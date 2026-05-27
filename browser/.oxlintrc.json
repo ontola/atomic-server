@@ -74,7 +74,7 @@
     "**/build",
     "**/.svelte-kit",
     "**/.netlify",
-    "browser/data-browser/src/locales/**"
+    "**/src/locales/**"
   ],
   "overrides": [
     {

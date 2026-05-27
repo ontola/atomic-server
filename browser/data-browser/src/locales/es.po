@@ -4311,11 +4311,11 @@ msgstr "Mod-y"
 
 #: src/hooks/useDevDrive.ts
 msgid "Dev agent created — secret copied to clipboard"
-msgstr ""
+msgstr "Agente de desarrollo creado — secreto copiado al portapapeles"
 
 #: src/hooks/useDevDrive.ts
 msgid "Dev agent created — secret available in localStorage (clipboard write blocked)"
-msgstr ""
+msgstr "Agente de desarrollo creado — secreto disponible en localStorage (escritura en portapapeles bloqueada)"
 
 #: src/routes/SyncRoute.tsx
 msgid "Node DID copied to clipboard"

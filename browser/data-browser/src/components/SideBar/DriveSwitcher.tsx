@@ -1,5 +1,4 @@
 import { Resource, core, server, useResources } from '@tomic/react';
-import { useMemo } from 'react';
 import {
   FaGear,
   FaHardDrive,
@@ -52,62 +51,51 @@ export function DriveSwitcher({
 
   const createNewResource = useNewResourceUI();
 
-  const items = useMemo<DropdownItem[]>(
-    () => [
-      ...Array.from(savedDrivesMap.entries())
-        .filter(([_, resource]) => !resource.error)
-        .map(([subject, resource]) => ({
-          id: subject,
-          label: getTitle(resource),
-          helper: `Switch to ${getTitle(resource)}`,
-          disabled: false,
-          onClick: (): void => {
-            setDrive(subject);
-            navigate(constructOpenURL(subject));
-          },
-          icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
-        })),
-      {
-        id: 'new-drive',
-        label: 'New Drive',
-        icon: <FaPlus />,
-        helper: 'Create a new drive',
-        onClick: (): void =>
-          createNewResource(server.classes.drive, agent?.subject ?? ''),
-        disabled: !agent,
-      },
-      DIVIDER,
-      ...Array.from(dedupeAFromB(historyMap, savedDrivesMap))
-        .map(([subject, resource]) => ({
-          label: getTitle(resource),
-          id: subject,
-          helper: `Switch to ${getTitle(resource)}`,
-          icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
-          onClick: buildHandleHistoryDriveClick(subject),
-          disabled: false,
-        }))
-        .slice(0, 5),
-      DIVIDER,
-      {
-        id: 'configure-drives',
-        label: 'Configure',
-        icon: <FaGear />,
-        helper: 'Load drives not displayed in this list.',
+  const items: DropdownItem[] = [
+    ...Array.from(savedDrivesMap.entries())
+      .filter(([_, resource]) => !resource.error)
+      .map(([subject, resource]) => ({
+        id: subject,
+        label: getTitle(resource),
+        helper: `Switch to ${getTitle(resource)}`,
+        disabled: false,
         onClick: (): void => {
-          void navigate(paths.serverSettings);
+          setDrive(subject);
+          navigate(constructOpenURL(subject));
         },
+        icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
+      })),
+    {
+      id: 'new-drive',
+      label: 'New Drive',
+      icon: <FaPlus />,
+      helper: 'Create a new drive',
+      onClick: (): void =>
+        createNewResource(server.classes.drive, agent?.subject ?? ''),
+      disabled: !agent,
+    },
+    DIVIDER,
+    ...Array.from(dedupeAFromB(historyMap, savedDrivesMap))
+      .map(([subject, resource]) => ({
+        label: getTitle(resource),
+        id: subject,
+        helper: `Switch to ${getTitle(resource)}`,
+        icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
+        onClick: buildHandleHistoryDriveClick(subject),
+        disabled: false,
+      }))
+      .slice(0, 5),
+    DIVIDER,
+    {
+      id: 'configure-drives',
+      label: 'Configure',
+      icon: <FaGear />,
+      helper: 'Load drives not displayed in this list.',
+      onClick: (): void => {
+        void navigate(paths.serverSettings);
       },
-    ],
-    [
-      agent,
-      createNewResource,
-      drive,
-      historyMap,
-      navigate,
-      savedDrivesMap,
-      setDrive,
-    ],
-  );
+    },
+  ];
 
   return <DropdownMenu Trigger={Trigger} items={items} />;
 }

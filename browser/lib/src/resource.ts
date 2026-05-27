@@ -699,6 +699,48 @@ export class Resource<C extends OptionalClass = any> {
    *
    * Returns undefined if there are no Loro changes or Loro isn't loaded.
    */
+  /**
+   * Export Loro bytes for WS drive-sync pull responses.
+   * Prefers incremental updates since `serverVv`; falls back to a full
+   * snapshot when the delta is empty (e.g. blob-only pull).
+   */
+  static exportLoroBytesForSync(
+    doc: LoroDoc,
+    serverVersionVector?: Record<string, number>,
+  ): Uint8Array | undefined {
+    if (!LoroLoader.isLoaded()) {
+      return undefined;
+    }
+
+    let bytes: Uint8Array | undefined;
+
+    if (serverVersionVector && Object.keys(serverVersionVector).length > 0) {
+      const { VersionVector } = LoroLoader.Loro;
+      const map = new Map<string, number>();
+
+      for (const [peer, counter] of Object.entries(serverVersionVector)) {
+        map.set(peer, counter);
+      }
+
+      try {
+        const from = VersionVector.parseJSON(map as Map<`${number}`, number>);
+        bytes = doc.export({ mode: 'update', from });
+      } catch {
+        // Fall through to snapshot.
+      }
+    }
+
+    if (!bytes || bytes.length <= 4) {
+      try {
+        bytes = doc.export({ mode: 'snapshot' });
+      } catch {
+        return undefined;
+      }
+    }
+
+    return bytes.length > 4 ? bytes : undefined;
+  }
+
   private exportLoroDelta(): Uint8Array | undefined {
     if (!this._loroDoc) {
       return undefined;

@@ -177,7 +177,7 @@ Then set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317` (no TLS needed loca
 - Use the `tracing::instrument` macro to make functions traceable. Check out the [tracing](https://docs.rs/tracing/latest/tracing/) docs for more info.
 - Run the server with the `--trace chrome` flag.
 - Close the server. A `trace-{unix-timestamp}.json` file will be generated in the current directory.
-- Open this file with https://ui.perfetto.dev/ or `chrome://tracing`. This will show you a flamegraph that you can zoom into.
+- Open this file with <https://ui.perfetto.dev/> or `chrome://tracing`. This will show you a flamegraph that you can zoom into.
 
 ### Criterion benchmarks
 
@@ -208,7 +208,7 @@ drill -b benchmark.yml --stats
 
 If you encounter serious security risks, please refrain from posting these publicly in the issue tracker.
 We could minimize the impact by first patching the issue, publishing the patch, and then (after 30 days) disclose the bug.
-So please first send an e-mail to joep@ontola.io describing the issue, and then we will work on fixing it as soon as possible.
+So please first send an e-mail to <joep@ontola.io> describing the issue, and then we will work on fixing it as soon as possible.
 
 ## Releases, Versioning and Tagging
 

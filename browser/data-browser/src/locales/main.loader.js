@@ -26,12 +26,10 @@ export const getRuntimeRx = (/** @type {string} */ loadID) => {
     // function to useState because runtime is a function too
     const [runtime, setRuntime] = useState(() => getRuntime(loadID))
     useEffect(() => {
-        const cb = (/** @type {import('wuchale/runtime').Runtime} */ nextRuntime) => setRuntime(() => nextRuntime)
+        const cb = (/** @type {import('wuchale/runtime').Runtime} */ runtime) => setRuntime(() => runtime)
         callbacks[loadID] ??= new Set()
         callbacks[loadID].add(cb)
-
         return () => callbacks[loadID].delete(cb)
     }, [loadID])
-
     return runtime
 }
