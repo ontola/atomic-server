@@ -3,6 +3,7 @@
 
 use actix::{prelude::Message, Addr};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// Subscribes a WebSocketConnection to a Subject.
 #[derive(Message)]
@@ -126,6 +127,17 @@ pub struct UnsubscribeQuery {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
 }
 
+/// Sent by `WebSocketConnection::stopped` to every subscription-holding
+/// actor (`CommitMonitor`, `LoroSyncBroadcaster`). Each handler walks
+/// its maps and removes every entry whose `Addr` matches. Without this,
+/// stale entries accumulate over the server's lifetime and every fanout
+/// pass pays for dead `Addr`s. See `planning/connection-close-cleanup.md`.
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct UnsubscribeAll {
+    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
+}
+
 /// Forwarded into `CommitMonitor` by the `DbEvent::QueryMembershipChanged`
 /// listener task: a resource entered or left a watched filter's result
 /// set. Routed to each filter subscriber as an `UPDATE` (added — full
@@ -142,8 +154,10 @@ pub struct MembershipNotification {
     pub added: bool,
     /// Pre-fetched Loro snapshot bytes — only populated when `added`.
     /// Empty / `None` skips the UPDATE emission (the subscriber can
-    /// still GET the subject explicitly).
-    pub loro_snapshot: Option<Vec<u8>>,
+    /// still GET the subject explicitly). `Arc<[u8]>` so the fanout
+    /// loop in `CommitMonitor::Handler<MembershipNotification>` does
+    /// O(1) clones per subscriber instead of O(snapshot size).
+    pub loro_snapshot: Option<Arc<[u8]>>,
     /// Pre-fetched `lastCommit` propval — only populated when `added`.
     pub commit_id: Option<String>,
     /// Source connection id for echo suppression.

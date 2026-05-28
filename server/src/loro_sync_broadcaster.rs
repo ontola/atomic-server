@@ -1,5 +1,8 @@
 use crate::{
-    actor_messages::{LoroEphemeralUpdate, LoroSyncUpdate, SubscribeLoroSync, UnsubscribeLoroSync},
+    actor_messages::{
+        LoroEphemeralUpdate, LoroSyncUpdate, SubscribeLoroSync, UnsubscribeAll,
+        UnsubscribeLoroSync,
+    },
     handlers::web_sockets::WebSocketConnection,
 };
 
@@ -121,6 +124,20 @@ impl Handler<UnsubscribeLoroSync> for LoroSyncBroadcaster {
                 self.subscriptions.remove(&msg.subject);
             }
         }
+    }
+}
+
+impl Handler<UnsubscribeAll> for LoroSyncBroadcaster {
+    type Result = ();
+
+    /// Sent on WebSocket close: remove this connection from every
+    /// subject's subscriber set. See `planning/connection-close-cleanup.md`.
+    fn handle(&mut self, msg: UnsubscribeAll, _ctx: &mut Context<Self>) {
+        for subscribers in self.subscriptions.values_mut() {
+            subscribers.retain(|s| s.addr != msg.addr);
+        }
+        self.subscriptions
+            .retain(|_, subscribers| !subscribers.is_empty());
     }
 }
 

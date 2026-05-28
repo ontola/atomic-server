@@ -5,7 +5,7 @@
 use crate::{
     actor_messages::{
         CommitMessage, MembershipNotification, Subscribe, SubscribeDrive, SubscribeQuery,
-        UnsubscribeQuery,
+        UnsubscribeAll, UnsubscribeQuery,
     },
     handlers::web_sockets::WebSocketConnection,
     search::SearchState,
@@ -180,7 +180,7 @@ impl Actor for CommitMonitor {
                                         if snapshot.is_empty() {
                                             None
                                         } else {
-                                            Some(snapshot)
+                                            Some(Arc::from(snapshot.into_boxed_slice()))
                                         },
                                         cid,
                                     )
@@ -406,6 +406,33 @@ impl Handler<UnsubscribeQuery> for CommitMonitor {
     type Result = ();
 
     fn handle(&mut self, msg: UnsubscribeQuery, _ctx: &mut Context<Self>) {
+        for conns in self.query_subscriptions.values_mut() {
+            conns.remove(&msg.addr);
+        }
+        self.query_subscriptions
+            .retain(|_, conns| !conns.is_empty());
+    }
+}
+
+impl Handler<UnsubscribeAll> for CommitMonitor {
+    type Result = ();
+
+    /// Sent on WebSocket close: remove this connection from every map so
+    /// future fanouts don't iterate over a dead `Addr`. Without it, every
+    /// reconnect leaks an entry per subscription primitive used.
+    #[allow(clippy::mutable_key_type)]
+    fn handle(&mut self, msg: UnsubscribeAll, _ctx: &mut Context<Self>) {
+        for conns in self.subscriptions.values_mut() {
+            conns.remove(&msg.addr);
+        }
+        self.subscriptions.retain(|_, conns| !conns.is_empty());
+
+        for conns in self.drive_subscriptions.values_mut() {
+            conns.remove(&msg.addr);
+        }
+        self.drive_subscriptions
+            .retain(|_, conns| !conns.is_empty());
+
         for conns in self.query_subscriptions.values_mut() {
             conns.remove(&msg.addr);
         }

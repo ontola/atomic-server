@@ -15,7 +15,8 @@ Flutter on WS session (see [`unified-sync.md`](./unified-sync.md)).
 **`QUERY_UPDATE` removed** — first narrowed in `dd771c29` (drive-wide only fired
 on membership), then deleted entirely. Drive-wide subscribers now receive
 creates/destroys via the same `UPDATE` / `DESTROY` channel that already
-carried edits. See [`drop-query-update.md`](./drop-query-update.md).
+carried edits. The `SUBSCRIBE_QUERY` registration primitive is kept (clients
+can still say "watch this filter") — only the response shape changed.
 
 ---
 
@@ -187,9 +188,10 @@ Touched browser files:
 ### Query Semantics Follow-Up (superseded)
 
 Originally proposed narrowing `QUERY_UPDATE` to membership-only events. That
-narrowing shipped in `dd771c29`, then `planning/drop-query-update.md` retired
-`QUERY_UPDATE` entirely — drive-wide subscribers now get creates / edits /
-destroys through the same `UPDATE` / `DESTROY` channel as resource subscribers.
+narrowing shipped in `dd771c29`, then `QUERY_UPDATE` was retired entirely —
+drive-wide subscribers now get creates / edits / destroys through the same
+`UPDATE` / `DESTROY` channel as resource subscribers. `SUBSCRIBE_QUERY`
+registration is kept; only the response wire shape changed.
 
 ### Documentation
 
@@ -257,11 +259,9 @@ Add or update tests at these levels:
 
 ### Gaps to close
 
-- [ ] **`server/tests/ws_get.rs`** — client `GET`, assert response is `UPDATE`
-  with `HAS_COMMIT_ID` set and `commit_id == resource.lastCommit`.
-  This is the regression test for
-  [`fix-canvas-genesis-save.md`](./fix-canvas-genesis-save.md); we cannot
-  land that fix without it.
+- [x] **`server/tests/ws_get.rs`** — client `GET`, assert response is `UPDATE`
+  with `HAS_COMMIT_ID` set and `commit_id == resource.lastCommit`. Regression
+  test for the canvas-genesis-save bug fix (shipped 2026-05-28).
 - [ ] **`server/tests/ws_destroy.rs`** — assert standalone `DESTROY` frame
   delivery to subscribers (today only reached via COMMIT-destroy).
 - [ ] **`server/tests/ws_errors.rs`** — assert `ERROR` frame format/`request_id`

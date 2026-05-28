@@ -122,6 +122,19 @@ impl Actor for WebSocketConnection {
             ctx.ping(b"");
         });
     }
+
+    fn stopped(&mut self, ctx: &mut Self::Context) {
+        // Remove ourselves from every subscription map. Without this,
+        // closed connections leave stale `Addr`s in `CommitMonitor` and
+        // `LoroSyncBroadcaster`, which every subsequent fanout iterates
+        // over (do_send to a stopped actor silently no-ops). See
+        // `planning/connection-close-cleanup.md`.
+        let addr = ctx.address();
+        self.commit_monitor_addr
+            .do_send(crate::actor_messages::UnsubscribeAll { addr: addr.clone() });
+        self.loro_sync_broadcaster_addr
+            .do_send(crate::actor_messages::UnsubscribeAll { addr });
+    }
 }
 
 // ---- Incoming message routing ----

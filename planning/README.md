@@ -5,27 +5,26 @@ not public-facing product/spec documentation; that belongs in `docs/`.
 
 Use this folder to stay aligned on active architectural plans before making
 broad changes. Prefer updating an existing plan over adding a new root-level
-scratch document. When a plan becomes obsolete, either delete it or mark it as
-superseded at the top.
+scratch document. When a plan becomes obsolete, delete it.
 
 ## Current Plans
 
-| Document | Scope |
-| --- | --- |
-| [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | Target architecture: `atomic_lib` as the complete HTTP-optional local node runtime. |
-| [`unified-sync.md`](./unified-sync.md) | **Active:** one sync API over WS or Iroh; mobile same as browser; retire manual `peer_sync`. |
-| [`authorization-sync.md`](./authorization-sync.md) | **Draft:** signed commit authorization, creator proof, grant-chain evidence, delegated/replica/indexer/DM/inbox patterns, and peer-sync trust boundaries. |
-| [`sync.md`](./sync.md) | WS `COMMIT` / echo suppression (mostly done); query-semantics follow-up. |
-| [`unified-data-layer.md`](./unified-data-layer.md) | Browser/JS data-layer simplification: one ingress, one outbox, one subscription model. |
-| [`loro-source-of-truth.md`](./loro-source-of-truth.md) | Make the Loro doc authoritative; `PropVals` becomes a derived projection. |
-| [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | Proposal: commits remain signed write certificates, but commit retention is optional node policy. |
-| [`s3-blob-storage.md`](./s3-blob-storage.md) | Pluggable blob backend design for redb/S3/hybrid storage. |
-| [`virtual-drive.md`](./virtual-drive.md) | Expose Atomic as a mountable filesystem (NFS / FUSE / native cloud-sync APIs); shared VFS backend trait for desktop and mobile. |
-| [`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md) | Consolidating the canvas undo/redo stacks across Flutter and Loro. |
-| [`SDK-API-design.md`](./SDK-API-design.md) | SDK / developer-experience direction for app builders and LLM agents. |
-| [`rust-dependency-upgrade-audit.md`](./rust-dependency-upgrade-audit.md) | Audit notes for the Rust dependency upgrade pass. |
-| [`cleanup-update-encoding.md`](./cleanup-update-encoding.md) | **Active:** Refactor UPDATE frame encoding/decoding, unify parser, and remove magic numbers. |
-| [`fix-canvas-genesis-save.md`](./fix-canvas-genesis-save.md) | **Active:** Fix canvas genesis save error by passing lastCommit ID in WebSocket GET snapshot responses. |
+| Document                                                                                     | Scope                                                                                                                                                     |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`atomic-lib-runtime.md`](./atomic-lib-runtime.md)                                           | Target architecture: `atomic_lib` as the complete HTTP-optional local node runtime.                                                                       |
+| [`unified-sync.md`](./unified-sync.md)                                                       | **Active:** one sync API over WS or Iroh; mobile same as browser; retire manual `peer_sync`.                                                              |
+| [`authorization-sync.md`](./authorization-sync.md)                                           | **Draft:** signed commit authorization, creator proof, grant-chain evidence, delegated/replica/indexer/DM/inbox patterns, and peer-sync trust boundaries. |
+| [`sync.md`](./sync.md)                                                                       | WS `COMMIT` flow, echo suppression, and the unified `UPDATE` / `DESTROY` channel. Mostly shipped; tracks remaining test gaps.                              |
+| [`unified-data-layer.md`](./unified-data-layer.md)                                           | Browser/JS data-layer simplification: one ingress, one outbox, one subscription model.                                                                    |
+| [`loro-source-of-truth.md`](./loro-source-of-truth.md)                                       | Make the Loro doc authoritative; `PropVals` becomes a derived projection.                                                                                 |
+| [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | Proposal: commits remain signed write certificates, but commit retention is optional node policy.                                                         |
+| [`s3-blob-storage.md`](./s3-blob-storage.md)                                                 | Pluggable blob backend design for redb/S3/hybrid storage.                                                                                                 |
+| [`virtual-drive.md`](./virtual-drive.md)                                                     | Expose Atomic as a mountable filesystem (NFS / FUSE / native cloud-sync APIs); shared VFS backend trait for desktop and mobile.                           |
+| [`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md)                             | Consolidating the canvas undo/redo stacks across Flutter and Loro.                                                                                        |
+| [`SDK-API-design.md`](./SDK-API-design.md)                                                   | SDK / developer-experience direction for app builders and LLM agents.                                                                                     |
+| [`rust-dependency-upgrade-audit.md`](./rust-dependency-upgrade-audit.md)                     | Audit notes for the Rust dependency upgrade pass.                                                                                                         |
+| [`cleanup-update-encoding.md`](./cleanup-update-encoding.md)                                 | **Active:** Refactor UPDATE frame encoding/decoding, unify parser, and remove magic numbers.                                                              |
+| [`structural-problems-index.md`](./structural-problems-index.md)                             | 2026-05-28 audit: ranked open structural issues with per-item plan files. Covers React Compiler / Resource proxy mismatch, subscription unification, save-state signals, Loro-as-authority, subject typing, and remaining actor-message Arc-wrap. |
 
 Protocol reference lives in the public docs: [`docs/src/websockets.md`](../docs/src/websockets.md).
 Planning documents may discuss how that protocol is used internally, but should
