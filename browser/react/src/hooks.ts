@@ -27,6 +27,7 @@ import {
   OptionalClass,
   type Core,
   ResourceEvents,
+  LoroLoader,
   core,
   server,
 } from '@tomic/lib';
@@ -541,8 +542,24 @@ export function useLoroDoc(resource: Resource): LoroDoc | undefined {
   const stable = resource.stable;
   const subject = resource.subject;
   const store = useStore();
+  // Subscribe to BOTH resource updates AND Loro WASM readiness. The
+  // resource may finish loading before the lazy `loro-crdt` import does;
+  // when WASM finally lands, `getLoroDoc()` flips from `undefined` to a
+  // real doc — but nothing in the resource update channel fires for that
+  // transition. Without the `LoroLoader.onReady` subscription, the
+  // `useSyncExternalStore` cache holds onto `undefined` and the editor
+  // stays on "Loading…" forever (cold-tab repro: open a doc in a fresh
+  // tab while WASM is still streaming in).
   const subscribe = useCallback(
-    (cb: () => void) => store.subscribe(subject, () => cb()),
+    (cb: () => void) => {
+      const unsubResource = store.subscribe(subject, () => cb());
+      const unsubLoro = LoroLoader.onReady(cb);
+
+      return () => {
+        unsubResource();
+        unsubLoro();
+      };
+    },
     [store, subject],
   );
 

@@ -9,8 +9,13 @@
 **Persisted commits over WS** — implemented (protocol, server, browser). See
 [Rollout](#rollout) below.
 
-**Still open:** integration tests, `QUERY_UPDATE` membership narrowing, Flutter on WS
-session (see [`unified-sync.md`](./unified-sync.md)).
+**Still open:** test gaps (see [Test coverage gaps](#test-coverage-gaps)),
+Flutter on WS session (see [`unified-sync.md`](./unified-sync.md)).
+
+**`QUERY_UPDATE` removed** — first narrowed in `dd771c29` (drive-wide only fired
+on membership), then deleted entirely. Drive-wide subscribers now receive
+creates/destroys via the same `UPDATE` / `DESTROY` channel that already
+carried edits. See [`drop-query-update.md`](./drop-query-update.md).
 
 ---
 
@@ -35,7 +40,7 @@ Outstanding product/UX issues (Iroh-era):
 
 > Trust model (hub vs bulk, same-agent vs share): [`unified-sync.md` § Trust and authority](./unified-sync.md#trust-and-authority).
 
-- **Live path (no protocol change):** signed destroy commit → `DESTROY (0x12)` and/or `QUERY_UPDATE` `removed` on WS; Iroh live loop mirrors `DESTROY`.
+- **Live path (no protocol change):** signed destroy commit → `DESTROY (0x12)` on WS; Iroh live loop mirrors `DESTROY`.
 - **Bulk path:** `SYNC_DIFF` JSON now includes `remove: string[]` so peers delete instead of re-uploading subjects that vanished from the other side's VV map. Documented in [`docs/src/websockets.md`](../docs/src/websockets.md).
 - **Local tombstones:** `lib/src/sync/tombstones.rs` records destroys in `PluginMeta` so `handle_sync_vv` can emit `remove` and `import_sync_push` won't resurrect. Not on the wire.
 - **Flutter:** every delete must call signed destroy + `try_push_commit` / `nudge_peers` (folder delete was UI-only; fixed like folder rename).
@@ -145,7 +150,7 @@ Use this shape for:
 - drive-wide subscriptions
 - filter query subscriptions
 
-When broadcasting `UPDATE`, `DESTROY`, or `QUERY_UPDATE`, skip subscribers whose
+When broadcasting `UPDATE` or `DESTROY`, skip subscribers whose
 `source_id` equals the event source id.
 
 HTTP commits have no source id and continue to broadcast to all matching
@@ -179,24 +184,12 @@ Touched browser files:
 - `browser/lib/src/resource.ts`: likely no behavior change, but tests should
   cover that `pushCommits()` still works with WS ack.
 
-### Query Semantics Follow-Up
+### Query Semantics Follow-Up (superseded)
 
-Commit-over-WS fixes self-echo for the originating connection. It does not by
-itself fix the separate semantic issue where ordinary edits can be represented
-as drive-wide `QUERY_UPDATE` frames.
-
-After WS commits land, narrow `QUERY_UPDATE` to actual membership changes:
-
-- resource created in a drive
-- resource removed from a drive
-- filter membership changes, such as parent/class/property changes
-- sort membership updates if the watched query depends on sort order
-
-Existing resource edits should arrive through resource `UPDATE` pushes for
-subscribers of that resource, not through drive-wide `QUERY_UPDATE`.
-
-Keep this as a separate patch unless implementation shows the two are tightly
-coupled.
+Originally proposed narrowing `QUERY_UPDATE` to membership-only events. That
+narrowing shipped in `dd771c29`, then `planning/drop-query-update.md` retired
+`QUERY_UPDATE` entirely — drive-wide subscribers now get creates / edits /
+destroys through the same `UPDATE` / `DESTROY` channel as resource subscribers.
 
 ### Documentation
 
@@ -233,6 +226,72 @@ Add or update tests at these levels:
   - `Store.postCommit()` uses WS when available
   - HTTP fallback still works when WS is unavailable
 - Existing HTTP commit tests must remain green.
+
+## Test coverage gaps
+
+> Audit pass 2026-05-28 against `docs/src/websockets.md` (canonical wire spec).
+> Layers in play: codec unit (`lib/src/sync/protocol.rs` `#[cfg(test)]`),
+> engine / lib e2e (`lib/src/sync/tests.rs`, `iroh_e2e.rs`), server integration
+> (`server/tests/*.rs`), browser lib (`browser/lib/src/*.test.ts`), browser e2e
+> (`browser/e2e/tests/sync.spec.ts`).
+
+### Coverage matrix (load-bearing frames)
+
+| Frame / flow              | Codec | Engine | Server-int | Browser-e2e |
+|---------------------------|:-----:|:------:|:----------:|:-----------:|
+| AUTH / AUTH_OK            | (JSON) | yes    | every test (overlap) | —           |
+| ERROR                     | yes   | —      | implicit    | —           |
+| GET (request)             | yes   | —      | **—**       | —           |
+| UPDATE — `SNAPSHOT`       | yes   | yes    | yes         | yes         |
+| UPDATE — `HAS_COMMIT_ID`  | yes   | —      | **—**       | —           |
+| UPDATE — `PUSH`           | yes   | yes    | yes         | implicit    |
+| DESTROY (standalone)      | —     | —      | **—**       | —           |
+| COMMIT / COMMIT_OK        | yes   | —      | yes         | yes         |
+| SUB                       | yes   | yes    | yes (×5)    | —           |
+| UNSUB                     | **—** | **—**  | **—**       | —           |
+| SYNC* + SYNC_PUSH chunking| yes (×3) | yes (×3) | yes (×2) | —           |
+| BLOB_REQUEST / RESPONSE   | —     | yes    | yes         | —           |
+| Drive-wide membership (UPDATE/DESTROY via SUB) | n/a | partial | `ws_drive_membership` (×1) | implicit |
+| HELLO (Iroh-only)         | yes (×8) | happy-path only | n/a | —    |
+| EPHEMERAL (0x40 binary)   | **—** | **—**  | **—**       | —           |
+
+### Gaps to close
+
+- [ ] **`server/tests/ws_get.rs`** — client `GET`, assert response is `UPDATE`
+  with `HAS_COMMIT_ID` set and `commit_id == resource.lastCommit`.
+  This is the regression test for
+  [`fix-canvas-genesis-save.md`](./fix-canvas-genesis-save.md); we cannot
+  land that fix without it.
+- [ ] **`server/tests/ws_destroy.rs`** — assert standalone `DESTROY` frame
+  delivery to subscribers (today only reached via COMMIT-destroy).
+- [ ] **`server/tests/ws_errors.rs`** — assert `ERROR` frame format/`request_id`
+  for invalid `previousCommit`, wrong signer, unknown subject.
+- [ ] **`UNSUB`** — no test at any layer; add a unit/engine test that subscribes,
+  unsubs, and confirms no further `UPDATE` arrives.
+- [ ] **`EPHEMERAL (0x40)` binary tag** — declared in the tag table but no
+  encoder/decoder/test. Decide if it's used; if not, mark `reserved` in
+  `docs/src/websockets.md` so the tag table stops looking like a gap.
+
+### Overlap to thin
+
+- AUTH happy-path is exercised by every server integration test. One dedicated
+  `server/tests/ws_auth.rs` should carry it; the others can assume an
+  authed session.
+- `SYNC_PUSH` chunking semantics (LAST flag, multi-chunk drain) are repeated
+  across codec + engine + integration. Keep the codec assertions; let the
+  integration tests stop poking at chunking internals.
+- HELLO has 8 codec tests for a 4-byte-header frame — collapse the
+  empty-name / control-strip variants into a parameterized table.
+
+### Status
+
+- [x] Audit (this section) — 2026-05-28
+- [ ] `ws_get.rs` + canvas-genesis-save fix (in flight)
+- [ ] `ws_destroy.rs`
+- [ ] `ws_errors.rs`
+- [ ] `UNSUB` test
+- [ ] EPHEMERAL doc decision
+- [ ] Overlap trim (AUTH-handshake repetition, SYNC_PUSH chunking, HELLO codec tests)
 
 ### Rollout
 

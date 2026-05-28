@@ -77,11 +77,23 @@ pub async fn handle_frame(
                         if snapshot.is_empty() {
                             vec![protocol::encode_error(decoded.request_id, "No state")]
                         } else {
+                            // Include `lastCommit` so the recipient can set
+                            // `previousCommit` on its next save. See
+                            // `planning/fix-canvas-genesis-save.md`.
+                            let last_commit = resource
+                                .get(crate::urls::LAST_COMMIT)
+                                .ok()
+                                .map(|v| v.to_string())
+                                .filter(|s| !s.is_empty());
+                            let mut flags = protocol::flags::SNAPSHOT;
+                            if last_commit.is_some() {
+                                flags |= protocol::flags::HAS_COMMIT_ID;
+                            }
                             vec![protocol::encode_update(
-                                protocol::flags::SNAPSHOT,
+                                flags,
                                 decoded.request_id,
                                 resource.get_subject().as_str(),
-                                None,
+                                last_commit.as_deref(),
                                 &snapshot,
                             )]
                         }

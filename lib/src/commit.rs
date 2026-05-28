@@ -560,19 +560,35 @@ impl Commit {
                 // properties need to round-trip cleanly for the guard to
                 // mean what its name claims.
                 let server_managed: &[&str] = &[crate::urls::LAST_COMMIT, crate::urls::CREATED_AT];
-                let all_match = !incoming_intent.is_empty()
-                    && incoming_intent.iter().all(|(key, incoming_val)| {
+
+                // Empty `incoming_intent` means the loroUpdate didn't write
+                // any *propvals* — but Loro docs can carry non-propval state
+                // (TipTap document body via `loro-prosemirror` containers,
+                // canvas stroke trees, etc.) that lives outside the
+                // `properties` map this guard reads from. Rejecting on
+                // empty intent would block every document/canvas content
+                // edit (`documents.spec.ts:25` regression — heading inserts
+                // never reach the server). The fact that `imported_new_ops`
+                // was true here proves the commit *did* contribute work to
+                // the Loro doc; we just can't observe it through the
+                // propval projection. Accept and trust Loro CRDT.
+                let all_match = if incoming_intent.is_empty() {
+                    true
+                } else {
+                    incoming_intent.iter().all(|(key, incoming_val)| {
                         if server_managed.contains(&key.as_str()) {
                             return true;
                         }
                         merged_state.get(key).is_some_and(|mv| mv == incoming_val)
-                    });
+                    })
+                };
 
                 if all_match {
                     tracing::debug!(
                         subject = %commit.subject,
                         keys = ?incoming_intent.keys().collect::<Vec<_>>(),
-                        "[causality-guard] accepting semantic no-op commit (values match stored state)"
+                        empty_intent = incoming_intent.is_empty(),
+                        "[causality-guard] accepting commit (propval intent is empty or matches stored state)"
                     );
                 } else {
                     tracing::warn!(

@@ -30,7 +30,11 @@ import type {
 } from './client-db.js';
 import { LocalSearch } from './local-search.js';
 import { perfMark, perfSpan } from './perf-trace.js';
-import { LocalOutbox, type OutboxEntry } from './local-outbox.js';
+import {
+  LocalOutbox,
+  isTerminalCommitErrorMessage,
+  type OutboxEntry,
+} from './local-outbox.js';
 
 /** Function called when a resource is updated or removed */
 type ResourceCallback<C extends OptionalClass = UnknownClass> = (
@@ -622,6 +626,24 @@ export class Store {
       await this.outbox.drain({
         sort: this.sortOutboxEntries,
         postEntry: this.postOutboxEntry,
+        isTerminalError: (_entry, e) => {
+          const msg = e instanceof Error ? e.message : String(e);
+
+          return isTerminalCommitErrorMessage(msg);
+        },
+        onTerminalDrop: (entry, e) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          // Surface the recovery to the user — silent discards are
+          // worse than visible recoveries when a write got lost.
+          this.notifyError(
+            new Error(
+              `Dropped stuck commit for ${entry.subject.slice(0, 60)}…: ${msg}`,
+            ),
+          );
+          // Best-effort: refetch the resource so the local copy
+          // aligns with whatever the server already has.
+          this.fetchResourceFromServer(entry.subject).catch(() => undefined);
+        },
       });
     } finally {
       this.emitSyncStatus();

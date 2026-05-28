@@ -72,25 +72,18 @@ async fn test_multi_client_gallery_sync() -> AtomicResult<()> {
     db_b.set_default_agent(agent.clone());
     db_b.set_active_drive(&drive_subject)?;
 
-    // Start WS session for Tablet (Device A)
+    // Start WS session for Tablet (Device A). Drive-wide SUB fans every
+    // commit under the drive (creates / edits / destroys) to this connection
+    // as `UPDATE` / `DESTROY` frames. Replaces the legacy `SUBSCRIBE_QUERY`
+    // text-frame registrar — see `planning/drop-query-update.md`.
     let ws_a = WsClient::connect(&ws_url).await?;
     ws_a.authenticate(&agent).await?;
-    ws_a.subscribe_query(
-        atomic_lib::urls::PARENT,
-        &drive_subject,
-        drive_subject.as_str(),
-    )
-    .await?;
+    ws_a.subscribe_drive(&drive_subject).await?;
 
     // Start WS session for Phone (Device B)
     let ws_b = WsClient::connect(&ws_url).await?;
     ws_b.authenticate(&agent).await?;
-    ws_b.subscribe_query(
-        atomic_lib::urls::PARENT,
-        &drive_subject,
-        drive_subject.as_str(),
-    )
-    .await?;
+    ws_b.subscribe_drive(&drive_subject).await?;
 
     // Listen before the commit — broadcast receivers miss messages sent earlier.
     let mut rx_b = ws_b.subscribe();
@@ -120,11 +113,15 @@ async fn test_multi_client_gallery_sync() -> AtomicResult<()> {
     let commit_json = atomic_lib::client::commit_to_wire_json(&response.commit, &db_a).await?;
     ws_a.post_commit(1, &commit_json).await?;
 
-    // 2. Phone should see the canvas via QUERY_UPDATE
-    let received_query_update = tokio::time::timeout(Duration::from_secs(10), async {
+    // 2. Phone should see the canvas as a drive-wide UPDATE push. QUERY_UPDATE
+    //    was retired (`planning/drop-query-update.md`); the new resource's
+    //    full snapshot arrives directly on the existing drive SUB.
+    let received_update = tokio::time::timeout(Duration::from_secs(10), async {
         while let Ok(msg) = rx_b.recv().await {
-            if let atomic_lib::client::ws::WsMessage::QueryUpdate { .. } = msg {
-                return true;
+            if let atomic_lib::client::ws::WsMessage::Update { subject, .. } = msg {
+                if subject == canvas_subject.as_str() {
+                    return true;
+                }
             }
         }
         false
@@ -133,8 +130,8 @@ async fn test_multi_client_gallery_sync() -> AtomicResult<()> {
     .unwrap_or(false);
 
     assert!(
-        received_query_update,
-        "Phone should receive QUERY_UPDATE when Tablet adds canvas"
+        received_update,
+        "Phone should receive UPDATE when Tablet adds canvas"
     );
 
     // Phone subscribes to the newly discovered resource

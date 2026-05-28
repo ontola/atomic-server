@@ -1,0 +1,6 @@
+cargo:rustc-check-cfg=cfg(wasm_browser)
+cargo:rustc-check-cfg=cfg(dht)
+cargo:rustc-check-cfg=cfg(relays)
+cargo:rustc-cfg=relays
+cargo:rustc-check-cfg=cfg(client)
+cargo:rustc-cfg=client

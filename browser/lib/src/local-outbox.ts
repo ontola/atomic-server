@@ -26,6 +26,40 @@ export interface OutboxDrainContext {
   postEntry: (entry: OutboxEntry) => Promise<void>;
   /** Caller-supplied ordering (agents → drive → children). */
   sort: (entries: readonly OutboxEntry[]) => OutboxEntry[];
+  /** Optional: classify a post failure as terminal (the commit can never
+   *  succeed, e.g. genesis collision against an existing server resource).
+   *  Terminal entries are dropped from the outbox after `onTerminalDrop`
+   *  fires, so the client recovers automatically instead of retrying
+   *  the same doomed commit on every reconnect. */
+  isTerminalError?: (entry: OutboxEntry, error: unknown) => boolean;
+  /** Notification hook for dropped entries — caller typically surfaces
+   *  a toast and clears related local state. */
+  onTerminalDrop?: (entry: OutboxEntry, error: unknown) => void;
+}
+
+/**
+ * Pattern-match server error messages that mean "this commit will never
+ * be accepted, no matter how many times we retry." Returning `true` drops
+ * the offending entry from the outbox; `false` keeps it queued for the
+ * next drain.
+ *
+ * Conservative by design — only patterns we're certain are terminal go
+ * here. A false positive silently discards a user write, which is worse
+ * than retrying forever (the worse failure mode is already what the
+ * outbox does without this guard). Add new entries only with the server-
+ * side error string they correspond to.
+ */
+export function isTerminalCommitErrorMessage(message: string): boolean {
+  // Genesis collision: client tried to (re-)create a resource that
+  // already exists. Happens when local state lost `lastCommit` and a
+  // follow-up save built a genesis commit. The resource is fine on the
+  // server; the only loss is the never-applied diff in this commit.
+  // See `planning/fix-canvas-genesis-save.md`.
+  if (message.includes('is_genesis: true, but the resource already exists')) {
+    return true;
+  }
+
+  return false;
 }
 
 const STORAGE_KEY = 'atomic.outbox';
@@ -132,6 +166,22 @@ export class LocalOutbox {
         }
       } catch (e) {
         live.lastAttemptError = e instanceof Error ? e.message : String(e);
+
+        // Terminal errors (e.g. genesis-against-existing-resource) can't
+        // be retried into success — drop the entry so the client stops
+        // re-posting the same doomed commit on every reconnect, then
+        // notify the caller so it can show a toast / clear related
+        // local state.
+        if (ctx.isTerminalError?.(live, e)) {
+          console.warn(
+            '[Outbox] dropping terminal entry',
+            live.subject,
+            '—',
+            live.lastAttemptError,
+          );
+          this.entries.delete(entry.subject);
+          ctx.onTerminalDrop?.(live, e);
+        }
       }
 
       this.persist();

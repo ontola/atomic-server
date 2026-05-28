@@ -1,0 +1,10 @@
+/Users/joep/dev/atomic-server/target-check/debug/deps/diatomic_waker-ddb8b1bbdc4d365c.d: /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/lib.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/arc_waker.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/borrowed_waker.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/loom_exports.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/primitives.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/waker.rs
+
+/Users/joep/dev/atomic-server/target-check/debug/deps/libdiatomic_waker-ddb8b1bbdc4d365c.rmeta: /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/lib.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/arc_waker.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/borrowed_waker.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/loom_exports.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/primitives.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/waker.rs
+
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/lib.rs:
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/arc_waker.rs:
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/borrowed_waker.rs:
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/loom_exports.rs:
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/primitives.rs:
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/diatomic-waker-0.2.3/src/waker.rs:

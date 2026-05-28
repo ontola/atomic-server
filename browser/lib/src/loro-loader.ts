@@ -6,6 +6,7 @@ import type * as Loro from 'loro-crdt';
  */
 export class LoroLoader {
   private static _Loro: typeof Loro | undefined;
+  private static _readyListeners: Set<() => void> = new Set();
 
   public static get Loro(): typeof Loro {
     if (!this._Loro) {
@@ -21,6 +22,24 @@ export class LoroLoader {
     }
 
     this._Loro = await import('loro-crdt');
+
+    // Fire the ready callbacks. Hooks that called `getLoroDoc()` *before*
+    // the WASM module finished loading would have observed it as
+    // `undefined` and cached that result in `useSyncExternalStore`; they
+    // need an external nudge to re-evaluate now that the WASM is ready.
+    // Without this, opening a doc in a fresh tab leaves the editor
+    // stuck on "Loading…" forever — the `store.subscribe(subject, …)`
+    // signal that `useLoroDoc` listens to fires only on resource
+    // updates, never on WASM-ready.
+    const listeners = [...this._readyListeners];
+    this._readyListeners.clear();
+    for (const cb of listeners) {
+      try {
+        cb();
+      } catch (e) {
+        console.warn('[LoroLoader] ready listener threw:', e);
+      }
+    }
   }
 
   public static isLoaded(): boolean {
@@ -31,6 +50,25 @@ export class LoroLoader {
     if (!this.isLoaded()) {
       throw new Error('Loro not initialized. Call enableLoro() first.');
     }
+  }
+
+  /**
+   * Register a callback that fires once when the Loro WASM module
+   * finishes loading. If Loro is already loaded the callback runs
+   * synchronously. Returns an unsubscribe function for callers that want
+   * to clean up before the load completes (e.g. React unmount during
+   * the lazy load). Callbacks fire exactly once.
+   */
+  public static onReady(cb: () => void): () => void {
+    if (this.isLoaded()) {
+      cb();
+
+      return () => undefined;
+    }
+
+    this._readyListeners.add(cb);
+
+    return () => this._readyListeners.delete(cb);
   }
 }
 

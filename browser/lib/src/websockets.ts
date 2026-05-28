@@ -30,7 +30,6 @@ import {
   decodeSyncPush,
   decodeBlobRequest,
   decodeBlobResponse,
-  decodeQueryUpdate,
   encodeBlobResponse,
   encodeBlobRequest,
   encodeSyncPushChunks,
@@ -48,34 +47,6 @@ const WS_PROTOCOL = 'atomicdata-ws.v2';
 
 const connectionFailedMessage = (url: URL): string =>
   `Could not connect to ${url.origin}. Check that the server is running and reachable.`;
-
-/**
- * Decide whether a QUERY_UPDATE `added` subject needs a network fetch.
- *
- * Commits are immutable: once the local store has one, re-fetching is
- * pure waste. This is the self-echo case from posting a chat message —
- * the client signs and posts a commit, the server processes it and
- * broadcasts QUERY_UPDATE to all subscribers (including us), and the
- * stock handler then GETs the commit DID it literally just sent. The
- * server response carries identical bytes to the locally-signed copy.
- *
- * Non-commit subjects are kept on the fetch path: regular resources
- * can be mutated, so a QUERY_UPDATE `added` may signal a new version
- * the local copy doesn't have. Per-resource version dedup happens
- * deeper, inside `applyIncoming` (commit-id check), but the WS GET
- * round-trip is unavoidable for those — the QUERY_UPDATE frame
- * itself doesn't carry the payload.
- */
-export function shouldFetchOnQueryUpdate(
-  subject: string,
-  store: Store,
-): boolean {
-  if (subject.startsWith('did:ad:commit:') && store.resources.has(subject)) {
-    return false;
-  }
-
-  return true;
-}
 
 // Optional perf-profiler hook. The data-browser app installs an object
 // at `window.__atomicProfiler` that aggregates render + event counts;
@@ -864,29 +835,6 @@ export class WSClient {
         break;
       }
 
-      case Tag.QUERY_UPDATE: {
-        const msg = decodeQueryUpdate(payload);
-
-        if (!msg) break;
-
-        // Drive-wide subscription channel: server tells us a subject was
-        // added or removed somewhere on the drive. Translate that into
-        // store-level changes; `addResources` (called inside
-        // `fetchResourceFromServer`) will fire `StoreEvents.ResourceUpdated`,
-        // and each `useCollection` surgically applies the change against
-        // its filter — no `/query` refetch storm.
-        for (const s of msg.removed) {
-          this.store.removeResource(s);
-        }
-
-        for (const s of msg.added) {
-          if (!shouldFetchOnQueryUpdate(s, this.store)) continue;
-          this.store.fetchResourceFromServer(s).catch(() => undefined);
-        }
-
-        break;
-      }
-
       case Tag.BLOB_REQUEST: {
         const hash = decodeBlobRequest(payload);
 
@@ -945,26 +893,6 @@ export class WSClient {
       this.store.__handleLoroEphemeralMessage(
         text.slice('LORO_EPHEMERAL_UPDATE '.length),
       );
-    } else if (text.startsWith('QUERY_UPDATE ')) {
-      try {
-        const update = JSON.parse(text.slice('QUERY_UPDATE '.length));
-        const added: string[] = update.added ?? [];
-        const removed: string[] = update.removed ?? [];
-
-        // Same shape as the binary handler: each fetched/removed subject
-        // flows through `addResources`/`removeResource`, which fires
-        // `ResourceUpdated`/`ResourceRemoved` for `useCollection` to react.
-        for (const s of removed) {
-          this.store.removeResource(s);
-        }
-
-        for (const s of added) {
-          if (!shouldFetchOnQueryUpdate(s, this.store)) continue;
-          this.store.fetchResourceFromServer(s).catch(() => {});
-        }
-      } catch {
-        // ignore
-      }
     } else if (text === 'AUTHENTICATED') {
       // Legacy auth response — handled for backward compat
     }

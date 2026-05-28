@@ -31,13 +31,6 @@ pub enum WsMessage {
     LoroSyncUpdate { subject: String, update: Vec<u8> },
     /// A Loro ephemeral update (cursors/presence). Contains `{ subject, update }` JSON.
     LoroEphemeralUpdate { subject: String, update: Vec<u8> },
-    /// A query's results changed. Contains added/removed subjects.
-    QueryUpdate {
-        property: Option<String>,
-        value: Option<String>,
-        added: Vec<String>,
-        removed: Vec<String>,
-    },
     /// Server confirmed authentication.
     Authenticated,
     /// A `BLOB_RESPONSE` (0x35) frame: server returned the bytes for a
@@ -353,36 +346,6 @@ fn parse_server_message(text: &str) -> WsMessage {
             }
             Err(_) => WsMessage::Error(format!("Invalid LORO_EPHEMERAL_UPDATE: {}", text)),
         }
-    } else if let Some(stripped) = text.strip_prefix("QUERY_UPDATE ") {
-        match serde_json::from_str::<serde_json::Value>(stripped) {
-            Ok(v) => {
-                let property = v["property"].as_str().map(|s| s.to_string());
-                let value = v["value"].as_str().map(|s| s.to_string());
-                let added = v["added"]
-                    .as_array()
-                    .map(|a| {
-                        a.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                let removed = v["removed"]
-                    .as_array()
-                    .map(|a| {
-                        a.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                WsMessage::QueryUpdate {
-                    property,
-                    value,
-                    added,
-                    removed,
-                }
-            }
-            Err(_) => WsMessage::Error(format!("Invalid QUERY_UPDATE: {}", text)),
-        }
     } else if text.starts_with("AUTHENTICATED") {
         WsMessage::Authenticated
     } else if let Some(stripped) = text.strip_prefix("ERROR ") {
@@ -417,15 +380,6 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
             })
         }
         tag::UPDATE => decode_update_frame(&bin[1..]),
-        tag::QUERY_UPDATE => {
-            let q = protocol::decode_query_update(&bin[1..])?;
-            Some(WsMessage::QueryUpdate {
-                property: q.property,
-                value: q.value,
-                added: q.added,
-                removed: q.removed,
-            })
-        }
         tag::DESTROY => {
             // [tag] [request_id: u16] [subject: utf8]
             if bin.len() < 3 {

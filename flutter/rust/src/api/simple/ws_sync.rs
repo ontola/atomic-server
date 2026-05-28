@@ -66,11 +66,11 @@ pub async fn open_ws_sync(server_origin: &str) -> Result<(), String> {
     client.authenticate(&agent).await.map_err(err)?;
 
     if let Some(drive) = store.get_active_drive() {
+        // Drive-wide SUB now covers everything that used to require a
+        // separate `subscribe_query(parent, drive, drive)` — every commit
+        // under the drive fans out as `UPDATE` / `DESTROY` on this
+        // subscription. See `planning/drop-query-update.md`.
         client.subscribe_drive(&drive).await.map_err(err)?;
-        client
-            .subscribe_query(atomic_lib::urls::PARENT, &drive, &drive)
-            .await
-            .map_err(err)?;
         tracing::info!("[ws_sync] subscribed to drive {}", &drive[..drive.len().min(24)]);
     }
 
@@ -142,18 +142,6 @@ async fn handle_ws_message(store: &atomic_lib::Db, msg: WsMessage) -> Result<(),
         }
         WsMessage::Commit(json) => {
             ws_apply::apply_commit_json(store, &json).await.map_err(err)?;
-        }
-        WsMessage::QueryUpdate { added, removed, .. } => {
-            for subject in added {
-                if let Ok(bytes) = fetch_resource_state(store, &subject).await {
-                    if !bytes.is_empty() {
-                        let _ = ws_apply::apply_state_update(store, &subject, &bytes).await;
-                    }
-                }
-            }
-            for subject in removed {
-                let _ = ws_apply::apply_destroy(store, &subject).await;
-            }
         }
         WsMessage::Error(e) => tracing::warn!("[ws_sync] server error: {e}"),
         _ => {}
