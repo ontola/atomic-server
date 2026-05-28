@@ -8,6 +8,7 @@ import wasm from 'vite-plugin-wasm';
 import { wuchale } from '@wuchale/vite-plugin';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { execSync } from 'node:child_process';
 
 // TAURI=1 produces a Tauri-compatible bundle: no CSP nonces (Tauri serves
 // HTML verbatim, so the server's runtime ATOMICSERVER_NONCE substitution
@@ -24,7 +25,31 @@ const libDefaultsDir = fs.existsSync(
   ? repoLibDefaults
   : ciLibDefaults;
 
+// Build/version info surfaced on the About page. Computed at build time and
+// injected via `define`. Falls back gracefully outside a git checkout.
+const appVersion = (
+  JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'),
+  ) as { version: string }
+).version;
+
+let gitCommit = 'unknown';
+try {
+  gitCommit = execSync('git rev-parse --short HEAD', { cwd: __dirname })
+    .toString()
+    .trim();
+} catch {
+  // Not a git checkout (e.g. published tarball) — leave as 'unknown'.
+}
+
+const buildTime = new Date().toISOString();
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+    __GIT_COMMIT__: JSON.stringify(gitCommit),
+    __BUILD_TIME__: JSON.stringify(buildTime),
+  },
   resolve: {
     alias: [
       // Force EVERY `loro-crdt` import (our `enableLoro`, plus
@@ -161,6 +186,9 @@ export default defineConfig({
           // so the SW caches whatever HTML the server serves (with nonce), and falls
           // back to it offline.
           globIgnores: ['**/index.html'],
+          // Purge precache entries from prior builds on SW activation, so a
+          // stale worker/wasm can never linger after the hashed names change.
+          cleanupOutdatedCaches: true,
           // Increased for WASM binaries (loro-crdt + atomic-wasm)
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
           // index.html is NOT precached because atomic-server injects CSP nonces.
@@ -302,7 +330,17 @@ export default defineConfig({
       output: {
         entryFileNames: `assets/[name]-[hash].js`,
         chunkFileNames: `assets/chunk_[name]-[hash].js`,
-        assetFileNames: `assets/[name].[ext]`,
+        // Content-hash ALL assets — including the `?url`-imported ClientDb
+        // worker and the loro-crdt `.wasm`. With stable names these were
+        // precached by Workbox with `revision: null` (it assumes an unhashed
+        // name is immutable), so a content change kept the same URL+revision
+        // and the SW served the OLD worker/wasm to NEW hashed chunks forever:
+        // a soft (cmd+r) reload hit a stale worker (missing newer message
+        // handlers → empty resources) and the stale loro bundler glue
+        // (`./loro_wasm_bg.js` import error). Hashing makes every change a new
+        // URL Workbox correctly re-fetches. atomic-wasm is unaffected: it's
+        // served from the stable `/wasm/` public path, not via this pipeline.
+        assetFileNames: `assets/[name]-[hash].[ext]`,
       },
     },
   },
