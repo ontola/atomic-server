@@ -47,6 +47,7 @@ export * from './parse.js';
 export * from './search.js';
 export * from './resource.js';
 export * from './store.js';
+export * from './subject.js';
 export * from './value.js';
 export * from './urls.js';
 export * from './truncate.js';

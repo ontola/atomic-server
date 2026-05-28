@@ -267,21 +267,94 @@ Persistence: one `localStorage['atomic.outbox']` JSON blob (or
 one OPFS file once we go multi-tab safely). One source of truth
 for "what hasn't been pushed yet".
 
-`_pendingCommits` on the Resource still exists in-memory while a
-commit is being signed (signing is sync; outbox is the durable
-boundary). After `signChanges`, the commit moves into the outbox
-and `_pendingCommits` is cleared. After `drain()` succeeds, the
-outbox entry is removed and `applyIncoming({source: 'local-acked'})`
-fires for each commit.
+The `Resource` does **not** keep a post-sign queue. It owns only
+the local editable Loro doc, derived cache, and "dirty since last
+export" bookkeeping. Saving a resource exports a Loro update,
+wraps it in a signed commit certificate, and hands that certificate
+directly to `LocalOutbox`. After that point the outbox is the only
+owner of "this write still needs to reach the server".
+
+The outbox stores signed commits, not bare Loro bytes. The Loro
+bytes are the state transition, but the signed envelope is the
+authorization boundary: subject, signer, timestamp, signature,
+genesis/destroy flags, and optional audit metadata such as
+`previousCommit`. Re-signing raw bytes later would change the
+certificate and breaks DID genesis, retry idempotency, and
+debug/audit semantics.
+
+After `drain()` succeeds, the outbox entry is removed and
+`applyIncoming({source: 'local-acked'})` fires for the accepted
+resource state. Acceptance does not require the remote node to
+retain the commit as a retrievable resource; it only requires the
+node to verify and apply the signed certificate.
 
 **What dies**: `Store.dirtyForSync`, `localStorage['atomic.offline.*']`,
-`hydrateCommitLogFromOffline`, the manual `_lastLocalSignature`
-rehydration in `signChanges`.
+`hydrateCommitLogFromOffline`, `Resource._pendingCommits`,
+`Resource.pushCommits`, the manual `_lastLocalSignature`
+rehydration in `signChanges`, and the local paths that materialize
+commit resources only so they can be drained later.
 
-**Migration**: the outbox can wrap the existing dirty queue
-without behavioural change initially. Then move signing to
+**Migration**: first make the current outbox the durable source of
+truth while keeping the old methods as shims. Then move signing to
 write directly to the outbox instead of `_pendingCommits`. Then
-delete the parallel state stores.
+delete the parallel state stores and the Resource-owned drain path.
+
+#### S4a: Resource save decomposition
+
+`browser/lib/src/resource.ts` is currently the knot: it holds the
+Loro doc, derived prop cache, validation, commit-building state,
+in-memory commit queue, offline persistence, post-ack blob upload,
+and store notification. The cleanup should split those jobs without
+changing the public `resource.save()` call.
+
+Target responsibilities:
+
+| Owner | Responsibility |
+| --- | --- |
+| `Resource` | Edit Loro state, rebuild derived cache, expose reads, track local dirty state. |
+| `signLoroCommit` helper | Build and sign one commit certificate from `{subject, loroUpdate, previousCommit, isGenesis, destroy}`. |
+| `LocalOutbox` | Own every signed commit after signing; persist, retry, classify terminal failures. |
+| `Store` / future `DriveSync` | Drain outbox, POST commits, apply acks, push referenced blobs. |
+| Optional audit layer | Materialize retained commit resources for commit detail/feed UI only. |
+
+Concrete cleanup sequence:
+
+- [ ] Add a pure browser signing helper alongside `CommitBuilder`
+      that signs a Loro update without storing mutable builder state
+      on `Resource`.
+- [ ] Change `Resource.save()` to export the current Loro delta,
+      call the helper, enqueue the signed commit in `store.outbox`,
+      persist local state for offline durability, and request a
+      drain when online.
+- [ ] Move post-ack work out of `Resource.pushCommits` into the
+      outbox drain path: set `lastCommit`, call
+      `applyIncoming({source: 'local-acked'})`, subscribe newly
+      created subjects, save batched children, and push referenced
+      blobs.
+- [ ] Delete `Resource._pendingCommits`, `setPendingCommits`,
+      `hasPendingCommits`, `_lastLocalSignature`, `pushCommits`,
+      `_drainPendingCommits`, `saveOffline`, and
+      `applyPendingCommitsLocally` after their behaviour exists in
+      the outbox/store path.
+- [ ] Shrink `CommitBuilder` to a compatibility/test helper, or
+      remove it from the browser public API if no downstream caller
+      needs it. The server-side Rust `CommitBuilder` can remain as a
+      separate legacy/native-resource builder until the Rust resource
+      API has its own cleanup pass.
+- [ ] Stop treating commit resources as required local state.
+      Continue to synthesize them only for pending/audit UI when the
+      UI explicitly needs `CommitDetail`; resource history must come
+      from the Loro oplog.
+
+Non-goals for this cleanup:
+
+- Do not remove signed commits from the transport. `COMMIT` remains
+  the write authorization boundary.
+- Do not make the outbox store only raw Loro updates. It must store
+  signed certificates.
+- Do not make commit retention decisions in the browser. Retention is
+  node policy; the browser should work whether accepted commits are
+  later retrievable or not.
 
 ---
 
@@ -395,15 +468,19 @@ mostly stay.
    moves existing code behind one function. (S2)
 2. **`LocalOutbox`** — wraps existing `_pendingCommits` +
    `dirtyForSync`. Existing tests keep passing. (S4)
-3. **`applyIncoming` chokepoint** — move WS handlers over one
+3. **Resource save decomposition** — make `Resource.save()` sign
+   directly into `LocalOutbox`, move ack/blob/child follow-up work
+   into the store drain path, then delete `Resource._pendingCommits`
+   and `Resource.pushCommits`. (S4a)
+4. **`applyIncoming` chokepoint** — move WS handlers over one
    Tag at a time, then HTTP fetch, then local-commit paths.
    Each Tag move is independently testable. (S1)
-4. **`DriveSync` state machine** — once `applyIncoming` is the
+5. **`DriveSync` state machine** — once `applyIncoming` is the
    only ingress, the orchestrator can be added without
    surprising the rest of the code. (S6)
-5. **`useSyncExternalStore` hooks** — biggest perf win, biggest
+6. **`useSyncExternalStore` hooks** — biggest perf win, biggest
    surface area on `data-browser`. Do behind a flag. (S3)
-6. **SharedWorker** — last, because it touches the worker
+7. **SharedWorker** — last, because it touches the worker
    protocol and needs cross-browser smoke tests. (S5)
 
 Each step is independently shippable. Steps 1 and 2 can land in

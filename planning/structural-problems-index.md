@@ -28,8 +28,8 @@ plans and can be tackled independently.
 | 3 | [unify-subscription-actors.md](./unify-subscription-actors.md) | Cleanup | Medium | Fold LoroSyncBroadcaster's subject-sub into CommitMonitor |
 | 5 | [unify-resource-dirty-signals.md](./unify-resource-dirty-signals.md) | Correctness | Medium | Single `getSaveState(subject)` enum |
 | 6 | [unify-resource-representations.md](./unify-resource-representations.md) | Correctness | High | Make Loro doc authoritative; `_cache` becomes memoized read |
-| 7 | [arc-actor-message-payloads.md](./arc-actor-message-payloads.md) | Performance | Low | `CommitMessage` Arc-wrap remaining (`atomic_lib` change). `MembershipNotification.loro_snapshot` already Arc-wrapped. |
-| 8 | [subject-types-end-to-end.md](./subject-types-end-to-end.md) | Correctness | High | Add a `Subject` TS type that round-trips through Rust |
+| 7 | [arc-actor-message-payloads.md](./arc-actor-message-payloads.md) | Performance | Low | ✅ Stretch landed (uncommitted) — `SendFrame` + encode-once + `Bytes::from_owner` zero-copy at WS write; 6/6 WS tests green. `MembershipNotification` already Arc-wrapped (committed earlier). `CommitMessage` Arc-wrap (atomic_lib change) deferred. |
+| 8 | [subject-types-end-to-end.md](./subject-types-end-to-end.md) | Correctness | High | 🟡 Started (uncommitted) — `Subject` brand + `asSubject`/`tryAsSubject`/`isValidSubject` added in `browser/lib/src/subject.ts` with 8 passing tests. Consumer migration not started. |
 
 ## Suggested execution order
 

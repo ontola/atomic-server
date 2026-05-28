@@ -52,6 +52,18 @@ impl AppState {
         )
         .await?;
 
+        // Drop the persisted watched-query registry on startup. Every
+        // entry was registered by a now-dead WS connection; live
+        // subscribers re-register on reconnect. Without this, e2e
+        // suites leak a unique filter per test (drives are unique)
+        // and `check_if_atom_matches_watched_query_filters` walks a
+        // growing pile of dead filters per commit, eventually pushing
+        // rapid-save tests past their timeout. See
+        // `Db::clear_watched_queries` for the full rationale.
+        if let Err(e) = store.clear_watched_queries() {
+            tracing::warn!("clear_watched_queries on startup failed: {e}");
+        }
+
         // Register all built-in class extenders
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
         store.add_class_extender(plugins::chatroom::build_message_extender())?;

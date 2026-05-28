@@ -145,6 +145,21 @@ export class Resource<C extends OptionalClass = any> {
   private _lastCommit: string | undefined;
 
   private inProgressCommit: Promise<void> | undefined;
+
+  /** Refcount of in-flight `save()` calls. Bumped in `save()` entry
+   * and dropped in the matching `finally`. `inProgressCommit` above
+   * is left set even after the promise resolves (the existing flow
+   * uses it as a "save was started" sentinel), so checking it for
+   * "saving right now?" gives a permanent true after the first save.
+   */
+  private _saveDepth = 0;
+
+  /** True while at least one `save()` is in flight. Lets the store
+   * report this in `pendingDirtyCount` so editor exit paths
+   * (Escape/blur) don't return before the commit lands. */
+  public get isSaving(): boolean {
+    return this._saveDepth > 0;
+  }
   private hasQueue = false;
   /**
    * Coalesces concurrent {@link pushCommits} invocations onto a single
@@ -391,7 +406,10 @@ export class Resource<C extends OptionalClass = any> {
         this._loroDoc.import(stored);
       } else {
         for (const [key, value] of Object.entries(this._cache)) {
-          if (key !== properties.commit.lastCommit && key !== commits.properties.createdAt) {
+          if (
+            key !== properties.commit.lastCommit &&
+            key !== commits.properties.createdAt
+          ) {
             this.loroSetProperty(key, value);
           }
         }
@@ -411,7 +429,10 @@ export class Resource<C extends OptionalClass = any> {
       // behaviour is unchanged.
       if (initializedFromSnapshot && this._loroMap) {
         for (const [key, value] of Object.entries(this._cache)) {
-          if (key !== properties.commit.lastCommit && key !== commits.properties.createdAt) {
+          if (
+            key !== properties.commit.lastCommit &&
+            key !== commits.properties.createdAt
+          ) {
             if (this._loroMap.get(key) === undefined) {
               this.loroSetProperty(key, value);
             }
@@ -451,7 +472,10 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   private applyRawValue(prop: string, val: AtomicValue): void {
-    if (prop === properties.commit.lastCommit || prop === commits.properties.createdAt) {
+    if (
+      prop === properties.commit.lastCommit ||
+      prop === commits.properties.createdAt
+    ) {
       if (val === undefined) {
         delete this._cache[prop];
       } else {
@@ -576,7 +600,11 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     // Preserve server-managed/housekeeping properties in the cache
-    const serverManaged = [properties.commit.lastCommit, commits.properties.createdAt];
+    const serverManaged = [
+      properties.commit.lastCommit,
+      commits.properties.createdAt,
+    ];
+
     for (const key of serverManaged) {
       if (this._cache[key] !== undefined && nextCache[key] === undefined) {
         nextCache[key] = this._cache[key];
@@ -1008,7 +1036,11 @@ export class Resource<C extends OptionalClass = any> {
 
         // Copy housekeeping properties from resourceB._cache to this._cache
         // before rebuilding cache so they are preserved
-        const serverManaged = [properties.commit.lastCommit, commits.properties.createdAt];
+        const serverManaged = [
+          properties.commit.lastCommit,
+          commits.properties.createdAt,
+        ];
+
         for (const key of serverManaged) {
           if (resourceB._cache[key] !== undefined) {
             this._cache[key] = resourceB._cache[key];
@@ -1034,7 +1066,10 @@ export class Resource<C extends OptionalClass = any> {
     } else {
       // No incoming Loro snapshot (e.g. metadata-only update or non-crdt resource)
       // Copy housekeeping properties first
-      const serverManaged = [properties.commit.lastCommit, commits.properties.createdAt];
+      const serverManaged = [
+        properties.commit.lastCommit,
+        commits.properties.createdAt,
+      ];
       for (const key of serverManaged) {
         if (resourceB._cache[key] !== undefined) {
           this._cache[key] = resourceB._cache[key];
@@ -2094,6 +2129,18 @@ export class Resource<C extends OptionalClass = any> {
       return undefined;
     }
 
+    this._saveDepth++;
+    try {
+      return await this._saveInner(differentAgent, hasChanges);
+    } finally {
+      this._saveDepth--;
+    }
+  }
+
+  private async _saveInner(
+    differentAgent: Agent | undefined,
+    hasChanges: boolean,
+  ): Promise<string | undefined> {
     const agent = this.store.getAgent() ?? differentAgent;
 
     if (!agent) {
@@ -2385,7 +2432,10 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
-    if (prop === properties.commit.lastCommit || prop === commits.properties.createdAt) {
+    if (
+      prop === properties.commit.lastCommit ||
+      prop === commits.properties.createdAt
+    ) {
       delete this._cache[prop];
 
       return;

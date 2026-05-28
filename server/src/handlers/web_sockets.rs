@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::{
-    actor_messages::CommitMessage, appstate::AppState, commit_monitor::CommitMonitor,
+    actor_messages::SendFrame, appstate::AppState, commit_monitor::CommitMonitor,
     errors::AtomicServerResult, handlers::ws_v2, helpers::get_auth_headers,
     loro_sync_broadcaster::LoroSyncBroadcaster,
 };
@@ -325,9 +325,9 @@ impl WebSocketConnection {
                         self.store.get_base_domain().as_deref(),
                     );
                     // Drive-wide fanout: every commit under this drive lands
-                    // on the connection as `CommitMessage` (encoded as UPDATE
-                    // or DESTROY). Replaces the old SubscribeQuery /
-                    // QUERY_UPDATE pair — see `planning/drop-query-update.md`.
+                    // on the connection as a pre-encoded `SendFrame`
+                    // (UPDATE or DESTROY). Replaces the old SubscribeQuery /
+                    // QUERY_UPDATE pair.
                     self.commit_monitor_addr
                         .do_send(crate::actor_messages::SubscribeDrive {
                             addr: ctx.address(),
@@ -484,49 +484,16 @@ impl WebSocketConnection {
 
 // ---- Outgoing message handlers (Actor → WebSocket) ----
 
-impl Handler<CommitMessage> for WebSocketConnection {
+impl Handler<SendFrame> for WebSocketConnection {
     type Result = ();
 
-    fn handle(&mut self, msg: CommitMessage, ctx: &mut ws::WebsocketContext<Self>) {
-        let commit = &msg.commit_response.commit;
-        // The wire `commit_id` becomes the client's `lastCommit` propval and,
-        // on its next commit, its `previousCommit`. The latter is parsed as
-        // an AtomicURL by the server's JSON-AD parser — a raw base64
-        // signature isn't a URL and gets rejected. Always emit the full
-        // `did:ad:commit:{signature}` DID. (`commit.url` is never populated
-        // in practice, so the previous `or(signature)` fallback was always
-        // taken — silently dropping the prefix.)
-        let commit_id_owned = commit
-            .url
-            .clone()
-            .or_else(|| {
-                commit
-                    .signature
-                    .as_ref()
-                    .map(|s| format!("did:ad:commit:{}", s))
-            })
-            .unwrap_or_default();
-        let commit_id = commit_id_owned.as_str();
-
-        // Resolve any `internal:/…` subject to the server's origin — the client
-        // only speaks HTTP URLs and DIDs; `internal:` is a server-only form.
-        let origin = self
-            .store
-            .get_base_domain()
-            .unwrap_or_else(|| "http://localhost".to_string());
-        let subject_resolved = commit.subject.resolve(&origin);
-
-        if let Some(loro_update) = &commit.loro_update {
-            ctx.binary(ws_v2::encode_update(
-                ws_v2::flags::HAS_COMMIT_ID | ws_v2::flags::PUSH,
-                0,
-                &subject_resolved,
-                Some(commit_id),
-                loro_update,
-            ));
-        } else if commit.destroy.unwrap_or(false) {
-            ctx.binary(ws_v2::encode_destroy(0, &subject_resolved));
-        }
+    /// Receives a pre-encoded `UPDATE` / `DESTROY` wire frame from
+    /// `CommitMonitor`'s fanout and writes it to the WebSocket. The
+    /// encoding work happened once at the fanout site; here we hand
+    /// the `Arc<[u8]>` to `Bytes::from_owner` so actix shares ownership
+    /// without copying the bytes.
+    fn handle(&mut self, msg: SendFrame, ctx: &mut ws::WebsocketContext<Self>) {
+        ctx.binary(actix_web::web::Bytes::from_owner(msg.frame));
     }
 }
 
