@@ -171,7 +171,10 @@ const AppSettings: React.FunctionComponent = () => {
                 </CheckboxLabel>
               </Column>
             </SettingsSection>
-            <SettingsSection label='Accessibility'>
+            <SettingsSection
+              label='Accessibility'
+              childSearchKeywords='disable page transition animations view transitions motion'
+            >
               <Column gap='0.5rem'>
                 <CheckboxLabel>
                   <Checkbox

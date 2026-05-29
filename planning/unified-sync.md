@@ -26,12 +26,13 @@ Flutter / browser UI
         │
    ┌────┴────┐
    ▼         ▼
-WsTransport  IrohTransport          ← send/recv same v2 frames
+WsTransport  IrohTransport  ReticulumTransport  ← send/recv same v2 frames
 ```
 
 Wire format: [`docs/src/websockets.md`](../docs/src/websockets.md) (Atomic peer
 protocol). Encoding lives in `lib/src/sync/protocol.rs`; semantics in
-`lib/src/sync/engine.rs`.
+`lib/src/sync/engine.rs`. Reticulum transport planning lives in
+[`reticulum-sync.md`](./reticulum-sync.md).
 
 ## Current state (honest)
 

@@ -1,9 +1,12 @@
 # Commits as State Certificates
 
-> **Status:** Proposal (2026-05). Reframes Atomic Commits around Loro as the
-> resource history engine. It does **not** propose removing signed writes — it
-> separates the *required trust boundary* (verify a signed write) from
-> *optional audit retention* (keep the commit afterwards).
+> **Status:** Proposal (2026-05; per-resource retention added 2026-05-29).
+> Reframes Atomic Commits around Loro as the resource history engine. It does
+> **not** propose removing signed writes — it separates the *required trust
+> boundary* (verify a signed write) from *optional audit retention* (keep the
+> commit afterwards). Retention is resolved **per resource** (user-controlled,
+> inherited down the parent chain), capped by node policy — see
+> "Per-resource retention" below.
 
 ## Thesis
 
@@ -281,6 +284,88 @@ explain why a given signer was allowed to write at a given point. A node
 configured `retention=none` keeps this expanded floor, not only genesis.
 Ordinary content commits remain discardable.
 
+## Per-resource retention (user-controlled, inherited)
+
+The node-level `ATOMIC_COMMIT_RETENTION` above is the deployment floor. But
+retention is also a **product decision the user should make per resource** —
+"keep full history of this contract" vs "this scratch note needs none." So the
+effective policy for a resource is resolved, not global.
+
+### Three lifetimes (only one is optional)
+
+The clarifying frame: a resource is made of three things with three different
+lifetimes, and **only the third is what retention controls.**
+
+| Thing | Lifetime | Lives in |
+| --- | --- | --- |
+| **Current state** — the values right now | Always kept | Loro snapshot (current projection) |
+| **Genesis facts** — `createdAt`, `createdBy` | Always kept | intrinsic propvals on the resource |
+| **Change history** — everything between genesis and now | **Optional, per-resource** | retained commits / full Loro oplog |
+
+Turning history off never costs the current data or the creation metadata.
+That invariant is what makes a user-facing toggle safe: "stop keeping history"
+can't be misread as "lose my resource" or "lose when it was made."
+
+This makes denormalising `createdAt` (and `createdBy`) onto the resource a
+**prerequisite**, not a nicety: a `retention=none` resource has no commit to
+read those from, so they must be intrinsic propvals written at genesis. (It
+also fixes today's fragility where views fetch a `did:ad:commit:<sig>` resource
+just to render an author/timestamp — see "History / audit UI" below.)
+
+### The `retention` property
+
+A resource may carry a `retention` propval:
+
+```text
+retention = full | recent | none   (unset = inherit)
+```
+
+Effective retention resolves in order:
+
+1. The resource's own `retention` propval, if set.
+2. The nearest ancestor in the `parent` chain that sets `retention` (a folder
+   or drive sets policy for its subtree).
+3. The node default (`ATOMIC_COMMIT_RETENTION`).
+
+So a user sets `full` once on a sensitive folder and everything under it
+inherits it; a single ephemeral child can override to `none`. The node policy
+is the floor a deployment can enforce (a storage-constrained node may *cap*
+retention regardless of the resource's request — the resolved value is
+`min(resource-or-inherited, node-max)`).
+
+### Two orthogonal dials
+
+Retention (*how much history*) is independent of signing granularity (*how
+finely the kept history is attributable*). They compose:
+
+| | `retention=none` | `retention=full`, batched sign (today) | `retention=full`, per-change sign (high-audit) |
+| --- | --- | --- | --- |
+| Current state | ✅ verifiable via state certificate | ✅ | ✅ |
+| Per-save author/time | ❌ | ✅ | ✅ |
+| Per-keystroke audit | ❌ | ❌ | ✅ (tamper-evident) |
+| Storage cost | lowest | medium | highest (~150 B/change) |
+
+Most resources want `none` or `recent`. Legal/regulated resources opt into
+`full` + per-change signing. The per-change profile is specified in
+[`sign-at-drain.md`](./sign-at-drain.md) ("high-audit profile"); it is not a
+prerequisite for per-resource retention and can land later.
+
+### Mechanism: Loro shallow snapshots
+
+`retention=none` is not "throw away the resource" — it's "compact." Loro
+supports a shallow snapshot at the current frontier plus GC of older ops. So:
+
+- `full` → keep the full Loro snapshot + every signed commit/update.
+- `recent` → shallow snapshot retaining a bounded window of recent history.
+- `none` → shallow snapshot at the current frontier, drop prior ops and
+  intermediate commits; the server issues a signed **state certificate**
+  (the `stateHash`-bearing attestation defined above) so the compacted
+  current state stays verifiable without the chain.
+
+Compaction is a server-side background operation gated by the resolved policy;
+the must-retain floor (genesis + authorization-critical commits) is never
+compacted away.
+
 ## DID genesis
 
 DID resource identity still derives from the genesis commit signature:
@@ -362,11 +447,32 @@ commit is not assumed to equal one UI action or one Loro op.**
 
 ### History / audit UI
 
-- Resource history page: Loro oplog (the change list + time travel).
-- Audit/feed views: retained commits only, and the UI must clearly indicate
-  when retention is unavailable rather than silently showing an empty feed.
-- Distinguish "resource history" (always available) from "audit log"
-  (retention-dependent).
+History may be **absent by policy** (a `retention=none` resource has no commit
+log and a shallow Loro snapshot with no past ops). The UI must treat that as a
+first-class, non-error state — not a spinner, not an empty feed that looks like
+a bug.
+
+- **Basic facts** (author, creation time) come from **intrinsic propvals**
+  (`createdAt`, `createdBy`) on the resource — never from fetching a
+  `did:ad:commit:<sig>` resource. This is what makes them survive
+  `retention=none`, and it removes the current fragile coupling (a chatroom
+  message shouldn't fetch a commit just to show who/when).
+- **Resource history page**: Loro oplog (change list + time travel) — available
+  whenever the oplog is retained (`full` / `recent`); shows "history not
+  retained for this resource" under `none`.
+- **Audit/feed views** (per-change *signed* attribution): retained commits
+  only, gated on policy + signing profile. Clearly indicate when unavailable.
+- Distinguish three states explicitly: **current state** (always),
+  **resource history** (retained-oplog-dependent), **signed audit log**
+  (retained-commits + signing-profile-dependent).
+
+### Required first step (prerequisite for any retention work)
+
+Denormalise `createdAt` (and `createdBy` = genesis signer) as intrinsic
+propvals written at genesis and carried in the Loro doc. Migrate every view
+that reads creation/author from a fetched commit to read these instead. This
+is independently shippable, fixes the current commit-fetch fragility, and is a
+hard prerequisite for `retention=none` (which has no commit to read them from).
 
 ## Spec impact
 
@@ -454,6 +560,25 @@ history model):
 - [ ] Add a test mode with retention disabled; ensure write/read/sync/history
       all pass with it off (genesis commits still retained).
 
+### Phase 2.5 — intrinsic creation metadata (prerequisite for per-resource)
+
+- [ ] Write `createdAt` (+ `createdBy` = genesis signer) as intrinsic propvals
+      at genesis, carried in the Loro doc.
+- [ ] Migrate views that read creation/author from a fetched
+      `did:ad:commit:` resource to read these propvals instead.
+- [ ] Independently shippable; also fixes the current commit-fetch fragility
+      (chatroom `<CommitDetail>` vanishing on refresh).
+
+### Phase 2.6 — per-resource retention resolution
+
+- [ ] Add the `retention` propval (`full | recent | none`, unset = inherit).
+- [ ] Resolve effective policy: resource → ancestor `parent` chain → node
+      default, capped by node max.
+- [ ] Loro shallow-snapshot + GC compaction for `none` / `recent`; issue a
+      signed state certificate on compaction.
+- [ ] UI: a `retention` control on the resource (and folder/drive for
+      subtree default).
+
 ### Phase 3 — Loro-based history
 
 - [ ] Retire `server/src/plugins/versioning.rs` (the commit-replay
@@ -461,7 +586,8 @@ history model):
       `loro.rs::get_history()`, which already derives versions from the oplog.
 - [ ] Move the history UI/API onto the Loro oplog.
 - [ ] Keep audit/feed UI explicitly backed by retained commits, surfacing when
-      retention is unavailable.
+      retention is unavailable; treat "history not retained" as a first-class
+      state.
 
 ### Phase 4 — optional `stateHash`
 
@@ -481,16 +607,16 @@ materialized state before commit retention can safely become optional.
 
 ## Open questions
 
-1. **Retention scope.** Should retention be per-node, per-drive, or
-   per-resource? (Leaning per-node, with a per-drive override for
-   shared/audited drives.)
+1. **Retention scope.** ~~Per-node, per-drive, or per-resource?~~ **Resolved
+   (2026-05-29): per-resource, inherited.** Effective policy =
+   `min(resource-or-inherited-ancestor, node-max)`, where the inherited value
+   walks the `parent` chain (resource → folder → drive) and falls back to the
+   node default. See "Per-resource retention" above.
    [`authorization-sync.md`](./authorization-sync.md#per-class-retention-preferences)
-   proposes a fourth axis — **per-class** retention preferences declared
-   in the ontology — which is orthogonal to the three above. The three
-   layers compose: node policy is the outer bound, per-class preference
-   is the hint inside it, and the cross-agent authorization-critical
-   floor (genesis + rights-changing + parent-changing + destroy) wins
-   over both. See
+   adds a **per-class** preference declared in the ontology — orthogonal, and
+   composes as a hint when a resource sets no explicit `retention`. The
+   cross-agent authorization-critical floor (genesis + rights-changing +
+   parent-changing + destroy) still wins over all of them. See
    [`authorization-sync.md` § Relationship to node-level retention policy](./authorization-sync.md#relationship-to-node-level-retention-policy).
 2. Do audit feeds need a bounded mode with periodic signed checkpoints, so a
    feed survives `recent` eviction without keeping every commit?

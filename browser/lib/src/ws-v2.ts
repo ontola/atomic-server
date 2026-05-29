@@ -489,7 +489,9 @@ const TAG_NAMES: Record<number, string> = {
 function formatBytes(n: number): string {
   const kb = n / 1024;
   if (kb === 0) return '0kb';
-  const formatted = kb < 0.1 ? kb.toFixed(3) : (kb < 10 ? kb.toFixed(2) : kb.toFixed(1));
+  const formatted =
+    kb < 0.1 ? kb.toFixed(3) : kb < 10 ? kb.toFixed(2) : kb.toFixed(1);
+
   return `${formatted.replace(/\.?0+$/, '')}kb`;
 }
 

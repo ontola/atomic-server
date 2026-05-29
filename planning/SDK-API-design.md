@@ -25,11 +25,11 @@ In the "old" HTTP based Atomic(Server) UX, an app developer had to:
 ## Future situation
 
 - Easy to follow end-to-end tutorial
-- Schema creation in-code (no need to use the Ontology Editor if you're just writing code)
+- Schema creation in-code (no need to use the Ontology Editor if you're just writing code). See [`json-schema-code-first.md`](./json-schema-code-first.md).
 - We provide not just the pipework for persistence, sync, authentication, authorization, but also useful front-end components to provide a unified and secure experience
 
 ## What needs to happen
 
 - [ ] Make tutorial describing the future situation (I think this is where we should start, so we design from the perspective of a developer)
-- [ ] Schema creation in-code
+- [ ] Schema creation in-code. See [`json-schema-code-first.md`](./json-schema-code-first.md).
 - [ ] Update APIs
