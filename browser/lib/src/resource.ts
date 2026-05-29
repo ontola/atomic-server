@@ -127,18 +127,6 @@ export class Resource<C extends OptionalClass = any> {
   private _loroVersionAtLastSave?: VersionVector;
 
   /**
-   * Queue of commits that have been signed locally but not yet pushed to the
-   * server. `signChanges()` appends here; `push()` drains it.
-   */
-  private _pendingCommits: Commit[] = [];
-
-  /**
-   * Signature of the most recently locally-signed commit.  Used as
-   * `previousCommit` when chaining multiple local commits before pushing.
-   */
-  private _lastLocalSignature: string | undefined;
-
-  /**
    * The subject of the most recently applied commit. This is the source of truth
    * for the commit chain and is protected from being clobbered by remote merges.
    */
@@ -323,16 +311,7 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Returns `true` when there are locally-signed commits waiting to be pushed. */
   public get hasPendingCommits(): boolean {
-    return this._pendingCommits.length > 0;
-  }
-
-  /**
-   * Restore previously-signed commits onto this resource — used by the store
-   * when a hydrated resource needs its offline-persisted commit queue
-   * re-attached after a page reload.
-   */
-  public setPendingCommits(pending: Commit[]): void {
-    this._pendingCommits = [...pending];
+    return this._store?.outbox.hasPending(this.subject) ?? false;
   }
 
   private get store(): Store {
@@ -992,8 +971,6 @@ export class Resource<C extends OptionalClass = any> {
     res.commitBuilder = this.commitBuilder.clone();
     res._dirty = this._dirty;
     res.appliedCommitSignatures = this.appliedCommitSignatures;
-    res._pendingCommits = [...this._pendingCommits];
-    res._lastLocalSignature = this._lastLocalSignature;
 
     res.cloneLoroStateFrom(this);
 
@@ -1921,14 +1898,16 @@ export class Resource<C extends OptionalClass = any> {
     // covers props set via `set()` and via cache hydration alike.
     this.writeDatatypeTags();
 
-    // Chain: use last locally-signed commit, or the server-known lastCommit.
-    if (this._lastLocalSignature) {
-      // Construct the full commit URL that the server will use.  This ensures
-      // the serialization signed here matches what the server will produce when
-      // it verifies the signature.  The server stores commit resources at
-      // `{origin}/commits/{signature}`.
-      const commitUrl = `did:ad:commit:${this._lastLocalSignature}`;
-      this.commitBuilder.setPreviousCommit(commitUrl);
+    // Chain on the most recent signed-but-undrained commit if one
+    // exists, else on the server-known `lastCommit`. The outbox is
+    // the canonical "what's signed but not acked" list.
+    const queued = this.store.outbox.getEntry(this.subject)?.commits;
+    const lastQueuedSig = queued?.length
+      ? queued[queued.length - 1]?.signature
+      : undefined;
+
+    if (lastQueuedSig) {
+      this.commitBuilder.setPreviousCommit(`did:ad:commit:${lastQueuedSig}`);
     } else {
       const lastCommit =
         this._lastCommit ?? this.get(properties.commit.lastCommit)?.toString();
@@ -1969,8 +1948,7 @@ export class Resource<C extends OptionalClass = any> {
     if (
       isDIDEligible &&
       !isAgent &&
-      !this.commitBuilder.previousCommit &&
-      !this._lastLocalSignature
+      !this.commitBuilder.previousCommit
     ) {
       this.commitBuilder.setIsGenesis(true);
     }
@@ -2005,10 +1983,12 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.appliedCommitSignatures.add(commit.signature);
-    this._lastLocalSignature = commit.signature;
-    this._pendingCommits.push(commit);
     this.loading = false;
     this.new = false;
+
+    // S4a: outbox owns "signed but not acked." The certificate goes
+    // straight onto it; `_drainPendingCommits` reads from there.
+    this.store.outbox.upsertCommit(this.subject, commit);
 
     // Surface the queued commit in the Sync page's commit log immediately,
     // so users can see what's pending without waiting for the push. The same
@@ -2034,7 +2014,7 @@ export class Resource<C extends OptionalClass = any> {
    * exists" when both pushes race the server's lookup→apply window.
    */
   public async pushCommits(): Promise<string | undefined> {
-    if (this._pendingCommits.length === 0) {
+    if (!this.store.outbox.hasPending(this.subject)) {
       return undefined;
     }
 
@@ -2055,27 +2035,43 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
+  /**
+   * POST every signed commit the outbox holds for this subject, in
+   * order, then run the post-ack work that the legacy save flow
+   * expected (`lastCommit` advance, `applyToStore('local-acked')`,
+   * blob push, new-subject subscribe + child save).
+   *
+   * The outbox is the durable queue; this method is the per-resource
+   * drain that propagates errors back to the caller. Cross-resource
+   * reconnect drains run through `store.syncDirtyResources` ->
+   * `postOutboxEntry`, which delegates here too.
+   */
   private async _drainPendingCommits(): Promise<string | undefined> {
     const endpoint = this.getCommitEndpoint();
-    const wasNew =
-      this._pendingCommits.length > 0 &&
-      this._pendingCommits[0].previousCommit === undefined;
+    const entry = this.store.outbox.getEntry(this.subject);
+    if (!entry || entry.commits.length === 0) return undefined;
+
+    const wasNew = entry.commits[0]?.previousCommit === undefined;
 
     let lastCommitId: string | undefined;
+    const postedSignatures: string[] = [];
 
     try {
       this.commitError = undefined;
       // Pre-push: surface in-flight state to subscribers.
       this.applyToStore('local-pre-push');
 
-      while (this._pendingCommits.length > 0) {
-        const commit = this._pendingCommits[0];
+      for (const commit of [...entry.commits]) {
         const created = await this.store.postCommit(commit, endpoint);
         lastCommitId = commitIdOf(created);
-        this._pendingCommits.shift();
+        if (commit.signature) postedSignatures.push(commit.signature);
       }
 
-      this._lastLocalSignature = undefined;
+      // Ack what we actually posted — commits upserted mid-drain
+      // (typing a new character while the previous letter's POST was
+      // in flight) stay queued for the next drain.
+      this.store.outbox.acknowledgeCommits(this.subject, postedSignatures);
+
       if (lastCommitId) this.setLastCommitValue(lastCommitId);
       this.store.notifyResourceSaved(this);
 
@@ -2134,7 +2130,7 @@ export class Resource<C extends OptionalClass = any> {
   public async save(differentAgent?: Agent): Promise<string | undefined> {
     const hasChanges = this.hasUnsavedChanges();
 
-    if (!hasChanges && this._pendingCommits.length === 0) {
+    if (!hasChanges && !this.store.outbox.hasPending(this.subject)) {
       // Save called on a clean resource (typical on blur with no edits) — not
       // an error worth surfacing to the console.
       return undefined;
@@ -2293,20 +2289,22 @@ export class Resource<C extends OptionalClass = any> {
     this.store.notifyResourceSaved(this);
   }
 
-  /** Persist the current resource state offline: each pending
-   * commit becomes a CommitDetail-renderable resource, the
-   * resource itself is persisted atomically (JSON-AD + Loro
-   * snapshot), and the outbox is updated so the queue survives
-   * a reload. `_pendingCommits` stays in-memory until drain. */
+  /** Persist the current resource state offline: each queued
+   *  commit becomes a CommitDetail-renderable resource, and the
+   *  resource itself is persisted atomically (JSON-AD + Loro
+   *  snapshot). The outbox already persists the signed commits
+   *  themselves — no extra step needed for the queue to survive
+   *  a reload. */
   private async applyPendingCommitsLocally(): Promise<void> {
     // Server sets createdAt on apply; we need it locally for sort.
     if (this.get(commits.properties.createdAt) === undefined) {
       this.setCreatedAtValue(Date.now());
     }
 
+    const queued = this.store.outbox.getEntry(this.subject)?.commits ?? [];
     let lastCommitSubject: string | undefined;
 
-    for (const commit of this._pendingCommits) {
+    for (const commit of queued) {
       const commitSubject = `did:ad:commit:${commit.signature}`;
       lastCommitSubject = commitSubject;
       const commitResource = new Resource(commitSubject);
@@ -2353,13 +2351,6 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.applyToStore('offline-replay');
-
-    // Outbox is durable — survives reload so reconnect drain
-    // sees the queued commits even after the in-memory store
-    // is wiped.
-    if (this._pendingCommits.length) {
-      this.store.outbox.setEntry(this.subject, this._pendingCommits);
-    }
   }
 
   /**
