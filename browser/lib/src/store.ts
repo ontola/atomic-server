@@ -1612,11 +1612,14 @@ export class Store {
       return true;
     }
 
-    // Offline-created resources with queued signed commits: the
-    // outbox holds them durably across reload. The freshly hydrated
-    // resource doesn't need a per-instance queue re-attachment —
-    // `pushCommits` reads straight from `store.outbox.getEntry`.
-    if (existing?.hasPendingCommits) {
+    // Don't clobber an in-memory resource that has unsaved local
+    // edits — `hydrateOfflineReplay` would overwrite the in-flight
+    // Loro state with the older clientDb snapshot. The outbox queue
+    // survives reload independently; the drain reads from there.
+    // (Cold-load case: `existing` is a placeholder with no Loro doc
+    // and no unsaved changes, so this guard is a no-op and the
+    // hydration proceeds.)
+    if (existing?.hasUnsavedChanges()) {
       return true;
     }
 
