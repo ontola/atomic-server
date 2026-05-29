@@ -317,9 +317,9 @@ Target responsibilities:
 | `Store` / future `DriveSync` | Drain outbox, POST commits, apply acks, push referenced blobs. |
 | Optional audit layer | Materialize retained commit resources for commit detail/feed UI only. |
 
-Concrete cleanup sequence:
+Aight Concrete cleanup sequence:
 
-- [ ] Add a pure browser signing helper alongside `CommitBuilder`
+- [x] Add a pure browser signing helper alongside `CommitBuilder`
       that signs a Loro update without storing mutable builder state
       on `Resource`.
 - [ ] Change `Resource.save()` to export the current Loro delta,
@@ -345,6 +345,27 @@ Concrete cleanup sequence:
       Continue to synthesize them only for pending/audit UI when the
       UI explicitly needs `CommitDetail`; resource history must come
       from the Loro oplog.
+
+Retry/save cursor invariants:
+
+- [ ] Do not repair `previousCommit` failures by clearing
+      `_loroVersionAtLastSave` to `undefined`. That turns a rejected
+      delta into a full snapshot export and mixes retry logic with
+      genesis/update detection, server-managed metadata, and unrelated
+      pending saves.
+- [ ] Treat a signed commit as immutable. If it was rejected because it
+      was built against stale metadata, discard that certificate and
+      re-sign from a known Loro export baseline; do not mutate and
+      retry the same signed object.
+- [ ] Persist the signed certificate to `LocalOutbox` before considering
+      the exported Loro version durable. Once the outbox owns it,
+      retrying is an outbox concern, not `Resource` state surgery.
+- [ ] Serialize per-resource saves around the outbox enqueue boundary so
+      two debounced saves cannot both sign against the same local export
+      cursor and then race each other through the retry path.
+- [ ] Long term: remove the browser `previousCommit` retry branch. Modern
+      servers do not use `previousCommit` as the causal validation gate;
+      Loro op IDs and the server causality guard do that work.
 
 Non-goals for this cleanup:
 

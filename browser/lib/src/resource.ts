@@ -534,7 +534,7 @@ export class Resource<C extends OptionalClass = any> {
           this._loroDoc.import(bytes);
           this.rebuildCacheFromLoro();
           this._cacheDirty = false;
-          this.markLoroSaved();
+          this.initLoroSaveCursorIfFresh();
         } catch (e) {
           console.warn(
             `[Resource] Loro import on hydration failed for ${this.subject}:`,
@@ -819,11 +819,19 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * Mark the current Loro state as "saved" — subsequent deltas will be
-   * computed from this point.
+   * Initialize the Loro save cursor on first-time hydration only.
+   *
+   * Called from import/merge paths after the doc has been seeded from
+   * external bytes. Subsequent advances belong to `signChanges` — the
+   * only caller that actually knows "I just exported everything up to
+   * here". If we let merge/import advance the cursor, it captures the
+   * doc's CURRENT version, which by then may include local pending
+   * edits the user typed while a previous sign was in flight. The next
+   * sign would then export from that advanced cursor and emit an empty
+   * delta, silently dropping the user's edits on the wire.
    */
-  private markLoroSaved(): void {
-    if (this._loroDoc) {
+  private initLoroSaveCursorIfFresh(): void {
+    if (this._loroDoc && this._loroVersionAtLastSave === undefined) {
       this._loroVersionAtLastSave = this._loroDoc.oplogVersion();
     }
   }
@@ -1050,7 +1058,7 @@ export class Resource<C extends OptionalClass = any> {
         // Rebuild the read cache from the merged Loro doc
         this.rebuildCacheFromLoro();
         this._cacheDirty = false;
-        this.markLoroSaved();
+        this.initLoroSaveCursorIfFresh();
       } else {
         // No local Loro doc — just take the incoming state. `resourceB` is
         // discarded after merge (the store keeps `this`), so we can take
@@ -1889,7 +1897,6 @@ export class Resource<C extends OptionalClass = any> {
     const agent = this.store.getAgent() ?? differentAgent;
 
     if (!agent) {
-      console.error('[signChanges] No agent set');
       throw new Error('No agent has been set or passed, you cannot sign.');
     }
 
@@ -1937,8 +1944,9 @@ export class Resource<C extends OptionalClass = any> {
 
     if (!this.commitBuilder.hasUnsavedChanges() && !loroDelta) {
       this._dirty = false;
-      this.markLoroSaved();
-      console.error('[signChanges] No changes to sign');
+      if (this._loroDoc) {
+        this._loroVersionAtLastSave = this._loroDoc.oplogVersion();
+      }
       throw new Error(`No changes to sign for ${this.subject}`);
     }
 
@@ -1974,7 +1982,13 @@ export class Resource<C extends OptionalClass = any> {
     const builder = this.commitBuilder.clone();
     this.commitBuilder = new CommitBuilder(this.subject);
     this._dirty = false;
-    this.markLoroSaved();
+    // Advance the save cursor: everything in the doc up to here is now
+    // captured in the signed commit. The next exportLoroDelta will start
+    // from this version. Must be a direct assignment — `markLoroSaved`-
+    // style "init only" helpers would no-op here.
+    if (this._loroDoc) {
+      this._loroVersionAtLastSave = this._loroDoc.oplogVersion();
+    }
     const commit = await builder.sign(agent);
 
     // DID genesis: the real subject is derived from the signature.
@@ -2472,7 +2486,7 @@ export class Resource<C extends OptionalClass = any> {
       doc.import(loroUpdate);
       this.rebuildCacheFromLoro();
       this._cacheDirty = false;
-      this.markLoroSaved();
+      this.initLoroSaveCursorIfFresh();
       // Mirror what `markDirty` / `undo` / `redo` already do: when the
       // resource's Loro state changes out-of-band of `set` / `pushListItem`,
       // emit a wildcard `LocalChange` so React consumers (canvas page,
@@ -2481,7 +2495,10 @@ export class Resource<C extends OptionalClass = any> {
       // pre-import state until the user navigates away and back.
       this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
     } catch (e) {
-      console.warn('Failed to import Loro update:', e);
+      console.warn(
+        `[Resource] importLoroUpdate failed for ${this.subject}:`,
+        e,
+      );
     }
   }
 

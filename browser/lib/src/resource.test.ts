@@ -308,4 +308,49 @@ describe('resource.ts', () => {
       expect(v.containers.has('properties')).toBe(false);
     }
   });
+
+  /**
+   * Regression: rapid typing across two tabs lost everything past the
+   * first character. Root cause: import / merge paths called the old
+   * `markLoroSaved`, which captured the doc's CURRENT oplog version.
+   * When the sender's own WS echo arrived mid-typing, that snapshot
+   * already included the in-progress local edits — so the cursor leapt
+   * past unsigned ops, and the next `exportLoroDelta` emitted a 22-byte
+   * empty-header frame. Imports must not advance the export cursor.
+   */
+  it('importLoroUpdate does not advance the export cursor past local edits', async ({
+    expect,
+  }) => {
+    const name = 'https://atomicdata.dev/properties/name';
+    const r = new Resource('https://example.com/sync-cursor');
+    await r.set(name, 'a', false);
+    const doc = r.getLoroDoc()!;
+    doc.commit();
+
+    // Mimic the cursor state after a successful sign of "a".
+    const lvasAtSign = doc.oplogVersion();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (r as any)._loroVersionAtLastSave = lvasAtSign;
+
+    // User types another char before the echo lands.
+    await r.set(name, 'ab', false);
+    doc.commit();
+
+    // Server echoes the first commit back. Bytes contain ops the doc
+    // already has — Loro merges idempotently and the state is unchanged.
+    const echoBytes = doc.export({ mode: 'update', from: lvasAtSign });
+    void echoBytes; // not the echo body itself; we exercise the path:
+    r.importLoroUpdate(doc.export({ mode: 'snapshot' }));
+
+    // Cursor must still point at the post-sign-of-"a" version, NOT at
+    // the doc's current version (which includes the unsigned "b" op).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lvasAfterEcho = (r as any)._loroVersionAtLastSave;
+    expect(lvasAfterEcho.encode()).toEqual(lvasAtSign.encode());
+
+    // The next export from that cursor must carry the "b" op, not a
+    // header-only no-op.
+    const delta = doc.export({ mode: 'update', from: lvasAfterEcho });
+    expect(delta.length).toBeGreaterThan(40);
+  });
 });

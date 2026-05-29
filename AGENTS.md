@@ -14,10 +14,11 @@ The frontend auto-updates via HMR. If changes don't appear, reload the page. If 
 Use the `./planning` folder to write plans and keep track of progress.
 Use todo lists and checkboxes to track progress.
 Make sure to update the planning as you find new insights and see outdated planning text.
+Remove planning documents that are completed.
 
 ## Quick Dev Setup
 
-Navigate to `http://localhost:5173/app/dev-drive` to instantly create a fresh agent + drive on `localhost:9883` and switch to it. Only works in dev mode.
+Use the Charlotte MCP server and navigate to `http://localhost:5173/app/dev-drive` to instantly create a fresh agent.
 
 In E2E tests, most specs use `test.beforeEach(before)` from `test-utils.ts`, which calls `devDrive(page)` and gives every test a fresh agent + drive. For a second browser context signed in as the same user, use `getDevDriveSecret(page)` after `before` has run. Call `devDrive(page)` directly only when a spec does not use the shared `before` hook.
 

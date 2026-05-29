@@ -261,7 +261,9 @@ export function useValue(
     },
     [store, subject, stable, propertyURL],
   );
-  const val = useSyncExternalStore(subscribe, () => resource.get(propertyURL));
+  const val = useSyncExternalStore(subscribe, () =>
+    resource.get(propertyURL),
+  );
 
   const saveResource = useCallback(() => {
     if (!commit) {
