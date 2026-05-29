@@ -238,8 +238,10 @@ Each step is independently shippable; tests stay green after each.
 
 1. **Server prereq:** ship `commit-retention-and-state-certificates.md`
    Phase 1 (split `validate_loro_causality` so idempotent replays accept).
-   Without this, a drain that retries a POST the server already applied
-   strands the outbox.
+   ✅ Already shipped. `lib/src/commit.rs` line 520 short-circuits on
+   `!imported_new_ops` to accept idempotent replay; `CommitApplied.imported_new_ops`
+   (line 711, 726) is computed from oplog VV before/after import; covered by
+   `idempotent_commit_replay_is_accepted` (line 1996).
 2. **Browser: dirty bit in outbox.** Add `Outbox.markDirty(subject)`
    alongside the existing `upsertCommit`. `Resource.save()` keeps signing
    for now but also calls `markDirty`. Drain prefers dirty-set entries when
