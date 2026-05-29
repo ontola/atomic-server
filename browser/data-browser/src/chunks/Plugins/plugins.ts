@@ -3,10 +3,20 @@ import {
   ZipReader,
   Uint8ArrayReader,
   TextWriter,
+  configure,
   type Entry,
 } from '@zip.js/zip.js';
 import type { JSONSchema7 } from 'ai';
 import { Ajv } from 'ajv';
+
+// zip.js defaults to decompressing in a Web Worker spawned from a `blob:`
+// URL. The production server's CSP is `worker-src 'self'`
+// (server/src/handlers/single_page_app.rs), which blocks blob workers — so
+// reading an uploaded plugin zip throws on a real (CSP-enforced) server and
+// the "Add Plugin" dialog never opens. (Dev/Vite has no CSP, so it only
+// reproduced in the production bundle.) Plugin zips are tiny, so main-thread
+// inflate is fine; this keeps the CSP strict instead of allowing `blob:`.
+configure({ useWebWorkers: false });
 
 export type PluginPermissionType =
   | 'network'

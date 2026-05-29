@@ -97,8 +97,16 @@ test.describe('data-browser', async () => {
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
     await page2.setViewportSize({ width: 1000, height: 400 });
-    await page2.goto(FRONTEND_URL);
-    await openSubject(page2, driveURL);
+    // Navigate straight to the private drive. Do NOT use `openSubject` here:
+    // it waits for `main[about=drive]`, but an unauthorized anonymous user is
+    // redirected to /welcome — `main[about]` only renders as a sub-second
+    // flash (ResourcePage wraps ErrorPage in <Main> before the redirect
+    // effect fires). Dev is slow enough to catch that flash; on a production
+    // bundle the redirect wins the race. The correct readiness signal is the
+    // welcome card itself, asserted below.
+    await page2.goto(
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(driveURL)}`,
+    );
     await expect(
       page2.getByRole('button', { name: 'Create account' }),
     ).toBeVisible({ timeout: 15000 });
