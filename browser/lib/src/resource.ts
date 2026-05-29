@@ -1944,9 +1944,6 @@ export class Resource<C extends OptionalClass = any> {
 
     if (!this.commitBuilder.hasUnsavedChanges() && !loroDelta) {
       this._dirty = false;
-      if (this._loroDoc) {
-        this._loroVersionAtLastSave = this._loroDoc.oplogVersion();
-      }
       throw new Error(`No changes to sign for ${this.subject}`);
     }
 

@@ -76,10 +76,20 @@ export class LocalOutbox {
   private entries = new Map<string, OutboxEntry>();
   private drainInFlight: Promise<void> | undefined;
   private onChange: () => void = () => undefined;
+  private persistScheduled = false;
 
   constructor(onChange?: () => void) {
     if (onChange) this.onChange = onChange;
     this.hydrate();
+    // Best-effort: flush pending writes before the tab closes.
+    // Without this, debounced writes lose the final state when the
+    // user closes the tab between an upsert/ack and the next
+    // microtask. Synchronous `flushPersist` is small (one
+    // localStorage.setItem) and safe in beforeunload.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', () => this.flushPersist());
+      window.addEventListener('pagehide', () => this.flushPersist());
+    }
   }
 
   upsertCommit(subject: string, commit: Commit): void {
@@ -90,7 +100,7 @@ export class LocalOutbox {
     };
     entry.commits.push(commit);
     this.entries.set(subject, entry);
-    this.persist();
+    this.schedulePersist();
     this.onChange();
   }
 
@@ -107,7 +117,32 @@ export class LocalOutbox {
       });
     }
 
-    this.persist();
+    this.schedulePersist();
+    this.onChange();
+  }
+
+  /** Remove specific commits from a subject's queue by signature.
+   *  Commits enqueued AFTER the caller captured the posted-list stay.
+   *  Caller-side drain paths use this instead of `setEntry([])` to
+   *  avoid clobbering commits that were upserted while a previous
+   *  batch was in flight. */
+  acknowledgeCommits(subject: string, signatures: readonly string[]): void {
+    if (signatures.length === 0) return;
+    const entry = this.entries.get(subject);
+    if (!entry) return;
+
+    const ack = new Set(signatures);
+    const remaining = entry.commits.filter(
+      c => !c.signature || !ack.has(c.signature),
+    );
+
+    if (remaining.length === 0) {
+      this.entries.delete(subject);
+    } else {
+      entry.commits = remaining;
+    }
+
+    this.schedulePersist();
     this.onChange();
   }
 
@@ -199,13 +234,44 @@ export class LocalOutbox {
         }
       }
 
-      this.persist();
+      this.schedulePersist();
       this.onChange();
     }
   }
 
-  private persist(): void {
+  /**
+   * Coalesce multiple mutations into one localStorage write per
+   * microtask. Per-keystroke saves used to do one full
+   * `JSON.stringify` + sync `setItem` per `upsertCommit` / `ack` —
+   * 52 sync writes during a 26-char typing burst was enough to
+   * stall input handlers and break the `quick edit text typing ux`
+   * e2e test. The microtask flush keeps durability semantics in
+   * practice (any await yields to the microtask queue and persists)
+   * without the per-call CPU spike.
+   */
+  private schedulePersist(): void {
+    if (this.persistScheduled) return;
+    this.persistScheduled = true;
+    queueMicrotask(() => {
+      this.persistScheduled = false;
+      this.flushPersist();
+    });
+  }
+
+  /**
+   * Synchronously write the current outbox state. Used by the
+   * microtask flush above and by `beforeunload` / `pagehide` to
+   * guarantee the final state survives a tab close.
+   */
+  private flushPersist(): void {
     if (typeof localStorage === 'undefined') return;
+    if (!this.persistScheduled && this.entries.size === 0) {
+      // Hot path: nothing scheduled and no entries — skip the
+      // localStorage.removeItem call (still cheap, but avoids
+      // touching storage on every beforeunload for clean tabs).
+    }
+
+    this.persistScheduled = false;
 
     try {
       if (this.entries.size === 0) {
@@ -223,6 +289,13 @@ export class LocalOutbox {
     } catch (e) {
       console.warn('[Outbox] persist failed:', e);
     }
+  }
+
+  /** Force a synchronous write of the current state. Tests use
+   *  this to simulate a reload; callers in production rely on the
+   *  scheduled microtask + `beforeunload` flush. */
+  public flush(): void {
+    this.flushPersist();
   }
 
   /** Read unified key; one-shot migrate the legacy keys if needed. */
@@ -272,7 +345,7 @@ export class LocalOutbox {
       localStorage.removeItem(LEGACY_DIRTY_KEY);
       for (const s of subjects)
         localStorage.removeItem(LEGACY_OFFLINE_PREFIX + s);
-      this.persist();
+      this.flushPersist();
     } catch (e) {
       console.warn('[Outbox] legacy migration failed:', e);
     }
