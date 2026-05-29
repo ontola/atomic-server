@@ -2244,23 +2244,19 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
-  /** Save when the server is unreachable: persist locally,
-   *  clear error, notify. Used by both `save()` offline branches. */
+  /**
+   * Save when the server is unreachable. Materializes each queued
+   * commit as a `CommitDetail`-renderable resource for the offline
+   * audit log, advances `lastCommit` to the most recent local
+   * signature, and persists this resource atomically (JSON-AD + Loro
+   * snapshot) to clientDb so a reload can hydrate it before the WS
+   * reconnect.
+   *
+   * The outbox persists the signed commits themselves — the drain
+   * on reconnect pulls straight from `store.outbox.getEntry`, no
+   * extra reattachment step needed on this side.
+   */
   private async saveOffline(): Promise<void> {
-    await this.applyPendingCommitsLocally();
-    this.commitError = undefined;
-    this.loading = false;
-    this.applyToStore('offline-replay');
-    this.store.notifyResourceSaved(this);
-  }
-
-  /** Persist the current resource state offline: each queued
-   *  commit becomes a CommitDetail-renderable resource, and the
-   *  resource itself is persisted atomically (JSON-AD + Loro
-   *  snapshot). The outbox already persists the signed commits
-   *  themselves — no extra step needed for the queue to survive
-   *  a reload. */
-  private async applyPendingCommitsLocally(): Promise<void> {
     // Server sets createdAt on apply; we need it locally for sort.
     if (this.get(commits.properties.createdAt) === undefined) {
       this.setCreatedAtValue(Date.now());
@@ -2270,19 +2266,8 @@ export class Resource<C extends OptionalClass = any> {
     let lastCommitSubject: string | undefined;
 
     for (const commit of queued) {
-      const commitSubject = `did:ad:commit:${commit.signature}`;
-      lastCommitSubject = commitSubject;
-      const commitResource = new Resource(commitSubject);
-      commitResource.applyHydratedValues(
-        Object.entries(commitToJsonADObject(commit)) as [string, AtomicValue][],
-      );
-      commitResource.loading = false;
-      commitResource.new = false;
-      this.store.applyIncoming({
-        subject: commitSubject,
-        resource: commitResource,
-        source: 'offline-replay',
-      });
+      lastCommitSubject = `did:ad:commit:${commit.signature}`;
+      this.store.materializeCommitLocally(commit);
     }
 
     if (lastCommitSubject) this.setLastCommitValue(lastCommitSubject);
@@ -2298,12 +2283,10 @@ export class Resource<C extends OptionalClass = any> {
 
       const snapshot = this._loroDoc?.export({ mode: 'snapshot' });
 
-      // `await` the OPFS write — the caller (`save()`) treats this
-      // method as durable: when it returns, the edit MUST survive a
-      // reload. Without the await, `save()` resolved while the OPFS
-      // write was still in flight; a subsequent reload (the offline-
-      // edit-persists-across-reload test does this immediately) read
-      // OPFS before the write landed and the offline edit was lost.
+      // Await the OPFS write — when `save()` resolves the edit MUST
+      // survive a reload. A non-awaited write left the offline-edit-
+      // persists-across-reload test reading OPFS before the write
+      // landed and silently lost the edit.
       try {
         await clientDb.putResourceWithSnapshot(
           this.subject,
@@ -2315,7 +2298,10 @@ export class Resource<C extends OptionalClass = any> {
       }
     }
 
+    this.commitError = undefined;
+    this.loading = false;
     this.applyToStore('offline-replay');
+    this.store.notifyResourceSaved(this);
   }
 
   /**

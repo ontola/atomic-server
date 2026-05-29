@@ -3123,7 +3123,7 @@ export class Store {
    * Idempotent: bails if the commit's subject is already present
    * (e.g. the offline path beat us to it via `applyPendingCommitsLocally`).
    */
-  private materializeCommitLocally(commit: Commit): void {
+  public materializeCommitLocally(commit: Commit): void {
     const signature = commit.signature;
     if (!signature) return;
     const commitSubject = `did:ad:commit:${signature}`;
