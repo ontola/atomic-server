@@ -2095,28 +2095,6 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
-  /**
-   * Saves the resource as a new DID-native resource.
-   * The subject will be set to `did:ad:{genesis_signature}`.
-   */
-  public async saveAsGenesis(): Promise<string> {
-    const agent = this.store.getAgent();
-
-    if (!agent) {
-      throw new Error('No agent set, cannot sign genesis commit');
-    }
-
-    // Explicitly mark as genesis so signChanges derives the DID subject from
-    // the signature rather than relying on implicit subject-pattern detection.
-    this.markNextCommitAsGenesis();
-
-    await this.signChanges(agent);
-    // signChanges has already updated this._subject to did:ad:{signature}.
-
-    const result = await this.pushCommits();
-
-    return result as string;
-  }
 
   /**
    * Commits the changes and sends the Commit to the resource's `/commit`
