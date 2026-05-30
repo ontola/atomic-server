@@ -111,12 +111,12 @@ export class Resource<C extends OptionalClass = any> {
   private _loading = false;
   private _dirty = false;
 
-  private commitBuilder: CommitBuilder;
+  #commitBuilder: CommitBuilder;
   private _subject: string;
-  /** Memoized read cache derived from Loro. Rebuilt lazily when _cacheDirty. */
-  private _cache: Record<string, JSONValue> = Object.create(null);
-  /** True when Loro has been modified but _cache hasn't been rebuilt yet. */
-  private _cacheDirty = false;
+  /** Memoized read cache derived from Loro. Rebuilt lazily when #cacheDirty. */
+  #cache: Record<string, JSONValue> = Object.create(null);
+  /** True when Loro has been modified but #cache hasn't been rebuilt yet. */
+  #cacheDirty = false;
   private _auxValues: Map<string, AtomicValue> = new Map();
   /** Raw Loro snapshot bytes, kept separate from properties. Not a propval. */
   private _loroSnapshotBytes?: Uint8Array | string;
@@ -179,7 +179,7 @@ export class Resource<C extends OptionalClass = any> {
 
     this.new = !!newResource;
     this._subject = subject;
-    this.commitBuilder = new CommitBuilder(subject);
+    this.#commitBuilder = new CommitBuilder(subject);
   }
 
   public get __internalObject(): Resource<C> {
@@ -196,7 +196,7 @@ export class Resource<C extends OptionalClass = any> {
 
     // A resource with buffered Loro snapshot bytes but no doc CAN be readable
     // if the cache has propvals already (typical post-`parseMetaTags`: the
-    // JSON-AD-initial meta tag flattens propvals into `_cache` and the
+    // JSON-AD-initial meta tag flattens propvals into `#cache` and the
     // `loroUpdate` field — if present — lands in `_loroSnapshotBytes`).
     // Only treat the buffered-without-doc state as "loading" when there's
     // genuinely nothing to render — empty cache means `get(prop)` would
@@ -208,9 +208,9 @@ export class Resource<C extends OptionalClass = any> {
         (typeof buf === 'string' && buf.length > 0);
 
       if (hasBuffered) {
-        // Object.create(null)-style _cache → use Object.keys to count
+        // Object.create(null)-style #cache → use Object.keys to count
         // own props. Hot path; cheap.
-        const hasCache = Object.keys(this._cache).length > 0;
+        const hasCache = Object.keys(this.#cache).length > 0;
         if (!hasCache) return true;
       }
     }
@@ -379,7 +379,7 @@ export class Resource<C extends OptionalClass = any> {
       if (stored) {
         this._loroDoc.import(stored);
       } else {
-        for (const [key, value] of Object.entries(this._cache)) {
+        for (const [key, value] of Object.entries(this.#cache)) {
           if (
             key !== properties.commit.lastCommit &&
             key !== commits.properties.createdAt
@@ -394,7 +394,7 @@ export class Resource<C extends OptionalClass = any> {
       // — e.g. `parent`, `isA` — that the resource's own snapshot was
       // produced before, or that the snapshot author never wrote into Loro).
       // Without this pass, those propvals get silently dropped when
-      // `rebuildCacheFromLoro` below overwrites `_cache` with the snapshot's
+      // `rebuildCacheFromLoro` below overwrites `#cache` with the snapshot's
       // contents only, and consumers see `resource.get(parent)` as
       // `undefined` for resources whose hierarchy is fully discoverable from
       // the JSON-AD payload. Write any cache key absent from the imported
@@ -402,7 +402,7 @@ export class Resource<C extends OptionalClass = any> {
       // initialised from a snapshot, so the no-snapshot path's prior
       // behaviour is unchanged.
       if (initializedFromSnapshot && this._loroMap) {
-        for (const [key, value] of Object.entries(this._cache)) {
+        for (const [key, value] of Object.entries(this.#cache)) {
           if (
             key !== properties.commit.lastCommit &&
             key !== commits.properties.createdAt
@@ -415,7 +415,7 @@ export class Resource<C extends OptionalClass = any> {
       }
 
       this.rebuildCacheFromLoro();
-      this._cacheDirty = false;
+      this.#cacheDirty = false;
       // Initialize the export cursor:
       //   - If the outbox holds a dirty bit for this subject, the
       //     ops in the loaded snapshot weren't all server-acked yet
@@ -498,9 +498,9 @@ export class Resource<C extends OptionalClass = any> {
       prop === commits.properties.createdAt
     ) {
       if (val === undefined) {
-        delete this._cache[prop];
+        delete this.#cache[prop];
       } else {
-        this._cache[prop] = val as JSONValue;
+        this.#cache[prop] = val as JSONValue;
       }
 
       return;
@@ -554,7 +554,7 @@ export class Resource<C extends OptionalClass = any> {
         try {
           this._loroDoc.import(bytes);
           this.rebuildCacheFromLoro();
-          this._cacheDirty = false;
+          this.#cacheDirty = false;
           this.initLoroSaveCursorIfFresh();
         } catch (e) {
           console.warn(
@@ -582,7 +582,7 @@ export class Resource<C extends OptionalClass = any> {
         this.loroSetProperty(prop, val as JSONValue);
       }
 
-      this._cacheDirty = true;
+      this.#cacheDirty = true;
 
       return;
     }
@@ -590,21 +590,21 @@ export class Resource<C extends OptionalClass = any> {
     // No Loro doc yet (hydration) — write to cache as temporary buffer.
     // getLoroDoc() will seed Loro from cache when it's first called.
     if (val === undefined) {
-      delete this._cache[prop];
+      delete this.#cache[prop];
     } else {
-      this._cache[prop] = val as JSONValue;
+      this.#cache[prop] = val as JSONValue;
     }
   }
 
   /** Returns all property entries (cache + binary aux values) as a flat array. */
   public getEntries(): [string, AtomicValue][] {
-    if (this._cacheDirty && this._loroDoc) {
+    if (this.#cacheDirty && this._loroDoc) {
       this.rebuildCacheFromLoro();
-      this._cacheDirty = false;
+      this.#cacheDirty = false;
     }
 
     return [
-      ...Object.entries(this._cache),
+      ...Object.entries(this.#cache),
       ...Array.from(this._auxValues.entries()),
     ];
   }
@@ -627,12 +627,12 @@ export class Resource<C extends OptionalClass = any> {
     ];
 
     for (const key of serverManaged) {
-      if (this._cache[key] !== undefined && nextCache[key] === undefined) {
-        nextCache[key] = this._cache[key];
+      if (this.#cache[key] !== undefined && nextCache[key] === undefined) {
+        nextCache[key] = this.#cache[key];
       }
     }
 
-    this._cache = nextCache;
+    this.#cache = nextCache;
   }
 
   /**
@@ -705,9 +705,9 @@ export class Resource<C extends OptionalClass = any> {
       // Loro not loaded yet — write to cache as fallback.
       // getLoroDoc() will seed Loro from cache when it initializes.
       if (value === undefined || value === null) {
-        delete this._cache[prop];
+        delete this.#cache[prop];
       } else {
-        this._cache[prop] = value;
+        this.#cache[prop] = value;
       }
 
       return;
@@ -747,7 +747,7 @@ export class Resource<C extends OptionalClass = any> {
     const map = this.getLoroMap();
 
     if (!map) {
-      delete this._cache[prop];
+      delete this.#cache[prop];
 
       return;
     }
@@ -1151,7 +1151,7 @@ export class Resource<C extends OptionalClass = any> {
   public clone(): Resource<C> {
     const res = new Resource(this.subject);
 
-    res._cache = structuredClone(this._cache);
+    res.#cache = structuredClone(this.#cache);
     res._auxValues = new Map(
       structuredClone(Array.from(this._auxValues.entries())),
     );
@@ -1161,7 +1161,7 @@ export class Resource<C extends OptionalClass = any> {
     res.new = this.new;
     res.error = structuredClone(this.error);
     res.commitError = this.commitError;
-    res.commitBuilder = this.commitBuilder.clone();
+    res.#commitBuilder = this.#commitBuilder.clone();
     res._dirty = this._dirty;
     res.appliedCommitSignatures = this.appliedCommitSignatures;
 
@@ -1206,13 +1206,13 @@ export class Resource<C extends OptionalClass = any> {
           );
           this.resetLoroState();
           this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
-          this._cache = structuredClone(resourceB._cache);
+          this.#cache = structuredClone(resourceB.#cache);
           this._auxValues = new Map(
             structuredClone(Array.from(resourceB._auxValues.entries())),
           );
         }
 
-        // Copy housekeeping properties from resourceB._cache to this._cache
+        // Copy housekeeping properties from resourceB.#cache to this.#cache
         // before rebuilding cache so they are preserved
         const serverManaged = [
           properties.commit.lastCommit,
@@ -1220,14 +1220,14 @@ export class Resource<C extends OptionalClass = any> {
         ];
 
         for (const key of serverManaged) {
-          if (resourceB._cache[key] !== undefined) {
-            this._cache[key] = resourceB._cache[key];
+          if (resourceB.#cache[key] !== undefined) {
+            this.#cache[key] = resourceB.#cache[key];
           }
         }
 
         // Rebuild the read cache from the merged Loro doc
         this.rebuildCacheFromLoro();
-        this._cacheDirty = false;
+        this.#cacheDirty = false;
         this.initLoroSaveCursorIfFresh();
       } else {
         // No local Loro doc — just take the incoming state. `resourceB` is
@@ -1237,7 +1237,7 @@ export class Resource<C extends OptionalClass = any> {
         // Map copy keeps callers from accidentally mutating the source's
         // entries, which is the only invariant `structuredClone` was
         // protecting here.
-        this._cache = resourceB._cache;
+        this.#cache = resourceB.#cache;
         this._auxValues = new Map(resourceB._auxValues);
         this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
       }
@@ -1250,14 +1250,14 @@ export class Resource<C extends OptionalClass = any> {
       ];
 
       for (const key of serverManaged) {
-        if (resourceB._cache[key] !== undefined) {
-          this._cache[key] = resourceB._cache[key];
+        if (resourceB.#cache[key] !== undefined) {
+          this.#cache[key] = resourceB.#cache[key];
         }
       }
 
       // Shallow copy other fields if no loro doc exists at all
       if (!this._loroDoc) {
-        this._cache = resourceB._cache;
+        this.#cache = resourceB.#cache;
         this._auxValues = new Map(resourceB._auxValues);
       }
     }
@@ -1286,18 +1286,6 @@ export class Resource<C extends OptionalClass = any> {
     this.loading = resourceB.loading;
   }
 
-  /**
-   * Marks the next commit as a DID genesis commit. Creating a new DID
-   * resource derives its `did:ad:<sig>` subject from this commit's
-   * signature, so genesis is decided when the resource is created.
-   *
-   * @internal Only `Store.newResource` calls this. Application code
-   * never marks genesis by hand — use `store.newResource(...)`.
-   */
-  public markNextCommitAsGenesis(): void {
-    this.commitBuilder.setIsGenesis(true);
-  }
-
   /** Checks if the resource is both loaded and free from errors */
   public isReady(): boolean {
     return !this.loading && this.error === undefined;
@@ -1313,12 +1301,12 @@ export class Resource<C extends OptionalClass = any> {
   public get<Prop extends string, Returns = InferTypeOfValueInTriple<C, Prop>>(
     propUrl: Prop,
   ): Returns {
-    if (this._cacheDirty && this._loroDoc) {
+    if (this.#cacheDirty && this._loroDoc) {
       this.rebuildCacheFromLoro();
-      this._cacheDirty = false;
+      this.#cacheDirty = false;
     }
 
-    return (this._auxValues.get(propUrl) ?? this._cache[propUrl]) as Returns;
+    return (this._auxValues.get(propUrl) ?? this.#cache[propUrl]) as Returns;
   }
 
   /**
@@ -1398,7 +1386,7 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Returns true if the resource has unsaved local changes. */
   public hasUnsavedChanges(): boolean {
-    return this.commitBuilder.hasUnsavedChanges() || this._dirty;
+    return this.#commitBuilder.hasUnsavedChanges() || this._dirty;
   }
 
   /** Clear the dirty flag after a successful drain has signed + POSTed
@@ -1828,7 +1816,7 @@ export class Resource<C extends OptionalClass = any> {
     // Build a new array so that the reference changes. This is needed in most UI frameworks.
     const newArray = [...propVal, ...values];
     this.loroSetProperty(propUrl, newArray);
-    this._cacheDirty = true;
+    this.#cacheDirty = true;
     this._dirty = true;
   }
 
@@ -1838,8 +1826,8 @@ export class Resource<C extends OptionalClass = any> {
    */
   public pushListItem(propUrl: string, item: JSONValue): void {
     const propVal = (this.get(propUrl) as JSONArray) ?? [];
-    this._cache[propUrl] = [...propVal, item];
-    this._cacheDirty = true;
+    this.#cache[propUrl] = [...propVal, item];
+    this.#cacheDirty = true;
     this._dirty = true;
 
     const map = this.getLoroMap();
@@ -1870,7 +1858,7 @@ export class Resource<C extends OptionalClass = any> {
     this.eventManager.emit(
       ResourceEvents.LocalChange,
       propUrl,
-      this._cache[propUrl],
+      this.#cache[propUrl],
     );
   }
 
@@ -1888,8 +1876,8 @@ export class Resource<C extends OptionalClass = any> {
    * `pushListItem`, just batched.
    */
   public replaceListItems(propUrl: string, items: JSONArray): void {
-    this._cache[propUrl] = [...items];
-    this._cacheDirty = true;
+    this.#cache[propUrl] = [...items];
+    this.#cacheDirty = true;
     this._dirty = true;
 
     const map = this.getLoroMap();
@@ -1932,7 +1920,7 @@ export class Resource<C extends OptionalClass = any> {
     this.eventManager.emit(
       ResourceEvents.LocalChange,
       propUrl,
-      this._cache[propUrl],
+      this.#cache[propUrl],
     );
   }
 
@@ -1951,12 +1939,12 @@ export class Resource<C extends OptionalClass = any> {
     list.delete(index, 1);
     this._loroDoc?.commit();
     this.rebuildCacheFromLoro();
-    this._cacheDirty = false;
+    this.#cacheDirty = false;
     this._dirty = true;
     this.eventManager.emit(
       ResourceEvents.LocalChange,
       propUrl,
-      this._cache[propUrl],
+      this.#cache[propUrl],
     );
   }
 
@@ -2035,7 +2023,7 @@ export class Resource<C extends OptionalClass = any> {
     this._loroUndoManager.undo();
     this._loroDoc?.commit();
     this.rebuildCacheFromLoro();
-    this._cacheDirty = false;
+    this.#cacheDirty = false;
     this._dirty = true;
     // Reset saved version so next save exports full snapshot
     this._loroVersionAtLastSave = undefined;
@@ -2056,7 +2044,7 @@ export class Resource<C extends OptionalClass = any> {
     this._loroUndoManager.redo();
     this._loroDoc?.commit();
     this.rebuildCacheFromLoro();
-    this._cacheDirty = false;
+    this.#cacheDirty = false;
     this._dirty = true;
     // Reset saved version so next save exports full snapshot
     this._loroVersionAtLastSave = undefined;
@@ -2115,7 +2103,7 @@ export class Resource<C extends OptionalClass = any> {
     // written to Loro yet (e.g. write/read permissions during creation).
     this.getLoroDoc();
     this.rebuildCacheFromLoro();
-    this._cacheDirty = false;
+    this.#cacheDirty = false;
 
     // Phase 1 (loro-source-of-truth): stamp the sibling `datatypes` map so
     // the server materializes references/arrays exactly. Runs here — after
@@ -2132,20 +2120,20 @@ export class Resource<C extends OptionalClass = any> {
       this._lastCommit ?? this.get(properties.commit.lastCommit)?.toString();
 
     if (lastCommit) {
-      this.commitBuilder.setPreviousCommit(lastCommit);
+      this.#commitBuilder.setPreviousCommit(lastCommit);
     }
 
     // Export Loro delta — this is the sole carrier of property changes.
-    const isFirstCommit = !this.commitBuilder.previousCommit;
+    const isFirstCommit = !this.#commitBuilder.previousCommit;
     const loroDelta = this.exportLoroDelta(isFirstCommit);
 
-    if (!this.commitBuilder.hasUnsavedChanges() && !loroDelta) {
+    if (!this.#commitBuilder.hasUnsavedChanges() && !loroDelta) {
       this._dirty = false;
       throw new Error(`No changes to sign for ${this.subject}`);
     }
 
     if (loroDelta) {
-      this.commitBuilder.setLoroUpdate(loroDelta);
+      this.#commitBuilder.setLoroUpdate(loroDelta);
     }
 
     // Auto-detect genesis: no previousCommit means this is a new resource.
@@ -2163,13 +2151,13 @@ export class Resource<C extends OptionalClass = any> {
       this.subject.startsWith('_new:') || this.subject.startsWith('did:ad:');
     const isAgent = this.subject.startsWith('did:ad:agent:');
 
-    if (isDIDEligible && !isAgent && !this.commitBuilder.previousCommit) {
-      this.commitBuilder.setIsGenesis(true);
+    if (isDIDEligible && !isAgent && !this.#commitBuilder.previousCommit) {
+      this.#commitBuilder.setIsGenesis(true);
     }
 
     // Clone the builder so new changes after this call go into a fresh one.
-    const builder = this.commitBuilder.clone();
-    this.commitBuilder = new CommitBuilder(this.subject);
+    const builder = this.#commitBuilder.clone();
+    this.#commitBuilder = new CommitBuilder(this.subject);
     this._dirty = false;
 
     // Advance the save cursor: everything in the doc up to here is now
@@ -2186,8 +2174,8 @@ export class Resource<C extends OptionalClass = any> {
     if (commit.subject !== this.subject) {
       const oldSubject = this.subject;
       this._subject = commit.subject;
-      // Update the fresh commitBuilder to use the real subject.
-      this.commitBuilder = new CommitBuilder(commit.subject);
+      // Update the fresh #commitBuilder to use the real subject.
+      this.#commitBuilder = new CommitBuilder(commit.subject);
 
       if (this._store) {
         // Silently move the resource in the store map — don't use removeResource()
@@ -2296,13 +2284,13 @@ export class Resource<C extends OptionalClass = any> {
         this._pendingGenesis = undefined;
       } else if (
         hasChanges &&
-        (this.commitBuilder.isGenesis || this.subject.startsWith('_new:'))
+        (this.#commitBuilder.isGenesis || this.subject.startsWith('_new:'))
       ) {
         // Genesis path for resources NOT created via `store.newResource` —
-        // either `new Resource(...)` + `markNextCommitAsGenesis()`, or the
-        // new-resource form / `NewInstanceButton`, which mint a transient
-        // `_new:` subject via `store.createSubject()` and then `set()` +
-        // `save()` with no explicit genesis step. The real `did:ad:<sig>`
+        // the new-resource form / `NewInstanceButton`, which mint a
+        // transient `_new:` subject via `store.createSubject()` and then
+        // `set()` + `save()` with no explicit genesis step. The real
+        // `did:ad:<sig>`
         // subject only exists after signing, so sign now: `signChanges`
         // auto-detects genesis (no previousCommit + DID-eligible), derives
         // the DID, and renames this resource in place; we enqueue the
@@ -2334,14 +2322,14 @@ export class Resource<C extends OptionalClass = any> {
         // localStorage dirty bit survives.
         await this.saveOffline();
 
-        if (hasChanges && !this.commitBuilder.isGenesis) {
+        if (hasChanges && !this.#commitBuilder.isGenesis) {
           this.store.outbox.markDirty(this.subject);
         }
 
         return 'offline';
       }
 
-      if (hasChanges && !this.commitBuilder.isGenesis) {
+      if (hasChanges && !this.#commitBuilder.isGenesis) {
         // Online non-genesis: mark dirty. The store-level drain
         // exports the accumulated Loro delta, signs ONE commit, sends.
         this.store.outbox.markDirty(this.subject);
@@ -2506,7 +2494,7 @@ export class Resource<C extends OptionalClass = any> {
 
     // Write to Loro only — cache is rebuilt lazily on next get()
     this.loroSetProperty(prop, value as JSONValue);
-    this._cacheDirty = true;
+    this.#cacheDirty = true;
 
     this._dirty = true;
     this.eventManager.emit(
@@ -2528,19 +2516,19 @@ export class Resource<C extends OptionalClass = any> {
       prop === properties.commit.lastCommit ||
       prop === commits.properties.createdAt
     ) {
-      delete this._cache[prop];
+      delete this.#cache[prop];
 
       return;
     }
 
     this.loroDeleteProperty(prop);
     this._auxValues.delete(prop);
-    this._cacheDirty = true;
+    this.#cacheDirty = true;
   }
 
   public clearUnsafe(): void {
-    this._cache = Object.create(null);
-    this._cacheDirty = false;
+    this.#cache = Object.create(null);
+    this.#cacheDirty = false;
     this._auxValues.clear();
     this._loroSnapshotBytes = undefined;
     this.resetLoroState();
@@ -2570,7 +2558,7 @@ export class Resource<C extends OptionalClass = any> {
     try {
       const status = doc.import(loroUpdate);
       this.rebuildCacheFromLoro();
-      this._cacheDirty = false;
+      this.#cacheDirty = false;
       this.initLoroSaveCursorIfFresh();
       // Mirror what `markDirty` / `undo` / `redo` already do: when the
       // resource's Loro state changes out-of-band of `set` / `pushListItem`,
@@ -2623,7 +2611,7 @@ export class Resource<C extends OptionalClass = any> {
   public setSubject(subject: string): void {
     const normalized = this._store?.normalizeSubject(subject) ?? subject;
     Client.tryValidSubject(normalized);
-    this.commitBuilder.setSubject(normalized);
+    this.#commitBuilder.setSubject(normalized);
     this._subject = normalized;
   }
 

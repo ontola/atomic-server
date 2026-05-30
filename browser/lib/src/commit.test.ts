@@ -1,131 +1,15 @@
 import { describe, it, vi } from 'vitest';
-import {
-  Commit,
-  CommitBuilder,
-  commitToJsonADObject,
-  parseAndApplyCommit,
-  serializeDeterministically,
-} from './commit.js';
+import { Commit, commitToJsonADObject, parseAndApplyCommit } from './commit.js';
 import { Store } from './store.js';
-import { JSCryptoProvider } from './CryptoProvider.js';
-import { Agent } from './agent.js';
 import { Resource } from './resource.js';
 import { core } from './index.js';
 import { testStore } from './test-store.js';
 
-/**
- * Low-level signing primitives. These legitimately exercise
- * `CommitBuilder` directly — it's the unit under test here (canonical
- * serialization, Ed25519 signatures, DID-from-signature derivation).
- * Application/integration tests below never touch `CommitBuilder`;
- * they go through `store.newResource()` → `set()` → `save()`.
- */
-describe('Commit signing primitives', () => {
-  const privateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
-  const agentSubject =
-    'http://localhost/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=';
-  const agent = new Agent(new JSCryptoProvider(privateKey), agentSubject);
-  const subject = 'https://localhost/new_thing';
-
-  it('signs a commit with the right signature', async ({ expect }) => {
-    const signatureCorrect =
-      'kLh+mxy/lgFD6WkbIbhJANgRhyu39USL9up1zCmqU8Jmc+4rlvLZwxSlfxKTISP2BiXLSiz/5NJZrN5XpXJ/Cg==';
-    const serializedCommitRust =
-      '{"https://atomicdata.dev/properties/createdAt":0,"https://atomicdata.dev/properties/isA":["https://atomicdata.dev/classes/Commit"],"https://atomicdata.dev/properties/set":{"https://atomicdata.dev/properties/description":"Some value","https://atomicdata.dev/properties/shortname":"someval"},"https://atomicdata.dev/properties/signature":"kLh+mxy/lgFD6WkbIbhJANgRhyu39USL9up1zCmqU8Jmc+4rlvLZwxSlfxKTISP2BiXLSiz/5NJZrN5XpXJ/Cg==","https://atomicdata.dev/properties/signer":"http://localhost/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=","https://atomicdata.dev/properties/subject":"https://localhost/new_thing"}';
-    const createdAt = 0;
-
-    const commitBuilder = new CommitBuilder(subject, {
-      set: new Map([
-        ['https://atomicdata.dev/properties/description', 'Some value'],
-        ['https://atomicdata.dev/properties/shortname', 'someval'],
-      ]),
-    });
-
-    const commit = await commitBuilder.signAt(agent, createdAt);
-    expect(serializeDeterministically(commit)).to.equal(serializedCommitRust);
-    expect(commit.signature).to.equal(signatureCorrect);
-  });
-
-  it('derives a did:ad subject from the genesis signature', async ({
-    expect,
-  }) => {
-    const commitBuilder = new CommitBuilder('did:ad:genesis', {
-      set: new Map([
-        ['https://atomicdata.dev/properties/description', 'Genesis value'],
-      ]),
-    });
-    commitBuilder.setIsGenesis(true);
-
-    const commit = await commitBuilder.signAt(agent, 0);
-
-    // Subject IS the signature.
-    expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
-    expect(commit.isGenesis).toBe(true);
-
-    // Serialization omits the subject (it's circular — the subject is
-    // derived FROM the signature) but keeps isGenesis for the server.
-    const json = JSON.parse(serializeDeterministically(commit));
-    expect(json['https://atomicdata.dev/properties/subject']).toBeUndefined();
-    expect(json['https://atomicdata.dev/properties/isGenesis']).toBe(true);
-  });
-
-  it('derives a did:ad subject from a temporary _new subject', async ({
-    expect,
-  }) => {
-    const didAgent = new Agent(
-      new JSCryptoProvider(privateKey),
-      'did:ad:agent:TESTAGENT',
-    );
-    const commitBuilder = new CommitBuilder('_new:01TESTTEMP', {
-      set: new Map([
-        ['https://atomicdata.dev/properties/description', 'Genesis value'],
-      ]),
-    });
-    commitBuilder.setIsGenesis(true);
-
-    const commit = await commitBuilder.signAt(didAgent, 0);
-
-    expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
-    const json = JSON.parse(serializeDeterministically(commit));
-    expect(json['https://atomicdata.dev/properties/subject']).toBeUndefined();
-  });
-
-  it('preserves a did:ad:agent subject — never treats it as genesis', async ({
-    expect,
-  }) => {
-    const agentDid = 'did:ad:agent:SOMEPUBLICKEY123';
-    const didAgent = new Agent(new JSCryptoProvider(privateKey), agentDid);
-
-    const commitBuilder = new CommitBuilder(agentDid, {
-      set: new Map([['https://atomicdata.dev/properties/name', 'Alice']]),
-    });
-
-    const commit = await commitBuilder.signAt(didAgent, 0);
-
-    // Subject must remain the agent DID, not become did:ad:{signature}.
-    expect(commit.subject).to.equal(agentDid);
-    const json = JSON.parse(serializeDeterministically(commit));
-    expect(json['https://atomicdata.dev/properties/subject']).to.equal(
-      agentDid,
-    );
-  });
-
-  it('keeps the _new subject for non-did signers', async ({ expect }) => {
-    const commitBuilder = new CommitBuilder('_new:01TESTTEMP', {
-      set: new Map([
-        ['https://atomicdata.dev/properties/description', 'Regular value'],
-      ]),
-    });
-
-    const commit = await commitBuilder.signAt(agent, 0);
-
-    expect(commit.subject).to.equal('_new:01TESTTEMP');
-    const json = JSON.parse(serializeDeterministically(commit));
-    expect(json['https://atomicdata.dev/properties/subject']).to.equal(
-      '_new:01TESTTEMP',
-    );
-  });
-});
+// Low-level signing primitives (CommitBuilder, _new: subjects, Ed25519
+// serialization) live in `sign.test.ts`. This file is the consumer-API
+// canary: every test below goes through `store.newResource()` → `set()`
+// → `save()` and never touches `CommitBuilder` / `markNextCommitAsGenesis`
+// / `_new:` / `syncDirtyResources`.
 
 /**
  * The application-facing flow: create a resource, edit it, save it.
@@ -171,6 +55,31 @@ describe('Resource save flow', () => {
     const second = postCommitSpy.mock.calls[1][0] as Commit;
     expect(second.subject).toBe(genesisSubject);
     expect(second.previousCommit).toContain(first.signature!);
+  });
+
+  it('supports typed property setters via the props proxy', async ({
+    expect,
+  }) => {
+    const { store, postCommitSpy } = await testStore();
+
+    const doc = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Drive',
+      propVals: { [core.properties.name]: 'Initial' },
+      noParent: true,
+    });
+    expect(await doc.save()).toBe('persisted');
+
+    // Typed setter: `doc.props.name = …` resolves the shortname to its
+    // property URL and writes through `set(…, false)` — the write-side
+    // companion of the typed `props` read accessor, so consumers never
+    // type `set(core.properties.name, …)`. (Direct `doc.name =` is
+    // intentionally NOT offered: flattening props onto the Resource would
+    // collide with methods like `save`/`subject`/`parent`.)
+    doc.props.name = 'Renamed';
+    expect(await doc.save()).toBe('persisted');
+
+    expect(doc.get(core.properties.name)).toBe('Renamed');
+    expect(postCommitSpy.mock.calls.length).toBe(2);
   });
 
   it('a no-op save returns "noop" and posts nothing', async ({ expect }) => {
