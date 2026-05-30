@@ -4300,27 +4300,29 @@ msgstr "DID del nodo copiado al portapapeles"
 #. placeholder {0}: NODE_DID_PREFIX
 #: src/routes/SyncRoute.tsx
 msgid "Error: Expected {0}<node-id>"
-msgstr ""
+msgstr "Error: Se esperaba {0}<node-id>"
 
 #. placeholder {0}: data.count
 #. placeholder {1}: data.count !== 1 ? 's' : ''
 #. placeholder {2}: peerName
 #: src/routes/SyncRoute.tsx
 msgid "Synced {0} resource{1} with {2}"
-msgstr ""
+msgstr "Se sincronizaron {0} recurso{1} con {2}"
 
 #~ msgid "Loading... damn"
 #~ msgstr ""
 
 #: src/views/Document/DocumentV2FullPage.tsx
 msgid "Couldn't open the document editor"
-msgstr ""
+msgstr "No se pudo abrir el editor de documentos"
 
 #: src/views/Document/DocumentV2FullPage.tsx
 msgid ""
 "The collaborative editing engine (Loro / WebAssembly) failed to\n"
 "initialize in this tab, so the document body can't be shown."
 msgstr ""
+"El motor de edición colaborativa (Loro / WebAssembly) no se pudo\n"
+"inicializar en esta pestaña, por lo que no se puede mostrar el cuerpo del documento."
 
 #: src/views/Document/DocumentV2FullPage.tsx
 msgid ""
@@ -4328,13 +4330,16 @@ msgid ""
 "app or a browser extension may be blocking WebAssembly, or the tab\n"
 "ran out of memory."
 msgstr ""
+"Intenta recargar la página. Si el problema persiste, es posible que otra\n"
+"pestaña de esta aplicación o una extensión del navegador esté bloqueando WebAssembly, o\n"
+"que la pestaña se haya quedado sin memoria."
 
 #~ msgid "Ignoring corrupted table column widths \"{0}\": {1}"
 #~ msgstr ""
 
 #: src/routes/AboutRoute.tsx
 msgid "The easiest way to create, share and model linked data."
-msgstr ""
+msgstr "La forma más fácil de crear, compartir y modelar datos enlazados."
 
 #: src/routes/AboutRoute.tsx
 msgid ""
@@ -4342,24 +4347,27 @@ msgid ""
 "linked data and the reliability of type-safety — one open protocol for\n"
 "knowledge graphs, collaborative apps and shareable datasets."
 msgstr ""
+"Atomic Data combina la facilidad de uso de JSON, la conectividad de los\n"
+"datos enlazados y la fiabilidad de la seguridad de tipos — un protocolo abierto para\n"
+"grafos de conocimiento, aplicaciones colaborativas y conjuntos de datos compartibles."
 
 #: src/routes/AboutRoute.tsx
 msgid "Features"
-msgstr ""
+msgstr "Características"
 
 #: src/routes/AboutRoute.tsx
 msgid "Learn more & get involved"
-msgstr ""
+msgstr "Aprende más y participa"
 
 #: src/routes/AboutRoute.tsx
 msgid "Atomic Data Browser"
-msgstr ""
+msgstr "Navegador de datos atómicos"
 
 #: src/routes/AboutRoute.tsx
 msgid "Build commit"
-msgstr ""
+msgstr "Compilación commit"
 
 #. placeholder {0}: buildDate
 #: src/routes/AboutRoute.tsx
 msgid "built {0}"
-msgstr ""
+msgstr "compilado el {0}"
