@@ -27,8 +27,9 @@ interface TableCellProps {
   rowIndex: number;
   subject: string;
   property: Property;
-  onEditNextRow?: () => void;
-  onAddNewRow?: () => void;
+  /** Called on every edit; the row uses it to spawn a trailing placeholder the
+   * first time a virtual new row gains content (no-op for existing rows). */
+  onFirstContent?: () => void;
 }
 
 const SAVE_DEBOUNCE_TIME = 200;
@@ -57,8 +58,7 @@ export function TableCell({
   rowIndex,
   subject,
   property,
-  onEditNextRow,
-  onAddNewRow,
+  onFirstContent,
 }: TableCellProps): JSX.Element {
   const resource = useResource(subject);
   const { setActiveCell } = useTableEditorContext();
@@ -95,7 +95,19 @@ export function TableCell({
 
       await setValue(v);
 
-      save();
+      // A `_new:` row is virtual: it stays purely local (the Loro dirty
+      // subscriber skips `_new:` subjects, so it never auto-drains) and is
+      // materialized when the user moves off it (`useMaterializeWhenDeselected`).
+      // NOT persisting per-keystroke is what keeps rapid row entry stable — no
+      // save → re-fetch → remount churn reaches the cell mid-typing. Existing
+      // rows still persist as you type. Instead of a save spawning the next
+      // empty row (the old mechanism), the virtual row spawns it directly on
+      // first content via `onFirstContent`.
+      if (resource.subject.startsWith('_new:')) {
+        onFirstContent?.();
+      } else {
+        save();
+      }
     },
     [
       setValue,
@@ -104,6 +116,7 @@ export function TableCell({
       resource,
       property.subject,
       save,
+      onFirstContent,
       addItemsToHistoryStack,
     ],
   );
@@ -115,25 +128,21 @@ export function TableCell({
     [onChange, dataType],
   );
 
-  const propValCount = resource.getEntries().length;
-
   const handleEditNextRow = useCallback(() => {
-    onEditNextRow?.();
-
-    // Only go to the next row if the resource has any properties set (It has two by default, isA and parent)
-    // This prevents triggering a rerender and losing focus on the input.
-    if (propValCount > 2) {
-      onAddNewRow?.();
+    // Advance to the next row. The trailing empty row to move into already
+    // exists — a virtual row spawns its successor via `onFirstContent` the
+    // moment it gains content — so this is pure navigation, no spawning here.
+    //
+    // Only advance if this row has real content (a fresh row has just `isA` +
+    // `parent`) — avoids hopping off an empty row on a stray Enter. Read the
+    // count FRESH from the resource, not a render-time snapshot: the keystroke
+    // just typed updates the resource synchronously, but the cell's rerender
+    // lags under load, so a stale closure would skip the advance — piling the
+    // next value onto the same cell.
+    if (resource.getEntries().length > 2) {
       setActiveCell(rowIndex + 1, columnIndex);
     }
-  }, [
-    setActiveCell,
-    rowIndex,
-    columnIndex,
-    onEditNextRow,
-    onAddNewRow,
-    propValCount,
-  ]);
+  }, [setActiveCell, rowIndex, columnIndex, resource]);
 
   return (
     <Cell
