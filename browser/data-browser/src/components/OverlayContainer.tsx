@@ -571,7 +571,7 @@ const ShortcutKey = styled.kbd`
 
 function displayShortcut(s: string): string {
   return s
-    .replace('cmd+', '⌘')
+    .replace('meta+', '⌘')
     .replace('option+', '⌥')
     .replace('shift+', '⇧')
     .replace('ctrl+', '⌃')
