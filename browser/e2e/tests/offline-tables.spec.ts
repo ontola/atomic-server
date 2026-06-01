@@ -3,66 +3,58 @@ import { FRONTEND_URL, editableTitle } from './test-utils';
 
 /**
  * Offline-first table test.
- * The atomic-server on 9883 must be STOPPED for these tests.
- * Tests that a drive, table, and rows can be created and survive a page reload
- * entirely from the client-side WASM DB + OPFS.
+ *
+ * Runs in the normal (server-up) environment: instead of requiring
+ * atomic-server to be stopped, it sets up the dev drive online and then
+ * DISCONNECTS the client via the Sync page. `store.disconnect()` persists the
+ * offline state across a reload (localStorage `ws-disconnected`), so the reload
+ * stays offline and the table + row must come back purely from the client-side
+ * WASM DB / OPFS.
  */
-// The docstring above requires atomic-server on 9883 to be STOPPED. The
-// default test environment has it running, so skip unless the caller
-// explicitly asks for it (ATOMIC_TEST_OFFLINE=1 ... pnpm test-e2e).
 test.describe('offline tables', () => {
-  test.skip(
-    process.env.ATOMIC_TEST_OFFLINE !== '1',
-    'Requires atomic-server stopped; set ATOMIC_TEST_OFFLINE=1 to run.',
-  );
-
-  test('create drive, table, row, and persist across reload', async ({
+  test('create table + row while disconnected and persist across reload', async ({
     page,
   }) => {
     test.slow();
 
-    // 1. Navigate to dev-drive setup (server is off — will go offline)
+    // 1. Set up the dev drive (online).
     await page.goto(`${FRONTEND_URL}/app/dev-drive`, {
       waitUntil: 'domcontentloaded',
     });
-
-    // Wait for the WASM DB to be ready
-    await page.waitForFunction(
-      () => {
-        return window.store.getClientDb()?.isReady;
-      },
-      { timeout: 30000 },
-    );
-
-    // Wait for the dev drive to be created (should work offline via DID genesis)
+    await page.waitForFunction(() => window.store.getClientDb()?.isReady, {
+      timeout: 30000,
+    });
     await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
+    await expect(page.getByTestId('current-drive-title')).toBeVisible({
+      timeout: 15000,
+    });
 
-    // Verify the drive title is visible
-    const driveTitle = page.getByTestId('current-drive-title');
-    await expect(driveTitle).toBeVisible({ timeout: 15000 });
+    // 2. Go to the Sync page and disconnect from the server.
+    await page
+      .getByTestId('sidebar')
+      .getByRole('link', { name: 'Sync' })
+      .click();
+    await page.getByRole('button', { name: 'Disconnect' }).click();
+    await expect
+      .poll(() => page.evaluate(() => window.store.getSyncStatus().serverConnected))
+      .toBe(false);
 
-    // 2. Create a table via the sidebar quick-create icon
+    // 3. Create a table — offline.
     await page
       .getByTestId('sidebar')
       .getByRole('button', { name: 'New Table' })
       .click();
-
-    // Fill in the table name in the dialog
     const tableNameInput = page.getByPlaceholder('New Table');
     await expect(tableNameInput).toBeVisible({ timeout: 5000 });
     await tableNameInput.fill('My Offline Table');
     await page.locator('dialog[open] button:has-text("Create")').click();
-
-    // Wait for the table heading to load
     await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
-
-    // Verify the table appears in the sidebar (live query)
     await expect(
       page.getByTestId('sidebar').getByText('My Offline Table'),
     ).toBeVisible({ timeout: 10000 });
 
-    // 3. Fill in the first row (auto-created with the table)
-    //    Double-click: first click sets Visual mode, second enters Edit mode
+    // 4. Fill the first row (auto-created with the table) — offline.
+    //    Double-click: first click sets Visual mode, second enters Edit mode.
     const nameCell = page.locator('[aria-rowindex="2"] [aria-colindex="2"]');
     await expect(nameCell).toBeVisible({ timeout: 10000 });
     await nameCell.click();
@@ -70,43 +62,33 @@ test.describe('offline tables', () => {
     await nameCell.click();
     await page.waitForTimeout(300);
 
-    // The input should now be visible inside the cell
     const cellInput = page.locator('[role="grid"] input').first();
     await expect(cellInput).toBeVisible({ timeout: 5000 });
     await cellInput.fill('Test Row 1');
-    // Tab commits the cell value (Escape would discard it)
+    // Tab commits the cell value (Escape would discard it).
     await page.keyboard.press('Tab');
-
-    // Wait for save
     await page.waitForTimeout(2000);
 
-    // Verify the row is visible
     await expect(
       page.getByRole('gridcell', { name: 'Test Row 1' }),
     ).toBeVisible();
 
-    // 4. Reload the page
+    // 5. Reload — still offline (disconnect persists) — and verify the table
+    //    and row come back from OPFS.
     await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.store.getClientDb()?.isReady, {
+      timeout: 30000,
+    });
+    await expect
+      .poll(() => page.evaluate(() => window.store.getSyncStatus().serverConnected))
+      .toBe(false);
 
-    // Wait for WASM DB
-    await page.waitForFunction(
-      () => {
-        return window.store.getClientDb()?.isReady;
-      },
-      { timeout: 30000 },
-    );
-
-    // Verify the table title survives reload
     await expect(
       page.getByTestId('editable-title').getByText('My Offline Table'),
-    ).toBeVisible({
-      timeout: 15000,
-    });
+    ).toBeVisible({ timeout: 15000 });
 
-    // Verify the row count survives reload (row data may be empty
-    // if OPFS is unavailable and the WASM DB falls back to in-memory).
+    // Header + 1 data row + trailing new row.
     const rows = page.locator('[aria-rowindex]');
-    // At least the header + 1 data row should be present
     await expect(rows).toHaveCount(3, { timeout: 15000 });
   });
 });
