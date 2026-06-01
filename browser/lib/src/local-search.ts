@@ -128,6 +128,13 @@ export class LocalSearch {
     return this.indexes.get(drive)?.documentCount ?? 0;
   }
 
+  /** Whether a subject is already indexed under a drive. Used to avoid
+   *  clobbering a fresher (in-memory ingest) entry with a stale one when
+   *  lazily rebuilding a drive's index from OPFS. */
+  hasResource(subject: string, drive: string): boolean {
+    return this.indexes.get(drive)?.has(subject) ?? false;
+  }
+
   /** Total documents across every drive's index. */
   get size(): number {
     let total = 0;
