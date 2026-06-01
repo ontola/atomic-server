@@ -105,7 +105,17 @@ export function useServerSearch(
           }
 
           setError(e);
-          setResults([]);
+
+          // A *transient* failure (server contention / request timeout under
+          // load) must not leave the overlay permanently blank for a resource
+          // that exists. Retry on the same bounded schedule as the empty-result
+          // path above; only give up — and clear — once retries are exhausted.
+          if (attempt < MAX_RETRIES) {
+            attempt++;
+            retryTimer = setTimeout(runSearch, RETRY_DELAY_MS);
+          } else {
+            setResults([]);
+          }
         })
         .finally(() => {
           if (!cancelled) {
