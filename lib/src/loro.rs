@@ -59,6 +59,34 @@ pub struct VersionMetadata {
     pub message: Option<String>,
 }
 
+/// The founding (genesis) change of a resource's oplog — the source of its
+/// creation metadata. See [`AtomicLoroDoc::genesis_change`].
+#[derive(Clone, Debug)]
+pub struct GenesisChange {
+    /// Change timestamp normalised to Unix **milliseconds** (0 if unrecorded).
+    pub timestamp: i64,
+    /// Lamport timestamp — used to tie-break changes sharing a timestamp.
+    pub lamport: u64,
+    /// Commit message attached to the change. The client writes the signing
+    /// agent's subject here at genesis, so it carries `createdBy`.
+    pub message: Option<String>,
+}
+
+/// Coerce a Loro change timestamp to Unix **milliseconds**. Loro's own
+/// auto-recording uses seconds, but we stamp commits with millisecond
+/// precision (Loro orders changes by lamport, not timestamp, so a finer
+/// timestamp is safe). Values already in milliseconds (≥ 1e12, i.e. any time
+/// after 2001 in ms) pass through; second-resolution values are scaled up. A
+/// single oplog can carry both conventions (legacy snapshots, mixed peers),
+/// so always normalise before comparing or materialising.
+pub fn normalize_change_timestamp_ms(timestamp: i64) -> i64 {
+    if timestamp >= 1_000_000_000_000 {
+        timestamp
+    } else {
+        timestamp * 1000
+    }
+}
+
 /// Wraps a LoroDoc for an Atomic Resource, providing helpers to convert between
 /// Atomic Data property/value pairs and Loro containers.
 pub struct AtomicLoroDoc {
@@ -184,6 +212,54 @@ impl AtomicLoroDoc {
         // but sort explicitly by timestamp for consistent output.
         history.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
         history
+    }
+
+    /// The founding (genesis) change in the oplog: the causally-first change,
+    /// i.e. the one with the lowest Lamport timestamp. Creation metadata
+    /// (`createdAt` from its timestamp, `createdBy` from its commit message) is
+    /// derived from it — the change travels inside the resource's own Loro doc,
+    /// so no commit resource is needed. Returns `None` for an empty oplog.
+    ///
+    /// Selection is by **Lamport, not wall-clock timestamp**: server-authored
+    /// follow-up changes (e.g. setting `lastCommit` after apply) carry a
+    /// second-resolution timestamp that can sort *before* the client's
+    /// millisecond-precise genesis within the same second, which would
+    /// mis-pick a later, message-less change as the genesis. Lamport is the
+    /// causal order — the founding change is always the minimum.
+    pub fn genesis_change(&self) -> Option<GenesisChange> {
+        let frontier_ids: Vec<loro::ID> = self.doc.oplog_frontiers().iter().collect();
+
+        if frontier_ids.is_empty() {
+            return None;
+        }
+
+        let mut genesis: Option<GenesisChange> = None;
+
+        let _ = self
+            .doc
+            .travel_change_ancestors(&frontier_ids, &mut |change| {
+                // Select by Lamport (causal order); the founding change is the
+                // minimum. timestamp is kept only for `createdAt`, normalised to
+                // ms.
+                let timestamp = normalize_change_timestamp_ms(change.timestamp);
+                let lamport = change.lamport as u64;
+                let is_earlier = match &genesis {
+                    None => true,
+                    Some(g) => lamport < g.lamport,
+                };
+
+                if is_earlier {
+                    genesis = Some(GenesisChange {
+                        timestamp,
+                        lamport,
+                        message: change.message.map(|m| m.to_string()),
+                    });
+                }
+
+                ControlFlow::Continue(())
+            });
+
+        genesis
     }
 
     /// Returns the properties at a specific historical version without
@@ -1074,6 +1150,135 @@ mod test {
         let val = props.get(prop)?;
         let tag = datatypes.get(prop).map(|s| s.as_str());
         loro_value_to_atomic_value_tagged(val, tag)
+    }
+
+    #[test]
+    fn genesis_change_is_earliest_and_carries_message() {
+        let doc = AtomicLoroDoc::new();
+
+        // Genesis: one change tagged with the signing agent's subject, stamped
+        // with millisecond precision (as the client does at sign time).
+        doc.set_property(
+            "https://atomicdata.dev/properties/description",
+            &Value::String("hello".into()),
+        )
+        .unwrap();
+        doc.doc().commit_with(
+            loro::CommitOptions::new()
+                .timestamp(1_700_000_000_123)
+                .commit_msg("https://atomicdata.dev/agents/alice"),
+        );
+
+        // A later edit with a newer timestamp must NOT become the genesis.
+        doc.set_property(
+            "https://atomicdata.dev/properties/description",
+            &Value::String("edited".into()),
+        )
+        .unwrap();
+        doc.doc()
+            .commit_with(loro::CommitOptions::new().timestamp(1_700_000_009_999));
+
+        let genesis = doc.genesis_change().expect("doc has changes");
+        assert_eq!(
+            genesis.timestamp, 1_700_000_000_123,
+            "genesis is the earliest change, ms precision preserved",
+        );
+        assert_eq!(
+            genesis.message.as_deref(),
+            Some("https://atomicdata.dev/agents/alice"),
+            "genesis carries the agent subject from its commit message",
+        );
+    }
+
+    #[test]
+    fn genesis_change_picks_lowest_lamport_not_earliest_timestamp() {
+        // A genesis followed by a later edit whose (second-resolution) timestamp
+        // is numerically *smaller* than the ms-precise genesis — mimicking the
+        // server's post-apply `lastCommit` change. Timestamp-based selection
+        // would mis-pick the later, message-less edit; Lamport (causal order)
+        // correctly keeps the genesis, which was committed first.
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(
+            "https://atomicdata.dev/properties/description",
+            &Value::String("hello".into()),
+        )
+        .unwrap();
+        doc.doc().commit_with(
+            loro::CommitOptions::new()
+                .timestamp(1_700_000_000_000)
+                .commit_msg("https://atomicdata.dev/agents/alice"),
+        );
+
+        doc.set_property(
+            "https://atomicdata.dev/properties/description",
+            &Value::String("edited".into()),
+        )
+        .unwrap();
+        doc.doc()
+            .commit_with(loro::CommitOptions::new().timestamp(1_700_000_001));
+
+        let genesis = doc.genesis_change().expect("doc has changes");
+        assert_eq!(
+            genesis.message.as_deref(),
+            Some("https://atomicdata.dev/agents/alice"),
+            "genesis (lowest lamport) wins over the later, smaller-timestamp edit",
+        );
+        assert_eq!(genesis.timestamp, 1_700_000_000_000);
+    }
+
+    #[test]
+    fn genesis_change_none_for_empty_doc() {
+        let doc = AtomicLoroDoc::new();
+        assert!(doc.genesis_change().is_none());
+    }
+
+    #[test]
+    fn materializes_created_at_and_created_by_from_genesis() {
+        let agent = "https://atomicdata.dev/agents/alice";
+
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(
+            "https://atomicdata.dev/properties/description",
+            &Value::String("hello".into()),
+        )
+        .unwrap();
+        // Millisecond-precise genesis timestamp.
+        doc.doc().commit_with(
+            loro::CommitOptions::new()
+                .timestamp(1_700_000_123_456)
+                .commit_msg(agent),
+        );
+
+        // `apply_state_doc` runs the projection (materialize_propvals_from_loro_doc)
+        // — the same chokepoint the index and JSON-AD reads use.
+        let mut resource = crate::Resource::new("https://example.com/msg".into());
+        resource.apply_state_doc(doc).unwrap();
+
+        // createdAt: the genesis timestamp, preserved at millisecond precision.
+        assert_eq!(
+            resource
+                .get(crate::urls::CREATED_AT)
+                .unwrap()
+                .to_int()
+                .unwrap(),
+            1_700_000_123_456,
+        );
+        // createdBy: the agent subject from the genesis change message.
+        assert_eq!(
+            resource.get(crate::urls::CREATED_BY).unwrap().to_string(),
+            agent,
+        );
+
+        // Both must serialize when the resource is read in JSON-AD.
+        let json = resource.to_json_ad(None).unwrap();
+        assert!(
+            json.contains(crate::urls::CREATED_AT),
+            "createdAt serialized in JSON-AD: {json}",
+        );
+        assert!(
+            json.contains(crate::urls::CREATED_BY) && json.contains(agent),
+            "createdBy serialized in JSON-AD: {json}",
+        );
     }
 
     #[test]

@@ -1,6 +1,8 @@
 import { useState, type JSX } from 'react';
 import {
   useResource,
+  useCreatedAt,
+  useCreatedBy,
   signRequest,
   HeadersObject,
   useStore,
@@ -11,6 +13,7 @@ import { ContainerNarrow } from '../components/Containers';
 import { AtomicLink } from '../components/AtomicLink';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { PropValRow, PropertyLabel } from '../components/PropVal';
+import { CommitDetail } from '../components/CommitDetail';
 import { Button } from '../components/Button';
 import { ErrMessage } from '../components/forms/InputStyles';
 import { useSettings } from '../helpers/AppSettings';
@@ -38,6 +41,10 @@ export const DataRoute = createRoute({
 function Data(): JSX.Element {
   const [subject] = useCurrentSubject();
   const resource = useResource(subject);
+  // Creation metadata derived from the signed genesis commit (the resource
+  // identity), materialized into propvals — not a refetched commit.
+  const createdAt = useCreatedAt(resource);
+  const createdBy = useCreatedBy(resource);
   const [textResponse, setTextResponse] = useState<string | undefined>(
     undefined,
   );
@@ -117,6 +124,14 @@ function Data(): JSX.Element {
             </PropertyLabel>
             <AtomicLink subject={subject}>{subject}</AtomicLink>
           </PropValRow>
+          {(createdBy || createdAt) && (
+            <PropValRow columns>
+              <PropertyLabel title='Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature.'>
+                genesis:
+              </PropertyLabel>
+              <CommitDetail createdAt={createdAt} createdBy={createdBy} />
+            </PropValRow>
+          )}
           <AllProps resource={resource} editable columns />
           {resource.hasUnsavedChanges() ? (
             <>

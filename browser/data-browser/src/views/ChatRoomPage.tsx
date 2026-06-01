@@ -2,9 +2,10 @@ import {
   commits,
   core,
   dataBrowser,
-  getTimestampNow,
   useCanWrite,
   useCollection,
+  useCreatedAt,
+  useCreatedBy,
   useResource,
   useStore,
   useString,
@@ -85,7 +86,9 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
           isA: dataBrowser.classes.message,
           propVals: {
             [core.properties.description]: newMessageVal,
-            [commits.properties.createdAt]: getTimestampNow(),
+            // `createdAt` is NOT set here: it's derived from the genesis Loro
+            // change (timestamp) and materialized server-side. Authoring it
+            // explicitly is now rejected by the server.
             ...(isReplyTo && {
               [dataBrowser.properties.replyTo]: isReplyTo,
             }),
@@ -261,7 +264,11 @@ const MESSAGE_MAX_LEN = 500;
 const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   const resource = useResource(subject);
   const [description] = useString(resource, core.properties.description);
-  const [lastCommit] = useSubject(resource, commits.properties.lastCommit);
+  // Creation date + creator come from the genesis change in the resource's own
+  // Loro oplog (materialized into propvals) — no commit fetch, so they survive
+  // a refresh. The commit subject is intentionally NOT passed.
+  const createdAt = useCreatedAt(resource);
+  const createdBy = useCreatedBy(resource);
   const [replyTo] = useSubject(resource, dataBrowser.properties.replyTo);
   const navigate = useNavigateWithTransition();
   const canWrite = useCanWrite(resource);
@@ -279,7 +286,7 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   return (
     <MessageComponent about={subject}>
       <MessageDetails>
-        <CommitDetail commitSubject={lastCommit!} />
+        <CommitDetail createdAt={createdAt} createdBy={createdBy} />
         {replyTo && <MessageLine subject={replyTo} />}
         <MessageActions>
           {canWrite && (
@@ -333,13 +340,11 @@ const MESSAGE_LINE_MAX_LEN = 50;
 function MessageLine({ subject }: MessageLineProps) {
   const resource = useResource(subject);
   const [description] = useString(resource, core.properties.description);
-  const [lastCommit] = useSubject(resource, commits.properties.lastCommit);
+  // Author from the resource's own genesis metadata (createdBy) — not a commit
+  // fetch, so it survives a refresh.
+  const author = useCreatedBy(resource);
 
-  // Traverse path to find the author
-  const commitResource = useResource(lastCommit);
-  const [signer] = useSubject(commitResource, commits.properties.signer);
-
-  if (!resource.isReady() || !commitResource.isReady()) {
+  if (!resource.isReady()) {
     return <MessageLineStyled>loading...</MessageLineStyled>;
   }
 
@@ -351,7 +356,7 @@ function MessageLine({ subject }: MessageLineProps) {
   return (
     <MessageLineStyled>
       <span>to </span>
-      <ResourceInline subject={signer!} />
+      {author && <ResourceInline subject={author} />}
       <AtomicLink subject={subject}>{`: ${truncated}${ellipsis}`}</AtomicLink>
     </MessageLineStyled>
   );

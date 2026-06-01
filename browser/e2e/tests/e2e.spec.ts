@@ -208,6 +208,27 @@ test.describe('data-browser', async () => {
       'Message date missing — commit createdAt not stored/retrievable',
     ).toContainText(year);
 
+    // Regression: author + date must SURVIVE A REFRESH. They are derived from
+    // the message's genesis Loro change (createdBy = signing agent, createdAt =
+    // change timestamp), materialized server-side into propvals and served in
+    // JSON-AD — NOT refetched from a `did:ad:commit:<sig>` resource (which no
+    // longer resolves under sign-at-drain). Before the fix both vanished on
+    // reload because `<CommitDetail>` fetched the commit. A hard reload drops
+    // the in-memory store, so this proves the metadata round-trips from the DB.
+    await page.reload();
+    const messageAfterReload = page
+      .getByText(teststring)
+      .locator('xpath=ancestor::*[@about][1]');
+    await expect(messageAfterReload).toBeVisible({ timeout: 15_000 });
+    await expect(
+      messageAfterReload,
+      'Message author "Dev User" missing after refresh — creation metadata did not survive the round-trip',
+    ).toContainText('Dev User');
+    await expect(
+      messageAfterReload,
+      'Message date missing after refresh — createdAt did not survive the round-trip',
+    ).toContainText(year);
+
     // Build the chatroom fallback URL on the SERVER's origin (same as the
     // invite URL the guest opens), not the frontend dev server. The guest
     // sets up their agent on `localhost:9883` after accepting the invite —

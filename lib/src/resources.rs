@@ -114,7 +114,41 @@ impl Resource {
             }
         }
 
+        Self::materialize_genesis_metadata(doc, &mut propvals);
         propvals
+    }
+
+    /// Derive `createdAt` / `createdBy` from the genesis oplog change and write
+    /// them into the materialized projection. This is the single chokepoint
+    /// feeding both the index (so collections can sort by `createdAt`) and
+    /// JSON-AD reads — so every resource exposes its creation metadata without
+    /// fetching a commit. The signing agent is written into the genesis
+    /// change's message by the client (`signChanges`); the timestamp comes
+    /// from the genesis change, normalised to milliseconds.
+    fn materialize_genesis_metadata(doc: &crate::loro::AtomicLoroDoc, propvals: &mut PropVals) {
+        let Some(genesis) = doc.genesis_change() else {
+            return;
+        };
+
+        // Fill in `createdAt` only when the oplog has a real timestamp and no
+        // value is already present — never clobber an existing creation time.
+        // `genesis.timestamp` is already normalised to milliseconds.
+        if genesis.timestamp > 0 && !propvals.contains_key(urls::CREATED_AT) {
+            if let Ok(value) = Value::new(
+                &genesis.timestamp.to_string(),
+                &crate::datatype::DataType::Timestamp,
+            ) {
+                propvals.insert(urls::CREATED_AT.into(), value);
+            }
+        }
+
+        if let Some(message) = genesis.message {
+            if !message.is_empty() && !propvals.contains_key(urls::CREATED_BY) {
+                if let Ok(value) = Value::new(&message, &crate::datatype::DataType::AtomicUrl) {
+                    propvals.insert(urls::CREATED_BY.into(), value);
+                }
+            }
+        }
     }
 
     pub fn build_state_doc(&self) -> AtomicResult<crate::loro::AtomicLoroDoc> {

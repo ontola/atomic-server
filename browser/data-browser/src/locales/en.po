@@ -4676,3 +4676,11 @@ msgid ""
 msgstr ""
 "A short description given to the AI Agent, use this to tell it\n"
 "what this drive is about, link important resources etc."
+
+#: src/routes/DataRoute.tsx
+msgid "genesis:"
+msgstr "genesis:"
+
+#: src/routes/DataRoute.tsx
+msgid "Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature."
+msgstr "Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature."
