@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
   newResource,
-  waitForCommit,
   before,
   inDialog,
   REBUILD_INDEX_TIME,
@@ -151,7 +150,6 @@ test.describe('tables', async () => {
       await dialog.getByPlaceholder('New Column').fill(dateColumnName);
       await dialog.getByLabel('Long').click();
       await closeDialogWith('Create');
-      await waitForCommit(page);
     });
 
     await expect(
@@ -165,7 +163,6 @@ test.describe('tables', async () => {
       await expect(page.locator('text=New Number Column')).toBeVisible();
       await dialog.getByPlaceholder('New Column').fill(numberColumnName);
       await closeDialogWith('Create');
-      await waitForCommit(page);
     });
 
     await expect(
@@ -179,7 +176,6 @@ test.describe('tables', async () => {
       await expect(page.locator('text=New Checkbox Column')).toBeVisible();
       await dialog.getByPlaceholder('New Column').fill(checkboxColumnName);
       await closeDialogWith('Create');
-      await waitForCommit(page);
     });
 
     await expect(
@@ -197,7 +193,6 @@ test.describe('tables', async () => {
       await createTag('😵‍💫', 'dreamy');
       await createTag('🤨', 'wtf');
       await closeDialogWith('Create');
-      await waitForCommit(page);
     });
 
     await expect(

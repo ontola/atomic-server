@@ -147,8 +147,13 @@ export const newDriveMenuItem = '[data-test="menu-item-new-drive"]';
 export const sidebarDriveButtonId = 'sidebar-drive-open';
 export const defaultDevServer = 'http://localhost:9883';
 export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
-// Depends on server index throttle time, `commit_monitor.rs`
-export const REBUILD_INDEX_TIME = 6500;
+// Fallback wait for the search index to catch up, for callers that can't
+// supply a probe to `waitForSearchIndex`. The e2e server runs with a short
+// `ATOMIC_SEARCH_INDEX_INTERVAL_MS` (see `commit_monitor.rs`), so the flush
+// happens in well under a second — this is a safe upper bound, not the 5s
+// production cadence. Prefer the probe form of `waitForSearchIndex`, which
+// polls real readiness and is independent of the server's flush interval.
+export const REBUILD_INDEX_TIME = 1500;
 
 /**
  * Default test setup: `/app/dev-drive` creates a fresh agent + drive on the dev
@@ -632,8 +637,23 @@ export async function waitForCommitOnCurrentResource(
   await page.waitForTimeout(200);
 }
 
-export async function waitForSearchIndex(page: Page) {
-  return page.waitForTimeout(REBUILD_INDEX_TIME);
+/**
+ * Wait for the search index to catch up with recently-created resources.
+ *
+ * The e2e server runs with a short `ATOMIC_SEARCH_INDEX_INTERVAL_MS` (see
+ * `commit_monitor.rs`), so the Tantivy flush + reader reload completes in well
+ * under a second — {@link REBUILD_INDEX_TIME} is a safe upper bound, not the 5s
+ * production cadence.
+ *
+ * Where a test searches for one specific resource in a single page/context,
+ * prefer an explicit `store.search(query, { parents: drive })` poll for the
+ * subject (see `search.spec.ts` "text search") — that's true readiness. A
+ * generic probe here is deliberately avoided: it's unreliable across a second
+ * browser context (drive scoping) and the overlay's streaming re-render races a
+ * click that fires too soon.
+ */
+export async function waitForSearchIndex(page: Page): Promise<void> {
+  await page.waitForTimeout(REBUILD_INDEX_TIME);
 }
 
 export async function openAgentPage(page: Page) {
@@ -873,8 +893,13 @@ export async function clickSidebarItem(text: string, page: Page) {
 /** Click an item from the main, visible context menu */
 export async function contextMenuClick(text: string, page: Page) {
   await page.click(contextMenu);
-  await page.waitForTimeout(100);
-  await page.getByTestId(`menu-item-${text}`).click();
+  // Wait for the menu item to actually render in the opened menu rather than
+  // sleeping for the open animation. `.click()` auto-waits for actionability,
+  // but an explicit visibility wait makes the readiness signal clear and
+  // avoids racing the menu's mount.
+  const item = page.getByTestId(`menu-item-${text}`);
+  await item.waitFor({ state: 'visible' });
+  await item.click();
 }
 
 export const anyValue = Symbol('any');

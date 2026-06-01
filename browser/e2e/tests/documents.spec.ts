@@ -130,7 +130,7 @@ test.describe('documents', async () => {
       'Paragraph not deleted in first window.',
     ).not.toBeVisible({ timeout: 15000 });
 
-    // Wait for AtomicServer to index the folder
+    // Wait for AtomicServer to index the folder so the @-mention can find it.
     await waitForSearchIndex(page2);
     // Add a link to a folder via @ mention
     await page2.keyboard.press('Space');

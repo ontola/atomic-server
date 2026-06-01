@@ -68,8 +68,22 @@ pub struct CommitMonitor {
     pending_commit: Arc<AtomicBool>,
 }
 
-// Only runs expensive index operation (tantivy) once every x seconds
-const REBUILD_INDEX_TIME: std::time::Duration = std::time::Duration::from_secs(5);
+// Only runs expensive index operation (tantivy) once every x seconds.
+const DEFAULT_REBUILD_INDEX_MS: u64 = 5000;
+
+/// Search-index flush cadence. Defaults to 5s (keeps tantivy commit churn low
+/// in production), but `ATOMIC_SEARCH_INDEX_INTERVAL_MS` can lower it so the
+/// e2e suite sees freshly-created resources become searchable in well under a
+/// second instead of waiting out a 5s batch window.
+fn rebuild_index_interval() -> std::time::Duration {
+    let ms = std::env::var("ATOMIC_SEARCH_INDEX_INTERVAL_MS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|ms| *ms > 0)
+        .unwrap_or(DEFAULT_REBUILD_INDEX_MS);
+
+    std::time::Duration::from_millis(ms)
+}
 
 // Since his Actor only starts once, there is no need to handle its lifecycle
 impl Actor for CommitMonitor {
@@ -92,7 +106,7 @@ impl Actor for CommitMonitor {
             let writer = self.search_state.writer.clone();
             let reader = self.search_state.reader.clone();
             tokio::spawn(async move {
-                let mut interval = tokio::time::interval(REBUILD_INDEX_TIME);
+                let mut interval = tokio::time::interval(rebuild_index_interval());
                 // `interval.tick()` returns immediately on first call;
                 // skip it so we don't commit an empty writer at boot.
                 interval.tick().await;
