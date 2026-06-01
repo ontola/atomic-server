@@ -575,7 +575,7 @@ export class Store {
     return build;
   }
 
-  private async buildDriveInstilldex(drive: string): Promise<void> {
+  private async buildDriveIndex(drive: string): Promise<void> {
     const clientDb = this.clientDb;
 
     if (!clientDb) {
@@ -1896,6 +1896,7 @@ export class Store {
       try {
         const { jsonAd, snapshot } =
           await this.clientDb.getResourceWithSnapshot(subject);
+        const hasSnapshot = !!(snapshot && snapshot.length > 0);
 
         if (jsonAd) {
           hasLocalData = this.hydrateResourceFromJson(
@@ -1904,11 +1905,33 @@ export class Store {
           );
         }
 
-        if (hasLocalData && snapshot && snapshot.length > 0) {
+        if (hasLocalData && hasSnapshot) {
           const resource = this.resources.get(subject);
 
           if (resource) {
             resource.importLoroUpdate(snapshot);
+          }
+        }
+
+        // An OPFS hit is only authoritative if it actually hydrated to
+        // something renderable. If we end up with no properties at all — an
+        // incomplete write: a jsonAd-only placeholder with no Loro snapshot, or
+        // an empty snapshot — trusting it would suppress the server GET below
+        // and render a contentless resource (bare subject as title, no body)
+        // that never recovers. The slow (cache-cold) reload dodges this only
+        // because the ClientDb isn't initialized yet and skips OPFS entirely;
+        // the fast service-worker reload hits it. Treat such a hit as a miss
+        // and let the server GET populate it — keep `loading` so the UI shows a
+        // spinner, never an empty resource.
+        if (hasLocalData) {
+          const resource = this.resources.get(subject);
+
+          if (!resource || resource.getEntries().length === 0) {
+            hasLocalData = false;
+
+            if (resource) {
+              resource.loading = true;
+            }
           }
         }
       } catch (e) {

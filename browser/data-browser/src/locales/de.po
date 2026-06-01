@@ -217,94 +217,71 @@ msgstr "Leeren"
 msgid "Copy"
 msgstr "Kopieren"
 
-#: src/routes/AboutRoute.tsx
-msgid ""
-"The easiest way to <0>create</0>, <1>share</1> and <2>model</2> linked\n"
-"data."
-msgstr "Der einfachste Weg, um Linked Data zu <0>erstellen</0>, zu <1>teilen</1> und zu <2>modellieren</2>."
+#~ msgid ""
+#~ "The easiest way to <0>create</0>, <1>share</1> and <2>model</2> linked\n"
+#~ "data."
+#~ msgstr "Der einfachste Weg, um Linked Data zu <0>erstellen</0>, zu <1>teilen</1> und zu <2>modellieren</2>."
 
-#: src/routes/AboutRoute.tsx
-msgid ""
-"Atomic Data is a modular specification for sharing, modifying and\n"
-"modeling graph data. It combines the ease of use of JSON, the\n"
-"connectivity of RDF (linked data) and the reliability of type-safety."
-msgstr ""
-"Atomic Data ist eine modulare Spezifikation zum Teilen, Modifizieren und\n"
-"Modellieren von Graphendaten. Es kombiniert die Benutzerfreundlichkeit von JSON, die\n"
-"Konnektivität von RDF (Linked Data) und die Zuverlässigkeit der Typsicherheit."
+#~ msgid ""
+#~ "Atomic Data is a modular specification for sharing, modifying and\n"
+#~ "modeling graph data. It combines the ease of use of JSON, the\n"
+#~ "connectivity of RDF (linked data) and the reliability of type-safety."
+#~ msgstr ""
+#~ "Atomic Data ist eine modulare Spezifikation zum Teilen, Modifizieren und\n"
+#~ "Modellieren von Graphendaten. Es kombiniert die Benutzerfreundlichkeit von JSON, die\n"
+#~ "Konnektivität von RDF (Linked Data) und die Zuverlässigkeit der Typsicherheit."
 
-#: src/routes/AboutRoute.tsx
-msgid "About this app"
-msgstr "Über diese App"
+#~ msgid "About this app"
+#~ msgstr "Über diese App"
 
-#. placeholder {0}: ' '
-#: src/routes/AboutRoute.tsx
-msgid ""
-"You're looking at{0} <0>atomic-data-browser</0> , an open-source client for viewing and editing data. Please add an\n"
-"issue if you encouter problems or have a feature request. Expect bugs\n"
-"and issues, because this stuff is pretty beta."
-msgstr ""
-"Sie sehen sich{0} <0>atomic-data-browser</0> an, einen Open-Source-Client zum Anzeigen und Bearbeiten von Daten. Bitte fügen Sie ein\n"
-"Problem hinzu, wenn Sie auf Probleme stoßen oder einen Funktionswunsch haben. Erwarten Sie Fehler\n"
-"und Probleme, da dieses Zeug ziemlich Beta ist."
+#~ msgid ""
+#~ "You're looking at{0} <0>atomic-data-browser</0> , an open-source client for viewing and editing data. Please add an\n"
+#~ "issue if you encouter problems or have a feature request. Expect bugs\n"
+#~ "and issues, because this stuff is pretty beta."
+#~ msgstr ""
+#~ "Sie sehen sich{0} <0>atomic-data-browser</0> an, einen Open-Source-Client zum Anzeigen und Bearbeiten von Daten. Bitte fügen Sie ein\n"
+#~ "Problem hinzu, wenn Sie auf Probleme stoßen oder einen Funktionswunsch haben. Erwarten Sie Fehler\n"
+#~ "und Probleme, da dieses Zeug ziemlich Beta ist."
 
-#. placeholder {0}: ' '
-#: src/routes/AboutRoute.tsx
-msgid "The back-end of this app is{0} <0>atomic-server</0> , which you can think of as an open source, web-native database."
-msgstr "Das Back-End dieser App ist{0} <0>atomic-server</0> , den Sie sich als Open-Source-, Web-native Datenbank vorstellen können."
+#~ msgid "The back-end of this app is{0} <0>atomic-server</0> , which you can think of as an open source, web-native database."
+#~ msgstr "Das Back-End dieser App ist{0} <0>atomic-server</0> , den Sie sich als Open-Source-, Web-native Datenbank vorstellen können."
 
-#: src/routes/AboutRoute.tsx
-msgid "Things to visit"
-msgstr "Dinge zu besuchen"
+#~ msgid "Things to visit"
+#~ msgstr "Dinge zu besuchen"
 
-#: src/routes/AboutRoute.tsx
-msgid "List of lists"
-msgstr "Liste der Listen"
+#~ msgid "List of lists"
+#~ msgstr "Liste der Listen"
 
-#: src/routes/AboutRoute.tsx
-msgid "List of Classes"
-msgstr "Liste der Klassen"
+#~ msgid "List of Classes"
+#~ msgstr "Liste der Klassen"
 
-#: src/routes/AboutRoute.tsx
-msgid "List of Properties"
-msgstr "Liste der Eigenschaften"
+#~ msgid "List of Properties"
+#~ msgstr "Liste der Eigenschaften"
 
-#: src/routes/AboutRoute.tsx
-msgid "Run your own server"
-msgstr "Eigenen Server betreiben"
+#~ msgid "Run your own server"
+#~ msgstr "Eigenen Server betreiben"
 
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
-#: src/routes/AboutRoute.tsx
-msgid "The easiest way to run an{0} <0>atomic-server</0>{1} is by using Docker:"
-msgstr "Der einfachste Weg, einen{0} <0>atomic-server</0>{1} auszuführen, ist die Verwendung von Docker:"
+#~ msgid "The easiest way to run an{0} <0>atomic-server</0>{1} is by using Docker:"
+#~ msgstr "Der einfachste Weg, einen{0} <0>atomic-server</0>{1} auszuführen, ist die Verwendung von Docker:"
 
-#. placeholder {0}: ' '
-#: src/routes/AboutRoute.tsx
-msgid "...and visit{0} <0>localhost</0>."
-msgstr "...und besuchen Sie{0} <0>localhost</0>."
+#~ msgid "...and visit{0} <0>localhost</0>."
+#~ msgstr "...und besuchen Sie{0} <0>localhost</0>."
 
-#: src/routes/AboutRoute.tsx
-msgid "Join the community"
-msgstr "Der Community beitreten"
+#~ msgid "Join the community"
+#~ msgstr "Der Community beitreten"
 
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
-#. placeholder {2}: ' '
-#. placeholder {3}: "'"
-#: src/routes/AboutRoute.tsx
-msgid ""
-"Atomic Data is open and fully powered by volunteers. We're looking\n"
-"for people who want to help discuss various design challenges and work\n"
-"on implmenentations. If you have any questions, or want to help out,\n"
-"feel free to join our{0} <0>Discord</0>! Sign\n"
-"up to{1} <1>our newsletter</1>{2} if you{3}d like to get updated! ."
-msgstr ""
-"Atomic Data ist offen und wird vollständig von Freiwilligen betrieben. Wir suchen\n"
-"nach Personen, die helfen möchten, verschiedene Designherausforderungen zu diskutieren und an\n"
-"Implementierungen zu arbeiten. Wenn Sie Fragen haben oder helfen möchten,\n"
-"können Sie gerne unserem{0} <0>Discord</0> beitreten! Melden Sie sich\n"
-"für{1} <1>unseren Newsletter</1>{2} an, wenn Sie auf dem Laufenden bleiben möchten{3} ."
+#~ msgid ""
+#~ "Atomic Data is open and fully powered by volunteers. We're looking\n"
+#~ "for people who want to help discuss various design challenges and work\n"
+#~ "on implmenentations. If you have any questions, or want to help out,\n"
+#~ "feel free to join our{0} <0>Discord</0>! Sign\n"
+#~ "up to{1} <1>our newsletter</1>{2} if you{3}d like to get updated! ."
+#~ msgstr ""
+#~ "Atomic Data ist offen und wird vollständig von Freiwilligen betrieben. Wir suchen\n"
+#~ "nach Personen, die helfen möchten, verschiedene Designherausforderungen zu diskutieren und an\n"
+#~ "Implementierungen zu arbeiten. Wenn Sie Fragen haben oder helfen möchten,\n"
+#~ "können Sie gerne unserem{0} <0>Discord</0> beitreten! Melden Sie sich\n"
+#~ "für{1} <1>unseren Newsletter</1>{2} an, wenn Sie auf dem Laufenden bleiben möchten{3} ."
 
 #: src/components/SideBar/AppMenu.tsx
 #: src/routes/AppSettings.tsx
@@ -1598,6 +1575,7 @@ msgstr "Ressourcenversion aktualisiert"
 msgid "History of {0}"
 msgstr "Verlauf von {0}"
 
+#: src/routes/AboutRoute.tsx
 #: src/routes/History/HistoryMobileView.tsx
 msgid "Version"
 msgstr "Version"
@@ -2804,21 +2782,18 @@ msgstr ""
 "Zusätzlich können Sie nach Ressourcen mit bestimmten Tags suchen,\n"
 "indem Sie <0/> zu Ihrer Suche hinzufügen."
 
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
-#: src/routes/AboutRoute.tsx
-msgid ""
-"Atomic Data is especially suitable for knowledge graphs, distributed\n"
-"datasets, semantic data, p2p applications, decentralized apps, and data\n"
-"that is meant to be shared. It is designed to be highly extensible, easy\n"
-"to use, and to make the process of domain specific standardization as\n"
-"simple as possible. Check out{0} <0>the docs</0>{1} for more information about Atomic Data."
-msgstr ""
-"Atomic Data eignet sich besonders für Wissensgraphen, verteilte Datensätze,\n"
-"semantische Daten, P2P-Anwendungen, dezentrale Apps und Daten, die gemeinsam\n"
-"genutzt werden sollen. Es ist so konzipiert, dass es hochgradig erweiterbar und\n"
-"einfach zu bedienen ist und den Prozess der domänenspezifischen Standardisierung\n"
-"so einfach wie möglich macht. Weitere Informationen zu Atomic Data finden Sie{0} <0>in der Dokumentation</0>{1}."
+#~ msgid ""
+#~ "Atomic Data is especially suitable for knowledge graphs, distributed\n"
+#~ "datasets, semantic data, p2p applications, decentralized apps, and data\n"
+#~ "that is meant to be shared. It is designed to be highly extensible, easy\n"
+#~ "to use, and to make the process of domain specific standardization as\n"
+#~ "simple as possible. Check out{0} <0>the docs</0>{1} for more information about Atomic Data."
+#~ msgstr ""
+#~ "Atomic Data eignet sich besonders für Wissensgraphen, verteilte Datensätze,\n"
+#~ "semantische Daten, P2P-Anwendungen, dezentrale Apps und Daten, die gemeinsam\n"
+#~ "genutzt werden sollen. Es ist so konzipiert, dass es hochgradig erweiterbar und\n"
+#~ "einfach zu bedienen ist und den Prozess der domänenspezifischen Standardisierung\n"
+#~ "so einfach wie möglich macht. Weitere Informationen zu Atomic Data finden Sie{0} <0>in der Dokumentation</0>{1}."
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Untitled Agent"
@@ -2901,9 +2876,10 @@ msgid "<0/> Upload Plugin"
 msgstr "<0/> Plugin hochladen"
 
 #. placeholder {0}: metadata.version
-#. placeholder {0}: resource.props.version
+#. placeholder {0}: __APP_VERSION__
 #. placeholder {0}: resource.props.version
 #: src/chunks/Plugins/NewPluginButton.tsx
+#: src/routes/AboutRoute.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "v{0}"
 msgstr "v{0}"
@@ -4361,3 +4337,35 @@ msgstr ""
 
 #~ msgid "Ignoring corrupted table column widths \"{0}\": {1}"
 #~ msgstr ""
+
+#: src/routes/AboutRoute.tsx
+msgid "The easiest way to create, share and model linked data."
+msgstr ""
+
+#: src/routes/AboutRoute.tsx
+msgid ""
+"Atomic Data combines the ease of use of JSON, the connectivity of\n"
+"linked data and the reliability of type-safety — one open protocol for\n"
+"knowledge graphs, collaborative apps and shareable datasets."
+msgstr ""
+
+#: src/routes/AboutRoute.tsx
+msgid "Features"
+msgstr ""
+
+#: src/routes/AboutRoute.tsx
+msgid "Learn more & get involved"
+msgstr ""
+
+#: src/routes/AboutRoute.tsx
+msgid "Atomic Data Browser"
+msgstr ""
+
+#: src/routes/AboutRoute.tsx
+msgid "Build commit"
+msgstr ""
+
+#. placeholder {0}: buildDate
+#: src/routes/AboutRoute.tsx
+msgid "built {0}"
+msgstr ""
