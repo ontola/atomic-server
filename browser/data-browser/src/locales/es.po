@@ -4352,3 +4352,6 @@ msgid ""
 "app or a browser extension may be blocking WebAssembly, or the tab\n"
 "ran out of memory."
 msgstr ""
+
+#~ msgid "Ignoring corrupted table column widths \"{0}\": {1}"
+#~ msgstr ""

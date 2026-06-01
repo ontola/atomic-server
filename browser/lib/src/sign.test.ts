@@ -22,9 +22,9 @@ describe('Commit signing primitives', () => {
 
   it('signs a commit with the right signature', async ({ expect }) => {
     const signatureCorrect =
-      'kLh+mxy/lgFD6WkbIbhJANgRhyu39USL9up1zCmqU8Jmc+4rlvLZwxSlfxKTISP2BiXLSiz/5NJZrN5XpXJ/Cg==';
+      'kLh-mxy_lgFD6WkbIbhJANgRhyu39USL9up1zCmqU8Jmc-4rlvLZwxSlfxKTISP2BiXLSiz_5NJZrN5XpXJ_Cg';
     const serializedCommitRust =
-      '{"https://atomicdata.dev/properties/createdAt":0,"https://atomicdata.dev/properties/isA":["https://atomicdata.dev/classes/Commit"],"https://atomicdata.dev/properties/set":{"https://atomicdata.dev/properties/description":"Some value","https://atomicdata.dev/properties/shortname":"someval"},"https://atomicdata.dev/properties/signature":"kLh+mxy/lgFD6WkbIbhJANgRhyu39USL9up1zCmqU8Jmc+4rlvLZwxSlfxKTISP2BiXLSiz/5NJZrN5XpXJ/Cg==","https://atomicdata.dev/properties/signer":"http://localhost/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=","https://atomicdata.dev/properties/subject":"https://localhost/new_thing"}';
+      '{"https://atomicdata.dev/properties/createdAt":0,"https://atomicdata.dev/properties/isA":["https://atomicdata.dev/classes/Commit"],"https://atomicdata.dev/properties/set":{"https://atomicdata.dev/properties/description":"Some value","https://atomicdata.dev/properties/shortname":"someval"},"https://atomicdata.dev/properties/signature":"kLh-mxy_lgFD6WkbIbhJANgRhyu39USL9up1zCmqU8Jmc-4rlvLZwxSlfxKTISP2BiXLSiz_5NJZrN5XpXJ_Cg","https://atomicdata.dev/properties/signer":"http://localhost/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=","https://atomicdata.dev/properties/subject":"https://localhost/new_thing"}';
     const createdAt = 0;
 
     const commitBuilder = new CommitBuilder(subject, {

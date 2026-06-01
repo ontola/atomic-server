@@ -9,7 +9,7 @@ import { EdgeData, NodeData, applyNodeStyling } from './buildGraph';
 import { useCallback, useMemo, useState } from 'react';
 import Dagre from '@dagrejs/dagre';
 import { useTheme } from 'styled-components';
-import { dataBrowser, Resource, useString } from '@tomic/react';
+import { dataBrowser, Resource, useValue } from '@tomic/react';
 
 interface CustomNodePositioning {
   [key: string]: [x: number, y: number];
@@ -69,15 +69,20 @@ const placeNodesInSpace = (
 export function useGraph(ontology: Resource): UseNodeReturn {
   const theme = useTheme();
 
-  const [customPositioningSTR, setCustomPositioningSTR] = useString(
+  // `customNodePositioning` is a JSON property holding a plain object that maps
+  // each node's subject to its `[x, y]` position. Read and write it as a native
+  // object via `useValue` — NOT as a `JSON.stringify`'d string. The stringified
+  // form round-tripped through `useString`/`valToString` as `"[object Object]"`
+  // (an object has no useful `toString()`), which `JSON.parse` then choked on.
+  const [customPositioningValue, setCustomPositioning] = useValue(
     ontology,
     dataBrowser.properties.customNodePositioning,
     { commit: true },
   );
 
-  const customPositioning = useMemo(
-    () => JSON.parse(customPositioningSTR || '{}'),
-    [customPositioningSTR],
+  const customPositioning = useMemo<CustomNodePositioning>(
+    () => (customPositioningValue as CustomNodePositioning | undefined) ?? {},
+    [customPositioningValue],
   );
 
   const [nodes, setNodes] = useState<Node<NodeData>[]>([]);
@@ -106,7 +111,7 @@ export function useGraph(ontology: Resource): UseNodeReturn {
 
       delete newCustomPositioning[node.id];
 
-      await setCustomPositioningSTR(JSON.stringify(newCustomPositioning));
+      await setCustomPositioning(newCustomPositioning);
 
       const [positionedNodes] = placeNodesInSpace(
         nodes,
@@ -116,7 +121,7 @@ export function useGraph(ontology: Resource): UseNodeReturn {
 
       setNodes(positionedNodes);
     },
-    [customPositioning, nodes, edges, setCustomPositioningSTR],
+    [customPositioning, nodes, edges, setCustomPositioning],
   );
 
   const handleNodeChange = useCallback(
@@ -127,21 +132,19 @@ export function useGraph(ontology: Resource): UseNodeReturn {
         if (change.dragging) {
           setLastPositionChange(change);
         } else {
-          setCustomPositioningSTR(
-            JSON.stringify({
-              ...customPositioning,
-              [change.id]: [
-                lastPositionChange!.positionAbsolute?.x,
-                lastPositionChange!.positionAbsolute?.y,
-              ],
-            }),
-          );
+          setCustomPositioning({
+            ...customPositioning,
+            [change.id]: [
+              lastPositionChange!.positionAbsolute?.x,
+              lastPositionChange!.positionAbsolute?.y,
+            ],
+          });
         }
       }
 
       setNodes(prev => applyNodeChanges(changes, prev));
     },
-    [customPositioning, lastPositionChange, setCustomPositioningSTR],
+    [customPositioning, lastPositionChange, setCustomPositioning],
   );
 
   return {

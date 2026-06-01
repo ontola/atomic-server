@@ -25,8 +25,9 @@ describe('Agent', () => {
       validSubject,
     );
     const input = 'val';
+    // base64url (RFC 4648 §5, unpadded) — matches the Rust signer encoding.
     const correct_signature_rust =
-      'YtDR/xo0272LHNBQtDer4LekzdkfUANFTI0eHxZhITXnbC3j0LCqDWhr6itNvo4tFnep6DCbev5OKAHH89+TDA==';
+      'YtDR_xo0272LHNBQtDer4LekzdkfUANFTI0eHxZhITXnbC3j0LCqDWhr6itNvo4tFnep6DCbev5OKAHH89-TDA';
     const signature = await agent.sign(input);
     expect(signature).to.equal(correct_signature_rust);
   });
@@ -38,7 +39,7 @@ describe('Agent', () => {
     );
     const generatedPublickey = await agent.getPublicKey();
     expect(generatedPublickey).to.equal(
-      '7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=',
+      '7LsjMW5gOfDdJzK_atgjQ1t20J_rw8MjVg6xwqm-h8U',
     );
   });
 });
