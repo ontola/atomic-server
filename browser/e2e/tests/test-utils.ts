@@ -125,7 +125,15 @@ export async function searchAndOpen(
     .filter({ hasText: resultText })
     .first();
   await expect(result).toBeVisible({ timeout: 15000 });
-  await result.click();
+  // The overlay streams results in waves (local index first, then the
+  // server-merge), re-rendering the list and detaching row nodes. A plain
+  // `click()` can fire mid-wave and fail with "element was detached from the
+  // DOM" — and under suite-wide load the server wave lands later, widening that
+  // window. Retry the click (re-resolving the locator each attempt) until it
+  // lands on a stable node, rather than racing a single re-render.
+  await expect(async () => {
+    await result.click({ timeout: 2000 });
+  }).toPass({ timeout: 15000 });
 }
 
 /**
