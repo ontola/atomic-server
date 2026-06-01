@@ -221,15 +221,42 @@ pub fn generate_public_key(private_key: &str) -> Pair {
     }
 }
 
+/// Decodes base64 used throughout Atomic Data for keys, signatures and the
+/// identifiers derived from them (`did:ad:…`).
+///
+/// Accepts BOTH the URL-safe alphabet (`-` `_`, the canonical encoding, see
+/// [`encode_base64`]) and the legacy standard alphabet (`+` `/`), with or
+/// without `=` padding. The leniency means data written before the switch to
+/// URL-safe still decodes, so a mixed store doesn't hard-fail.
 pub fn decode_base64(string: &str) -> AtomicResult<Vec<u8>> {
+    // Normalise the URL-safe alphabet back to the standard one, then re-pad to
+    // a multiple of 4 so a single `STANDARD` decoder handles every variant.
+    let standard_alphabet: String = string
+        .chars()
+        .map(|c| match c {
+            '-' => '+',
+            '_' => '/',
+            other => other,
+        })
+        .collect();
+    let trimmed = standard_alphabet.trim_end_matches('=');
+    let pad = (4 - trimmed.len() % 4) % 4;
+    let padded = format!("{}{}", trimmed, "=".repeat(pad));
+
     let vec = general_purpose::STANDARD
-        .decode(string)
+        .decode(padded)
         .map_err(|e| format!("Invalid key. Not valid Base64. {}", e))?;
     Ok(vec)
 }
 
+/// Encodes bytes as **URL-safe, unpadded** base64 (RFC 4648 §5 — alphabet
+/// `A–Z a–z 0–9 - _`, no `=`). This is what makes `did:ad:…` identifiers safe to
+/// drop into URLs verbatim: the standard alphabet's `+` (which form-decoders
+/// turn into a space) and `/` would otherwise corrupt a subject on round-trip
+/// through a query string. Used for keys, signatures and every derived
+/// identifier; [`decode_base64`] still accepts the old standard encoding.
 pub fn encode_base64(bytes: &[u8]) -> String {
-    general_purpose::STANDARD.encode(bytes)
+    general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 
 /// Signs a message using the private key.

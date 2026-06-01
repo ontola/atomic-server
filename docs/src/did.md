@@ -18,6 +18,14 @@ This makes resources portable, self-authenticating, and resolvable over both the
 
 Atomic Data defines the `did:ad` method with four forms, distinguished by an explicit type prefix (or its absence, for Resources):
 
+### Encoding
+
+All binary parts of a `did:ad` identifier — public keys and signatures — are encoded with **URL-safe, unpadded base64** (RFC 4648 §5: alphabet `A–Z a–z 0–9 - _`, no `=` padding). Blob hashes are the exception: they are hex (see [Blob identifiers](#blob-identifiers)).
+
+This matters because identifiers travel inside URLs (`/app/show?subject=did:ad:…`, the `?drive=` routing hint, deep links). The *standard* base64 alphabet contains `+` and `/`: a `+` is turned into a space by form-decoders (`application/x-www-form-urlencoded`), and `/` and the `=` padding are path/query-significant — any of them silently corrupts a subject on a URL round-trip. The URL-safe alphabet avoids all three, so a `did:ad:` subject can be dropped into a URL verbatim and survive parsing.
+
+Decoders accept the legacy standard alphabet (`+` `/`, padded) as well, so data written before this convention still resolves.
+
 ### Agent identifiers
 
 [Agents](agents.md) are identified by the `agent` prefix followed by their public key:
@@ -26,7 +34,7 @@ Atomic Data defines the `did:ad` method with four forms, distinguished by an exp
 did:ad:agent:{publicKey}
 ```
 
-The `publicKey` is an Ed25519 public key, base64-encoded.
+The `publicKey` is an Ed25519 public key, [URL-safe base64-encoded](#encoding).
 The `agent` prefix disambiguates agents from drive resources and signals that the identifier is primarily a verification key.
 
 Agents are **not scoped to any Drive**.
@@ -52,7 +60,7 @@ More sophisticated resolution (e.g. using [Mainline DHT](#3-mainline-dht-interne
 did:ad:commit:{signature}
 ```
 
-The `signature` is the base64-encoded Ed25519 signature of the commit.
+The `signature` is the [URL-safe base64-encoded](#encoding) Ed25519 signature of the commit.
 Using a DID for commits ensures that the history of a resource is fully portable and not tied to the server where the commit was originally created.
 
 Like resources, commits can include a routing hint to help discover them over decentralized networks:

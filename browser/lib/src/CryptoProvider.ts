@@ -1,5 +1,5 @@
 import { sha512 } from '@noble/hashes/sha2.js';
-import { decodeB64, encodeB64 } from './base64.js';
+import { decodeB64, encodeB64Url } from './base64.js';
 import { sign, getPublicKey, hashes, utils } from '@noble/ed25519';
 
 hashes.sha512 = sha512;
@@ -42,14 +42,14 @@ export class JSCryptoProvider implements CryptoProvider {
     const utf8Encode = new TextEncoder();
     const messageBytes: Uint8Array = utf8Encode.encode(message);
     const signatureHex = await sign(messageBytes, this.#privateKey);
-    const signatureBase64 = encodeB64(signatureHex);
+    const signatureBase64 = encodeB64Url(signatureHex);
 
     return signatureBase64;
   }
 
   async getPublicKey(): Promise<string> {
     const publickey = await getPublicKey(this.#privateKey);
-    const publicBase64 = encodeB64(publickey);
+    const publicBase64 = encodeB64Url(publickey);
 
     return publicBase64;
   }
@@ -151,7 +151,7 @@ export class SubtleCryptoProvider implements CryptoProvider {
       this.#privateKey,
       utf8Encode.encode(message),
     );
-    const signatureBase64 = encodeB64(new Uint8Array(signature));
+    const signatureBase64 = encodeB64Url(new Uint8Array(signature));
 
     return signatureBase64;
   }
@@ -161,7 +161,7 @@ export class SubtleCryptoProvider implements CryptoProvider {
       'raw',
       this.#publicKey,
     );
-    const publicBase64 = encodeB64(new Uint8Array(publicKey));
+    const publicBase64 = encodeB64Url(new Uint8Array(publicKey));
 
     return publicBase64;
   }
@@ -206,8 +206,8 @@ export interface KeyPair {
 export async function generateKeyPair(): Promise<KeyPair> {
   const privateBytes = utils.randomSecretKey();
   const publicBytes = await getPublicKey(privateBytes);
-  const privateKey = encodeB64(privateBytes);
-  const publicKey = encodeB64(publicBytes);
+  const privateKey = encodeB64Url(privateBytes);
+  const publicKey = encodeB64Url(publicBytes);
 
   return {
     publicKey,
