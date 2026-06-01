@@ -575,7 +575,7 @@ export class Store {
     return build;
   }
 
-  private async buildDriveIndex(drive: string): Promise<void> {
+  private async buildDriveInstilldex(drive: string): Promise<void> {
     const clientDb = this.clientDb;
 
     if (!clientDb) {
@@ -1058,7 +1058,13 @@ export class Store {
 
     if (this.clientDb) {
       try {
+        // NB: this pulls the version vector of EVERY resource in OPFS (all
+        // drives), and the worker is single-threaded — so a large DB makes this
+        // hog the worker and delays the sidebar's own OPFS queries. Scope-to-
+        // drive is the fix; see the `drive` arg we already have.
+        const endVV = perfSpan('clientdb.getAllVersionVectors');
         allVVs = await this.clientDb.getAllVersionVectors();
+        endVV({ count: Object.keys(allVVs).length });
       } catch {
         // WASM DB may not be ready yet
       }

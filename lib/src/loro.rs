@@ -215,6 +215,27 @@ impl AtomicLoroDoc {
             .collect()
     }
 
+    /// Extract the version vector from a snapshot blob WITHOUT importing /
+    /// reconstructing the document.
+    ///
+    /// For a full `ExportMode::Snapshot` blob (how we persist Loro state),
+    /// `ImportBlobMetadata::partial_end_vv` is the complete oplog version
+    /// vector — i.e. identical to `from_snapshot(..).oplog_vv_map()` — but this
+    /// only parses the blob header instead of rebuilding the whole CRDT doc.
+    /// `getAllVersionVectors` calls this once per resource at sync time, so on a
+    /// large drive the difference is hundreds of ms of avoided work.
+    pub fn vv_map_from_snapshot(
+        snapshot: &[u8],
+    ) -> AtomicResult<std::collections::HashMap<String, i32>> {
+        let meta = LoroDoc::decode_import_blob_meta(snapshot, false)
+            .map_err(|e| format!("Failed to decode Loro blob meta: {e}"))?;
+        Ok(meta
+            .partial_end_vv
+            .iter()
+            .map(|(peer_id, counter)| (peer_id.to_string(), *counter))
+            .collect())
+    }
+
     /// Get the raw oplog version vector.
     pub fn oplog_vv(&self) -> VersionVector {
         self.doc.oplog_vv()
@@ -1094,6 +1115,86 @@ mod test {
         assert_eq!(
             doc2.get_string_property("https://atomicdata.dev/properties/name"),
             Some("Bob".into())
+        );
+    }
+
+    #[test]
+    fn vv_from_snapshot_matches_full_import() {
+        // The fast path (`vv_map_from_snapshot`, header-only) must produce the
+        // exact same version vector as the slow path (`from_snapshot` +
+        // `oplog_vv_map`, full doc rebuild) that the sync protocol relies on.
+        let doc = AtomicLoroDoc::new();
+        for (k, v) in [("name", "Bob"), ("description", "hi"), ("name", "Bobby")] {
+            doc.set_property(
+                &format!("https://atomicdata.dev/properties/{k}"),
+                &Value::String(v.into()),
+            )
+            .unwrap();
+        }
+
+        let snapshot = doc.export_snapshot();
+
+        let fast = AtomicLoroDoc::vv_map_from_snapshot(&snapshot).unwrap();
+        let slow = AtomicLoroDoc::from_snapshot(&snapshot)
+            .unwrap()
+            .oplog_vv_map();
+
+        assert_eq!(fast, slow, "header-decoded VV must match full-import VV");
+        assert!(!fast.is_empty(), "a non-trivial doc should have a VV");
+    }
+
+    #[test]
+    fn vv_from_snapshot_matches_after_multi_peer_merge() {
+        // Two peers with concurrent histories, merged both ways — the version
+        // vector now carries multiple peer entries. This is the case where a
+        // *partial* header VV could in principle omit a peer, so it's the
+        // important one: the header-decoded VV must still exactly match the
+        // full-import VV the sync protocol would otherwise compute.
+        let doc_a = AtomicLoroDoc::new();
+        doc_a
+            .set_property(
+                "https://atomicdata.dev/properties/name",
+                &Value::String("A".into()),
+            )
+            .unwrap();
+
+        // doc_b starts from doc_a's snapshot but is a distinct peer.
+        let doc_b = AtomicLoroDoc::from_snapshot(&doc_a.export_snapshot()).unwrap();
+
+        // Concurrent edits on each peer.
+        let va = doc_a.doc().oplog_vv();
+        doc_a
+            .set_property(
+                "https://atomicdata.dev/properties/description",
+                &Value::String("from A".into()),
+            )
+            .unwrap();
+        let vb = doc_b.doc().oplog_vv();
+        doc_b
+            .set_property(
+                "https://atomicdata.dev/properties/shortname",
+                &Value::String("fromb".into()),
+            )
+            .unwrap();
+
+        // Merge both directions so doc_a holds a genuinely multi-peer oplog.
+        doc_a
+            .import_update(&doc_b.export_updates_since(&vb))
+            .unwrap();
+        doc_b
+            .import_update(&doc_a.export_updates_since(&va))
+            .unwrap();
+
+        let snapshot = doc_a.export_snapshot();
+        let fast = AtomicLoroDoc::vv_map_from_snapshot(&snapshot).unwrap();
+        let slow = AtomicLoroDoc::from_snapshot(&snapshot)
+            .unwrap()
+            .oplog_vv_map();
+
+        assert_eq!(fast, slow, "multi-peer merged VV mismatch");
+        assert!(
+            fast.len() >= 2,
+            "expected a >=2-peer version vector, got {fast:?}"
         );
     }
 
