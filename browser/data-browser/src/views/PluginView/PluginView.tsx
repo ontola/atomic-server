@@ -3,12 +3,11 @@ import { useStore } from '@tomic/react';
 import { useSettings } from '@helpers/AppSettings';
 import { usePluginRPC } from '@views/PluginView/pluginRPC';
 import styled from 'styled-components';
-import { useMemo } from 'react';
+import { useEffect, useRef } from 'react';
 
-import resetCss from '../../reset.css?url';
+import resetCss from '../../reset.css?raw';
 import { useCreateThemeVars } from './useCreateThemeVars';
 import { useCustomViews } from '@components/CustomViewProvider';
-import { generateNonce } from '@helpers/randomString';
 
 export enum ViewType {
   Page = 'page',
@@ -20,34 +19,20 @@ export interface PluginViewProps extends ResourcePageProps {
   plugin: string;
 }
 
-type HTMLProps = {
-  scriptSrc: string;
-  cssSrc?: string;
-  stylesheet: string;
-  nonce: string;
-};
-const html = ({ scriptSrc, cssSrc, stylesheet, nonce }: HTMLProps) => `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; img-src * data:; connect-src *; font-src *; base-uri 'none'; object-src 'none';">
-    <title>Document</title>
-    <link rel="stylesheet" href="${resetCss}" nonce="${nonce}" />
-    ${cssSrc ? `<link rel="stylesheet" href="${cssSrc}" nonce="${nonce}" />` : ''}
-    <style nonce="${nonce}">${stylesheet}</style>
-    <script type="module" src="${scriptSrc}" nonce="${nonce}"></script>
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
-  </html>
-`;
-
 /**
  * Renders a ResourcePage view provided by the plugin.
- * The view is rendered in a null-origin iframe to prevent the plugin from accessing the parent page.
+ *
+ * The view is hosted in a sandboxed (null-origin) iframe so the plugin can't
+ * touch the parent page. The iframe is loaded via `src` from the server's
+ * `/plugin-ui?...&format=html` endpoint rather than `srcdoc`: a `srcdoc`
+ * (or `blob:`/`data:`) iframe INHERITS the parent SPA's nonce-locked CSP, so
+ * the plugin's `<script>` is blocked on any CSP-enforced (i.e. production)
+ * server — dev has no parent CSP, which is why it only broke in prod. A real
+ * network response gets its own CSP from the server (see plugin_ui.rs).
+ *
+ * Because the iframe is null-origin we can't reach into its DOM to inject the
+ * reset + theme CSS, so we hand it over via `postMessage` once the iframe's
+ * bootstrap signals `__atomic_plugin_ready`.
  */
 export const PluginView: React.FC<PluginViewProps> = ({ plugin }) => {
   const { drive } = useSettings();
@@ -57,12 +42,40 @@ export const PluginView: React.FC<PluginViewProps> = ({ plugin }) => {
   const [frameRef, resourcePickerDialog] = usePluginRPC(pluginData);
   const stylesheet = useCreateThemeVars();
   const pluginUrl = `${store.getServerUrl()}/plugin-ui?drive=${encodeURIComponent(drive)}&plugin=${encodeURIComponent(plugin)}`;
-  const scriptSrc = `${pluginUrl}&format=js`;
-  const cssSrc = pluginData.uiManifest.css
-    ? `${pluginUrl}&format=css`
-    : undefined;
+  const src = `${pluginUrl}&format=html`;
 
-  const nonce = useMemo(() => generateNonce(), []);
+  // Hand the reset + theme CSS to the null-origin iframe via postMessage. The
+  // iframe applies it to its `<style id="__atomic_theme">`. We (re)send on the
+  // iframe's ready signal and whenever the theme changes.
+  const readyRef = useRef(false);
+
+  useEffect(() => {
+    const css = `${resetCss}\n${stylesheet}`;
+
+    const post = () =>
+      frameRef.current?.contentWindow?.postMessage(
+        { type: '__atomic_style', css },
+        '*',
+      );
+
+    const onMessage = (e: MessageEvent) => {
+      if (e.source !== frameRef.current?.contentWindow) return;
+
+      if ((e.data as { type?: string })?.type === '__atomic_plugin_ready') {
+        readyRef.current = true;
+        post();
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+
+    // Theme changed after the iframe was already up → push the update.
+    if (readyRef.current) {
+      post();
+    }
+
+    return () => window.removeEventListener('message', onMessage);
+  }, [stylesheet, frameRef]);
 
   return (
     <>
@@ -71,7 +84,7 @@ export const PluginView: React.FC<PluginViewProps> = ({ plugin }) => {
         id='custom-view'
         referrerPolicy='no-referrer'
         ref={frameRef}
-        srcDoc={html({ scriptSrc, cssSrc, stylesheet, nonce })}
+        src={src}
         sandbox='allow-scripts allow-downloads allow-pointer-lock allow-presentation'
       />
       {resourcePickerDialog}
