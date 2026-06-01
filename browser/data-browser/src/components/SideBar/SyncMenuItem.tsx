@@ -48,19 +48,19 @@ export function SyncMenuItem({
 }
 
 function getSyncIcon(status: StoreSyncStatus): JSX.Element {
-  if (status.syncInProgress) {
-    return (
-      <SpinningIcon aria-hidden>
-        <FaArrowsRotate />
-      </SpinningIcon>
-    );
-  }
-
   if (!status.serverConnected) {
     return (
       <OfflineIcon>
         <MdSignalWifiOff title='Offline' />
       </OfflineIcon>
+    );
+  }
+
+  if (status.syncInProgress) {
+    return (
+      <SpinningIcon aria-hidden>
+        <FaArrowsRotate />
+      </SpinningIcon>
     );
   }
 
@@ -76,8 +76,8 @@ function getSyncIcon(status: StoreSyncStatus): JSX.Element {
 }
 
 function getSyncLabel(status: StoreSyncStatus): string {
-  if (status.syncInProgress) return 'Syncing...';
   if (!status.serverConnected) return 'Offline';
+  if (status.syncInProgress) return 'Syncing...';
   if (status.pendingDirtyCount > 0)
     return `${status.pendingDirtyCount} changes pending`;
 
