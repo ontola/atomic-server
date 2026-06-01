@@ -540,8 +540,12 @@ export class Store {
         return;
       }
 
+      const endExport = perfSpan('clientdb.exportAllResources');
       const exported = await clientDb.exportAllResources();
+      endExport({ bytes: exported.length });
+      const endParse = perfSpan('clientdb.rehydrateParse');
       const parsed = JSON.parse(exported);
+      endParse();
       console.debug(
         '[search] rehydrate: exportAllResources →',
         Array.isArray(parsed) ? `${parsed.length} resources` : typeof parsed,
