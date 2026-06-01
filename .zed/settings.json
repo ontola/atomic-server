@@ -1,5 +1,24 @@
 {
   "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        // Build into a dedicated target dir so rust-analyzer's background
+        // check doesn't hold the workspace `target/` lock while we run
+        // `cargo build` / `cargo run` / `cargo test` from the terminal.
+        // Mirrors `.vscode/settings.json`. See
+        // planning/dev-cargo-lock-contention.md.
+        "cargo": {
+          "targetDir": "target/rust-analyzer",
+          "extraEnv": {
+            "ATOMICSERVER_SKIP_JS_BUILD": "true"
+          }
+        },
+        "check": {
+          "command": "clippy",
+          "targetDir": "target/rust-analyzer"
+        }
+      }
+    },
     "oxlint": {
       "initialization_options": {
         "settings": {

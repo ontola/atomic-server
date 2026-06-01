@@ -327,7 +327,9 @@ test.describe('tables', async () => {
     await firstCell.click({ force: true });
     await page.waitForTimeout(300);
 
-    const values = ['alpha', 'bravo', 'charlie', 'delta', 'echo'];
+    // Enough rows to overflow the viewport and exercise react-window
+    // virtualization + auto-scroll as new rows are added past the fold.
+    const values = Array.from({ length: 40 }, (_, i) => `row${i + 1}`);
 
     // Type each value and immediately press Enter to move to the next row
     for (const value of values) {
@@ -340,6 +342,23 @@ test.describe('tables', async () => {
     // Wait for last typed value to register before exiting edit mode
     await page.waitForTimeout(500);
 
+    // Every Enter must have created a row. This is the regression guard for
+    // the bug where, once rows overflowed the viewport, a list remount snapped
+    // the scroll to the top, virtualized the active cell out, and silently
+    // stopped adding rows. The grid is virtualized so we can't assert every
+    // row is in the DOM — count the materialized resources in the store
+    // instead. `+1` row in the grid is the trailing empty placeholder.
+    const namedRowCount = () =>
+      page.evaluate(() => {
+        const NAME = 'https://atomicdata.dev/properties/name';
+        return Array.from(window.store.resources?.values?.() ?? []).filter(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (r: any) => /^row\d+$/.test(r.get?.(NAME) ?? ''),
+        ).length;
+      });
+
+    await expect.poll(namedRowCount).toBe(values.length);
+
     // Exit edit mode
     await page.keyboard.press('Escape');
 
@@ -350,25 +369,36 @@ test.describe('tables', async () => {
       { timeout: 10000 },
     );
 
-    // Verify all values are displayed correctly before refresh
-    for (const value of values) {
-      await expect(
-        page.getByRole('gridcell', { name: value }),
-        `Row "${value}" should be visible before refresh`,
-      ).toBeVisible();
-    }
+    // Spot-check the bottom of the list is rendered (the active cell stayed in
+    // view) — the last typed row must be visible right after entry.
+    const last = values[values.length - 1];
+    await expect(
+      page.getByRole('gridcell', { name: last, exact: true }),
+      `Last row "${last}" should be visible after entry`,
+    ).toBeVisible();
 
-    // Refresh and wait for the page to reload
+    // Refresh and verify the rows persisted. The collection is virtualized, so
+    // assert the loaded member count, then spot-check the first row (scroll to
+    // top) and the last row (scroll to bottom).
     await page.reload();
     await expect(page.getByTestId('editable-title').first()).toBeVisible();
     await page.waitForTimeout(REBUILD_INDEX_TIME);
 
-    // Verify all values are still correct after refresh
-    for (const value of values) {
-      await expect(
-        page.getByRole('gridcell', { name: value }),
-        `Row "${value}" should be visible after refresh`,
-      ).toBeVisible();
-    }
+    await expect.poll(namedRowCount, { timeout: 15000 }).toBe(values.length);
+
+    const grid = page.getByRole('grid');
+    await grid.evaluate(g => g.scrollIntoView({ block: 'start' }));
+    await page.mouse.move(600, 300);
+    await page.mouse.wheel(0, -5000); // scroll to top
+    await expect(
+      page.getByRole('gridcell', { name: 'row1', exact: true }),
+      'First row should be visible after refresh',
+    ).toBeVisible();
+
+    await page.mouse.wheel(0, 5000); // scroll to bottom
+    await expect(
+      page.getByRole('gridcell', { name: last, exact: true }),
+      `Last row "${last}" should be visible after refresh`,
+    ).toBeVisible();
   });
 });
