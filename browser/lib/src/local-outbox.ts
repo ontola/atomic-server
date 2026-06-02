@@ -38,7 +38,44 @@ export interface OutboxEntry {
   baseVersion?: string;
   lastAttemptAt?: number;
   lastAttemptError?: string;
+  /** Consecutive failed drain attempts. Drives exponential backoff so a
+   *  persistently-failing commit (e.g. a parent not yet synced) stops
+   *  hammering the server. Reset to 0 on success. */
+  failures?: number;
+  /** Set when a drain failed with an UNRECOVERABLE error that retrying can
+   *  never fix (e.g. `401 Unauthorized` — the agent lacks write rights on the
+   *  target parent). A blocked entry stays in the outbox so it stays visible to
+   *  the user ("could not sync"), but the drain stops retrying it and the
+   *  scheduler stops waking for it. Cleared by `markDirty` — a fresh local edit
+   *  is a new signal worth re-attempting (rights may have since been granted). */
+  blocked?: boolean;
 }
+
+/** Exponential backoff before re-attempting a failed drain: 1s, 2s, 4s … capped
+ *  at 30s. Without this, a non-terminal failure reschedules immediately
+ *  (`setTimeout(0)`) and the outbox spins on the server at full speed. */
+const DRAIN_BACKOFF_BASE_MS = 1000;
+const DRAIN_BACKOFF_MAX_MS = 30_000;
+
+export function drainBackoffMs(failures: number): number {
+  if (failures <= 0) return 0;
+
+  return Math.min(
+    DRAIN_BACKOFF_BASE_MS * 2 ** (failures - 1),
+    DRAIN_BACKOFF_MAX_MS,
+  );
+}
+
+// How many consecutive failures a BLOCKING-classified error (e.g. a 401) must
+// rack up before we give up and park it. A 401 "no write right ... in its
+// parents" is frequently TRANSIENT under sign-at-drain: a child/edit commit
+// races ahead of its parent's genesis ack, so the parent chain the server
+// walks for rights is briefly incomplete. Backoff-retry resolves it once the
+// parent lands (usually within a few seconds). We only conclude "genuinely
+// unauthorized" after the backoff has retried well past any ordering race —
+// `drainBackoffMs` sums to ~90s of waiting by the 8th failure, far beyond the
+// few-second window an ordering race needs.
+export const BLOCK_AFTER_FAILURES = 8;
 
 export interface OutboxDrainContext {
   /** Drain ONE subject: POST signedGenesis if present, then export the
@@ -55,6 +92,14 @@ export interface OutboxDrainContext {
   /** Notification hook for dropped entries — caller typically surfaces
    *  a toast and clears related local state. */
   onTerminalDrop?: (entry: OutboxEntry, error: unknown) => void;
+  /** Optional: classify a drain failure as BLOCKING — unrecoverable by retry
+   *  (e.g. `401 Unauthorized`) but the entry is kept (not dropped) so it stays
+   *  visible. A blocked entry is skipped by future drains until `markDirty`
+   *  re-arms it. Checked after `isTerminalError`. */
+  isBlockingError?: (entry: OutboxEntry, error: unknown) => boolean;
+  /** Notification hook fired once when an entry transitions to blocked —
+   *  caller typically surfaces a persistent "could not sync" message. */
+  onBlocked?: (entry: OutboxEntry, error: unknown) => void;
 }
 
 /**
@@ -81,9 +126,74 @@ export function isTerminalCommitErrorMessage(message: string): boolean {
   return false;
 }
 
-const STORAGE_KEY = 'atomic.outbox';
+/**
+ * Pattern-match server errors that mean "this drain cannot succeed by
+ * retrying, but the user write is not necessarily lost." Unlike
+ * {@link isTerminalCommitErrorMessage} (which drops the entry), a match here
+ * *blocks* the entry: it stays in the outbox, visible as "could not sync", and
+ * stops being retried until a fresh local edit (`markDirty`) re-arms it.
+ *
+ * Authorization rejections are the canonical case: a commit POSTed under a
+ * parent the agent has no `write` right on will be `401`-rejected forever.
+ * Retrying spins the server (see the 401-flood); the only resolutions are a
+ * rights change or the user abandoning the edit — neither helped by hammering.
+ */
+export function isUnrecoverableCommitErrorMessage(message: string): boolean {
+  // Server emits: "No https://atomicdata.dev/properties/write right has been found..."
+  if (message.includes('/properties/write right has been found')) {
+    return true;
+  }
+
+  return false;
+}
+
+/** Prefix for per-agent outbox namespaces: `atomic.outbox.<agentSubject>`. */
+const STORAGE_KEY_PREFIX = 'atomic.outbox';
+/** Pre-scoping key: a SINGLE shared queue for all identities. Its existence is
+ *  the cross-user bug — a new agent inherited a prior agent's commits. Migrated
+ *  away (re-filed by owner) on first run, then deleted. */
+const LEGACY_FLAT_KEY = 'atomic.outbox';
+/** Namespace used when no agent is set (cold open before sign-in). Resource
+ *  creation requires an agent, so in practice this stays empty. */
+const ANON_NAMESPACE = '__anonymous__';
 const LEGACY_DIRTY_KEY = 'atomic.dirtyForSync';
 const LEGACY_OFFLINE_PREFIX = 'atomic.offline.';
+
+/** localStorage key for an agent's outbox. The outbox is identity-scoped:
+ *  each agent gets its own queue so a new identity never drains a previous
+ *  agent's commits (whose `did:ad:<sig>` subjects are derived from that
+ *  agent's signature and can't be re-signed by anyone else). */
+function outboxKeyFor(agentSubject: string | undefined): string {
+  return `${STORAGE_KEY_PREFIX}.${agentSubject ?? ANON_NAMESPACE}`;
+}
+
+/** The owning agent of a persisted entry: the signer of its pre-signed genesis
+ *  commit. `undefined` for dirty-only entries that carry no signed envelope. */
+function signerOfPersisted(p: unknown): string | undefined {
+  if (typeof p !== 'object' || p === null) return undefined;
+
+  const sg = (p as Record<string, unknown>).signedGenesis;
+  if (!sg) return undefined;
+
+  try {
+    return parseCommitJSON(JSON.stringify(sg)).signer;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Parse a stored namespace value into an entry array; `[]` on absent/garbage. */
+function parseStoredEntries(raw: string | null): PersistedEntry[] {
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    return Array.isArray(parsed) ? (parsed as PersistedEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 interface PersistedEntry {
   subject: string;
@@ -97,9 +207,15 @@ export class LocalOutbox {
   private drainInFlight: Promise<void> | undefined;
   private onChange: () => void = () => undefined;
   private persistScheduled = false;
+  /** localStorage key for the CURRENTLY-bound agent's queue. Switched by
+   *  {@link rebind} on agent change. Starts anonymous until `setAgent`. */
+  private activeKey: string = outboxKeyFor(undefined);
 
   constructor(onChange?: () => void) {
     if (onChange) this.onChange = onChange;
+    // One-shot: split the old shared queue into per-agent namespaces before
+    // hydrating, so a later `rebind` finds each agent's migrated entries.
+    this.migrateLegacyFlatKey();
     this.hydrate();
 
     // Best-effort: flush pending writes before the tab closes.
@@ -109,6 +225,22 @@ export class LocalOutbox {
     }
   }
 
+  /** Bind the outbox to `agentSubject`'s queue. Persists the current agent's
+   *  entries under its own key, then loads the target agent's pending entries.
+   *  Called from `Store.setAgent` on every identity change (sign-in, invite,
+   *  dev-drive recovery, sign-out). Each agent's outbox is isolated. */
+  rebind(agentSubject: string | undefined): void {
+    const nextKey = outboxKeyFor(agentSubject);
+    if (nextKey === this.activeKey) return;
+
+    // Persist the outgoing agent's queue under its key, then swap.
+    this.flushPersist();
+    this.entries.clear();
+    this.activeKey = nextKey;
+    this.hydrate();
+    this.onChange();
+  }
+
   /** Mark a subject as having local Loro edits that need to drain.
    *  Idempotent; called once per Loro local-updates fire. */
   markDirty(subject: string): void {
@@ -116,6 +248,13 @@ export class LocalOutbox {
 
     if (existing) {
       // Already dirty; bump enqueuedAt only if it was never set (recovery).
+      // A fresh edit re-arms a blocked entry: clear the block and the failure
+      // streak so the next drain re-attempts (rights may now be granted).
+      if (existing.blocked) {
+        existing.blocked = false;
+        existing.failures = 0;
+      }
+
       this.schedulePersist();
       this.onChange();
 
@@ -222,6 +361,19 @@ export class LocalOutbox {
     return this.entries.size;
   }
 
+  /** Count of entries parked as {@link OutboxEntry.blocked} — unrecoverable by
+   *  retry (e.g. `401`), kept only for visibility. `size - blockedCount` is the
+   *  number still actively draining. */
+  get blockedCount(): number {
+    let n = 0;
+
+    for (const e of this.entries.values()) {
+      if (e.blocked) n++;
+    }
+
+    return n;
+  }
+
   /** True when the subject has an entry — either a pre-signed genesis,
    *  a dirty bit, or both. */
   hasPending(subject: string): boolean {
@@ -230,6 +382,32 @@ export class LocalOutbox {
 
   getEntry(subject: string): OutboxEntry | undefined {
     return this.entries.get(subject);
+  }
+
+  /** Soonest epoch-ms at which some entry is eligible to drain, honoring
+   *  per-entry backoff. Returns 0 when something is due now, or undefined when
+   *  the outbox is empty. `Store.scheduleOutboxDrain` uses this to wake at the
+   *  right time instead of busy-retrying a failing entry. */
+  nextDueAt(): number | undefined {
+    let soonest: number | undefined;
+
+    for (const e of this.entries.values()) {
+      // Blocked entries never become due on their own — they wait for a fresh
+      // `markDirty`. Excluding them lets `nextDueAt` return undefined when
+      // nothing is drainable, so the scheduler doesn't arm a no-op timer.
+      if (e.blocked) continue;
+
+      const due =
+        e.failures && e.lastAttemptAt !== undefined
+          ? e.lastAttemptAt + drainBackoffMs(e.failures)
+          : 0;
+
+      if (soonest === undefined || due < soonest) {
+        soonest = due;
+      }
+    }
+
+    return soonest;
   }
 
   /** True while a drain is in flight. Mirrors `drainInFlight` for
@@ -256,14 +434,42 @@ export class LocalOutbox {
     for (const entry of ctx.sort([...this.entries.values()])) {
       const live = this.entries.get(entry.subject);
       if (!live) continue;
+
+      // Blocked: an unrecoverable failure (e.g. 401) parked this entry. It
+      // waits for a fresh `markDirty` to re-arm — never retried on its own.
+      if (live.blocked) continue;
+
+      // Backoff: skip an entry still inside its post-failure window. The next
+      // drain (scheduled at `nextDueAt`) re-attempts it once it's due. Prevents
+      // the immediate-retry spin on a persistently-failing commit.
+      if (
+        live.failures &&
+        live.lastAttemptAt !== undefined &&
+        Date.now() < live.lastAttemptAt + drainBackoffMs(live.failures)
+      ) {
+        continue;
+      }
+
       live.lastAttemptAt = Date.now();
 
       try {
         await ctx.drainSubject(live.subject);
+        // Success — clear the failure counter. The entry itself is usually
+        // already removed by `drainSubject`; this handles the genesis-acked-
+        // but-still-dirty leftover case.
+        const stillLive = this.entries.get(entry.subject);
+        if (stillLive) stillLive.failures = 0;
       } catch (e) {
         live.lastAttemptError = e instanceof Error ? e.message : String(e);
+        console.warn(
+          '[Outbox] drain failed for subject:',
+          live.subject,
+          'error:',
+          live.lastAttemptError,
+        );
 
         if (ctx.isTerminalError?.(live, e)) {
+          // Unrecoverable AND the write is lost — drop it.
           console.warn(
             '[Outbox] dropping terminal entry',
             live.subject,
@@ -272,6 +478,30 @@ export class LocalOutbox {
           );
           this.entries.delete(entry.subject);
           ctx.onTerminalDrop?.(live, e);
+        } else {
+          // Back off and retry. This includes BLOCKING-classified errors
+          // (e.g. 401): they are usually transient ordering races (parent not
+          // yet synced), so we retry them like any failure. Only once a
+          // blocking error has survived `BLOCK_AFTER_FAILURES` backoff retries
+          // — long past any ordering race — do we park it as genuinely
+          // unauthorized ("stop + surface"); a later `markDirty` re-arms it.
+          live.failures = (live.failures ?? 0) + 1;
+
+          if (
+            live.failures >= BLOCK_AFTER_FAILURES &&
+            ctx.isBlockingError?.(live, e)
+          ) {
+            console.warn(
+              '[Outbox] blocking entry (stopped retrying after',
+              live.failures,
+              'failures) —',
+              live.subject,
+              '—',
+              live.lastAttemptError,
+            );
+            live.blocked = true;
+            ctx.onBlocked?.(live, e);
+          }
         }
       }
 
@@ -305,7 +535,7 @@ export class LocalOutbox {
 
     try {
       if (this.entries.size === 0) {
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(this.activeKey);
 
         return;
       }
@@ -318,7 +548,7 @@ export class LocalOutbox {
           : undefined,
         baseVersion: e.baseVersion,
       }));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
+      localStorage.setItem(this.activeKey, JSON.stringify(out));
     } catch (e) {
       console.warn('[Outbox] persist failed:', e);
     }
@@ -329,12 +559,51 @@ export class LocalOutbox {
     this.flushPersist();
   }
 
-  /** Read unified key; one-shot migrate the legacy keys if needed. */
+  /** Re-file the pre-scoping shared queue (`atomic.outbox`) into per-agent
+   *  namespaces, keyed by each entry's `signedGenesis.signer`. Runs once: the
+   *  flat key is deleted afterward. Dirty-only entries (no signed envelope)
+   *  carry no owner — they are DROPPED rather than risk being adopted by the
+   *  wrong identity, which is the exact cross-user bug this scoping fixes. */
+  private migrateLegacyFlatKey(): void {
+    if (typeof localStorage === 'undefined') return;
+
+    try {
+      const raw = localStorage.getItem(LEGACY_FLAT_KEY);
+      if (raw === null) return;
+
+      const parsed = JSON.parse(raw);
+
+      if (Array.isArray(parsed)) {
+        const byOwner = new Map<string, PersistedEntry[]>();
+
+        for (const p of parsed) {
+          const owner = signerOfPersisted(p);
+          if (!owner) continue; // unattributable → drop
+
+          const bucket = byOwner.get(owner) ?? [];
+          bucket.push(p as PersistedEntry);
+          byOwner.set(owner, bucket);
+        }
+
+        for (const [owner, entries] of byOwner) {
+          const key = outboxKeyFor(owner);
+          const existing = parseStoredEntries(localStorage.getItem(key));
+          localStorage.setItem(key, JSON.stringify([...existing, ...entries]));
+        }
+      }
+
+      localStorage.removeItem(LEGACY_FLAT_KEY);
+    } catch (e) {
+      console.warn('[Outbox] flat-key migration failed:', e);
+    }
+  }
+
+  /** Read the active agent's namespace; one-shot migrate older keys if empty. */
   private hydrate(): void {
     if (typeof localStorage === 'undefined') return;
 
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(this.activeKey);
 
       if (raw) {
         const parsed = JSON.parse(raw);
