@@ -33,6 +33,7 @@ import {
 } from './schema.js';
 import { frozenIdFor, UNIT_MEMBERS_KEY, type FrozenId } from './freeze.js';
 import { jcsCanonicalize } from './jcs.js';
+import { verifySchemaLock, type SchemaLock } from './schema-lock.js';
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
@@ -1832,6 +1833,40 @@ export class Store {
     }
 
     return frozen;
+  }
+
+  /**
+   * Registers an app-bundled `*.schema.lock.json` into the store: verifies every
+   * frozen object by re-hash, then materializes each as a read-only Resource so
+   * the schema resolves offline with no server. This is "available without a
+   * host" — the lockfile travels with the code, and a frozen id is reproducible
+   * from it. Returns the lock so callers can read its id maps. Cycle "unit"
+   * objects are skipped (not yet individually materializable).
+   */
+  public loadSchemaLock(lock: SchemaLock): SchemaLock {
+    const verification = verifySchemaLock(lock);
+
+    if (!verification.ok) {
+      throw new Error(
+        `Refusing to load an invalid schema lock: ${verification.errors.join('; ')}`,
+      );
+    }
+
+    for (const [frozenId, content] of Object.entries(lock.frozen)) {
+      if (
+        content &&
+        typeof content === 'object' &&
+        UNIT_MEMBERS_KEY in content
+      ) {
+        continue;
+      }
+
+      const [resource] = new JSONADParser().parse(content, frozenId);
+      resource.loading = false;
+      this.addResource(resource, { skipCommitCompare: true });
+    }
+
+    return lock;
   }
 
   private async publishFrozenResource(

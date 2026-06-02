@@ -3,6 +3,7 @@ import { afterEach, describe, it, vi } from 'vitest';
 import { Datatype } from './datatypes.js';
 import { frozenIdFor } from './freeze.js';
 import { core } from './ontologies/core.js';
+import { buildSchemaLock } from './schema-lock.js';
 import { Store } from './store.js';
 
 const body = {
@@ -136,5 +137,53 @@ describe('Store.registerFrozenSchema', () => {
         call.startsWith('PUT https://example.com/frozen/'),
       ),
     ).toBe(true);
+  });
+});
+
+describe('Store.loadSchemaLock', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('makes a bundled lockfile resolve offline with no server', async ({
+    expect,
+  }) => {
+    // The lockfile is the only input — any network call would throw.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('should not hit the network');
+      }),
+    );
+
+    const lock = buildSchemaLock(todoPackage);
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.loadSchemaLock(lock);
+
+    const titleId = lock.presentation.properties['todo.title'].id;
+    const prop = await store.getProperty(titleId);
+
+    expect(prop.shortname).toBe('title');
+    expect(prop.datatype).toBe(Datatype.STRING);
+
+    const todoClass = await store.getResource(lock.presentation.classes.todo.id);
+    expect(todoClass.get(core.properties.shortname)).toBe('todo');
+  });
+
+  it('rejects a tampered lockfile', ({ expect }) => {
+    const lock = buildSchemaLock(todoPackage);
+    const [firstId] = Object.keys(lock.frozen);
+    const tampered = {
+      ...lock,
+      frozen: {
+        ...lock.frozen,
+        [firstId]: { ...(lock.frozen[firstId] as object), tampered: true },
+      },
+    };
+
+    const store = new Store({ serverUrl: 'https://example.com' });
+    expect(() => store.loadSchemaLock(tampered as typeof lock)).toThrow(
+      /invalid schema lock/i,
+    );
   });
 });

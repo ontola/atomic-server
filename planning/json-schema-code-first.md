@@ -816,8 +816,10 @@ Rules:
       `presentation`) via `ad-generate schema --lock`, using
       `buildSchemaLock()`/`verifySchemaLock()` in `@tomic/lib`. The emitter
       refuses to write an unverifiable lock.
-- [ ] Load + register a lockfile at app startup for offline availability (needs
-      the Store `did:ad:frozen` resolution path).
+- [x] Load + register a lockfile at app startup for offline availability:
+      `Store.loadSchemaLock(lock)` verifies every frozen object by re-hash and
+      materializes them locally, so a bundled `*.schema.lock.json` resolves with
+      no server. Tested (`frozen-resolve.test.ts`).
 - [ ] Add a CI "regenerate and diff" guard so the lockfile cannot drift from the
       source schema (`verifySchemaLock` + a re-emit check are the building blocks).
 
