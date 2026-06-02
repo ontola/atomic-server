@@ -43,7 +43,8 @@ test.describe('freeze', () => {
       page.locator(`main[about="${frozenId}"]`).first(),
     ).toBeVisible({ timeout: 20000 });
 
-    // A frozen resource is immutable: the context menu offers no Edit.
+    // A frozen resource is immutable: a Frozen badge, and no Edit affordance.
+    await expect(page.getByTestId('frozen-badge')).toBeVisible();
     await page.click('[data-test="context-menu"]');
     await expect(page.getByTestId('menu-item-edit')).toHaveCount(0);
   });
