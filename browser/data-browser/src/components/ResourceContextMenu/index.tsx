@@ -26,6 +26,7 @@ import {
   FaPlus,
   FaArrowUpRightFromSquare,
   FaMessage,
+  FaSnowflake,
 } from 'react-icons/fa6';
 import { useQueryScopeHandler } from '../../hooks/useQueryScope';
 import {
@@ -36,6 +37,7 @@ import { ResourceInline } from '../../views/ResourceInline';
 import { ResourceUsage } from '../ResourceUsage';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { ResourceCodeUsageDialog } from '../../views/CodeUsage/ResourceCodeUsageDialog';
+import { FreezeDialog } from './FreezeDialog';
 import { useNewRoute } from '../../helpers/useNewRoute';
 import { addIf } from '../../helpers/addIf';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
@@ -64,6 +66,7 @@ export const ContextMenuOptions = {
   Export: 'export',
   Open: 'open',
   AddToChat: 'addToChat',
+  Freeze: 'freeze',
 } as const;
 
 export type ContextMenuOptionsUnion =
@@ -101,6 +104,7 @@ export function ResourceContextMenu({
   const resource = useResource(subject);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showCodeUsageDialog, setShowCodeUsageDialog] = useState(false);
+  const [showFreezeDialog, setShowFreezeDialog] = useState(false);
   const handleAddClick = useNewRoute(subject);
   const [currentSubject] = useCurrentSubject();
   const canWrite = useCanWrite(resource);
@@ -203,6 +207,14 @@ export function ResourceContextMenu({
       onClick: () => setShowCodeUsageDialog(true),
     },
     {
+      id: ContextMenuOptions.Freeze,
+      label: 'Freeze',
+      helper:
+        'Create an immutable, content-addressed (did:ad:frozen) copy of this resource and the structure it references.',
+      icon: <FaSnowflake />,
+      onClick: () => setShowFreezeDialog(true),
+    },
+    {
       id: ContextMenuOptions.AddToChat,
       label: 'Add to chat',
       helper: 'Add the resource as context to the AI sidebar',
@@ -302,6 +314,11 @@ export function ResourceContextMenu({
           bindShow={setShowCodeUsageDialog}
         />
       )}
+      <FreezeDialog
+        subject={subject}
+        show={showFreezeDialog}
+        bindShow={setShowFreezeDialog}
+      />
     </>
   );
 }
