@@ -419,6 +419,223 @@ fn strongly_connected_components(
     state.result
 }
 
+// --- Schema authoring DSL ---------------------------------------------------
+//
+// `freeze_schema` is the Rust counterpart of `browser/lib/src/schema.ts#
+// freezeSchema`: it builds identity-only JSON-AD bodies for an Ontology and its
+// Classes/Properties and content-addresses them, producing frozen ids
+// byte-for-byte identical to the TS producer. Descriptions and other
+// presentation are deliberately excluded from identity. Input is order-
+// preserving (Vec-based), because an Ontology's `classes`/`properties` array
+// order is significant (JCS does not sort arrays).
+
+const P_ISA: &str = "https://atomicdata.dev/properties/isA";
+const P_SHORTNAME: &str = "https://atomicdata.dev/properties/shortname";
+const P_DATATYPE: &str = "https://atomicdata.dev/properties/datatype";
+const P_CLASSTYPE: &str = "https://atomicdata.dev/properties/classtype";
+const P_REQUIRES: &str = "https://atomicdata.dev/properties/requires";
+const P_RECOMMENDS: &str = "https://atomicdata.dev/properties/recommends";
+const P_CLASSES: &str = "https://atomicdata.dev/properties/classes";
+const P_PROPERTIES: &str = "https://atomicdata.dev/properties/properties";
+const P_VERSION: &str = "https://atomicdata.dev/properties/version";
+const C_PROPERTY: &str = "https://atomicdata.dev/classes/Property";
+const C_CLASS: &str = "https://atomicdata.dev/classes/Class";
+const C_ONTOLOGY: &str = "https://atomicdata.dev/class/ontology";
+
+/// An Atomic datatype, the machine contract of a Property.
+#[derive(Clone, Copy)]
+pub enum SchemaDatatype {
+    String,
+    Integer,
+    Float,
+    Boolean,
+    Date,
+    Uri,
+    AtomicUrl,
+    ResourceArray,
+    Json,
+}
+
+impl SchemaDatatype {
+    pub fn url(&self) -> &'static str {
+        match self {
+            SchemaDatatype::String => "https://atomicdata.dev/datatypes/string",
+            SchemaDatatype::Integer => "https://atomicdata.dev/datatypes/integer",
+            SchemaDatatype::Float => "https://atomicdata.dev/datatypes/float",
+            SchemaDatatype::Boolean => "https://atomicdata.dev/datatypes/boolean",
+            SchemaDatatype::Date => "https://atomicdata.dev/datatypes/date",
+            SchemaDatatype::Uri => "https://atomicdata.dev/datatypes/uri",
+            SchemaDatatype::AtomicUrl => "https://atomicdata.dev/datatypes/atomicURL",
+            SchemaDatatype::ResourceArray => "https://atomicdata.dev/datatypes/resourceArray",
+            SchemaDatatype::Json => "https://atomicdata.dev/datatypes/json",
+        }
+    }
+}
+
+pub struct SchemaProperty {
+    /// Developer key, also the default shortname.
+    pub key: String,
+    pub datatype: SchemaDatatype,
+    pub shortname: Option<String>,
+    pub class_type: Option<String>,
+}
+
+pub struct SchemaClass {
+    pub key: String,
+    pub shortname: Option<String>,
+    /// Property keys that are required (the rest become `recommends`).
+    pub required: Vec<String>,
+    pub properties: Vec<SchemaProperty>,
+}
+
+pub struct SchemaDef {
+    pub name: String,
+    pub version: Option<String>,
+    pub classes: Vec<SchemaClass>,
+}
+
+/// Frozen ids for a schema, keyed by developer key (`"classKey.propKey"` for
+/// properties).
+pub struct FrozenSchema {
+    pub ontology: String,
+    pub classes: HashMap<String, String>,
+    pub properties: HashMap<String, String>,
+}
+
+/// Freezes a code-first schema into `did:ad:frozen` ids identical to the TS
+/// producer. Acyclic by construction (Ontology -> Classes -> Properties).
+pub fn freeze_schema(def: &SchemaDef) -> AtomicResult<FrozenSchema> {
+    let prop_local = |class_key: &str, prop_key: &str| format!("prop:{}.{}", class_key, prop_key);
+    let class_local = |class_key: &str| format!("class:{}", class_key);
+    let ontology_local = "ontology".to_string();
+
+    // The TS producer normalizes the schema (sorts object keys) before freezing,
+    // so ids are independent of declaration order. Mirror that by processing
+    // classes and properties sorted by key. (Byte order; TS uses `localeCompare`,
+    // which coincides for the lowercase-ASCII shortnames that are the convention.)
+    let mut classes: Vec<&SchemaClass> = def.classes.iter().collect();
+    classes.sort_by(|a, b| a.key.cmp(&b.key));
+    let prepared: Vec<(&SchemaClass, Vec<&SchemaProperty>)> = classes
+        .iter()
+        .map(|c| {
+            let mut props: Vec<&SchemaProperty> = c.properties.iter().collect();
+            props.sort_by(|a, b| a.key.cmp(&b.key));
+            (*c, props)
+        })
+        .collect();
+
+    let mut freezable: Vec<FreezableResource> = Vec::new();
+
+    for (class, props) in &prepared {
+        for property in props {
+            let shortname = property.shortname.clone().unwrap_or(property.key.clone());
+            let mut body = serde_json::Map::new();
+            body.insert(
+                P_ISA.to_string(),
+                Value::Array(vec![Value::String(C_PROPERTY.into())]),
+            );
+            body.insert(P_SHORTNAME.to_string(), Value::String(shortname));
+            body.insert(
+                P_DATATYPE.to_string(),
+                Value::String(property.datatype.url().into()),
+            );
+            if let Some(ct) = &property.class_type {
+                body.insert(P_CLASSTYPE.to_string(), Value::String(ct.clone()));
+            }
+
+            freezable.push(FreezableResource {
+                local_id: prop_local(&class.key, &property.key),
+                content: Value::Object(body),
+            });
+        }
+    }
+
+    for (class, props) in &prepared {
+        let required: HashSet<&str> = class.required.iter().map(|s| s.as_str()).collect();
+        let mut requires = Vec::new();
+        let mut recommends = Vec::new();
+        for property in props {
+            let local = prop_local(&class.key, &property.key);
+            if required.contains(property.key.as_str()) {
+                requires.push(Value::String(local));
+            } else {
+                recommends.push(Value::String(local));
+            }
+        }
+
+        let shortname = class.shortname.clone().unwrap_or(class.key.clone());
+        let mut body = serde_json::Map::new();
+        body.insert(
+            P_ISA.to_string(),
+            Value::Array(vec![Value::String(C_CLASS.into())]),
+        );
+        body.insert(P_SHORTNAME.to_string(), Value::String(shortname));
+        body.insert(P_REQUIRES.to_string(), Value::Array(requires));
+        body.insert(P_RECOMMENDS.to_string(), Value::Array(recommends));
+
+        freezable.push(FreezableResource {
+            local_id: class_local(&class.key),
+            content: Value::Object(body),
+        });
+    }
+
+    let class_refs: Vec<Value> = prepared
+        .iter()
+        .map(|(c, _)| Value::String(class_local(&c.key)))
+        .collect();
+    let property_refs: Vec<Value> = prepared
+        .iter()
+        .flat_map(|(c, props)| {
+            props
+                .iter()
+                .map(move |p| Value::String(prop_local(&c.key, &p.key)))
+        })
+        .collect();
+
+    let mut ontology_body = serde_json::Map::new();
+    ontology_body.insert(
+        P_ISA.to_string(),
+        Value::Array(vec![Value::String(C_ONTOLOGY.into())]),
+    );
+    ontology_body.insert(P_SHORTNAME.to_string(), Value::String(def.name.clone()));
+    ontology_body.insert(P_CLASSES.to_string(), Value::Array(class_refs));
+    ontology_body.insert(P_PROPERTIES.to_string(), Value::Array(property_refs));
+    if let Some(version) = &def.version {
+        ontology_body.insert(P_VERSION.to_string(), Value::String(version.clone()));
+    }
+    freezable.push(FreezableResource {
+        local_id: ontology_local.clone(),
+        content: Value::Object(ontology_body),
+    });
+
+    let result = freeze_resources(freezable)?;
+    let require_id = |local: &str| -> AtomicResult<String> {
+        result
+            .by_local_id
+            .get(local)
+            .cloned()
+            .ok_or_else(|| format!("freeze_schema produced no id for {}", local).into())
+    };
+
+    let mut classes = HashMap::new();
+    let mut properties = HashMap::new();
+    for (class, props) in &prepared {
+        classes.insert(class.key.clone(), require_id(&class_local(&class.key))?);
+        for property in props {
+            properties.insert(
+                format!("{}.{}", class.key, property.key),
+                require_id(&prop_local(&class.key, &property.key))?,
+            );
+        }
+    }
+
+    Ok(FrozenSchema {
+        ontology: require_id(&ontology_local)?,
+        classes,
+        properties,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -516,5 +733,68 @@ mod tests {
                 case.name
             );
         }
+    }
+
+    #[derive(serde::Deserialize)]
+    struct SchemaExpected {
+        ontology: String,
+        classes: HashMap<String, String>,
+        properties: HashMap<String, String>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct SchemaVector {
+        expected: SchemaExpected,
+    }
+
+    /// Proves the Rust `freeze_schema` authoring DSL produces ids identical to
+    /// the TS `freezeSchema` for the same schema — the multi-language authoring
+    /// guarantee.
+    #[test]
+    fn freeze_schema_matches_cross_language_vector() {
+        let raw = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../test-vectors/freeze-schema.json"
+        ));
+        let vector: SchemaVector = serde_json::from_str(raw).expect("valid fixture");
+
+        let def = SchemaDef {
+            name: "FrozenTodoApp".into(),
+            version: Some("1.0.0".into()),
+            classes: vec![SchemaClass {
+                key: "todo".into(),
+                shortname: None,
+                required: vec!["title".into()],
+                properties: vec![
+                    SchemaProperty {
+                        key: "title".into(),
+                        datatype: SchemaDatatype::String,
+                        shortname: None,
+                        class_type: None,
+                    },
+                    SchemaProperty {
+                        key: "done".into(),
+                        datatype: SchemaDatatype::Boolean,
+                        shortname: None,
+                        class_type: None,
+                    },
+                    SchemaProperty {
+                        key: "dueAt".into(),
+                        datatype: SchemaDatatype::Date,
+                        shortname: None,
+                        class_type: None,
+                    },
+                ],
+            }],
+        };
+
+        let frozen = freeze_schema(&def).unwrap();
+
+        assert_eq!(frozen.ontology, vector.expected.ontology, "ontology id");
+        assert_eq!(frozen.classes, vector.expected.classes, "class ids");
+        assert_eq!(
+            frozen.properties, vector.expected.properties,
+            "property ids"
+        );
     }
 }
