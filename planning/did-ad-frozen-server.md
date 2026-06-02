@@ -1,5 +1,14 @@
 # Server-side `did:ad:frozen` plan
 
+> **Status: Phases A, B, and C are done and verified.** Storage, parsing,
+> materialization, commit-rejection, `GET/PUT /frozen`, browser resolution,
+> `registerFrozenSchema`/`loadSchemaLock`/`createSchemaPointer`/`freezeStructure`,
+> the data-browser "Freeze" UI (+ immutability badge), and a browser e2e all
+> land. Cross-language hashing (TS `jcs.ts` ↔ Rust `serde_jcs`) is proven by
+> shared `test-vectors/`. Remaining: **Phase D (sync over iroh)** and the
+> optional polish in the companion doc (Loro mode, ClientDb persistence, CI
+> lock-guard).
+
 Companion to [json-schema-code-first.md](./json-schema-code-first.md). That doc
 decided the **identity model**: schema definitions are immutable, so they are
 content-addressed as `did:ad:frozen:{blake3-hex}` instead of signed genesis DIDs.

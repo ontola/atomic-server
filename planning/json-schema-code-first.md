@@ -61,7 +61,13 @@ produces locally available DID-backed schema resources from code.
 
 ## Current Status
 
-This is not full-stack working yet.
+**Full-stack working and verified end to end.** The content-addressed
+`did:ad:frozen` schema system runs producer → server → client across both
+TypeScript and Rust, with a data-browser UI driving it. Verified live: a
+code-first `@tomic/lib` app publishes a schema and it renders in the browser; the
+"Freeze" action produces immutable content-addressed resources that resolve back
+by hash. (`registerSchema` keeps the signed-DID path for editable ontologies;
+`registerFrozenSchema`/`freezeStructure` are the content-addressed path.)
 
 Implemented so far:
 
@@ -130,20 +136,52 @@ Implemented so far:
   split (description edit keeps ids stable, datatype edit changes them, no
   cascade), determinism, shortname dedupe/conflict, and the imported-property
   guard.
+- `browser/lib/src/schema-lock.ts`: `buildSchemaLock()`/`verifySchemaLock()` — the
+  committed, self-verifying lockfile (`frozen` objects + `@index` + non-hashed
+  `presentation`). Verify = re-hash each frozen object via the shared
+  `frozenIdFor()`.
+- **Rust producer (cross-language authoring)** — `lib/src/frozen.rs`:
+  `frozen_id`/`verify_frozen`, `freeze_resources` (the full content-addressing
+  core: Tarjan SCC + color refinement + one-unit-per-cycle), and `freeze_schema`
+  (the order-preserving schema DSL). All **byte-for-byte identical to TS**, pinned
+  by `test-vectors/{frozen,freeze-resources,freeze-schema}.json` and asserted in
+  both languages.
+- **Server (`did:ad:frozen`)** — `Tree::Frozen` storage (both backends),
+  `subject.rs` parsing, `db.rs#materialize_frozen` (resolve via re-hash → read-only
+  Resource), commit-rejection for frozen subjects, and `GET/PUT /frozen/{hash}`
+  endpoints. Tested incl. a server round-trip + `frozen_endpoint_roundtrip`.
+- **Browser client** — `Store.fetchFrozenResource` (resolve `did:ad:frozen` over
+  HTTP, verify-by-rehash, materialize), `registerFrozenSchema` (freeze + publish),
+  `loadSchemaLock` (offline, server-free availability from a bundled lockfile),
+  `createSchemaPointer` (signed mutable Ontology referencing frozen ids), and the
+  generic `freezeStructure` (freeze any resource + its reference closure).
+  `getProperty` treats `description` as optional (presentation). Covered by
+  `frozen-resolve.test.ts`.
+- **Capstone integration** — `tests/frozen-e2e.integration.test.ts`: producer
+  publishes frozen resources to a real server, a fresh consumer resolves and uses
+  them.
+- **Data-browser UI** — a "Freeze" resource context-menu action +
+  `FreezeDialog` (copy/download/publish, JSON-AD mode, Loro toggle as coming-soon,
+  closure checkbox); frozen resources are immutable (write actions hidden) with a
+  "❄ Frozen" badge. Browser e2e `browser/e2e/tests/frozen.spec.ts` drives
+  freeze → publish → resolve → immutable against a real server.
+- `examples/code-first-schema/publish-schema.mjs` — a minimal `@tomic/lib` app
+  that defines and publishes a schema (verified rendering in the data-browser).
 
-Not implemented yet:
+Not implemented yet (all optional/follow-up — none block the core flows):
 
-- `did:ad:frozen` is designed and produced by `freezeSchema`, but
-  `Store.registerSchema` still mints signed genesis DIDs; switching it over needs
-  server-side store/serve/resolve support for `did:ad:frozen` (verify-by-rehash,
-  read-only) plus a `did:ad:frozen` resolution path in the browser Store.
-- The signed "latest version" pointer / overlay layer on the author's drive.
-- Schema package resolution from Drive context, app registry, CLI config, synced
-  Ontologies, or schema hash before the schema is explicitly registered.
-- `store.getProperty()` fallback to unresolved schema packages.
-- CLI-side consumer/type-generation e2e for imported schemas.
-- Data browser/table/editor handling for content-locked Properties.
-- Rust/server import/export or JSON Schema validation.
+- **Loro freeze mode** (the disabled dialog toggle): a separate feature —
+  `did:ad:blob` over the (non-reproducible) Loro snapshot, materialized by
+  Loro-load, keeping history.
+- ClientDb/OPFS persistence of frozen objects (offline resolution currently
+  in-memory; survives via the bundled lockfile but not a page reload).
+- `ad-generate` emitting the lockfile + a CI stale-lock guard; CLI-side
+  import/hash-pin checks and a CLI consumer e2e.
+- Phase D sync (frozen objects travelling with drives over iroh).
+- Native-Rust-struct codegen from frozen schemas; JSON Schema validation
+  (richer keywords beyond the Atomic subset) in browser/Rust.
+- Drive-context / app-registry discovery of schemas by hash before explicit
+  registration; round-trip of editor/table-created schemas into frozen.
 
 ## Existing Touch Points
 
@@ -835,16 +873,22 @@ Rules:
 - [ ] Add a CLI-side producer/consumer import e2e where one generated schema
       imports another published/local Ontology with an expected hash.
 
-### Phase 3: Editor and table compatibility
+### Phase 3: Editor and table compatibility / UI
 
-- [ ] Keep Ontology editor creation/editing as a first-class schema authoring
-      path.
-- [ ] Ensure table-created Properties and Classes can be exported to JSON
-      Schema/code schema and then regenerated without changing meaning.
-- [ ] Add UI indicators or warnings when editing a published/content-locked
-      Property would change datatype, `classtype`, or semantic meaning.
-- [ ] Ensure table columns and forms continue to resolve generated DID
-      Properties through `store.getProperty()`.
+- [x] Keep Ontology editor creation/editing as a first-class schema authoring
+      path (untouched; verified a code-first ontology renders + is editable in
+      `OntologyPage`).
+- [x] A generic **"Freeze" UI** — resource context-menu action + `FreezeDialog`
+      (copy/download/publish, JSON-AD mode, Loro coming-soon, closure toggle) over
+      `Store.freezeStructure`. Works on any resource, not just ontologies.
+- [x] **Content-locked / immutable UI**: a frozen (`did:ad:frozen`) resource
+      hides all write actions and shows a "❄ Frozen" badge. (UI *warnings* when a
+      datatype-changing edit would mint a new id — for the signed-DID editor path
+      — remain a follow-up.)
+- [x] Table columns and forms continue to resolve DID/frozen Properties through
+      `store.getProperty()` (description made optional for frozen).
+- [ ] Round-trip: export table/editor-created Classes & Properties to code schema
+      / freeze them and regenerate without changing meaning.
 
 ### Phase 4: Import/export and validation
 
