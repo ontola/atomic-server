@@ -23,12 +23,16 @@ import { JSONADParser } from './parse.js';
 import { Resource, unknownSubject } from './resource.js';
 import { type SearchOpts, buildSearchSubject } from './search.js';
 import {
+  freezeSchema,
   SCHEMA_HASH_PROPERTY,
   schemaToOntologyModel,
   type AtomicSchemaPackage,
   type ConvertedSchemaPackage,
   type DefinedSchema,
+  type FrozenSchema,
 } from './schema.js';
+import { frozenIdFor, UNIT_MEMBERS_KEY, type FrozenId } from './freeze.js';
+import { jcsCanonicalize } from './jcs.js';
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
@@ -1798,6 +1802,57 @@ export class Store {
     return this.schemaHashIndex.get(schemaHash);
   }
 
+  /**
+   * Content-addressed schema registration: freezes the schema into immutable
+   * `did:ad:frozen` resources, materializes them into the local store so
+   * `getResource`/`getProperty` resolve them immediately (offline), and — with
+   * `{ save: true }` — publishes the canonical bytes to `/frozen/{hash}` so other
+   * stores can resolve them. Returns the {@link FrozenSchema} (frozen ids per
+   * developer key, plus the mutable `presentation` layer). Unlike
+   * {@link registerSchema}, identity is the content hash, not a signed DID.
+   */
+  public async registerFrozenSchema(
+    schema: AtomicSchemaPackage | DefinedSchema,
+    opts: RegisterSchemaOptions = {},
+  ): Promise<FrozenSchema> {
+    const frozen = freezeSchema(schema);
+
+    for (const { frozenId, content } of frozen.resources) {
+      const [resource] = new JSONADParser().parse(content, frozenId);
+      resource.loading = false;
+      this.addResource(resource, { skipCommitCompare: true });
+    }
+
+    if (opts.save) {
+      await Promise.all(
+        frozen.resources.map(({ frozenId, content }) =>
+          this.publishFrozenResource(frozenId, content),
+        ),
+      );
+    }
+
+    return frozen;
+  }
+
+  private async publishFrozenResource(
+    frozenId: FrozenId,
+    content: unknown,
+  ): Promise<void> {
+    const hash = frozenId.replace('did:ad:frozen:', '');
+    const base = this.getServerUrl().replace(/\/$/, '');
+    const response = await fetch(`${base}/frozen/${hash}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/ad+json' },
+      body: jcsCanonicalize(content as Parameters<typeof jcsCanonicalize>[0]),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to publish frozen resource ${frozenId} (HTTP ${response.status})`,
+      );
+    }
+  }
+
   private assertCompatibleExistingSchemaProperty(
     property: ConvertedSchemaPackage['properties'][number],
   ): void {
@@ -2390,6 +2445,48 @@ export class Store {
     return work;
   }
 
+  /**
+   * Resolves a `did:ad:frozen:` subject: fetches the JSON-AD bytes from
+   * `/frozen/{hash}`, verifies they hash to the id (trustless — the server is
+   * just a cache), and materializes a read-only Resource. Cycle "unit" objects
+   * are not yet materializable individually.
+   */
+  private async fetchFrozenResource<C extends OptionalClass = UnknownClass>(
+    subject: string,
+  ): Promise<Resource<C>> {
+    const pureId = subject.split('?')[0].split('#')[0];
+    const hash = pureId.replace('did:ad:frozen:', '');
+    const base = this.getServerUrl().replace(/\/$/, '');
+    const response = await fetch(`${base}/frozen/${hash}`, {
+      headers: { Accept: 'application/ad+json' },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Could not resolve frozen resource ${pureId} (HTTP ${response.status})`,
+      );
+    }
+
+    const body = JSON.parse(await response.text());
+
+    // Trustless: the bytes must hash to the requested id.
+    if (frozenIdFor(body) !== pureId) {
+      throw new Error(`Frozen resource ${pureId} failed hash verification`);
+    }
+
+    if (body && typeof body === 'object' && UNIT_MEMBERS_KEY in body) {
+      throw new Error(
+        `Frozen resource ${pureId} is a reference-cycle unit; individual materialization is not yet supported.`,
+      );
+    }
+
+    const [resource] = new JSONADParser().parse(body, pureId);
+    resource.loading = false;
+    this.addResource(resource as Resource<C>, { skipCommitCompare: true });
+
+    return resource as Resource<C>;
+  }
+
   private async _fetchResourceFromServerImpl<
     C extends OptionalClass = UnknownClass,
   >(
@@ -2423,6 +2520,13 @@ export class Store {
       this.addResource(local, { skipCommitCompare: true });
 
       return local;
+    }
+
+    // Frozen resources are content-addressed and immutable: fetch their bytes
+    // from `/frozen/{hash}`, verify by re-hash, and materialize locally — no
+    // commits, no auth, no trust in the source.
+    if (normalizedSubject.startsWith('did:ad:frozen:')) {
+      return this.fetchFrozenResource<C>(normalizedSubject);
     }
 
     if (opts.setLoading) {
@@ -2722,13 +2826,10 @@ export class Store {
       );
     }
 
+    // Description is presentation, not identity — content-addressed `did:ad:frozen`
+    // properties omit it deliberately. Default to empty rather than rejecting,
+    // so a frozen property still resolves and validates.
     const description = resource.get(core.properties.description);
-
-    if (description === undefined) {
-      throw Error(
-        `Property ${subject} has no description: ${resource.debugValueSummary()}`,
-      );
-    }
 
     const classTypeURL = resource.get(core.properties.classtype)?.toString();
 
@@ -2736,7 +2837,7 @@ export class Store {
       subject,
       classType: classTypeURL,
       shortname: shortname.toString(),
-      description: description.toString(),
+      description: description?.toString() ?? '',
       datatype: datatypeFromUrl(datatypeUrl.toString()),
       allowsOnly: resource.get(core.properties.allowsOnly),
     };

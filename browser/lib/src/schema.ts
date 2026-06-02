@@ -23,6 +23,7 @@ export type JsonValue =
 // would collide with the one above).
 export {
   freezeResources,
+  frozenIdFor,
   type FrozenId,
   type FreezableResource,
   type FrozenResource,

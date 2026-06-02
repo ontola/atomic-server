@@ -568,7 +568,11 @@ pub fn parse_propval<'a>(
 /// Parse a single Json AD string, convert to Atoms
 /// Adds to the store if `add` is true.
 #[tracing::instrument(skip_all)]
-async fn parse_json_ad_map_to_resource(
+/// Parse a JSON-AD object (property-URL -> value map) into a [Resource].
+/// `overwrite_subject` forces the resource's subject (and forbids an inline
+/// `@id`), which is what frozen materialization uses — the subject is the
+/// content hash, never stored in the body.
+pub async fn parse_json_ad_map_to_resource(
     json: Map<String, serde_json::Value>,
     store: &impl crate::Storelike,
     overwrite_subject: Option<String>,

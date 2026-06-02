@@ -80,6 +80,7 @@ pub mod discovery;
 #[cfg(feature = "db")]
 pub mod endpoints;
 pub mod errors;
+pub mod frozen;
 pub mod hierarchy;
 /// Resource version history (time-travel reads). Prefer this over `loro` in app code.
 pub mod history {

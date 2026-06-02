@@ -353,6 +353,16 @@ impl Commit {
         let commit = self;
         let subject = commit.subject.clone();
 
+        // Frozen resources are immutable, content-addressed, and signatureless —
+        // they live in Tree::Frozen and are verified by re-hash, never edited.
+        if subject.is_frozen_did() {
+            return Err(format!(
+                "Cannot commit to {}: `did:ad:frozen` resources are immutable and content-addressed.",
+                subject
+            )
+            .into());
+        }
+
         if subject.is_did() && subject.as_str().starts_with("did:ad:") {
             let pure_id = subject.pure_id();
             let b64_part = if subject.is_agent_did() {
@@ -1866,6 +1876,42 @@ mod test {
         assert!(
             err.to_string().to_lowercase().contains("signature"),
             "expected a signature error, got: {}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    async fn commit_to_frozen_subject_is_rejected() {
+        let (store, _agent) = store_with_known_agent().await;
+        let commit = Commit {
+            subject:
+                "did:ad:frozen:0000000000000000000000000000000000000000000000000000000000000000"
+                    .into(),
+            created_at: 0,
+            signer: "did:ad:agent:placeholder".into(),
+            loro_update: None,
+            destroy: None,
+            signature: Some("placeholder".to_string()),
+            previous_commit: None,
+            is_genesis: None,
+            url: None,
+        };
+        let opts = CommitOpts {
+            validate_signature: false,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            ..CommitOpts::no_validations_no_index()
+        };
+        // The frozen check fires before signature validation, so an invalid
+        // signature here is irrelevant — immutability is enforced first.
+        let err = commit
+            .validate_and_build_response(&opts, &store)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().to_lowercase().contains("immutable"),
+            "expected an immutability error, got: {}",
             err
         );
     }

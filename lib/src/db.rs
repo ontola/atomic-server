@@ -850,6 +850,51 @@ impl Db {
         store.get_resource_extended(subject, false, for_agent).await
     }
 
+    /// Resolves a `did:ad:frozen:` subject from [`Tree::Frozen`]: loads the
+    /// stored JSON-AD bytes, **verifies they hash to the requested id**
+    /// (trustless — no signature, no trust in the source), and parses them into
+    /// a read-only Resource. Immutability is enforced elsewhere by rejecting
+    /// commits to frozen subjects. Cycle "unit" objects are not yet
+    /// materializable as individual resources.
+    async fn materialize_frozen(&self, subject: &Subject) -> AtomicResult<Resource> {
+        let id = subject.pure_id();
+        let hash_hex = subject
+            .frozen_hash_hex()
+            .ok_or_else(|| AtomicError::not_found(format!("Invalid frozen subject: {}", id)))?;
+        let bytes = self
+            .kv
+            .get(Tree::Frozen, hash_hex.as_bytes())?
+            .ok_or_else(|| AtomicError::not_found(format!("Frozen resource not found: {}", id)))?;
+        let body: serde_json::Value = serde_json::from_slice(&bytes)
+            .map_err(|e| format!("Stored frozen body for {} is not valid JSON: {}", id, e))?;
+
+        // Trustless verification: the stored bytes must hash to the requested id.
+        crate::frozen::verify_frozen(&id, &body)?;
+
+        if crate::frozen::is_unit(&body) {
+            return Err(format!(
+                "Frozen subject {} is a reference-cycle unit; materializing individual members is not yet supported.",
+                id
+            )
+            .into());
+        }
+
+        let serde_json::Value::Object(map) = body else {
+            return Err(format!("Frozen body for {} must be a JSON object", id).into());
+        };
+
+        // DontSave: a frozen resource is read-only — never write it to
+        // Tree::Resources and never run class-`requires` validation (a frozen
+        // definition deliberately omits presentation like `description`; its
+        // validity is the hash, not class completeness).
+        let parse_opts = crate::parse::ParseOpts {
+            save: crate::parse::SaveOpts::DontSave,
+            skip_unknown_props: true,
+            ..Default::default()
+        };
+        crate::parse::parse_json_ad_map_to_resource(map, self, Some(id), &parse_opts).await
+    }
+
     pub fn add_class_extender(&self, class_extender: ClassExtender) -> AtomicResult<()> {
         let mut extenders = self
             .class_extenders
@@ -2027,6 +2072,11 @@ impl Storelike for Db {
     #[instrument(skip_all)]
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
+        // Frozen resources are content-addressed and immutable; they live in
+        // Tree::Frozen, not Tree::Resources, and materialize by re-hash + parse.
+        if normalized.is_frozen_did() {
+            return self.materialize_frozen(&normalized).await;
+        }
         let subject_str = normalized.pure_id();
         if let Ok(propvals) = self.get_propvals(&subject_str) {
             let mut res_subject = normalized.clone();

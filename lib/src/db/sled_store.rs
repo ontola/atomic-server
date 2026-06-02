@@ -24,6 +24,7 @@ pub struct SledStore {
     did_mapping: sled::Tree,
     loro_snapshots: sled::Tree,
     blobs: sled::Tree,
+    frozen: sled::Tree,
 }
 
 impl SledStore {
@@ -47,6 +48,7 @@ impl SledStore {
         let did_mapping = db.open_tree(Tree::DidMapping)?;
         let loro_snapshots = db.open_tree(Tree::LoroSnapshots)?;
         let blobs = db.open_tree(Tree::Blobs)?;
+        let frozen = db.open_tree(Tree::Frozen)?;
 
         Ok(SledStore {
             db,
@@ -60,6 +62,7 @@ impl SledStore {
             did_mapping,
             loro_snapshots,
             blobs,
+            frozen,
         })
     }
 
@@ -80,6 +83,7 @@ impl SledStore {
             Tree::DidMapping => &self.did_mapping,
             Tree::LoroSnapshots => &self.loro_snapshots,
             Tree::Blobs => &self.blobs,
+            Tree::Frozen => &self.frozen,
         }
     }
 }
@@ -159,6 +163,7 @@ impl KvStore for SledStore {
         let mut batch_did_mapping = sled::Batch::default();
         let mut batch_loro_snapshots = sled::Batch::default();
         let mut batch_blobs = sled::Batch::default();
+        let mut batch_frozen = sled::Batch::default();
 
         for op in operations {
             let batch = match op.tree {
@@ -172,6 +177,7 @@ impl KvStore for SledStore {
                 Tree::DidMapping => &mut batch_did_mapping,
                 Tree::LoroSnapshots => &mut batch_loro_snapshots,
                 Tree::Blobs => &mut batch_blobs,
+                Tree::Frozen => &mut batch_frozen,
             };
             match op.method {
                 Method::Insert => {
@@ -225,6 +231,10 @@ impl KvStore for SledStore {
         self.blobs
             .apply_batch(batch_blobs)
             .map_err(|e| format!("Failed to apply blobs batch: {}", e))?;
+
+        self.frozen
+            .apply_batch(batch_frozen)
+            .map_err(|e| format!("Failed to apply frozen batch: {}", e))?;
 
         Ok(())
     }

@@ -90,50 +90,71 @@ needed.
 
 ### Phase A — lib + server storage, parsing, materialization
 
-- [ ] `lib/src/subject.rs`: add `is_frozen_did`, `frozen_hash_hex`,
-      `from_frozen_hash`, mirroring the blob helpers. `pure_id()` already strips
-      `?drive=`; subject equality is already string-based — reuse both.
-- [ ] `lib/src/db/trees.rs`: add `Tree::Frozen` (key = 32-byte BLAKE3, value =
-      canonical JSON-AD bytes).
-- [ ] `lib/src/db.rs#get_resource`: if `is_frozen_did(subject)`, look up
-      `Tree::Frozen`, verify hash, parse JSON-AD into a **read-only** Resource,
-      return it — bypassing `Tree::Resources`/Loro. Cache in memory like any
-      fetched resource.
-- [ ] Reject any Commit whose subject is `did:ad:frozen:` (immutable; no edits).
-- [ ] Use **RFC 8785 JCS** for the canonical JSON-AD bytes on the Rust side
-      (`serde_jcs` / `serde_json_canonicalizer`) so it byte-matches the TS
-      producer (`browser/lib/src/jcs.ts#jcsCanonicalize`, already used by
-      `freeze.ts`). Lock it with shared test vectors (fixed schema → fixed hash,
-      asserted in both Rust and TS). **This is the sharpest correctness risk** —
-      a one-byte canonicalization difference makes ids diverge across languages,
-      so JCS (a named standard with conformant impls on both sides) is required.
+- [x] `lib/src/frozen.rs`: `frozen_id` / `verify_frozen`. Done + cross-language
+      tested.
+- [x] `lib/src/subject.rs`: `is_frozen_did`, `frozen_hash_hex`,
+      `from_frozen_hash` (+ `DID_AD_FROZEN_PREFIX`), mirroring the blob helpers.
+      Done + tested (`test_frozen_did_parsing`, incl. `?drive=` hint stripping).
+- [x] `lib/src/db/trees.rs`: `Tree::Frozen` (key = BLAKE3 hex, value = canonical
+      JSON-AD bytes), wired through both backends (`sled_store`, `redb_store`).
+      Done + storage round-trip test (`db::test::frozen_storage`).
+- [x] `lib/src/db.rs#get_resource`: if `is_frozen_did(subject)`,
+      `materialize_frozen` looks up `Tree::Frozen`, **verifies by re-hash**
+      (trustless), and parses the JSON-AD into a read-only Resource via
+      `parse_json_ad_map_to_resource` with `SaveOpts::DontSave` — bypassing
+      `Tree::Resources`/Loro and, crucially, class-`requires` validation (a frozen
+      definition is valid by its hash, not by completeness, so omitting
+      `description` is fine). Cycle "unit" objects error for now. Done + tested
+      (`db::test::frozen_materialization`, incl. re-hash rejection of a mismatched
+      body).
+- [x] Reject any Commit whose subject is `did:ad:frozen:` (immutable). Done:
+      `commit.rs#validate_and_build_response` rejects frozen subjects up front
+      (before signature checks). Tested (`commit_to_frozen_subject_is_rejected`).
+- [x] Use **RFC 8785 JCS** for the canonical JSON-AD bytes on the Rust side.
+      Done: `lib/src/frozen.rs#frozen_id` uses the already-present `serde_jcs` +
+      `blake3`, and `test-vectors/frozen.json` pins the contract. Both
+      `browser/lib/src/frozen-vectors.test.ts` (TS) and the `frozen.rs` test
+      assert identical ids; verified byte-for-byte across all vectors (incl.
+      unicode key ordering and a cycle unit). **The sharpest correctness risk is
+      retired.**
 
 ### Phase B — server endpoints
 
-- [ ] `PUT /frozen/{hash}`: accept bytes, verify `blake3 == hash`, store
-      idempotently (re-post is a no-op, like `/blob`). Auth: require an
-      authenticated agent (forgery is impossible since content is hash-checked, so
-      the only risk is storage spam — gate with auth + a size/rate limit).
-- [ ] `GET /frozen/{hash}`: return canonical JSON-AD bytes
-      (`content-type: application/ad+json`).
-- [ ] Wire `did:ad:frozen:` subjects into the normal resource GET path so they
-      resolve through the same `/` endpoint and the WebSocket `GET` frame, not
-      only the dedicated route.
+- [x] `PUT /frozen/{hash}`: parses the JSON-AD body, verifies
+      `frozen_id(body) == did:ad:frozen:{hash}` (blake3 of JCS, not raw bytes),
+      stores the canonical bytes in `Tree::Frozen` idempotently. Public, like
+      `/blob` (the hash is the capability). Done: `server/src/handlers/frozen.rs`.
+- [x] `GET /frozen/{hash}`: returns the stored JSON-AD bytes
+      (`content-type: application/ad+json`), 404 if absent.
+- [x] End-to-end HTTP test (`server::tests::frozen_endpoint_roundtrip`):
+      PUT -> GET round-trips, a wrong-hash PUT is rejected, and the stored body
+      resolves through the normal `get_resource` materialization path.
+- [ ] _(optional)_ Wire `did:ad:frozen:` into the WebSocket `GET` frame / sync so
+      frozen objects travel with drives (Phase D), not only the dedicated route.
+      `get_resource` already resolves them for the HTTP `/` path.
 
 ### Phase C — browser Store + registerSchema switch-over
 
-- [ ] Store: detect `did:ad:frozen:` in `getResource`/`fetchResourceFromServer`,
-      fetch (local cache → `GET /frozen` → sync), **re-hash to verify**, parse
-      JSON-AD into a read-only Resource, cache. `getProperty` then works
-      unchanged.
-- [ ] Persist frozen objects in ClientDb (OPFS) keyed by hash for offline use.
-- [ ] `Store.registerSchema`: replace genesis-DID minting with `freezeSchema`;
-      write frozen objects locally and optionally `PUT /frozen` to the author's
-      server; return the frozen ids. Keep the old path behind a flag during
-      migration so existing tests/producers keep working until parity is proven.
-- [ ] The signed **"latest version" pointer** stays a normal genesis-DID resource
-      on the author's drive (`name → latest frozen ontology id`), plus any
-      mutable display overlay the app chooses to keep editable.
+- [x] Store: `fetchFrozenResource` detects `did:ad:frozen:` in the fetch path,
+      fetches `GET /frozen/{hash}`, **re-hashes to verify** (`frozenIdFor`), and
+      materializes a read-only Resource via `JSONADParser`. `getProperty` was
+      relaxed to treat `description` as optional (presentation, not identity), so
+      frozen properties resolve. Tested (`frozen-resolve.test.ts`).
+- [x] `Store.registerFrozenSchema` (additive — leaves the signed-DID
+      `registerSchema` intact): freezes the schema, materializes the frozen bodies
+      into the local store (offline-resolvable immediately), and with
+      `{ save: true }` PUTs each to `/frozen/{hash}`. Returns the `FrozenSchema`
+      (frozen ids per key + `presentation`). Tested.
+- [x] **Capstone e2e** (`tests/frozen-e2e.integration.test.ts`, real server):
+      producer `registerFrozenSchema(..., { save: true })` PUTs frozen bodies; a
+      fresh agent-less consumer `getProperty`/`getResource` resolves them over
+      `GET /frozen` (verify-by-rehash), refs intact, and builds an instance
+      against the frozen class + property. Proves the whole producer→server→
+      consumer loop live.
+- [ ] Persist frozen objects in ClientDb (OPFS) keyed by hash for offline reload
+      (currently in-memory only).
+- [ ] The signed **"latest version" pointer** on the author's drive
+      (`name → latest frozen ontology id`) + any mutable display overlay.
 
 ### Phase D — sync (frozen travels with drives)
 
