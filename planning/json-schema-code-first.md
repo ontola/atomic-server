@@ -182,6 +182,10 @@ Not implemented yet (all optional/follow-up — none block the core flows):
   (richer keywords beyond the Atomic subset) in browser/Rust.
 - Drive-context / app-registry discovery of schemas by hash before explicit
   registration; round-trip of editor/table-created schemas into frozen.
+- **Availability & incentives** (who stores/serves schemas, and a discovery
+  registry / "index all ontologies" hub) — see the
+  [Availability & incentives](./did-ad-frozen-server.md#availability--incentives-who-stores-and-serves-schemas-and-why)
+  section of the server plan.
 
 ## Existing Touch Points
 

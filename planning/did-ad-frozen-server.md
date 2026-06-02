@@ -66,6 +66,70 @@ documented as optional, and the protocol/spec never references it. If it is down
 and the bytes exist in a bundle, on the author's drive, or on any peer, resolution
 still succeeds and verifies.
 
+## Availability & incentives: who stores and serves schemas, and why
+
+A frozen id is **self-certifying but not self-locating** (like a git object hash
+or an IPFS CID): it proves the content but doesn't say where to get the bytes. So
+the open question isn't correctness — verify-by-rehash already gives us that — it's
+**availability**: who keeps the bytes and serves them? The design answer is to make
+storing/serving a *byproduct of self-interest* and *trustlessly cheap*, rather than
+to bolt on a reward. In priority order:
+
+1. **Storing is a side effect of using your own data.** A server cannot validate
+   or serve a resource of class `did:ad:frozen:X` without holding `X` — so every
+   data-hosting server already holds the schemas its data depends on (the
+   browser-side publish-on-save in [json-schema-code-first.md](./json-schema-code-first.md),
+   `Store.publishReferencedFrozen`, pushes them there before the commit lands).
+   Data and its schema travel together; no altruism required.
+
+2. **Serving to others is trustless and ~free.** `GET /frozen/{hash}` is public and
+   re-hashable, so a holder *cannot* serve a wrong answer — closing the endpoint
+   buys nothing. Frozen objects are tiny, immutable (infinite cache TTL, CDN-able),
+   and deduplicated (a reused property is stored once). Cost ≈ 0 beats any reward.
+   _Action:_ set `Cache-Control: public, immutable, max-age=31536000` on
+   `GET /frozen` responses.
+
+3. **The reuse flywheel.** Identical definitions hash to the same id, so reuse *is*
+   convergence: the more an "email"/"name"/… property is reused, the more servers
+   independently hold it, the more available and canonical it becomes — a Schelling
+   point. Popular vocabularies get *more* available with use, with zero coordination;
+   private variants stay isolated on one server (self-punishing divergence).
+
+4. **A registry/index for discovery + the long tail** — the high-leverage build, and
+   the same "index all ontologies on atomicdata.dev" goal noted elsewhere. Think
+   crates.io / npm / schema.org for ontologies: pin-on-push + search over
+   shortnames/descriptions + a "used by N ontologies" usage signal that surfaces the
+   flywheel. Incentives align: publishers get discoverability + a durable home,
+   consumers get one reliable resolve/search endpoint, the operator becomes the
+   ecosystem's discovery layer. Because apps ship lockfiles (below), the registry is
+   a convenience and flywheel — **not** a dependency or single point of failure.
+
+5. **Lockfiles make clients self-sufficient seeders.** A committed
+   `*.schema.lock.json` travels with the code, so an app *runs* with no server at
+   all, and any client holding the bytes can re-seed any server (`publishFrozenResource`).
+   Availability stops being a hard dependency for *running* — it's only needed for
+   *discovery/interop*, which de-risks the whole scheme.
+
+6. **Mesh + (optional) paid permanence, later.** Phase D sync makes this
+   BitTorrent-like: any peer with the bytes serves them, verified by re-hash
+   (incentive = reciprocity from a shared pool). Pay-once-store-forever
+   (Arweave-style) is a natural fit for *guaranteed* permanence of critical
+   vocabularies but is over-engineering for objects this cheap until there's demand —
+   flag as future, don't build.
+
+**Net:** don't pay anyone to store schemas. Make storing a side effect of using
+your own data, make serving trustless and free, ship lockfiles so nothing *depends*
+on a host, and let reuse-convergence plus a discovery registry turn "available
+because someone happens to host it" into "available because everyone who uses it
+hosts it."
+
+### Follow-up tasks
+
+- [ ] `GET /frozen/{hash}`: add long-lived immutable `Cache-Control` headers.
+- [ ] Registry/index on a default server: pin-on-push, search by
+      shortname/description, and a `used-by` count per frozen id.
+- [ ] Promote lockfiles to the documented default for shipping a schema with an app.
+
 ## Decided + implemented: cyclic members freeze as one unit
 
 This was the one place the producer and server models disagreed; it is now
