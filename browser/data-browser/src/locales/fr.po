@@ -4441,3 +4441,11 @@ msgstr "Télécharger"
 #: src/components/ResourceContextMenu/FreezeDialog.tsx
 msgid "Publish to server"
 msgstr "Publier sur le serveur"
+
+#: src/components/NavBar.tsx
+msgid "Frozen"
+msgstr "Frozen"
+
+#: src/components/NavBar.tsx
+msgid "Content-addressed and immutable — verified by hash"
+msgstr "Adressable par contenu et immuable — vérifié par hachage"

@@ -4433,3 +4433,11 @@ msgstr "Herunterladen"
 #: src/components/ResourceContextMenu/FreezeDialog.tsx
 msgid "Publish to server"
 msgstr "Auf Server veröffentlichen"
+
+#: src/components/NavBar.tsx
+msgid "Frozen"
+msgstr "Eingefroren"
+
+#: src/components/NavBar.tsx
+msgid "Content-addressed and immutable — verified by hash"
+msgstr "Inhaltsadressiert und unveränderlich – verifiziert durch Hash"
