@@ -27,6 +27,7 @@ pub const TABLE: &str = "https://atomicdata.dev/classes/Table";
 pub const PLUGIN: &str = "https://atomicdata.dev/classes/Plugin";
 pub const TAG: &str = "https://atomicdata.dev/classes/Tag";
 pub const PEER: &str = "https://atomicdata.dev/classes/Peer";
+pub const PLAIN_TEXT: &str = "https://atomicdata.dev/classes/PlainText";
 
 // Properties
 pub const SHORTNAME: &str = "https://atomicdata.dev/properties/shortname";
@@ -98,6 +99,7 @@ pub const SEARCH_QUERY: &str = "https://atomicdata.dev/properties/search/query";
 pub const SEARCH_LIMIT: &str = "https://atomicdata.dev/properties/search/limit";
 pub const SEARCH_PROPERTY: &str = "https://atomicdata.dev/properties/search/property";
 pub const SETUP_RESET: &str = "https://atomicdata.dev/properties/setup/reset";
+pub const SEARCH_CHUNKS: &str = "https://atomicdata.dev/properties/search/chunks";
 pub const URL: &str = "https://atomicdata.dev/property/url";
 pub const PREVIEW: &str = "https://atomicdata.dev/property/preview";
 // ... for Bookmarks
@@ -165,6 +167,10 @@ pub const JSON_SCHEMA: &str = "https://atomicdata.dev/properties/jsonSchema";
 pub const PLUGIN_AUTHOR: &str = "https://atomicdata.dev/properties/pluginAuthor";
 pub const PLUGIN_AGENT: &str = "https://atomicdata.dev/properties/pluginAgent";
 pub const PLUGIN_PERMISSIONS: &str = "https://atomicdata.dev/properties/pluginPermissions";
+// AI
+pub const TEXT_PART: &str = "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/text-part";
+pub const REASONING_PART: &str =
+    "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/reasoning-part";
 // Datatypes
 pub const STRING: &str = "https://atomicdata.dev/datatypes/string";
 pub const MARKDOWN: &str = "https://atomicdata.dev/datatypes/markdown";

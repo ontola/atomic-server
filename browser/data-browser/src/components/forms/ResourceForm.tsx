@@ -225,6 +225,7 @@ export function ResourceForm({
               return (
                 <ResourceField
                   key={property + ' field'}
+                  disabled={!canWrite}
                   propertyURL={property}
                   resource={resource}
                 />
@@ -234,6 +235,7 @@ export function ResourceForm({
               return (
                 <ResourceField
                   key={property + ' field'}
+                  disabled={!canWrite}
                   propertyURL={property}
                   resource={resource}
                   handleDelete={() => handleDelete(property)}

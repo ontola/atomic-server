@@ -472,6 +472,60 @@ export class WSClient {
   // ---- Resource operations ----
 
   /** Fetch a resource over WebSocket. Returns a promise that resolves when the UPDATE arrives. */
+  public subscribeResource(subject: string): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket is not open, cannot subscribe to resource');
+
+      return;
+    }
+
+    this.authPromise
+      .catch(() => {
+        // We don't want to log the error here, as it's already handled in the authenticate() method
+      })
+      .finally(() => {
+        this.ws.send('SUBSCRIBE ' + subject);
+      });
+  }
+
+  public unsubscribeResource(subject: string): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket is not open, cannot unsubscribe from resource');
+
+      return;
+    }
+
+    this.ws.send('UNSUBSCRIBE ' + subject);
+  }
+
+  /** Subscribe to vector index status updates for a drive root (see server `SUBSCRIBE_INDEX_STATUS`). */
+  public subscribeIndexStatus(drive: string): void {
+    this.authPromise
+      .catch(() => {
+        // Authentication errors are handled in authenticate()
+      })
+      .finally(() => {
+        if (this.readyState !== WebSocket.OPEN) {
+          console.warn(
+            'WebSocket is not open, cannot subscribe to index status',
+          );
+
+          return;
+        }
+
+        this.ws.send('SUBSCRIBE_INDEX_STATUS ' + JSON.stringify({ drive }));
+      });
+  }
+
+  public unsubscribeIndexStatus(drive: string): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    this.ws.send('UNSUBSCRIBE_INDEX_STATUS ' + JSON.stringify({ drive }));
+  }
+
+  /** Sends a GET message for some resource over websockets. */
   public async fetch(subject: string): Promise<Resource> {
     // Ensure auth has been kicked off before sending the GET. `authPromise`
     // starts as a resolved promise (not undefined), so `await this.authPromise`
@@ -893,6 +947,15 @@ export class WSClient {
       this.store.__handleLoroEphemeralMessage(
         text.slice('LORO_EPHEMERAL_UPDATE '.length),
       );
+    } else if (text.startsWith('INDEX_STATUS ')) {
+      const json = text.slice('INDEX_STATUS '.length);
+
+      try {
+        const parsed = JSON.parse(json) as { drive: string; indexing: boolean };
+        this.store.__notifyIndexingStatus(parsed.drive, parsed.indexing);
+      } catch {
+        console.warn('Invalid INDEX_STATUS message:', json);
+      }
     } else if (text === 'AUTHENTICATED') {
       // Legacy auth response — handled for backward compat
     }

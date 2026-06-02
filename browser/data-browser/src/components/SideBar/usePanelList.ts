@@ -1,9 +1,10 @@
-export enum Panel {
-  Ontologies = 'ontologies',
-}
-
 import { useCallback, useMemo } from 'react';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
+
+export enum Panel {
+  Ontologies = 'ontologies',
+  AIChats = 'aichats',
+}
 
 export const usePanelList = (): {
   enabledPanels: Set<Panel>;
@@ -11,7 +12,7 @@ export const usePanelList = (): {
   disablePanel: (panel: Panel) => void;
 } => {
   const [enabledPanels, setEnabledPanels] = useLocalStorage<Panel[]>(
-    'sidebar-panels',
+    'atomic.sidebar-panels',
     [],
   );
 

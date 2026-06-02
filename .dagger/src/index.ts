@@ -110,6 +110,7 @@ export class AtomicServer {
   @func()
   async jsLint(): Promise<string> {
     const depsContainer = this.jsBuild();
+
     return depsContainer
       .withWorkdir('/app')
       .withExec(['pnpm', 'run', 'lint'])
@@ -119,6 +120,7 @@ export class AtomicServer {
   @func()
   async jsTest(): Promise<string> {
     const depsContainer = this.jsBuild();
+
     return depsContainer
       .withWorkdir('/app')
       .withExec(['pnpm', 'run', 'test'])
@@ -135,60 +137,53 @@ export class AtomicServer {
     const cargoCache = dag.cacheVolume('cargo');
     const flutterRustTarget = dag.cacheVolume('flutter-plugin-rust-target');
     const pathPrefix = 'export PATH="$HOME/.cargo/bin:$PATH"';
-    return dag
-      .container()
-      .from(FLUTTER_IMAGE)
-      .withEnvVariable('CI', 'true')
-      .withExec(['apt-get', 'update', '-qq'])
-      .withExec([
-        'apt-get',
-        'install',
-        '-y',
-        '--no-install-recommends',
-        'ca-certificates',
-        'curl',
-        'git',
-        'build-essential',
-        'cmake',
-        'ninja-build',
-        'pkg-config',
-        'libssl-dev',
-        'clang',
-      ])
-      .withExec([
-        'sh',
-        '-c',
-        'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal',
-      ])
-      .withMountedCache('/root/.cargo/registry', cargoCache, {
-        sharing: CacheSharingMode.Locked,
-      })
-      .withDirectory('/workspace/lib', this.source.directory('lib'))
-      .withDirectory('/workspace/flutter', this.source.directory('flutter'))
-      .withMountedCache(
-        '/workspace/flutter/rust/target',
-        flutterRustTarget,
-        { sharing: CacheSharingMode.Locked },
-      )
-      .withWorkdir('/workspace/flutter')
-      .withExec([
-        'bash',
-        '-lc',
-        `${pathPrefix} && flutter --version && flutter pub get`,
-      ])
-      // Scope like `Makefile analyze`: cargokit `build_tool` is a nested
-      // Dart package — analyzing the whole repo without its own pub get fails.
-      .withExec([
-        'bash',
-        '-lc',
-        `${pathPrefix} && flutter analyze lib test`,
-      ])
-      .withExec([
-        'bash',
-        '-lc',
-        `${pathPrefix} && flutter test --no-pub`,
-      ])
-      .stdout();
+
+    return (
+      dag
+        .container()
+        .from(FLUTTER_IMAGE)
+        .withEnvVariable('CI', 'true')
+        .withExec(['apt-get', 'update', '-qq'])
+        .withExec([
+          'apt-get',
+          'install',
+          '-y',
+          '--no-install-recommends',
+          'ca-certificates',
+          'curl',
+          'git',
+          'build-essential',
+          'cmake',
+          'ninja-build',
+          'pkg-config',
+          'libssl-dev',
+          'clang',
+        ])
+        .withExec([
+          'sh',
+          '-c',
+          'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal',
+        ])
+        .withMountedCache('/root/.cargo/registry', cargoCache, {
+          sharing: CacheSharingMode.Locked,
+        })
+        .withDirectory('/workspace/lib', this.source.directory('lib'))
+        .withDirectory('/workspace/flutter', this.source.directory('flutter'))
+        .withMountedCache('/workspace/flutter/rust/target', flutterRustTarget, {
+          sharing: CacheSharingMode.Locked,
+        })
+        .withWorkdir('/workspace/flutter')
+        .withExec([
+          'bash',
+          '-lc',
+          `${pathPrefix} && flutter --version && flutter pub get`,
+        ])
+        // Scope like `Makefile analyze`: cargokit `build_tool` is a nested
+        // Dart package — analyzing the whole repo without its own pub get fails.
+        .withExec(['bash', '-lc', `${pathPrefix} && flutter analyze lib test`])
+        .withExec(['bash', '-lc', `${pathPrefix} && flutter test --no-pub`])
+        .stdout()
+    );
   }
 
   /** Builds the WASM bundle (wasm-pack) used by `NodeClientDb` in the
@@ -197,64 +192,74 @@ export class AtomicServer {
   @func()
   wasmBuild(): Directory {
     const cargoCache = dag.cacheVolume('cargo');
-    return dag
-      .container()
-      .from(RUST_IMAGE)
-      .withMountedCache('/usr/local/cargo/registry', cargoCache, { sharing: CacheSharingMode.Locked })
-      // Cache `cargo install`-built binaries (wasm-pack here). Without
-      // this, each CI run recompiled wasm-pack from source (~2 min).
-      // Routed through `CARGO_INSTALL_ROOT` to a non-default path so
-      // the cache mount can't hide the rust image's preinstalled
-      // \`cargo\`/\`rustc\` at \`/usr/local/cargo/bin\`. Adding the
-      // install root's \`bin\` to \`PATH\` makes \`wasm-pack\` resolvable.
-      // \`cargo install\` no-ops when the latest version is already
-      // present.
-      .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), { sharing: CacheSharingMode.Locked })
-      .withEnvVariable('CARGO_INSTALL_ROOT', '/opt/cargo-bin')
-      .withEnvVariable('PATH', '/opt/cargo-bin/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin')
-      .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
-      .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
-      // wasm-pack runs `cargo metadata` which validates every workspace
-      // member, so all members must be present even though we only build
-      // the wasm crate.
-      .withDirectory('/code/lib', this.source.directory('lib'))
-      .withDirectory('/code/wasm', this.source.directory('wasm'))
-      .withDirectory('/code/server', this.source.directory('server'))
-      .withDirectory('/code/cli', this.source.directory('cli'))
-      .withDirectory('/code/desktop', this.source.directory('desktop'))
-      .withDirectory(
-        '/code/plugin-examples',
-        this.source.directory('plugin-examples'),
-      )
-      .withDirectory(
-        '/code/atomic-plugin',
-        this.source.directory('atomic-plugin'),
-      )
-      .withMountedCache('/code/target', dag.cacheVolume('rust-wasm-target'))
-      .withWorkdir('/code/wasm')
-      // Install + build in a single exec so the install is part of the
-      // build step's own cache key. Splitting them lets dagger cache the
-      // `cargo install` step as "already ran" while the mounted
-      // `cargo-bin` cache volume can be cleared by the engine (e.g. after
-      // a restart with `Locked` sharing), leaving wasm-pack missing from
-      // PATH on replay ("executable file not found in $PATH"). Bundling
-      // makes any cache hit imply the binary is present too; `cargo
-      // install` no-ops when the binary is current.
-      //
-      // `CARGO_ENCODED_RUSTFLAGS` is exported INLINE so it only applies
-      // to the wasm-pack build. Setting it at container scope leaks into
-      // `cargo install wasm-pack` (which compiles wasm-pack for the host
-      // triple, not wasm32) and trips getrandom's
-      //   "wasm_js backend can be enabled only for OS-less WASM targets!"
-      // compile_error. The `\x1f` is the encoded-rustflags arg separator.
-      .withExec([
-        'sh',
-        '-c',
-        'cargo install wasm-pack --quiet && ' +
-          "CARGO_ENCODED_RUSTFLAGS='--cfg\x1fgetrandom_backend=\"wasm_js\"' " +
-          'wasm-pack build --target web --out-dir pkg',
-      ])
-      .directory('/code/wasm/pkg');
+
+    return (
+      dag
+        .container()
+        .from(RUST_IMAGE)
+        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
+          sharing: CacheSharingMode.Locked,
+        })
+        // Cache `cargo install`-built binaries (wasm-pack here). Without
+        // this, each CI run recompiled wasm-pack from source (~2 min).
+        // Routed through `CARGO_INSTALL_ROOT` to a non-default path so
+        // the cache mount can't hide the rust image's preinstalled
+        // \`cargo\`/\`rustc\` at \`/usr/local/cargo/bin\`. Adding the
+        // install root's \`bin\` to \`PATH\` makes \`wasm-pack\` resolvable.
+        // \`cargo install\` no-ops when the latest version is already
+        // present.
+        .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
+          sharing: CacheSharingMode.Locked,
+        })
+        .withEnvVariable('CARGO_INSTALL_ROOT', '/opt/cargo-bin')
+        .withEnvVariable(
+          'PATH',
+          '/opt/cargo-bin/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        )
+        .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
+        .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
+        // wasm-pack runs `cargo metadata` which validates every workspace
+        // member, so all members must be present even though we only build
+        // the wasm crate.
+        .withDirectory('/code/lib', this.source.directory('lib'))
+        .withDirectory('/code/wasm', this.source.directory('wasm'))
+        .withDirectory('/code/server', this.source.directory('server'))
+        .withDirectory('/code/cli', this.source.directory('cli'))
+        .withDirectory('/code/desktop', this.source.directory('desktop'))
+        .withDirectory(
+          '/code/plugin-examples',
+          this.source.directory('plugin-examples'),
+        )
+        .withDirectory(
+          '/code/atomic-plugin',
+          this.source.directory('atomic-plugin'),
+        )
+        .withMountedCache('/code/target', dag.cacheVolume('rust-wasm-target'))
+        .withWorkdir('/code/wasm')
+        // Install + build in a single exec so the install is part of the
+        // build step's own cache key. Splitting them lets dagger cache the
+        // `cargo install` step as "already ran" while the mounted
+        // `cargo-bin` cache volume can be cleared by the engine (e.g. after
+        // a restart with `Locked` sharing), leaving wasm-pack missing from
+        // PATH on replay ("executable file not found in $PATH"). Bundling
+        // makes any cache hit imply the binary is present too; `cargo
+        // install` no-ops when the binary is current.
+        //
+        // `CARGO_ENCODED_RUSTFLAGS` is exported INLINE so it only applies
+        // to the wasm-pack build. Setting it at container scope leaks into
+        // `cargo install wasm-pack` (which compiles wasm-pack for the host
+        // triple, not wasm32) and trips getrandom's
+        //   "wasm_js backend can be enabled only for OS-less WASM targets!"
+        // compile_error. The `\x1f` is the encoded-rustflags arg separator.
+        .withExec([
+          'sh',
+          '-c',
+          'cargo install wasm-pack --quiet && ' +
+            'CARGO_ENCODED_RUSTFLAGS=\'--cfg\x1fgetrandom_backend="wasm_js"\' ' +
+            'wasm-pack build --target web --out-dir pkg',
+        ])
+        .directory('/code/wasm/pkg')
+    );
   }
 
   /** Builds the `atomic-server` binary without depending on a built
@@ -264,45 +269,50 @@ export class AtomicServer {
   @func()
   rustBuildSlim(): File {
     const cargoCache = dag.cacheVolume('cargo');
-    return dag
-      .container()
-      .from(RUST_IMAGE)
-      .withMountedCache('/usr/local/cargo/registry', cargoCache, { sharing: CacheSharingMode.Locked })
-      .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
-      .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
-      .withDirectory('/code/server', this.source.directory('server'))
-      .withDirectory('/code/lib', this.source.directory('lib'))
-      .withDirectory('/code/cli', this.source.directory('cli'))
-      .withDirectory('/code/desktop', this.source.directory('desktop'))
-      .withDirectory('/code/wasm', this.source.directory('wasm'))
-      .withDirectory(
-        '/code/plugin-examples',
-        this.source.directory('plugin-examples'),
-      )
-      .withDirectory(
-        '/code/atomic-plugin',
-        this.source.directory('atomic-plugin'),
-      )
-      .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target'))
-      .withWorkdir('/code')
-      .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
-      // build.rs still wants to bundle the data-browser dist as embedded
-      // static files. Skipping the JS build is fine — but we still need
-      // *some* directory to satisfy `static_files::resource_dir`. Drop a
-      // placeholder index.html so the macro has something to embed.
-      .withExec(['mkdir', '-p', '/code/server/assets_tmp'])
-      .withExec([
-        'sh',
-        '-c',
-        'echo "<html><body>integration test stub</body></html>" > /code/server/assets_tmp/index.html',
-      ])
-      .withExec(['cargo', 'build', '-p', 'atomic-server'])
-      .withExec([
-        'cp',
-        '/code/target/debug/atomic-server',
-        '/atomic-server-binary',
-      ])
-      .file('/atomic-server-binary');
+
+    return (
+      dag
+        .container()
+        .from(RUST_IMAGE)
+        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
+          sharing: CacheSharingMode.Locked,
+        })
+        .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
+        .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
+        .withDirectory('/code/server', this.source.directory('server'))
+        .withDirectory('/code/lib', this.source.directory('lib'))
+        .withDirectory('/code/cli', this.source.directory('cli'))
+        .withDirectory('/code/desktop', this.source.directory('desktop'))
+        .withDirectory('/code/wasm', this.source.directory('wasm'))
+        .withDirectory(
+          '/code/plugin-examples',
+          this.source.directory('plugin-examples'),
+        )
+        .withDirectory(
+          '/code/atomic-plugin',
+          this.source.directory('atomic-plugin'),
+        )
+        .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target'))
+        .withWorkdir('/code')
+        .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
+        // build.rs still wants to bundle the data-browser dist as embedded
+        // static files. Skipping the JS build is fine — but we still need
+        // *some* directory to satisfy `static_files::resource_dir`. Drop a
+        // placeholder index.html so the macro has something to embed.
+        .withExec(['mkdir', '-p', '/code/server/assets_tmp'])
+        .withExec([
+          'sh',
+          '-c',
+          'echo "<html><body>integration test stub</body></html>" > /code/server/assets_tmp/index.html',
+        ])
+        .withExec(['cargo', 'build', '-p', 'atomic-server'])
+        .withExec([
+          'cp',
+          '/code/target/debug/atomic-server',
+          '/atomic-server-binary',
+        ])
+        .file('/atomic-server-binary')
+    );
   }
 
   /** Runs the `@tomic/lib` integration tests, which spawn a real
@@ -370,10 +380,7 @@ export class AtomicServer {
         browser.file('e2e/package.json'),
       )
       // The lib's tsconfig.json extends the workspace-level tsconfigs.
-      .withFile(
-        '/repo/browser/tsconfig.json',
-        browser.file('tsconfig.json'),
-      )
+      .withFile('/repo/browser/tsconfig.json', browser.file('tsconfig.json'))
       .withFile(
         '/repo/browser/tsconfig.build.json',
         browser.file('tsconfig.build.json'),
@@ -404,6 +411,7 @@ export class AtomicServer {
   @func()
   docsPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
     const builtDocsHtml = this.docsFolder();
+
     return this.netlifyDeploy(builtDocsHtml, 'atomic-docs', netlifyAuthToken);
   }
 
@@ -434,6 +442,7 @@ export class AtomicServer {
   /** Extracts the unique deploy URL from netlify output */
   private extractDeployUrl(netlifyOutput: string): string {
     const match = netlifyOutput.match(/https:\/\/[a-f0-9]+--.+\.netlify\.app/);
+
     return match ? match[0] : 'Deploy URL not found';
   }
 
@@ -457,6 +466,7 @@ export class AtomicServer {
   @func()
   typedocPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
     const browserDir = this.jsBuild();
+
     return browserDir
       .withWorkdir('/app')
       .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
@@ -515,13 +525,10 @@ export class AtomicServer {
     // (it overwrites OS /lib). Mount alongside browser and resolve via alias in vite.config.
     const sourceContainer = workspaceContainer
       .withDirectory('/app', browser)
-      .withDirectory(
-        '/app/lib-defaults',
-        this.source.directory('lib/defaults'),
-      )
-      // Provide the prebuilt WASM artifacts so data-browser's `build:wasm`
-      // step can be skipped (`wasm-pack` isn't available in this Node-only
-      // container, and mounting the Rust toolchain just for this would
+      .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
+      // Provide the prebuilt WASM artifacts so data-browser's `build` can skip
+      // wasm-pack when `SKIP_WASM_BUILD=1` (`wasm-pack` isn't available in this
+      // Node-only container, and mounting the Rust toolchain just for this would
       // bloat the JS image significantly).
       .withDirectory('/app/data-browser/public/wasm', this.wasmBuild())
       // data-browser imports the repo-root logo from `../../../../logo.svg`
@@ -530,7 +537,10 @@ export class AtomicServer {
       .withFile('/logo.svg', this.source.file('logo.svg'));
 
     // Build all packages since they may depend on each other's built artifacts
-    let buildContainer = sourceContainer.withEnvVariable('SKIP_WASM_BUILD', '1');
+    let buildContainer = sourceContainer.withEnvVariable(
+      'SKIP_WASM_BUILD',
+      '1',
+    );
 
     if (e2e) {
       // Surfaces /app/dev-drive and /app/prunetests in the production
@@ -559,7 +569,9 @@ export class AtomicServer {
       .from(image)
       .withExec(['apt-get', 'update', '-qq'])
       .withExec(['apt', 'install', '-y', 'nasm'])
-      .withMountedCache('/usr/local/cargo/registry', cargoCache, { sharing: CacheSharingMode.Locked })
+      .withMountedCache('/usr/local/cargo/registry', cargoCache, {
+        sharing: CacheSharingMode.Locked,
+      })
       .withExec(['rustup', 'component', 'add', 'clippy'])
       .withExec(['rustup', 'component', 'add', 'rustfmt']);
     // cargo-nextest used to be installed here, but recent versions need
@@ -627,6 +639,7 @@ export class AtomicServer {
     @argument() target: string = 'x86_64-unknown-linux-musl',
   ): File {
     const container = this.rustBuild(true, target);
+
     return container.file('/atomic-server-binary');
   }
 
@@ -650,46 +663,48 @@ export class AtomicServer {
     const cargoCache = dag.cacheVolume('cargo');
     const image = TARGET_IMAGE_MAP['x86_64-unknown-linux-musl'];
 
-    return dag
-      .container()
-      .from(image)
-      .withExec(['apt-get', 'update', '-qq'])
-      .withExec(['apt', 'install', '-y', 'nasm'])
-      .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-        sharing: CacheSharingMode.Locked,
-      })
-      .withExec(['rustup', 'component', 'add', 'clippy'])
-      .withExec(['rustup', 'component', 'add', 'rustfmt'])
-      .withFile('/code/Cargo.toml', source.file('Cargo.toml'))
-      .withFile('/code/Cargo.lock', source.file('Cargo.lock'))
-      .withFile('/code/Cross.toml', source.file('Cross.toml'))
-      .withFile(
-        '/code/.config/nextest.toml',
-        source.file('.config/nextest.toml'),
-      )
-      .withDirectory('/code/server', source.directory('server'))
-      .withDirectory('/code/lib', source.directory('lib'))
-      .withDirectory('/code/cli', source.directory('cli'))
-      .withDirectory('/code/desktop', source.directory('desktop'))
-      .withDirectory('/code/wasm', source.directory('wasm'))
-      .withDirectory(
-        '/code/plugin-examples',
-        source.directory('plugin-examples'),
-      )
-      .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
-      .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target'))
-      .withWorkdir('/code')
-      // build.rs in atomic-server wants to bundle a JS dist. Skip it —
-      // fmt/clippy/test don't need it and including the bundle would
-      // re-introduce the JS-source dependency we just removed.
-      .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
-      .withExec(['mkdir', '-p', '/code/server/assets_tmp'])
-      .withExec([
-        'sh',
-        '-c',
-        'echo "<html><body>checks stub</body></html>" > /code/server/assets_tmp/index.html',
-      ])
-      .withExec(['cargo', 'fetch']);
+    return (
+      dag
+        .container()
+        .from(image)
+        .withExec(['apt-get', 'update', '-qq'])
+        .withExec(['apt', 'install', '-y', 'nasm'])
+        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
+          sharing: CacheSharingMode.Locked,
+        })
+        .withExec(['rustup', 'component', 'add', 'clippy'])
+        .withExec(['rustup', 'component', 'add', 'rustfmt'])
+        .withFile('/code/Cargo.toml', source.file('Cargo.toml'))
+        .withFile('/code/Cargo.lock', source.file('Cargo.lock'))
+        .withFile('/code/Cross.toml', source.file('Cross.toml'))
+        .withFile(
+          '/code/.config/nextest.toml',
+          source.file('.config/nextest.toml'),
+        )
+        .withDirectory('/code/server', source.directory('server'))
+        .withDirectory('/code/lib', source.directory('lib'))
+        .withDirectory('/code/cli', source.directory('cli'))
+        .withDirectory('/code/desktop', source.directory('desktop'))
+        .withDirectory('/code/wasm', source.directory('wasm'))
+        .withDirectory(
+          '/code/plugin-examples',
+          source.directory('plugin-examples'),
+        )
+        .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
+        .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target'))
+        .withWorkdir('/code')
+        // build.rs in atomic-server wants to bundle a JS dist. Skip it —
+        // fmt/clippy/test don't need it and including the bundle would
+        // re-introduce the JS-source dependency we just removed.
+        .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
+        .withExec(['mkdir', '-p', '/code/server/assets_tmp'])
+        .withExec([
+          'sh',
+          '-c',
+          'echo "<html><body>checks stub</body></html>" > /code/server/assets_tmp/index.html',
+        ])
+        .withExec(['cargo', 'fetch'])
+    );
   }
 
   @func()
@@ -909,21 +924,24 @@ export class AtomicServer {
       'x86_64-unknown-linux-musl',
       e2e,
     ).file('/atomic-server-binary');
-    return dag
-      .container()
-      .from('alpine:latest')
-      .withFile('/atomic-server-bin', atomicServerBinary, {
-        permissions: 0o755,
-      })
-      .withEnvVariable('ATOMIC_DOMAIN', ATOMIC_DOMAIN)
-      // First-run flag — sets up the bootstrap agent + public drive +
-      // /app/dev-drive endpoint that the e2e tests' `beforeEach` relies on.
-      // Without this, every test's `before()` hook times out fetching it.
-      .withEnvVariable('ATOMIC_INITIALIZE', 'true')
-      .withExposedPort(9883)
-      .withEntrypoint(['/atomic-server-bin'])
-      .asService()
-      .withHostname(ATOMIC_DOMAIN);
+
+    return (
+      dag
+        .container()
+        .from('alpine:latest')
+        .withFile('/atomic-server-bin', atomicServerBinary, {
+          permissions: 0o755,
+        })
+        .withEnvVariable('ATOMIC_DOMAIN', ATOMIC_DOMAIN)
+        // First-run flag — sets up the bootstrap agent + public drive +
+        // /app/dev-drive endpoint that the e2e tests' `beforeEach` relies on.
+        // Without this, every test's `before()` hook times out fetching it.
+        .withEnvVariable('ATOMIC_INITIALIZE', 'true')
+        .withExposedPort(9883)
+        .withEntrypoint(['/atomic-server-bin'])
+        .asService()
+        .withHostname(ATOMIC_DOMAIN)
+    );
   }
 
   @func()
@@ -1017,6 +1035,7 @@ export class AtomicServer {
 
     // Check the test exit code and fail if tests failed
     const exitCode = await e2eContainer.file('/test-exit-code').contents();
+
     if (exitCode.trim() !== '0') {
       throw new Error(
         `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n${deployUrl}\n\n===== TEST OUTPUT (tail) =====\n${testOutput.slice(-60000)}\n===== END TEST OUTPUT =====`,
@@ -1091,6 +1110,7 @@ export class AtomicServer {
 
     const builds = targets.map(target => {
       const container = this.rustBuild(true, target);
+
       return {
         target,
         binary: container.file('/atomic-server-binary'),
@@ -1125,6 +1145,7 @@ export class AtomicServer {
     };
 
     const platform = platformMap[target as keyof typeof platformMap];
+
     if (!platform) {
       throw new Error(`Unknown platform for target: ${target}`);
     }

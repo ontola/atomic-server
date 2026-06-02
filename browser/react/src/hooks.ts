@@ -615,17 +615,21 @@ export function useCanWrite(resource: Resource): boolean {
     () => !!agent?.subject && !!resource.new,
   );
 
-  useOnValueChange(() => {
-    if (agent?.subject === undefined) {
-      setCanWrite(false);
+  useOnValueChange(
+    () => {
+      if (agent?.subject === undefined) {
+        setCanWrite(false);
 
-      return;
-    }
+        return;
+      }
 
-    if (resource.new) {
-      setCanWrite(true);
-    }
-  }, [resource, agent?.subject]);
+      if (resource.new) {
+        setCanWrite(true);
+      }
+    },
+    [resource, agent?.subject],
+    true,
+  );
 
   // Re-check write permissions when the subject or agent changes.
   // Using resource.subject instead of the full proxy to avoid re-running

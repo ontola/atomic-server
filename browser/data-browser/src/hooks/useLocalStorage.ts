@@ -71,3 +71,20 @@ export function useLocalStorage<T>(
 
   return [storedValue, setValue];
 }
+
+/** Write a value to storage and notify all `useLocalStorage` subscribers for that key (same tab). */
+export function setLocalStorageValue<T>(
+  key: string,
+  value: T,
+  storage: Storage = window.localStorage,
+): void {
+  try {
+    for (const listener of listeners.get(key) || []) {
+      listener(value);
+    }
+
+    storage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(error);
+  }
+}

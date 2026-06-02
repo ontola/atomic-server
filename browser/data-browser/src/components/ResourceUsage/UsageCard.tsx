@@ -28,13 +28,14 @@ export function UsageCard({
       <Details
         noIndent
         disabled={collection.totalMembers === 0}
+        summaryClickable={false}
         title={
           <DetailsTitleRow>
             <span>{title}</span>
             {isOpen && collection.totalPages > 1 && (
               <PageButtons>
                 <IconButton
-                  title='Previous page'
+                  title="Previous page"
                   onClick={() => setPage(p => p - 1)}
                   disabled={page === 0}
                 >
@@ -42,7 +43,7 @@ export function UsageCard({
                 </IconButton>
                 <PageNumber>{page + 1}</PageNumber>
                 <IconButton
-                  title='Next page'
+                  title="Next page"
                   onClick={() => setPage(p => p + 1)}
                   disabled={page === collection.totalPages - 1}
                 >
@@ -55,7 +56,7 @@ export function UsageCard({
         initialState={initialOpenState}
         onStateToggle={setIsOpen}
       >
-        <Column gap='0.5rem'>
+        <Column gap="0.5rem">
           {members.length === 0 ? (
             <Empty>No resources</Empty>
           ) : (

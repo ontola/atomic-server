@@ -57,6 +57,8 @@ export const server = {
     pluginFile: 'https://atomicdata.dev/properties/pluginFile',
     pluginAgent: 'https://atomicdata.dev/properties/pluginAgent',
     pluginPermissions: 'https://atomicdata.dev/properties/pluginPermissions',
+    searchChunks: 'https://atomicdata.dev/properties/search/chunks',
+    llmTxt: 'https://atomicdata.dev/properties/llm-txt',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Drive']: [
@@ -67,6 +69,7 @@ export const server = {
       'https://atomicdata.dev/properties/write',
       'https://atomicdata.dev/ontology/server/property/default-ontology',
       'https://atomicdata.dev/properties/plugins',
+      'https://atomicdata.dev/properties/llm-txt',
     ],
     ['https://atomicdata.dev/classes/Endpoint']: [
       'https://atomicdata.dev/properties/description',
@@ -140,7 +143,8 @@ declare module '../index.js' {
         | 'https://atomicdata.dev/properties/subresources'
         | 'https://atomicdata.dev/properties/write'
         | typeof server.properties.defaultOntology
-        | typeof server.properties.plugins;
+        | typeof server.properties.plugins
+        | typeof server.properties.llmTxt;
     };
     [server.classes.endpoint]: {
       requires:
@@ -239,6 +243,8 @@ declare module '../index.js' {
     [server.properties.pluginFile]: string;
     [server.properties.pluginAgent]: string;
     [server.properties.pluginPermissions]: JSONValue;
+    [server.properties.searchChunks]: JSONValue;
+    [server.properties.llmTxt]: string;
   }
 
   interface PropSubjectToNameMapping {
@@ -278,5 +284,7 @@ declare module '../index.js' {
     [server.properties.pluginFile]: 'pluginFile';
     [server.properties.pluginAgent]: 'pluginAgent';
     [server.properties.pluginPermissions]: 'pluginPermissions';
+    [server.properties.searchChunks]: 'searchChunks';
+    [server.properties.llmTxt]: 'llmTxt';
   }
 }

@@ -1,0 +1,21 @@
+{
+  "extends": "../tsconfig.build.json",
+  "compilerOptions": {
+    "composite": true,
+    // We overwrite this so we don't have to use `.js` extensions in imports
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES6", "ES7", "ESNext", "DOM"],
+    "outDir": "./dist",
+    "strictNullChecks": true,
+    "paths": {
+      "@components/*": ["./src/components/*"],
+      "@views/*": ["./src/views/*"],
+      "@hooks/*": ["./src/hooks/*"],
+      "@helpers/*": ["./src/helpers/*"],
+      "@chunks/*": ["./src/chunks/*"],
+      "@repo-lib-defaults/*": ["../../lib/defaults/*"]
+    }
+  },
+  "include": ["./src"]
+}

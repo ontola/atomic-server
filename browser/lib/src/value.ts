@@ -6,6 +6,7 @@ export type JSONValue = JSONPrimitive | JSONObject | JSONArray | undefined;
 export type JSONObject = { [key: string]: JSONValue };
 export type JSONArray = Array<JSONValue>;
 
+/** Either a valid JSON-AD value or a raw Loro value (Uint8Array) */
 export type AtomicValue = JSONValue | Uint8Array;
 
 /**
@@ -96,8 +97,14 @@ export function valToResource(val: AtomicValue): string | Resource {
   throw new Error(`Not a resource: ${val}, is a ${typeof val}`);
 }
 
-export const isJSONObject = (value: JSONValue): value is JSONObject =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+export const isJSONObject = (value: AtomicValue): value is JSONObject =>
+  isJSONValue(value) &&
+  typeof value === 'object' &&
+  value !== null &&
+  !Array.isArray(value);
+
+export const isJSONValue = (value: AtomicValue): value is JSONValue =>
+  !(value instanceof Uint8Array);
 
 /** Converts a hex string to a Uint8Array */
 export function hexToBytes(hex: string): Uint8Array {

@@ -44,6 +44,9 @@ import { shortcuts } from './HotKeyWrapper';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { isRunningInTauri } from '../helpers/tauri';
 import { openSearchOverlay } from './OverlayContainer';
+import { useAIChanges } from './AIChangesContext';
+import { Row } from './Row';
+import toast from 'react-hot-toast';
 
 export type NavBarProps = {
   resource?: Resource;
@@ -191,8 +194,20 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
       : driveResource;
 
   const [parent] = useString(resource, core.properties.parent);
+  const { changes, revertResource } = useAIChanges();
   const { enableAI } = useAISettings();
   const { setIsOpen } = useAISidebar();
+  const hasAiChanges = changes.includes(resource.subject);
+
+  const handleAcceptChanges = async () => {
+    try {
+      await resource.save();
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to save changes');
+    }
+  };
+
   const { back, forward } = useBackForward();
   const [title] = useTitle(resource);
 
@@ -211,30 +226,30 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
   );
 
   return (
-    <NavBarWrapper aria-label='Breadcrumbs'>
+    <NavBarWrapper aria-label="Breadcrumbs">
       <IconButton
-        color='textLight'
-        type='button'
+        color="textLight"
+        type="button"
         onClick={() => setSideBarLocked(!sideBarLocked)}
         title={`Show / hide sidebar (${shortcuts.sidebarToggle})`}
-        data-test='sidebar-toggle'
+        data-test="sidebar-toggle"
       >
         <FaBars />
       </IconButton>
       {isInStandaloneMode && (
         <>
           <IconButton
-            color='textLight'
-            type='button'
-            title='Go back'
+            color="textLight"
+            type="button"
+            title="Go back"
             onClick={back}
           >
             <FaArrowLeft />
           </IconButton>
           <IconButton
-            color='textLight'
-            type='button'
-            title='Go forward'
+            color="textLight"
+            type="button"
+            title="Go forward"
             onClick={forward}
           >
             <FaArrowRight />
@@ -242,8 +257,8 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         </>
       )}
       <IconButton
-        color='textLight'
-        type='button'
+        color="textLight"
+        type="button"
         title={`Search (${shortcuts.search})`}
         onClick={() => openSearchOverlay()}
       >
@@ -254,10 +269,20 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
       <EditableBreadcrumb resource={resource} fallback={title} />
       <Spacer />
       <ButtonArea>
+        {hasAiChanges && (
+          <Row gap="0.5rem" center>
+            <SmallButton clean onClick={() => revertResource(resource.subject)}>
+              Revert
+            </SmallButton>
+            <SmallButton onClick={handleAcceptChanges}>
+              Accept Changes
+            </SmallButton>
+          </Row>
+        )}
         <ShareDialog
           subject={resource.subject}
           trigger={
-            <LabelButton as='button'>
+            <LabelButton as="button">
               <FaShare />
               <span>Share</span>
             </LabelButton>
@@ -467,9 +492,9 @@ function EditableBreadcrumb({
     return (
       <BreadCrumbInput
         ref={inputRef}
-        type='text'
+        type="text"
         value={text || ''}
-        placeholder='Untitled'
+        placeholder="Untitled"
         onChange={e => setText(e.target.value)}
         onBlur={() => setIsEditing(false)}
         onKeyDown={e => {
@@ -512,6 +537,12 @@ const Breadcrumb = styled.a`
   &:active {
     background: ${p => p.theme.colors.bg2};
   }
+`;
+
+const SmallButton = styled(Button)`
+  font-size: 0.7rem;
+  padding: 0.1rem 0.5rem;
+  height: 1.5rem;
 `;
 
 export default NavBar;

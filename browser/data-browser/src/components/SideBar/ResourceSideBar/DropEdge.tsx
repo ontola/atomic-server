@@ -88,7 +88,7 @@ const DropEdgeElement = styled.div<{ visible: boolean; active: boolean }>`
   height: 12px;
   margin-top: -6px;
   z-index: 3;
-  width: calc(var(${SIDEBAR_WIDTH_PROP}) - 2rem);
+  width: calc(${SIDEBAR_WIDTH_PROP.var()} - 2rem);
 
   &::before {
     content: '';

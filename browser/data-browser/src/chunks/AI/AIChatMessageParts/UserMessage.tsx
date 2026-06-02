@@ -10,13 +10,15 @@ interface UserMessageProps {
 }
 
 export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
-  const context = message.metadata?.context;
+  const context = message.metadata?.userContext;
+  const visibleContext = context?.filter(item => item.type !== 'skill');
 
   return (
     <UserMessageWrapper>
-      {context && (
-        <ContextItemRow wrapItems center gap='1ch'>
-          {context.map(item => (
+      <SenderName>You</SenderName>
+      {visibleContext && visibleContext.length > 0 && (
+        <ContextItemRow wrapItems center gap="1ch">
+          {visibleContext.map(item => (
             <MessageContextItem key={item.id} contextItem={item} />
           ))}
         </ContextItemRow>
@@ -52,5 +54,13 @@ const UserMessageWrapper = styled(MessageWrapper)`
   padding: ${p => p.theme.size()};
   background-color: ${p => p.theme.colors.bg};
   align-self: flex-end;
-  box-shadow: ${p => p.theme.boxShadow};
+  border: solid 1px ${p => p.theme.colors.bg2};
+`;
+
+const SenderName = styled.span`
+  font-weight: bold;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+  display: block;
 `;

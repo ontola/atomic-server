@@ -87,7 +87,7 @@ function LastCommit({ resource }: CellProps): JSX.Element {
 
   return (
     <LinkWrapper>
-      <CommitDetail commitSubject={commit} />
+      <CommitDetail short commitSubject={commit} />
     </LinkWrapper>
   );
 }

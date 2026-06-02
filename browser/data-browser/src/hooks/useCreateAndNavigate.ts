@@ -17,6 +17,8 @@ export type CreateAndNavigate = (
     subject?: string;
     /** If true, skip navigation after resource creation */
     skipNavigation?: boolean;
+    /** If true, skip notifying the store after resource creation */
+    skipNotify?: boolean;
   },
 ) => Promise<Resource>;
 

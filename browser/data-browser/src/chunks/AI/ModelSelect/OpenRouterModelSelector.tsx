@@ -26,7 +26,7 @@ export const OpenRouterModelSelector: React.FC<
   OpenRouterModelSelectorProps
 > = ({ onSelect, defaultModel, enforceToolSupport = false }) => {
   const { models } = useOpenRouterModels();
-  const { isProviderEnabled } = useAISettings();
+  const { isProviderAvailable } = useAISettings();
   const [selectedId, setSelectedId] = useState<string>(defaultModel);
   const selectedModel = models.find(m => m.id === selectedId);
 
@@ -43,9 +43,11 @@ export const OpenRouterModelSelector: React.FC<
     value: model.id,
   }));
 
-  if (!isProviderEnabled(AIProvider.OpenRouter)) {
+  if (!isProviderAvailable(AIProvider.OpenRouter)) {
     return (
-      <ModelInfoLayout.Empty>OpenRouter is not enabled</ModelInfoLayout.Empty>
+      <ModelInfoLayout.Empty>
+        Add an OpenRouter API key in settings
+      </ModelInfoLayout.Empty>
     );
   }
 

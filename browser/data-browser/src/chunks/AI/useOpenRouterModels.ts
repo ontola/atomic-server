@@ -16,6 +16,7 @@ export type OpenRouterAIModel = {
     web_search: number;
   };
   supported_parameters: string[];
+  context_length: number;
 };
 
 let modelDataCache: OpenRouterAIModel[] | undefined = undefined;
@@ -45,6 +46,16 @@ export function useOpenRouterModels() {
     return foundModel.architecture.input_modalities.includes('image');
   };
 
+  const getORModelContextLength = (modelId: string): number | undefined => {
+    const foundModel = models.find(m => m.id === modelId);
+
+    if (!foundModel) {
+      return undefined;
+    }
+
+    return foundModel.context_length;
+  };
+
   const getOutputModalities = (modelId: string): Modalities[] => {
     const foundModel = models.find(m => m.id === modelId);
 
@@ -72,6 +83,7 @@ export function useOpenRouterModels() {
     models,
     checkORModelSupport,
     checkORModelSupportsImageInput,
+    getORModelContextLength,
     getOutputModalities,
   };
 }

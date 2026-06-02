@@ -1,14 +1,26 @@
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { Components } from 'react-markdown';
 import { styled } from 'styled-components';
 import remarkGFM from 'remark-gfm';
-import { Button } from '../Button';
-import { truncateMarkdown } from '../../helpers/markdown';
+import remarkBreaks from 'remark-breaks';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
+import { Button } from '@components/Button';
+import { truncateMarkdown } from '@helpers/markdown';
 import { FC, useState } from 'react';
-import { AtomicLink } from '../AtomicLink';
+import { AtomicLink, AtomicLinkProps } from '@components/AtomicLink';
+import { remarkMention, Mention } from './markdown/MarkdownMention';
+import { addFieldsIf, addIf } from '@helpers/addIf';
+import { diffComponents, remarkDiff } from './markdown/MarkdownDiff';
 
 type Props = {
   text: string;
   renderGFM?: boolean;
+  /**
+   * Treat single newlines inside paragraphs as hard breaks (like GitHub).
+   * Use for diff output so line breaks match the source.
+   */
+  preserveLineBreaks?: boolean;
   /**
    * If this is set, and the markdown is more characters than this number, the
    * text will be truncated and a button will be shown
@@ -21,10 +33,20 @@ type Props = {
 
 const disableElementsInLink = ['a'];
 
+const ExternalLinkComponent = ({
+  children: linkChildren,
+  ...props
+}: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+  return (
+    <AtomicLink {...(props as AtomicLinkProps)}>{linkChildren}</AtomicLink>
+  );
+};
+
 /** Renders a markdown value */
 const Markdown: FC<Props> = ({
   text,
   renderGFM = true,
+  preserveLineBreaks = false,
   maxLength = 5000,
   className,
   nestedInLink = false,
@@ -39,16 +61,24 @@ const Markdown: FC<Props> = ({
   return (
     <MarkdownWrapper className={className}>
       <ReactMarkdown
-        remarkPlugins={renderGFM ? [remarkGFM] : []}
+        remarkPlugins={[
+          ...addIf(renderGFM, remarkGFM),
+          ...addIf(preserveLineBreaks, remarkBreaks),
+          remarkMath,
+          remarkMention,
+          remarkDiff,
+        ]}
+        rehypePlugins={[rehypeKatex]}
         disallowedElements={nestedInLink ? disableElementsInLink : undefined}
         components={
-          markExternalLinks
-            ? {
-                a: ({ node: _node, children, ...props }) => {
-                  return <AtomicLink {...props}>{children}</AtomicLink>;
-                },
-              }
-            : {}
+          {
+            mention: Mention,
+            ...addFieldsIf(markExternalLinks, {
+              a: ExternalLinkComponent,
+            }),
+            ...diffComponents,
+            // ReactMarkdowns typing only allows existing html elements but our plugin creates a new type. It works fine, the types are just too strict.
+          } as unknown as Components
         }
       >
         {collapsed ? truncateMarkdown(text, maxLength) : text}
@@ -71,6 +101,11 @@ const MarkdownWrapper = styled.div`
 
   * {
     white-space: unset;
+  }
+
+  ins,
+  del {
+    white-space: pre-wrap;
   }
 
   p,
@@ -135,6 +170,12 @@ const MarkdownWrapper = styled.div`
 
   a {
     word-break: break-word;
+  }
+
+  ins,
+  del {
+    /* Ensure they don't break lines unless the text does */
+    display: inline;
   }
 `;
 

@@ -57,12 +57,16 @@ function setDragStyling(id: string, enable: boolean) {
   }
 }
 
+export type ResizeEdge = 'left' | 'right';
+
 export type UseResizableProps<E extends HTMLElement> = {
   initialSize: number;
   onResize?: (size: number) => void;
   minSize?: number;
   maxSize?: number;
   targetRef: React.RefObject<E | null>;
+  /** Which edge of the target element width is measured from. Default `left`. */
+  edge?: ResizeEdge;
 };
 
 export function useResizable<E extends HTMLElement>({
@@ -71,6 +75,7 @@ export function useResizable<E extends HTMLElement>({
   minSize = 0,
   maxSize = Infinity,
   targetRef,
+  edge = 'left',
 }: UseResizableProps<E>): UseResizeResult {
   const dragAreaRef = useRef<HTMLDivElement>(null);
 
@@ -85,9 +90,19 @@ export function useResizable<E extends HTMLElement>({
     onResizeRef.current = onResize;
   }, [onResize]);
 
+  const edgeRef = useRef(edge);
+  useEffect(() => {
+    edgeRef.current = edge;
+  }, [edge]);
+
   const mouseMove = useRef((e: MouseEvent) => {
     const targetRect = targetRef.current?.getBoundingClientRect();
-    const relativePosition = e.clientX - (targetRect?.x ?? 0);
+    if (!targetRect) return;
+
+    const relativePosition =
+      edgeRef.current === 'right'
+        ? targetRect.right - e.clientX
+        : e.clientX - targetRect.x;
     const newSize = Math.min(maxSize, Math.max(minSize, relativePosition));
 
     requestAnimationFrame(() => {

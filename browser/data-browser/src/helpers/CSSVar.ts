@@ -5,6 +5,26 @@ const randomId = () => Math.random().toString(36).substring(2, 15);
 /**
  * Creates an object that can be used to define and reference a css variable.
  * Using css vars like this makes it easier to track their usage and manage css.
+ *
+ * Usage:
+ * ```tsx
+ * const LargeContainerWidth = new CSSVar('large-container-width');
+ * const StyledDiv = styled.div`
+ *   ${LargeContainerWidth.define('900px')};
+ * `;
+ *
+ * const SomeChildDiv = styled.div`
+ *   width: ${LargeContainerWidth.var()};
+ * `;
+ * ```
+ *
+ * or
+ * ```tsx
+ * const LargeContainerWidth = new CSSVar('large-container-width');
+ * const StyledDiv = styled.div`
+ *   ${LargeContainerWidth.define(p => p.theme.containerWidthWide)};
+ * `;
+ * ```
  */
 export class CSSVar {
   /**

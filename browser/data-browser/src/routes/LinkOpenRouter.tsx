@@ -1,5 +1,5 @@
 import { createRoute } from '@tanstack/react-router';
-import { pathNames, paths } from './paths';
+import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
 import { useEffect, useEffectEvent, useState } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -33,8 +33,9 @@ function LinkOpenRouterPage() {
     setOpenRouterApiKey(key);
     sessionStorage.removeItem('atomic.ai.openrouter-code-verifier');
     sessionStorage.removeItem('atomic.ai.openrouter-code-challenge');
+    sessionStorage.setItem('atomic.ai.openSetup', 'true');
 
-    navigate({ to: paths.appSettings });
+    navigate({ to: pathNames.app });
   });
 
   const codeVerifier = sessionStorage.getItem(

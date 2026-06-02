@@ -1,25 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Column, Row } from '@components/Row';
-import toast from 'react-hot-toast';
 import { useAtomicMCPTools } from './useAtomicTools';
+import { skillTools, getSkillsSystemPromptPart } from './skills/skill';
 import { AIChatMessage } from './AIChatMessage';
 import { type FileUIPart } from 'ai';
 import { useTools } from './useTools';
-import { styled } from 'styled-components';
+import { styled, keyframes } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
-import {
-  IconButton,
-  IconButtonVariant,
-} from '@components/IconButton/IconButton';
-import {
-  FaXmark,
-  FaPaperclip,
-  FaFile,
-  FaCheck,
-  FaGlobe,
-} from 'react-icons/fa6';
+import { IconButton } from '@components/IconButton/IconButton';
+import { FaXmark, FaPaperclip, FaFile } from 'react-icons/fa6';
 import { ChatMessagesContainer } from './ChatMessagesContainer';
-import { useStore } from '@tomic/react';
+import { useStore, type Resource } from '@tomic/react';
 import { AIProvider } from '@components/AI/aiContstants';
 import {
   AIAgent,
@@ -27,21 +18,33 @@ import {
   type AIMCPResourceMessageContext,
   type AIMessageContext,
   type AIModelIdentifier,
+  type AISkillMessageContext,
   type AtomicUIMessage,
 } from './types';
-import { AgentConfig, useAIAgentConfig } from './AgentConfig';
-import { Button } from '@components/Button';
+import { useAIAgentConfig } from './AgentConfig';
+import { AISettingsDialog } from './AISettingsDialog';
 import { MessageContextItem } from './MessageContextItem';
 import { useProcessMessages } from './useProcessMessages';
-import { NoKeyOverlay } from './NoKeyOverlay';
+import { AISetupPanel } from './AISetupPanel';
 import { useOpenRouterModels } from './useOpenRouterModels';
+import {
+  getAutoCompactTokenThreshold,
+  useModelContextLength,
+} from './useModelContextLength';
 import type { MentionItem } from '@chunks/RTE/AIChatInput/types';
 import { useChat } from '@ai-sdk/react';
 import { useClientOnlyTransport } from './ClientOnlyTransport';
 import { useGenerativeData } from './useGenerativeData';
+import { useConversationSummary } from './useConversationSummary';
 import { FollowUpPrompt } from './FollowUpPrompt';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import UsesMCPServers from '@components/AI/MCP/UsesMCPServers';
+import { useRAG } from './useRAG';
+import { useOnValueChange } from '@helpers/useOnValueChange';
+import { transition } from '@helpers/transition';
+import { useAIChanges } from '@components/AIChangesContext';
+import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
+import { Spinner } from '@components/Spinner';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
@@ -51,7 +54,19 @@ interface RealAIChatProps {
   fullView?: boolean;
   readonly?: boolean;
   initialMessages?: AtomicUIMessage[];
+  /** Messages that predate the latest compaction — shown in UI but not sent to the LLM. */
+  historicalMessages?: AtomicUIMessage[];
   onNewMessage: (message: AtomicUIMessage) => void;
+  /**
+   * Called after compaction. All prior messages move to historical UI state;
+   * only the summary is kept for LLM context.
+   */
+  onCompacted?: (
+    priorMessages: AtomicUIMessage[],
+    summaryMessage: AtomicUIMessage,
+  ) => void;
+  /** Called when a summary message is deleted and prior messages are restored. */
+  onSummaryDeleted?: (restoredMessages: AtomicUIMessage[]) => void;
   externalContextItems: AIMessageContext[];
   chatSubject?: string;
   setExternalContextItems: React.Dispatch<
@@ -76,10 +91,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   fullView = false,
   readonly = false,
   initialMessages,
+  historicalMessages,
   externalContextItems,
   chatSubject,
   setExternalContextItems,
   onNewMessage,
+  onCompacted,
+  onSummaryDeleted,
   onDeleteMessage,
   onRegenerateMessage,
   children,
@@ -90,20 +108,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     showTokenUsage,
     showFollowUpPrompts,
     ollamaUrl,
-    isProviderEnabled,
+    isProviderAvailable,
   } = useAISettings();
 
   // useChat does not update it's options so we need to use a ref to make it use the latest value.
   const showFollowUpPromptsRef = useRef(showFollowUpPrompts);
-  showFollowUpPromptsRef.current = showFollowUpPrompts;
+  const autoCompactTokenThresholdRef = useRef<number | null>(null);
+  // Use a ref for the guard so the stale onFinish closure sees the current value.
+  const isCompactingRef = useRef(false);
 
-  const {
-    autoAgentSelectEnabled,
-    getInitialAgent,
-    setLastUsedAgentForChat,
-    setLastUsedSidebarAgent,
-  } = useAIAgentConfig();
-  const addContextToMessages = useProcessMessages();
+  const { getInitialAgent, setLastUsedAgentForChat, setLastUsedSidebarAgent } =
+    useAIAgentConfig();
   const getToolsForAgent = useTools();
   const {
     checkORModelSupportsImageInput,
@@ -111,38 +126,44 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     getOutputModalities,
   } = useOpenRouterModels();
 
+  const getRAGData = useRAG();
+  const [isRagging, setIsRagging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [userInput, setUserInput] = useState('');
-  const [editedResources, setEditedResources] = useState<string[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
   );
+  const modelContextLength = useModelContextLength(selectedAgent.model);
+  const addContextToMessages = useProcessMessages({
+    includeDriveInstructions: selectedAgent.canReadAtomicData,
+  });
 
-  const canSubmit =
-    autoAgentSelectEnabled || isProviderEnabled(selectedAgent.model.provider);
+  const vectorIndexing = useVectorIndexStatus();
+
+  // The user should be blocked from posting if the indexes are updating while using an agent that is dependent on those indexes.
+  const disableSubmit =
+    vectorIndexing &&
+    (selectedAgent.canReadAtomicData || selectedAgent.ragEnabled);
+
+  const { reportAIEdit } = useAIChanges();
+  const canUseInput = isProviderAvailable(selectedAgent.model.provider);
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
   >([]);
   const { generateFollowUpQuestions } = useGenerativeData();
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const { generateConversationSummary } = useConversationSummary(
+    selectedAgent.model,
+  );
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
 
-  const webSearchSupported =
-    selectedAgent.model.provider === AIProvider.OpenRouter;
-
   const { tools: atomicTools } = useAtomicMCPTools({
-    onResourceEdited: (subject: string) => {
-      setEditedResources(prev => {
-        if (!prev.includes(subject)) {
-          return [...prev, subject];
-        }
-
-        return prev;
-      });
+    editModel: selectedAgent.model,
+    onResourceEdited: (originalResource: Resource) => {
+      reportAIEdit(originalResource);
     },
   });
 
@@ -150,13 +171,15 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     openRouterAPIKey: openRouterApiKey,
     ollamaURL: ollamaUrl,
     selectedAgent,
+    additionalSystemPrompt: selectedAgent.skillsEnabled
+      ? getSkillsSystemPromptPart()
+      : undefined,
     tools: {
       ...(selectedAgent.canReadAtomicData ? atomicTools.read : {}),
       ...(selectedAgent.canWriteAtomicData ? atomicTools.write : {}),
+      ...(selectedAgent.skillsEnabled ? skillTools : {}),
       ...getToolsForAgent(selectedAgent),
     },
-    autoSelectAgent: autoAgentSelectEnabled,
-    webSearchEnabled,
     resolveOutputModalities: getOutputModalities,
     resolveParameterSupport: checkORModelSupport,
     addContextToMessages,
@@ -180,8 +203,65 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         if (showFollowUpPromptsRef.current && message.role === 'assistant') {
           generateFollowUpQuestions(_messages).then(setFollowUpQuestions);
         }
+
+        const inputTokens = message.metadata?.inputTokensUsed ?? 0;
+        const threshold = autoCompactTokenThresholdRef.current;
+
+        if (threshold !== null && inputTokens > threshold) {
+          compact(_messages);
+        }
       },
     });
+
+  const [isCompacting, setIsCompacting] = useState(false);
+  const [scrollToCompactTrigger, setScrollToCompactTrigger] = useState(0);
+
+  const compact = async (messagesOverride?: AtomicUIMessage[]) => {
+    const messagesToCompact = messagesOverride ?? messages;
+
+    if (isCompactingRef.current || messagesToCompact.length < 2) return;
+
+    isCompactingRef.current = true;
+    setIsCompacting(true);
+
+    let summaryText: string | undefined;
+
+    try {
+      summaryText = await generateConversationSummary(messagesToCompact);
+    } catch (e) {
+      console.error(e);
+      isCompactingRef.current = false;
+      setIsCompacting(false);
+
+      return;
+    }
+
+    if (!summaryText) {
+      isCompactingRef.current = false;
+      setIsCompacting(false);
+
+      return;
+    }
+
+    const summaryMessage: AtomicUIMessage = {
+      id: store.createSubject(),
+      role: 'user',
+      parts: [
+        {
+          type: 'text',
+          text: `<conversation-summary>\n${summaryText}\n</conversation-summary>`,
+        },
+      ],
+      metadata: { isSummary: true },
+    };
+
+    setMessages([summaryMessage]);
+    onCompacted?.(messagesToCompact, summaryMessage);
+    setScrollToCompactTrigger(t => t + 1);
+
+    isCompactingRef.current = false;
+    setIsCompacting(false);
+  };
 
   const usage = messages.reduce(
     (acc, message) => ({
@@ -220,29 +300,18 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
           name: mention.label,
           serverId: mention.serverId,
         } as AIMCPResourceMessageContext;
+      } else if (mention.type === 'skill') {
+        return {
+          type: 'skill',
+          id: crypto.randomUUID(),
+          name: mention.label,
+        } as AISkillMessageContext;
       }
 
       throw new Error('Invalid mention type');
     });
 
     setUserSelectedContextItems(newContextItems);
-  };
-
-  const handleAcceptChanges = async () => {
-    try {
-      // Save all edited resources
-      await Promise.all(
-        editedResources.map(subject =>
-          store.getResource(subject).then(resource => resource.save()),
-        ),
-      );
-      // Clear the edited resources list after saving
-      setEditedResources([]);
-      toast.success('Changes Saved!');
-    } catch (error) {
-      console.error('Error saving changes:', error);
-      toast.error('Failed to save changes');
-    }
   };
 
   const checkModelSupportsImageInput = (model: AIModelIdentifier) => {
@@ -259,8 +328,20 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     ...externalContextItems,
     ...userSelectedContextItems,
   ];
+  const visibleContextItems = allContextItems.filter(
+    item => item.type !== 'skill',
+  );
 
   const handleSubmit = async (inputOverride?: string) => {
+    const text = inputOverride || userInput;
+
+    if (text.trim() === '/compact') {
+      setUserInput('');
+      await compact();
+
+      return;
+    }
+
     const context = [...externalContextItems, ...userSelectedContextItems];
     const message: AtomicUIMessage = {
       id: store.createSubject(),
@@ -268,10 +349,22 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       parts: [
         {
           type: 'text',
-          text: inputOverride || userInput,
+          text: text,
         },
       ],
     };
+
+    if (selectedAgent.ragEnabled && messages.length === 0) {
+      setIsRagging(true);
+      const ragData = await getRAGData(text);
+
+      message.metadata = {
+        ...(message.metadata ?? {}),
+        serverContext: ragData,
+      };
+
+      setIsRagging(false);
+    }
 
     if (attachedFiles) {
       const fileParts = await filesToFileParts(attachedFiles);
@@ -280,7 +373,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
     if (context.length > 0) {
       message.metadata = {
-        context,
+        ...(message.metadata ?? {}),
+        userContext: context,
       };
 
       setUserSelectedContextItems([]);
@@ -302,17 +396,40 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const regenerateMessage = async (message: AtomicUIMessage) => {
     await onRegenerateMessage(message);
 
+    // If the message is historical (before the summary), it isn't in useChat's
+    // internal messages. Restore those messages so regenerate() can find the ID.
+    if (historicalMessageIds.has(message.id)) {
+      const historicalList = historicalMessages ?? [];
+      const targetIndex = historicalList.findIndex(m => m.id === message.id);
+
+      if (targetIndex !== -1) {
+        setMessages(historicalList.slice(0, targetIndex + 1));
+      }
+    }
+
     regenerate({
       messageId: message.id,
     });
   };
 
   const deleteMessage = (message: AtomicUIMessage) => {
+    if (message.metadata?.isSummary) {
+      const restored = [
+        ...(historicalMessages ?? []),
+        ...messages.filter(m => m.id !== message.id),
+      ];
+      setMessages(restored);
+      onSummaryDeleted?.(restored);
+      onDeleteMessage(message);
+
+      return;
+    }
+
     onDeleteMessage(message);
     setMessages(prev => prev.filter(m => m !== message));
   };
 
-  useEffect(() => {
+  useOnValueChange(() => {
     if (!chatSubject) return;
 
     const initialAgent = getInitialAgent(false, chatSubject);
@@ -320,14 +437,51 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     setSelectedAgent(initialAgent);
   }, [chatSubject]);
 
+  const isEmptyChat = messages.length === 0;
+  const totalTokensUsed = usage.input + usage.output;
+
+  // Historical messages are shown in the UI but excluded from the active message list.
+  const historicalMessageIds = new Set(
+    (historicalMessages ?? []).map(m => m.id),
+  );
+  const visibleMessages = messages.filter(
+    m => m.metadata?.isSummary || !historicalMessageIds.has(m.id),
+  );
+
+  useEffect(() => {
+    showFollowUpPromptsRef.current = showFollowUpPrompts;
+  }, [showFollowUpPrompts]);
+
+  useEffect(() => {
+    const percent = selectedAgent.autoCompactThresholdPercent ?? 80;
+    autoCompactTokenThresholdRef.current = getAutoCompactTokenThreshold(
+      modelContextLength,
+      percent,
+    );
+  }, [selectedAgent.autoCompactThresholdPercent, modelContextLength]);
+
   return (
-    <ChatWindow fullView={fullView}>
+    <ChatWindow fullView={fullView} empty={messages.length === 0}>
       {children}
       <ChatMessagesContainer
         enableAutoScroll={status === 'streaming'}
+        scrollToCompactTrigger={scrollToCompactTrigger}
         fullView={fullView}
       >
-        {messages.map(message => (
+        {historicalMessages && historicalMessages.length > 0 && (
+          <>
+            {historicalMessages.map(message => (
+              <HistoricalMessageWrapper key={message.id}>
+                <AIChatMessage
+                  message={message}
+                  onDeleteMessage={deleteMessage}
+                  onRegenerateMessage={regenerateMessage}
+                />
+              </HistoricalMessageWrapper>
+            ))}
+          </>
+        )}
+        {visibleMessages.map(message => (
           <AIChatMessage
             key={message.id}
             message={message}
@@ -345,103 +499,107 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
             </IconButton>
           </Row>
         )}
+        {status !== 'streaming' && isRagging && (
+          <Row center gap='0.2ch'>
+            <GeneratingIndicator text='Gathering context' />
+          </Row>
+        )}
+        {isCompacting && (
+          <Row center gap='0.2ch'>
+            <GeneratingIndicator text='Compacting context' />
+          </Row>
+        )}
         {!readonly && (
           <>
-            <Column gap='0px'>
-              {followUpQuestions.map(question => (
-                <FollowUpPrompt
-                  key={question}
-                  text={question}
-                  onClick={() => handleSubmit(question)}
-                />
-              ))}
-            </Column>
+            {followUpQuestions.length > 0 && (
+              <Column gap='0px'>
+                {followUpQuestions.map(question => (
+                  <FollowUpPrompt
+                    key={question}
+                    text={question}
+                    onClick={() => handleSubmit(question)}
+                  />
+                ))}
+              </Column>
+            )}
             <ChatInputWrapper>
               <Column fullWidth gap='none' style={{ position: 'relative' }}>
                 <FloatingChatWidgetsContainer>
-                  {editedResources.length > 0 && (
-                    <UnsavedChangesIndicator>
-                      <Row center gap='1ch' justify='flex-end'>
-                        <span>Unsaved changes</span>
-                        <AcceptButton onClick={handleAcceptChanges}>
-                          <FaCheck />
-                          <span>Accept</span>
-                        </AcceptButton>
-                      </Row>
-                    </UnsavedChangesIndicator>
+                  {attachedFiles.length > 0 && (
+                    <Row gap='1ch' wrapItems>
+                      {attachedFiles.map(file => (
+                        <AttachmentPreview key={file.name}>
+                          <Row gap='1ch' center>
+                            <FaFile />
+                            <span>{file.name}</span>
+                          </Row>
+                          <IconButton
+                            title='Remove file'
+                            onClick={() => removeAttachedFile(file)}
+                            size='small'
+                          >
+                            <FaXmark />
+                          </IconButton>
+                        </AttachmentPreview>
+                      ))}
+                    </Row>
                   )}
-                  {attachedFiles.map(file => (
-                    <AttachmentPreview key={file.name}>
-                      <Row gap='1ch' center>
-                        <FaFile />
-                        <span>{file.name}</span>
-                      </Row>
-                      <IconButton
-                        title='Remove file'
-                        onClick={() => removeAttachedFile(file)}
-                        size='small'
-                      >
-                        <FaXmark />
-                      </IconButton>
-                    </AttachmentPreview>
-                  ))}
                 </FloatingChatWidgetsContainer>
-                <ContextItemRow wrapItems center gap='1ch'>
-                  {allContextItems.map(item => (
-                    <MessageContextItem
-                      key={item.id}
-                      contextItem={item}
-                      onRemove={
-                        // Only allow removing external context items, normal items are removed via the input.
-                        externalContextItems.some(x => x.id === item.id)
-                          ? () => {
-                              setExternalContextItems(prev => {
-                                const newList = prev.filter(
-                                  i => i.id !== item.id,
-                                );
+                {visibleContextItems.length > 0 && (
+                  <ContextItemRow wrapItems center gap='1ch'>
+                    {visibleContextItems.map(item => (
+                      <MessageContextItem
+                        key={item.id}
+                        contextItem={item}
+                        onRemove={
+                          // Only allow removing external context items, normal items are removed via the input.
+                          externalContextItems.some(x => x.id === item.id)
+                            ? () => {
+                                setExternalContextItems(prev => {
+                                  const newList = prev.filter(
+                                    i => i.id !== item.id,
+                                  );
 
-                                if (newList.length === prev.length) {
-                                  return prev;
-                                }
+                                  if (newList.length === prev.length) {
+                                    return prev;
+                                  }
 
-                                return newList;
-                              });
-                            }
-                          : undefined
-                      }
-                    />
-                  ))}
-                </ContextItemRow>
+                                  return newList;
+                                });
+                              }
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </ContextItemRow>
+                )}
                 <AIChatInput
-                  disabled={!canSubmit}
+                  large={isEmptyChat && fullView}
+                  disabled={!canUseInput}
+                  disableSubmit={disableSubmit}
                   hasFiles={!!attachedFiles}
                   onMentionUpdate={handleMentionUpdate}
                   onChange={setUserInput}
                   onSubmit={handleSubmit}
+                  onCompact={compact}
                   onFileAdded={
                     checkModelSupportsImageInput(selectedAgent.model)
                       ? handleFileUpload
                       : undefined
                   }
+                  rightAlignedChildren={
+                    vectorIndexing && (
+                      <IndexingIndicator center gap='0.5rem'>
+                        <Spinner size='1.1rem' inheritColor />
+                        <span>Indexing</span>
+                      </IndexingIndicator>
+                    )
+                  }
                 >
                   <Row gap='0.5rem'>
                     <SubtleButton onClick={() => setAgentConfigOpen(true)}>
-                      {autoAgentSelectEnabled
-                        ? 'Automatic'
-                        : selectedAgent.name}
+                      {selectedAgent.name}
                     </SubtleButton>
-                    {webSearchSupported && (
-                      <IconButton
-                        title='Toggle web search'
-                        onClick={() => setWebSearchEnabled(v => !v)}
-                        color={webSearchEnabled ? 'main' : 'textLight'}
-                        variant={
-                          webSearchEnabled ? IconButtonVariant.Fill : undefined
-                        }
-                      >
-                        <FaGlobe />
-                      </IconButton>
-                    )}
                     {checkModelSupportsImageInput(selectedAgent.model) && (
                       <>
                         <input
@@ -467,25 +625,29 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   </Row>
                 </AIChatInput>
               </Column>
-              <NoKeyOverlay />
+              {messages.length === 0 && <div></div>}
             </ChatInputWrapper>
-            {showTokenUsage && (
+            {showTokenUsage && totalTokensUsed > 0 && (
               <TokensUsed>
-                Tokens used: {usage.input} input, {usage.output} output
+                Tokens used: {nummberFormatter.format(usage.input)} input,{' '}
+                {nummberFormatter.format(usage.output)} output
               </TokensUsed>
             )}
           </>
         )}
       </Column>
-      <AgentConfig
+      <AISettingsDialog
         open={agentConfigOpen}
         onOpenChange={setAgentConfigOpen}
         selectedAgent={selectedAgent}
         onSelectAgent={setSelectedAgent}
       />
+      {!readonly && <AISetupPanel />}
     </ChatWindow>
   );
 };
+
+const nummberFormatter = new Intl.NumberFormat(undefined, {});
 
 const filesToFileParts = (files: File[]): Promise<FileUIPart[]> =>
   Promise.all(
@@ -523,6 +685,7 @@ const ChatInputWrapper = styled.div`
   gap: ${p => p.theme.size()};
   position: relative;
 
+  ${transition('border-color')}
   &:focus-within {
     border-color: ${p => p.theme.colors.main};
   }
@@ -536,21 +699,22 @@ const AttachmentPreview = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: ${p => p.theme.colors.bg1};
+  background-color: ${p => p.theme.colors.bg};
   padding: ${p => p.theme.size(1)};
   border-radius: ${p => p.theme.radius};
   font-size: 0.8rem;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 `;
 
-const ChatWindow = styled.div<{ fullView?: boolean }>`
+const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
   padding: ${p => (p.fullView ? p.theme.size() : 0)};
   padding-top: ${p => (p.fullView ? p.theme.size(2) : 0)};
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: ${p =>
+    p.empty && p.fullView ? 'auto 1fr auto 1fr' : 'auto 1fr auto'};
   height: ${p => (p.fullView ? '90vh' : '100%')};
-  width: min(100%, 40rem);
+  width: min(100%, 70rem);
   margin-inline: auto;
   gap: 1rem;
 
@@ -574,7 +738,6 @@ const SubtleButton = styled.button`
   cursor: pointer;
   background: none;
   border: none;
-  color: ${p => p.theme.colors.textLight};
   border-radius: ${p => p.theme.radius};
   padding: ${p => p.theme.size(1)};
   padding-inline: ${p => p.theme.size(2)};
@@ -585,19 +748,6 @@ const SubtleButton = styled.button`
   }
 `;
 
-// New styled components for the Unsaved Changes indicator
-const UnsavedChangesIndicator = styled.div`
-  color: ${p => p.theme.colors.text};
-  padding: ${p => p.theme.size(1)} ${p => p.theme.size(2)};
-  border-radius: ${p => p.theme.radius};
-  font-size: 0.85rem;
-`;
-
-const AcceptButton = styled(Button)`
-  padding: ${p => p.theme.size(1)} ${p => p.theme.size(2)};
-  font-size: 0.75rem;
-`;
-
 const FloatingChatWidgetsContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -605,7 +755,7 @@ const FloatingChatWidgetsContainer = styled.div`
   gap: ${p => p.theme.size(2)};
   position: absolute;
   width: 100%;
-  bottom: calc(100% + ${p => p.theme.size(2)});
+  bottom: calc(100% + ${p => p.theme.size(3)});
   left: 0;
   right: 0;
   z-index: 10;
@@ -613,4 +763,25 @@ const FloatingChatWidgetsContainer = styled.div`
 
 const ContextItemRow = styled(Row)`
   padding-inline: ${p => p.theme.size(2)};
+`;
+
+const IndexingIndicator = styled(Row)`
+  color: ${p => p.theme.colors.textLight};
+`;
+
+/**
+ * Animates from full opacity (in-viewport) to dim (above viewport) as the message
+ * exits by scrolling upward. The exit range covers exactly the height of the element
+ * crossing the viewport's top edge, so the fade-out is proportional to scroll distance.
+ * animation-fill-mode: both keeps it dim when above the viewport and bright when in view.
+ */
+const historicalExitFade = keyframes`
+  from { opacity: 1; }
+  to { opacity: 0.2; }
+`;
+
+const HistoricalMessageWrapper = styled.div`
+  animation: ${historicalExitFade} linear both;
+  animation-timeline: view();
+  animation-range: exit 0% exit 80%;
 `;

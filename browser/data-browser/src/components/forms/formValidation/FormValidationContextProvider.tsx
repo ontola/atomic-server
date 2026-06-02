@@ -34,7 +34,7 @@ export function FormValidationContextProvider({
     (update: (newValidations: Validations) => Validations) => {
       _setValidations(prev => update(prev));
     },
-    [onValidationChange],
+    [],
   );
 
   const context = useMemo(

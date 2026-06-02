@@ -1042,7 +1042,8 @@
       "https://atomicdata.dev/properties/description",
       "https://atomicdata.dev/properties/subresources",
       "https://atomicdata.dev/properties/write",
-      "https://atomicdata.dev/properties/name"
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/llm-txt"
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
     "https://atomicdata.dev/properties/shortname": "drive"
@@ -1493,5 +1494,40 @@
       "https://atomicdata.dev/classes/Property"
     ],
     "https://atomicdata.dev/properties/shortname": "sort-order"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/llm-txt",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/markdown",
+    "https://atomicdata.dev/properties/description": "Information for an AI agent about a drive. This could include things like common patterns or where to find important resources.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "llm-txt"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/PlainText",
+    "https://atomicdata.dev/properties/description": "A simple class with a name and a description used to store plain text as resource.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/description"
+    ],
+    "https://atomicdata.dev/properties/shortname": "plain-text"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/search/chunks",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "A JSON Array of text-chunks returned from a (vector)search endpoint",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/isLocked": true,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "search-chunks"
   }
 ]

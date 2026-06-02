@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useMemo } from 'react';
 import type { HistoryViewProps } from './HistoryViewProps';
 import { styled } from 'styled-components';
 import { Button } from '../../components/Button';
@@ -6,7 +6,6 @@ import { Card } from '../../components/Card';
 import { Column } from '../../components/Row';
 import { VersionTitle } from './VersionTitle';
 import { VersionScroller } from './VersionScroller';
-import { VersionContent } from './VersionContent';
 import {
   Dialog,
   DialogActions,
@@ -15,20 +14,64 @@ import {
   useDialog,
 } from '../../components/Dialog';
 import type { Version } from '@tomic/react';
+import { useStore, Resource, type AtomicValue } from '@tomic/react';
+import {
+  ResourceDiff,
+  useResourceDiff,
+} from '@components/ResourceDiff/ResourceDiff';
+import { plural } from '@helpers/plural';
+import { Tabs } from '@components/Tabs';
+import { ResourceCardDefault } from '@views/Card/ResourceCard';
 
 export function HistoryMobileView({
   resource,
   groupedVersions,
   selectedVersion,
+  olderVersion,
+  isCurrentVersion,
   onSelectVersion,
   onVersionAccept,
 }: HistoryViewProps) {
   const [dialogProps, showDialog, closeDialog] = useDialog();
+  const store = useStore();
 
-  const handleVersionSelect = useCallback((version: Version) => {
+  const selectedVersionResource = useMemo(() => {
+    const res = new Resource(resource.subject);
+    res.setStore(store);
+    res.applyHydratedValues(
+      selectedVersion.propvals.entries() as Iterable<[string, AtomicValue]>,
+    );
+
+    return res;
+  }, [store, resource.subject, selectedVersion]);
+
+  const olderVersionResource = useMemo(() => {
+    if (!olderVersion) return undefined;
+    const res = new Resource(resource.subject);
+    res.setStore(store);
+    res.applyHydratedValues(
+      olderVersion.propvals.entries() as Iterable<[string, AtomicValue]>,
+    );
+
+    return res;
+  }, [store, resource.subject, olderVersion]);
+
+  const diff = useResourceDiff(olderVersionResource, selectedVersionResource);
+
+  const changesCountText = plural(diff.changedProps.length, [
+    '1 Change',
+    '# Changes',
+  ]);
+
+  const tabs = [
+    { label: changesCountText, value: 'changes' },
+    { label: 'Resource', value: 'resource' },
+  ];
+
+  const handleVersionSelect = (version: Version) => {
     onSelectVersion(version);
     showDialog();
-  }, []);
+  };
 
   return (
     <>
@@ -49,19 +92,18 @@ export function HistoryMobileView({
               <>
                 <VersionTitle version={selectedVersion} />
                 <StyledCard>
-                  <PropertiesList>
-                    {[...selectedVersion.propvals.entries()]
-                      .filter(([key]) => !key.includes('loroUpdate'))
-                      .map(([key, value]) => (
-                        <div key={key}>
-                          <strong>{key.split('/').pop()}: </strong>
-                          {typeof value === 'string'
-                            ? value
-                            : JSON.stringify(value)}
-                        </div>
-                      ))}
-                  </PropertiesList>
-                  <VersionContent containers={selectedVersion.containers} />
+                  <Tabs tabs={tabs} label="History">
+                    <Card.Content>
+                      <Tabs.Panel value="changes">
+                        <ResourceDiff diff={diff} />
+                      </Tabs.Panel>
+                      <Tabs.Panel value="resource">
+                        <ResourceCardDefault
+                          resource={selectedVersionResource}
+                        />
+                      </Tabs.Panel>
+                    </Card.Content>
+                  </Tabs>
                 </StyledCard>
               </>
             )}
@@ -71,7 +113,9 @@ export function HistoryMobileView({
           <Button onClick={() => closeDialog(false)} subtle>
             Cancel
           </Button>
-          <Button onClick={onVersionAccept}>Restore this version</Button>
+          <Button onClick={onVersionAccept} disabled={isCurrentVersion}>
+            Restore this version
+          </Button>
         </DialogActions>
       </Dialog>
     </>
@@ -80,13 +124,6 @@ export function HistoryMobileView({
 
 const StyledCard = styled(Card)`
   overflow: auto;
-`;
-
-const PropertiesList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 1rem;
 `;
 
 const CenteredScroller = styled(VersionScroller)`

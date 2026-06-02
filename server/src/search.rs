@@ -154,12 +154,10 @@ impl SearchState {
         };
 
         // If the resource has Loro document content, extract the text for search indexing.
-        if let Ok(atomic_lib::Value::LoroDoc(snapshot)) =
-            resource.get(atomic_lib::urls::DOCUMENT_CONTENT)
-        {
-            if let Ok(loro_doc) = atomic_lib::loro::AtomicLoroDoc::from_snapshot(snapshot) {
-                if let Some(text) = loro_doc.get_string_property(atomic_lib::urls::DOCUMENT_CONTENT)
-                {
+        if let Some(snapshot) = resource.materialized_state() {
+            if let Ok(loro_doc) = atomic_lib::loro::AtomicLoroDoc::from_snapshot(&snapshot) {
+                let text = loro_doc.extract_document_plain_text();
+                if !text.is_empty() {
                     doc.add_text(fields.description, text);
                 }
             }
@@ -229,14 +227,10 @@ pub fn build_schema() -> AtomicServerResult<tantivy::schema::Schema> {
 pub fn get_index(config: &Config) -> AtomicServerResult<(IndexWriter, tantivy::Index)> {
     let schema = build_schema()?;
     std::fs::create_dir_all(&config.search_index_path)?;
-    if config.opts.rebuild_indexes {
-        std::fs::remove_dir_all(&config.search_index_path)?;
-        std::fs::create_dir_all(&config.search_index_path)?;
-    }
     let mmap_directory = tantivy::directory::MmapDirectory::open(&config.search_index_path)?;
     let index = Index::open_or_create(mmap_directory, schema).map_err(|e| {
         format!(
-            "Failed to create or open search index. Try starting again with --rebuild-indexes. Error: {}",
+            "Failed to create or open search index. Try starting again with --rebuild-indexes search. Error: {}",
             e
         )
     })?;
@@ -294,7 +288,7 @@ pub async fn resource_to_facet(resource: &Resource, store: &Db) -> AtomicServerR
     Ok(result)
 }
 
-fn get_resource_title(resource: &Resource) -> String {
+pub fn get_resource_title(resource: &Resource) -> String {
     let title = if let Ok(name) = resource.get(atomic_lib::urls::NAME) {
         name.clone()
     } else if let Ok(shortname) = resource.get(atomic_lib::urls::SHORTNAME) {

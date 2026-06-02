@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AIAgent } from './types';
 import { jsonSchema, tool, type Tool, type ToolSet } from 'ai';
-import { useMcpServers } from '@components/AI/MCP/useMcpServers';
+import { useMcpServers } from '@components/AI/MCP/McpServersContext';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 
 export type MCPToolCallResult = {
@@ -39,6 +39,7 @@ const convertTool = (t: MCPTool, client: Client): Tool => {
 
       return result.content;
     },
+    strict: false,
   });
 };
 

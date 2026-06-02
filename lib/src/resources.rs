@@ -200,6 +200,7 @@ impl Resource {
     }
 
     /// Gets the children of this resource.
+    #[tracing::instrument(skip(store))]
     pub async fn get_children(&self, store: &impl Storelike) -> AtomicResult<Vec<Resource>> {
         let result = store
             .query(&Query::new_prop_val(

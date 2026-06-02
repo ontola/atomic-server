@@ -1,14 +1,15 @@
 {
-  "extends": "../tsconfig.build.json",
+  "extends": "./tsconfig.build.json",
   "compilerOptions": {
-    "composite": true,
-    // We overwrite this so we don't have to use `.js` extensions in imports
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES6", "ES7", "ESNext", "DOM"],
-    "outDir": "./dist",
-    "strictNullChecks": true,
+    "typeRoots": ["../node_modules/@types"],
+    "types": ["node"],
+    "composite": false,
+    // Resolve workspace packages from source so the IDE does not depend on
+    // dist/*.d.ts while tsup watch rebuilds @tomic/lib and @tomic/react.
+    "rootDir": "..",
     "paths": {
+      "@tomic/react": ["../react/src/index.ts"],
+      "@tomic/lib": ["../lib/src/index.ts"],
       "@components/*": ["./src/components/*"],
       "@views/*": ["./src/views/*"],
       "@hooks/*": ["./src/hooks/*"],
@@ -16,6 +17,5 @@
       "@chunks/*": ["./src/chunks/*"],
       "@repo-lib-defaults/*": ["../../lib/defaults/*"]
     }
-  },
-  "include": ["./src"]
+  }
 }

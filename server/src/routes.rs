@@ -3,9 +3,9 @@
 
 use crate::{content_types, handlers};
 use actix_web::{
-    HttpRequest, HttpResponse, guard,
-    http::{Method, header},
-    web,
+    guard,
+    http::{header, Method},
+    web, HttpRequest, HttpResponse,
 };
 use actix_web_static_files::ResourceFiles;
 use std::collections::HashMap;
@@ -255,6 +255,11 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
         web::resource("/search")
             .guard(guard::Method(Method::GET))
             .to(handlers::search::search_query),
+    )
+    .service(
+        web::resource("/vector_search")
+            .guard(guard::Method(Method::GET))
+            .to(handlers::vector_search::vector_search_query),
     )
     .service(
         web::resource(ANY)

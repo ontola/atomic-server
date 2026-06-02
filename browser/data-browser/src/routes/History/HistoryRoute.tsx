@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type JSX } from 'react';
+import { useMemo, useState, type JSX } from 'react';
 import { useResource, type Version } from '@tomic/react';
 
 import { ContainerNarrow } from '../../components/Containers';
@@ -34,6 +34,16 @@ function History(): JSX.Element {
   const { versions, loading, error } = useVersions(resource);
   const [selectedVersion, setSelectedVersion] = useState<Version | undefined>();
 
+  const resolvedVersion =
+    versions.length > 0
+      ? (selectedVersion ?? versions[versions.length - 1])
+      : undefined;
+
+  const findCurrentIndex = () =>
+    resolvedVersion === undefined
+      ? -1
+      : versions.findIndex(v => v === resolvedVersion);
+
   const groupedVersions: {
     [key: string]: Version[];
   } = useMemo(() => groupVersionsByMonth(versions), [versions]);
@@ -58,29 +68,32 @@ function History(): JSX.Element {
     }
   };
 
-  const nextVersion = useCallback(() => {
-    const currentIndex = versions.findIndex(v => v === selectedVersion);
+  const nextVersion = () => {
+    const currentIndex = findCurrentIndex();
 
     if (currentIndex === -1 || currentIndex === versions.length - 1) {
       return;
     }
 
     setSelectedVersion(versions[currentIndex + 1]);
-  }, [versions, selectedVersion]);
+  };
 
-  const previousVersion = useCallback(() => {
-    const currentIndex = versions.findIndex(v => v === selectedVersion);
+  const previousVersion = () => {
+    const currentIndex = findCurrentIndex();
 
     if (currentIndex === -1 || currentIndex === 0) {
       return;
     }
 
     setSelectedVersion(versions[currentIndex - 1]);
-  }, [versions, selectedVersion]);
+  };
 
   const ViewComp = isSmallScreen ? HistoryMobileView : HistoryDesktopView;
 
-  const isCurrentVersion = selectedVersion === versions[versions.length - 1];
+  const isCurrentVersion = resolvedVersion === versions[versions.length - 1];
+  const currentIndex = findCurrentIndex();
+  const olderVersion =
+    currentIndex > 0 ? versions[currentIndex - 1] : undefined;
 
   if (loading || resource.loading) {
     return (
@@ -110,13 +123,16 @@ function History(): JSX.Element {
     );
   }
 
+  const selectedForView = resolvedVersion!;
+
   return (
     <Main subject={subject}>
       <SplitView about={subject}>
         <ViewComp
           resource={resource}
           groupedVersions={groupedVersions}
-          selectedVersion={selectedVersion}
+          selectedVersion={selectedForView}
+          olderVersion={olderVersion}
           isCurrentVersion={isCurrentVersion}
           onNextVersion={nextVersion}
           onPreviousVersion={previousVersion}
@@ -133,8 +149,8 @@ const SplitView = styled.main`
   width: 100%;
   height: 100%;
   height: calc(100vh - 6rem);
-  padding: ${p => p.theme.margin}rem;
-  gap: ${p => p.theme.margin}rem;
+  padding: ${p => p.theme.size()};
+  gap: ${p => p.theme.size()};
 
   & code {
     word-break: break-word;

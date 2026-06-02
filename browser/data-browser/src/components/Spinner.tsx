@@ -1,7 +1,12 @@
 import { styled } from 'styled-components';
 
-export const Spinner = () => (
-  <StyledSpinner viewBox='0 0 50 50'>
+interface SpinnerProps {
+  size?: string;
+  inheritColor?: boolean;
+}
+
+export const Spinner = ({ size, inheritColor = false }: SpinnerProps) => (
+  <StyledSpinner size={size} inheritColor={inheritColor} viewBox='0 0 50 50'>
     <circle
       className='path'
       cx='25'
@@ -13,15 +18,17 @@ export const Spinner = () => (
   </StyledSpinner>
 );
 
-const StyledSpinner = styled.svg`
+const StyledSpinner = styled.svg<{ size?: string; inheritColor?: boolean }>`
+  --spinner-size: ${props => props.size || '50px'};
   animation: rotate 2s linear infinite;
-  width: 50px;
-  height: 50px;
+  width: var(--spinner-size);
+  height: var(--spinner-size);
   max-width: 100%;
   max-height: 100%;
 
   & .path {
-    stroke: ${props => props.theme.colors.main};
+    stroke: ${props =>
+      props.inheritColor ? 'currentColor' : props.theme.colors.main};
     stroke-linecap: round;
     animation: dash 1.5s ease-in-out infinite;
   }

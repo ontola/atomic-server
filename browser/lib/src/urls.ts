@@ -178,7 +178,6 @@ export const datatypes = {
 
 export const instances = {
   publicAgent: 'https://atomicdata.dev/agents/publicAgent',
-  displayStyleGrid: 'https://atomicdata.dev/agents/publicAgent',
   numberFormats: {
     number: 'https://atomicdata.dev/classes/NumberFormat/number',
     percentage: 'https://atomicdata.dev/classes/NumberFormat/Percentage',

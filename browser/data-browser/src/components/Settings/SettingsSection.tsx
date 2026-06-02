@@ -1,5 +1,5 @@
 import { styled } from 'styled-components';
-import { Details, type DetailsProps } from '../Details';
+import { Details, type DetailsPropsBase } from '../Details';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { useSettingsSearch, SettingsSearchProvider } from './SettingsSearch';
 import { useMemo } from 'react';
@@ -40,7 +40,7 @@ export const SettingsContent = styled.div`
   padding-block: 0.5rem 1rem;
 `;
 
-interface SettingsSectionProps extends Omit<DetailsProps, 'title' | 'open'> {
+interface SettingsSectionProps extends DetailsPropsBase {
   /** Label shown as the collapsible title */
   label: string;
   /** Keywords from child sections (matching these shows this section, but children still filter themselves) */

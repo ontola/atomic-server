@@ -1,0 +1,347 @@
+import Markdown from '@components/datatypes/Markdown';
+import { createMarkdownDiff } from '@components/datatypes/markdown/MarkdownDiff';
+import { JsonDiff } from '@components/datatypes/json/JsonDiff';
+import { Column, Row } from '@components/Row';
+import {
+  dataBrowser,
+  Datatype,
+  isJSONObject,
+  useProperty,
+  type AtomicValue,
+  type Property,
+  type Resource,
+} from '@tomic/react';
+import { ResourceInline } from '@views/ResourceInline';
+import { FaArrowRight } from 'react-icons/fa6';
+import styled from 'styled-components';
+import ValueComp from '@components/ValueComp';
+import type { AtomicDiff } from '@components/ResourceDiff/resourceDiffUtils';
+import { LoroDocMarkdownDiff } from './LoroDocMarkdownDiff';
+
+export interface ResourceDiffProps {
+  diff: AtomicDiff;
+  className?: string;
+}
+
+export const ResourceDiff: React.FC<ResourceDiffProps> = ({
+  diff,
+  className,
+}) => {
+  const { oldResource, newResource, changedProps } = diff;
+
+  return (
+    <Column className={className}>
+      {changedProps.map(prop => (
+        <PropertyLine
+          key={prop}
+          prop={prop}
+          oldResource={oldResource}
+          newResource={newResource}
+        />
+      ))}
+    </Column>
+  );
+};
+
+const basicTypes = [
+  Datatype.STRING,
+  Datatype.SLUG,
+  Datatype.INTEGER,
+  Datatype.FLOAT,
+  Datatype.BOOLEAN,
+  Datatype.URI,
+  Datatype.DATE,
+];
+
+interface PropertyLineProps {
+  prop: string;
+  oldResource?: Resource;
+  newResource: Resource;
+}
+
+const PropertyLine = ({
+  prop,
+  oldResource,
+  newResource,
+}: PropertyLineProps) => {
+  const property = useProperty(prop);
+
+  const hasOld = oldResource?.get(prop) !== undefined;
+  const hasNew = newResource.get(prop) !== undefined;
+
+  let type: 'added' | 'removed' | 'changed' = 'changed';
+
+  if (!hasOld) {
+    type = 'added';
+  } else if (!hasNew) {
+    type = 'removed';
+  }
+
+  return (
+    <PropLineWrapper>
+      <Row center gap="1ch">
+        <DiffTag type={type}>{type}</DiffTag>
+        <Title>
+          <ResourceInline subject={prop} />
+        </Title>
+      </Row>
+      <ChangeSwitcher
+        property={property}
+        oldResource={oldResource}
+        newResource={newResource}
+      />
+    </PropLineWrapper>
+  );
+};
+
+export interface ChangeSwitcherProps {
+  property: Property;
+  oldResource?: Resource;
+  newResource: Resource;
+  showFullValue?: boolean;
+}
+
+export const ChangeSwitcher: React.FC<ChangeSwitcherProps> = ({
+  property,
+  oldResource,
+  newResource,
+  showFullValue = false,
+}) => {
+  if (!oldResource) {
+    return (
+      <div>
+        <ValueComp
+          datatype={property.datatype}
+          value={newResource.get(property.subject)}
+        />
+      </div>
+    );
+  }
+
+  if (basicTypes.includes(property.datatype)) {
+    return (
+      <BasicChange
+        oldValue={oldResource.get(property.subject)}
+        newValue={newResource.get(property.subject)}
+      />
+    );
+  }
+
+  if (
+    property.datatype === Datatype.DATE ||
+    property.datatype === Datatype.TIMESTAMP
+  ) {
+    return (
+      <DateTimeChange
+        oldValue={oldResource.get(property.subject)}
+        newValue={newResource.get(property.subject)}
+      />
+    );
+  }
+
+  if (property.datatype === Datatype.MARKDOWN) {
+    return (
+      <MarkdownChange
+        oldValue={oldResource.get(property.subject)}
+        newValue={newResource.get(property.subject)}
+        showFullValue={showFullValue}
+      />
+    );
+  }
+
+  if (property.datatype === Datatype.ATOMIC_URL) {
+    return (
+      <AtomicUrlChange
+        oldValue={oldResource.get(property.subject)}
+        newValue={newResource.get(property.subject)}
+      />
+    );
+  }
+
+  const valOld = oldResource.get(property.subject);
+  const valNew = newResource.get(property.subject);
+
+  // TODO: Document content is not stored on this property anymore, we should update this code.
+  if (property.subject === dataBrowser.properties.documentContent) {
+    return (
+      <LoroDocMarkdownDiff
+        oldResource={oldResource}
+        newResource={newResource}
+        propertySubject={property.subject}
+        showFullValue={showFullValue}
+      />
+    );
+  }
+
+  if (
+    property.datatype === Datatype.JSON ||
+    isJSONObject(valOld) ||
+    isJSONObject(valNew) ||
+    Array.isArray(valOld) ||
+    Array.isArray(valNew)
+  ) {
+    return <JsonChange oldValue={valOld} newValue={valNew} />;
+  }
+
+  return null;
+};
+
+const JsonChange = ({
+  oldValue = {},
+  newValue = {},
+}: {
+  oldValue?: AtomicValue;
+  newValue?: AtomicValue;
+}) => {
+  return <JsonDiff oldValue={oldValue} newValue={newValue} />;
+};
+
+const BasicChange = ({
+  oldValue,
+  newValue,
+}: {
+  oldValue?: string | number | boolean;
+  newValue?: string | number | boolean;
+}) => {
+  if (oldValue === undefined) {
+    return <span>{newValue?.toString() ?? <Empty>unset</Empty>}</span>;
+  }
+
+  return (
+    <DiffRow center wrapItems>
+      <OldDiffValue>
+        {oldValue?.toString() ?? <Empty>unset</Empty>}
+      </OldDiffValue>
+      <DiffArrow />
+      <span>{newValue?.toString() ?? <Empty>unset</Empty>}</span>
+    </DiffRow>
+  );
+};
+
+const MarkdownChange = ({
+  oldValue = '',
+  newValue = '',
+  showFullValue = false,
+}: {
+  oldValue?: string;
+  newValue?: string;
+  showFullValue?: boolean;
+}) => {
+  const diff = createMarkdownDiff(oldValue, newValue, showFullValue);
+
+  return <Markdown preserveLineBreaks text={diff} />;
+};
+
+const DateTimeChange = ({
+  oldValue,
+  newValue,
+}: {
+  oldValue?: number;
+  newValue?: number;
+}) => {
+  const formatter = new Intl.DateTimeFormat('default', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+
+  const format = (val?: number) => {
+    if (val === undefined || val === null) {
+      return <Empty>unset</Empty>;
+    }
+
+    const date = new Date(val as string | number);
+
+    if (isNaN(date.getTime())) {
+      return val.toString();
+    }
+
+    return formatter.format(date);
+  };
+
+  if (oldValue === undefined) {
+    return <span>{format(newValue)}</span>;
+  }
+
+  return (
+    <Row center>
+      <OldDiffValue>{format(oldValue)}</OldDiffValue>
+      <DiffArrow />
+      <span>{format(newValue)}</span>
+    </Row>
+  );
+};
+
+const AtomicUrlChange = ({
+  oldValue,
+  newValue,
+}: {
+  oldValue?: string;
+  newValue?: string;
+}) => {
+  if (oldValue === undefined && newValue !== undefined) {
+    return <ResourceInline subject={newValue} />;
+  }
+
+  return (
+    <DiffRow center wrapItems>
+      {oldValue ? <ResourceInline subject={oldValue} /> : <Empty>unset</Empty>}
+      <DiffArrow />
+      {newValue ? <ResourceInline subject={newValue} /> : <Empty>unset</Empty>}
+    </DiffRow>
+  );
+};
+
+const Title = styled.h3`
+  margin: 0;
+`;
+
+const DiffTag = styled.span<{ type: 'added' | 'removed' | 'changed' }>`
+  --tag-color: ${p => {
+    switch (p.type) {
+      case 'added':
+        return '#3cad3c';
+      case 'removed':
+        return p.theme.colors.alert;
+      case 'changed':
+        return p.theme.colors.main;
+    }
+  }};
+  padding: 0 5px;
+  border-radius: ${p => p.theme.radius};
+  font-size: 0.55rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: var(--tag-color);
+  border: 1px solid var(--tag-color);
+  display: inline-flex;
+  align-items: center;
+  height: fit-content;
+  align-self: center;
+`;
+
+const PropLineWrapper = styled(Column)`
+  &:not(:last-child) {
+    border-bottom: 1px solid ${p => p.theme.colors.bg2};
+    padding-bottom: ${p => p.theme.size()};
+  }
+`;
+
+const Empty = styled.span`
+  color: ${p => p.theme.colors.textLight};
+  font-style: italic;
+`;
+
+const OldDiffValue = styled.span`
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const DiffArrow = styled(FaArrowRight)`
+  color: ${p => p.theme.colors.main};
+`;
+
+const DiffRow = styled(Row)`
+  & svg {
+    min-width: 1rem;
+    flex-basis: content;
+  }
+`;
