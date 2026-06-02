@@ -107,7 +107,11 @@ export function ResourceContextMenu({
   const [showFreezeDialog, setShowFreezeDialog] = useState(false);
   const handleAddClick = useNewRoute(subject);
   const [currentSubject] = useCurrentSubject();
-  const canWrite = useCanWrite(resource);
+  const writeRight = useCanWrite(resource);
+  // Frozen resources are content-addressed and immutable — never editable,
+  // regardless of rights. Hide all write actions and show a frozen badge.
+  const isFrozen = subject.startsWith('did:ad:frozen:');
+  const canWrite = writeRight && !isFrozen;
   const { enableScope } = useQueryScopeHandler(subject);
   const { setContextItems, isOpen, setIsOpen } = useAISidebar();
   const { items: customItems } = useCustomContextItemsContext();
