@@ -859,8 +859,13 @@ Rules:
       - reuse one imported Property in another Class
       - table-created schema exports and re-imports
       - required/datatype validation still works
-- [ ] Add Rust-side import/export structs after the TypeScript API shape is
-      stable.
+- [x] Port the content-addressing core to Rust for cross-language **authoring**:
+      `lib/src/frozen.rs#freeze_resources` (Tarjan SCC + color refinement +
+      one-unit-per-cycle), byte-for-byte identical to TS, pinned by
+      `test-vectors/freeze-resources.json`. A Rust `freeze_schema` DSL (the
+      JSON-Schema-subset → frozen bodies layer) on top is the remaining piece.
+- [ ] Add optional JSON Schema validation in the browser SDK and Rust/server
+      (richer keywords beyond the Atomic subset).
 - [ ] Add optional JSON Schema validation in the browser SDK.
 - [ ] Add optional JSON Schema validation in Rust/server.
 
