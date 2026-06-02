@@ -5,6 +5,7 @@ import { JSCryptoProvider } from './CryptoProvider.js';
 import { Datatype } from './datatypes.js';
 import { frozenIdFor } from './freeze.js';
 import { core } from './ontologies/core.js';
+import { JSONADParser } from './parse.js';
 import { buildSchemaLock } from './schema-lock.js';
 import { Store } from './store.js';
 
@@ -220,5 +221,78 @@ describe('Store.createSchemaPointer', () => {
         frozen.properties['todo.done'],
       ]),
     );
+  });
+});
+
+describe('Store.freezeStructure', () => {
+  const P = 'https://atomicdata.dev/properties/';
+  const propSubject = 'https://my.drive/p/title';
+  const classSubject = 'https://my.drive/c/todo';
+  const ontSubject = 'https://my.drive/o/todoapp';
+
+  const seeded = (): Store => {
+    const store = new Store({ serverUrl: 'https://my.drive' });
+
+    const add = (obj: Record<string, unknown>) => {
+      const [res] = new JSONADParser().parse(obj, obj['@id'] as string);
+      res.loading = false;
+      store.addResource(res, { skipCommitCompare: true });
+    };
+
+    add({
+      '@id': propSubject,
+      [`${P}isA`]: ['https://atomicdata.dev/classes/Property'],
+      [`${P}shortname`]: 'title',
+      [`${P}datatype`]: Datatype.STRING,
+    });
+    add({
+      '@id': classSubject,
+      [`${P}isA`]: ['https://atomicdata.dev/classes/Class'],
+      [`${P}shortname`]: 'todo',
+      [`${P}requires`]: [propSubject],
+    });
+    add({
+      '@id': ontSubject,
+      [`${P}isA`]: ['https://atomicdata.dev/class/ontology'],
+      [`${P}shortname`]: 'todoapp',
+      [`${P}classes`]: [classSubject],
+      [`${P}properties`]: [propSubject],
+      [`${P}parent`]: 'https://my.drive',
+    });
+
+    return store;
+  };
+
+  it('freezes a resource and the structure it references', async ({
+    expect,
+  }) => {
+    const frozen = await seeded().freezeStructure(ontSubject);
+
+    expect(Object.keys(frozen.frozen)).toHaveLength(3);
+    expect(frozen.root).toBe(frozen.bySubject[ontSubject]);
+    expect(frozen.root).toMatch(/^did:ad:frozen:[0-9a-f]{64}$/);
+
+    // Cross-references rewritten to frozen ids; hierarchy stripped.
+    const ontBody = frozen.frozen[frozen.root] as Record<string, unknown>;
+    expect(ontBody[`${P}classes`]).toEqual([frozen.bySubject[classSubject]]);
+    expect(ontBody[`${P}properties`]).toEqual([frozen.bySubject[propSubject]]);
+    expect(ontBody[`${P}parent`]).toBeUndefined();
+
+    const classBody = frozen.frozen[frozen.bySubject[classSubject]] as Record<
+      string,
+      unknown
+    >;
+    expect(classBody[`${P}requires`]).toEqual([frozen.bySubject[propSubject]]);
+  });
+
+  it('freezes only the root with { closure: false }', async ({ expect }) => {
+    const frozen = await seeded().freezeStructure(ontSubject, {
+      closure: false,
+    });
+
+    expect(Object.keys(frozen.frozen)).toHaveLength(1);
+    // The reference stays as the original subject, not rewritten.
+    const ontBody = frozen.frozen[frozen.root] as Record<string, unknown>;
+    expect(ontBody[`${P}classes`]).toEqual([classSubject]);
   });
 });

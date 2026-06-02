@@ -31,7 +31,14 @@ import {
   type DefinedSchema,
   type FrozenSchema,
 } from './schema.js';
-import { frozenIdFor, UNIT_MEMBERS_KEY, type FrozenId } from './freeze.js';
+import {
+  freezeResources,
+  frozenIdFor,
+  UNIT_MEMBERS_KEY,
+  type FrozenId,
+  type FreezableResource,
+  type JsonValue as FrozenJsonValue,
+} from './freeze.js';
 import { jcsCanonicalize } from './jcs.js';
 import { verifySchemaLock, type SchemaLock } from './schema-lock.js';
 import { stringToSlug } from './stringToSlug.js';
@@ -100,6 +107,27 @@ export interface RegisteredSchema {
 export interface RegisterSchemaOptions {
   /** Save generated resources through the normal Commit/outbox path. */
   save?: boolean;
+}
+
+export interface FreezeStructureOptions {
+  /**
+   * Follow value references to other already-loaded resources, freezing the
+   * whole structure (e.g. an Ontology + its Classes + Properties). Defaults to
+   * true; set false to freeze only the root resource.
+   */
+  closure?: boolean;
+  /** Also publish each frozen body to `/frozen` on the server. Defaults to false. */
+  save?: boolean;
+}
+
+/** The result of freezing a resource (and the structure it references). */
+export interface FrozenStructure {
+  /** The root resource's frozen id. */
+  root: FrozenId;
+  /** Original subject -> frozen id, for every resource included. */
+  bySubject: Record<string, FrozenId>;
+  /** Frozen id -> identity JSON-AD body (what a consumer re-hashes and materializes). */
+  frozen: Record<string, FrozenJsonValue>;
 }
 
 export interface StoreOpts {
@@ -1872,6 +1900,145 @@ export class Store {
     }
 
     return ontology;
+  }
+
+  /**
+   * Freezes a resource — and, by default, the structure it references — into
+   * immutable, content-addressed `did:ad:frozen` JSON-AD. Generic: works on any
+   * resource (Ontology, Document, Folder, …), not just schemas. References
+   * between included resources are rewritten to frozen ids; references outside
+   * the structure (core schema, drives, agents) stay as their normal subjects.
+   * Hierarchy/server metadata (`parent`, `lastCommit`, `localId`) is stripped.
+   * With `{ save: true }` each frozen body is published to `/frozen`.
+   */
+  public async freezeStructure(
+    subject: string,
+    opts: FreezeStructureOptions = {},
+  ): Promise<FrozenStructure> {
+    const { closure = true, save = false } = opts;
+    const root = await this.getResource(subject);
+
+    if (root.error) {
+      throw new Error(`Cannot freeze ${subject}: ${root.error}`);
+    }
+
+    const bodies = new Map<string, FrozenJsonValue>();
+    const queue: string[] = [subject];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+
+      if (bodies.has(current)) {
+        continue;
+      }
+
+      const resource =
+        current === subject ? root : this.resources.get(current);
+
+      if (!resource || !resource.isReady()) {
+        continue;
+      }
+
+      const body = this.frozenBodyOf(resource);
+      bodies.set(current, body);
+
+      if (closure) {
+        for (const ref of this.structureReferences(body)) {
+          if (!bodies.has(ref) && this.isFreezableResource(ref)) {
+            queue.push(ref);
+          }
+        }
+      }
+    }
+
+    const freezable: FreezableResource[] = [...bodies].map(
+      ([localId, content]) => ({ localId, content }),
+    );
+    const { resources, byLocalId } = freezeResources(freezable);
+
+    const rootId = byLocalId.get(subject);
+
+    if (!rootId) {
+      throw new Error(`Freezing produced no id for ${subject}`);
+    }
+
+    if (save) {
+      await Promise.all(
+        resources.map(resource =>
+          this.publishFrozenResource(resource.frozenId, resource.content),
+        ),
+      );
+    }
+
+    return {
+      root: rootId,
+      bySubject: Object.fromEntries(byLocalId),
+      frozen: Object.fromEntries(
+        resources.map(resource => [resource.frozenId, resource.content]),
+      ),
+    };
+  }
+
+  /** A resource's propvals as a frozen body — strips subject and mutable metadata. */
+  private frozenBodyOf(resource: Resource): FrozenJsonValue {
+    const strip = new Set<string>([
+      core.properties.parent,
+      'https://atomicdata.dev/properties/lastCommit',
+      core.properties.localId,
+    ]);
+    const body: Record<string, FrozenJsonValue> = {};
+
+    for (const [key, value] of resource.getEntries()) {
+      if (strip.has(key) || value instanceof Uint8Array) {
+        continue;
+      }
+
+      body[key] = value as FrozenJsonValue;
+    }
+
+    return body;
+  }
+
+  /** Subjects referenced by `body` that are already loaded resources. */
+  private structureReferences(body: FrozenJsonValue): string[] {
+    const out: string[] = [];
+
+    const walk = (value: FrozenJsonValue): void => {
+      if (typeof value === 'string') {
+        if (this.resources.has(value)) {
+          out.push(value);
+        }
+      } else if (Array.isArray(value)) {
+        value.forEach(walk);
+      } else if (value !== null && typeof value === 'object') {
+        Object.values(value).forEach(walk);
+      }
+    };
+
+    walk(body);
+
+    return out;
+  }
+
+  /** Whether a referenced subject should be pulled into a frozen structure. */
+  private isFreezableResource(subject: string): boolean {
+    if (
+      subject.startsWith('https://atomicdata.dev/') ||
+      subject.startsWith('did:ad:agent:') ||
+      subject.startsWith('did:ad:commit:') ||
+      subject.startsWith('did:ad:frozen:') ||
+      subject.startsWith('did:ad:blob:')
+    ) {
+      return false;
+    }
+
+    const resource = this.resources.get(subject);
+
+    return (
+      !!resource &&
+      resource.isReady() &&
+      !resource.hasClasses(server.classes.drive)
+    );
   }
 
   /**
