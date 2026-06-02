@@ -1,7 +1,7 @@
 import { store } from './store.js';
 import { camelCaseify, getExtension } from './utils.js';
 import { atomicConfig } from './config.js';
-import type { Core } from '@tomic/lib';
+import type { Core, Store } from '@tomic/lib';
 
 enum Inserts {
   MODULE_ALIAS = '{{1}}',
@@ -30,9 +30,10 @@ export function initOntologies(): void {
 export const generateIndex = (
   ontologies: string[],
   inludeExternals: boolean,
+  activeStore: Store = store,
 ) => {
   const names = ontologies.map(x => {
-    const res = store.getResourceLoading<Core.Ontology>(x);
+    const res = activeStore.getResourceLoading<Core.Ontology>(x);
 
     return camelCaseify(res.props.shortname);
   });

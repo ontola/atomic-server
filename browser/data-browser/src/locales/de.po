@@ -212,6 +212,7 @@ msgstr "Fehler in die Zwischenablage kopiert"
 msgid "Clear"
 msgstr "Leeren"
 
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
 #: src/components/Toaster.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Copy"
@@ -4376,3 +4377,67 @@ msgstr "Build-Commit"
 #: src/routes/AboutRoute.tsx
 msgid "built {0}"
 msgstr "erstellt {0}"
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Freeze"
+msgstr "Einfrieren"
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Create an immutable, content-addressed (did:ad:frozen) copy of this resource and the structure it references."
+msgstr "Erstellen Sie eine unveränderliche, inhaltsadressierte (did:ad:frozen) Kopie dieser Ressource und der von ihr referenzierten Struktur."
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Copied frozen JSON-AD"
+msgstr "Gefrorenes JSON-AD kopiert"
+
+#. placeholder {0}: count
+#. placeholder {1}: count === 1 ? '' : 's'
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Published {0} frozen resource{1}"
+msgstr "{0} eingefrorene Ressource{1} veröffentlicht"
+
+#. placeholder {0}: (e as Error).message
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Publish failed: {0}"
+msgstr "Veröffentlichung fehlgeschlagen: {0}"
+
+#. placeholder {0}: resource.title
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Freeze {0}"
+msgstr "{0} einfrieren"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "<0/> JSON-AD <1>reproducible, no history</1>"
+msgstr "<0/> JSON-AD <1>reproduzierbar, keine Historie</1>"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "<0/> Loro <1>coming soon</1>"
+msgstr "<0/> Loro <1>demnächst verfügbar</1>"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Coming soon — keeps CRDT history, binary, id not reproducible"
+msgstr "Bald verfügbar – behält CRDT-Verlauf, binär, ID nicht reproduzierbar"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Freeze format"
+msgstr "Format einfrieren"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "<0/> Include referenced structure"
+msgstr "<0/> Referenzierte Struktur einschließen"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Download"
+msgstr "Herunterladen"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Publish to server"
+msgstr "Auf Server veröffentlichen"
+
+#: src/components/NavBar.tsx
+msgid "Frozen"
+msgstr "Eingefroren"
+
+#: src/components/NavBar.tsx
+msgid "Content-addressed and immutable — verified by hash"
+msgstr "Inhaltsadressiert und unveränderlich – verifiziert durch Hash"

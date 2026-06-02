@@ -1,4 +1,4 @@
-import { Core, Datatype, Resource } from '@tomic/lib';
+import { Core, Datatype, Resource, type Store } from '@tomic/lib';
 import { atomicConfig } from './config.js';
 import { DatatypeToTSTypeMap } from './DatatypeToTSTypeMap.js';
 import { store } from './store.js';
@@ -65,9 +65,12 @@ const generateBaseObjectProperties = (
   return lines.join('\n');
 };
 
-export const generateExternals = async (props: string[]) => {
+export const generateExternals = async (
+  props: string[],
+  activeStore: Store = store,
+) => {
   const properties: Resource<Core.Property>[] = await Promise.all(
-    props.map(p => store.getResource<Core.Property>(p)),
+    props.map(p => activeStore.getResource<Core.Property>(p)),
   );
 
   const baseOjbectProperties = generateBaseObjectProperties(properties);

@@ -27,6 +27,10 @@ pub enum Tree {
     LoroSnapshots,
     /// Content-addressed storage for binary files, keyed by BLAKE3 hash.
     Blobs,
+    /// Content-addressed storage for immutable `did:ad:frozen` JSON-AD bodies,
+    /// keyed by the 32-byte BLAKE3 hash of their JCS canonicalization. Unlike
+    /// `Blobs` (opaque bytes), these materialize into read-only Resources.
+    Frozen,
 }
 
 const RESOURCES: &str = "resources_v3";
@@ -44,6 +48,7 @@ const DRIVE_MAPPING: &str = "drive_mapping";
 const DID_MAPPING: &str = "did_mapping";
 const LORO_SNAPSHOTS: &str = "loro_snapshots";
 const BLOBS: &str = "blobs";
+const FROZEN: &str = "frozen_v1";
 
 impl std::fmt::Display for Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -58,6 +63,7 @@ impl std::fmt::Display for Tree {
             Tree::DidMapping => f.write_str(DID_MAPPING),
             Tree::LoroSnapshots => f.write_str(LORO_SNAPSHOTS),
             Tree::Blobs => f.write_str(BLOBS),
+            Tree::Frozen => f.write_str(FROZEN),
         }
     }
 }
@@ -76,6 +82,7 @@ impl AsRef<[u8]> for Tree {
             Tree::DidMapping => DID_MAPPING.as_bytes(),
             Tree::LoroSnapshots => LORO_SNAPSHOTS.as_bytes(),
             Tree::Blobs => BLOBS.as_bytes(),
+            Tree::Frozen => FROZEN.as_bytes(),
         }
     }
 }

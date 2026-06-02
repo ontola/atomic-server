@@ -657,6 +657,70 @@ async fn blobs_storage() {
 }
 
 #[tokio::test]
+async fn frozen_storage() {
+    let store = Db::init_temp("frozen_storage").await.unwrap();
+    // A frozen object is content-addressed by the BLAKE3 of its JCS bytes.
+    let body = serde_json::json!({
+        "https://atomicdata.dev/properties/shortname": "title",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
+    });
+    let id = crate::frozen::frozen_id(&body).unwrap();
+    let hash_hex = id.strip_prefix("did:ad:frozen:").unwrap();
+    let bytes = serde_jcs::to_string(&body).unwrap().into_bytes();
+
+    store
+        .kv
+        .insert(Tree::Frozen, hash_hex.as_bytes(), &bytes)
+        .unwrap();
+    let retrieved = store
+        .kv
+        .get(Tree::Frozen, hash_hex.as_bytes())
+        .unwrap()
+        .unwrap();
+
+    // Round-trips, and the stored bytes still verify against the id.
+    let parsed: serde_json::Value = serde_json::from_slice(&retrieved).unwrap();
+    assert!(crate::frozen::verify_frozen(&id, &parsed).is_ok());
+}
+
+#[tokio::test]
+async fn frozen_materialization() {
+    let store = Db::init_temp("frozen_materialization").await.unwrap();
+    let body = serde_json::json!({
+        "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+        "https://atomicdata.dev/properties/shortname": "title",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
+    });
+    let id = crate::frozen::frozen_id(&body).unwrap();
+    let hash_hex = id.strip_prefix("did:ad:frozen:").unwrap();
+    let bytes = serde_jcs::to_string(&body).unwrap().into_bytes();
+    store
+        .kv
+        .insert(Tree::Frozen, hash_hex.as_bytes(), &bytes)
+        .unwrap();
+
+    // Resolving the frozen subject materializes a read-only Resource.
+    let subject = Subject::from_raw(&id, None);
+    let resource = store.get_resource(&subject).await.unwrap();
+
+    assert_eq!(resource.get_subject().as_str(), id);
+    assert_eq!(resource.get(urls::SHORTNAME).unwrap().to_string(), "title");
+    assert_eq!(
+        resource.get(urls::DATATYPE_PROP).unwrap().to_string(),
+        "https://atomicdata.dev/datatypes/string"
+    );
+
+    // Bytes that don't hash to the addressed id are rejected on resolve.
+    let bogus_hex = "00".repeat(32);
+    store
+        .kv
+        .insert(Tree::Frozen, bogus_hex.as_bytes(), b"{\"x\":1}")
+        .unwrap();
+    let bogus_subject = Subject::from_raw(&format!("did:ad:frozen:{}", bogus_hex), None);
+    assert!(store.get_resource(&bogus_subject).await.is_err());
+}
+
+#[tokio::test]
 /// Changing these values actually correctly updates the index.
 async fn invalidate_cache() {
     let store_owned = Db::init_temp("invalidate_cache").await.unwrap();

@@ -20,6 +20,8 @@ export interface AtomicConfig {
    * If left empty the public agent is used.
    */
   agentSecret?: string;
+  /** Server used for relative subjects and publishing code-first schemas. */
+  serverUrl?: string;
   /** The list of subjects of your ontologies */
 
   ontologies: string[];

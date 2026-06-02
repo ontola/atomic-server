@@ -1,0 +1,38 @@
+{
+  "schema": {
+    "name": "FrozenTodoApp",
+    "version": "1.0.0",
+    "classes": {
+      "todo": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Task title"
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "dueAt": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "ontology": "did:ad:frozen:5359f2dbb9d46cc3188be1d76f27d0a8b5a89add18defcd9b26ca538c3b1d4da",
+    "classes": {
+      "todo": "did:ad:frozen:cf44ff3df002db21831e487bc930b0e03b4a3adbac4223445d4eaa1cb283c9e7"
+    },
+    "properties": {
+      "todo.done": "did:ad:frozen:29a60b4ed180a3f1c0fc60c38ed35bd57c35487fc782b6477d195f5b400defd5",
+      "todo.dueAt": "did:ad:frozen:03171f4e8940ec0661c37504748c5a20d213d498cd583137c139cd226d44707c",
+      "todo.title": "did:ad:frozen:9c227a3e5d127dfdeeecf7fc93ae8bf8c97f31083e44e2440cf70a2d30c4b702"
+    }
+  }
+}

@@ -178,10 +178,23 @@ fn should_build(dirs: &Dirs) -> bool {
 fn build_js(dirs: &Dirs) {
     let pkg_manager = "pnpm";
 
+    // The JS build runs `build:wasm` -> `wasm-pack` -> a *nested* cargo. That
+    // child cargo would otherwise block forever on the workspace
+    // `target/.cargo-lock` that the outer cargo running THIS build script
+    // already holds (a recursive-cargo deadlock — e.g. when an editor's
+    // `cargo check` triggers build.rs while it also runs the JS build).
+    // Pointing the nested build at its own CARGO_TARGET_DIR gives it a separate
+    // lock, so it can't deadlock against us. wasm artifacts are copied out via
+    // `--out-dir`, so this dir holds only intermediates and is safe to isolate.
+    let nested_target_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .map(|m| Path::new(&m).join("../target/frontend-build"))
+        .unwrap_or_else(|_| PathBuf::from("../target/frontend-build"));
+
     p!("install js packages...");
 
     std::process::Command::new(pkg_manager)
         .current_dir(&dirs.browser_root)
+        .env("CARGO_TARGET_DIR", &nested_target_dir)
         .args(["install"])
         .output()
         .unwrap_or_else(|_| {
@@ -193,6 +206,7 @@ fn build_js(dirs: &Dirs) {
     p!("build js assets...");
     let out = std::process::Command::new(pkg_manager)
         .current_dir(&dirs.browser_root)
+        .env("CARGO_TARGET_DIR", &nested_target_dir)
         .args(["run", "build"])
         .output()
         .expect("Failed to build js bundle");

@@ -9,6 +9,7 @@ pub mod blob;
 pub mod commit;
 pub mod download;
 pub mod export;
+pub mod frozen;
 pub mod get_resource;
 #[cfg(feature = "image")]
 pub mod image;

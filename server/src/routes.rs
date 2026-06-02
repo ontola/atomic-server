@@ -208,6 +208,16 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .to(handlers::blob::put_blob),
     )
     .service(
+        web::resource("/frozen/{hash}")
+            .guard(guard::Method(Method::PUT))
+            .to(handlers::frozen::put_frozen),
+    )
+    .service(
+        web::resource("/frozen/{hash}")
+            .guard(guard::Method(Method::GET))
+            .to(handlers::frozen::get_frozen),
+    )
+    .service(
         web::resource("/setup")
             .guard(guard::Method(Method::POST))
             .to(handlers::post_resource::handle_post_resource),

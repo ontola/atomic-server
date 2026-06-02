@@ -627,3 +627,75 @@ async fn upload_download_test() {
     let downloaded_bytes = test::read_body(resp).await;
     assert_eq!(downloaded_bytes, test_content.as_slice());
 }
+
+#[actix_rt::test]
+async fn frozen_endpoint_roundtrip() {
+    let unique_string = atomic_lib::utils::random_string(10);
+    use clap::Parser;
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", unique_string),
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+    ]);
+    let mut config = config::build_config(opts).expect("failed init config");
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+    let appstate = crate::appstate::AppState::init(config.clone())
+        .await
+        .expect("failed init appstate");
+    atomic_lib::test_utils::setup_test_env(&appstate.store)
+        .await
+        .unwrap();
+    let data = Data::new(appstate.clone());
+    let app = test::init_service(
+        App::new()
+            .app_data(data)
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    // An identity-only frozen Property body.
+    let body = serde_json::json!({
+        "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+        "https://atomicdata.dev/properties/shortname": "title",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
+    });
+    let id = atomic_lib::frozen::frozen_id(&body).unwrap();
+    let hash = id.strip_prefix("did:ad:frozen:").unwrap();
+    let canonical = serde_jcs::to_string(&body).unwrap();
+
+    // PUT stores it (content-addressed, public).
+    let put = TestRequest::put()
+        .uri(&format!("/frozen/{}", hash))
+        .set_payload(canonical.clone())
+        .to_request();
+    let resp = test::call_service(&app, put).await;
+    assert!(resp.status().is_success(), "PUT status: {}", resp.status());
+
+    // GET returns the same canonical bytes.
+    let get = TestRequest::get()
+        .uri(&format!("/frozen/{}", hash))
+        .to_request();
+    let resp = test::call_service(&app, get).await;
+    assert!(resp.status().is_success());
+    let returned = test::read_body(resp).await;
+    assert_eq!(returned, canonical.as_bytes());
+
+    // A body that doesn't hash to the URL id is rejected.
+    let bad = TestRequest::put()
+        .uri(&format!("/frozen/{}", "00".repeat(32)))
+        .set_payload(canonical.clone())
+        .to_request();
+    let resp = test::call_service(&app, bad).await;
+    assert!(!resp.status().is_success());
+
+    // And it now resolves through the normal get_resource path.
+    let subject = atomic_lib::Subject::from_raw(&id, None);
+    let resource = appstate.store.get_resource(&subject).await.unwrap();
+    assert_eq!(
+        resource.get(urls::SHORTNAME).unwrap().to_string(),
+        "title"
+    );
+}

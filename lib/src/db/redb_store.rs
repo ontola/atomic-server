@@ -31,6 +31,7 @@ const TABLE_DRIVE_MAPPING: TableDefinition<&[u8], &[u8]> = TableDefinition::new(
 const TABLE_DID_MAPPING: TableDefinition<&[u8], &[u8]> = TableDefinition::new("did_mapping");
 const TABLE_LORO_SNAPSHOTS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("loro_snapshots");
 const TABLE_BLOBS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("blobs");
+const TABLE_FROZEN: TableDefinition<&[u8], &[u8]> = TableDefinition::new("frozen_v1");
 
 fn table_def(tree: Tree) -> TableDefinition<'static, &'static [u8], &'static [u8]> {
     match tree {
@@ -44,6 +45,7 @@ fn table_def(tree: Tree) -> TableDefinition<'static, &'static [u8], &'static [u8
         Tree::DidMapping => TABLE_DID_MAPPING,
         Tree::LoroSnapshots => TABLE_LORO_SNAPSHOTS,
         Tree::Blobs => TABLE_BLOBS,
+        Tree::Frozen => TABLE_FROZEN,
     }
 }
 
@@ -151,6 +153,7 @@ impl RedbStore {
             let _ = tx.open_table(TABLE_DID_MAPPING);
             let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
             let _ = tx.open_table(TABLE_BLOBS);
+            let _ = tx.open_table(TABLE_FROZEN);
             tx.commit()
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
@@ -186,6 +189,7 @@ impl RedbStore {
             let _ = tx.open_table(TABLE_DID_MAPPING);
             let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
             let _ = tx.open_table(TABLE_BLOBS);
+            let _ = tx.open_table(TABLE_FROZEN);
             tx.commit()
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
@@ -224,6 +228,7 @@ impl RedbStore {
             let _ = tx.open_table(TABLE_DID_MAPPING);
             let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
             let _ = tx.open_table(TABLE_BLOBS);
+            let _ = tx.open_table(TABLE_FROZEN);
             tx.commit()
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
