@@ -1836,6 +1836,45 @@ export class Store {
   }
 
   /**
+   * Creates the mutable, signed "latest version" pointer for a frozen schema: a
+   * normal Ontology resource (genesis DID) on the author's drive whose
+   * `classes`/`properties` point at the immutable frozen ids. Its stable subject
+   * is the durable name ("the current TodoApp"), and its signed commit history is
+   * the version log — re-running this when the schema changes records a new
+   * version while old frozen ids stay permanently resolvable. With
+   * `{ save: true }` it is signed and committed.
+   */
+  public async createSchemaPointer(
+    frozen: FrozenSchema,
+    opts: { parent?: string; save?: boolean } = {},
+  ): Promise<Resource<Core.Ontology>> {
+    const version = frozen.presentation.ontology.version;
+    const ontology = await this.newResource<Core.Ontology>({
+      parent: opts.parent,
+      isA: core.classes.ontology,
+      validatePropVals: false,
+      propVals: {
+        [core.properties.shortname]: stringToSlug(
+          frozen.model.ontology.shortname,
+        ),
+        [core.properties.description]: frozen.presentation.ontology.description,
+        [core.properties.classes]: Object.values(frozen.classes) as string[],
+        [core.properties.properties]: Object.values(
+          frozen.properties,
+        ) as string[],
+        [core.properties.instances]: [],
+        ...(version ? { [server.properties.version]: version } : {}),
+      },
+    });
+
+    if (opts.save) {
+      await ontology.save();
+    }
+
+    return ontology;
+  }
+
+  /**
    * Registers an app-bundled `*.schema.lock.json` into the store: verifies every
    * frozen object by re-hash, then materializes each as a read-only Resource so
    * the schema resolves offline with no server. This is "available without a

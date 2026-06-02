@@ -153,8 +153,12 @@ needed.
       consumer loop live.
 - [ ] Persist frozen objects in ClientDb (OPFS) keyed by hash for offline reload
       (currently in-memory only).
-- [ ] The signed **"latest version" pointer** on the author's drive
-      (`name → latest frozen ontology id`) + any mutable display overlay.
+- [x] The signed **"latest version" pointer**: `Store.createSchemaPointer(frozen)`
+      builds a mutable, signed Ontology (genesis DID) on the author's drive whose
+      `classes`/`properties` reference the immutable frozen ids. Its stable subject
+      is the durable name and its commit history is the version log; old frozen
+      ids stay permanently resolvable. Tested (construction). Explicit `replaces`
+      links would need a new bootstrapped property — deferred.
 
 ### Phase D — sync (frozen travels with drives)
 

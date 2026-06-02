@@ -1,5 +1,7 @@
 import { afterEach, describe, it, vi } from 'vitest';
 
+import { Agent } from './agent.js';
+import { JSCryptoProvider } from './CryptoProvider.js';
 import { Datatype } from './datatypes.js';
 import { frozenIdFor } from './freeze.js';
 import { core } from './ontologies/core.js';
@@ -184,6 +186,39 @@ describe('Store.loadSchemaLock', () => {
     const store = new Store({ serverUrl: 'https://example.com' });
     expect(() => store.loadSchemaLock(tampered as typeof lock)).toThrow(
       /invalid schema lock/i,
+    );
+  });
+});
+
+describe('Store.createSchemaPointer', () => {
+  it('creates a signed Ontology pointing at the frozen ids', async ({
+    expect,
+  }) => {
+    const keys = await Agent.generateKeyPair();
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setAgent(
+      new Agent(
+        new JSCryptoProvider(keys.privateKey),
+        `did:ad:agent:${keys.publicKey}`,
+      ),
+    );
+
+    const frozen = await store.registerFrozenSchema({
+      ...todoPackage,
+      version: '1.0.0',
+    });
+    const pointer = await store.createSchemaPointer(frozen);
+
+    // Stable, signed DID — the durable "name" for the latest version.
+    expect(pointer.subject).toMatch(/^did:ad:/);
+    expect(pointer.hasClasses(core.classes.ontology)).toBe(true);
+    // Its members point at the immutable frozen ids.
+    expect(pointer.props.classes).toEqual([frozen.classes.todo]);
+    expect(pointer.props.properties).toEqual(
+      expect.arrayContaining([
+        frozen.properties['todo.title'],
+        frozen.properties['todo.done'],
+      ]),
     );
   });
 });
