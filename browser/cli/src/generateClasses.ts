@@ -1,4 +1,4 @@
-import { type Core, type Resource } from '@tomic/lib';
+import { type Core, type Resource, type Store } from '@tomic/lib';
 import { store } from './store.js';
 import { ReverseMapping } from './generateBaseObject.js';
 import { PropertyRecord } from './PropertyRecord.js';
@@ -8,11 +8,12 @@ export const generateClasses = (
   ontology: Resource<Core.Ontology>,
   reverseMapping: ReverseMapping,
   propertyRecord: PropertyRecord,
+  activeStore: Store = store,
 ): string => {
   const classes = dedupe(ontology.props.classes ?? []);
 
   const classStringList = classes.map(subject => {
-    return generateClass(subject, reverseMapping, propertyRecord);
+    return generateClass(subject, reverseMapping, propertyRecord, activeStore);
   });
 
   const innerStr = classStringList.join('\n');
@@ -26,8 +27,9 @@ const generateClass = (
   subject: string,
   reverseMapping: ReverseMapping,
   propertyRecord: PropertyRecord,
+  activeStore: Store,
 ): string => {
-  const resource = store.getResourceLoading<Core.Class>(subject);
+  const resource = activeStore.getResourceLoading<Core.Class>(subject);
 
   const transformSubject = (str: string) => {
     const name = reverseMapping[str];

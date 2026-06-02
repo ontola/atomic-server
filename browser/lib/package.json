@@ -62,6 +62,13 @@
       },
       "require": "./dist/ontologies/*.cjs"
     },
+    "./schema.js": {
+      "import": {
+        "types": "./dist/src/schema.d.ts",
+        "default": "./dist/schema.js"
+      },
+      "require": "./dist/schema.cjs"
+    },
     "./client-db.worker.js": "./dist/client-db.worker.js"
   },
   "main-dev": "src/index.ts",

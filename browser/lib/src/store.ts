@@ -16,12 +16,19 @@ import { EventManager } from './EventManager.js';
 import { hasBrowserAPI } from './hasBrowserAPI.js';
 import { collections } from './ontologies/collections.js';
 import { commits } from './ontologies/commits.js';
-import { core } from './ontologies/core.js';
+import { core, type Core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
 import { Resource, unknownSubject } from './resource.js';
 import { type SearchOpts, buildSearchSubject } from './search.js';
+import {
+  SCHEMA_HASH_PROPERTY,
+  schemaToOntologyModel,
+  type AtomicSchemaPackage,
+  type ConvertedSchemaPackage,
+  type DefinedSchema,
+} from './schema.js';
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
@@ -72,9 +79,23 @@ type CreateResourceOptions = {
   isA?: string | string[];
   /** Any additional properties the resource should have */
   propVals?: Record<string, JSONValue>;
+  /** Validate `propVals` while creating the resource. Defaults to true. */
+  validatePropVals?: boolean;
   /** Set to true if the resource should have a DID as subject. Defaults to `true` for `did:ad` agents, otherwise `false`. */
   did?: boolean;
 };
+
+export interface RegisteredSchema {
+  ontology: Resource<Core.Ontology>;
+  classes: Record<string, Resource<Core.Class>>;
+  properties: Record<string, Resource<Core.Property>>;
+  model: ConvertedSchemaPackage;
+}
+
+export interface RegisterSchemaOptions {
+  /** Save generated resources through the normal Commit/outbox path. */
+  save?: boolean;
+}
 
 export interface StoreOpts {
   /** The default store URL, where to send commits and where to create new instances */
@@ -268,7 +289,6 @@ function yieldToEventLoop(): Promise<void> {
   });
 }
 
-
 /**
  * Cheap equality for commit-log property values. Strict `===` would always
  * report arrays/objects as different even when their contents match, so the
@@ -318,6 +338,7 @@ export class Store {
   private _resources: Map<string, Resource>;
   /** Mapping from HTTP aliases to primary subjects (e.g. DIDs) */
   private aliases: Map<string, string> = new Map();
+  private schemaHashIndex: Map<string, string> = new Map();
 
   /** List of resources that have parents that are not saved to the server, when a parent is saved it should also save its children */
   private batchedResources: Map<string, Set<string>> = new Map();
@@ -1570,6 +1591,7 @@ export class Store {
     parent,
     isA,
     propVals,
+    validatePropVals = true,
     noParent,
     did,
   }: CreateResourceOptions = {}): Promise<Resource<C>> {
@@ -1603,7 +1625,7 @@ export class Store {
 
     if (propVals) {
       for (const [key, value] of Object.entries(propVals)) {
-        await resource.set(key, value);
+        await resource.set(key, value, validatePropVals);
       }
     }
 
@@ -1634,6 +1656,257 @@ export class Store {
     }
 
     return resource;
+  }
+
+  public async registerSchema(
+    schema: AtomicSchemaPackage | DefinedSchema,
+    opts: RegisterSchemaOptions = {},
+  ): Promise<RegisteredSchema> {
+    const model = schemaToOntologyModel(schema);
+
+    await this.validateSchemaImports(model.ontology.jsonSchema);
+
+    const ontology = await this.newResource<Core.Ontology>({
+      isA: core.classes.ontology,
+      validatePropVals: false,
+      propVals: {
+        [core.properties.shortname]: stringToSlug(model.ontology.shortname),
+        [core.properties.description]: model.ontology.description,
+        [core.properties.classes]: [],
+        [core.properties.properties]: [],
+        [core.properties.instances]: [],
+      },
+    });
+
+    const properties: Record<string, Resource<Core.Property>> = {};
+
+    for (const property of model.properties) {
+      this.assertCompatibleExistingSchemaProperty(property);
+
+      const resource = await this.newResource<Core.Property>({
+        subject: property.subject,
+        parent: ontology.subject,
+        isA: core.classes.property,
+        validatePropVals: false,
+        propVals: {
+          [core.properties.shortname]: property.shortname,
+          [core.properties.description]: property.description,
+          [core.properties.datatype]: property.datatype,
+          ...(property.classType
+            ? { [core.properties.classtype]: property.classType }
+            : {}),
+          ...(property.allowsOnly
+            ? { [core.properties.allowsOnly]: property.allowsOnly as string[] }
+            : {}),
+          ...(property.isDynamic !== undefined
+            ? { [core.properties.isDynamic]: property.isDynamic }
+            : {}),
+          ...(property.isLocked !== undefined
+            ? { [core.properties.isLocked]: property.isLocked }
+            : {}),
+        },
+      });
+
+      properties[property.key] = resource;
+    }
+
+    const classes: Record<string, Resource<Core.Class>> = {};
+
+    for (const klass of model.classes) {
+      const requires = await Promise.all(
+        klass.requires.map(key =>
+          this.resolveRegisteredSchemaPropertyKey(
+            key,
+            model.ontology.jsonSchema,
+            properties,
+          ),
+        ),
+      );
+      const recommends = await Promise.all(
+        klass.recommends.map(key =>
+          this.resolveRegisteredSchemaPropertyKey(
+            key,
+            model.ontology.jsonSchema,
+            properties,
+          ),
+        ),
+      );
+      const resource = await this.newResource<Core.Class>({
+        subject: klass.subject,
+        parent: ontology.subject,
+        isA: core.classes.class,
+        validatePropVals: false,
+        propVals: {
+          [core.properties.shortname]: klass.shortname,
+          [core.properties.description]: klass.description,
+          [core.properties.requires]: requires,
+          [core.properties.recommends]: recommends,
+        },
+      });
+
+      classes[klass.key] = resource;
+    }
+
+    await ontology.set(
+      core.properties.classes,
+      Object.values(classes).map(resource => resource.subject),
+      false,
+    );
+    await ontology.set(
+      core.properties.properties,
+      Object.values(properties).map(resource => resource.subject),
+      false,
+    );
+    await ontology.set(
+      server.properties.jsonSchema,
+      model.ontology.jsonSchema as unknown as JSONValue,
+      false,
+    );
+    await ontology.set(SCHEMA_HASH_PROPERTY, model.ontology.schemaHash, false);
+
+    if (model.ontology.version) {
+      await ontology.set(
+        server.properties.version,
+        model.ontology.version,
+        false,
+      );
+    }
+
+    this.schemaHashIndex.set(model.ontology.schemaHash, ontology.subject);
+
+    if (opts.save) {
+      await ontology.save();
+
+      for (const property of Object.values(properties)) {
+        await property.save();
+      }
+
+      for (const klass of Object.values(classes)) {
+        await klass.save();
+      }
+    }
+
+    return {
+      ontology,
+      classes,
+      properties,
+      model,
+    };
+  }
+
+  public getRegisteredSchemaSubject(schemaHash: string): string | undefined {
+    return this.schemaHashIndex.get(schemaHash);
+  }
+
+  private assertCompatibleExistingSchemaProperty(
+    property: ConvertedSchemaPackage['properties'][number],
+  ): void {
+    if (!property.subject) {
+      return;
+    }
+
+    const existing = this.resources.get(property.subject);
+
+    if (!existing?.isReady() || !existing.hasClasses(core.classes.property)) {
+      return;
+    }
+
+    const checks: Array<
+      [string, JSONValue | undefined, JSONValue | undefined]
+    > = [
+      [
+        core.properties.datatype,
+        existing.get(core.properties.datatype),
+        property.datatype,
+      ],
+      [
+        core.properties.classtype,
+        existing.get(core.properties.classtype),
+        property.classType,
+      ],
+      [
+        core.properties.allowsOnly,
+        existing.get(core.properties.allowsOnly),
+        property.allowsOnly as JSONValue | undefined,
+      ],
+    ];
+
+    for (const [field, actual, expected] of checks) {
+      if (JSON.stringify(actual ?? null) !== JSON.stringify(expected ?? null)) {
+        throw new Error(
+          `Schema property ${property.subject} is already registered with a different ${field}. Publish a new Property subject for datatype or semantic changes.`,
+        );
+      }
+    }
+  }
+
+  private async validateSchemaImports(
+    schema: AtomicSchemaPackage,
+  ): Promise<void> {
+    for (const [name, schemaImport] of Object.entries(schema.imports ?? {})) {
+      if (!schemaImport.expectedHash) {
+        continue;
+      }
+
+      const resource = await this.getResource(schemaImport.subject);
+      const actualHash = resource.get(SCHEMA_HASH_PROPERTY)?.toString();
+
+      if (actualHash !== schemaImport.expectedHash) {
+        throw new Error(
+          `Schema import ${name} expected ${schemaImport.expectedHash} but resolved ${actualHash ?? 'no schema hash'} from ${schemaImport.subject}`,
+        );
+      }
+    }
+  }
+
+  private async resolveRegisteredSchemaPropertyKey(
+    key: string,
+    schema: AtomicSchemaPackage,
+    generatedProperties: Record<string, Resource<Core.Property>>,
+  ): Promise<string> {
+    const generated = generatedProperties[key];
+
+    if (generated) {
+      return generated.subject;
+    }
+
+    if (!key.startsWith('ref:')) {
+      throw new Error(`Could not resolve generated schema property key ${key}`);
+    }
+
+    const ref = key.slice('ref:'.length);
+    const [importName, collectionName, propertyShortname] = ref.split('.');
+
+    if (collectionName !== 'properties' || !propertyShortname) {
+      throw new Error(`Unsupported schema property reference ${ref}`);
+    }
+
+    const schemaImport = schema.imports?.[importName];
+
+    if (!schemaImport) {
+      throw new Error(
+        `Schema property reference ${ref} uses unknown import ${importName}`,
+      );
+    }
+
+    const importedOntology = await this.getResource<Core.Ontology>(
+      schemaImport.subject,
+    );
+    const propertySubjects = importedOntology.getArray(
+      core.properties.properties,
+    ) as string[];
+
+    for (const subject of propertySubjects) {
+      const property = await this.getResource<Core.Property>(subject);
+
+      if (property.get(core.properties.shortname) === propertyShortname) {
+        return property.subject;
+      }
+    }
+
+    throw new Error(
+      `Schema property reference ${ref} did not match any Property in ${schemaImport.subject}`,
+    );
   }
 
   /**
