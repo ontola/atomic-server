@@ -4,6 +4,7 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { Datatype } from './datatypes.js';
 import {
   freezeResources,
+  registerFrozenBodies,
   type FreezableResource,
   type FrozenId,
   type JsonValue as FreezeJsonValue,
@@ -11,6 +12,7 @@ import {
 import { jcsCanonicalize } from './jcs.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
+import { registerOntologies } from './ontology.js';
 
 type JsonPrimitive = string | number | boolean | null;
 
@@ -88,12 +90,39 @@ export interface AtomicSchemaPackage {
   $defs?: Record<string, AtomicSchemaClassDefinition>;
 }
 
+/** The class keys of a schema package, mapped to their `did:ad:frozen:` ids. */
+export type SchemaClassHandles<S extends AtomicSchemaPackage> = {
+  readonly [C in keyof S['classes']]: string;
+};
+
+/** Union of every property key across all classes of a schema package. */
+export type SchemaPropertyKey<S extends AtomicSchemaPackage> = {
+  [C in keyof S['classes']]: keyof S['classes'][C]['properties'] & string;
+}[keyof S['classes']];
+
+/** The property keys of a schema package, mapped to their `did:ad:frozen:` ids. */
+export type SchemaPropertyHandles<S extends AtomicSchemaPackage> = {
+  readonly [P in SchemaPropertyKey<S>]: string;
+};
+
 export interface DefinedSchema<
   Schema extends AtomicSchemaPackage = AtomicSchemaPackage,
 > {
   readonly schema: Schema;
   readonly normalized: AtomicSchemaPackage;
   readonly schemaHash: SchemaHash;
+  /**
+   * Content-addressed `did:ad:frozen:` id for each class, keyed by class key.
+   * Computed lazily and locally (no server) the first time it is read — use
+   * directly as `isA` when creating resources. Self-contained schemas only;
+   * accessing this on a schema with `$ref` imports throws.
+   */
+  readonly classes: SchemaClassHandles<Schema>;
+  /**
+   * Content-addressed `did:ad:frozen:` id for each property, keyed by property
+   * key. Use directly as `propVals` keys.
+   */
+  readonly properties: SchemaPropertyHandles<Schema>;
 }
 
 export interface ConvertedSchemaProperty {
@@ -138,11 +167,80 @@ export function defineSchema<Schema extends AtomicSchemaPackage>(
 ): DefinedSchema<Schema> {
   const normalized = normalizeSchemaPackage(schema);
 
-  return Object.freeze({
+  // `.classes` / `.properties` are content-addressed frozen ids. They are
+  // computed lazily — on first access — so that (a) merely defining a schema
+  // (or converting one to a model internally) does no hashing work, and (b) a
+  // schema with `$ref` imports, which cannot be frozen without a store, only
+  // errors if a caller actually reaches for the local handles.
+  let handles: SchemaHandles | undefined;
+  const getHandles = (): SchemaHandles => (handles ??= computeSchemaHandles(defined));
+
+  const defined = Object.freeze({
     schema,
     normalized,
     schemaHash: hashSchemaPackage(normalized),
-  });
+    get classes() {
+      return getHandles().classes;
+    },
+    get properties() {
+      return getHandles().properties;
+    },
+  }) as unknown as DefinedSchema<Schema>;
+
+  return defined;
+}
+
+interface SchemaHandles {
+  readonly classes: Record<string, string>;
+  readonly properties: Record<string, string>;
+}
+
+/**
+ * Freezes a self-contained schema into `did:ad:frozen:` ids and exposes them as
+ * flat `{ classKey -> id }` / `{ propertyKey -> id }` handles. Also registers the
+ * schema in the global runtime mapping so `resource.props.<shortname>` resolves
+ * without any generated bindings.
+ */
+function computeSchemaHandles(defined: DefinedSchema): SchemaHandles {
+  const frozen = freezeSchema(defined);
+
+  const properties: Record<string, string> = {};
+
+  for (const property of frozen.model.properties) {
+    properties[property.propertyKey] = frozen.properties[property.key];
+  }
+
+  registerFrozenSchemaRuntime(frozen);
+  // Make the frozen bodies publishable so the Store can lazily PUT them on save.
+  registerFrozenBodies(frozen.resources);
+
+  return { classes: { ...frozen.classes }, properties };
+}
+
+/**
+ * Teaches `@tomic/lib`'s runtime about a frozen schema (subject -> shortname and
+ * the per-class property set), so quick-access `resource.props` works for
+ * code-first schemas the same way it does for generated ontologies.
+ */
+function registerFrozenSchemaRuntime(frozen: FrozenSchema): void {
+  const properties: Record<string, string> = {};
+
+  for (const property of frozen.model.properties) {
+    properties[property.shortname] = frozen.properties[property.key];
+  }
+
+  const classes: Record<string, string> = {};
+  const classDefs: Record<string, string[]> = {};
+
+  for (const klass of frozen.model.classes) {
+    const classId = frozen.classes[klass.key];
+    classes[klass.shortname] = classId;
+    classDefs[classId] = [...klass.requires, ...klass.recommends]
+      .map(modelKey => frozen.properties[modelKey])
+      .filter((id): id is FrozenId => Boolean(id));
+  }
+
+  registerOntologies({ classes, properties, __classDefs: classDefs });
 }
 
 export function schemaToOntologyModel(

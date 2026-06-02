@@ -14,6 +14,7 @@ import {
 } from './schema.js';
 import { Datatype } from './datatypes.js';
 import { core } from './ontologies/core.js';
+import { getKnownNameBySubject } from './ontology.js';
 import { Store } from './store.js';
 
 interface MockClientDbEntry {
@@ -194,6 +195,79 @@ describe('defineSchema', () => {
     expect(external.normalized.imports?.todo.expectedHash).toMatch(
       /^blake3:[0-9a-f]{64}$/,
     );
+  });
+
+  it('exposes content-addressed frozen ids as typed class/property handles', ({
+    expect,
+  }) => {
+    // Inline literal (not annotated) so the generic captures the literal keys —
+    // `.classes.todo` / `.properties.title` are typed, autocompleted handles.
+    const defined = defineSchema({
+      name: 'TodoApp',
+      version: '1.0.0',
+      classes: {
+        todo: {
+          type: 'object',
+          required: ['title'],
+          properties: {
+            title: { type: 'string' },
+            done: { type: 'boolean' },
+          },
+        },
+      },
+    });
+
+    expect(defined.classes.todo).toMatch(/^did:ad:frozen:[0-9a-f]{64}$/);
+    expect(defined.properties.title).toMatch(/^did:ad:frozen:[0-9a-f]{64}$/);
+    expect(defined.properties.done).toMatch(/^did:ad:frozen:[0-9a-f]{64}$/);
+
+    // The handles are exactly the frozen ids, addressable with no server.
+    const frozen = freezeSchema(defined);
+    expect(defined.classes.todo).toBe(frozen.classes.todo);
+    expect(defined.properties.title).toBe(frozen.properties['todo.title']);
+  });
+
+  it('computes handles deterministically and locally (no server)', ({
+    expect,
+  }) => {
+    const a = defineSchema(todoSchema).classes.todo;
+    const b = defineSchema(todoSchema).classes.todo;
+
+    expect(a).toBe(b);
+  });
+
+  it('registers the schema at runtime so props resolve by shortname', ({
+    expect,
+  }) => {
+    const defined = defineSchema(todoSchema);
+    // Accessing a handle triggers lazy freeze + runtime registration.
+    const titleId = defined.properties.title;
+
+    expect(getKnownNameBySubject(titleId)).toBe('title');
+  });
+
+  it('does not freeze on definition, and throws on handle access for imports', ({
+    expect,
+  }) => {
+    // Defining an import-containing schema must not throw (no eager freeze)...
+    const external = defineSchema({
+      name: 'ProjectApp',
+      imports: {
+        todo: {
+          subject: 'did:ad:todoOntology',
+          expectedHash: defineSchema(todoSchema).schemaHash,
+        },
+      },
+      classes: {
+        project: {
+          type: 'object',
+          properties: { title: { $ref: 'todo.properties.title' } },
+        },
+      },
+    });
+
+    // ...but reaching for a local handle (which needs a store) throws clearly.
+    expect(() => external.classes.project).toThrow(/store-backed registration/);
   });
 });
 
@@ -780,5 +854,60 @@ describe('Store.registerSchema', () => {
     expect(project.classes.project.props.requires).toEqual([
       todo.properties['todo.title'].subject,
     ]);
+  });
+});
+
+describe('Store lazy frozen publish on save', () => {
+  it('PUTs referenced frozen definitions to /frozen when an instance is saved', async ({
+    expect,
+  }) => {
+    const keys = await Agent.generateKeyPair();
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setServerConnected(true);
+    store.setAgent(
+      new Agent(
+        new JSCryptoProvider(keys.privateKey),
+        `did:ad:agent:${keys.publicKey}`,
+      ),
+    );
+
+    // Commits go to the mocked client; nothing hits the network there.
+    (
+      store as unknown as { client: { postCommit: typeof vi.fn } }
+    ).client.postCommit = vi.fn(async (commit: Commit) => ({
+      ...commit,
+      id: `https://example.com/commits/${commit.signature}`,
+    })) as never;
+
+    // Capture the `/frozen` PUTs the store makes on save.
+    const puts: string[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: { method?: string }) => {
+      if (init?.method === 'PUT') {
+        puts.push(url);
+      }
+
+      return { ok: true, status: 200 } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      // No registerSchema, no CLI — just define and use.
+      const schema = defineSchema(todoSchema);
+
+      const todo = await store.newResource({
+        isA: schema.classes.todo,
+        propVals: { [schema.properties.title]: 'Buy milk' },
+      });
+      await todo.save();
+
+      const classHash = schema.classes.todo.replace('did:ad:frozen:', '');
+      const titleHash = schema.properties.title.replace('did:ad:frozen:', '');
+
+      // The class and its property definitions were published automatically.
+      expect(puts.some(url => url.endsWith(`/frozen/${classHash}`))).toBe(true);
+      expect(puts.some(url => url.endsWith(`/frozen/${titleHash}`))).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

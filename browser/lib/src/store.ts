@@ -34,6 +34,8 @@ import {
 import {
   freezeResources,
   frozenIdFor,
+  getRegisteredFrozenBody,
+  registerFrozenBodies,
   UNIT_MEMBERS_KEY,
   type FrozenId,
   type FreezableResource,
@@ -372,6 +374,8 @@ export class Store {
   /** Mapping from HTTP aliases to primary subjects (e.g. DIDs) */
   private aliases: Map<string, string> = new Map();
   private schemaHashIndex: Map<string, string> = new Map();
+  /** Frozen ids already PUT to the server this session — skip redundant publishes. */
+  private publishedFrozenIds: Set<string> = new Set();
 
   /** List of resources that have parents that are not saved to the server, when a parent is saved it should also save its children */
   private batchedResources: Map<string, Set<string>> = new Map();
@@ -924,6 +928,19 @@ export class Store {
     }
 
     const endpoint = new URL('/commit', this.serverUrl).toString();
+
+    // Lazy publish-on-save: ensure any content-addressed `did:ad:frozen`
+    // definitions this resource references (its class, a code-first property)
+    // exist on the server before the commit lands — so code-first schemas need
+    // no separate build/publish step. Best-effort: a failure here must not block
+    // the user's save.
+    const draining = this.resources.get(subject);
+
+    if (draining) {
+      await this.publishReferencedFrozen(draining).catch(err =>
+        console.warn('[Store] auto-publish of frozen references failed:', err),
+      );
+    }
 
     // Step 1: POST the pre-signed genesis if present. The genesis
     // commit's `loroUpdate` was captured in `signChanges` at sign
@@ -1846,6 +1863,8 @@ export class Store {
   ): Promise<FrozenSchema> {
     const frozen = freezeSchema(schema);
 
+    registerFrozenBodies(frozen.resources);
+
     for (const { frozenId, content } of frozen.resources) {
       const [resource] = new JSONADParser().parse(content, frozenId);
       resource.loading = false;
@@ -2067,6 +2086,10 @@ export class Store {
         continue;
       }
 
+      registerFrozenBodies([
+        { frozenId: frozenId as FrozenId, content: content as FrozenJsonValue },
+      ]);
+
       const [resource] = new JSONADParser().parse(content, frozenId);
       resource.loading = false;
       this.addResource(resource, { skipCommitCompare: true });
@@ -2091,6 +2114,88 @@ export class Store {
       throw new Error(
         `Failed to publish frozen resource ${frozenId} (HTTP ${response.status})`,
       );
+    }
+  }
+
+  /**
+   * Lazy publish-on-save: if a resource about to be committed references any
+   * `did:ad:frozen:` definitions (its class, a code-first property, an enum
+   * value…) whose bodies are locally known but not yet on the server, PUT them
+   * first — together with the transitive closure they reference (a class points
+   * at its property ids). This is what makes code-first schemas need no build or
+   * publish step: defining a schema registers its bodies, and the first save of
+   * an instance pushes the definitions. Publishing is idempotent (hash-keyed) and
+   * de-duplicated per session, so unchanged saves do no extra work.
+   */
+  private async publishReferencedFrozen(resource: Resource): Promise<void> {
+    const discovered = new Set<string>();
+    const queue: string[] = [];
+
+    for (const [key, value] of resource.getEntries()) {
+      this.collectFrozenRefs(key, discovered, queue);
+      this.collectFrozenRefs(value as FrozenJsonValue, discovered, queue);
+    }
+
+    if (queue.length === 0) {
+      return;
+    }
+
+    const toPublish = new Map<string, FrozenJsonValue>();
+
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+
+      if (toPublish.has(id) || this.publishedFrozenIds.has(id)) {
+        continue;
+      }
+
+      const body = getRegisteredFrozenBody(id);
+
+      if (body === undefined) {
+        // Not locally known — assume it is already hosted (or external).
+        continue;
+      }
+
+      toPublish.set(id, body as FrozenJsonValue);
+      // Expand the closure: a class body references its property ids, etc.
+      this.collectFrozenRefs(body as FrozenJsonValue, discovered, queue);
+    }
+
+    if (toPublish.size === 0) {
+      return;
+    }
+
+    await Promise.all(
+      [...toPublish].map(([id, body]) =>
+        this.publishFrozenResource(id as FrozenId, body).then(() => {
+          this.publishedFrozenIds.add(id);
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Walks a JSON-AD value, collecting every `did:ad:frozen:` string into `into`
+   * and (optionally) appending newly-seen ids to `queue` for closure expansion.
+   */
+  private collectFrozenRefs(
+    value: FrozenJsonValue,
+    into: Set<string>,
+    queue?: string[],
+  ): void {
+    if (typeof value === 'string') {
+      if (value.startsWith('did:ad:frozen:') && !into.has(value)) {
+        into.add(value);
+        queue?.push(value);
+      }
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        this.collectFrozenRefs(item, into, queue);
+      }
+    } else if (value !== null && typeof value === 'object') {
+      for (const item of Object.values(value)) {
+        this.collectFrozenRefs(item as FrozenJsonValue, into, queue);
+      }
     }
   }
 

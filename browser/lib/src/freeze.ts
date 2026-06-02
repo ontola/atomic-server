@@ -374,6 +374,32 @@ export function frozenIdFor(content: JsonValue): FrozenId {
   return (FROZEN_PREFIX + hashCanonical(content)) as FrozenId;
 }
 
+/**
+ * Process-wide registry of frozen bodies by id. Populated whenever frozen
+ * resources are computed locally (`defineSchema`, `registerFrozenSchema`,
+ * `loadSchemaLock`), so the Store can lazily PUT a referenced definition to the
+ * server on save without the caller ever publishing it explicitly. Bodies are
+ * immutable and content-addressed, so first-write-wins is always safe.
+ */
+const frozenBodyRegistry = new Map<FrozenId, JsonValue>();
+
+export function registerFrozenBodies(
+  resources: ReadonlyArray<{ frozenId: FrozenId; content: JsonValue }>,
+): void {
+  for (const { frozenId, content } of resources) {
+    if (!frozenBodyRegistry.has(frozenId)) {
+      frozenBodyRegistry.set(frozenId, content);
+    }
+  }
+}
+
+/** The locally-known body for a frozen id, if one has been registered. */
+export function getRegisteredFrozenBody(
+  frozenId: string,
+): JsonValue | undefined {
+  return frozenBodyRegistry.get(frozenId as FrozenId);
+}
+
 function stronglyConnectedComponents(
   nodes: string[],
   edges: Map<string, Set<string>>,
