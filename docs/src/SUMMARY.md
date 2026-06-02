@@ -71,6 +71,7 @@
   - [Schema](schema/intro.md)
     - [Classes](schema/classes.md)
     - [Datatypes](schema/datatypes.md)
+    - [Code-first schemas](schema/code-first.md)
     - [FAQ](schema/faq.md)
 
 - [Atomic Data Extended](extended.md)
