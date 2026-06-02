@@ -859,11 +859,15 @@ Rules:
       - reuse one imported Property in another Class
       - table-created schema exports and re-imports
       - required/datatype validation still works
-- [x] Port the content-addressing core to Rust for cross-language **authoring**:
-      `lib/src/frozen.rs#freeze_resources` (Tarjan SCC + color refinement +
-      one-unit-per-cycle), byte-for-byte identical to TS, pinned by
-      `test-vectors/freeze-resources.json`. A Rust `freeze_schema` DSL (the
-      JSON-Schema-subset → frozen bodies layer) on top is the remaining piece.
+- [x] Cross-language **authoring** in Rust: `lib/src/frozen.rs#freeze_resources`
+      (the content-addressing core — Tarjan SCC + color refinement +
+      one-unit-per-cycle) and `freeze_schema` (the order-preserving schema DSL →
+      frozen Ontology/Class/Property ids). Both byte-for-byte identical to TS,
+      pinned by `test-vectors/freeze-resources.json` and `freeze-schema.json`. A
+      Rust app can now author a schema and get the same `did:ad:frozen` ids as the
+      TS producer. (Key sorting uses byte order; TS `localeCompare` coincides for
+      lowercase-ASCII shortnames — the convention. Codegen of native Rust structs
+      from frozen schemas is a further, optional step.)
 - [ ] Add optional JSON Schema validation in the browser SDK and Rust/server
       (richer keywords beyond the Atomic subset).
 - [ ] Add optional JSON Schema validation in the browser SDK.
