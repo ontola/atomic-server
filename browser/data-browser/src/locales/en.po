@@ -2236,6 +2236,7 @@ msgstr "Nothing to copy."
 msgid "Copied error to clipboard"
 msgstr "Copied error to clipboard"
 
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
 #: src/components/Toaster.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Copy"
@@ -4392,3 +4393,59 @@ msgstr "Build commit"
 #: src/routes/AboutRoute.tsx
 msgid "built {0}"
 msgstr "built {0}"
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Freeze"
+msgstr "Freeze"
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Create an immutable, content-addressed (did:ad:frozen) copy of this resource and the structure it references."
+msgstr "Create an immutable, content-addressed (did:ad:frozen) copy of this resource and the structure it references."
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Copied frozen JSON-AD"
+msgstr "Copied frozen JSON-AD"
+
+#. placeholder {0}: count
+#. placeholder {1}: count === 1 ? '' : 's'
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Published {0} frozen resource{1}"
+msgstr "Published {0} frozen resource{1}"
+
+#. placeholder {0}: (e as Error).message
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Publish failed: {0}"
+msgstr "Publish failed: {0}"
+
+#. placeholder {0}: resource.title
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Freeze {0}"
+msgstr "Freeze {0}"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "<0/> JSON-AD <1>reproducible, no history</1>"
+msgstr "<0/> JSON-AD <1>reproducible, no history</1>"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "<0/> Loro <1>coming soon</1>"
+msgstr "<0/> Loro <1>coming soon</1>"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Coming soon — keeps CRDT history, binary, id not reproducible"
+msgstr "Coming soon — keeps CRDT history, binary, id not reproducible"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Freeze format"
+msgstr "Freeze format"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "<0/> Include referenced structure"
+msgstr "<0/> Include referenced structure"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Download"
+msgstr "Download"
+
+#: src/components/ResourceContextMenu/FreezeDialog.tsx
+msgid "Publish to server"
+msgstr "Publish to server"
