@@ -261,9 +261,7 @@ export function useValue(
     },
     [store, subject, stable, propertyURL],
   );
-  const val = useSyncExternalStore(subscribe, () =>
-    resource.get(propertyURL),
-  );
+  const val = useSyncExternalStore(subscribe, () => resource.get(propertyURL));
 
   const saveResource = useCallback(() => {
     if (!commit) {
@@ -534,6 +532,65 @@ export function useDate(
 
     return;
   }
+}
+
+/**
+ * Reactive creation timestamp (a `Date`) derived from the resource's genesis
+ * Loro change — no commit fetch, and it survives a refresh. Returns undefined
+ * until the doc has history, or for an offline-authored genesis with no
+ * recorded time. See {@link Resource.getCreatedAt}.
+ */
+export function useCreatedAt(resource: Resource): Date | undefined {
+  const stable = resource.stable;
+  const subject = resource.subject;
+  const store = useStore();
+  // Subscribe to resource updates AND Loro WASM readiness — the oplog only
+  // becomes readable once the lazy `loro-crdt` module lands (mirrors
+  // `useLoroDoc`).
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      const unsubResource = store.subscribe(subject, () => cb());
+      const unsubLoro = LoroLoader.onReady(cb);
+
+      return () => {
+        unsubResource();
+        unsubLoro();
+      };
+    },
+    [store, subject],
+  );
+
+  // getSnapshot returns a stable primitive (ms number) — the genesis change is
+  // immutable, so successive calls are referentially equal and don't loop.
+  const ms = useSyncExternalStore(subscribe, () => stable.getCreatedAt());
+
+  return useMemo(() => (ms === undefined ? undefined : new Date(ms)), [ms]);
+}
+
+/**
+ * Reactive creator — the signing agent's subject — derived from the
+ * resource's genesis Loro change. No commit fetch. Returns undefined for
+ * resources created before this metadata was embedded. See
+ * {@link Resource.getCreatedBy}.
+ */
+export function useCreatedBy(resource: Resource): string | undefined {
+  const stable = resource.stable;
+  const subject = resource.subject;
+  const store = useStore();
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      const unsubResource = store.subscribe(subject, () => cb());
+      const unsubLoro = LoroLoader.onReady(cb);
+
+      return () => {
+        unsubResource();
+        unsubLoro();
+      };
+    },
+    [store, subject],
+  );
+
+  return useSyncExternalStore(subscribe, () => stable.getCreatedBy());
 }
 
 /**

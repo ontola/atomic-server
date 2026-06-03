@@ -56,6 +56,7 @@ pub const Y_UPDATE: &str = "https://atomicdata.dev/properties/yUpdate";
 pub const LORO_UPDATE: &str = "https://atomicdata.dev/properties/loroUpdate";
 pub const SIGNER: &str = "https://atomicdata.dev/properties/signer";
 pub const CREATED_AT: &str = "https://atomicdata.dev/properties/createdAt";
+pub const CREATED_BY: &str = "https://atomicdata.dev/properties/createdBy";
 pub const SIGNATURE: &str = "https://atomicdata.dev/properties/signature";
 pub const PREVIOUS_COMMIT: &str = "https://atomicdata.dev/properties/previousCommit";
 pub const LAST_COMMIT: &str = "https://atomicdata.dev/properties/lastCommit";

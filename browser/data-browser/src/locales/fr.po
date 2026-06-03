@@ -4659,3 +4659,11 @@ msgstr "Une courte description donnée à l'Agent IA, utilisez ceci pour lui dir
 #: src/routes/SyncRoute.tsx
 msgid "Synced {0} resource{1} with {2}"
 msgstr "Ressource{1} {0} synchronisée avec {2}"
+
+#: src/routes/DataRoute.tsx
+msgid "genesis:"
+msgstr "genèse :"
+
+#: src/routes/DataRoute.tsx
+msgid "Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature."
+msgstr "Créateur et heure de création, dérivés du commit de genèse signé (l'identité de la ressource). Pour les ressources DID, le sujet ci-dessus EST la signature de genèse."

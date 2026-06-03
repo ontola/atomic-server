@@ -658,7 +658,11 @@ export class Resource<C extends OptionalClass = any> {
    * materialization heuristic, exactly as before this map existed. Properties
    * edited via `set()` with validation are always cached by the time we sign.
    */
-  private writeDatatypeTags(): void {
+  private writeDatatypeTags(
+    commitOptions: { origin?: string; timestamp?: number; message?: string } = {
+      origin: SYSTEM_COMMIT_ORIGIN,
+    },
+  ): void {
     const doc = this._loroDoc;
 
     if (!doc) {
@@ -695,7 +699,11 @@ export class Resource<C extends OptionalClass = any> {
     // pushes a phantom checkpoint and the user's next undo silently reverts
     // the datatype-tag rewrite instead of their stroke / property change.
     if (wroteAnything) {
-      doc.commit({ origin: SYSTEM_COMMIT_ORIGIN });
+      // For a genesis sign, `signChanges` passes the agent + ms timestamp here:
+      // this is the FIRST commit on the doc, so it creates the genesis change,
+      // and the creation metadata (createdBy/createdAt) must ride on it. A later
+      // `commit()` would be a no-op (no pending ops) and never attach them.
+      doc.commit(commitOptions);
     }
   }
 
@@ -850,8 +858,11 @@ export class Resource<C extends OptionalClass = any> {
    *
    * @internal used by `signChanges` only — not part of the public API.
    */
-  public exportLoroDelta(isFirstCommit: boolean): Uint8Array | undefined {
-    return this.exportLoroDeltaInternal(isFirstCommit);
+  public exportLoroDelta(
+    isFirstCommit: boolean,
+    commitMessage?: string,
+  ): Uint8Array | undefined {
+    return this.exportLoroDeltaInternal(isFirstCommit, commitMessage);
   }
 
   /**
@@ -973,9 +984,16 @@ export class Resource<C extends OptionalClass = any> {
     // collapses into a single Change (same peer, same second) and history
     // shows only the latest state. Set synchronously here, before any
     // `await`, so it never races user input or the save cursor.
-    this._loroDoc.commit(
-      commitMessage ? { message: commitMessage } : undefined,
-    );
+    // Stamp every commit with millisecond precision. Loro's auto-record is
+    // second-resolution, which collapses the ordering of resources created in
+    // the same second (e.g. chat messages sorted by `createdAt`, which is read
+    // from the genesis change's timestamp). Loro orders changes by lamport,
+    // not timestamp, so a finer timestamp is safe metadata; readers normalise
+    // mixed-unit oplogs via `normalizeLoroChangeTimestampMs`.
+    this._loroDoc.commit({
+      timestamp: Date.now(),
+      ...(commitMessage ? { message: commitMessage } : {}),
+    });
 
     // If it's the first commit, we must export a full snapshot.
     if (isFirstCommit || !this._loroVersionAtLastSave) {
@@ -1484,6 +1502,99 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
+   * The founding (genesis) change in the Loro oplog: the earliest change by
+   * timestamp, then by op counter (offline edits record timestamp 0, so the
+   * counter tiebreak keeps genesis first). Creation metadata is derived from
+   * it — and because it lives inside the resource's own Loro doc, no separate
+   * commit fetch is needed and it survives a refresh.
+   */
+  private getGenesisChange():
+    | { timestamp: number; message: string | undefined }
+    | undefined {
+    const doc = this.getLoroDoc();
+
+    if (!doc) {
+      return undefined;
+    }
+
+    let genesis:
+      | { timestamp: number; lamport: number; message: string | undefined }
+      | undefined;
+
+    for (const [, changes] of doc.getAllChanges().entries()) {
+      for (const change of changes) {
+        // Select by Lamport (causal order) — the founding change is the
+        // minimum. NOT by timestamp: a server-authored follow-up (e.g.
+        // `lastCommit` after apply) can carry a second-resolution timestamp
+        // that sorts before the client's millisecond-precise genesis within
+        // the same second, mis-picking a later, message-less change.
+        if (!genesis || change.lamport < genesis.lamport) {
+          genesis = {
+            timestamp: change.timestamp,
+            lamport: change.lamport,
+            message: change.message,
+          };
+        }
+      }
+    }
+
+    return (
+      genesis && { timestamp: genesis.timestamp, message: genesis.message }
+    );
+  }
+
+  /**
+   * Creation timestamp (Unix **ms**) from the genesis change in the Loro
+   * oplog, or undefined when the doc has no history yet or the genesis was
+   * authored offline (timestamp 0, not yet known). Read this instead of
+   * fetching the genesis commit just to show *when* — it travels in the doc
+   * and survives a refresh. See `planning/commit-retention-and-state-certificates.md`.
+   */
+  public getCreatedAt(): number | undefined {
+    // Prefer the materialized `createdAt` propval: the server (and the local
+    // WASM DB) derive it from the genesis change and serialise it in JSON-AD,
+    // so it's the authoritative value that survives every round-trip and
+    // re-fetch. Fall back to the genesis oplog change for a freshly-created
+    // local resource that hasn't been materialised yet.
+    const fromPropval = this.get(properties.commit.createdAt);
+
+    if (typeof fromPropval === 'number') {
+      return normalizeLoroChangeTimestampMs(fromPropval);
+    }
+
+    const genesis = this.getGenesisChange();
+
+    if (!genesis || genesis.timestamp <= 0) {
+      return undefined;
+    }
+
+    return normalizeLoroChangeTimestampMs(genesis.timestamp);
+  }
+
+  /**
+   * Creator — the signing agent's subject — from the genesis change's commit
+   * message in the Loro oplog, or undefined for resources created before this
+   * metadata was embedded. The oplog itself only records a random Loro peer
+   * id, never the agent, so `signChanges` writes the agent subject into the
+   * genesis change message as the carrier. Read this instead of fetching the
+   * genesis commit just to show *who*.
+   */
+  public getCreatedBy(): string | undefined {
+    // Prefer the materialized `createdBy` propval (server / WASM DB, serialised
+    // in JSON-AD); fall back to the genesis change message for a freshly-created
+    // local resource that hasn't been materialised yet.
+    const fromPropval = this.get(properties.createdBy);
+
+    if (typeof fromPropval === 'string' && fromPropval.length > 0) {
+      return fromPropval;
+    }
+
+    const message = this.getGenesisChange()?.message;
+
+    return message && message.length > 0 ? message : undefined;
+  }
+
+  /**
    * Get the history of this resource from its Loro OpLog.
    * Returns an array of Versions, each with materialized property values
    * at that point in time. Uses Loro's `checkout()` for instant time-travel
@@ -1535,10 +1646,16 @@ export class Resource<C extends OptionalClass = any> {
       }
     }
 
-    // Sort by timestamp (oldest first), then by counter. Loro often reports
-    // timestamp=0 for offline edits, so the counter tiebreaker keeps things
-    // monotonic per peer — but cross-peer order is best-effort.
-    steps.sort((a, b) => a.timestamp - b.timestamp || a.counter - b.counter);
+    // Sort by timestamp (oldest first), then by counter. Normalise first so a
+    // mixed-unit oplog (ms-stamped commits alongside legacy second-resolution
+    // changes) orders correctly. Loro often reports timestamp=0 for offline
+    // edits, so the counter tiebreaker keeps things monotonic per peer — but
+    // cross-peer order is best-effort.
+    steps.sort(
+      (a, b) =>
+        normalizeLoroChangeTimestampMs(a.timestamp) -
+          normalizeLoroChangeTimestampMs(b.timestamp) || a.counter - b.counter,
+    );
 
     const lastCommitProp = 'https://atomicdata.dev/properties/lastCommit';
     type GroupedVersion = {
@@ -2149,12 +2266,6 @@ export class Resource<C extends OptionalClass = any> {
     this.rebuildCacheFromLoro();
     this.#cacheDirty = false;
 
-    // Phase 1 (loro-source-of-truth): stamp the sibling `datatypes` map so
-    // the server materializes references/arrays exactly. Runs here — after
-    // every property is in the doc, before the snapshot export below — so it
-    // covers props set via `set()` and via cache hydration alike.
-    this.writeDatatypeTags();
-
     // Chain on the resource's lastCommit (server-acked). Under
     // sign-at-drain there's at most one signed-but-unposted commit
     // per subject (the optional `signedGenesis` in the outbox), and
@@ -2162,14 +2273,40 @@ export class Resource<C extends OptionalClass = any> {
     // to chain on an unposted local commit.
     const lastCommit =
       this._lastCommit ?? this.get(properties.commit.lastCommit)?.toString();
+    const isFirstCommit = !lastCommit;
+
+    // Phase 1 (loro-source-of-truth): stamp the sibling `datatypes` map so
+    // the server materializes references/arrays exactly. Runs here — after
+    // every property is in the doc, before the snapshot export below — so it
+    // covers props set via `set()` and via cache hydration alike.
+    //
+    // On a genesis sign this is the FIRST commit on the doc, so it creates the
+    // genesis change — tag it with the signing agent's subject (→ `createdBy`)
+    // and a millisecond timestamp (→ `createdAt`). The oplog records only a
+    // random peer id, never the agent, so this commit message is what carries
+    // authorship inside the doc, readable without fetching the commit (which is
+    // no longer refetchable under sign-at-drain).
+    this.writeDatatypeTags(
+      isFirstCommit
+        ? {
+            origin: SYSTEM_COMMIT_ORIGIN,
+            timestamp: Date.now(),
+            message: agent.subject,
+          }
+        : undefined,
+    );
 
     if (lastCommit) {
       this.#commitBuilder.setPreviousCommit(lastCommit);
     }
 
-    // Export Loro delta — this is the sole carrier of property changes.
-    const isFirstCommit = !this.#commitBuilder.previousCommit;
-    const loroDelta = this.exportLoroDelta(isFirstCommit);
+    // Export Loro delta — the sole carrier of property changes. Pass the agent
+    // again as a fallback: if `writeDatatypeTags` had nothing to commit, this
+    // export's commit is the one that creates the genesis change.
+    const loroDelta = this.exportLoroDelta(
+      isFirstCommit,
+      isFirstCommit ? agent.subject : undefined,
+    );
 
     if (!this.#commitBuilder.hasUnsavedChanges() && !loroDelta) {
       this._dirty = false;

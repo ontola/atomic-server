@@ -2,8 +2,6 @@ import { describe, it } from 'vitest';
 import { normalizeLoroChangeTimestampMs, Resource } from './resource.js';
 import type { JSONValue } from './value.js';
 
-const yProp = 'https://example.com/y-test-prop';
-
 describe('resource.ts', () => {
   it('push propvals', ({ expect }) => {
     const resource = new Resource('test');
@@ -43,6 +41,82 @@ describe('resource.ts', () => {
     expect(
       resource.get('https://atomicdata.dev/properties/subresources'),
     ).toStrictEqual([testsubject, testsubject2, testsubject, testsubject]);
+  });
+
+  it('getCreatedAt / getCreatedBy read the genesis change, surviving a snapshot round-trip', async ({
+    expect,
+  }) => {
+    const subject = 'https://example.com/created-test';
+    const description = 'https://atomicdata.dev/properties/description';
+    // `signChanges` writes the signing agent's subject into the genesis Loro
+    // change message; mirror that here with an explicit commit message.
+    const agentSubject = 'did:ad:agent:testpubkey';
+    // Millisecond-precise genesis timestamp (what the runtime stamps via
+    // `Date.now()`), so `createdAt` is sub-second precise — not rounded to a
+    // whole second by Loro's default auto-record.
+    const createdAtMs = 1_700_000_123_456;
+
+    const original = new Resource(subject);
+    await original.set(description, 'hello', false);
+    original
+      .getLoroDoc()!
+      .commit({ message: agentSubject, timestamp: createdAtMs });
+
+    expect(original.getCreatedBy()).toBe(agentSubject);
+    expect(original.getCreatedAt()).toBe(createdAtMs);
+
+    // Simulate a refresh: hydrate a fresh Resource from the exported snapshot.
+    // Creator + timestamp must come back from the oplog alone — no commit fetch.
+    const snapshot = original.getLoroDoc()!.export({ mode: 'snapshot' });
+    const reloaded = new Resource(subject);
+    reloaded.importLoroUpdate(snapshot);
+
+    expect(reloaded.getCreatedBy()).toBe(agentSubject);
+    expect(reloaded.getCreatedAt()).toBe(createdAtMs);
+  });
+
+  it('getCreatedBy is undefined when the genesis change carries no message', async ({
+    expect,
+  }) => {
+    const resource = new Resource('https://example.com/no-creator');
+    await resource.set(
+      'https://atomicdata.dev/properties/description',
+      'x',
+      false,
+    );
+    resource.getLoroDoc()!.commit();
+
+    expect(resource.getCreatedBy()).toBeUndefined();
+  });
+
+  it('getCreatedAt / getCreatedBy prefer the materialized propval over the oplog', async ({
+    expect,
+  }) => {
+    const resource = new Resource('https://example.com/propval-wins');
+    await resource.set(
+      'https://atomicdata.dev/properties/description',
+      'hi',
+      false,
+    );
+    // Oplog genesis carries one creator/time...
+    resource
+      .getLoroDoc()!
+      .commit({ message: 'did:ad:agent:oplog', timestamp: 1_700_000_000_000 });
+    // ...but the server/WASM-materialized propvals (as served in JSON-AD) are
+    // authoritative and must win.
+    await resource.set(
+      'https://atomicdata.dev/properties/createdAt',
+      1_700_000_999_999,
+      false,
+    );
+    await resource.set(
+      'https://atomicdata.dev/properties/createdBy',
+      'did:ad:agent:materialized',
+      false,
+    );
+
+    expect(resource.getCreatedAt()).toBe(1_700_000_999_999);
+    expect(resource.getCreatedBy()).toBe('did:ad:agent:materialized');
   });
 
   it('merges remote state without dropping local unsaved loro edits', async ({

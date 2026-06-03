@@ -487,6 +487,14 @@ impl Commit {
                 )
             })?;
 
+        // NOTE: `createdAt` / `createdBy` are server-managed creation metadata
+        // (materialized from the genesis oplog change). We do NOT reject commits
+        // that carry them: the materialized values round-trip back to clients in
+        // JSON-AD, so a later edit legitimately re-sends them (e.g. saving an
+        // agent's name). Rejecting broke those saves. Forge-resistance is the
+        // job of the genesis certificate (`planning/genesis-self-verifying.md`),
+        // where identity metadata is signed into the DID, not a settable propval.
+
         // Causality guard: a commit with a non-trivial loroUpdate that
         // produces ZERO net state change.
         //
