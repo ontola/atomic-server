@@ -64,6 +64,7 @@ const config: PlaywrightTestConfig = {
   projects: [
     {
       name: 'chromium',
+      // No `testMatch` — chromium runs the whole suite (incl. the locks spec).
       use: {
         ...devices['Desktop Chrome'],
         // CI sets ATOMIC_TEST_INSECURE_ORIGIN to the http:// origin of the
@@ -88,21 +89,23 @@ const config: PlaywrightTestConfig = {
           : undefined,
       },
     },
+    // Firefox runs ONLY the ClientDb locks spec — it guards the hardened
+    // Firefox leadership path (no Chromium lock-steal). The rest of the suite
+    // stays chromium-only (the SPA targets Chromium-class browsers). Skipped
+    // when ATOMIC_TEST_HOST_MAP is set: that's the dagger CI's non-localhost
+    // origin, where the secure-context (`crypto.subtle`) workaround is a
+    // chromium-only `--host-resolver-rules` flag, so the WASM ClientDb can't
+    // init on Firefox there. Locally (localhost is a secure context) it runs.
+    ...(process.env.ATOMIC_TEST_HOST_MAP
+      ? []
+      : [
+          {
+            name: 'firefox',
+            testMatch: /client-db-locks\.spec\.ts/,
+            use: { ...devices['Desktop Firefox'] },
+          },
+        ]),
   ],
-  // projects: [
-  //   {
-  //     name: 'chromium',
-  //     use: { ...devices['Desktop Chrome'] },
-  //   },
-  //   {
-  //     name: 'firefox',
-  //     use: { ...devices['Desktop Firefox'] },
-  //   },
-  //   {
-  //     name: 'webkit',
-  //     use: { ...devices['Desktop Safari'] },
-  //   },
-  // ],
   fullyParallel: true,
   // 2 workers for speed. CI uses 1 worker + retries=2; locally we
   // prefer the speed and depend on the tests themselves to be
