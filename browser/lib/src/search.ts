@@ -13,6 +13,17 @@ export interface SearchOpts {
   };
 }
 
+export interface SemanticSearchOpts {
+  /** Fetch full resources instead of subjects */
+  include?: boolean;
+  /** Max of how many results to return */
+  limit?: number;
+  parents?: string[] | string;
+  isA?: string[] | string;
+  rerank?: boolean;
+  text_query?: string;
+}
+
 const baseURL = (serverURL: string) => {
   const url = new URL(serverURL);
   url.pathname = 'search';
@@ -100,6 +111,40 @@ export function buildSearchSubject(
       url.searchParams.append('parents', parents.join(','));
     } else {
       url.searchParams.append('parents', parents);
+    }
+  }
+
+  return url.toString();
+}
+
+export function buildSemanticSearchSubject(
+  serverURL: string,
+  query: string,
+  opts: SemanticSearchOpts = {},
+) {
+  const url = new URL(serverURL);
+  url.pathname = 'vector_search';
+
+  url.searchParams.set('q', query);
+  if (opts.include) url.searchParams.set('include', opts.include.toString());
+  if (opts.limit) url.searchParams.set('limit', opts.limit.toString());
+  if (opts.rerank) url.searchParams.set('rerank', opts.rerank.toString());
+  if (opts.text_query)
+    url.searchParams.set('text_q', opts.text_query.toString());
+
+  if (opts.isA) {
+    if (Array.isArray(opts.isA)) {
+      url.searchParams.append('is_a', opts.isA.join(','));
+    } else {
+      url.searchParams.append('is_a', opts.isA);
+    }
+  }
+
+  if (opts.parents) {
+    if (Array.isArray(opts.parents)) {
+      url.searchParams.append('parents', opts.parents.join(','));
+    } else {
+      url.searchParams.append('parents', opts.parents);
     }
   }
 

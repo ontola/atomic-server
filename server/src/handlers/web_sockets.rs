@@ -12,7 +12,8 @@ in [`atomic_lib::sync::protocol`]; the TypeScript counterparts are
 (high-level client). Update all four together when changing the protocol.
  */
 use actix::{
-    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Handler, StreamHandler, WrapFuture,
+    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Handler, Message, Running,
+    StreamHandler, WrapFuture,
 };
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web_actors::ws::{self, WsResponseBuilder};
@@ -22,12 +23,13 @@ use atomic_lib::{
     Db, Storelike,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::{
     actor_messages::SendFrame, appstate::AppState, commit_monitor::CommitMonitor,
     errors::AtomicServerResult, handlers::ws_v2, helpers::get_auth_headers,
-    loro_sync_broadcaster::LoroSyncBroadcaster,
+    loro_sync_broadcaster::LoroSyncBroadcaster, vector_search::VectorSearchState,
 };
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -71,6 +73,9 @@ pub async fn web_socket_handler(
             agent: for_agent,
             store: appstate.store.clone(),
             connection_id: new_connection_id(),
+            vector_search_state: appstate.vector_search_state.clone(),
+            index_status_broadcast: appstate.index_status_broadcast.clone(),
+            index_status_subscribed: std::collections::HashSet::new(),
         },
         &req,
         stream,
@@ -105,6 +110,61 @@ pub struct WebSocketConnection {
     /// `CommitResponse` and the emitted `DbEvent`s, so the commit monitor
     /// can suppress broadcasts back to this connection.
     connection_id: String,
+    vector_search_state: VectorSearchState,
+    index_status_broadcast: Arc<IndexStatusBroadcast>,
+    index_status_subscribed: std::collections::HashSet<String>,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct IndexStatusPush {
+    pub drive: String,
+    pub indexing: bool,
+}
+
+/// Fan-out for `INDEX_STATUS` websocket messages (per subscribed drive).
+pub struct IndexStatusBroadcast {
+    inner: Arc<Mutex<std::collections::HashMap<String, Vec<Addr<WebSocketConnection>>>>>,
+}
+
+impl IndexStatusBroadcast {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(std::collections::HashMap::new())),
+        }
+    }
+
+    pub fn subscribe(&self, drive: String, addr: Addr<WebSocketConnection>) {
+        let mut g = self.inner.lock().expect("index status broadcast mutex");
+        g.entry(drive).or_default().push(addr);
+    }
+
+    pub fn unsubscribe_drive(&self, drive: &str, addr: &Addr<WebSocketConnection>) {
+        let mut g = self.inner.lock().expect("index status broadcast mutex");
+        if let Some(v) = g.get_mut(drive) {
+            v.retain(|a: &Addr<WebSocketConnection>| a != addr);
+        }
+    }
+
+    pub fn unsubscribe_all_for_addr(&self, addr: &Addr<WebSocketConnection>) {
+        let mut g = self.inner.lock().expect("index status broadcast mutex");
+        for v in g.values_mut() {
+            v.retain(|a: &Addr<WebSocketConnection>| a != addr);
+        }
+    }
+
+    pub fn notify(&self, drive: &str, indexing: bool) {
+        let addrs: Vec<Addr<WebSocketConnection>> = {
+            let g = self.inner.lock().expect("index status broadcast mutex");
+            g.get(drive).cloned().unwrap_or_default()
+        };
+        for addr in addrs {
+            let _ = addr.do_send(IndexStatusPush {
+                drive: drive.to_string(),
+                indexing,
+            });
+        }
+    }
 }
 
 impl Actor for WebSocketConnection {
@@ -134,6 +194,11 @@ impl Actor for WebSocketConnection {
             .do_send(crate::actor_messages::UnsubscribeAll { addr: addr.clone() });
         self.loro_sync_broadcaster_addr
             .do_send(crate::actor_messages::UnsubscribeAll { addr });
+    }
+    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
+        self.index_status_broadcast
+            .unsubscribe_all_for_addr(&ctx.address());
+        Running::Stop
     }
 }
 
@@ -388,7 +453,29 @@ impl WebSocketConnection {
 
     /// Handle remaining text messages (Loro sync, SYNC_VV/DELTAS, query subs).
     fn handle_text(&mut self, text: &str, ctx: &mut ws::WebsocketContext<Self>) {
-        if let Some(json) = text.strip_prefix("LORO_SYNC_SUBSCRIBE ") {
+        if let Some(json) = text.strip_prefix("SUBSCRIBE_INDEX_STATUS ") {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
+                if let Some(drive) = v.get("drive").and_then(|d| d.as_str()) {
+                    let addr = ctx.address();
+                    self.index_status_broadcast
+                        .subscribe(drive.to_string(), addr.clone());
+                    self.index_status_subscribed.insert(drive.to_string());
+                    let indexing = self.vector_search_state.is_drive_indexing(drive);
+                    let payload = serde_json::json!({ "drive": drive, "indexing": indexing });
+                    if let Ok(s) = serde_json::to_string(&payload) {
+                        ctx.text(format!("INDEX_STATUS {s}"));
+                    }
+                }
+            }
+        } else if let Some(json) = text.strip_prefix("UNSUBSCRIBE_INDEX_STATUS ") {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
+                if let Some(drive) = v.get("drive").and_then(|d| d.as_str()) {
+                    self.index_status_broadcast
+                        .unsubscribe_drive(drive, &ctx.address());
+                    self.index_status_subscribed.remove(drive);
+                }
+            }
+        } else if let Some(json) = text.strip_prefix("LORO_SYNC_SUBSCRIBE ") {
             if let Ok(msg) =
                 serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
             {
@@ -545,11 +632,9 @@ impl Handler<crate::actor_messages::MembershipNotification> for WebSocketConnect
             .store
             .get_base_domain()
             .unwrap_or_else(|| "http://localhost".to_string());
-        let subject_resolved = atomic_lib::Subject::from_raw(
-            &msg.subject,
-            self.store.get_base_domain().as_deref(),
-        )
-        .resolve(&origin);
+        let subject_resolved =
+            atomic_lib::Subject::from_raw(&msg.subject, self.store.get_base_domain().as_deref())
+                .resolve(&origin);
 
         if msg.added {
             let Some(snapshot) = msg.loro_snapshot.filter(|b| !b.is_empty()) else {
@@ -608,4 +693,17 @@ async fn handle_sync_vv(request: SyncVVRequest, store: Db, agent: ForAgent) -> V
 /// Delegate to atomic_lib sync engine.
 async fn handle_sync_deltas(request: SyncDeltasRequest, store: Db, _agent: ForAgent) {
     atomic_lib::sync::engine::handle_sync_deltas(&request.drive, &request.deltas, &store).await;
+}
+impl Handler<IndexStatusPush> for WebSocketConnection {
+    type Result = ();
+
+    fn handle(&mut self, msg: IndexStatusPush, ctx: &mut ws::WebsocketContext<Self>) {
+        let payload = serde_json::json!({
+            "drive": msg.drive,
+            "indexing": msg.indexing,
+        });
+        if let Ok(s) = serde_json::to_string(&payload) {
+            ctx.text(format!("INDEX_STATUS {}", s));
+        }
+    }
 }

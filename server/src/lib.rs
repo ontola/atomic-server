@@ -21,6 +21,7 @@ mod metrics;
 pub mod plugins;
 pub mod routes;
 pub mod serve;
+pub mod vector_search;
 // #[cfg(feature = "search")]
 pub mod iroh_transport;
 mod search;

@@ -158,7 +158,7 @@ pub async fn search_query(
 }
 
 #[instrument(skip(appstate, req))]
-async fn get_resources(
+pub async fn get_resources(
     req: actix_web::HttpRequest,
     appstate: &web::Data<AppState>,
     subject: &str,
@@ -332,7 +332,7 @@ fn docs_to_subjects(
     // convert found documents to resources
     for (_score, doc_address) in docs {
         let retrieved_doc: tantivy::TantivyDocument = searcher.doc(doc_address)?;
-        let subject_val = retrieved_doc.get_first(fields.subject).ok_or("No 'subject' in search doc found. This is required when indexing. Run with --rebuild-indexes")?;
+        let subject_val = retrieved_doc.get_first(fields.subject).ok_or("No 'subject' in search doc found. This is required when indexing. Run with --rebuild-indexes search")?;
 
         let subject_val = tantivy::schema::OwnedValue::from(subject_val);
         let subject = unpack_value(&subject_val, &retrieved_doc, "Subject".to_string())?;

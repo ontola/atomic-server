@@ -35,7 +35,7 @@ export const OllamaModelSelector: React.FC<OllamaModelSelectorProps> = ({
   onSelect,
   selectedModel,
 }) => {
-  const { ollamaUrl, isProviderEnabled } = useAISettings();
+  const { ollamaUrl, isProviderAvailable } = useAISettings();
 
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(modelCache.length === 0);
@@ -79,8 +79,12 @@ export const OllamaModelSelector: React.FC<OllamaModelSelectorProps> = ({
     return <LoaderBlock>Loading...</LoaderBlock>;
   }
 
-  if (!isProviderEnabled(AIProvider.Ollama)) {
-    return <ModelInfoLayout.Empty>Ollama is not enabled</ModelInfoLayout.Empty>;
+  if (!isProviderAvailable(AIProvider.Ollama)) {
+    return (
+      <ModelInfoLayout.Empty>
+        Check your Ollama URL and that the server is running
+      </ModelInfoLayout.Empty>
+    );
   }
 
   return (

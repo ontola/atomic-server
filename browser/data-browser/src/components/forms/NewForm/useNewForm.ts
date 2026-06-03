@@ -11,7 +11,7 @@ import { useState, useEffect } from 'react';
 
 const resourseOpts = { newResource: true };
 
-type UseNewForm = {
+type UseNewFormOptions = {
   klass: Resource<Core.Class>;
   setSubject: (v: string) => void;
   initialSubject?: string;
@@ -19,9 +19,12 @@ type UseNewForm = {
 };
 
 /** Shared logic for NewForm components. */
-export const useNewForm = (args: UseNewForm) => {
-  const { klass, setSubject, initialSubject, parent } = args;
-
+export const useNewForm = ({
+  klass,
+  setSubject,
+  initialSubject,
+  parent,
+}: UseNewFormOptions) => {
   const store = useStore();
   const [initialized, setInitialized] = useState(false);
 
@@ -56,7 +59,7 @@ export const useNewForm = (args: UseNewForm) => {
 
       setInitialized(true);
     })();
-  }, [resource]);
+  }, [resource, parentVal, parent, isAVal.length, klass.subject]);
 
   async function setSubjectValue(newSubject: string) {
     setSubjectValueInternal(newSubject);

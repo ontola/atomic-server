@@ -3,13 +3,7 @@ import { styled, css, keyframes } from 'styled-components';
 import { SideBarItem } from '../SideBarItem';
 import { FloatingActions, floatingHoverStyles } from './FloatingActions';
 import { getIconForClass } from '../../../helpers/iconMap';
-import {
-  useResource,
-  useArray,
-  core,
-  useString,
-  useTitle,
-} from '@tomic/react';
+import { useResource, useArray, core, useTitle } from '@tomic/react';
 import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { DraggableAttributes } from '@dnd-kit/core';
 import { StyledLink, TextWrapper } from './shared';
@@ -62,7 +56,6 @@ export const SidebarItemTitle = memo(
       const resource = useResource(subject);
       const { sidebarKeyboardDndEnabled } = useSettings();
       const [classType] = useArray(resource, core.properties.isA);
-      const [description] = useString(resource, core.properties.description);
       const Icon = getIconForClass(classType[0]!);
       // Reactive title via `useTitle` (subscribes to `name`/`shortname`/
       // `filename` LocalChange events through `useValue`'s
@@ -83,7 +76,7 @@ export const SidebarItemTitle = memo(
             expandable ? (
               <>
                 <ExpandToggleButton
-                  type='button'
+                  type="button"
                   aria-expanded={expanded}
                   aria-label={expandLabel}
                   title={`Rearrange ${title}`}
@@ -103,7 +96,6 @@ export const SidebarItemTitle = memo(
                       onClick={onClick}
                       disabled={active}
                       resource={subject}
-                      title={description}
                     >
                       <TextWrapper>
                         <TreeRowTitle>{title}</TreeRowTitle>
@@ -119,14 +111,13 @@ export const SidebarItemTitle = memo(
                   onClick={onClick}
                   disabled={active}
                   resource={subject}
-                  title={description}
                 >
                   <TextWrapper>
                     <StyledIconButton
                       title={`Rearange ${title}`}
                       {...(listeners ?? {})}
                       {...(attributes ?? {})}
-                      role='link'
+                      role="link"
                     >
                       <Icon />
                       <FaGripVertical />
@@ -140,7 +131,7 @@ export const SidebarItemTitle = memo(
           ) : expandable ? (
             <>
               <ExpandToggleButton
-                type='button'
+                type="button"
                 aria-expanded={expanded}
                 aria-label={expandLabel}
                 title={expandLabel}
@@ -164,7 +155,6 @@ export const SidebarItemTitle = memo(
                     onClick={onClick}
                     disabled={active}
                     resource={subject}
-                    title={description}
                   >
                     <TextWrapper>
                       <TreeRowTitle>{title}</TreeRowTitle>
@@ -186,7 +176,6 @@ export const SidebarItemTitle = memo(
                 onClick={onClick}
                 disabled={active}
                 resource={subject}
-                title={description}
               >
                 <TextWrapper>
                   <LeadingSlot>

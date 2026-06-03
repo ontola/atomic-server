@@ -20,6 +20,7 @@ mod metrics;
 pub mod plugins;
 mod routes;
 pub mod serve;
+pub mod vector_search;
 // #[cfg(feature = "search")]
 mod iroh_transport;
 mod search;
@@ -95,7 +96,7 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                 .add_all_resources(&appstate.store)
                 .await?;
             println!("Successfully imported {:?} to store.", import_opts.file);
-            println!("WARNING: Your search index is not yet updated with these imported items. Run `--rebuild-index` to fix that.");
+            println!("WARNING: Your search index is not yet updated with these imported items. Run `--rebuild-indexes search` to fix that.");
             Ok(())
         }
         Some(config::Command::ShowConfig) => {

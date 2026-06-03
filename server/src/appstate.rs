@@ -1,8 +1,11 @@
 //! App state, which is accessible from handlers
+use std::sync::Arc;
+
 use crate::{
     commit_monitor::CommitMonitor,
     config::Config,
     errors::AtomicServerResult,
+    handlers::web_sockets::IndexStatusBroadcast,
     loro_sync_broadcaster::{self, LoroSyncBroadcaster},
     plugins,
     search::SearchState,
@@ -28,6 +31,8 @@ pub struct AppState {
     pub commit_monitor: actix::Addr<CommitMonitor>,
     pub loro_sync_broadcaster: actix::Addr<LoroSyncBroadcaster>,
     pub search_state: SearchState,
+    pub vector_search_state: crate::vector_search::VectorSearchState,
+    pub index_status_broadcast: Arc<IndexStatusBroadcast>,
 }
 
 impl AppState {
@@ -92,6 +97,7 @@ impl AppState {
         store.add_endpoint(plugins::prunetests::prune_tests_endpoint())?;
         store.add_endpoint(plugins::query::query_endpoint())?;
         store.add_endpoint(plugins::search::search_endpoint())?;
+        store.add_endpoint(plugins::vector_search::vector_search_endpoint())?;
 
         // Get and register Wasm class extender plugins
         #[cfg(feature = "wasm-plugins")]
@@ -129,6 +135,19 @@ impl AppState {
             search_state.add_all_resources(&store).await?;
         }
 
+        let index_status_broadcast = Arc::new(IndexStatusBroadcast::new());
+        let index_notifier: Arc<dyn Fn(&str, bool) + Send + Sync> = {
+            let b = index_status_broadcast.clone();
+            Arc::new(move |drive: &str, indexing: bool| {
+                b.notify(drive, indexing);
+            })
+        };
+
+        let vector_search_state =
+            crate::vector_search::VectorSearchState::new(&config, Some(index_notifier))
+                .await
+                .map_err(|e| format!("Failed to start vector search service: {}", e))?;
+
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
         let commit_monitor =
             crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone());
@@ -146,12 +165,20 @@ impl AppState {
         };
         store.set_handle_commit(Box::new(send_commit));
 
+        if should_init {
+            tracing::info!("Adding all resources to vector search index");
+            if let Err(e) = vector_search_state.add_all_resources(&store).await {
+                tracing::error!("Failed to add all resources to vector search index: {}", e);
+            }
+        }
         Ok(AppState {
             store,
             config,
             commit_monitor,
             loro_sync_broadcaster,
             search_state,
+            vector_search_state,
+            index_status_broadcast,
         })
     }
 
@@ -159,7 +186,28 @@ impl AppState {
     /// Cleanup code, writing buffers, committing changes, etc.
     fn exit(&self) -> AtomicServerResult<()> {
         self.search_state.writer.write()?.commit()?;
-        Ok(())
+
+        // `flush_pending` is async; sync teardown (`exit`) runs outside/normal teardown contexts where we cannot safely call `Handle::block_on()`
+        // — nesting Tokio block-on triggers panic ("cannot block_on runtime inside runtime").
+        let vs = self.vector_search_state.clone();
+        match std::thread::spawn(move || -> AtomicServerResult<()> {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| {
+                    format!(
+                        "failed to build shutdown tokio runtime for vector flush: {}",
+                        e
+                    )
+                })?;
+            rt.block_on(vs.flush_pending())
+        })
+        .join()
+        {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(_panic) => Err("vector index flush thread panicked on shutdown".into()),
+        }
     }
 }
 

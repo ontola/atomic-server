@@ -4,6 +4,10 @@ import { type AtomicUIMessage } from './types';
 import { AssistantMessage } from './AIChatMessageParts/AssistantMessage';
 import { IconButton } from '@components/IconButton/IconButton';
 import { UserMessage } from './AIChatMessageParts/UserMessage';
+import {
+  CompactSeparatorWidget,
+  extractSummaryTextFromMessage,
+} from './CompactSeparatorWidget';
 
 interface MessageProps {
   message: AtomicUIMessage;
@@ -16,6 +20,20 @@ export const AIChatMessage = ({
   onDeleteMessage,
   onRegenerateMessage,
 }: MessageProps) => {
+  if (message.metadata?.isSummary) {
+    return (
+      <MessageActionWrapper
+        message={message}
+        onDeleteMessage={onDeleteMessage}
+        data-summary-message
+      >
+        <CompactSeparatorWidget
+          summaryText={extractSummaryTextFromMessage(message)}
+        />
+      </MessageActionWrapper>
+    );
+  }
+
   if (message.role === 'user') {
     return (
       <MessageActionWrapper
@@ -59,14 +77,11 @@ const MessageTopWrapper = styled.div`
   }
 `;
 
-const MessageActionWrapper: React.FC<React.PropsWithChildren<MessageProps>> = ({
-  children,
-  message,
-  onDeleteMessage,
-  onRegenerateMessage,
-}) => {
+const MessageActionWrapper: React.FC<
+  React.PropsWithChildren<MessageProps & { 'data-summary-message'?: true }>
+> = ({ children, message, onDeleteMessage, onRegenerateMessage, ...rest }) => {
   return (
-    <MessageTopWrapper>
+    <MessageTopWrapper {...rest}>
       <FloatingActionRow>
         {onDeleteMessage && (
           <IconButton

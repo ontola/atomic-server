@@ -2,17 +2,14 @@ import * as React from 'react';
 import { Column, Row } from '@components/Row';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { MCPServersManager } from './MCP/MCPServersManager';
 import styled, { useTheme } from 'styled-components';
-import { transition } from '@helpers/transition';
 import { Suspense, useEffect, useState } from 'react';
 import { OpenRouterLoginButton } from './OpenRouterLoginButton';
 import { effectFetch } from '@helpers/effectFetch';
 import { CheckboxDescriptor } from '@components/forms/CheckboxDescriptor';
+import { transition } from '@helpers/transition';
 import { useAISettings } from './AISettingsContext';
-import { AIProvider } from './aiContstants';
 import { useIsOllamaUrlValid } from './useIsOllamaUrlValid';
-import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
 import { Details } from '@components/Details';
 import {
   SettingsContent,
@@ -22,6 +19,8 @@ import {
   SettingsSearchProvider,
   queryMatches,
 } from '@components/Settings';
+import { WarningBlock } from '@components/WarningBlock';
+import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
 
 const ModelSelect = React.lazy(
   () => import('@chunks/AI/ModelSelect/ModelSelect'),
@@ -30,6 +29,7 @@ const ModelSelect = React.lazy(
 const intl = new Intl.NumberFormat('default', {
   style: 'currency',
   currency: 'USD',
+  currencyDisplay: 'narrowSymbol',
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
@@ -55,16 +55,15 @@ const AISettings: React.FC = () => {
     setEnableAI,
     openRouterApiKey,
     setOpenRouterApiKey,
-    mcpServers,
-    setMcpServers,
     showTokenUsage,
     setShowTokenUsage,
     ollamaUrl,
     setOllamaUrl,
     showFollowUpPrompts,
     setShowFollowUpPrompts,
-    isProviderEnabled,
-    setIsProviderEnabled,
+    isProviderAvailable,
+    defaultChatModel,
+    setDefaultChatModel,
     shouldGenerateTitles,
     setShouldGenerateTitles,
     genFeaturesModel,
@@ -73,15 +72,25 @@ const AISettings: React.FC = () => {
 
   const [creditUsage, setCreditUsage] = useState<CreditUsage | undefined>();
 
-  const isOllamaUrlValid = useIsOllamaUrlValid(
-    isProviderEnabled(AIProvider.Ollama),
-    ollamaUrl,
+  const handleSetOpenRouterKey = (key: string | undefined) => {
+    if (!key) {
+      setCreditUsage(undefined);
+    }
+
+    setOpenRouterApiKey(key);
+  };
+
+  const genFeaturesUnavailable = !isProviderAvailable(
+    genFeaturesModel.provider,
   );
+  const defaultModelUnavailable = !isProviderAvailable(
+    defaultChatModel.provider,
+  );
+
+  const isOllamaUrlValid = useIsOllamaUrlValid(ollamaUrl);
 
   useEffect(() => {
     if (!openRouterApiKey) {
-      setCreditUsage(undefined);
-
       return;
     }
 
@@ -131,7 +140,7 @@ const AISettings: React.FC = () => {
       >
         <SettingsContent>
           <SettingsSearchProvider value={childContext}>
-            <Column gap='0.75rem'>
+            <Column gap="0.75rem">
               <CheckboxLabel>
                 <Checkbox checked={enableAI} onChange={setEnableAI} /> Enable AI
                 Features
@@ -145,28 +154,37 @@ const AISettings: React.FC = () => {
                   Show token usage in chats
                 </CheckboxLabel>
 
+                <SubSectionTitle as="h3">Default chat model</SubSectionTitle>
+                <Subtle as="p">
+                  Pre-selected when creating new agents. Does not override
+                  models you have already set per agent.
+                </Subtle>
+                {defaultModelUnavailable && (
+                  <WarningBlock>
+                    <WarningBlock.Title>
+                      The selected default model&apos;s provider is not
+                      available. Choose a model from a connected provider below.
+                    </WarningBlock.Title>
+                  </WarningBlock>
+                )}
+                <Suspense>
+                  <ModelSelect
+                    defaultModel={defaultChatModel}
+                    onSelect={setDefaultChatModel}
+                    enforceToolSupport
+                  />
+                </Suspense>
+
                 <SubGroup>
                   <SubSection>
                     <SubSectionTitle>OpenRouter</SubSectionTitle>
-                    <Column gap='0.5rem'>
-                      <CheckboxLabel>
-                        <Checkbox
-                          checked={isProviderEnabled(AIProvider.OpenRouter)}
-                          onChange={checked => {
-                            setIsProviderEnabled(
-                              AIProvider.OpenRouter,
-                              checked,
-                            );
-                          }}
-                        />
-                        Enable OpenRouter
-                      </CheckboxLabel>
+                    <Column gap="0.5rem">
                       <ConditionalSettings
                         fullWidth
-                        gap='0.5rem'
-                        enabled={isProviderEnabled(AIProvider.OpenRouter)}
+                        gap="0.5rem"
+                        enabled={true}
                       >
-                        <label htmlFor='openrouter-api-key'>
+                        <label htmlFor="openrouter-api-key">
                           OpenRouter API Key
                         </label>
                         <Row center>
@@ -178,13 +196,15 @@ const AISettings: React.FC = () => {
                           )}
                           <InputWrapper>
                             <InputStyled
-                              id='openrouter-api-key'
-                              type='password'
+                              id="openrouter-api-key"
+                              type="password"
                               value={openRouterApiKey || ''}
                               onChange={e =>
-                                setOpenRouterApiKey(e.target.value || undefined)
+                                handleSetOpenRouterKey(
+                                  e.target.value || undefined,
+                                )
                               }
-                              placeholder='Enter your OpenRouter API key'
+                              placeholder="Enter your OpenRouter API key"
                             />
                           </InputWrapper>
                         </Row>
@@ -208,60 +228,45 @@ const AISettings: React.FC = () => {
 
                   <SubSection>
                     <SubSectionTitle>Ollama</SubSectionTitle>
-                    <Column gap='0.5rem'>
-                      <CheckboxDescriptor
-                        label='Enable Ollama'
-                        description={
-                          <>
-                            Host your own AI models locally using{' '}
-                            <a
-                              href='https://ollama.com/'
-                              target='_blank'
-                              rel='noreferrer'
-                            >
-                              Ollama
-                            </a>
-                          </>
-                        }
-                      >
-                        {id => (
-                          <Checkbox
-                            id={id}
-                            checked={isProviderEnabled(AIProvider.Ollama)}
-                            onChange={checked =>
-                              setIsProviderEnabled(AIProvider.Ollama, checked)
-                            }
-                          />
-                        )}
-                      </CheckboxDescriptor>
+                    <Column gap="0.5rem">
+                      <Subtle>
+                        Host your own AI models locally using{' '}
+                        <a
+                          href="https://ollama.com/"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Ollama
+                        </a>
+                      </Subtle>
                       <ConditionalSettings
                         fullWidth
-                        gap='0.5rem'
-                        enabled={isProviderEnabled(AIProvider.Ollama)}
+                        gap="0.5rem"
+                        enabled={true}
                       >
-                        <Row center gap='1ch'>
+                        <Row center gap="1ch">
                           {isOllamaUrlValid ? (
                             <FaCheck
-                              title='Server found'
+                              title="Server found"
                               color={theme.colors.main}
                             />
                           ) : (
                             <FaTriangleExclamation
-                              title='Server not responding'
+                              title="Server not responding"
                               color={theme.colors.warning}
                             />
                           )}
-                          <label htmlFor='ollama-url'>Ollama API Url</label>
+                          <label htmlFor="ollama-url">Ollama API Url</label>
                         </Row>
                         <InputWrapper>
                           <InputStyled
-                            id='ollama-url'
+                            id="ollama-url"
                             value={ollamaUrl || ''}
                             onChange={e =>
                               setOllamaUrl(e.target.value || undefined)
                             }
-                            type='url'
-                            placeholder='http://localhost:11434'
+                            type="url"
+                            placeholder="http://localhost:11434"
                           />
                         </InputWrapper>
                       </ConditionalSettings>
@@ -270,7 +275,15 @@ const AISettings: React.FC = () => {
 
                   <SubSection>
                     <SubSectionTitle>Generative features</SubSectionTitle>
-                    <Column gap='0.5rem'>
+                    {genFeaturesUnavailable && (
+                      <WarningBlock>
+                        <WarningBlock.Title>
+                          The generative features model uses a provider that is
+                          not available.
+                        </WarningBlock.Title>
+                      </WarningBlock>
+                    )}
+                    <Column gap="0.5rem">
                       <CheckboxLabel>
                         <Checkbox
                           checked={shouldGenerateTitles}
@@ -279,8 +292,8 @@ const AISettings: React.FC = () => {
                         Generate AI Chat titles
                       </CheckboxLabel>
                       <CheckboxDescriptor
-                        label='Show follow up prompts in chats'
-                        description='Uses a small model to generate a follow up prompt based on the last message in the chat.'
+                        label="Show follow up prompts in chats"
+                        description="Uses a small model to generate a follow up prompt based on the last message in the chat."
                       >
                         {id => (
                           <Checkbox
@@ -290,7 +303,7 @@ const AISettings: React.FC = () => {
                           />
                         )}
                       </CheckboxDescriptor>
-                      <Details title='Change what model is used for generative features'>
+                      <Details title="Change what model is used for generative features">
                         <Suspense>
                           <Subtle>(Tip) Choose a cheap and fast model</Subtle>
                           <ModelSelect
@@ -300,14 +313,6 @@ const AISettings: React.FC = () => {
                         </Suspense>
                       </Details>
                     </Column>
-                  </SubSection>
-
-                  <SubSection>
-                    <SubSectionTitle>MCP servers</SubSectionTitle>
-                    <MCPServersManager
-                      servers={mcpServers}
-                      setServers={setMcpServers}
-                    />
                   </SubSection>
                 </SubGroup>
               </ConditionalSettings>

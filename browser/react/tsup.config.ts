@@ -7,7 +7,7 @@ export default defineConfig(options => ({
   minify: !options.watch,
   entry: ['src/index.ts'],
   sourcemap: true,
-  clean: true,
+  clean: !options.watch,
   format: ['esm', 'cjs'],
   target: 'es2023',
   // We need to generate the type definition files ourselves because the build in rollup dts plugin does not work with the way we use module augmentation.
@@ -16,18 +16,24 @@ export default defineConfig(options => ({
     console.warn('Generating type definition files...');
 
     // Run the typescript compiler but only emit declaration files.
-    exec('tsc --emitDeclarationOnly --declaration', (err, stdout, stderr) => {
-      if (err || stderr) {
-        console.error(err ?? stderr);
-      }
+    await new Promise<void>((resolve, reject) => {
+      exec('tsc --emitDeclarationOnly --declaration', (err, stdout, stderr) => {
+        if (err || stderr) {
+          console.error(err ?? stderr);
+        }
 
-      // We need a copy of index.d.ts for cjs builds but the actual content can be the same so we can just copy it.
-      console.warn('Creating index.d.cts...');
-      fs.copyFile('dist/src/index.d.ts', 'dist/src/index.d.cts')
-        .then(() => {
-          console.warn('Build Finished!');
-        })
-        .catch(console.error);
+        // We need a copy of index.d.ts for cjs builds but the actual content can be the same so we can just copy it.
+        console.warn('Creating index.d.cts...');
+        fs.copyFile('dist/src/index.d.ts', 'dist/src/index.d.cts')
+          .then(() => {
+            console.warn('Build Finished!');
+            resolve();
+          })
+          .catch(e => {
+            console.error(e);
+            reject(e);
+          });
+      });
     });
   },
 }));

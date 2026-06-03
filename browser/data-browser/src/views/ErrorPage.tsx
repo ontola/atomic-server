@@ -9,7 +9,6 @@ import { useSettings } from '../helpers/AppSettings';
 import { ResourcePageProps } from './ResourcePage';
 import { Column, Row } from '../components/Row';
 import CrashPage from './CrashPage';
-import { clearAllLocalData } from '../helpers/clearData';
 import { AtomicLink } from '../components/AtomicLink';
 import { paths } from '../routes/paths';
 import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceError';
@@ -99,12 +98,12 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
           >
             Retry
           </Button>
-          <Button
+          {/* <Button
             title='Clear all local data & refresh page'
             onClick={clearAllLocalData}
           >
             Hard reset
-          </Button>
+          </Button> */}
           <Button
             onClick={() =>
               store.fetchResourceFromServer(resource.subject, {

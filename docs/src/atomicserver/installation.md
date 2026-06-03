@@ -1,4 +1,5 @@
 {{#title Installing AtomicServer}}
+
 # Setup / installation
 
 You can run AtomicServer in different ways:
@@ -59,6 +60,10 @@ sudo apt-get install -y build-essential pkg-config libssl-dev --fix-missing
 - After running the server, check the logs and take note of the `Agent Subject` and `Private key`. You should use these in the [`atomic-cli`](https://crates.io/crates/atomic-cli) and [atomic-data-browser](https://github.com/atomicdata-dev/atomic-data-browser) clients for authorization.
 - A directory is made: `~/.config/atomic`, which stores your newly created Agent keys, the HTTPS certificates other configuration. Depending on your OS, the actual data is stored in different locations. See use the `show-config` command to find out where, if you need the files.
 - Visit `http://localhost:9883/setup` to **register your first (admin) user**. You can use an existing Agent, or create a new one. Note that if you create a `localhost` agent, it cannot be used on the web (since, well, it's local). More info and steps in [getting started with the GUI](gui.md).
+
+## Vector search embeddings (OpenRouter)
+
+Semantic search uses vector embeddings. By default the server runs [fastembed](https://github.com/Anush008/fastembed-rs) locally. To use [OpenRouter](https://openrouter.ai/) embeddings instead, pass **`--openrouter-api-key`** and **`--openrouter-embedding-model`** (or set **`OPENROUTER_API_KEY`** and **`OPENROUTER_EMBEDDING_MODEL`** in your environment or `.env`). **`--openrouter-embedding-dimensions`** / **`OPENROUTER_EMBEDDING_DIMENSIONS`** is optional (some models ignore it). **`--gpu-indexing`** / **`ATOMIC_GPU_INDEXING`** uses GPU acceleration for the default local embedding and reranker, not for OpenRouter.
 
 ## Running using a tunneling service (easy mode)
 
@@ -175,8 +180,9 @@ Options:
 
           [env: ATOMIC_INITIALIZE=]
 
-      --rebuild-indexes
+      --rebuild-indexes <INDEX_TYPE>
           Re-builds the indexes. Parses all the resources. Do this when updating requires it, or if you have issues with Collections / Queries / Search
+          [possible values: all, atoms, vector, search]
 
           [env: ATOMIC_REBUILD_INDEX=]
 
@@ -240,6 +246,11 @@ Options:
 
           [env: ATOMIC_DATA_DIR=]
 
+      --cache-dir <CACHE_DIR>
+          Path for the atomic data cache folder. Contains search index, temp files and more. Default value depends on your OS
+
+          [env: ATOMIC_CACHE_DIR=]
+
       --public-mode
           CAUTION: Skip authentication checks, making all data publicly readable. Improves performance
 
@@ -275,6 +286,31 @@ Options:
           Introduces random delays in the server, to simulate a slow connection. Useful for testing
 
           [env: ATOMIC_SLOW_MODE=]
+
+      --clear-remote-cache
+          Removes all remote resources from the store
+
+          [env: ATOMIC_CLEAR_REMOTE_CACHE=]
+
+      --gpu-indexing
+          Use the GPU (if available) for processing vector search embeddings
+
+          [env: ATOMIC_GPU_INDEXING=]
+
+      --openrouter-api-key <OPENROUTER_API_KEY>
+          OpenRouter API key for remote embeddings instead of local fastembed
+
+          [env: OPENROUTER_API_KEY=]
+
+      --openrouter-embedding-model <OPENROUTER_EMBEDDING_MODEL>
+          OpenRouter embedding model id (required when `OPENROUTER_API_KEY` is set)
+
+          [env: OPENROUTER_EMBEDDING_MODEL=]
+
+      --openrouter-embedding-dimensions <OPENROUTER_EMBEDDING_DIMENSIONS>
+          Optional embedding vector dimensions for OpenRouter (JSON `dimensions` field; not all models honor it). Empty string is treated as unset.
+
+          [env: OPENROUTER_EMBEDDING_DIMENSIONS=]
 
   -h, --help
           Print help information (use `-h` for a summary)

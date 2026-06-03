@@ -12,8 +12,12 @@ type CardProps = {
   small?: boolean;
 };
 
-/** A Card with a border. */
-export const Card = styled.div.attrs<CardProps>(p => ({
+const Content = styled.div`
+  padding: ${p => p.theme.size()};
+`;
+
+const CardBase = styled.div.attrs<CardProps>(p => ({
+  // When we render a lot of cards it is more performant to use styles instead of classes when each card has a unique style
   style: getTransitionStyle(RESOURCE_PAGE_TRANSITION_TAG, p.about),
 }))`
   background-color: ${p => p.theme.colors.bg};
@@ -25,7 +29,16 @@ export const Card = styled.div.attrs<CardProps>(p => ({
   border-radius: ${p => p.theme.radius};
   max-height: ${p => (p.small ? p.theme.size(12) : 'initial')};
   overflow: ${p => (p.small ? 'hidden' : 'visible')};
+
+  &:has(${Content}) {
+    padding: 0;
+  }
 `;
+
+/** A Card with a border.
+ * By default the Card has padding but if you use `Card.Content` inside the card, only the content will have padding.
+ */
+export const Card = Object.assign(CardBase, { Content });
 
 export interface CardRowProps {
   noBorder?: boolean;

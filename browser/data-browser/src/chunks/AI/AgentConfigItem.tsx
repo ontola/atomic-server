@@ -4,6 +4,7 @@ import {
   FaStar,
   FaTriangleExclamation,
   FaPencil,
+  FaRegCopy,
   FaTrash,
   FaEllipsisVertical,
 } from 'react-icons/fa6';
@@ -16,6 +17,7 @@ import { useId } from 'react';
 import { VisuallyHidden } from '@components/VisuallyHidden';
 import { DropdownMenu, type DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
+import { addIf } from '@helpers/addIf';
 
 interface AgentConfigItemProps {
   agent: AIAgent;
@@ -23,6 +25,8 @@ interface AgentConfigItemProps {
   onSelect: (agent: AIAgent) => void;
   onEdit: (agent: AIAgent) => void;
   onDelete: (agent: AIAgent) => void;
+  onDuplicate: (agent: AIAgent) => void;
+  canDelete: boolean;
 }
 
 const ContextTrigger = buildDefaultTrigger(
@@ -36,6 +40,8 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
   onSelect,
   onEdit,
   onDelete,
+  onDuplicate,
+  canDelete,
 }) => {
   const inputId = useId();
   const titleId = useId();
@@ -43,10 +49,10 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
 
   const theme = useTheme();
   const { defaultAgentId, setDefaultAgentId } = useAIAgentConfig();
-  const { isProviderEnabled } = useAISettings();
+  const { isProviderAvailable } = useAISettings();
 
   const isDefault = defaultAgentId === agent.id;
-  const providerDisabled = !isProviderEnabled(agent.model.provider);
+  const providerDisabled = !isProviderAvailable(agent.model.provider);
 
   const contextItems: DropdownItem[] = [
     {
@@ -56,11 +62,17 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
       onClick: () => onEdit(agent),
     },
     {
+      label: 'Duplicate',
+      id: 'duplicate',
+      icon: <FaRegCopy />,
+      onClick: () => onDuplicate(agent),
+    },
+    ...addIf(canDelete, {
       label: 'Delete',
       id: 'delete',
       icon: <FaTrash />,
       onClick: () => onDelete(agent),
-    },
+    }),
   ];
 
   return (

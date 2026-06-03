@@ -3,15 +3,19 @@ import { useDeferredValue, useEffect, useState } from 'react';
 
 const MODEL_API_ROUTE = '/api/tags';
 
-export const useIsOllamaUrlValid = (
-  enabled: boolean,
-  url: string | undefined,
-) => {
+type OllamaCheckResult = {
+  url: string;
+  valid: boolean;
+};
+
+export const useIsOllamaUrlValid = (url: string | undefined) => {
   const deferredUrl = useDeferredValue(url);
-  const [isValid, setIsValid] = useState(false);
+  const [checkResult, setCheckResult] = useState<OllamaCheckResult | null>(
+    null,
+  );
 
   useEffect(() => {
-    if (!enabled || !deferredUrl) {
+    if (!deferredUrl) {
       return;
     }
 
@@ -23,14 +27,20 @@ export const useIsOllamaUrlValid = (
         'Content-Type': 'application/json',
       },
     })(
-      _data => {
-        setIsValid(true);
+      () => {
+        setCheckResult({ url: deferredUrl, valid: true });
       },
-      _e => {
-        setIsValid(false);
+      () => {
+        setCheckResult({ url: deferredUrl, valid: false });
       },
     );
-  }, [deferredUrl, enabled]);
+  }, [deferredUrl]);
 
-  return url !== undefined ? isValid : false;
+  if (!url) {
+    return false;
+  }
+
+  return (
+    checkResult !== null && checkResult.url === deferredUrl && checkResult.valid
+  );
 };

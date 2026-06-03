@@ -275,7 +275,8 @@ export default defineConfig({
       }),
     !isVitest &&
       prismjs({
-        languages: ['typescript'],
+        languages: ['typescript', 'json', 'diff'],
+        plugins: ['diff-highlight'],
         css: true,
         theme: 'default',
       }),

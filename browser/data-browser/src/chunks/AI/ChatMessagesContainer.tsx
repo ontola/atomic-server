@@ -1,22 +1,50 @@
 import { styled } from 'styled-components';
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { ScrollArea } from '@components/ScrollArea';
 import { Column } from '@components/Row';
 
 interface ChatMessagesContainerProps {
   enableAutoScroll?: boolean;
+  /** When this value changes, scroll the compact separator (or bottom) into view. */
+  scrollToCompactTrigger?: number;
   fullView?: boolean;
 }
 
 export const ChatMessagesContainer: React.FC<
   React.PropsWithChildren<ChatMessagesContainerProps>
-> = ({ children, enableAutoScroll, fullView }) => {
+> = ({ children, enableAutoScroll, scrollToCompactTrigger, fullView }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
   };
+
+  const scrollToCompactSeparator = useEffectEvent(() => {
+    const separators = containerRef.current?.querySelectorAll(
+      '[data-compact-separator]',
+    );
+    const separator =
+      separators && separators.length > 0
+        ? separators[separators.length - 1]
+        : null;
+
+    if (separator) {
+      separator.scrollIntoView({ behavior: 'instant', block: 'center' });
+
+      return;
+    }
+
+    scrollToBottom();
+  });
+
+  useEffect(() => {
+    if (scrollToCompactTrigger === undefined || scrollToCompactTrigger === 0) {
+      return;
+    }
+
+    scrollToCompactSeparator();
+  }, [scrollToCompactTrigger]);
 
   useEffect(() => {
     // Initial scroll to bottom when component mounts
@@ -54,7 +82,7 @@ export const ChatMessagesContainer: React.FC<
   }, [enableAutoScroll]);
 
   return (
-    <MessagesContainer fullView={fullView}>
+    <MessagesContainer $fullView={fullView}>
       <Column ref={containerRef}>
         {children}
         <div ref={messagesEndRef} />
@@ -63,10 +91,10 @@ export const ChatMessagesContainer: React.FC<
   );
 };
 
-const MessagesContainer = styled(ScrollArea)<{ fullView?: boolean }>`
+const MessagesContainer = styled(ScrollArea)<{ $fullView?: boolean }>`
   overflow: auto;
   height: 100%;
   background-color: ${p => p.theme.colors.bgBody};
   border-radius: ${p => p.theme.radius};
-  padding: ${p => (p.fullView ? '0' : p.theme.size())};
+  padding: ${p => (p.$fullView ? '0' : p.theme.size())};
 `;

@@ -12,7 +12,7 @@ import {
   truncateUrl,
   Datatype,
 } from '@tomic/react';
-import { styled, keyframes, css } from 'styled-components';
+import { styled, keyframes, css, type DefaultTheme } from 'styled-components';
 import {
   FaLaptop,
   FaServer,
@@ -209,8 +209,10 @@ function SyncPage() {
     if (!nodeDid || !status.drive) return;
 
     const rawNodeId = nodeDidToRaw(nodeDid);
+
     if (!rawNodeId) {
       setPeerSyncResult(`Error: Expected ${NODE_DID_PREFIX}<node-id>`);
+
       return;
     }
 
@@ -286,7 +288,7 @@ function SyncPage() {
 
         {isRunningInTauri() ? (
           <LocalDevice>
-            <NodeIcon $status='synced'>
+            <NodeIcon $status="synced">
               <FaLaptop />
             </NodeIcon>
             <LocalDeviceBody>
@@ -301,8 +303,8 @@ function SyncPage() {
         ) : (
           /* Visual sync diagram (client-server) */
           <SyncDiagram>
-            <SyncNode $status='synced'>
-              <NodeIcon $status='synced'>
+            <SyncNode $status="synced">
+              <NodeIcon $status="synced">
                 <FaLaptop />
               </NodeIcon>
               <NodeLabel>This device</NodeLabel>
@@ -330,7 +332,7 @@ function SyncPage() {
                 {statusLabel(nodes.server)}
               </NodeStatusBadge>
               {!status.serverConnected && status.serverConnectionError && (
-                <NodeError role='alert'>
+                <NodeError role="alert">
                   <FaCircleExclamation aria-hidden />
                   <span>{status.serverConnectionError}</span>
                 </NodeError>
@@ -414,18 +416,18 @@ function SyncPage() {
                   >
                     <ServerInput
                       autoFocus
-                      placeholder='https://... or iroh:...'
+                      placeholder="https://... or iroh:..."
                       value={serverInput}
                       onChange={e => setServerInput(e.target.value)}
                     />
-                    <Button type='submit' subtle>
+                    <Button type="submit" subtle>
                       Add
                     </Button>
                   </AddServerRow>
                   <DocsLink
-                    href='https://docs.atomicdata.dev/atomicserver/installation.html'
-                    target='_blank'
-                    rel='noopener'
+                    href="https://docs.atomicdata.dev/atomicserver/installation.html"
+                    target="_blank"
+                    rel="noopener"
                   >
                     How to run your own server
                   </DocsLink>
@@ -494,13 +496,13 @@ function SyncPage() {
                   >
                     <ServerInput
                       autoFocus
-                      placeholder='Paste did:ad:node:...'
+                      placeholder="Paste did:ad:node:..."
                       value={peerInput}
                       onChange={e => setPeerInput(e.target.value)}
                       disabled={peerSyncing}
                     />
                     <Button
-                      type='submit'
+                      type="submit"
                       subtle
                       disabled={peerSyncing || !peerInput.trim()}
                     >
@@ -550,7 +552,7 @@ function SyncPage() {
               <DetailLabel>WS debug</DetailLabel>
               <DetailValue>
                 <DebugToggle
-                  type='checkbox'
+                  type="checkbox"
                   checked={wsDebug}
                   onChange={e => {
                     setWsDebug(e.target.checked);
@@ -622,7 +624,7 @@ function SyncPage() {
                             key={ps.property}
                             data-change-type={ps.changeType}
                           >
-                            <span aria-hidden='true'>
+                            <span aria-hidden="true">
                               {ps.changeType === 'changed' ? '+' : '−'}
                             </span>
                             <PropertyName propertyURL={ps.property} />
@@ -689,10 +691,10 @@ function LocalDbControl({
     <LocalDbStack>
       <LocalDbRow>
         <DebugToggle
-          type='checkbox'
+          type="checkbox"
           checked={enabled}
           onChange={e => onToggle(e.target.checked)}
-          aria-label='Enable local WASM DB'
+          aria-label="Enable local WASM DB"
         />
         <StatusDot $state={state} aria-hidden />
         <LocalDbLabel>
@@ -721,11 +723,11 @@ function DriveDetailSwitcher({ drive }: { drive: string }) {
         id={id}
         aria-controls={menuId}
         aria-expanded={isActive}
-        aria-haspopup='menu'
+        aria-haspopup="menu"
         onClick={onClick}
         ref={ref}
-        title='Open Drive Settings'
-        type='button'
+        title="Open Drive Settings"
+        type="button"
       >
         {label}
       </DriveSwitchTriggerButton>
@@ -869,10 +871,7 @@ const Muted = styled.p`
 
 // --- Sync diagram ---
 
-const statusColor = (
-  status: NodeStatus,
-  theme: { colors: Record<string, string> },
-) => {
+const statusColor = (status: NodeStatus, theme: DefaultTheme) => {
   switch (status) {
     case 'synced':
       return theme.colors.main;

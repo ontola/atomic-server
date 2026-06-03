@@ -29,3 +29,4 @@ scratchpad
 !.cargo/config.toml
 
 .bin/
+.fastembed_cache

@@ -6,18 +6,19 @@ import FileHandler from '@tiptap/extension-file-handler';
 import { TiptapContextProvider } from '../TiptapContext';
 import { EditorWrapperBase } from '../EditorWrapperBase';
 import { searchSuggestionBuilder } from './mcpSuggestions';
+import { skillSuggestionBuilder } from './skillSuggestions';
 import { useRef, useState } from 'react';
 import { EditorEvents } from '../EditorEvents';
 import { Markdown } from '@tiptap/markdown';
 import { useStore } from '@tomic/react';
 import { useSettings } from '../../../helpers/AppSettings';
-import type { Node } from '@tiptap/pm/model';
 import Placeholder from '@tiptap/extension-placeholder';
-import { useMcpServers } from '../../../components/AI/MCP/useMcpServers';
+import { useMcpServers } from '@components/AI/MCP/McpServersContext';
 import type {
   AtomicResourceSuggestion,
   MCPResourceSuggestion,
   MentionItem,
+  SkillSuggestion,
 } from './types';
 import { Row } from '../../../components/Row';
 import {
@@ -46,19 +47,16 @@ const createAttribute = (propName: string, dataName: string) => {
   };
 };
 
-// Modify the Mention extension to allow serializing to markdown.
+const escapeMentionAttribute = (value: unknown): string => {
+  return String(value ?? '').replaceAll('"', '&quot;');
+};
+
 const SerializableMention = Mention.extend({
-  addStorage() {
-    return {
-      markdown: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        serialize(state: any, node: Node) {
-          state.write('@' + (node.attrs.label || ''));
-          state.renderContent(node);
-          state.flushClose(1);
-        },
-      },
-    };
+  renderMarkdown(node: JSONContent) {
+    const id = escapeMentionAttribute(node.attrs?.id);
+    const label = escapeMentionAttribute(node.attrs?.label);
+
+    return `[@ id="${id}" label="${label}"]`;
   },
   addAttributes() {
     return {
@@ -72,13 +70,37 @@ const SerializableMention = Mention.extend({
   },
 });
 
+// A second Mention extension for skill slash-commands. Uses a distinct node
+// name so it can coexist with `SerializableMention`.
+const SkillMention = Mention.extend({
+  name: 'skillMention',
+  renderMarkdown(node: JSONContent) {
+    const id = escapeMentionAttribute(node.attrs?.id);
+    const label = escapeMentionAttribute(node.attrs?.label);
+
+    return `[@ id="${id}" label="${label}" type="skill"]`;
+  },
+  addAttributes() {
+    return {
+      ...createAttribute('type', 'data-type'),
+      ...createAttribute('id', 'data-id'),
+      ...createAttribute('label', 'data-label'),
+      ...createAttribute('description', 'data-description'),
+    };
+  },
+});
+
 interface AsyncAIChatInputProps {
   hasFiles: boolean;
   disabled?: boolean;
+  disableSubmit?: boolean;
+  large?: boolean;
   onMentionUpdate: (mentions: MentionItem[]) => void;
   onChange: (markdown: string) => void;
   onSubmit: () => void;
+  onCompact?: () => void;
   onFileAdded?: (files: File[]) => void;
+  rightAlignedChildren?: React.ReactNode;
 }
 
 const AsyncAIChatInput: React.FC<
@@ -86,21 +108,28 @@ const AsyncAIChatInput: React.FC<
 > = ({
   children,
   hasFiles,
-  disabled,
+  disabled = false,
+  disableSubmit = false,
+  large = false,
   onMentionUpdate,
   onChange,
   onSubmit,
+  onCompact,
   onFileAdded,
+  rightAlignedChildren,
 }) => {
   const store = useStore();
   const { drive } = useSettings();
   const { mcpServers } = useAISettings();
   const [markdown, setMarkdown] = useState('');
-
   const markdownRef = useRef(markdown);
   const onSubmitRef = useRef(onSubmit);
+  const onCompactRef = useRef(onCompact);
+  const disableSubmitRef = useRef(disableSubmit);
   markdownRef.current = markdown;
   onSubmitRef.current = onSubmit;
+  onCompactRef.current = onCompact;
+  disableSubmitRef.current = disableSubmit;
 
   const { serversWithResources, searchResourcesOfServer } = useMcpServers();
 
@@ -119,6 +148,10 @@ const AsyncAIChatInput: React.FC<
                 // Check if the cursor is in a code block, if so allow the user to press enter.
                 // Pressing shift + enter will exit the code block.
                 if ('language' in this.editor.getAttributes('codeBlock')) {
+                  return false;
+                }
+
+                if (disableSubmitRef.current) {
                   return false;
                 }
 
@@ -158,8 +191,20 @@ const AsyncAIChatInput: React.FC<
             return `${options.suggestion.char}bla${node.attrs.title}`;
           },
         }),
+        SkillMention.configure({
+          HTMLAttributes: {
+            class: 'ai-chat-skill-mention',
+          },
+          suggestion: {
+            char: '/',
+            ...skillSuggestionBuilder(() => onCompactRef.current?.()),
+          },
+          renderText({ node }) {
+            return `/${node.attrs.label ?? ''}`;
+          },
+        }),
         Placeholder.configure({
-          placeholder: 'Ask me anything...',
+          placeholder: 'Ask me anything, / for commands, @ for context',
         }),
         ...addIf(
           !!onFileAdded,
@@ -178,6 +223,23 @@ const AsyncAIChatInput: React.FC<
       autofocus: true,
       contentType: 'markdown',
       editable: !disabled,
+      editorProps: {
+        handlePaste: (_view, event) => {
+          if (!onFileAdded) {
+            return false;
+          }
+
+          const files = extractImageFilesFromClipboard(event.clipboardData);
+
+          if (files.length === 0) {
+            return false;
+          }
+
+          onFileAdded(files);
+
+          return true;
+        },
+      },
     },
     [serversWithResources, searchResourcesOfServer, disabled],
   );
@@ -198,7 +260,7 @@ const AsyncAIChatInput: React.FC<
 
   return (
     <>
-      <EditorWrapper hideEditor={false}>
+      <EditorWrapper hideEditor={false} $large={large}>
         <TiptapContextProvider editor={editor}>
           <EditorContent editor={editor} />
           <EditorEvents onChange={handleChange} />
@@ -206,18 +268,23 @@ const AsyncAIChatInput: React.FC<
       </EditorWrapper>
       <Row justify='space-between'>
         {children}
-        <IconButton
-          disabled={disabled || (markdown.length === 0 && !hasFiles)}
-          onClick={() => {
-            onSubmit();
-            setMarkdown('');
-            editor?.commands.clearContent();
-          }}
-          title='Send'
-          variant={IconButtonVariant.Fill}
-        >
-          <FaArrowRight />
-        </IconButton>
+        <Row center>
+          {rightAlignedChildren}
+          <IconButton
+            disabled={
+              disabled || disableSubmit || (markdown.length === 0 && !hasFiles)
+            }
+            onClick={() => {
+              onSubmit();
+              setMarkdown('');
+              editor?.commands.clearContent();
+            }}
+            title='Send'
+            variant={IconButtonVariant.Fill}
+          >
+            <FaArrowRight />
+          </IconButton>
+        </Row>
       </Row>
     </>
   );
@@ -225,24 +292,31 @@ const AsyncAIChatInput: React.FC<
 
 export default AsyncAIChatInput;
 
-const EditorWrapper = styled(EditorWrapperBase)`
+const EditorWrapper = styled(EditorWrapperBase)<{ $large?: boolean }>`
   padding: ${p => p.theme.size(2)};
   font-size: 16px;
   line-height: 1.5;
-
+  flex: unset !important;
+  min-height: ${p => (p.$large ? '8rem' : 'none')};
   .ai-chat-mention {
     background-color: ${p => p.theme.colors.mainSelectedBg};
     color: ${p => p.theme.colors.mainSelectedFg};
     border-radius: 5px;
     padding-inline: ${p => p.theme.size(1)};
   }
+
+  .ai-chat-skill-mention {
+    color: ${p => p.theme.colors.main};
+  }
 `;
 
-function digForMentions(
-  data: JSONContent,
-): Array<MCPResourceSuggestion | AtomicResourceSuggestion> {
+function digForMentions(data: JSONContent): MentionItem[] {
   if (data.type === 'mention') {
     return [data.attrs as MCPResourceSuggestion | AtomicResourceSuggestion];
+  }
+
+  if (data.type === 'skillMention') {
+    return [{ ...(data.attrs as SkillSuggestion), type: 'skill' }];
   }
 
   if (data.content) {
@@ -250,4 +324,52 @@ function digForMentions(
   }
 
   return [];
+}
+
+const clipboardImageExtensionByMimeType: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/avif': 'avif',
+  'image/bmp': 'bmp',
+  'image/svg+xml': 'svg',
+  'image/tiff': 'tiff',
+};
+
+function extractImageFilesFromClipboard(
+  clipboardData: DataTransfer | null,
+): File[] {
+  if (!clipboardData) {
+    return [];
+  }
+
+  return Array.from(clipboardData.items).reduce<File[]>((files, item) => {
+    if (item.kind !== 'file' || !item.type.startsWith('image/')) {
+      return files;
+    }
+
+    const file = item.getAsFile();
+
+    if (!file) {
+      return files;
+    }
+
+    files.push(file.name ? file : nameClipboardImageFile(file, files.length));
+
+    return files;
+  }, []);
+}
+
+function nameClipboardImageFile(file: File, index: number): File {
+  const extension =
+    clipboardImageExtensionByMimeType[file.type] ??
+    file.type.replace(/^image\//, '').replace(/\+xml$/, '') ??
+    'png';
+  const suffix = index === 0 ? '' : `-${index + 1}`;
+
+  return new File([file], `pasted-image${suffix}.${extension}`, {
+    type: file.type,
+    lastModified: file.lastModified,
+  });
 }

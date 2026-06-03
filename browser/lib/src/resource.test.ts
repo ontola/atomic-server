@@ -2,6 +2,8 @@ import { describe, it } from 'vitest';
 import { normalizeLoroChangeTimestampMs, Resource } from './resource.js';
 import type { JSONValue } from './value.js';
 
+const yProp = 'https://example.com/y-test-prop';
+
 describe('resource.ts', () => {
   it('push propvals', ({ expect }) => {
     const resource = new Resource('test');
@@ -352,5 +354,41 @@ describe('resource.ts', () => {
     // header-only no-op.
     const delta = doc.export({ mode: 'update', from: lvasAfterEcho });
     expect(delta.length).toBeGreaterThan(40);
+  });
+});
+
+describe('Resource.merge Loro options', () => {
+  it('replaceLoroDocs makes local state match remote state (drops local-only CRDT ops)', async ({
+    expect,
+  }) => {
+    const subject = 'https://example.com/merge-loro-replace';
+    const name = 'https://atomicdata.dev/properties/name';
+
+    const local = new Resource(subject);
+    await local.set(name, 'local-only', false);
+
+    const remote = new Resource(subject);
+    await remote.set(name, 'server', false);
+
+    local.merge(remote, { replaceYDocs: true });
+
+    expect(local.get(name)).toBe('server');
+  });
+
+  it('omitKeysFromMerge keeps local state and does not adopt remote state', async ({
+    expect,
+  }) => {
+    const subject = 'https://example.com/merge-loro-omit';
+    const name = 'https://atomicdata.dev/properties/name';
+
+    const local = new Resource(subject);
+    await local.set(name, 'baseline', false);
+
+    const remote = new Resource(subject);
+    await remote.set(name, 'live-with-ai', false);
+
+    local.merge(remote, { omitKeysFromMerge: [name] });
+
+    expect(local.get(name)).toBe('baseline');
   });
 });

@@ -29,6 +29,7 @@ export const dataBrowser = {
     tag: 'https://atomicdata.dev/classes/Tag',
     template: 'https://atomicdata.dev/ontology/data-browser/class/template',
     documentV2: 'https://atomicdata.dev/classes/DocumentV2',
+    plainText: 'https://atomicdata.dev/classes/PlainText',
   },
   properties: {
     color: 'https://atomicdata.dev/properties/color',
@@ -148,6 +149,10 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/name',
       'https://atomicdata.dev/properties/documentContent',
     ],
+    ['https://atomicdata.dev/classes/PlainText']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/description',
+    ],
   },
 } as const satisfies OntologyBaseObject;
 
@@ -175,6 +180,7 @@ export namespace DataBrowser {
   export type Tag = typeof dataBrowser.classes.tag;
   export type Template = typeof dataBrowser.classes.template;
   export type DocumentV2 = typeof dataBrowser.classes.documentV2;
+  export type PlainText = typeof dataBrowser.classes.plainText;
 }
 
 declare module '../index.js' {
@@ -298,6 +304,13 @@ declare module '../index.js' {
     [dataBrowser.classes.documentV2]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/name';
       recommends: typeof dataBrowser.properties.documentContent;
+    };
+    [dataBrowser.classes.plainText]: {
+      requires:
+        | BaseProps
+        | 'https://atomicdata.dev/properties/name'
+        | 'https://atomicdata.dev/properties/description';
+      recommends: never;
     };
   }
 

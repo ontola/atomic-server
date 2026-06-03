@@ -11,9 +11,11 @@ import { type AIAgent, type AtomicUIMessage } from './types';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { useRef } from 'react';
 import { useStore } from '@tomic/react';
-import { useAutoAgentSelect } from './useAgentAutoSelect';
 import { createOllama } from 'ollama-ai-provider-v2';
 import { addFieldsIf } from '@helpers/addIf';
+import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
+import { useSettings } from '@helpers/AppSettings';
+import { getClassesOnDrive } from './atomicSchemaHelpers';
 
 export type Modalities = 'text' | 'image';
 
@@ -21,14 +23,14 @@ export interface ClientOnlyTransportOptions {
   openRouterAPIKey?: string;
   ollamaURL?: string;
   selectedAgent: AIAgent;
-  autoSelectAgent: boolean;
   tools: ToolSet;
-  webSearchEnabled: boolean;
   addContextToMessages: (
     messages: AtomicUIMessage[],
   ) => Promise<AtomicUIMessage[]>;
   resolveOutputModalities: (modelId: string) => Modalities[];
   resolveParameterSupport: (modelId: string, parameter: string) => boolean;
+  /** Appended after template substitution (e.g. skills instructions). */
+  additionalSystemPrompt?: string;
 }
 
 /**
@@ -38,11 +40,13 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
   public constructor(
     private options: ClientOnlyTransportOptions,
     private idGenerator: () => string,
-    private _autoSelectAgent: ReturnType<typeof useAutoAgentSelect>,
+    private _prepareSystemPrompt: (systemPrompt: string) => Promise<string>,
   ) {}
 
-  public set autoSelectAgent(func: ReturnType<typeof useAutoAgentSelect>) {
-    this._autoSelectAgent = func;
+  public set prepareSystemPrompt(
+    func: (systemPrompt: string) => Promise<string>,
+  ) {
+    this._prepareSystemPrompt = func;
   }
 
   public setOptions(options: ClientOnlyTransportOptions) {
@@ -53,23 +57,21 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
     abortSignal,
     ...options
   }: Parameters<ChatTransport<AtomicUIMessage>['sendMessages']>[0]) {
+    const messagesFromLastSummary = trimToLastSummary(options.messages);
+
     const transformedMessages = await this.options.addContextToMessages(
-      options.messages,
+      messagesFromLastSummary,
     );
 
-    const agent = await this.getAgent(transformedMessages);
-
-    const modelMessages = await convertToModelMessages(transformedMessages, {
-      tools: this.options.tools,
-    });
+    const agent = this.options.selectedAgent;
 
     const result = streamText({
-      messages: modelMessages,
+      messages: await convertToModelMessages(transformedMessages),
       model: this.getModelFromAgent(agent),
-      system: agent.systemPrompt,
+      system: await this._prepareSystemPrompt(agent.systemPrompt),
       tools: this.options.tools,
       abortSignal,
-      stopWhen: stepCountIs(10),
+      stopWhen: stepCountIs(1000),
       ...this.getParameters(agent),
     });
 
@@ -88,15 +90,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       sendReasoning: true,
     });
 
-    // Create a transform stream that logs each chunk
-    const loggingTransform = new TransformStream({
-      transform(chunk, controller) {
-        // console.log(chunk.type, chunk);
-        controller.enqueue(chunk);
-      },
-    });
-
-    return originalStream.pipeThrough(loggingTransform);
+    return originalStream;
   }
 
   public async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
@@ -114,14 +108,12 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
         apiKey: this.options.openRouterAPIKey,
         compatibility: 'strict',
         extraBody: {
-          transforms: ['middle-out'],
           modalities,
+          plugins: [{ id: 'context-compression' }],
         },
       });
 
-      return openRouter(
-        agent.model.id + (this.options.webSearchEnabled ? ':online' : ''),
-      );
+      return openRouter(agent.model.id);
     }
 
     if (agent.model.provider === AIProvider.Ollama && this.options.ollamaURL) {
@@ -151,52 +143,104 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
             temperature: agent.temperature,
           },
         ),
+        ...addFieldsIf(
+          this.options.resolveParameterSupport(agent.model.id, 'reasoning'),
+          {
+            reasoning: {
+              effort: 'low',
+              summary: 'auto',
+            },
+          },
+        ),
       };
     }
 
     throw new Error('Invalid model provider');
   }
+}
 
-  private async getAgent(messages: AtomicUIMessage[]): Promise<AIAgent> {
-    if (this.options.autoSelectAgent && messages.length === 1) {
-      const prompt = messages[0].parts
-        .filter(p => p.type === 'text')
-        .map(p => p.text)
-        .join('');
+/** Returns messages starting from the last summary message (inclusive), or all messages if none. */
+function trimToLastSummary(messages: AtomicUIMessage[]): AtomicUIMessage[] {
+  const lastSummaryIndex = messages.findLastIndex(
+    m => m.metadata?.isSummary === true,
+  );
 
-      try {
-        return await this._autoSelectAgent(prompt);
-      } catch (e) {
-        // Auto-select needs `genFeaturesModel` (default: OpenRouter). When the
-        // user only has Ollama configured, the call throws and the entire send
-        // is aborted before any fetch goes out — making the very first message
-        // appear to vanish until the user hits send again. Falling back to the
-        // explicitly-selected agent keeps the POST happening; the auto-pick is
-        // a nice-to-have, not a hard requirement.
-        console.warn('Auto agent select failed, using selected agent:', e);
-      }
-    }
-
-    return this.options.selectedAgent;
-  }
+  return lastSummaryIndex >= 0 ? messages.slice(lastSummaryIndex) : messages;
 }
 
 export const useClientOnlyTransport = (options: ClientOnlyTransportOptions) => {
   const store = useStore();
   const generateId = () => store.createSubject();
-  const pickAgent = useAutoAgentSelect();
+  const { drive } = useSettings();
+  const getDriveTree = useGetDriveStructure();
+
+  /**
+   * Prepares the system prompt by replacing the placeholders with the actual values.
+   * If you add any new placeholder, be sure to update the helper text in the {@link AgentConfig} component.
+   */
+  const prepareSystemPrompt = async (systemPrompt: string) => {
+    let modifiedSystemPrompt = systemPrompt;
+
+    if (systemPrompt.includes('{{drive}}')) {
+      modifiedSystemPrompt = modifiedSystemPrompt.replaceAll(
+        '{{drive}}',
+        drive,
+      );
+    }
+
+    if (systemPrompt.includes('{{drive-structure}}')) {
+      const driveTree = await getDriveTree();
+      modifiedSystemPrompt = modifiedSystemPrompt.replaceAll(
+        '{{drive-structure}}',
+        stringifyTree(driveTree),
+      );
+    }
+
+    if (systemPrompt.includes('{{custom-classes}}')) {
+      const classSubjects = await getClassesOnDrive(drive, store);
+      const customClasses = await Promise.all(
+        classSubjects.map(async cls => {
+          const resource = await store.getResource(cls);
+
+          return `${resource.title}: ${cls}`;
+        }),
+      );
+
+      modifiedSystemPrompt = modifiedSystemPrompt.replaceAll(
+        '{{custom-classes}}',
+        customClasses.length === 0
+          ? 'No custom classes found on the current drive.'
+          : customClasses.join('\n'),
+      );
+    }
+
+    if (systemPrompt.includes('{{timestamp}}')) {
+      modifiedSystemPrompt = modifiedSystemPrompt.replaceAll(
+        '{{timestamp}}',
+        new Date().toISOString(),
+      );
+    }
+
+    if (options.additionalSystemPrompt) {
+      modifiedSystemPrompt += `\n\n${options.additionalSystemPrompt}`;
+    }
+
+    return modifiedSystemPrompt;
+  };
+
   // The useChat aggressively memoizes the transport so we need to make sure we always modify the same instance.
   const transportRef = useRef(
-    new ClientOnlyTransport(options, generateId, pickAgent),
+    new ClientOnlyTransport(options, generateId, prepareSystemPrompt),
   );
   const prevOptionsRef = useRef(options);
 
+  // The ClientOnlyTransport instance needs to be stable between renders but we still need to update it's options when they change. I don't know how to do this without refs so we just have to accept these warnings.
   if (options !== prevOptionsRef.current) {
     transportRef.current.setOptions(options);
     prevOptionsRef.current = options;
   }
 
-  transportRef.current.autoSelectAgent = pickAgent;
+  transportRef.current.prepareSystemPrompt = prepareSystemPrompt;
 
   return transportRef.current;
 };

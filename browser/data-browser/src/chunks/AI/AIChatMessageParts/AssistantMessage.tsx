@@ -1,5 +1,5 @@
 import React from 'react';
-import { isToolUIPart } from 'ai';
+import { isStaticToolUIPart } from 'ai';
 import type { AtomicUIMessage } from '../types';
 import { FileContent } from './FileContent';
 import { MessageToolPart } from './MessageToolPart';
@@ -29,7 +29,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
           return <FileContent key={index} part={part} />;
         }
 
-        if (isToolUIPart(part)) {
+        if (isStaticToolUIPart(part)) {
           return <MessageToolPart key={index} part={part} />;
         }
 

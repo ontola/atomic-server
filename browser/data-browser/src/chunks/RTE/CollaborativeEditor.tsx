@@ -1,6 +1,4 @@
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
-import { StarterKit } from '@tiptap/starter-kit';
-import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { Typography } from '@tiptap/extension-typography';
 import { Extension } from '@tiptap/core';
@@ -14,12 +12,17 @@ import {
   type LoroDocType,
 } from 'loro-prosemirror';
 import { TaskList, TaskItem } from '@tiptap/extension-list';
-import DragHandle from '@tiptap/extension-drag-handle-react';
 import {
+  TextStyle,
   Color,
   BackgroundColor,
-  TextStyle,
 } from '@tiptap/extension-text-style';
+import { TableKit } from '@tiptap/extension-table';
+import {
+  ResourceNode,
+  ResourceNodeInline,
+} from './ResourceExtension/ResourceNode';
+import DragHandle from '@tiptap/extension-drag-handle-react';
 import { useEffect, useState } from 'react';
 import { TiptapContextProvider } from './TiptapContext';
 import { SlashCommands, buildSuggestion } from './SlashMenu/CommandsExtension';
@@ -46,10 +49,6 @@ import { EditorWrapperBase } from './EditorWrapperBase';
 import styled, { useTheme } from 'styled-components';
 import { useSettings } from '@helpers/AppSettings';
 import { FullBubbleMenu } from './FullBubbleMenu';
-import {
-  ResourceNode,
-  ResourceNodeInline,
-} from './ResourceExtension/ResourceNode';
 import { IsInRTEContex } from '@hooks/useIsInRTE';
 import { FaCircleInfo, FaGripVertical, FaLink, FaTable } from 'react-icons/fa6';
 import { useUpload } from '@hooks/useUpload';
@@ -60,10 +59,17 @@ import { useNewResourceUI } from '@components/forms/NewForm/useNewResourceUI';
 import toast from 'react-hot-toast';
 import { Row } from '@components/Row';
 import { Button } from '@components/Button';
-import { Note } from './NoteExtention/NoteExtention';
 import { FloatingHint } from './FloatingHint';
-import { TableKit } from '@tiptap/extension-table';
 import { useCustomBodyColor } from '@hooks/useCustomBodyColor';
+import {
+  getDocumentCollaborationCoreExtensions,
+  getDocumentCollaborationResourceAndFormattingExtensions,
+} from './documentCollaborationExtensions';
+import { useAIChanges } from '@components/AIChangesContext';
+import { ComparePlugin } from './comparePlugin';
+import { useOnValueChange } from '@helpers/useOnValueChange';
+import { getProsemirrorObjFromYDoc } from './prosemirrorObjFromYDoc';
+import { registerCollaborativeDocumentEditor } from './collaborativeDocumentEditorRegistry';
 
 export type CollaborativeEditorProps = {
   placeholder?: string;
@@ -75,6 +81,10 @@ export type CollaborativeEditorProps = {
 };
 
 const COLORS = ['#70d6ff', '#ff70a6', '#ff9770', '#ffd670', '#e9ff70'];
+
+const UNDO_KEYS = 'Mod-z';
+const REDO_KEYS = 'Mod-Shift-z';
+const REDO_WINDOWS_KEYS = 'Mod-y';
 
 export default function CollaborativeEditor({
   placeholder,
@@ -92,6 +102,10 @@ export default function CollaborativeEditor({
   const { upload } = useUpload(resource);
   const ephemeralStore = useLoroSync(resource, doc);
   const canWrite = useCanWrite(resource);
+  const [editorReady, setEditorReady] = useState(false);
+
+  const { oldResources, hasAIChanges } = useAIChanges();
+  const oldResource = oldResources[resource.subject] as Resource | undefined;
 
   const theme = useTheme();
   useCustomBodyColor(theme.colors.bg);
@@ -115,60 +129,21 @@ export default function CollaborativeEditor({
 
   const editor = useEditor(
     {
+      onCreate() {
+        setEditorReady(true);
+      },
       extensions: [
-        StarterKit.configure({
-          undoRedo: false,
-          link: false,
-          codeBlock: {
-            enableTabIndentation: true,
-          },
-        }),
-        Note,
-        Typography,
-        Link.extend({
-          parseHTML: () => [
-            {
-              tag: 'a[href]',
-              getAttrs: node => {
-                // Links with a data-type are custom nodes that should be ignored by the link extension
-                if (node.getAttribute('data-type')) {
-                  return false;
-                }
-
-                // Default link parsing
-                return {
-                  href: node.getAttribute('href'),
-                  target: node.getAttribute('target'),
-                };
-              },
-            },
-          ],
-        }).configure({
-          autolink: true,
-          openOnClick: true,
-          protocols: [
-            'http',
-            'https',
-            'mailto',
-            {
-              scheme: 'tel',
-              optionalSlashes: true,
-            },
-          ],
-          HTMLAttributes: {
-            class: 'tiptap-link',
-            rel: 'noopener noreferrer',
-            target: '_blank',
-          },
-        }),
-        ExtendedImage.configure({
+        ...getDocumentCollaborationCoreExtensions({
           uploadImage: upload,
-          HTMLAttributes: {
-            class: 'tiptap-image',
-          },
         }),
         Placeholder.configure({
           placeholder: placeholder ?? 'Start typing...',
+        }),
+        ComparePlugin.configure({
+          comparisonContent: '',
+          classAdded: 'diff-added',
+          classRemoved: 'diff-removed',
+          classRemovedNode: 'diff-removed-node',
         }),
         SlashCommands.configure({
           suggestion: buildSuggestion(document.body, [
@@ -283,10 +258,10 @@ export default function CollaborativeEditor({
                 cmd(e.state, e.view.dispatch.bind(e.view));
 
             return {
-              'Mod-z': exec(loroUndo),
-              'Mod-Shift-z': exec(loroRedo),
+              [UNDO_KEYS]: exec(loroUndo),
+              [REDO_KEYS]: exec(loroRedo),
               // Common Windows redo binding kept in sync.
-              'Mod-y': exec(loroRedo),
+              [REDO_WINDOWS_KEYS]: exec(loroRedo),
             };
           },
         }),
@@ -387,6 +362,25 @@ export default function CollaborativeEditor({
     }
   }, [agentResource, ephemeralStore, color]);
 
+  useOnValueChange(
+    () => {
+      if (!editorReady) return;
+
+      if (hasAIChanges(resource.subject)) {
+        if (!oldResource) return;
+
+        const oldYDoc = oldResource.get(dataBrowser.properties.documentContent);
+        const oldDoc = getProsemirrorObjFromYDoc(oldYDoc, editor.schema);
+
+        editor.commands.setComparisonContent(oldDoc);
+      } else {
+        editor.commands.setComparisonContent('');
+      }
+    },
+    [hasAIChanges(resource.subject), editorReady, oldResource],
+    true,
+  );
+
   return (
     <IsInRTEContex value={true}>
       <TiptapContextProvider editor={editor}>
@@ -394,12 +388,15 @@ export default function CollaborativeEditor({
           <DragHandle editor={editor}>
             <FaGripVertical />
           </DragHandle>
-          <EditorContent key='rich-editor' editor={editor}>
+          <EditorContent key="rich-editor" editor={editor}>
             <FloatingHint editor={editor}>
               Type &apos;/&apos; for options or &apos;@&apos; for resources
             </FloatingHint>
             <FullBubbleMenu />
-            <EditorEvents onChange={save} />
+            <EditorEvents
+              onChange={save}
+              disable={hasAIChanges(resource.subject)}
+            />
           </EditorContent>
           <ClickUnderHandler onClick={() => editor?.commands.focus('end')} />
         </StyledEditorWrapper>
@@ -428,6 +425,18 @@ export const StyledEditorWrapper = styled(EditorWrapperBase)`
     width: 100%;
     ::spelling-error {
       text-decoration: wavy red underline;
+    }
+
+    .diff-added {
+      background-color: ${p => p.theme.colors.diff.addedBg};
+      color: ${p => p.theme.colors.diff.addedFg};
+    }
+
+    .diff-removed,
+    .diff-removed-node {
+      background-color: ${p => p.theme.colors.diff.removedBg};
+      color: ${p => p.theme.colors.diff.removedFg};
+      text-decoration: line-through;
     }
   }
   .drag-handle {

@@ -1352,7 +1352,6 @@ impl Db {
     }
 
     /// Apply made changes to the store.
-    ///
     /// After a successful KV apply, scans the transaction for writes to
     /// `Tree::QueryMembers` and broadcasts a `DbEvent::QueryMembershipChanged`
     /// for each one. Subscribers (e.g. `CommitMonitor`'s listener task) use

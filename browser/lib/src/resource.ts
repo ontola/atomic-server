@@ -35,6 +35,18 @@ import {
   type AtomicValue,
 } from './value.js';
 
+/** Contains the PropertyURL / Value combinations */
+export type PropVals = Map<string, AtomicValue>;
+
+export interface MergeOptions {
+  replaceYDocs?: boolean;
+  replaceLoroDocs?: boolean;
+  /**
+   * Property keys to skip when merging: keep local values and do not delete them
+   * when missing from the remote resource.
+   */
+  omitKeysFromMerge?: string[];
+}
 /**
  * If a resource has no subject, it will have this subject. This means that the
  * Resource is not saved or fetched.
@@ -1177,8 +1189,13 @@ export class Resource<C extends OptionalClass = any> {
    * conflict resolution automatically — both local offline edits and
    * remote server edits survive. The cache is then rebuilt from the
    * merged Loro state.
+   * @param options.replaceLoroDocs When true, each local Loro.Doc is updated to match the remote document state (authoritative replace).
+   * @param options.omitKeysFromMerge Keys to skip so local values are kept (including when absent on the remote resource).
    */
-  public merge(resourceB: Resource): void {
+  public merge(resourceB: Resource, options: MergeOptions = {}): void {
+    const replaceYDocs = options.replaceYDocs ?? false;
+    const omitKeysFromMerge = options.omitKeysFromMerge ?? [];
+
     if (this.subject !== resourceB.subject) {
       throw new Error('Cannot merge resources with different subjects');
     }
@@ -1194,22 +1211,49 @@ export class Resource<C extends OptionalClass = any> {
       const localDoc = this.getLoroDoc();
 
       if (localDoc) {
-        // Import the incoming state — Loro merges via CRDT
-        try {
-          localDoc.import(incomingSnapshot);
-        } catch (e) {
-          // Import can fail if the snapshot is from an incompatible version.
-          // Fall back to replacing state entirely.
-          console.warn(
-            `[Resource] Loro merge failed for ${this.subject}, replacing:`,
-            e,
-          );
+        // Read local values for omitted keys
+        const savedOmittedValues: Record<string, AtomicValue> = {};
+
+        for (const key of omitKeysFromMerge) {
+          const val = this.get(key);
+
+          if (val !== undefined) {
+            savedOmittedValues[key] = val;
+          }
+        }
+
+        if (replaceYDocs || options.replaceLoroDocs) {
           this.resetLoroState();
           this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
           this.#cache = structuredClone(resourceB.#cache);
           this._auxValues = new Map(
             structuredClone(Array.from(resourceB._auxValues.entries())),
           );
+        } else {
+          // Import the incoming state — Loro merges via CRDT
+          try {
+            localDoc.import(incomingSnapshot);
+          } catch (e) {
+            // Import can fail if the snapshot is from an incompatible version.
+            // Fall back to replacing state entirely.
+            console.warn(
+              `[Resource] Loro merge failed for ${this.subject}, replacing:`,
+              e,
+            );
+            this.resetLoroState();
+            this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
+            this.#cache = structuredClone(resourceB.#cache);
+            this._auxValues = new Map(
+              structuredClone(Array.from(resourceB._auxValues.entries())),
+            );
+          }
+        }
+
+        // Restore local values for omitted keys
+        for (const key of omitKeysFromMerge) {
+          if (savedOmittedValues[key] !== undefined) {
+            this.set(key, savedOmittedValues[key]);
+          }
         }
 
         // Copy housekeeping properties from resourceB.#cache to this.#cache
@@ -2658,6 +2702,9 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Refetches the resource from the server. Will reset all changes to the latest saved version */
   public async refresh(): Promise<void> {
+    // Reset the commit builder so our changes don't get merged with the server version.
+    this.#commitBuilder = new CommitBuilder(this.subject);
+
     await this.store.fetchResourceFromServer(this.subject, {
       noWebSocket: true,
     });

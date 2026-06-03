@@ -7,7 +7,8 @@ export type GroupedVersions = {
 export interface HistoryViewProps {
   resource: Resource;
   groupedVersions: GroupedVersions;
-  selectedVersion: Version | undefined;
+  selectedVersion: Version;
+  olderVersion: Version | undefined;
   isCurrentVersion: boolean;
   onNextVersion: () => void;
   onPreviousVersion: () => void;

@@ -18,10 +18,14 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_INITIALIZE")]
     pub initialize: bool,
 
+    /// Re-imports built-in ontologies and default server resources (`populate_all`) without rebuilding indexes or re-running full initialization.
+    #[clap(long, env = "ATOMIC_REPOPULATE_DEFAULTS")]
+    pub repopulate_defaults: bool,
+
     /// Re-builds the indexes. Parses all the resources.
     /// Do this when updating requires it, or if you have issues with Collections / Queries / Search.
-    #[clap(long, env = "ATOMIC_REBUILD_INDEX")]
-    pub rebuild_indexes: bool,
+    #[clap(value_enum, long, env = "ATOMIC_REBUILD_INDEX")]
+    pub rebuild_indexes: Option<RebuildIndexMode>,
 
     /// Use staging environments for services like LetsEncrypt
     #[clap(long, env = "ATOMIC_DEVELOPMENT")]
@@ -108,6 +112,21 @@ pub struct Opts {
     /// to the OS hostname if unset, then to "Unknown" if that fails.
     #[clap(long, env = "ATOMIC_DEVICE_NAME")]
     pub device_name: Option<String>,
+    /// Use the GPU (if available) for processing vector search embeddings.
+    #[clap(long, env = "ATOMIC_GPU_INDEXING")]
+    pub gpu_indexing: bool,
+
+    /// OpenRouter API key for remote embeddings instead of local fastembed.
+    #[clap(long, env = "OPENROUTER_API_KEY")]
+    pub openrouter_api_key: Option<String>,
+
+    /// OpenRouter embedding model id (required when `OPENROUTER_API_KEY` is set).
+    #[clap(long, env = "OPENROUTER_EMBEDDING_MODEL")]
+    pub openrouter_embedding_model: Option<String>,
+
+    /// Optional embedding vector dimensions for OpenRouter (JSON `dimensions` field; not all models honor it). Empty string is treated as unset.
+    #[clap(long, env = "OPENROUTER_EMBEDDING_DIMENSIONS")]
+    pub openrouter_embedding_dimensions: Option<String>,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -126,6 +145,14 @@ pub enum LogLevel {
     Info,
     Debug,
     Trace,
+}
+
+#[derive(clap::ValueEnum, Clone, Debug, PartialEq)]
+pub enum RebuildIndexMode {
+    All,
+    Atoms,
+    Vector,
+    Search,
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -210,11 +237,24 @@ pub struct Config {
     pub uploads_path: PathBuf,
     /// Path to where the search index for tantivy full text search is located
     pub search_index_path: PathBuf,
+    /// Path to where the vector search index for polarisdb is located
+    pub vector_search_index_path: PathBuf,
     pub plugin_cache_path: PathBuf,
     /// If true, the initialization scripts will be ran (create first Drive, Agent, indexing, etc)
     pub initialize: bool,
     /// The base domain for multi-tenant hosting.
     pub base_domain: Option<String>,
+    /// If true, runs `populate_all` on startup without full initialize (no index rebuild).
+    pub repopulate_defaults: bool,
+    /// Use the GPU (if available) for processing vector search embeddings.
+    pub gpu_indexing: bool,
+
+    /// OpenRouter API key for remote embeddings (empty strings are treated as unset).
+    pub openrouter_api_key: Option<String>,
+    /// OpenRouter embedding model id (required when `openrouter_api_key` is set).
+    pub openrouter_embedding_model: Option<String>,
+    /// Optional embedding dimensions for OpenRouter.
+    pub openrouter_embedding_dimensions: Option<u32>,
 }
 
 impl Config {
@@ -324,10 +364,14 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
     let mut search_index_path = cache_dir.clone();
     search_index_path.push("search_index");
 
+    let mut vector_search_index_path = cache_dir.clone();
+    vector_search_index_path.push("vector_search_index");
+
     let mut plugin_cache_path = cache_dir.clone();
     plugin_cache_path.push("plugin_cache");
 
     let initialize = !std::path::Path::exists(&store_path) || opts.initialize;
+    let repopulate_defaults = opts.repopulate_defaults;
 
     if opts.https & opts.email.is_none() {
         return Err(
@@ -338,8 +382,34 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
 
     let base_domain = opts.base_domain.clone();
 
+    let gpu_indexing = opts.gpu_indexing;
+
+    let openrouter_api_key = opts.openrouter_api_key.clone().filter(|s| !s.is_empty());
+    let openrouter_embedding_model = opts
+        .openrouter_embedding_model
+        .clone()
+        .filter(|s| !s.is_empty());
+    let openrouter_embedding_dimensions = match opts.openrouter_embedding_dimensions.as_deref() {
+        None | Some("") => None,
+        Some(s) => {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.parse().map_err(|_| {
+                    "OPENROUTER_EMBEDDING_DIMENSIONS must be a non-negative integer if set"
+                })?)
+            }
+        }
+    };
+
     Ok(Config {
         initialize,
+        repopulate_defaults,
+        gpu_indexing,
+        openrouter_api_key,
+        openrouter_embedding_model,
+        openrouter_embedding_dimensions,
         opts,
         cert_path,
         config_dir,
@@ -350,6 +420,7 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         static_path,
         store_path,
         search_index_path,
+        vector_search_index_path,
         plugin_cache_path,
         uploads_path,
         base_domain,

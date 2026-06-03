@@ -51,16 +51,6 @@ const Shortcuts: React.FunctionComponent = () => {
         <p>
           <Key shortcut={shortcuts.themeSettings} /> <b>T</b>heme settings
         </p>
-        <h3>Document</h3>
-        <p>
-          <Key shortcut={shortcuts.moveLineUp} /> Move line / section up
-        </p>
-        <p>
-          <Key shortcut={shortcuts.moveLineDown} /> Move line / section down
-        </p>
-        <p>
-          <Key shortcut={shortcuts.deleteLine} /> Delete line
-        </p>
       </ContainerNarrow>
     </Main>
   );

@@ -3,16 +3,19 @@ import { useTipTapEditor } from './TiptapContext';
 
 interface EditorEventsProps {
   onChange?: () => void;
+  disable?: boolean;
 }
 
-export function EditorEvents({ onChange }: EditorEventsProps): null {
+export function EditorEvents({ onChange, disable }: EditorEventsProps): null {
   const editor = useTipTapEditor();
 
   useEffect(() => {
     if (!editor) return;
 
     const callback = () => {
-      onChange?.();
+      if (!disable) {
+        onChange?.();
+      }
     };
 
     editor.on('update', callback);
@@ -22,7 +25,7 @@ export function EditorEvents({ onChange }: EditorEventsProps): null {
         editor.off('update', callback);
       }
     };
-  }, [editor, onChange]);
+  }, [editor, onChange, disable]);
 
   return null;
 }

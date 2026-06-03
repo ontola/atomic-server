@@ -312,45 +312,43 @@ impl AtomicLoroDoc {
                         .map_err(|e| format!("Loro list push error: {e}"))?;
                 }
             }
-            Value::Json(json_val) => {
-                match json_val {
-                    serde_json::Value::Object(_) => {
-                        let map = root
-                            .insert_container(property, loro::LoroMap::new())
-                            .map_err(|e| format!("Loro insert_container error: {e}"))?;
-                        json_value_to_loro_map(json_val, &map)?;
+            Value::Json(json_val) => match json_val {
+                serde_json::Value::Object(_) => {
+                    let map = root
+                        .insert_container(property, loro::LoroMap::new())
+                        .map_err(|e| format!("Loro insert_container error: {e}"))?;
+                    json_value_to_loro_map(json_val, &map)?;
+                }
+                serde_json::Value::Array(arr) => {
+                    let list = root
+                        .insert_container(property, loro::LoroList::new())
+                        .map_err(|e| format!("Loro insert_container error: {e}"))?;
+                    for item in arr {
+                        json_value_to_loro_list_item(item, &list)?;
                     }
-                    serde_json::Value::Array(arr) => {
-                        let list = root
-                            .insert_container(property, loro::LoroList::new())
-                            .map_err(|e| format!("Loro insert_container error: {e}"))?;
-                        for item in arr {
-                            json_value_to_loro_list_item(item, &list)?;
-                        }
-                    }
-                    serde_json::Value::String(s) => {
-                        root.insert(property, s.as_str())
+                }
+                serde_json::Value::String(s) => {
+                    root.insert(property, s.as_str())
+                        .map_err(|e| format!("Loro set error: {e}"))?;
+                }
+                serde_json::Value::Number(n) => {
+                    if let Some(i) = n.as_i64() {
+                        root.insert(property, i)
                             .map_err(|e| format!("Loro set error: {e}"))?;
-                    }
-                    serde_json::Value::Number(n) => {
-                        if let Some(i) = n.as_i64() {
-                            root.insert(property, i)
-                                .map_err(|e| format!("Loro set error: {e}"))?;
-                        } else if let Some(f) = n.as_f64() {
-                            root.insert(property, f)
-                                .map_err(|e| format!("Loro set error: {e}"))?;
-                        }
-                    }
-                    serde_json::Value::Bool(b) => {
-                        root.insert(property, *b)
-                            .map_err(|e| format!("Loro set error: {e}"))?;
-                    }
-                    serde_json::Value::Null => {
-                        root.insert(property, loro::LoroValue::Null)
+                    } else if let Some(f) = n.as_f64() {
+                        root.insert(property, f)
                             .map_err(|e| format!("Loro set error: {e}"))?;
                     }
                 }
-            }
+                serde_json::Value::Bool(b) => {
+                    root.insert(property, *b)
+                        .map_err(|e| format!("Loro set error: {e}"))?;
+                }
+                serde_json::Value::Null => {
+                    root.insert(property, loro::LoroValue::Null)
+                        .map_err(|e| format!("Loro set error: {e}"))?;
+                }
+            },
             _ => {
                 // For other complex types, serialize the display string.
                 root.insert(property, value.to_string().as_str())
@@ -358,7 +356,7 @@ impl AtomicLoroDoc {
             }
         }
         Ok(())
-     }
+    }
 
     /// Push a JSON item to a property's LoroList.
     /// Creates the list if it doesn't exist. Does NOT replace existing items.
@@ -568,6 +566,33 @@ impl AtomicLoroDoc {
                 loro::LoroValue::I64(i) => Some(i),
                 _ => None,
             })
+    }
+
+    /// Extract plain text from a Document-v2 body for search indexing.
+    ///
+    /// Reads the loro-prosemirror `doc` root map first, then falls back to a
+    /// top-level `documentContent` text container.
+    pub fn extract_document_plain_text(&self) -> String {
+        let doc = self.doc();
+
+        if let Some(pm_map) = doc.try_get_map("doc") {
+            let deep = pm_map.get_deep_value();
+            let json = loro_value_to_json(&deep);
+            let text = extract_text_from_prosemirror_json(&json);
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return collapse_whitespace(trimmed);
+            }
+        }
+
+        if let Some(text_container) = doc.try_get_text("documentContent") {
+            let trimmed = text_container.to_string().trim().to_string();
+            if !trimmed.is_empty() {
+                return collapse_whitespace(&trimmed);
+            }
+        }
+
+        String::new()
     }
 
     /// Get all properties from the root map as a HashMap of LoroValues.
@@ -946,11 +971,74 @@ fn insert_json_value_into_loro_list(
     Ok(())
 }
 
-
 impl Default for AtomicLoroDoc {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Best-effort plain text from a loro-prosemirror or ProseMirror JSON tree.
+fn extract_text_from_prosemirror_json(node: &serde_json::Value) -> String {
+    match node {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(arr) => {
+            let parts: Vec<String> = arr
+                .iter()
+                .map(extract_text_from_prosemirror_json)
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            parts.join(" ")
+        }
+        serde_json::Value::Object(obj) => {
+            if let Some(serde_json::Value::String(text)) = obj.get("text") {
+                return text.clone();
+            }
+
+            if let Some(content) = obj.get("content").and_then(|c| c.as_array()) {
+                let joined: String = content
+                    .iter()
+                    .map(extract_text_from_prosemirror_json)
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("");
+                let node_type = obj.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                let is_block =
+                    !node_type.is_empty() && node_type != "text" && node_type != "hardBreak";
+                if is_block && !joined.is_empty() {
+                    return format!("{joined}\n");
+                }
+                return joined;
+            }
+
+            if let Some(children) = obj.get("children").and_then(|c| c.as_array()) {
+                let parts: Vec<String> = children
+                    .iter()
+                    .map(extract_text_from_prosemirror_json)
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                let node_name = obj
+                    .get("nodeName")
+                    .or_else(|| obj.get("type"))
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("");
+                let is_block = matches!(
+                    node_name,
+                    "paragraph" | "heading" | "doc" | "blockquote" | "listItem" | "codeBlock"
+                );
+                return parts.join(if is_block { " " } else { "" });
+            }
+
+            String::new()
+        }
+        _ => String::new(),
+    }
+}
+
+fn collapse_whitespace(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Convert a LoroValue back to serde_json::Value.
@@ -1055,11 +1143,8 @@ mod test {
         .unwrap();
         doc.set_property(&p("emptyRefs"), &Value::ResourceArray(vec![]))
             .unwrap();
-        doc.set_property(
-            &p("strokes"),
-            &Value::Json(serde_json::json!([{"x": 1}])),
-        )
-        .unwrap();
+        doc.set_property(&p("strokes"), &Value::Json(serde_json::json!([{"x": 1}])))
+            .unwrap();
         doc.set_property(&p("text"), &Value::String("plain".into()))
             .unwrap();
 
@@ -2277,7 +2362,8 @@ mod test {
     fn undo_exports_updates_for_sync() {
         let prop = "https://atomicdata.dev/ontology/canvas/strokeData";
         let doc = AtomicLoroDoc::new();
-        doc.set_property(prop, &Value::Json(serde_json::Value::Array(vec![]))).unwrap();
+        doc.set_property(prop, &Value::Json(serde_json::Value::Array(vec![])))
+            .unwrap();
         doc.doc().commit();
         doc.ensure_undo_manager();
 
@@ -2305,7 +2391,8 @@ mod test {
     fn undo_redo_json_array() {
         let prop = "https://atomicdata.dev/ontology/canvas/strokeData";
         let doc = AtomicLoroDoc::new();
-        doc.set_property(prop, &Value::Json(serde_json::Value::Array(vec![]))).unwrap();
+        doc.set_property(prop, &Value::Json(serde_json::Value::Array(vec![])))
+            .unwrap();
         doc.doc().commit();
 
         // Initialize undo manager before making changes
@@ -2386,5 +2473,80 @@ mod test {
             }
             _ => panic!("Expected Json array"),
         }
+    }
+
+    #[test]
+    fn extract_document_plain_text_empty() {
+        let doc = AtomicLoroDoc::new();
+        assert_eq!(doc.extract_document_plain_text(), "");
+    }
+
+    #[test]
+    fn extract_document_plain_text_document_content_container() {
+        let doc = AtomicLoroDoc::new();
+        doc.doc()
+            .get_text("documentContent")
+            .insert(0, "RTE body text")
+            .unwrap();
+        assert_eq!(doc.extract_document_plain_text(), "RTE body text");
+    }
+
+    #[test]
+    fn extract_text_loro_prosemirror_node_name_children() {
+        let json = serde_json::json!({
+            "nodeName": "doc",
+            "children": [
+                {
+                    "nodeName": "paragraph",
+                    "children": ["Hello ", "world"]
+                }
+            ]
+        });
+        assert_eq!(
+            super::extract_text_from_prosemirror_json(&json).trim(),
+            "Hello world"
+        );
+    }
+
+    #[test]
+    fn extract_text_prosemirror_type_content() {
+        let json = serde_json::json!({
+            "type": "doc",
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [{ "type": "text", "text": "Line one" }]
+                },
+                {
+                    "type": "paragraph",
+                    "content": [{ "type": "text", "text": "Line two" }]
+                }
+            ]
+        });
+        let text = super::extract_text_from_prosemirror_json(&json);
+        assert!(text.contains("Line one"));
+        assert!(text.contains("Line two"));
+    }
+
+    #[test]
+    fn extract_document_plain_text_prefers_doc_over_document_content() {
+        let doc = AtomicLoroDoc::new();
+        doc.doc()
+            .get_text("documentContent")
+            .insert(0, "legacy text")
+            .unwrap();
+        let pm = doc.doc().get_map("doc");
+        pm.insert("nodeName", "doc").unwrap();
+        let children = pm
+            .insert_container("children", loro::LoroList::new())
+            .unwrap();
+        let para = children.insert_container(0, loro::LoroMap::new()).unwrap();
+        para.insert("nodeName", "paragraph").unwrap();
+        let para_children = para
+            .insert_container("children", loro::LoroList::new())
+            .unwrap();
+        para_children.insert(0, "from doc map").unwrap();
+
+        assert_eq!(doc.extract_document_plain_text(), "from doc map");
     }
 }

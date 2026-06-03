@@ -21,7 +21,7 @@ export default defineConfig(options => ({
     'ontologies/commits': 'src/ontologies/commits.ts',
   },
   sourcemap: true,
-  clean: true,
+  clean: !options.watch,
   format: ['esm', 'cjs'],
   target: 'es2023',
   external: ['loro-crdt'],

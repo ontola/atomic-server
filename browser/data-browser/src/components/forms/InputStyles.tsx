@@ -1,30 +1,7 @@
 import { styled, css } from 'styled-components';
 
-export const FieldStyled = styled.div`
-  padding: 0;
-  margin-bottom: ${props => props.theme.size()};
-  border: none;
-  background-color: none;
-
-  // Removes default 1px margin on fieldset.
-  &:is(fieldset) {
-    margin-inline: 0;
-  }
-`;
-
-export const LabelWrapper = styled.div`
-  display: flex;
-  align-items: center;
-  margin-bottom: 0.5rem;
-`;
-
 export const LabelStyled = styled.label`
   font-weight: bold;
-  display: block;
-`;
-
-export const LabelHelper = styled.div`
-  font-size: 0.9em;
   display: block;
 `;
 
@@ -126,3 +103,11 @@ export const InputOverlay = styled.div`
   width: 100%;
   border-color: rgba(0, 0, 0, 0);
 `;
+
+export const Input: React.FC<
+  React.InputHTMLAttributes<HTMLInputElement> & InputWrapperProps
+> = ({ $invalid, hasPrefix, ...props }) => (
+  <InputWrapper $invalid={$invalid} hasPrefix={hasPrefix}>
+    <InputStyled {...props} />
+  </InputWrapper>
+);

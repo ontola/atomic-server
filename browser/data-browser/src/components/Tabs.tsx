@@ -19,14 +19,14 @@ interface TabsProps {
 
 export const TAB_PANEL_HAS_ERROR_CLASS = 'tab-panel-has-error';
 
-export const Tabs: FC<PropsWithChildren<TabsProps>> = ({
+export function Tabs({
   children,
   tabs,
   label,
   className,
   defaultValue,
   rounded,
-}) => {
+}: PropsWithChildren<TabsProps>) {
   return (
     <StyledTabsRoot
       defaultValue={defaultValue ?? tabs[0].value}
@@ -47,7 +47,7 @@ export const Tabs: FC<PropsWithChildren<TabsProps>> = ({
       {children}
     </StyledTabsRoot>
   );
-};
+}
 
 interface TabPanelProps {
   value: string;
@@ -65,6 +65,8 @@ export const TabPanel: FC<PropsWithChildren<TabPanelProps>> = ({
     </RadixTabs.Content>
   );
 };
+
+Tabs.Panel = TabPanel;
 
 const TabList = styled(RadixTabs.List)`
   display: flex;

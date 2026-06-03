@@ -21,7 +21,12 @@ import { server, type Server } from './ontologies/server.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
 import { Resource, unknownSubject } from './resource.js';
-import { type SearchOpts, buildSearchSubject } from './search.js';
+import {
+  type SearchOpts,
+  type SemanticSearchOpts,
+  buildSearchSubject,
+  buildSemanticSearchSubject,
+} from './search.js';
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
@@ -59,8 +64,10 @@ type CommitLogCallback = (entries: CommitLogEntry[]) => void;
 
 type ServerURLCallback = (serverURL: string) => void;
 type DriveCallback = (drive: string) => void;
-type Fetch = typeof fetch;
 
+/** Called when the server reports vector index activity for a drive (via websocket). */
+export type IndexingStatusCallback = (indexing: boolean) => void;
+type Fetch = typeof fetch;
 type CreateResourceOptions = {
   /** Optional subject of the new resource, if not given the store will generate a random subject */
   subject?: string;
@@ -188,6 +195,11 @@ export enum StoreEvents {
   ResourceUpdated = 'resource-updated',
   /** Event that gets called whenever the store encounters an error */
   Error = 'error',
+  /**
+   * Vector search indexing for a drive root (from websocket `INDEX_STATUS`).
+   * Use `store.on(StoreEvents.Indexing, driveSubject, callback)`.
+   */
+  Indexing = 'indexing',
 }
 
 export interface ImportJsonADOptions {
@@ -200,6 +212,7 @@ export interface ImportJsonADOptions {
 export interface AddResourcesOpts {
   /** If true, the resource will not be compared to the existing resource in the store. This is useful when you want to force an update. */
   skipCommitCompare?: boolean;
+  replaceLoroDocsFromRemote?: boolean;
   /** If the resource was fetched via an alias, we should record that alias. */
   alias?: string;
 }
@@ -219,6 +232,8 @@ type StoreEventHandlers = {
   [StoreEvents.CommitLogChanged]: CommitLogCallback;
   [StoreEvents.ResourceUpdated]: ResourceCallback;
   [StoreEvents.Error]: ErrorCallback;
+  /** Only used via `on(Indexing, drive, cb)`; not emitted through EventManager. */
+  [StoreEvents.Indexing]: IndexingStatusCallback;
 };
 
 export interface ResourceTreeTemplate {
@@ -249,6 +264,7 @@ export interface IncomingChange {
   source: ChangeSource;
   receivedAt?: number;
   forceNotify?: boolean;
+  replaceLoroDocsFromRemote?: boolean;
 }
 
 /** Returns True if the client has WebSocket support */
@@ -413,6 +429,11 @@ export class Store {
    * to learn the resource is fresh.
    */
   private recentlyCreatedSubjects: Map<string, number> = new Map();
+
+  private vectorIndexingSubscribers = new Map<
+    string,
+    Set<IndexingStatusCallback>
+  >();
 
   private client: Client;
 
@@ -1365,7 +1386,11 @@ export class Store {
     if (change.resource) {
       const alias =
         change.subject !== change.resource.subject ? change.subject : undefined;
-      this.addResource(change.resource, { skipCommitCompare: true, alias });
+      this.addResource(change.resource, {
+        skipCommitCompare: true,
+        alias,
+        replaceLoroDocsFromRemote: change.replaceLoroDocsFromRemote,
+      });
 
       return 'applied';
     }
@@ -1443,7 +1468,11 @@ export class Store {
    */
   public addResource(
     resource: Resource,
-    { skipCommitCompare, alias }: AddResourcesOpts = {},
+    {
+      skipCommitCompare,
+      alias,
+      replaceLoroDocsFromRemote,
+    }: AddResourcesOpts = {},
   ): void {
     // The resource might be new and not have a store yet. We set it here.
     resource.setStore(this);
@@ -1494,7 +1523,9 @@ export class Store {
     // don't overwrite it with the server's version. The local changes
     // need to be synced first.
     if (storeResource) {
-      storeResource.merge(resource.__internalObject);
+      storeResource.merge(resource.__internalObject, {
+        replaceLoroDocs: replaceLoroDocsFromRemote,
+      });
     } else {
       this.resources.set(subject, resource.__internalObject);
     }
@@ -1791,6 +1822,35 @@ export class Store {
     return results;
   }
 
+  public async semanticSearch(
+    query: string,
+    opts: SemanticSearchOpts = {},
+  ): Promise<{ subject: string; chunk: string }[]> {
+    const vectorSearchSubject = buildSemanticSearchSubject(
+      this.serverUrl,
+      query,
+      opts,
+    );
+    const vectorSearchResource = await this.fetchResourceFromServer(
+      vectorSearchSubject,
+      {
+        noWebSocket: true,
+      },
+    );
+    const results = vectorSearchResource.get(server.properties.results) ?? [];
+    const chunks =
+      vectorSearchResource.get(server.properties.searchChunks) ?? [];
+
+    if (!Array.isArray(chunks) || results.length !== chunks.length) {
+      throw new Error('Results and chunks length mismatch');
+    }
+
+    return results.map((result, index) => ({
+      subject: result,
+      chunk: chunks[index] as string,
+    }));
+  }
+
   /** Checks if a subject is free to use */
   public async checkSubjectTaken(subject: string): Promise<boolean> {
     const r = this.resources.get(subject);
@@ -2072,6 +2132,8 @@ export class Store {
       method?: 'GET' | 'POST';
       /** HTTP Body for POSTing */
       body?: ArrayBuffer | string;
+      /** Overwrites existing Loro state instead of merging */
+      forceOverride?: boolean;
     } = {},
   ): Promise<Resource<C>> {
     const normalizedSubject = this.normalizeSubject(subject);
@@ -2127,6 +2189,7 @@ export class Store {
       noWebSocket?: boolean;
       method?: 'GET' | 'POST';
       body?: ArrayBuffer | string;
+      forceOverride?: boolean;
     },
   ): Promise<Resource<C>> {
     const normalizedSubject = this.normalizeSubject(subject);
@@ -2196,6 +2259,7 @@ export class Store {
         subject,
         resource,
         source: 'http-fetch',
+        replaceLoroDocsFromRemote: !!opts.forceOverride,
       });
 
       const primarySubject = this.normalizeSubject(resource.subject);
@@ -2205,6 +2269,7 @@ export class Store {
             subject: r.subject,
             resource: r,
             source: 'http-fetch',
+            replaceLoroDocsFromRemote: !!opts.forceOverride,
           });
         }
       });
@@ -3020,6 +3085,44 @@ export class Store {
     };
   }
 
+  /**
+   * Subscribe to vector index activity for a drive: registers `callback` for
+   * {@link StoreEvents.Indexing} and opens the websocket subscription
+   * (`SUBSCRIBE_INDEX_STATUS`). The server sends an immediate `INDEX_STATUS`.
+   * The returned function removes both the listener and the websocket subscription.
+   */
+  public subscribeIndexStatus(
+    driveSubject: string,
+    callback: IndexingStatusCallback,
+  ): () => void {
+    if (driveSubject === unknownSubject) {
+      return () => {};
+    }
+
+    const unsubEvent = this.on(StoreEvents.Indexing, driveSubject, callback);
+
+    try {
+      const ws =
+        this.getDefaultWebSocket() ?? this.getWebSocketForSubject(driveSubject);
+      ws?.subscribeIndexStatus(driveSubject);
+    } catch (e) {
+      console.error(e);
+    }
+
+    return () => {
+      unsubEvent();
+
+      try {
+        const ws =
+          this.getDefaultWebSocket() ??
+          this.getWebSocketForSubject(driveSubject);
+        ws?.unsubscribeIndexStatus(driveSubject);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+  }
+
   private dispatchLoroMessage<T extends (update: Uint8Array) => void>(
     map: Map<string, T[]>,
     message: string,
@@ -3138,8 +3241,65 @@ export class Store {
     else this.subscribers.set(normalized, filtered);
   }
 
-  public on<T extends StoreEvents>(event: T, callback: StoreEventHandlers[T]) {
-    return this.eventManager.register(event, callback);
+  /**
+   * Notifies listeners registered with `on(StoreEvents.Indexing, drive, ...)`.
+   * Used when a websocket `INDEX_STATUS` message is received.
+   */
+  public __notifyIndexingStatus(drive: string, indexing: boolean): void {
+    const set = this.vectorIndexingSubscribers.get(drive);
+
+    if (!set) {
+      return;
+    }
+
+    for (const cb of set) {
+      try {
+        cb(indexing);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }
+
+  public on(
+    event: StoreEvents.Indexing,
+    drive: string,
+    callback: IndexingStatusCallback,
+  ): () => void;
+  public on<T extends Exclude<StoreEvents, StoreEvents.Indexing>>(
+    event: T,
+    callback: StoreEventHandlers[T],
+  ): () => void;
+  public on(
+    event: StoreEvents,
+    arg2: string | StoreEventHandlers[StoreEvents],
+    arg3?: IndexingStatusCallback,
+  ): () => void {
+    if (event === StoreEvents.Indexing && typeof arg2 === 'string' && arg3) {
+      const drive = arg2;
+      const callback = arg3;
+      let set = this.vectorIndexingSubscribers.get(drive);
+
+      if (!set) {
+        set = new Set();
+        this.vectorIndexingSubscribers.set(drive, set);
+      }
+
+      set.add(callback);
+
+      return () => {
+        set!.delete(callback);
+
+        if (set!.size === 0) {
+          this.vectorIndexingSubscribers.delete(drive);
+        }
+      };
+    }
+
+    return this.eventManager.register(
+      event as StoreEvents,
+      arg2 as StoreEventHandlers[StoreEvents],
+    );
   }
 
   private emitSyncStatus(): void {
