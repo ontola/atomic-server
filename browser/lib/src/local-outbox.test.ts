@@ -2,20 +2,33 @@ import { describe, it, beforeEach, vi } from 'vitest';
 import {
   LocalOutbox,
   isTerminalCommitErrorMessage,
+  isUnrecoverableCommitErrorMessage,
+  drainBackoffMs,
+  BLOCK_AFTER_FAILURES,
   type OutboxEntry,
 } from './local-outbox.js';
-import type { Commit } from './commit.js';
+import { commitToJsonADObject, type Commit } from './commit.js';
 
-function fakeCommit(subject: string, signature = 'fakesig=='): Commit {
+function fakeCommit(
+  subject: string,
+  signature = 'fakesig==',
+  signer = 'did:ad:agent:fake=',
+): Commit {
   return {
     subject,
-    signer: 'did:ad:agent:fake=',
+    signer,
     createdAt: 0,
     signature,
     isA: ['https://atomicdata.dev/classes/Commit'],
     previousCommit: undefined,
     set: { 'https://atomicdata.dev/properties/name': 'x' },
   } as unknown as Commit;
+}
+
+/** A persisted `signedGenesis` value (JSON-AD object), built through the real
+ *  serializer so `signerOfPersisted` (parseCommitJSON) can read its signer. */
+function fakeCommitJsonAd(subject: string, signer: string): unknown {
+  return commitToJsonADObject(fakeCommit(subject, 'fakesig==', signer));
 }
 
 const SUBJECT = 'did:ad:fakeresource';
@@ -134,5 +147,328 @@ describe('LocalOutbox.drain', () => {
     outbox.clearGenesis(SUBJECT);
     outbox.clearDirty(SUBJECT);
     expect(outbox.size).toBe(0);
+  });
+});
+
+describe('isUnrecoverableCommitErrorMessage', () => {
+  it('flags the server "no write right" 401', ({ expect }) => {
+    expect(
+      isUnrecoverableCommitErrorMessage(
+        'Unauthorized. No https://atomicdata.dev/properties/write right has been found for did:ad:agent:Qmfp=',
+      ),
+    ).toBe(true);
+  });
+
+  it("doesn't flag unrelated or read 401s", ({ expect }) => {
+    expect(
+      isUnrecoverableCommitErrorMessage(
+        'Unauthorized. This resource is not publicly readable. Try signing in',
+      ),
+    ).toBe(false);
+    expect(isUnrecoverableCommitErrorMessage('Network timeout')).toBe(false);
+    expect(isUnrecoverableCommitErrorMessage('')).toBe(false);
+  });
+});
+
+describe('LocalOutbox blocking', () => {
+  beforeEach(() => {
+    if (typeof localStorage !== 'undefined') localStorage.clear();
+  });
+
+  const blockingCtx = (
+    drainSubject: () => Promise<void>,
+    onBlocked = vi.fn(),
+  ) => ({
+    sort: (e: readonly OutboxEntry[]) => [...e],
+    drainSubject,
+    isBlockingError: (_e: OutboxEntry, err: unknown) =>
+      isUnrecoverableCommitErrorMessage(
+        err instanceof Error ? err.message : '',
+      ),
+    onBlocked,
+  });
+
+  const alwaysUnauthorized = () =>
+    vi.fn(async () => {
+      throw new Error(
+        'Unauthorized. No https://atomicdata.dev/properties/write right has been found for did:ad:agent:x=',
+      );
+    });
+
+  /** Drain repeatedly, advancing past each backoff window, until the entry
+   *  racks up enough failures to be parked as blocked. */
+  async function drainUntilBlocked(
+    outbox: LocalOutbox,
+    ctx: ReturnType<typeof blockingCtx>,
+  ) {
+    let now = 0;
+    vi.setSystemTime(now);
+
+    for (let i = 1; i <= BLOCK_AFTER_FAILURES; i++) {
+      await outbox.drain(ctx);
+      now += drainBackoffMs(i) + 1;
+      vi.setSystemTime(now);
+    }
+  }
+
+  it('retries a blocking error first, then parks after sustained failures', async ({
+    expect,
+  }) => {
+    vi.useFakeTimers();
+
+    try {
+      const outbox = new LocalOutbox();
+      outbox.markDirty(SUBJECT);
+      const drainSubject = alwaysUnauthorized();
+      const onBlocked = vi.fn();
+      const ctx = blockingCtx(drainSubject, onBlocked);
+
+      // A 401 is NOT blocked on the first failure — it's retried under backoff
+      // (it's usually a transient ordering race: parent not yet synced).
+      vi.setSystemTime(0);
+      await outbox.drain(ctx);
+      expect(outbox.getEntry(SUBJECT)?.blocked).toBeFalsy();
+      expect(outbox.getEntry(SUBJECT)?.failures).toBe(1);
+
+      // Only after BLOCK_AFTER_FAILURES sustained failures does it park.
+      await drainUntilBlocked(outbox, ctx);
+      expect(drainSubject).toHaveBeenCalledTimes(BLOCK_AFTER_FAILURES);
+      expect(outbox.getEntry(SUBJECT)?.blocked).toBe(true);
+      expect(outbox.blockedCount).toBe(1);
+      expect(outbox.size).toBe(1); // kept (visible), not dropped
+      expect(onBlocked).toHaveBeenCalledTimes(1);
+      expect(outbox.nextDueAt()).toBeUndefined();
+
+      // Once blocked, further drains do NOT re-attempt it.
+      vi.setSystemTime(60_000);
+      await outbox.drain(ctx);
+      expect(drainSubject).toHaveBeenCalledTimes(BLOCK_AFTER_FAILURES);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a successful retry clears the failure streak before blocking', async ({
+    expect,
+  }) => {
+    vi.useFakeTimers();
+
+    try {
+      const outbox = new LocalOutbox();
+      outbox.markDirty(SUBJECT);
+      let fail = true;
+      const drainSubject = vi.fn(async () => {
+        if (fail)
+          throw new Error(
+            'Unauthorized. No https://atomicdata.dev/properties/write right has been found for did:ad:agent:x=',
+          );
+      });
+      const ctx = blockingCtx(drainSubject);
+
+      // Two failures, then the parent syncs and the retry succeeds (the
+      // ordering race resolves) — the entry drains, never blocking.
+      vi.setSystemTime(0);
+      await outbox.drain(ctx);
+      vi.setSystemTime(drainBackoffMs(1) + 1);
+      await outbox.drain(ctx);
+      expect(outbox.getEntry(SUBJECT)?.failures).toBe(2);
+
+      fail = false;
+      vi.setSystemTime(drainBackoffMs(1) + drainBackoffMs(2) + 2);
+      await outbox.drain(ctx);
+      // drainSubject resolved → entry stays only if not cleared by caller; here
+      // there's no clearDirty, so it remains with failures reset to 0.
+      expect(outbox.getEntry(SUBJECT)?.failures).toBe(0);
+      expect(outbox.getEntry(SUBJECT)?.blocked).toBeFalsy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('markDirty re-arms a blocked entry for another attempt', async ({
+    expect,
+  }) => {
+    vi.useFakeTimers();
+
+    try {
+      const outbox = new LocalOutbox();
+      outbox.markDirty(SUBJECT);
+      const drainSubject = alwaysUnauthorized();
+      const ctx = blockingCtx(drainSubject);
+
+      await drainUntilBlocked(outbox, ctx);
+      expect(outbox.getEntry(SUBJECT)?.blocked).toBe(true);
+
+      // Fresh local edit clears the block + failure streak...
+      outbox.markDirty(SUBJECT);
+      expect(outbox.getEntry(SUBJECT)?.blocked).toBe(false);
+      expect(outbox.getEntry(SUBJECT)?.failures).toBe(0);
+      expect(outbox.nextDueAt()).toBe(0); // failures reset → due immediately
+
+      // ...so the next drain attempts again.
+      await outbox.drain(ctx);
+      expect(drainSubject).toHaveBeenCalledTimes(BLOCK_AFTER_FAILURES + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('LocalOutbox identity scoping (rebind)', () => {
+  const AGENT_A = 'did:ad:agent:aaa=';
+  const AGENT_B = 'did:ad:agent:bbb=';
+
+  beforeEach(() => {
+    if (typeof localStorage !== 'undefined') localStorage.clear();
+  });
+
+  it("a new agent does not see the previous agent's queue", ({ expect }) => {
+    const outbox = new LocalOutbox();
+    outbox.rebind(AGENT_A);
+    outbox.markDirty('did:ad:resourceA');
+    expect(outbox.size).toBe(1);
+
+    // Switch identity → B starts with an empty, isolated queue.
+    outbox.rebind(AGENT_B);
+    expect(outbox.size).toBe(0);
+    expect(outbox.hasPending('did:ad:resourceA')).toBe(false);
+
+    // B's own work stays in B's namespace.
+    outbox.markDirty('did:ad:resourceB');
+    expect(outbox.size).toBe(1);
+
+    // Returning to A restores A's preserved queue (not lost on switch).
+    outbox.rebind(AGENT_A);
+    expect(outbox.size).toBe(1);
+    expect(outbox.hasPending('did:ad:resourceA')).toBe(true);
+    expect(outbox.hasPending('did:ad:resourceB')).toBe(false);
+  });
+
+  it('rebind to the same agent is a no-op (keeps the queue)', ({ expect }) => {
+    const outbox = new LocalOutbox();
+    outbox.rebind(AGENT_A);
+    outbox.markDirty('did:ad:resourceA');
+    outbox.rebind(AGENT_A);
+    expect(outbox.size).toBe(1);
+  });
+
+  it('persists per-agent across instances (reload survives identity)', ({
+    expect,
+  }) => {
+    const first = new LocalOutbox();
+    first.rebind(AGENT_A);
+    first.markDirty('did:ad:resourceA');
+    first.flush();
+
+    // Fresh instance (a reload) bound to A sees A's entry; bound to B sees none.
+    const second = new LocalOutbox();
+    second.rebind(AGENT_B);
+    expect(second.size).toBe(0);
+    second.rebind(AGENT_A);
+    expect(second.hasPending('did:ad:resourceA')).toBe(true);
+  });
+
+  it('migrates the legacy flat queue by owner, dropping unattributable entries', ({
+    expect,
+  }) => {
+    // Seed the pre-scoping shared key with one owned (genesis) entry for A and
+    // one dirty-only entry that can't be attributed.
+    const owned = {
+      subject: 'did:ad:ownedByA',
+      enqueuedAt: 1,
+      signedGenesis: fakeCommitJsonAd('did:ad:ownedByA', AGENT_A),
+    };
+    const orphan = { subject: 'did:ad:noOwner', enqueuedAt: 2 };
+    localStorage.setItem('atomic.outbox', JSON.stringify([owned, orphan]));
+
+    // Construction runs the one-shot migration.
+    const outbox = new LocalOutbox();
+    // Flat key is consumed.
+    expect(localStorage.getItem('atomic.outbox')).toBeNull();
+
+    // A's namespace now holds the owned entry; the orphan was dropped.
+    outbox.rebind(AGENT_A);
+    expect(outbox.hasPending('did:ad:ownedByA')).toBe(true);
+    expect(outbox.hasPending('did:ad:noOwner')).toBe(false);
+  });
+});
+
+describe('outbox backoff', () => {
+  it('drainBackoffMs is exponential, capped at 30s', ({ expect }) => {
+    expect(drainBackoffMs(0)).toBe(0);
+    expect(drainBackoffMs(1)).toBe(1000);
+    expect(drainBackoffMs(2)).toBe(2000);
+    expect(drainBackoffMs(3)).toBe(4000);
+    expect(drainBackoffMs(20)).toBe(30_000); // capped
+  });
+
+  it('skips a failed entry within its backoff window, retries when due', async ({
+    expect,
+  }) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+
+    try {
+      const outbox = new LocalOutbox();
+      outbox.markDirty(SUBJECT);
+      const drainSubject = vi.fn(async () => {
+        throw new Error('Temporary network failure');
+      });
+      const ctx = { sort: (e: readonly OutboxEntry[]) => [...e], drainSubject };
+
+      // First attempt fails → failures=1, due at t=1000.
+      await outbox.drain(ctx);
+      expect(drainSubject).toHaveBeenCalledTimes(1);
+      expect(outbox.getEntry(SUBJECT)?.failures).toBe(1);
+      expect(outbox.nextDueAt()).toBe(1000);
+
+      // Re-drain still at t=0 → inside the backoff window → skipped entirely.
+      await outbox.drain(ctx);
+      expect(drainSubject).toHaveBeenCalledTimes(1);
+
+      // Past the window → attempted again; backoff grows to 2s (due at 3001).
+      vi.setSystemTime(1001);
+      await outbox.drain(ctx);
+      expect(drainSubject).toHaveBeenCalledTimes(2);
+      expect(outbox.getEntry(SUBJECT)?.failures).toBe(2);
+      expect(outbox.nextDueAt()).toBe(1001 + 2000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resets the failure counter after a successful drain', async ({
+    expect,
+  }) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+
+    try {
+      const outbox = new LocalOutbox();
+      // A genesis envelope keeps the entry around after a "successful" drain
+      // that doesn't clear it, so we can observe `failures` reset.
+      outbox.setGenesisCommit(SUBJECT, {
+        subject: SUBJECT,
+        signer: 'did:ad:agent:fake=',
+        createdAt: 0,
+        signature: 'sig',
+      } as unknown as Commit);
+
+      let shouldFail = true;
+      const drainSubject = vi.fn(async () => {
+        if (shouldFail) throw new Error('Temporary network failure');
+      });
+      const ctx = { sort: (e: readonly OutboxEntry[]) => [...e], drainSubject };
+
+      await outbox.drain(ctx);
+      expect(outbox.getEntry(SUBJECT)?.failures).toBe(1);
+
+      shouldFail = false;
+      vi.setSystemTime(2000); // past the 1s backoff window
+      await outbox.drain(ctx);
+      expect(outbox.getEntry(SUBJECT)?.failures).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -4667,3 +4667,7 @@ msgstr "Genesis:"
 #: src/routes/DataRoute.tsx
 msgid "Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature."
 msgstr "Ersteller und Erstellungszeit, abgeleitet vom signierten Genesis-Commit (der Ressourcenidentität). Für DID-Ressourcen IST das obige Subjekt die Genesis-Signatur."
+
+#: src/components/SideBar/SyncMenuItem.tsx
+msgid "Changes could not sync"
+msgstr "Änderungen konnten nicht synchronisiert werden"

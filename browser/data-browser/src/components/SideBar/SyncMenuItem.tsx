@@ -64,6 +64,14 @@ function getSyncIcon(status: StoreSyncStatus): JSX.Element {
     );
   }
 
+  if (status.blockedCount > 0) {
+    return (
+      <WarningIcon>
+        <FaCircleExclamation title='Changes could not sync' />
+      </WarningIcon>
+    );
+  }
+
   if (status.pendingDirtyCount > 0) {
     return (
       <WarningIcon>
@@ -78,6 +86,10 @@ function getSyncIcon(status: StoreSyncStatus): JSX.Element {
 function getSyncLabel(status: StoreSyncStatus): string {
   if (!status.serverConnected) return 'Offline';
   if (status.syncInProgress) return 'Syncing...';
+
+  if (status.blockedCount > 0)
+    return `${status.blockedCount} changes could not sync (no access)`;
+
   if (status.pendingDirtyCount > 0)
     return `${status.pendingDirtyCount} changes pending`;
 

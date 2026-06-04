@@ -43,6 +43,7 @@ import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
   isTerminalCommitErrorMessage,
+  isUnrecoverableCommitErrorMessage,
   type OutboxEntry,
 } from './local-outbox.js';
 
@@ -98,6 +99,10 @@ export interface StoreSyncStatus {
    * the outbox is currently draining. */
   syncInProgress: boolean;
   pendingDirtyCount: number;
+  /** Entries parked on an unrecoverable error (e.g. `401 Unauthorized`): kept
+   *  for visibility but no longer retried. Excluded from `pendingDirtyCount`
+   *  (they aren't "in progress"). A fresh edit re-arms them. */
+  blockedCount: number;
   serverUrl: string;
   /** `undefined` when no drive has been selected (cold open before
    *  `setDrive`). Callers must handle the absent case rather than
@@ -284,7 +289,6 @@ function yieldToEventLoop(): Promise<void> {
   });
 }
 
-
 /**
  * Cheap equality for commit-log property values. Strict `===` would always
  * report arrays/objects as different even when their contents match, so the
@@ -385,15 +389,32 @@ export class Store {
    * land instead of stranding until the next user keystroke.
    */
   private scheduleOutboxDrain(): void {
-    if (this.outboxDrainTimer) return;
     if (!this._serverConnected) return;
     if (this.outbox.size === 0) return;
     if (!this.getAgent()) return;
+    // Wake when the soonest entry is due (0 = due now), honoring per-entry
+    // backoff. Always (re)schedule to the soonest time rather than bailing on
+    // an existing timer: a fresh edit (due now) must not wait behind a failing
+    // entry's backoff window, and a drain that skipped only-backing-off entries
+    // must still re-arm so they retry when due.
+    const dueAt = this.outbox.nextDueAt();
+
+    // `undefined` means nothing is drainable (e.g. every entry is blocked on an
+    // unrecoverable 401). Don't arm a timer — those wait for a fresh edit.
+    if (dueAt === undefined) {
+      if (this.outboxDrainTimer) clearTimeout(this.outboxDrainTimer);
+      this.outboxDrainTimer = undefined;
+
+      return;
+    }
+
+    const delay = Math.max(0, dueAt - Date.now());
+    if (this.outboxDrainTimer) clearTimeout(this.outboxDrainTimer);
     this.outboxDrainTimer = setTimeout(() => {
       this.outboxDrainTimer = undefined;
       if (!this._serverConnected) return;
       void this.syncDirtyResources().catch(() => undefined);
-    }, 0);
+    }, delay);
   }
   /**
    * Whether the Store has an active connection to the server.
@@ -800,9 +821,33 @@ export class Store {
           // aligns with whatever the server already has.
           this.fetchResourceFromServer(entry.subject).catch(() => undefined);
         },
+        isBlockingError: (_entry, e) => {
+          const msg = e instanceof Error ? e.message : String(e);
+
+          return isUnrecoverableCommitErrorMessage(msg);
+        },
+        onBlocked: (entry, e) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          // Stopped retrying, but the entry stays queued + visible. Tell the
+          // user once; a fresh edit (`markDirty`) re-arms it automatically.
+          this.notifyError(
+            new Error(
+              `Could not sync ${entry.subject.slice(0, 60)}… — ${msg} ` +
+                `Not retrying; edit again once you have access.`,
+            ),
+          );
+        },
       });
     } finally {
       this.emitSyncStatus();
+      // Re-arm for entries that remain — including ones skipped this pass
+      // because they're still inside their backoff window (those fire no
+      // `onChange`, so without this re-arm they would strand). `scheduleOutbox-
+      // Drain` computes the next wake from `nextDueAt()`.
+
+      if (this.outbox.size > 0) {
+        this.scheduleOutboxDrain();
+      }
     }
   }
 
@@ -2669,7 +2714,9 @@ export class Store {
         this._driveSyncInProgress ||
         this.outbox.isDraining ||
         inFlightSaves > 0,
-      pendingDirtyCount: this.outbox.size + inFlightSaves,
+      pendingDirtyCount:
+        this.outbox.size - this.outbox.blockedCount + inFlightSaves,
+      blockedCount: this.outbox.blockedCount,
       serverUrl: this.serverUrl,
       drive: this.drive,
       clientDbReady: this.clientDb?.isReady ?? false,
@@ -2830,6 +2877,13 @@ export class Store {
    */
   public setAgent(agent: Agent | undefined): void {
     this.agent = agent;
+
+    // The outbox is identity-scoped: rebind to this agent's own queue so a new
+    // identity never drains a previous agent's commits (whose `did:ad:<sig>`
+    // subjects can't be re-signed by anyone else — they'd 401 forever).
+    this.outbox.rebind(agent?.subject);
+    // Drain the now-loaded queue for this agent (no-ops if empty/offline).
+    this.scheduleOutboxDrain();
 
     if (agent && agent.subject) {
       if (hasBrowserAPI()) {
