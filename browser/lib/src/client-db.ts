@@ -85,6 +85,23 @@ type Role = 'initializing' | 'leader' | 'follower' | 'failed';
 // as a ghost.
 const LEADER_ELECTION_WAIT_MS = 2_000;
 
+/**
+ * Whether `navigator.locks.request({ steal: true })` can reclaim a ghost
+ * leader's lease. Steal is Chromium-only; `navigator.userAgentData` is likewise
+ * Chromium-only (and available in the secure contexts we run in — https +
+ * localhost), so its presence is a reliable proxy. On Firefox/Safari `steal` is
+ * silently ignored (the request just queues behind the ghost), so attempting it
+ * only burns another `LEADER_ELECTION_WAIT_MS`; we skip it and rely on the
+ * already-pending plain queued request to recover when the ghost lease frees.
+ */
+function lockStealSupported(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    'locks' in navigator &&
+    'userAgentData' in navigator
+  );
+}
+
 type BroadcastMessage =
   | { type: 'leader-ping' }
   | { type: 'leader-announce' }
@@ -190,20 +207,37 @@ export class ClientDbWorker {
     endElection({ winner });
 
     if (winner === 'timeout') {
-      // Steal: forcibly take the lock from the ghost leader. The previous
+      if (!lockStealSupported()) {
+        // Firefox/Safari: no lock-steal, so a ghost lease can't be forced.
+        // Don't waste another `LEADER_ELECTION_WAIT_MS` on a steal that just
+        // queues — park in degraded (server-only) mode NOW. We stay
+        // recoverable: the plain queued request from `doInit` above is still
+        // pending, so `becomeLeader` runs the moment the holding tab/worker
+        // closes (→ leader), and a late `leader-announce` flips us to follower.
+        this.role = 'failed';
+        this._initError = new Error(
+          'ClientDb is running without its local cache: another tab — or a ' +
+            'leftover worker — on this site holds the local database, and ' +
+            "this browser can't reclaim it automatically (lock-stealing is " +
+            'Chromium-only). The app works normally meanwhile (reading from ' +
+            'the server directly), and recovers on its own when that tab ' +
+            'closes. To recover now, close other tabs of this site and reload.',
+        );
+        console.warn('[ClientDb]', this._initError.message);
+
+        return;
+      }
+
+      // Chromium: forcibly take the lock from the ghost leader. The previous
       // callback gets aborted by the browser; we run `becomeLeader` from
-      // this new callback. `steal: true` is Chromium-only — Firefox/Safari
-      // SPAs would fall through to `'failed'`. Since the data-browser
-      // targets Chromium-class browsers, this covers the production path;
-      // for other engines, manual tab close remains the workaround.
+      // this new callback.
       console.warn(
         `[ClientDb] no leader-announce in ${LEADER_ELECTION_WAIT_MS}ms; stealing OPFS lock from suspected ghost leader`,
       );
       this.requestLeaderLock(baseUrl, true);
 
       // Wait for the steal callback to actually run `becomeLeader`. Cap the
-      // wait so a non-Chromium engine (or a browser bug) surfaces a real
-      // error instead of hanging.
+      // wait so a browser bug surfaces a real error instead of hanging.
       const stolen = await Promise.race([
         this.leadershipGained.then(() => 'stolen' as const),
         new Promise<'still-stuck'>(resolve =>
@@ -214,7 +248,7 @@ export class ClientDbWorker {
       if (stolen === 'still-stuck') {
         this.role = 'failed';
         this._initError = new Error(
-          `ClientDb leadership election failed: lock-steal did not yield ownership within ${LEADER_ELECTION_WAIT_MS}ms. The browser may not support \`navigator.locks.request({ steal: true })\` (Chromium-only). Close other tabs of this origin and reload.`,
+          `ClientDb leadership election failed: lock-steal did not yield ownership within ${LEADER_ELECTION_WAIT_MS}ms. Close other tabs of this origin and reload.`,
         );
         console.warn('[ClientDb]', this._initError.message);
 
