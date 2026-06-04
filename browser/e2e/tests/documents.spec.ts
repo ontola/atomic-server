@@ -151,4 +151,77 @@ test.describe('documents', async () => {
       page.getByLabel('Rich Text Editor').locator('a:has-text("SomeFolder")'),
     ).toBeVisible({ timeout: 15000 });
   });
+
+  // Ephemeral Loro cursor (presence): a collaborator's caret position is
+  // broadcast over the WS hub as a `LORO_EPHEMERAL_UPDATE` frame (not
+  // persisted), and loro-prosemirror renders it in the other tab's editor as a
+  // `.ProseMirror-loro-cursor` decoration carrying the peer's color + name.
+  //
+  // FIXME: currently parked because the CollaborativeEditor crashes on load for
+  // this flow with `Cannot read properties of undefined (reading 'eq')` in
+  // prosemirror-view's `DecorationGroup.eq`. Trigger: a tiptap v3 React menu
+  // component (BubbleMenu/DragHandle/FloatingHint) registers/unregisters a
+  // ProseMirror plugin via a passive effect (double-invoked under StrictMode);
+  // the reconfigure's `view.updateState` diffs the decoration groups while the
+  // loro ephemeral-cursor plugin is contributing decorations, and a changed
+  // DecorationGroup membership dereferences an undefined member. This is the
+  // same tiptap-version incompatibility that had the cursor disabled before.
+  // Un-`fixme` once the RTE crash is fixed — the assertions below are correct.
+  test.fixme('shows a collaborator’s ephemeral cursor position', async ({
+    page,
+    browser,
+  }) => {
+    test.slow();
+
+    const secret = await getDevDriveSecret(page);
+    await makeDrivePublic(page);
+    await newResource('document', page);
+    await editTitle(`Cursor Doc ${timestamp()}`, page);
+
+    await expect(page.getByText('loading...')).not.toBeVisible();
+    // The CollaborativeEditor is a lazy chunk; on a cold dev server its first
+    // transform (React Compiler pass) can take >10s, so wait explicitly before
+    // interacting rather than relying on the default action timeout.
+    const editor1 = page.getByLabel('Rich Text Editor');
+    await expect(editor1).toBeVisible({ timeout: 30000 });
+    const sharedText = `Shared line ${timestamp()}`;
+    await editor1.click();
+    await page.keyboard.type(sharedText);
+    await expect(page.getByText(sharedText)).toBeVisible();
+
+    // Second user opens the same document and waits for the text to sync in.
+    const subject = await getCurrentSubject(page);
+    const page2 = await openNewSubjectWindow(browser, subject!, secret);
+
+    const setDriveButton = page2.getByRole('button', { name: 'Set Drive' });
+
+    if (await setDriveButton.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await setDriveButton.click();
+    }
+
+    await expect(
+      page2.getByRole('main').getByText(/^loading/i),
+    ).not.toBeVisible({ timeout: 15000 });
+    await expect(page2.getByText(sharedText)).toBeVisible({ timeout: 15000 });
+
+    // page2 places its caret inside the shared text. The selection change makes
+    // loro-prosemirror set the local ephemeral cursor, which is broadcast.
+    await page2.getByText(sharedText).click();
+    await page2.keyboard.press('ArrowLeft');
+
+    // page1 must render page2's remote caret. Use `toBeAttached` (not
+    // `toBeVisible`): a collapsed remote caret is a thin/zero-width decoration
+    // span, so presence in the DOM — not a bounding box — is the correct signal
+    // that the ephemeral cursor synced and was positioned.
+    const remoteCursor = page.locator('.ProseMirror-loro-cursor');
+    await expect(
+      remoteCursor.first(),
+      'page1 did not render the collaborator’s ephemeral cursor',
+    ).toBeAttached({ timeout: 15000 });
+
+    // Exactly one remote peer → exactly one caret (ephemeral, not duplicated or
+    // persisted into the doc), and it carries the peer's color via inline style.
+    await expect(remoteCursor).toHaveCount(1);
+    await expect(remoteCursor).toHaveAttribute('style', /border-color/);
+  });
 });
