@@ -100,9 +100,14 @@ offset  size  field
                              (present iff flags.bit0; omitted otherwise)
 58|90   var   parent         u16 length-prefix + UTF-8 subject
                              (DID or HTTP URL of the ORIGINAL parent)
+var     var   drive          u16 length-prefix + UTF-8 subject
+                             (the resource's drive DID — immutable; enables
+                              race-free, drive-first rights checks)
 ```
 
-- With `stateHash`: 90 bytes + `parent`. Without: 58 bytes + `parent`.
+- With `stateHash`: 90 bytes + `parent` + `drive`. Without: 58 bytes + `parent` + `drive`.
+- Two variable-length fields, each u16 length-prefixed, in this order: `parent`
+  then `drive`.
 - **`version` is load-bearing.** A signed layout can never change retroactively
   — only new versions can be added. Verifiers dispatch on `version`.
 - **`flags.bit0`** lets `stateHash` be optional without a second format.
@@ -136,7 +141,15 @@ offset  size  field
 - **`parent`** — hierarchy is authorization in Atomic, so the cert binds the
   birth context. NB: this is the **original** parent (immutable provenance);
   the resource's *current* `parent` propval is mutable and drives *live*
-  authorization. They are different facts and must not be conflated.
+  authorization. They are different facts and must not be conflated. Carried in
+  the cert so the current `parent` propval can be **materialized at genesis**
+  (it equals the original at birth) — see "Rights & the materialization race".
+- **`drive`** — the resource's drive DID. Immutable (a resource effectively
+  never moves between drives), so binding it into the signed identity is a real
+  invariant, not just provenance. It makes rights checks **drive-first and
+  race-free** (see below) and lets did:-subject resources be drive-scoped for
+  the watched-query index (otherwise they fall back to a global, un-scoped scan
+  of every watched query — an O(all-queries) cost per commit atom).
 
 ### Why binary, not JSON
 
@@ -167,7 +180,7 @@ two concerns that are one today, and maps onto the existing sign-at-drain
 
 1. Build the initial doc (propvals) as now.
 2. Generate the `nonce` (CSPRNG), gather `signer` / `createdAt` / original
-   `parent`, build the `GenesisCert`, sign it → `DID = did:ad:<sig>`.
+   `parent` / `drive`, build the `GenesisCert`, sign it → `DID = did:ad:<sig>`.
 3. The **genesis envelope is the cert** (no `loroUpdate`) — it mints the DID and
    creates the resource shell.
 4. The **initial content is the first delta commit** — the normal, already-built
@@ -208,13 +221,44 @@ materialized as ordinary propvals from it at apply time:
 
 - `createdBy`  ← cert `signerPubKey` → agent DID
 - `createdAt`  ← cert `createdAt`
-- `parent`     ← (current parent is its own mutable propval; the *original* is in
-  the cert)
+- `parent`     ← cert `parent` at genesis (equals the original at birth); the
+  *current* parent is this same mutable propval, updated by later moves
+- `drive`      ← cert `drive` (immutable)
 
 No redundancy concern: the cert is the source, the propvals are the derived
 projection used for sorting/display/querying. Binary is not eyeball-able in the
 data view, so `verifyGenesis()` decodes it for display (signer, time, parent,
-✓/✗).
+drive, ✓/✗).
+
+## Rights & the materialization race
+
+Authorization walks the hierarchy: to write a child, the server checks the
+agent's grant on the child, then its `parent`, … up to the `drive` (where grants
+live ~99% of the time). That walk reads each ancestor's propvals **from the
+store**.
+
+The race this design closes: when a parent and its children are created in a
+burst (e.g. a table + 40 rows, especially with two concurrent contexts), a
+child's rights check can run *before* the parent's `parent`/`drive` propvals are
+materialized — so `get_parent` returns "parent not found" and the write is
+wrongly rejected with a 401. Observed: ~350–1300 spurious 401s under a 2-context
+table-burst, cascading into outbox retry storms.
+
+The fix is **materialize `parent` and `drive` from the cert synchronously when
+the DID is minted** — before any child can reference the resource. Because both
+are immutable cert fields, they are present from the get-go, so:
+
+1. `check_rights` consults **`drive` first** (from the cert) — a single,
+   race-free grant lookup that covers the ~99% case with no recursive store
+   reads (which also trims per-commit CPU).
+2. The recursive `parent` walk is a fallback only for the rare explicit grant on
+   an *intermediate* container — and even that is race-free, since `parent` is
+   materialized at genesis too.
+
+This is why the cert carries **both** `parent` and `drive`: dropping `parent`
+would push its propval to the separate content delta commit (a later apply),
+re-introducing the very race for hierarchy, retention-chain inheritance, and
+nested-grant checks.
 
 ## Decisions made
 
@@ -233,11 +277,15 @@ data view, so `verifyGenesis()` decodes it for display (signer, time, parent,
    `signChanges`, and the wasm path.
 3. **Store + reserve** — write the `genesis` blob onto the resource at apply
    (server `commit.rs` + `wasm`), reject overwrites.
-4. **Materialize** — derive `createdBy` / `createdAt` (and original `parent`)
-   from the cert (reuses the existing materialization chokepoint).
-5. **`verifyGenesis(resource)`** in `@tomic/lib` — decode + Ed25519 verify + DID
+4. **Materialize** — derive `createdBy` / `createdAt` / `parent` / `drive`
+   from the cert at apply (reuses the existing materialization chokepoint), so
+   they are present from the get-go (the race fix above).
+5. **Rights** — `check_rights` consults the cert's `drive` first (race-free),
+   recursive `parent` walk only as fallback; drive-scope the watched-query
+   lookup for did: subjects.
+6. **`verifyGenesis(resource)`** in `@tomic/lib` — decode + Ed25519 verify + DID
    check (+ optional stateHash check). Returns `{ valid, signer, error? }`.
-6. **UI** — decoded display + "Verify signature" button in `DataRoute`.
+7. **UI** — decoded display + "Verify signature" button in `DataRoute`.
 
 ## Migration
 

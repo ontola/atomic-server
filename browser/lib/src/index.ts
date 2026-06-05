@@ -40,6 +40,7 @@ export * from './canvas-strokes.js';
 export * from './agent.js';
 export * from './authentication.js';
 export * from './client.js';
+export * from './genesis.js';
 export * from './commit.js';
 export * from './error.js';
 export * from './datatypes.js';
