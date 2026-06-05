@@ -444,7 +444,7 @@ describe('Resource.merge Loro options', () => {
     const remote = new Resource(subject);
     await remote.set(name, 'server', false);
 
-    local.merge(remote, { replaceYDocs: true });
+    local.merge(remote, { replaceLoroDocs: true });
 
     expect(local.get(name)).toBe('server');
   });

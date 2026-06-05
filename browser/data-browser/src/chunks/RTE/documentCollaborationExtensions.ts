@@ -77,9 +77,7 @@ export function getDocumentCollaborationCoreExtensions(
     Typography,
     linkExtension,
     ExtendedImage.configure({
-      ...(options?.uploadImage
-        ? { uploadImage: options.uploadImage }
-        : {}),
+      ...(options?.uploadImage ? { uploadImage: options.uploadImage } : {}),
       HTMLAttributes: {
         class: 'tiptap-image',
       },
@@ -113,7 +111,7 @@ export function getDocumentCollaborationResourceAndFormattingExtensions(
 }
 
 /**
- * Full extension list for schema / Yjs ↔ JSON (upgrade, AI document edit).
+ * Full extension list for schema.
  */
 export function getDocumentCollaborationExtensions(
   store: Store,

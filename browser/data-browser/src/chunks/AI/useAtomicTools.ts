@@ -21,6 +21,7 @@ import {
   toClassString,
 } from './atomicSchemaHelpers';
 import { useDocumentEditAgent } from './documentEditAgent';
+import { toResourceResultObjectForAgent } from './getDocumentContentForAgent';
 import type { AIModelIdentifier } from './types';
 
 export const TOOL_NAMES = {
@@ -39,18 +40,6 @@ export const TOOL_NAMES = {
   READ_SKILL_REFERENCE: 'read_skill_reference',
   CREATE_SKILL: 'create_skill',
 } as const;
-
-const toResultObject = (resource: Resource, includeCommitData: boolean) => {
-  const props = Object.fromEntries(
-    resource
-      .getEntries()
-      .filter(
-        ([key]) => includeCommitData || key !== commits.properties.lastCommit,
-      ),
-  );
-
-  return props;
-};
 
 const getClassesString = async (
   resource: Resource,
@@ -242,22 +231,25 @@ export function useAtomicMCPTools({
               subjects.map(s => store.getResource(s)),
             );
 
-            const result = resources.reduce(
-              async (acc, res, i) => ({
+            const result = resources.reduce(async (acc, res, i) => {
+              const resourceResult = toResourceResultObjectForAgent(
+                res,
+                includeCommitData,
+                store,
+              );
+
+              return {
                 ...(await acc),
                 [subjects[i]]: {
-                  ...toResultObject(res, includeCommitData),
+                  ...resourceResult,
                   _schema: await Promise.all(
                     res
                       .getClasses()
                       .map(classSubject => toClassString(classSubject, store)),
                   ),
                 },
-              }),
-              Promise.resolve({}),
-            );
-
-            console.log('result', result);
+              };
+            }, Promise.resolve({}));
 
             return result;
           } catch (error) {
@@ -392,6 +384,8 @@ export function useAtomicMCPTools({
       }),
       [TOOL_NAMES.EDIT_DOCUMENT_RESOURCE]: tool({
         description: `Use this tool to instruct edits to a document-v2 resource.
+
+The current document body is available from \`get_atomic_resource\` as \`_documentContent\` (TipTap XML). Use that as the source of truth for existing text and structure.
 
 A simple model will use it to apply the edit to the document. You should make it clear what the edit is but still make sure not to write too much unchanged text.
 The edit should be specified using an XML like syntax: include context in a \`<unchanged-text>\` tag, and the change in an \`<edit>\` tag.

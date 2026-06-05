@@ -46,7 +46,6 @@ import { isRunningInTauri } from '../helpers/tauri';
 import { openSearchOverlay } from './OverlayContainer';
 import { useAIChanges } from './AIChangesContext';
 import { Row } from './Row';
-import toast from 'react-hot-toast';
 
 export type NavBarProps = {
   resource?: Resource;
@@ -194,18 +193,13 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
       : driveResource;
 
   const [parent] = useString(resource, core.properties.parent);
-  const { changes, revertResource } = useAIChanges();
+  const { changes, revertResource, acceptChanges } = useAIChanges();
   const { enableAI } = useAISettings();
   const { setIsOpen } = useAISidebar();
   const hasAiChanges = changes.includes(resource.subject);
 
   const handleAcceptChanges = async () => {
-    try {
-      await resource.save();
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to save changes');
-    }
+    acceptChanges(resource);
   };
 
   const { back, forward } = useBackForward();

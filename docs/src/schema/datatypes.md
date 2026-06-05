@@ -1,4 +1,5 @@
 {{#title Atomic Data: Datatypes}}
+
 # Atomic Schema: Datatypes
 
 The Atomic Datatypes consist of some of the most commonly used [Datatypes](classes.md#Datatype).
@@ -100,7 +101,7 @@ ISO date _without time_.
 
 e.g. `1991-01-20`
 
-##  Timestamp
+## Timestamp
 
 _URL: `https://atomicdata.dev/datatypes/timestamp`_
 
@@ -139,18 +140,13 @@ example:
 ]
 ```
 
-## YDoc
+## LoroDoc
 
-_URL: `https://atomicdata.dev/datatypes/ydoc`_
+_URL: `https://atomicdata.dev/datatypes/lorodoc`_
 
-A [Yjs document](https://github.com/yjs/yjs).
-Stores a Yjs document state. (uses the update v2 format).
-They are updated using commits via the [yUpdate](https://atomicdata.dev/properties/yUpdate) property.
-When encoded into a JSON-AD value it will look like this:
+A [Loro CRDT](https://loro.dev) document binary, serialized as a base64 string.
+Used for `loroUpdate` commit fields and other binary CRDT payloads.
 
 ```json
-{
-  "type": "ydoc",
-  "data": "base64-encoded-updates"
-}
+"bG9ybwAAAAAAAA..."
 ```

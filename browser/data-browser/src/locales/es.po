@@ -2833,8 +2833,7 @@ msgstr "No hay plugins instalados"
 msgid "Failed to create message resource"
 msgstr "No se pudo crear el recurso del mensaje."
 
-#: src/components/AIChangesContext.tsx
-#: src/components/NavBar.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Failed to save changes"
 msgstr "Error al guardar los cambios"
 
@@ -4078,11 +4077,11 @@ msgstr "Error: Se esperaba {0}<node-id>"
 msgid "Synced {0} resource{1} with {2}"
 msgstr "Sincronizados {0} recurso{1} con {2}"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Review Edits"
 msgstr "Revisar Ediciones"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "edit"
 msgid_plural "edits"
 msgstr[0] "edición"
@@ -4090,15 +4089,15 @@ msgstr[1] "ediciones"
 
 #. placeholder {0}: editCount
 #. placeholder {1}: plural(editCount, ['edit', 'edits'])
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Review {0} {1}"
 msgstr "Revisar {0} {1}"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Revert Changes"
 msgstr "Revertir Cambios"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Confirm Changes"
 msgstr "Confirmar Cambios"
 
@@ -4128,7 +4127,9 @@ msgstr "Elige un modelo predeterminado"
 msgid ""
 "This pre-selects a model for built-in agents and new custom agents.\n"
 "You can change each agent's model individually later."
-msgstr "<<<<<<< Updated upstream"
+msgstr ""
+"Esto preselecciona un modelo para agentes integrados y nuevos agentes\n"
+"personalizados. Podrás cambiar el modelo de cada agente individualmente más tarde."
 
 #: src/views/Document/DocumentV2FullPage.tsx
 msgid "Couldn't open the document editor"
@@ -4185,9 +4186,7 @@ msgstr "Compilación commit"
 #. placeholder {0}: buildDate
 #: src/routes/AboutRoute.tsx
 msgid "built {0}"
-msgstr ""
-"compilado el {0}=======Esto preselecciona un modelo para agentes integrados y nuevos agentes\n"
-"personalizados. Podrás cambiar el modelo de cada agente individualmente más tarde."
+msgstr "compilado el {0}"
 
 #: src/chunks/AI/AISetupPanel.tsx
 msgid "Also use for chat titles and follow-up prompts"
@@ -4648,7 +4647,7 @@ msgstr[1] "# cambios"
 
 #: src/routes/History/HistoryDesktopView.tsx
 msgid "Show Commit"
-msgstr "Mostrar commit>>>>>>> Stashed changes"
+msgstr "Mostrar commit"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "Add description"
@@ -4679,3 +4678,19 @@ msgstr "No se pudieron sincronizar los cambios"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Start typing…"
 msgstr "Empieza a escribir…"
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Resource is not a document-v2"
+msgstr ""
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Loro not loaded"
+msgstr ""
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Failed to read document content"
+msgstr ""
+
+#: src/components/forms/InputLoroDoc.tsx
+msgid "Editing LoroDoc directly is not supported"
+msgstr ""

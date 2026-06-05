@@ -56,16 +56,14 @@ export class JSONADParser {
           continue;
         }
 
-        // Handle serialized binary values (LoroDoc or legacy YDoc)
+        // Handle serialized LoroDoc binary values from JSON-AD
         if (
           isJSONObject(value) &&
-          typeof value.type === 'string' &&
+          value.type === 'lorodoc' &&
           typeof value.data === 'string'
         ) {
-          if (value.type === 'lorodoc' || value.type === 'ydoc') {
-            hydratedValues.push([key, decodeB64(value.data)]);
-            continue;
-          }
+          hydratedValues.push([key, decodeB64(value.data)]);
+          continue;
         }
 
         hydratedValues.push([key, value]);

@@ -60,7 +60,8 @@ import { useCustomBodyColor } from '@hooks/useCustomBodyColor';
 import { getDocumentCollaborationCoreExtensions } from './documentCollaborationExtensions';
 import { useAIChanges } from '@components/AIChangesContext';
 import { ComparePlugin } from './comparePlugin';
-import { getProsemirrorObjFromYDoc } from './prosemirrorObjFromYDoc';
+import { useOnValueChange } from '@helpers/useOnValueChange';
+import { registerCollaborativeDocumentEditor } from './collaborativeDocumentEditorRegistry';
 
 export type CollaborativeEditorProps = {
   placeholder?: string;
@@ -95,8 +96,8 @@ export default function CollaborativeEditor({
   const canWrite = useCanWrite(resource);
   const [editorReady, setEditorReady] = useState(false);
 
-  const { oldResources, hasAIChanges } = useAIChanges();
-  const oldResource = oldResources[resource.subject] as Resource | undefined;
+  const { oldDocumentSnapshots, hasAIChanges } = useAIChanges();
+  const comparisonBaseline = oldDocumentSnapshots[resource.subject];
 
   const theme = useTheme();
   useCustomBodyColor(theme.colors.bg);
@@ -321,6 +322,14 @@ export default function CollaborativeEditor({
   }, [editor, canWrite]);
 
   useEffect(() => {
+    if (!editor || !editorReady) {
+      return;
+    }
+
+    return registerCollaborativeDocumentEditor(resource.subject, editor);
+  }, [editor, editorReady, resource.subject]);
+
+  useEffect(() => {
     if (!agentResource) return;
 
     const local = ephemeralStore.getLocal();
@@ -335,24 +344,22 @@ export default function CollaborativeEditor({
   }, [agentResource, ephemeralStore, color]);
 
   // Sync the comparison (AI-diff) content into the editor. This dispatches a
-  // ProseMirror transaction, so it MUST run in an effect — never during render
-  // (doing so triggers "Cannot update a component while rendering" and cascades
-  // into editor instability / detached inputs).
-  useEffect(() => {
-    if (!editor || !editorReady) return;
+  // ProseMirror transaction, so it MUST NOT run during render (doing so triggers
+  // "Cannot update a component while rendering" and cascades into editor
+  // instability / detached inputs).
+  useOnValueChange(
+    () => {
+      if (!editor || !editorReady) return;
 
-    if (hasAIChanges(resource.subject)) {
-      if (!oldResource) return;
-
-      const oldYDoc = oldResource.get(dataBrowser.properties.documentContent);
-      const oldDoc = getProsemirrorObjFromYDoc(oldYDoc, editor.schema);
-
-      editor.commands.setComparisonContent(oldDoc);
-    } else {
-      editor.commands.setComparisonContent('');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasAIChanges(resource.subject), editorReady, oldResource, editor]);
+      if (hasAIChanges(resource.subject)) {
+        editor.commands.setComparisonContent(comparisonBaseline ?? '');
+      } else {
+        editor.commands.setComparisonContent('');
+      }
+    },
+    [hasAIChanges(resource.subject), editorReady, comparisonBaseline, editor],
+    true,
+  );
 
   return (
     <IsInRTEContex value={true}>
@@ -361,7 +368,7 @@ export default function CollaborativeEditor({
           <DragHandle editor={editor}>
             <FaGripVertical />
           </DragHandle>
-          <EditorContent key='rich-editor' editor={editor}>
+          <EditorContent key="rich-editor" editor={editor}>
             <FloatingHint editor={editor}>
               Type &apos;/&apos; for options or &apos;@&apos; for resources
             </FloatingHint>

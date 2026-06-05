@@ -46,8 +46,6 @@ pub struct Commit {
     /// Overwrites existing values
     #[serde(rename = "https://atomicdata.dev/properties/set")]
     pub set: Option<std::collections::HashMap<String, JsonValue>>,
-    #[serde(rename = "https://atomicdata.dev/properties/yUpdate")]
-    pub y_update: Option<std::collections::HashMap<String, JsonValue>>,
     #[serde(rename = "https://atomicdata.dev/properties/remove")]
     /// The set of property URLs that need to be removed
     pub remove: Option<Vec<String>>,
@@ -80,8 +78,6 @@ pub struct CommitBuilder {
     set: std::collections::HashMap<String, JsonValue>,
     /// The set of PropVals that need to be appended to resource arrays.
     push: std::collections::HashMap<String, Vec<String>>,
-    /// A map of Propvals containing Yjs updates to be applied to the YDocs
-    y_update: std::collections::HashMap<String, JsonValue>,
     /// The set of property URLs that need to be removed
     /// https://atomicdata.dev/properties/remove
     remove: HashSet<String>,
@@ -97,7 +93,6 @@ impl CommitBuilder {
             subject,
             set: HashMap::new(),
             push: HashMap::new(),
-            y_update: HashMap::new(),
             remove: HashSet::new(),
             destroy: false,
             previous_commit: None,

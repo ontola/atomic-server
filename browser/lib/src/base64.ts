@@ -1,4 +1,4 @@
-// Standard base64 (`+` `/`, padded) is used for binary *values* (Loro/YDoc
+// Standard base64 (`+` `/`, padded) is used for binary *values* (Loro
 // blobs in commits, version-vector cursors) — these are decoded server-side as
 // standard base64, so they must stay standard.
 //

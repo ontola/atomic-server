@@ -30,7 +30,6 @@ pub enum Value {
     Boolean(bool),
     Uri(String),
     Json(serde_json::Value),
-    YDoc(Vec<u8>),
     /// Loro CRDT document binary (snapshot or update)
     LoroDoc(Vec<u8>),
     Unsupported(UnsupportedValue),
@@ -122,7 +121,6 @@ impl Value {
             Value::Boolean(_) => DataType::Boolean,
             Value::Uri(_) => DataType::Uri,
             Value::Json(_) => DataType::Json,
-            Value::YDoc(_) => DataType::YDoc,
             Value::LoroDoc(_) => DataType::LoroDoc,
             Value::Unsupported(s) => DataType::Unsupported(s.datatype.clone()),
         }
@@ -205,12 +203,6 @@ impl Value {
                     }
                 };
                 Ok(Value::Boolean(bool))
-            }
-            DataType::YDoc => {
-                let bin = general_purpose::STANDARD
-                    .decode(value)
-                    .map_err(|e| format!("Not a valid Base64 string: {}. {}", value, e))?;
-                Ok(Value::YDoc(bin))
             }
             DataType::LoroDoc => {
                 let bin = general_purpose::STANDARD
@@ -421,7 +413,6 @@ impl fmt::Display for Value {
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Uri(s) => write!(f, "{}", s),
             Value::Json(s) => write!(f, "{}", s),
-            Value::YDoc(s) => write!(f, "{}", general_purpose::STANDARD.encode(s)),
             Value::LoroDoc(s) => write!(f, "{}", general_purpose::STANDARD.encode(s)),
             Value::Unsupported(u) => write!(f, "{}", u.value),
         }

@@ -521,33 +521,6 @@ pub fn parse_propval<'a>(
                     Some(&prop),
                 ));
             }
-            DataType::YDoc => {
-                let serde_json::Value::Object(map) = val else {
-                    return Err(AtomicError::parse_error(
-                        "Invalid value for YDoc, must be of shape { type: \"ydoc\", data: <base64 string> }",
-                        subject,
-                        Some(&prop),
-                    ));
-                };
-
-                let Some(data) = map.get("data") else {
-                    return Err(AtomicError::parse_error(
-                        "Invalid value for YDoc, no data field",
-                        subject,
-                        Some(&prop),
-                    ));
-                };
-
-                let serde_json::Value::String(data) = data else {
-                    return Err(AtomicError::parse_error(
-                        "Invalid value for YDoc, data field must be a string",
-                        subject,
-                        Some(&prop),
-                    ));
-                };
-
-                Value::new(data.as_str(), &DataType::YDoc)?
-            }
             DataType::LoroDoc => {
                 let serde_json::Value::String(data) = val else {
                     return Err(AtomicError::parse_error(

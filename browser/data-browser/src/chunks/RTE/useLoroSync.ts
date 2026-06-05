@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo } from 'react';
 import type { LoroDoc } from 'loro-crdt';
 import { CursorEphemeralStore } from 'loro-prosemirror';
 import { type Resource, useStore } from '@tomic/react';
+import { isAIReviewHeld } from '../AI/aiReviewPersistHold';
 
 /**
  * Sets up Loro document and ephemeral (cursor/presence) sync over WebSocket.
@@ -36,6 +37,7 @@ export function useLoroSync(
   // `WSClient.startVVSync` (full snapshot exchange on WS connect).
   useLayoutEffect(() => {
     const unsub = doc.subscribeLocalUpdates(bytes => {
+      if (isAIReviewHeld(store, subject)) return;
       store.broadcastLoroSyncUpdate(subject, bytes);
       // Mark the resource as dirty so save() knows there are local changes
       resource.markDirty();

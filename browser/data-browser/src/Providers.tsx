@@ -25,7 +25,7 @@ import { LocaleProvider } from '@components/LocaleContext';
 import { CustomContextItemsProvider } from './components/ResourceContextMenu';
 import { LazyMCPProvider } from '@components/AI/MCP/LazyMCPProvider';
 import { CustomViewProvider } from '@components/CustomViewProvider';
-import { AIChangesProvider } from '@components/AIChangesContext';
+import { LazyAIChangesProvider } from '@components/AI/AIChanges/LazyAIChangesProvider';
 
 // Setup bugsnag for error handling, but only if there's an API key
 const ErrBoundary = window.bugsnagApiKey
@@ -73,23 +73,23 @@ export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
                               <MetaSetter />
                               <DropdownContainer>
                                 <DialogGlobalContextProvider>
-                                  <PopoverContainer>
-                                    <DropdownContainer>
-                                      <CustomContextItemsProvider>
-                                        <NewResourceUIProvider>
-                                          <AIChangesProvider>
+                                  <LazyAIChangesProvider>
+                                    <PopoverContainer>
+                                      <DropdownContainer>
+                                        <CustomContextItemsProvider>
+                                          <NewResourceUIProvider>
                                             <SkipNav />
                                             <SearchOverlayContextProvider>
                                               <NavWrapper>
                                                 {children}
                                               </NavWrapper>
                                             </SearchOverlayContextProvider>
-                                          </AIChangesProvider>
-                                        </NewResourceUIProvider>
-                                      </CustomContextItemsProvider>
-                                    </DropdownContainer>
-                                  </PopoverContainer>
-                                  <NetworkIndicator />
+                                          </NewResourceUIProvider>
+                                        </CustomContextItemsProvider>
+                                      </DropdownContainer>
+                                    </PopoverContainer>
+                                    <NetworkIndicator />
+                                  </LazyAIChangesProvider>
                                 </DialogGlobalContextProvider>
                               </DropdownContainer>
                             </CustomViewProvider>

@@ -52,7 +52,6 @@ pub const SET: &str = "https://atomicdata.dev/properties/set";
 pub const PUSH: &str = "https://atomicdata.dev/properties/push";
 pub const REMOVE: &str = "https://atomicdata.dev/properties/remove";
 pub const DESTROY: &str = "https://atomicdata.dev/properties/destroy";
-pub const Y_UPDATE: &str = "https://atomicdata.dev/properties/yUpdate";
 pub const LORO_UPDATE: &str = "https://atomicdata.dev/properties/loroUpdate";
 pub const SIGNER: &str = "https://atomicdata.dev/properties/signer";
 pub const CREATED_AT: &str = "https://atomicdata.dev/properties/createdAt";
@@ -190,7 +189,6 @@ pub const DATE: &str = "https://atomicdata.dev/datatypes/date";
 pub const TIMESTAMP: &str = "https://atomicdata.dev/datatypes/timestamp";
 pub const URI: &str = "https://atomicdata.dev/datatypes/uri";
 pub const JSON: &str = "https://atomicdata.dev/datatypes/json";
-pub const YDOC: &str = "https://atomicdata.dev/datatypes/ydoc";
 pub const LORO_DOC: &str = "https://atomicdata.dev/datatypes/lorodoc";
 
 // Methods

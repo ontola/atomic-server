@@ -1,5 +1,5 @@
 // @wc-ignore-file
-import { commits, useStore, type Resource, type Store } from '@tomic/react';
+import { useStore, type Store } from '@tomic/react';
 import { type AIMessageContext, type AtomicUIMessage } from './types';
 import { toClassString } from './atomicSchemaHelpers';
 import {
@@ -9,6 +9,7 @@ import {
 import { findSkillByName } from './skills/skill';
 import { useSettings } from '@helpers/AppSettings';
 import { getDriveInstructionsContext } from './driveInstructionsContext';
+import { toResourceResultObjectForAgent } from './getDocumentContentForAgent';
 
 /**
  * A hook that processes AI chat messages by applying context.
@@ -90,27 +91,6 @@ const findLastUserMessageIndex = (messages: AtomicUIMessage[]): number => {
 };
 
 /**
- * Converts an Atomic Resource into a plain object representation
- * @param resource - The Atomic Resource to convert
- * @param includeCommitData - Whether to include commit-related data in the output
- * @returns A plain object containing the resource's properties
- */
-const toResultObject = (resource: Resource, includeCommitData: boolean) => {
-  const props = Object.fromEntries(
-    resource
-      .getEntries()
-      .filter(
-        ([key]) => includeCommitData || key !== commits.properties.lastCommit,
-      ),
-  );
-
-  return {
-    '@id': resource.subject,
-    ...props,
-  };
-};
-
-/**
  * Processes atomic resources from context
  */
 const processAtomicResources = async (
@@ -129,7 +109,7 @@ const processAtomicResources = async (
   const resourcesContent = resources
     .map(
       r => `An atomicdata resource called ${r.title}. Data:\n\`\`\`json
-${JSON.stringify(toResultObject(r, true), null, 2)}
+${JSON.stringify(toResourceResultObjectForAgent(r, true, store, { includeAtId: true }), null, 2)}
 \`\`\``,
     )
     .join('\n');

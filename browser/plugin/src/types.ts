@@ -14,7 +14,6 @@ export interface Commit {
   subject: string;
   set?: Record<string, JSONValue>;
   push?: Record<string, unknown[]>;
-  yUpdate?: Record<string, Uint8Array>;
   remove?: string[];
   destroy?: boolean;
 }

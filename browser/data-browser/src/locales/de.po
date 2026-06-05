@@ -2813,8 +2813,7 @@ msgstr "Installieren"
 msgid "Failed to create message resource"
 msgstr "Nachrichtenressource konnte nicht erstellt werden"
 
-#: src/components/AIChangesContext.tsx
-#: src/components/NavBar.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Failed to save changes"
 msgstr "Änderungen konnten nicht gespeichert werden."
 
@@ -4085,16 +4084,17 @@ msgstr "Wähle ein Standardmodell"
 msgid ""
 "This pre-selects a model for built-in agents and new custom agents.\n"
 "You can change each agent's model individually later."
-msgstr "<<<<<<< Updated upstream"
+msgstr ""
+"Dies wählt ein Modell für integrierte Agenten und neue benutzerdefinierte Agenten vor.\n"
+"Du kannst das Modell jedes Agenten später einzeln ändern."
 
 #: src/views/Document/DocumentV2FullPage.tsx
 msgid ""
 "The collaborative editing engine (Loro / WebAssembly) failed to\n"
 "initialize in this tab, so the document body can't be shown."
 msgstr ""
-"<<<<<<< Updated upstreamDie kollaborative Bearbeitungs-Engine (Loro / WebAssembly) konnte in diesem Tab nicht\n"
-"initialisiert werden, daher kann der Dokumentinhalt nicht angezeigt werden.=======Die kollaborative Bearbeitungs-Engine (Loro / WebAssembly) konnte in diesem Tab\n"
-"nicht initialisiert werden, daher kann der Dokumentinhalt nicht angezeigt werden.>>>>>>> Stashed changes"
+"Die kollaborative Bearbeitungs-Engine (Loro / WebAssembly) konnte in diesem Tab\n"
+"nicht initialisiert werden, daher kann der Dokumentinhalt nicht angezeigt werden."
 
 #: src/views/Document/DocumentV2FullPage.tsx
 msgid ""
@@ -4138,9 +4138,7 @@ msgstr "Build-Commit"
 #. placeholder {0}: buildDate
 #: src/routes/AboutRoute.tsx
 msgid "built {0}"
-msgstr ""
-"erstellt {0}=======Dies wählt ein Modell für integrierte Agenten und neue benutzerdefinierte Agenten vor.\n"
-"Du kannst das Modell jedes Agenten später einzeln ändern."
+msgstr "erstellt {0}"
 
 #: src/chunks/AI/AISetupPanel.tsx
 msgid "Also use for chat titles and follow-up prompts"
@@ -4195,11 +4193,11 @@ msgstr "Agenten"
 msgid "Skills"
 msgstr "Fähigkeiten"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Review Edits"
 msgstr "Änderungen überprüfen"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "edit"
 msgid_plural "edits"
 msgstr[0] "Bearbeitung"
@@ -4207,15 +4205,15 @@ msgstr[1] "Bearbeitungen"
 
 #. placeholder {0}: editCount
 #. placeholder {1}: plural(editCount, ['edit', 'edits'])
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Review {0} {1}"
 msgstr "{0} {1} überprüfen"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Revert Changes"
 msgstr "Änderungen rückgängig machen"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Confirm Changes"
 msgstr "Änderungen bestätigen"
 
@@ -4635,7 +4633,7 @@ msgstr[1] "# Änderungen"
 
 #: src/routes/History/HistoryDesktopView.tsx
 msgid "Show Commit"
-msgstr "Commit anzeigen>>>>>>> Stashed changes"
+msgstr "Commit anzeigen"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "Add description"
@@ -4675,3 +4673,19 @@ msgstr "Änderungen konnten nicht synchronisiert werden"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Start typing…"
 msgstr "Beginnen Sie zu tippen…"
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Resource is not a document-v2"
+msgstr ""
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Loro not loaded"
+msgstr ""
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Failed to read document content"
+msgstr ""
+
+#: src/components/forms/InputLoroDoc.tsx
+msgid "Editing LoroDoc directly is not supported"
+msgstr ""

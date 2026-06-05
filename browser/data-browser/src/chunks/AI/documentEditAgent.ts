@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { useGetModel } from './useModel';
 import type { AIModelIdentifier } from './types';
 import { applyPatchedJsonToLoroDocCollaborative } from '@chunks/RTE/applyPatchedJsonToLoroDocCollaborative';
+import { readDocumentV2TiptapJson } from '@chunks/RTE/readDocumentV2TiptapJson';
 import { flushSync } from 'react-dom';
 
 const EDIT_PROMPT = `## Role
@@ -253,11 +254,13 @@ async function runDocumentEdit(
     return 'Error: No document content available.';
   }
 
-  const docJson = loroDoc.toJSON()?.doc;
+  const readResult = readDocumentV2TiptapJson(resource, store);
 
-  if (!docJson) {
-    return 'Error: Failed to read document content.';
+  if (!readResult.ok) {
+    return `Error: ${readResult.error}`;
   }
+
+  const docJson = readResult.docJson;
 
   let previousFailure: string | undefined;
   let patched: JSONContent | undefined;
@@ -277,6 +280,7 @@ async function runDocumentEdit(
       const text = await generatePatchCompilerText(model, userPrompt);
 
       const parsed = parsePatchResponseText(text);
+
       const validated = patchOutputSchema.safeParse(parsed);
 
       if (!validated.success) {
@@ -311,7 +315,7 @@ async function runDocumentEdit(
     }
 
     try {
-      const result = applyPatch(docJson, patch, true, false);
+      const result = applyPatch(structuredClone(docJson), patch, true, false);
 
       patched = result.newDocument as JSONContent;
     } catch (e) {
@@ -347,17 +351,17 @@ async function runDocumentEdit(
       beforeApply();
     });
 
-    const freshDocJson = loroDoc.toJSON()?.doc;
+    const freshRead = readDocumentV2TiptapJson(resource, store);
 
-    if (!freshDocJson) {
-      return 'Error: Failed to read fresh document content.';
+    if (!freshRead.ok) {
+      return `Error: Failed to read fresh document content (${freshRead.error}).`;
     }
 
     let patchedToApply: JSONContent;
 
     try {
       const reapply = applyPatch(
-        structuredClone(freshDocJson),
+        structuredClone(freshRead.docJson),
         winningPatch,
         true,
         false,

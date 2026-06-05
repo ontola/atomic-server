@@ -16,7 +16,6 @@ pub enum ValueV2 {
     Boolean(bool),
     Uri(String),
     Json(serde_json::Value),
-    YDoc(Vec<u8>),
     LoroDoc(Vec<u8>),
     Unsupported(crate::values::UnsupportedValue),
 }
@@ -66,7 +65,6 @@ impl ValueV2 {
             ValueV2::Boolean(v) => crate::values::Value::Boolean(v),
             ValueV2::Uri(v) => crate::values::Value::Uri(v),
             ValueV2::Json(v) => crate::values::Value::Json(v),
-            ValueV2::YDoc(v) => crate::values::Value::YDoc(v),
             ValueV2::LoroDoc(v) => crate::values::Value::LoroDoc(v),
             ValueV2::Unsupported(unsupported_value) => {
                 crate::values::Value::Unsupported(unsupported_value)

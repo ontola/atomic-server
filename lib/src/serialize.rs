@@ -93,15 +93,6 @@ pub fn val_to_serde(
                 }
             }
         },
-        Value::YDoc(val) => {
-            let mut obj = Map::new();
-            obj.insert("type".to_string(), "ydoc".into());
-            obj.insert(
-                "data".to_string(),
-                general_purpose::STANDARD.encode(val).into(),
-            );
-            obj.into()
-        }
         Value::LoroDoc(val) => SerdeValue::String(general_purpose::STANDARD.encode(val)),
     };
     Ok(json_val)

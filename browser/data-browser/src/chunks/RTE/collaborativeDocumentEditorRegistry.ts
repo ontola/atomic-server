@@ -5,7 +5,7 @@ const editors = new Map<string, Editor>();
 /**
  * When a document is open in the UI, the live Tiptap editor is registered so
  * AI / tooling can dispatch ProseMirror transactions on that instance instead
- * of creating a second Collaboration binding on the same Y.Doc.
+ * of creating a second Collaboration binding on the same LoroDoc.
  */
 export function registerCollaborativeDocumentEditor(
   subject: string,

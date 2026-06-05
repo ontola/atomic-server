@@ -2738,8 +2738,7 @@ msgstr "Install"
 msgid "Something went wrong"
 msgstr "Something went wrong"
 
-#: src/components/AIChangesContext.tsx
-#: src/components/NavBar.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Failed to save changes"
 msgstr "Failed to save changes"
 
@@ -4142,11 +4141,11 @@ msgstr "Build commit"
 msgid "built {0}"
 msgstr "built {0}"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Review Edits"
 msgstr "Review Edits"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "edit"
 msgid_plural "edits"
 msgstr[0] "edit"
@@ -4154,15 +4153,15 @@ msgstr[1] "edits"
 
 #. placeholder {0}: editCount
 #. placeholder {1}: plural(editCount, ['edit', 'edits'])
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Review {0} {1}"
 msgstr "Review {0} {1}"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Revert Changes"
 msgstr "Revert Changes"
 
-#: src/components/AIChangesContext.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Confirm Changes"
 msgstr "Confirm Changes"
 
@@ -4692,3 +4691,19 @@ msgstr "Changes could not sync"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Start typing…"
 msgstr "Start typing…"
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Resource is not a document-v2"
+msgstr "Resource is not a document-v2"
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Loro not loaded"
+msgstr "Loro not loaded"
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Failed to read document content"
+msgstr "Failed to read document content"
+
+#: src/components/forms/InputLoroDoc.tsx
+msgid "Editing LoroDoc directly is not supported"
+msgstr "Editing LoroDoc directly is not supported"

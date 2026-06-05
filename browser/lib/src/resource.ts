@@ -39,7 +39,6 @@ import {
 export type PropVals = Map<string, AtomicValue>;
 
 export interface MergeOptions {
-  replaceYDocs?: boolean;
   replaceLoroDocs?: boolean;
   /**
    * Property keys to skip when merging: keep local values and do not delete them
@@ -1211,7 +1210,6 @@ export class Resource<C extends OptionalClass = any> {
    * @param options.omitKeysFromMerge Keys to skip so local values are kept (including when absent on the remote resource).
    */
   public merge(resourceB: Resource, options: MergeOptions = {}): void {
-    const replaceYDocs = options.replaceYDocs ?? false;
     const omitKeysFromMerge = options.omitKeysFromMerge ?? [];
 
     if (this.subject !== resourceB.subject) {
@@ -1240,8 +1238,8 @@ export class Resource<C extends OptionalClass = any> {
           }
         }
 
-        if (replaceYDocs || options.replaceLoroDocs) {
-          this.resetLoroState();
+        if (options.replaceLoroDocs) {
+          this.cloneLoroStateFrom(resourceB);
           this._loroSnapshotBytes = resourceB._loroSnapshotBytes;
           this.#cache = structuredClone(resourceB.#cache);
           this._auxValues = new Map(

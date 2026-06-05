@@ -61,7 +61,6 @@ Here is a list of the available datatypes:
 - `resourceArray`: reference to multiple resources by their subjects.
 - `atomicURL`: reference to another resource by its subject.
 - `json`: A JSON object.
-- `ydoc`: A YDoc object, Should not be used in most cases.
 
 ## Creating enums
 

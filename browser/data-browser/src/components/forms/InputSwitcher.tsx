@@ -15,7 +15,7 @@ import { FilePicker } from './FilePicker/FilePicker';
 import type { JSX } from 'react';
 import { InputJSON } from './InputJSON';
 import InputURI from './InputURI';
-import { InputYDoc } from './InputYDoc';
+import { InputLoroDoc } from './InputLoroDoc';
 
 /** Renders a fitting HTML input depending on the Datatype */
 export default function InputSwitcher(props: InputProps): JSX.Element {
@@ -73,7 +73,7 @@ export default function InputSwitcher(props: InputProps): JSX.Element {
     }
 
     case Datatype.LORODOC: {
-      return <InputYDoc />;
+      return <InputLoroDoc />;
     }
 
     default: {
