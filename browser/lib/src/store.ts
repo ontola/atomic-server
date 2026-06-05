@@ -1675,6 +1675,18 @@ export class Store {
 
     if (!noParent) {
       await resource.set(core.properties.parent, normalizedParent);
+
+      // Stamp the resource's `drive` at genesis (mirrors
+      // `lib/src/commit.rs::create_did`) so the server's rights check can
+      // consult the stable drive grant directly instead of walking a parent
+      // that may not be materialized yet under concurrent creation — the fix
+      // for the parent-before-child 401 cascade. Drive = the parent's drive,
+      // or the parent itself when the parent is a drive root. `validate:false`
+      // skips the ontology fetch (the property is server-recognised).
+      const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
+      const parentResource = this.resources.get(normalizedParent);
+      const parentDrive = parentResource?.get(DRIVE_PROP) as string | undefined;
+      await resource.set(DRIVE_PROP, parentDrive ?? normalizedParent, false);
     }
 
     if (propVals) {

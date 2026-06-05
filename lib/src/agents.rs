@@ -329,7 +329,9 @@ mod test {
     #[test]
     fn generate_from_private_key() {
         let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
-        let public_key = "7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=";
+        // base64url (URL_SAFE_NO_PAD): DID subjects must be URL-safe, so
+        // `encode_base64` emits this form (was standard base64 before the switch).
+        let public_key = "7LsjMW5gOfDdJzK_atgjQ1t20J_rw8MjVg6xwqm-h8U";
         let regenerated_pair = generate_public_key(private_key);
         assert_eq!(public_key, regenerated_pair.public);
     }

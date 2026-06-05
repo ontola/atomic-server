@@ -211,6 +211,28 @@ impl Commit {
         let temp_subject = "did:ad:genesis".to_string();
         commit_builder.subject = temp_subject.clone().into();
 
+        // Race-free rights: stamp the resource's `drive` at genesis so a child's
+        // rights check can consult the (stable) drive grant directly instead of
+        // walking a parent chain that may not be materialized yet under
+        // concurrent creation (the parent-before-child 401 race). The drive is
+        // the parent's drive, or the parent itself when the parent is a drive
+        // root. Top-level resources (no parent) ARE their own drive — skip.
+        if !commit_builder.set.contains_key(urls::DRIVE_PROP) {
+            if let Some(parent_val) = commit_builder.set.get(urls::PARENT).cloned() {
+                let parent_subject = crate::Subject::from(parent_val.to_string());
+                if let Ok(parent_res) = store.get_resource(&parent_subject).await {
+                    let drive = match parent_res.get(urls::DRIVE_PROP) {
+                        Ok(d) => d.to_string(),
+                        Err(_) => parent_subject.to_string(),
+                    };
+                    commit_builder.set.insert(
+                        urls::DRIVE_PROP.into(),
+                        crate::values::Value::AtomicUrl(drive.into()),
+                    );
+                }
+            }
+        }
+
         let loro_update = if let Some(update) = commit_builder.loro_update {
             Some(update)
         } else if !commit_builder.set.is_empty() || !commit_builder.remove.is_empty() {
@@ -1328,7 +1350,8 @@ mod test {
         let agent = Agent::new_from_private_key(None, private_key).unwrap();
         assert_eq!(
             agent.subject,
-            "did:ad:agent:7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U="
+            // base64url (URL_SAFE_NO_PAD): agent DIDs must be URL-safe.
+            "did:ad:agent:7LsjMW5gOfDdJzK_atgjQ1t20J_rw8MjVg6xwqm-h8U"
         );
         store
             .add_resource(&agent.to_resource().unwrap())
@@ -1368,7 +1391,8 @@ mod test {
     fn signature_basics() {
         let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
         let public_key = "7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=";
-        let signature_expected = "YtDR/xo0272LHNBQtDer4LekzdkfUANFTI0eHxZhITXnbC3j0LCqDWhr6itNvo4tFnep6DCbev5OKAHH89+TDA==";
+        // base64url (URL_SAFE_NO_PAD) — `sign_message` emits this form.
+        let signature_expected = "YtDR_xo0272LHNBQtDer4LekzdkfUANFTI0eHxZhITXnbC3j0LCqDWhr6itNvo4tFnep6DCbev5OKAHH89-TDA";
         let message = "val";
         let signature = sign_message(message, private_key, public_key).unwrap();
         assert_eq!(signature, signature_expected);

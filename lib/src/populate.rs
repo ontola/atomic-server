@@ -87,6 +87,14 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
         },
         Property {
             class_type: None,
+            data_type: DataType::AtomicUrl,
+            shortname: "drive".into(),
+            description: "The drive (top-level resource) this Resource belongs to. Stamped at genesis from the resource's genesis certificate so authorization can resolve the drive's grant directly, without walking a parent chain that may not be materialized yet under concurrent creation. Immutable: a resource does not move between drives.".into(),
+            subject: urls::DRIVE_PROP.into(),
+            allows_only: None,
+        },
+        Property {
+            class_type: None,
             data_type: DataType::ResourceArray,
             shortname: "allows-only".into(),
             description: "Restricts this Property to only the values inside this one. This essentially turns the Property into an `enum`.".into(),
