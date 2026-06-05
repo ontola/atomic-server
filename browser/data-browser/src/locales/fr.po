@@ -4677,16 +4677,16 @@ msgstr "Commencez à taper…"
 
 #: src/chunks/RTE/readDocumentV2TiptapJson.ts
 msgid "Resource is not a document-v2"
-msgstr ""
+msgstr "La ressource n'est pas un document v2"
 
 #: src/chunks/RTE/readDocumentV2TiptapJson.ts
 msgid "Loro not loaded"
-msgstr ""
+msgstr "Loro non chargé"
 
 #: src/chunks/RTE/readDocumentV2TiptapJson.ts
 msgid "Failed to read document content"
-msgstr ""
+msgstr "Échec de la lecture du contenu du document"
 
 #: src/components/forms/InputLoroDoc.tsx
 msgid "Editing LoroDoc directly is not supported"
-msgstr ""
+msgstr "La modification directe de LoroDoc n'est pas prise en charge"

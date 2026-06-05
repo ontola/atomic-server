@@ -4298,7 +4298,7 @@ msgstr "Error al regenerar el mensaje de chat de IA"
 #. placeholder {0}: summaryText && ( <ChevronIcon expanded={expanded}> <FaChevronRight /> </ChevronIcon> )
 #: src/chunks/AI/CompactSeparatorWidget.tsx
 msgid "{0} Context compacted"
-msgstr ""
+msgstr "{0} Contexto compactado"
 
 #: src/chunks/AI/CompactSeparatorWidget.tsx
 msgid "Show summary"
@@ -4681,16 +4681,16 @@ msgstr "Empieza a escribir…"
 
 #: src/chunks/RTE/readDocumentV2TiptapJson.ts
 msgid "Resource is not a document-v2"
-msgstr ""
+msgstr "El recurso no es un documento-v2"
 
 #: src/chunks/RTE/readDocumentV2TiptapJson.ts
 msgid "Loro not loaded"
-msgstr ""
+msgstr "Loro no cargado"
 
 #: src/chunks/RTE/readDocumentV2TiptapJson.ts
 msgid "Failed to read document content"
-msgstr ""
+msgstr "Error al leer el contenido del documento"
 
 #: src/components/forms/InputLoroDoc.tsx
 msgid "Editing LoroDoc directly is not supported"
-msgstr ""
+msgstr "La edición directa de LoroDoc no es compatible"
