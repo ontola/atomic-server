@@ -34,6 +34,7 @@ const appVersion = (
 ).version;
 
 let gitCommit = 'unknown';
+
 try {
   gitCommit = execSync('git rev-parse --short HEAD', { cwd: __dirname })
     .toString()
@@ -51,6 +52,19 @@ export default defineConfig({
     __BUILD_TIME__: JSON.stringify(buildTime),
   },
   resolve: {
+    // `loro-prosemirror` is excluded from dep-optimization (see
+    // optimizeDeps.exclude — it pulls in the WASM `loro-crdt`), so its
+    // `import "prosemirror-view"` is served raw from node_modules. Meanwhile
+    // tiptap's ProseMirror is prebundled into an optimized chunk. Without
+    // deduping, that yields TWO copies of the `prosemirror-view` module at
+    // runtime: a `DecorationSet` produced by loro's cursor plugin then fails
+    // `instanceof DecorationSet` inside tiptap's `DecorationGroup.from`, which
+    // reads `.members` off the foreign set (undefined) and pushes it as a null
+    // group member — crashing `DecorationGroup.locals` ("Cannot read
+    // properties of undefined (reading 'localsInner')") on the next view
+    // update (e.g. opening the slash menu next to a collaborator cursor).
+    // Deduping forces a single shared instance so the `instanceof` holds.
+    dedupe: ['prosemirror-view', 'prosemirror-state', 'prosemirror-model'],
     alias: [
       // Force EVERY `loro-crdt` import (our `enableLoro`, plus
       // `loro-prosemirror` used by the editor) onto the `web` build.
@@ -289,7 +303,32 @@ export default defineConfig({
     // surfacing as `NS_ERROR_CORRUPTED_CONTENT` + empty MIME type on the
     // browser. Listing it up front makes the optimization happen at boot.
     //
-    include: ['react/compiler-runtime'],
+    // The AI SDK graph (`ai`, `@ai-sdk/react`, the provider packages and the
+    // MCP SDK) is only reachable behind the `React.lazy` AI sidebar chunk, so
+    // Vite's boot-time scan (which follows static imports from index.html)
+    // never sees it. The first time the sidebar opens, Vite discovers the
+    // whole graph, re-optimizes, and HARD-RELOADS the page — surfacing as a
+    // ~20s "Loading AI" stall (the lazy chunk's Suspense fallback). Listing
+    // them here prebundles them at boot so first-open is warm. Dev-only:
+    // production builds prebundle everything at build time. Keep in sync with
+    // the AI-only deps in `src/chunks/AI/`.
+    include: [
+      'react/compiler-runtime',
+      'ai',
+      '@ai-sdk/react',
+      'zod',
+      'ollama-ai-provider-v2',
+      '@openrouter/ai-sdk-provider',
+      '@modelcontextprotocol/sdk/client/index.js',
+      '@modelcontextprotocol/sdk/client/sse.js',
+      '@modelcontextprotocol/sdk/client/streamableHttp.js',
+      'fast-json-patch',
+      // Prebundle the collaborative editor's CRDT-ProseMirror bridge into the
+      // same optimize graph as tiptap so they share ONE `prosemirror-view`
+      // instance (see the exclude note below re: the DecorationGroup crash).
+      // `loro-crdt` stays external, so the WASM is unaffected.
+      'loro-prosemirror',
+    ],
     // `loro-crdt` ships a WASM module that `vite-plugin-wasm` (see the
     // `wasm()` plugin above) handles. esbuild's dep-optimizer CANNOT —
     // if Vite prebundles loro-crdt, the WASM init in the optimized
@@ -310,10 +349,25 @@ export default defineConfig({
     // `.wasm` via `fetch(new URL('loro_wasm_bg.wasm', import.meta.url))`.
     // If esbuild inlines either into an optimized chunk, `import.meta.url`
     // points at `.vite/deps/…` where the `.wasm` doesn't exist → 404.
-    // Excluding keeps them served from `node_modules` so the relative
-    // `.wasm` URL resolves. `loro-prosemirror` is here too because it
-    // imports `loro-crdt` (aliased to the web build above).
-    exclude: ['loro-crdt', 'loro-prosemirror'],
+    // Excluding keeps it served from `node_modules` so the relative
+    // `.wasm` URL resolves.
+    //
+    // NOTE: `loro-prosemirror` is deliberately NOT excluded (it's `include`d
+    // above). It only imports `loro-crdt` as a peer, which stays external
+    // here, so optimizing it doesn't drag the WASM into a chunk. Crucially,
+    // optimizing it puts its `prosemirror-view`/`-state`/`-model` imports in
+    // the SAME prebundled graph as tiptap's. If loro were excluded (served
+    // raw) while tiptap's ProseMirror was prebundled, there would be TWO
+    // runtime copies of `prosemirror-view`: a `DecorationSet` from loro's
+    // cursor plugin then fails `instanceof DecorationSet` inside tiptap's
+    // `DecorationGroup.from`, which reads `.members` off the foreign set
+    // (undefined) and stores it as a null group member — crashing
+    // `DecorationGroup.locals` ("Cannot read properties of undefined (reading
+    // 'localsInner')") on the next view update (e.g. opening the slash menu
+    // next to a collaborator's caret). One optimize graph + `resolve.dedupe`
+    // above keeps it a single instance. (Prod is unaffected: rollup bundles
+    // once.)
+    exclude: ['loro-crdt'],
     // this may help when linking + HMR is not working
     // exclude: ['@tomic/lib', '@tomic/react'],
   },
@@ -352,6 +406,18 @@ export default defineConfig({
     strictPort: true,
     host: true,
     allowedHosts: ['.tunn.dev', 't-1sk9qbdw.tunn.dev'],
+    // Pre-transform the lazy AI chunk's source graph in the background at
+    // boot, so the first time the sidebar opens its modules are already
+    // through the (slow) React Compiler babel pass instead of being
+    // transformed on-demand while the user waits behind "Loading AI".
+    // Complements the `optimizeDeps.include` AI entries above (those cover
+    // the npm deps; this covers our own source modules).
+    warmup: {
+      clientFiles: [
+        './src/chunks/AI/AISidebar.tsx',
+        './src/chunks/AI/AIChatInput.tsx',
+      ],
+    },
     proxy: {
       '/iroh-node-id': 'http://localhost:9883',
       '/iroh-sync': 'http://localhost:9883',

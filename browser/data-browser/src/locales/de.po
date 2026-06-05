@@ -1906,7 +1906,6 @@ msgstr "Neue Eigenschaft"
 
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
-#: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Start typing..."
 msgstr "Beginne zu tippen..."
 
@@ -2570,6 +2569,7 @@ msgstr ""
 "Zusätzlich können Sie nach Ressourcen mit bestimmten Tags suchen,\n"
 "indem Sie <0/> zu Ihrer Suche hinzufügen."
 
+#: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Untitled Agent"
 msgstr "Unbenannter Agent"
@@ -4671,3 +4671,7 @@ msgstr "Ersteller und Erstellungszeit, abgeleitet vom signierten Genesis-Commit 
 #: src/components/SideBar/SyncMenuItem.tsx
 msgid "Changes could not sync"
 msgstr "Änderungen konnten nicht synchronisiert werden"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Start typing…"
+msgstr "Beginnen Sie zu tippen…"

@@ -2930,7 +2930,6 @@ msgstr "Parameter Size:"
 
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
-#: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Start typing..."
 msgstr "Start typing..."
 
@@ -3134,6 +3133,7 @@ msgstr ""
 "There was an error in the editor, please refresh the page to\n"
 "continue.{0} <0>Refresh</0>"
 
+#: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Untitled Agent"
 msgstr "Untitled Agent"
@@ -4688,3 +4688,7 @@ msgstr "Creator and creation time, derived from the signed genesis commit (the r
 #: src/components/SideBar/SyncMenuItem.tsx
 msgid "Changes could not sync"
 msgstr "Changes could not sync"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Start typing…"
+msgstr "Start typing…"
