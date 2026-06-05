@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Client, core, useCanWrite, useResource } from '@tomic/react';
 import {
   editURL,
@@ -101,6 +101,8 @@ export function ResourceContextMenu({
   const resource = useResource(subject);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showCodeUsageDialog, setShowCodeUsageDialog] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [shiftHeld, setShiftHeld] = useState(false);
   const handleAddClick = useNewRoute(subject);
   const [currentSubject] = useCurrentSubject();
   const canWrite = useCanWrite(resource);
@@ -140,6 +142,39 @@ export function ResourceContextMenu({
       toast.error(error.message);
     }
   }, [resource, navigate, currentSubject, subject, onAfterDelete]);
+
+  const handleBindActive = useCallback(
+    (active: boolean) => {
+      setMenuOpen(active);
+
+      if (!active) {
+        setShiftHeld(false);
+      }
+
+      bindActive?.(active);
+    },
+    [bindActive],
+  );
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    const updateShiftFromEvent = (e: KeyboardEvent | MouseEvent) => {
+      setShiftHeld(e.shiftKey);
+    };
+
+    document.addEventListener('keydown', updateShiftFromEvent);
+    document.addEventListener('keyup', updateShiftFromEvent);
+    document.addEventListener('mousemove', updateShiftFromEvent);
+
+    return () => {
+      document.removeEventListener('keydown', updateShiftFromEvent);
+      document.removeEventListener('keyup', updateShiftFromEvent);
+      document.removeEventListener('mousemove', updateShiftFromEvent);
+    };
+  }, [menuOpen]);
 
   if (subject === undefined) {
     return null;
@@ -244,9 +279,15 @@ export function ResourceContextMenu({
         disabled: !canWrite,
         id: ContextMenuOptions.Delete,
         icon: <FaTrash />,
-        label: 'Delete',
+        label: shiftHeld ? 'Confirm Delete' : 'Delete',
         helper: 'Delete this resource.',
-        onClick: () => setShowDeleteDialog(true),
+        onClick: () => {
+          if (shiftHeld) {
+            handleDestroy();
+          } else {
+            setShowDeleteDialog(true);
+          }
+        },
       },
     ),
   ];
@@ -278,7 +319,7 @@ export function ResourceContextMenu({
         items={filteredItems}
         Trigger={triggerComp}
         isMainMenu={isMainMenu}
-        bindActive={bindActive}
+        bindActive={handleBindActive}
       />
       <ConfirmationDialog
         title={`Delete resource`}

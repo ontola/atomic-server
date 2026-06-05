@@ -4689,3 +4689,7 @@ msgstr "Fehler beim Lesen des Dokumentinhalts"
 #: src/components/forms/InputLoroDoc.tsx
 msgid "Editing LoroDoc directly is not supported"
 msgstr "Das direkte Bearbeiten von LoroDoc wird nicht unterstützt"
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Confirm Delete"
+msgstr "Löschen bestätigen"

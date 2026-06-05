@@ -4707,3 +4707,7 @@ msgstr "Failed to read document content"
 #: src/components/forms/InputLoroDoc.tsx
 msgid "Editing LoroDoc directly is not supported"
 msgstr "Editing LoroDoc directly is not supported"
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Confirm Delete"
+msgstr "Confirm Delete"
