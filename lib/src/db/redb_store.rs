@@ -451,7 +451,10 @@ impl KvStore for RedbStore {
             .db
             .begin_write()
             .map_err(|e| format!("redb write tx: {e}"))?;
-        tx.set_quick_repair(true);
+        // EXPERIMENT: relax durability to avoid an fsync per commit (was
+        // set_quick_repair(true) → 2PC + Immediate fsync ≈ 23ms/commit).
+        tx.set_durability(redb::Durability::None)
+            .map_err(|e| format!("redb set_durability: {e}"))?;
         {
             for op in operations {
                 let mut table = tx
@@ -478,7 +481,33 @@ impl KvStore for RedbStore {
     }
 
     fn flush(&self) -> AtomicResult<()> {
-        // redb with InMemoryBackend: no-op. With OPFS: would sync_data.
+        // Per-commit writes use Durability::None (no fsync) for throughput.
+        // redb only persists those to disk once a *subsequent* Immediate
+        // commit lands, so this flush — a quick Immediate commit — is what
+        // actually makes recent commits durable. The server calls it on a
+        // periodic tick (see `serve.rs`), amortizing one fsync across many
+        // commits instead of paying one per commit. `set_quick_repair`
+        // persists redb's allocator state so an unclean shutdown still boots
+        // fast.
+        let mut tx = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("redb flush begin_write: {e}"))?;
+        tx.set_quick_repair(true);
+        // Touch a sentinel key so the transaction is non-empty and redb
+        // definitely writes (and, at Immediate durability, fsyncs) a new
+        // commit point that persists all prior Durability::None commits.
+        {
+            let mut table = tx
+                .open_table(TABLE_DRIVE_MAPPING)
+                .map_err(|e| format!("redb flush open table: {e}"))?;
+            table
+                .insert(b"__flush_sentinel__".as_slice(), b"".as_slice())
+                .map_err(|e| format!("redb flush sentinel: {e}"))?;
+        }
+        // Immediate is the default durability; committing flushes + fsyncs all
+        // prior Durability::None commits.
+        tx.commit().map_err(|e| format!("redb flush commit: {e}"))?;
         Ok(())
     }
 
@@ -513,7 +542,9 @@ impl KvStore for RedbStore {
             .db
             .begin_write()
             .map_err(|e| format!("redb write tx: {e}"))?;
-        tx.set_quick_repair(true);
+        // EXPERIMENT: relax durability to avoid an fsync per commit.
+        tx.set_durability(redb::Durability::None)
+            .map_err(|e| format!("redb set_durability: {e}"))?;
         {
             for op in &ops {
                 let mut table = tx

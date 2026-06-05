@@ -299,10 +299,6 @@ pub fn check_if_atom_matches_watched_query_filters(
     resource: &Resource,
     transaction: &mut Transaction,
 ) -> AtomicResult<()> {
-    println!(
-        "DEBUG: check_if_atom_matches_watched_query_filters: subject={}",
-        index_atom.subject
-    );
     let subject_str = index_atom.subject.as_str();
 
     let filters: Vec<Arc<QueryFilter>> = if subject_str.starts_with("did:") {
@@ -312,7 +308,7 @@ pub fn check_if_atom_matches_watched_query_filters(
         store.watched_queries_for_drive(drive_prefix.as_str())
     };
 
-    tracing::info!(
+    tracing::trace!(
         "check_if_atom_matches_watched_query_filters: subject={}, atom_prop={}, filters_count={}",
         subject_str,
         index_atom.property,

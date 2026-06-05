@@ -220,6 +220,25 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
         atomic_lib::sync::peer::set_device_name(&appstate.store, name);
     }
 
+    // Durable-flush tick. Per-commit writes use Durability::None (no fsync)
+    // for throughput; this background flush makes them durable on a fixed
+    // cadence (100ms), bounding crash data-loss to the interval while
+    // amortizing a single fsync across every commit in the window. Runs on a
+    // dedicated OS thread because the flush blocks on fsync, which would stall
+    // a tokio worker.
+    {
+        let store = appstate.store.clone();
+        std::thread::Builder::new()
+            .name("durable-flush".into())
+            .spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                if let Err(e) = store.flush() {
+                    tracing::warn!("periodic durable flush failed: {e}");
+                }
+            })
+            .expect("spawn durable-flush thread");
+    }
+
     // Start Iroh peer-to-peer transport
     let _iroh_router = {
         let store = appstate.store.clone();
