@@ -149,7 +149,10 @@ var     var   drive          u16 length-prefix + UTF-8 subject
   invariant, not just provenance. It makes rights checks **drive-first and
   race-free** (see below) and lets did:-subject resources be drive-scoped for
   the watched-query index (otherwise they fall back to a global, un-scoped scan
-  of every watched query — an O(all-queries) cost per commit atom).
+  of every watched query — an O(all-queries) cost per commit atom). It also
+  scopes the WS commit fan-out to a resource's owning drive — already shipped
+  (server-side) ahead of the full cert, closing a cross-tenant leak; see
+  [`commit-fanout-drive-isolation.md`](./commit-fanout-drive-isolation.md).
 
 ### Why binary, not JSON
 

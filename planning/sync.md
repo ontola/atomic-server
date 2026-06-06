@@ -18,6 +18,12 @@ creates/destroys via the same `UPDATE` / `DESTROY` channel that already
 carried edits. The `SUBSCRIBE_QUERY` registration primitive is kept (clients
 can still say "watch this filter") — only the response shape changed.
 
+**Drive-scoped fan-out** — the drive-wide fan-out now delivers a commit only to
+subscribers of the resource's *owning* drive (via `Subject::is_within_drive` +
+the genesis `drive` propval), not to every drive subscriber. This closes a
+cross-tenant commit leak (and the e2e 401-spillover flake it caused). See
+[`commit-fanout-drive-isolation.md`](./commit-fanout-drive-isolation.md).
+
 ---
 
 ## History / context
@@ -254,6 +260,7 @@ Add or update tests at these levels:
 | SYNC* + SYNC_PUSH chunking| yes (×3) | yes (×3) | yes (×2) | —           |
 | BLOB_REQUEST / RESPONSE   | —     | yes    | yes         | —           |
 | Drive-wide membership (UPDATE/DESTROY via SUB) | n/a | partial | `ws_drive_membership` (×1) | implicit |
+| Drive-scoped fan-out isolation (no cross-tenant leak) | n/a | n/a | `ws_commit_isolation` (×1) | n/a |
 | HELLO (Iroh-only)         | yes (×8) | happy-path only | n/a | —    |
 | EPHEMERAL (0x40 binary)   | **—** | **—**  | **—**       | —           |
 

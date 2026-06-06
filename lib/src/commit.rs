@@ -677,6 +677,35 @@ impl Commit {
                                 .resource_new
                                 .set_unsafe(urls::WRITE.into(), writers.into())?;
                         }
+
+                        // Safety net: ensure a new DID resource carries its
+                        // `drive`. Clients stamp this at genesis (create_did /
+                        // browser newResource), but some creation paths miss it
+                        // — notably a guest replying in a drive shared with them,
+                        // whose local parent isn't fully materialized. Without a
+                        // drive the commit fan-out can't route to the owning
+                        // drive's subscribers (the owner never sees it). Resolve
+                        // it authoritatively from the parent's drive, which the
+                        // server always has. See
+                        // planning/commit-fanout-drive-isolation.md.
+                        if applied.resource_new.get(urls::DRIVE_PROP).is_err() {
+                            if let Ok(parent_val) = applied.resource_new.get(urls::PARENT) {
+                                let parent_subject =
+                                    crate::Subject::from(parent_val.to_string());
+                                if let Ok(parent_res) =
+                                    store.get_resource(&parent_subject).await
+                                {
+                                    let drive = match parent_res.get(urls::DRIVE_PROP) {
+                                        Ok(d) => d.to_string(),
+                                        Err(_) => parent_subject.to_string(),
+                                    };
+                                    applied.resource_new.set_unsafe(
+                                        urls::DRIVE_PROP.into(),
+                                        crate::values::Value::AtomicUrl(drive.into()),
+                                    )?;
+                                }
+                            }
+                        }
                     }
                 }
             } else {

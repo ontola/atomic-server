@@ -631,10 +631,18 @@ export class Resource<C extends OptionalClass = any> {
       }
     }
 
-    // Preserve server-managed/housekeeping properties in the cache
+    // Preserve server-managed / genesis-immutable properties in the cache.
+    // These are set once (at genesis or by the server) and are NOT necessarily
+    // re-encoded into a later Loro delta — so a rebuild from a delta-only doc
+    // would otherwise drop them. `drive` and `parent` matter especially for a
+    // GUEST who loaded a shared resource: losing the parent's `drive` here
+    // leaves a reply unstamped, so the drive-scoped commit fan-out never
+    // delivers it to the owner. See planning/commit-fanout-drive-isolation.md.
     const serverManaged = [
       properties.commit.lastCommit,
       commits.properties.createdAt,
+      'https://atomicdata.dev/properties/drive',
+      core.properties.parent,
     ];
 
     for (const key of serverManaged) {
@@ -2280,12 +2288,12 @@ export class Resource<C extends OptionalClass = any> {
 
     // Stamp the resource's `drive` at genesis (mirrors
     // `lib/src/commit.rs::create_did`). This is the genesis chokepoint that
-    // EVERY creation path flows through — including table rows, which set
-    // their parent directly and bypass `store.newResource`. The server's
-    // `check_rights` then resolves via this stable drive grant instead of
-    // walking a parent that may not be materialized yet under concurrent
-    // creation — the fix for the parent-before-child 401 cascade. Drive = the
-    // parent's drive, or the parent itself when the parent is a drive root.
+    // EVERY creation path flows through — including table rows, which set their
+    // parent directly and bypass `store.newResource`. The server's
+    // `check_rights` resolves via this stable drive grant instead of walking a
+    // parent that may not be materialized yet under concurrent creation (the
+    // parent-before-child 401 cascade), and the WS commit fan-out routes by it
+    // (planning/commit-fanout-drive-isolation.md).
     const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
 
     if (isFirstCommit && !this.get(DRIVE_PROP)) {
@@ -2293,21 +2301,21 @@ export class Resource<C extends OptionalClass = any> {
         | string
         | undefined;
 
-      // Resolve the resource's drive so the SERVER's drive-first rights check
-      // can authorize against the stable drive grant directly — instead of
-      // recursively walking a parent chain that may not be materialized yet
-      // under concurrent creation (the parent-before-child 401 cascade).
-      //
-      // The store's active drive is the authoritative source. When it isn't
-      // set yet, walk the LOCAL parent chain up to its root: during creation
-      // the whole chain (row → table → drive) is in the local store, so this
-      // reliably finds the real drive even when an intermediate parent hasn't
-      // been stamped — never falling back to a non-drive ancestor, which would
-      // make drive-first no-op into the racy parent walk.
+      // A resource lives in its PARENT's drive — which is NOT necessarily the
+      // creating agent's active drive. They coincide when you create in your
+      // own drive, but diverge when a guest writes into a drive shared with
+      // them (e.g. replying in someone else's chatroom): the resource belongs
+      // to the OWNER's drive. Stamping the guest's own drive (or nothing) would
+      // misroute the commit — the drive-scoped fan-out delivers only to the
+      // owning drive's subscribers, so the owner never sees it. So the parent's
+      // drive is authoritative: walk the LOCAL parent chain first (sync — the
+      // chain is cached while you're viewing it, and `rebuildCacheFromLoro` now
+      // preserves `drive`/`parent`), and only fall back to the active drive for
+      // a top-level resource or a parent not yet materialized.
       const DRIVE_CLASS = 'https://atomicdata.dev/classes/Drive';
-      let drive = this.store.getDrive();
+      let drive: string | undefined;
 
-      if (!drive && parentSubject) {
+      if (parentSubject) {
         let cursor: string | undefined = parentSubject;
         const seen = new Set<string>();
 
@@ -2317,23 +2325,35 @@ export class Resource<C extends OptionalClass = any> {
           const ancestorDrive = ancestor?.get(DRIVE_PROP) as string | undefined;
 
           if (ancestorDrive) {
-            drive = ancestorDrive; // ancestor already knows its drive
+            drive = ancestorDrive; // ancestor knows its drive (common path)
             break;
           }
 
           const classes =
             (ancestor?.get(core.properties.isA) as string[] | undefined) ?? [];
+
+          if (classes.includes(DRIVE_CLASS)) {
+            drive = cursor; // the chain reached the Drive root itself
+            break;
+          }
+
           const grandparent = ancestor?.get(core.properties.parent) as
             | string
             | undefined;
 
-          if (classes.includes(DRIVE_CLASS) || !grandparent) {
-            drive = cursor; // reached the Drive (or a top-level root)
+          if (!grandparent) {
+            // Inconclusive: a genuine top-level root, or an ancestor not
+            // materialized yet. Don't guess a non-drive ancestor — fall back
+            // to the active drive below.
             break;
           }
 
           cursor = grandparent;
         }
+      }
+
+      if (!drive) {
+        drive = this.store.getDrive();
       }
 
       if (drive) {

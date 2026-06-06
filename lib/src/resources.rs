@@ -496,6 +496,19 @@ impl Resource {
         }
     }
 
+    /// Returns the `drive` of this Resource, if set.
+    ///
+    /// The `drive` propval (stamped at genesis) records which drive a resource
+    /// belongs to. Unlike `parent`, it is a direct pointer to the drive root,
+    /// so it works even for `did:ad:` subjects that can't be matched to a drive
+    /// by URL prefix. Used by the commit fan-out to scope delivery to the
+    /// owning drive's subscribers and never leak commits across drives.
+    pub fn get_drive(&self) -> Option<Subject> {
+        self.get(urls::DRIVE_PROP)
+            .ok()
+            .map(|val| Subject::from(val.to_string()))
+    }
+
     /// Walks the parent tree upwards until there is no parent, then returns them as a vector.
     pub async fn get_parent_tree(&self, store: &impl Storelike) -> AtomicResult<Vec<Resource>> {
         let mut parents: Vec<Resource> = Vec::new();
