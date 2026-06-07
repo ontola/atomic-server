@@ -804,7 +804,6 @@ msgstr "Copiar código"
 
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
-#: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Start typing..."
 msgstr "Empieza a escribir..."
 
@@ -2566,6 +2565,7 @@ msgstr ""
 "Además, puede buscar recursos con etiquetas específicas\n"
 "agregando <0/> a su búsqueda."
 
+#: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Untitled Agent"
 msgstr "Agente sin título"
@@ -4675,3 +4675,7 @@ msgstr "Creador y tiempo de creación, derivados del commit génesis firmado (la
 #: src/components/SideBar/SyncMenuItem.tsx
 msgid "Changes could not sync"
 msgstr "No se pudieron sincronizar los cambios"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Start typing…"
+msgstr "Empieza a escribir…"

@@ -156,18 +156,7 @@ test.describe('documents', async () => {
   // broadcast over the WS hub as a `LORO_EPHEMERAL_UPDATE` frame (not
   // persisted), and loro-prosemirror renders it in the other tab's editor as a
   // `.ProseMirror-loro-cursor` decoration carrying the peer's color + name.
-  //
-  // FIXME: currently parked because the CollaborativeEditor crashes on load for
-  // this flow with `Cannot read properties of undefined (reading 'eq')` in
-  // prosemirror-view's `DecorationGroup.eq`. Trigger: a tiptap v3 React menu
-  // component (BubbleMenu/DragHandle/FloatingHint) registers/unregisters a
-  // ProseMirror plugin via a passive effect (double-invoked under StrictMode);
-  // the reconfigure's `view.updateState` diffs the decoration groups while the
-  // loro ephemeral-cursor plugin is contributing decorations, and a changed
-  // DecorationGroup membership dereferences an undefined member. This is the
-  // same tiptap-version incompatibility that had the cursor disabled before.
-  // Un-`fixme` once the RTE crash is fixed — the assertions below are correct.
-  test.fixme('shows a collaborator’s ephemeral cursor position', async ({
+  test('shows a collaborator’s ephemeral cursor position', async ({
     page,
     browser,
   }) => {

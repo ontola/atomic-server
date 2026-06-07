@@ -10,7 +10,7 @@ import { type Resource, useStore } from '@tomic/react';
 export function useLoroSync(
   resource: Resource,
   doc: LoroDoc,
-): CursorEphemeralStore | undefined {
+): CursorEphemeralStore {
   const store = useStore();
   const subject = resource.subject;
 

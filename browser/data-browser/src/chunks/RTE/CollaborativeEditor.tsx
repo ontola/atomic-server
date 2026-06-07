@@ -1,12 +1,9 @@
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
-import { Placeholder } from '@tiptap/extension-placeholder';
-import { Typography } from '@tiptap/extension-typography';
 import { Extension } from '@tiptap/core';
 import {
   LoroSyncPlugin,
   LoroUndoPlugin,
-  // LoroEphemeralCursorPlugin — removed: incompatible with
-  // prosemirror-view 1.41 (TipTap 3.23). See the editor plugin list.
+  LoroEphemeralCursorPlugin,
   redo as loroRedo,
   undo as loroUndo,
   type LoroDocType,
@@ -30,7 +27,6 @@ import {
   ResourceCommands,
   buildResourceSuggestion,
 } from './ResourceExtension/ResourceExtention';
-import { ExtendedImage } from './ImagePicker';
 import type { LoroDoc } from 'loro-crdt';
 import {
   dataBrowser,
@@ -61,15 +57,10 @@ import { Row } from '@components/Row';
 import { Button } from '@components/Button';
 import { FloatingHint } from './FloatingHint';
 import { useCustomBodyColor } from '@hooks/useCustomBodyColor';
-import {
-  getDocumentCollaborationCoreExtensions,
-  getDocumentCollaborationResourceAndFormattingExtensions,
-} from './documentCollaborationExtensions';
+import { getDocumentCollaborationCoreExtensions } from './documentCollaborationExtensions';
 import { useAIChanges } from '@components/AIChangesContext';
 import { ComparePlugin } from './comparePlugin';
-import { useOnValueChange } from '@helpers/useOnValueChange';
 import { getProsemirrorObjFromYDoc } from './prosemirrorObjFromYDoc';
-import { registerCollaborativeDocumentEditor } from './collaborativeDocumentEditorRegistry';
 
 export type CollaborativeEditorProps = {
   placeholder?: string;
@@ -136,9 +127,11 @@ export default function CollaborativeEditor({
         ...getDocumentCollaborationCoreExtensions({
           uploadImage: upload,
         }),
-        Placeholder.configure({
-          placeholder: placeholder ?? 'Start typing...',
-        }),
+        // NOTE: @tiptap/extension-placeholder was removed — its empty-node
+        // decoration formed a DecorationGroup with loro-prosemirror's cursor
+        // plugin that crashes prosemirror-view@1.41 (`DecorationGroup.eq` on a
+        // null member). The placeholder is now rendered with CSS instead (see
+        // `data-placeholder` in editorProps + StyledEditorWrapper below).
         ComparePlugin.configure({
           comparisonContent: '',
           classAdded: 'diff-added',
@@ -207,42 +200,14 @@ export default function CollaborativeEditor({
             return [
               LoroSyncPlugin({ doc: doc as unknown as LoroDocType }),
               LoroUndoPlugin({ doc: doc as unknown as LoroDocType }),
-              // Cursor presence plugin: installed for everyone — readers
-              // broadcasting their caret is the same useful "who's
-              // looking where" signal the old Yjs awareness gave us, and
-              // the server's `LoroEphemeralUpdate` handler has no
-              // can-write check (only `LoroSyncUpdate` gates writes), so
-              // a reader sharing their cursor is harmless.
-              //
-              // The earlier `canWrite && ephemeralStore` gate looked
-              // safe but interacted badly with the `[drive, doc]` deps
-              // on `useEditor` above: `canWrite` is `false` on first
-              // render (async permission probe still pending) and the
-              // editor is built ONCE, so by the time canWrite resolves
-              // to true the plugin set is already frozen and the cursor
-              // plugin is silently absent. The visible symptom: zero
-              // `LORO_EPHEMERAL_UPDATE` frames on the wire, doc sync
-              // works fine, no remote carets ever render.
-              // REMOTE-CURSOR PLUGIN REMOVED (2026-05-29).
-              //
-              // `LoroEphemeralCursorPlugin` (loro-prosemirror 0.4.3 — the
-              // latest published) is incompatible with prosemirror-view
-              // 1.41 pulled in by the TipTap 3.11→3.23 bump: its
-              // remote-caret decorations produce a `DecorationGroup`
-              // with an undefined member, and prosemirror-view's
-              // `DecorationGroup.eq` then throws `this.members[i] is
-              // undefined` during `updateState` — crashing the WHOLE
-              // editor on every document (read or write). Confirmed by
-              // toggling: editor renders with this off, crashes with it
-              // on.
-              //
-              // We still broadcast our own caret via
-              // `ephemeralStore.setLocal` below (harmless, no
-              // decorations) so re-enabling remote rendering is a
-              // one-liner once loro-prosemirror ships a release
-              // compatible with current prosemirror. Until then, live
-              // remote carets are disabled; collaborative *editing*
-              // (LoroSyncPlugin) is unaffected.
+              LoroEphemeralCursorPlugin(ephemeralStore, {
+                user: agentResource
+                  ? {
+                      name: agentResource.props.name ?? 'Untitled Agent',
+                      color,
+                    }
+                  : undefined,
+              }),
             ];
           },
           // `LoroUndoPlugin` exposes the undo manager + ProseMirror
@@ -304,6 +269,10 @@ export default function CollaborativeEditor({
           'aria-multiline': 'true',
           'aria-readonly': canWrite ? 'true' : 'false',
           spellcheck: 'true',
+          // CSS-only placeholder (see StyledEditorWrapper). Replaces
+          // @tiptap/extension-placeholder, whose decoration crashed pm@1.41
+          // when grouped with the loro cursor plugin's decorations.
+          'data-placeholder': placeholder ?? 'Start typing…',
         },
       },
       onContentError({ editor: currentEditor, error, disableCollaboration }) {
@@ -352,34 +321,38 @@ export default function CollaborativeEditor({
   }, [editor, canWrite]);
 
   useEffect(() => {
-    if (agentResource && ephemeralStore) {
-      ephemeralStore.setLocal({
-        user: {
-          name: agentResource.props.name ?? 'Untitled Agent',
-          color,
-        },
-      });
-    }
+    if (!agentResource) return;
+
+    const local = ephemeralStore.getLocal();
+    ephemeralStore.setLocal({
+      anchor: local?.anchor,
+      focus: local?.focus,
+      user: {
+        name: agentResource.props.name ?? 'Untitled Agent',
+        color,
+      },
+    });
   }, [agentResource, ephemeralStore, color]);
 
-  useOnValueChange(
-    () => {
-      if (!editorReady) return;
+  // Sync the comparison (AI-diff) content into the editor. This dispatches a
+  // ProseMirror transaction, so it MUST run in an effect — never during render
+  // (doing so triggers "Cannot update a component while rendering" and cascades
+  // into editor instability / detached inputs).
+  useEffect(() => {
+    if (!editor || !editorReady) return;
 
-      if (hasAIChanges(resource.subject)) {
-        if (!oldResource) return;
+    if (hasAIChanges(resource.subject)) {
+      if (!oldResource) return;
 
-        const oldYDoc = oldResource.get(dataBrowser.properties.documentContent);
-        const oldDoc = getProsemirrorObjFromYDoc(oldYDoc, editor.schema);
+      const oldYDoc = oldResource.get(dataBrowser.properties.documentContent);
+      const oldDoc = getProsemirrorObjFromYDoc(oldYDoc, editor.schema);
 
-        editor.commands.setComparisonContent(oldDoc);
-      } else {
-        editor.commands.setComparisonContent('');
-      }
-    },
-    [hasAIChanges(resource.subject), editorReady, oldResource],
-    true,
-  );
+      editor.commands.setComparisonContent(oldDoc);
+    } else {
+      editor.commands.setComparisonContent('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAIChanges(resource.subject), editorReady, oldResource, editor]);
 
   return (
     <IsInRTEContex value={true}>
@@ -388,7 +361,7 @@ export default function CollaborativeEditor({
           <DragHandle editor={editor}>
             <FaGripVertical />
           </DragHandle>
-          <EditorContent key="rich-editor" editor={editor}>
+          <EditorContent key='rich-editor' editor={editor}>
             <FloatingHint editor={editor}>
               Type &apos;/&apos; for options or &apos;@&apos; for resources
             </FloatingHint>
@@ -423,6 +396,23 @@ export const StyledEditorWrapper = styled(EditorWrapperBase)`
 
   & .tiptap {
     width: 100%;
+    position: relative;
+
+    /* CSS-only placeholder: shown when the doc is a single empty paragraph.
+     * Decoration-free (unlike @tiptap/extension-placeholder) so it never forms
+     * a DecorationGroup with the loro cursor plugin → avoids the pm@1.41
+     * DecorationGroup.eq crash. */
+    &[data-placeholder]:has(
+        > p:first-child:last-child > br.ProseMirror-trailingBreak:only-child
+      )::before {
+      content: attr(data-placeholder);
+      position: absolute;
+      top: 0;
+      left: 0;
+      color: ${p => p.theme.colors.textLight2};
+      pointer-events: none;
+    }
+
     ::spelling-error {
       text-decoration: wavy red underline;
     }
