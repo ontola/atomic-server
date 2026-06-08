@@ -61,6 +61,11 @@ pub const SIGNATURE: &str = "https://atomicdata.dev/properties/signature";
 pub const PREVIOUS_COMMIT: &str = "https://atomicdata.dev/properties/previousCommit";
 pub const LAST_COMMIT: &str = "https://atomicdata.dev/properties/lastCommit";
 pub const IS_GENESIS: &str = "https://atomicdata.dev/properties/isGenesis";
+/// Inline, immutable self-verifying genesis certificate (binary; base64 in
+/// JSON-AD). Carries signer/createdAt/nonce/parent/drive; the DID is
+/// `did:ad:<sign(cert)>`. Decoded for race-free, drive-first rights checks.
+/// See `lib/src/genesis.rs` + `planning/genesis-self-verifying.md`.
+pub const GENESIS: &str = "https://atomicdata.dev/properties/genesis";
 // ... for Agents
 pub const PUBLIC_KEY: &str = "https://atomicdata.dev/properties/publicKey";
 pub const NAME: &str = "https://atomicdata.dev/properties/name";
