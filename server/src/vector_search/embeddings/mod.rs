@@ -2,6 +2,7 @@
 
 mod local;
 mod openrouter;
+mod stub;
 
 use crate::config::Config;
 use crate::errors::AtomicServerResult;
@@ -20,6 +21,10 @@ pub(crate) trait Embedder: Send + Sync {
     fn index_batch_concurrency(&self) -> usize;
 
     async fn embed_strings(&self, chunks: &[String]) -> AtomicServerResult<Vec<Vec<f32>>>;
+}
+
+pub(crate) fn stub_embedder(dim: usize) -> Arc<dyn Embedder> {
+    Arc::new(stub::StubEmbedder::new(dim)) as Arc<dyn Embedder>
 }
 
 pub(crate) async fn create_embedder(config: &Config) -> AtomicServerResult<Arc<dyn Embedder>> {

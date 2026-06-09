@@ -9,6 +9,9 @@
   // from the terminal. See planning/dev-cargo-lock-contention.md.
   "rust-analyzer.cargo.targetDir": "target/rust-analyzer",
   "rust-analyzer.check.targetDir": "target/rust-analyzer",
+  // Use rustup's rust-analyzer so proc-macro ABI matches `cargo`/`rustc` (Cursor's
+  // bundled analyzer can lag stable and report spurious errors on #[async_trait] etc.).
+  "rust-analyzer.server.path": "rust-analyzer",
   "search.exclude": {
     "**/.git": true,
     "**/node_modules": true,

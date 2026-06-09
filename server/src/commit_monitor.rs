@@ -9,6 +9,7 @@ use crate::{
     },
     handlers::{web_sockets::WebSocketConnection, ws_v2},
     search::SearchState,
+    vector_search::VectorSearchState,
 };
 use actix::{
     prelude::{Actor, AsyncContext, Context, Handler},
@@ -56,6 +57,7 @@ pub struct CommitMonitor {
     query_subscriptions: HashMap<Vec<u8>, HashMap<Addr<WebSocketConnection>, String>>,
     store: Db,
     search_state: SearchState,
+    vector_search_state: VectorSearchState,
     /// Set by every commit handler that adds a doc to the tantivy
     /// writer. A standalone `tokio::spawn` task drains this flag and
     /// calls `writer.commit()` to flush. The actor itself never owns
@@ -105,6 +107,7 @@ impl Actor for CommitMonitor {
             let flag = self.pending_commit.clone();
             let writer = self.search_state.writer.clone();
             let reader = self.search_state.reader.clone();
+            let vector_search_state = self.vector_search_state.clone();
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(rebuild_index_interval());
                 // `interval.tick()` returns immediately on first call;
@@ -133,6 +136,9 @@ impl Actor for CommitMonitor {
                             tracing::error!("Tantivy writer lock poisoned: {}", e);
                             flag.store(true, Ordering::Release);
                         }
+                    }
+                    if let Err(e) = vector_search_state.flush_pending().await {
+                        tracing::error!("Vector index periodic flush failed: {}", e);
                     }
                 }
             });
@@ -301,10 +307,8 @@ impl Handler<SubscribeDrive> for CommitMonitor {
         let store = self.store.clone();
         Box::pin(
             async move {
-                let drive_subject = atomic_lib::Subject::from_raw(
-                    &msg.drive,
-                    store.get_base_domain().as_deref(),
-                );
+                let drive_subject =
+                    atomic_lib::Subject::from_raw(&msg.drive, store.get_base_domain().as_deref());
                 let resource = match store.get_resource(&drive_subject).await {
                     Ok(r) => r,
                     Err(e) => {
@@ -596,18 +600,31 @@ impl Handler<CommitMessage> for CommitMonitor {
 
         let store = self.store.clone();
         let search_state = self.search_state.clone();
+        let vector_search_state = self.vector_search_state.clone();
+        let resource_old = msg.commit_response.resource_old.clone();
         let resource_new = msg.commit_response.resource_new.clone();
         let target_str = target_subject.to_string();
 
         Box::pin(
             async move {
+                // Skip vector re-indexing when only non-text properties changed (e.g. parent adding
+                // a child to its subResources array). If the indexable text content is identical,
+                // neither a remove nor an add is needed — the existing vector entry is still correct.
+                // This is important for performance!
+                let vector_text_unchanged = resource_old.as_ref().zip(resource_new.as_ref()).is_some_and(
+                    |(old, new)| {
+                        crate::vector_search::get_resource_text_parts(old)
+                            == crate::vector_search::get_resource_text_parts(new)
+                    },
+                );
+
                 search_state.remove_resource(&target_str).map_err(|e| {
                     format!(
                         "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
                         e
                     )
                 })?;
-                if let Some(resource) = resource_new {
+                if let Some(resource) = resource_new.as_ref() {
                     if let Ok(classes) = resource.get(atomic_lib::urls::IS_A) {
                         if let Ok(subjects) = classes.to_subjects(None) {
                             if subjects.contains(&atomic_lib::urls::DRIVE.to_string()) {
@@ -623,7 +640,7 @@ impl Handler<CommitMessage> for CommitMonitor {
                         resource.get_subject()
                     );
                     search_state
-                        .add_resource(&resource, &store)
+                        .add_resource(resource, &store)
                         .await
                         .map_err(|e| {
                             tracing::error!(
@@ -636,6 +653,28 @@ impl Handler<CommitMessage> for CommitMonitor {
                     e
                 )
                         })?;
+                }
+
+                if vector_search_state.is_enabled() && !vector_text_unchanged {
+                    if resource_old.is_some() {
+                        vector_search_state.remove_resource(&target_str).await.map_err(|e| {
+                            format!(
+                                "Handling commit in CommitMonitor failed for vector search: {}",
+                                e
+                            )
+                        })?;
+                    }
+                    if let Some(resource) = resource_new {
+                        vector_search_state
+                            .add_resource(&resource, &store)
+                            .await
+                            .map_err(|e| {
+                                format!(
+                                    "Handling commit in CommitMonitor failed for vector search: {}",
+                                    e
+                                )
+                            })?;
+                    }
                 }
                 Ok::<_, String>(())
             }
@@ -705,7 +744,11 @@ fn encode_commit_frame(store: &Db, msg: &CommitMessage) -> Option<Arc<[u8]>> {
 }
 
 /// Spawns a commit monitor actor
-pub fn create_commit_monitor(store: Db, search_state: SearchState) -> Addr<CommitMonitor> {
+pub fn create_commit_monitor(
+    store: Db,
+    search_state: SearchState,
+    vector_search_state: VectorSearchState,
+) -> Addr<CommitMonitor> {
     tracing::info!("spawning commit monitor");
     crate::commit_monitor::CommitMonitor::create(|_ctx: &mut Context<CommitMonitor>| {
         CommitMonitor {
@@ -714,6 +757,7 @@ pub fn create_commit_monitor(store: Db, search_state: SearchState) -> Addr<Commi
             query_subscriptions: HashMap::new(),
             store,
             search_state,
+            vector_search_state,
             pending_commit: Arc::new(AtomicBool::new(false)),
         }
     })

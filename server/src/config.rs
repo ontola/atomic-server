@@ -127,6 +127,10 @@ pub struct Opts {
     /// Optional embedding vector dimensions for OpenRouter (JSON `dimensions` field; not all models honor it). Empty string is treated as unset.
     #[clap(long, env = "OPENROUTER_EMBEDDING_DIMENSIONS")]
     pub openrouter_embedding_dimensions: Option<String>,
+
+    /// Skip vector embedding models and Lance index builds (faster startup for tests).
+    #[clap(long, env = "ATOMIC_SKIP_VECTOR_INDEX")]
+    pub skip_vector_index: bool,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -255,6 +259,8 @@ pub struct Config {
     pub openrouter_embedding_model: Option<String>,
     /// Optional embedding dimensions for OpenRouter.
     pub openrouter_embedding_dimensions: Option<u32>,
+    /// When true, vector models are not loaded and indexing is a no-op.
+    pub skip_vector_index: bool,
 }
 
 impl Config {
@@ -280,6 +286,11 @@ impl Config {
     pub fn get_base_domain(&self) -> Option<String> {
         self.base_domain.clone()
     }
+}
+
+/// True when the store path is under a throwaway test directory (e.g. `./.temp/...`).
+fn store_path_looks_like_test_harness(store_path: &std::path::Path) -> bool {
+    store_path.components().any(|c| c.as_os_str() == ".temp")
 }
 
 /// Parse .env and CLI options
@@ -370,6 +381,16 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
     let mut plugin_cache_path = cache_dir.clone();
     plugin_cache_path.push("plugin_cache");
 
+    // Keep search/vector indexes beside throwaway test stores so parallel `cargo test`
+    // runs do not share the production cache dir (Tantivy lock contention, Lance dim mismatch).
+    if opts.cache_dir.is_none() && store_path_looks_like_test_harness(&store_path) {
+        let test_root = store_path
+            .parent()
+            .expect("test store path should have a parent directory");
+        search_index_path = test_root.join("search_index");
+        vector_search_index_path = test_root.join("vector_search_index");
+    }
+
     let initialize = !std::path::Path::exists(&store_path) || opts.initialize;
     let repopulate_defaults = opts.repopulate_defaults;
 
@@ -403,6 +424,9 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         }
     };
 
+    let skip_vector_index =
+        opts.skip_vector_index || cfg!(test) || store_path_looks_like_test_harness(&store_path);
+
     Ok(Config {
         initialize,
         repopulate_defaults,
@@ -410,6 +434,7 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         openrouter_api_key,
         openrouter_embedding_model,
         openrouter_embedding_dimensions,
+        skip_vector_index,
         opts,
         cert_path,
         config_dir,

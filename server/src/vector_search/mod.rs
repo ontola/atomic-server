@@ -233,10 +233,11 @@ pub fn get_resource_text_parts(
 /// State for the vector search, utilizing fastembed or OpenRouter for embeddings and LanceDB for storage.
 #[derive(Clone)]
 pub struct VectorSearchState {
+    enabled: bool,
     embedder: Arc<dyn Embedder>,
     /// Width of each stored vector; matches the LanceDB `vector` column and the active embedding backend.
     pub embedding_dim: usize,
-    pub rerank_model: Arc<tokio::sync::Mutex<TextRerank>>,
+    pub rerank_model: Option<Arc<tokio::sync::Mutex<TextRerank>>>,
     pub table: Arc<Table>,
     pending: Arc<tokio::sync::Mutex<PendingBatch>>,
     /// For `println!` diagnostics on incremental indexing (see `add_resource` / `flush_pending`).
@@ -267,6 +268,7 @@ async fn open_or_create_resources_table(
     db: &Connection,
     table_exists: bool,
     embedder: &dyn Embedder,
+    allow_recreate_on_dim_mismatch: bool,
 ) -> AtomicServerResult<(Table, usize)> {
     let ed = embedder.embedding_dimensions();
 
@@ -275,6 +277,14 @@ async fn open_or_create_resources_table(
         let dim = table_vector_dimension(&table).await?;
 
         if dim != ed {
+            if allow_recreate_on_dim_mismatch {
+                tracing::info!("Recreating vector table (dimension {} -> {})", dim, ed);
+                db.drop_table("resources", &[])
+                    .await
+                    .map_err(|e| format!("Failed to drop vector table: {}", e))?;
+                let table = create_resources_table(db, ed).await?;
+                return Ok((table, ed));
+            }
             return Err(
                 format!(
                     "The configured embedder's dimension size ({}) does not match existing index dimension ({}). Try rebuilding the vector index or choose a different embedding model.",
@@ -312,23 +322,42 @@ async fn connect_vector_db(config: &Config) -> AtomicServerResult<(Connection, b
 }
 
 impl VectorSearchState {
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
     pub async fn new(
         config: &Config,
         index_notifier: Option<Arc<dyn Fn(&str, bool) + Send + Sync>>,
     ) -> AtomicServerResult<Self> {
-        tracing::info!("Starting vector search service");
+        let enabled = !config.skip_vector_index;
+        if enabled {
+            tracing::info!("Starting vector search service");
+        } else {
+            tracing::info!("Vector search disabled (skip_vector_index)");
+        }
 
-        let rerank_model = init_rerank_model(config)?;
         let (db, table_exists) = connect_vector_db(config).await?;
 
-        let embedder = embeddings::create_embedder(config).await?;
+        let (embedder, rerank_model) = if enabled {
+            let embedder = embeddings::create_embedder(config).await?;
+            let rerank = Some(Arc::new(tokio::sync::Mutex::new(init_rerank_model(
+                config,
+            )?)));
+            (embedder, rerank)
+        } else {
+            const STUB_DIM: usize = 384;
+            (embeddings::stub_embedder(STUB_DIM), None)
+        };
+
         let (table, embedding_dim) =
-            open_or_create_resources_table(&db, table_exists, embedder.as_ref()).await?;
+            open_or_create_resources_table(&db, table_exists, embedder.as_ref(), !enabled).await?;
 
         Ok(VectorSearchState {
+            enabled,
             embedder,
             embedding_dim,
-            rerank_model: Arc::new(tokio::sync::Mutex::new(rerank_model)),
+            rerank_model,
             table: Arc::new(table),
             pending: Arc::new(tokio::sync::Mutex::new(PendingBatch::default())),
             incremental_batch_seq: Arc::new(AtomicU64::new(0)),
@@ -422,6 +451,11 @@ impl VectorSearchState {
 
     #[tracing::instrument(skip(self, store), level = "trace")]
     pub async fn add_all_resources(&self, store: &Db) -> AtomicServerResult<()> {
+        if !self.enabled {
+            tracing::debug!("Skipping vector search index build (disabled)");
+            return Ok(());
+        }
+
         let index_started = Instant::now();
         tracing::info!("Building vector search index...");
         self.incremental_batch_seq.store(0, Ordering::Relaxed);
@@ -766,6 +800,10 @@ impl VectorSearchState {
 
     #[tracing::instrument(skip(self, resource, store))]
     pub async fn add_resource(&self, resource: &Resource, store: &Db) -> AtomicServerResult<()> {
+        if !self.enabled {
+            return Ok(());
+        }
+
         let Some((subject, is_a, hierarchy, chunks)) =
             self.create_resource_chunks(resource, store).await?
         else {
@@ -827,6 +865,10 @@ impl VectorSearchState {
     /// so they do not force-flush unrelated pending rows.
     #[tracing::instrument(skip(self))]
     pub async fn flush_pending(&self) -> AtomicServerResult<()> {
+        if !self.enabled {
+            return Ok(());
+        }
+
         let batch_size = self.embedder.index_batch_size();
         let mut batch_processor = ParallelIndexBatches::new(self, true);
         loop {
@@ -902,6 +944,10 @@ impl VectorSearchState {
 
     #[tracing::instrument(skip(self))]
     pub async fn remove_resource(&self, subject: &str) -> AtomicServerResult<()> {
+        if !self.enabled {
+            return Ok(());
+        }
+
         self.scrub_pending_for_subject(subject).await;
 
         let safe_subject = subject.replace("'", "''");
@@ -910,5 +956,98 @@ impl VectorSearchState {
             .await
             .map_err(|e| format!("Failed to delete from lancedb: {}", e))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atomic_lib::{urls, Resource, Value};
+
+    #[test]
+    fn get_resource_title_prefers_name() {
+        let mut resource = Resource::new("https://example.com/doc".into());
+        resource
+            .set_unsafe(urls::NAME.into(), Value::String("My Doc".into()))
+            .unwrap();
+        resource
+            .set_unsafe(urls::SHORTNAME.into(), Value::Slug("short".into()))
+            .unwrap();
+        assert_eq!(get_resource_title(&resource).as_deref(), Some("My Doc"));
+    }
+
+    #[test]
+    fn get_resource_text_parts_reads_markdown_description() {
+        let mut resource = Resource::new("https://example.com/part".into());
+        resource
+            .set_unsafe(urls::NAME.into(), Value::String("Reasoning".into()))
+            .unwrap();
+        resource
+            .set_unsafe(
+                urls::DESCRIPTION.into(),
+                Value::Markdown("Some **markdown**".into()),
+            )
+            .unwrap();
+
+        let (title, description, doc) = get_resource_text_parts(&resource);
+        assert_eq!(title.as_deref(), Some("Reasoning"));
+        assert_eq!(description.as_deref(), Some("Some **markdown**"));
+        assert!(doc.is_none());
+    }
+
+    #[tokio::test]
+    async fn create_resource_chunks_returns_none_for_blacklisted_class() {
+        let store = atomic_lib::Db::init_temp("vector-chunk-blacklist")
+            .await
+            .unwrap();
+        let mut resource = Resource::new("https://example.com/part".into());
+        resource
+            .set_unsafe(urls::NAME.into(), Value::String("Part".into()))
+            .unwrap();
+        resource
+            .set_unsafe(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![atomic_lib::urls::TEXT_PART.into()]),
+            )
+            .unwrap();
+
+        let config = crate::config::build_temp_config("vector-chunk-test").unwrap();
+        let state = VectorSearchState::new(&config, None).await.unwrap();
+        assert!(state
+            .create_resource_chunks(&resource, &store)
+            .await
+            .unwrap()
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn create_resource_chunks_splits_description() {
+        let store = atomic_lib::Db::init_temp("vector-chunk-split")
+            .await
+            .unwrap();
+        let mut resource = Resource::new("https://example.com/article".into());
+        resource
+            .set_unsafe(urls::NAME.into(), Value::String("Article".into()))
+            .unwrap();
+        resource
+            .set_unsafe(
+                urls::DESCRIPTION.into(),
+                Value::Markdown("First paragraph.\n\nSecond paragraph with more detail.".into()),
+            )
+            .unwrap();
+
+        let config = crate::config::build_temp_config("vector-chunk-test-2").unwrap();
+        let state = VectorSearchState::new(&config, None).await.unwrap();
+        let chunks = state
+            .create_resource_chunks(&resource, &store)
+            .await
+            .unwrap()
+            .expect("should produce chunks");
+        assert_eq!(chunks.0, "https://example.com/article");
+        assert!(!chunks.3.is_empty());
+        assert!(
+            chunks.3.iter().any(|c| c.contains("Article")),
+            "chunks should include the title prefix"
+        );
     }
 }

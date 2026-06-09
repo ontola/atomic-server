@@ -149,8 +149,11 @@ impl AppState {
                 .map_err(|e| format!("Failed to start vector search service: {}", e))?;
 
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
-        let commit_monitor =
-            crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone());
+        let commit_monitor = crate::commit_monitor::create_commit_monitor(
+            store.clone(),
+            search_state.clone(),
+            vector_search_state.clone(),
+        );
 
         let commit_monitor_clone = commit_monitor.clone();
 
@@ -165,7 +168,7 @@ impl AppState {
         };
         store.set_handle_commit(Box::new(send_commit));
 
-        if should_init {
+        if should_init && vector_search_state.is_enabled() {
             tracing::info!("Adding all resources to vector search index");
             if let Err(e) = vector_search_state.add_all_resources(&store).await {
                 tracing::error!("Failed to add all resources to vector search index: {}", e);

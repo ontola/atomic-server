@@ -64,6 +64,10 @@ pub async fn vector_search_query(
     let mut chunks_map: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
 
+    if !appstate.vector_search_state.is_enabled() {
+        return Err("Vector search is disabled on this server".into());
+    }
+
     if let Some(q) = &params.q {
         timer.add("embed_query");
         let embeddings = appstate
@@ -181,8 +185,10 @@ pub async fn vector_search_query(
 
     // Convert the list of resources back into subjects.
     // These filtered lists will not contain any resources that the user does not have access to.
-    let filtered_subjects: Vec<String> =
-        resources.iter().map(|r| r.get_subject().to_string()).collect();
+    let filtered_subjects: Vec<String> = resources
+        .iter()
+        .map(|r| r.get_subject().to_string())
+        .collect();
 
     let filtered_chunks: Vec<String> = filtered_subjects
         .iter()
@@ -195,7 +201,12 @@ pub async fn vector_search_query(
 
             if !filtered_chunks.is_empty() {
                 let rerank_results = {
-                    let mut rerank_model = appstate.vector_search_state.rerank_model.lock().await;
+                    let rerank_model = appstate
+                        .vector_search_state
+                        .rerank_model
+                        .as_ref()
+                        .ok_or("Reranking is not available (vector search disabled)")?;
+                    let mut rerank_model = rerank_model.lock().await;
 
                     #[cfg(target_os = "macos")]
                     {
