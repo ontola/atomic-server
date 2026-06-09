@@ -39,7 +39,7 @@ impl Atom {
         // let sort_value = self.value.to_sortable_string();
         let index_atoms: Vec<IndexAtom> = match &self.value.to_reference_index_strings() {
             Some(v) => {
-                tracing::info!(
+                tracing::trace!(
                     "to_indexable_atoms: found {} reference strings for property {}",
                     v.len(),
                     self.property
@@ -54,7 +54,7 @@ impl Atom {
                     .collect()
             }
             None => {
-                tracing::info!(
+                tracing::trace!(
                     "to_indexable_atoms: no reference strings for property {}",
                     self.property
                 );
