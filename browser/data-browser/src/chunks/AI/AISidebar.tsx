@@ -30,7 +30,7 @@ import {
 import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
-import { useSettings } from '@helpers/AppSettings';
+import { usePersonalDrive } from '@hooks/usePersonalDrive';
 import toast from 'react-hot-toast';
 
 type DraftChatResource = Resource<Ai.AiChat>;
@@ -134,7 +134,7 @@ const AISidebar: React.FC = () => {
   const [rerenderKey, updateRenderKey] = useReducer(prev => prev + 1, 0);
   const { shouldGenerateTitles } = useAISettings();
   const { isOpen, contextItems, setContextItems, setIsOpen } = useAISidebar();
-  const { drive } = useSettings();
+  const { personalDrive } = usePersonalDrive();
 
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
   const [compactedMessages, setCompactedMessages] = useState<AtomicUIMessage[]>(
@@ -167,11 +167,15 @@ const AISidebar: React.FC = () => {
       return chatResourceRef.current;
     }
 
+    if (!personalDrive) {
+      return undefined;
+    }
+
     const generation = chatGenerationRef.current;
 
     if (!draftChatPromiseRef.current) {
       draftChatPromiseRef.current = store.newResource<Ai.AiChat>({
-        parent: drive,
+        parent: personalDrive,
         isA: ai.classes.aiChat,
         propVals: {
           [core.properties.name]: DEFAULT_AICHAT_NAME,
@@ -194,7 +198,7 @@ const AISidebar: React.FC = () => {
     setChatResource(newChatResource);
 
     return newChatResource;
-  }, [drive, store]);
+  }, [personalDrive, store]);
 
   const handleCompacted = (
     priorMessages: AtomicUIMessage[],
@@ -365,7 +369,7 @@ const AISidebar: React.FC = () => {
     }
   }, [setIsOpen]);
 
-  // When the active drive changes the cached resource refs belong to the old
+  // When the personal home drive changes, cached resource refs belong to the old
   // drive. Clear them so the next call to getOrCreateDraftChatResource creates
   // a fresh resource on the correct drive. Incrementing chatGenerationRef also
   // causes any still-resolving promises from the previous drive to be ignored.
@@ -373,7 +377,7 @@ const AISidebar: React.FC = () => {
     chatGenerationRef.current += 1;
     draftChatPromiseRef.current = null;
     chatResourceRef.current = undefined;
-  }, [drive]);
+  }, [personalDrive]);
 
   useEffect(() => {
     // Avoid re-adding the same subject after the user removes or changes the

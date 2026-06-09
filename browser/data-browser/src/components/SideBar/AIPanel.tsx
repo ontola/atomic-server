@@ -14,7 +14,7 @@ import { AtomicLink } from '@components/AtomicLink';
 import { ScrollArea } from '@components/ScrollArea';
 import { ErrorLook } from '@components/ErrorLook';
 import { useCallback, useEffect, useState, type JSX } from 'react';
-import { useSettings } from '@helpers/AppSettings';
+import { usePersonalDrive } from '@hooks/usePersonalDrive';
 import { SideBarItem } from './SideBarItem';
 import { FaPlus } from 'react-icons/fa6';
 import { useCreateAndNavigate } from '@hooks/useCreateAndNavigate';
@@ -22,8 +22,8 @@ import { useCreateAndNavigate } from '@hooks/useCreateAndNavigate';
 export function AIChatsPanel(): JSX.Element | null {
   const store = useStore();
   const [chats, setChats] = useState<string[]>([]);
-  const { drive } = useSettings();
-  const driveResource = useResource(drive);
+  const { personalDrive, loading } = usePersonalDrive();
+  const driveResource = useResource(personalDrive);
   const canWriteToDrive = useCanWrite(driveResource);
   const createAndNavigate = useCreateAndNavigate();
 
@@ -34,7 +34,7 @@ export function AIChatsPanel(): JSX.Element | null {
         [core.properties.name]: 'Untitled Chat',
       },
       {
-        parent: drive,
+        parent: personalDrive,
         onCreated: newChat => {
           setChats(prev => [newChat.subject, ...prev]);
         },
@@ -51,15 +51,21 @@ export function AIChatsPanel(): JSX.Element | null {
       filters: {
         [core.properties.isA]: ai.classes.aiChat,
       },
-      parents: drive,
+      parents: personalDrive,
     });
 
     return result.toSorted((a, b) => b.localeCompare(a));
-  }, [store, drive]);
+  }, [store, personalDrive]);
 
   useEffect(() => {
+    if (!personalDrive) {
+      setChats([]);
+
+      return;
+    }
+
     search().then(setChats);
-  }, [drive, search]);
+  }, [personalDrive, search]);
 
   useEffect(() => {
     const unsubRemove = store.on(StoreEvents.ResourceRemoved, subject => {
@@ -88,8 +94,8 @@ export function AIChatsPanel(): JSX.Element | null {
 
   return (
     <Wrapper>
-      <StyledScrollArea key={drive} type="hover">
-        {canWriteToDrive && (
+      <StyledScrollArea key={personalDrive} type="hover">
+        {!loading && canWriteToDrive && personalDrive && (
           <SideBarItem onClick={createNewChat}>
             <Row gap="1ch" center>
               <FaPlus />

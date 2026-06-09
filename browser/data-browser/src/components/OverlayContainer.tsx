@@ -19,6 +19,7 @@ import {
   type Store,
 } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
+import { usePersonalDrive } from '../hooks/usePersonalDrive';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { Column, Row } from './Row';
 import { ErrorBoundary } from '../views/ErrorPage';
@@ -267,6 +268,7 @@ function parseSearchTags(
 function SearchOverlay(): JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { drive } = useSettings();
+  const { personalDrive } = usePersonalDrive();
   const { scope } = useQueryScopeHandler();
   const navigate = useNavigateWithTransition();
   const store = useStore();
@@ -318,7 +320,7 @@ function SearchOverlay(): JSX.Element {
     allowEmptyQuery: !filterIsEmpty,
   });
 
-  const showAIChatRow = query && results.length === 0;
+  const showAIChatRow = !!personalDrive && query && results.length === 0;
   const totalItemCount = results.length + (showAIChatRow ? 1 : 0);
 
   useEffect(() => {
@@ -351,8 +353,10 @@ function SearchOverlay(): JSX.Element {
           closeOverlay();
         } else if (showAIChatRow && selectedIndex === results.length) {
           // AI Chat row selected
-          await handleStartAIChat(query, store, drive, navigate);
-          closeOverlay();
+          if (personalDrive) {
+            await handleStartAIChat(query, store, personalDrive, navigate);
+            closeOverlay();
+          }
         }
 
         break;
@@ -369,13 +373,17 @@ function SearchOverlay(): JSX.Element {
     e => {
       e.preventDefault();
 
+      if (!personalDrive) {
+        return;
+      }
+
       void (async () => {
-        await handleStartAIChat(query, store, drive, navigate);
+        await handleStartAIChat(query, store, personalDrive, navigate);
         closeOverlay();
       })();
     },
     { enableOnFormTags: ['INPUT'] },
-    [query, store, drive, navigate],
+    [query, store, personalDrive, navigate],
   );
 
   useEffect(() => {
@@ -401,10 +409,10 @@ function SearchOverlay(): JSX.Element {
           value={query}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder='Search for resources...'
-          autoComplete='off'
-          autoCorrect='off'
-          autoCapitalize='off'
+          placeholder="Search for resources..."
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
           spellCheck={false}
         />
         <ShortcutHint onClick={closeOverlay}>esc</ShortcutHint>
@@ -417,7 +425,7 @@ function SearchOverlay(): JSX.Element {
           {tags.length > 0 && (
             <Row
               center
-              gap='1ch'
+              gap="1ch"
               style={{
                 padding: '0.5rem 1rem',
                 borderBottom: '1px solid',
@@ -432,7 +440,7 @@ function SearchOverlay(): JSX.Element {
           <PanelContent>
             <ResultsList>
               <ResultsArea ref={resultsRef}>
-                <Column gap='0'>
+                <Column gap="0">
                   {results.map((subject, index) => (
                     <ResultCard
                       key={subject}
@@ -454,7 +462,16 @@ function SearchOverlay(): JSX.Element {
                       data-index={results.length}
                       $selected={selectedIndex === results.length}
                       onClick={async () => {
-                        await handleStartAIChat(query, store, drive, navigate);
+                        if (!personalDrive) {
+                          return;
+                        }
+
+                        await handleStartAIChat(
+                          query,
+                          store,
+                          personalDrive,
+                          navigate,
+                        );
                         closeOverlay();
                       }}
                     >
@@ -640,7 +657,7 @@ function ShortcutsOverlay(): JSX.Element {
         <OverlayInput
           ref={inputRef}
           onKeyDown={handleKeyDown}
-          placeholder='Press esc to close...'
+          placeholder="Press esc to close..."
           readOnly
           style={{ cursor: 'default', fontSize: '0.875rem' }}
         />
