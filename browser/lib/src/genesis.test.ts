@@ -58,6 +58,32 @@ describe('GenesisCert', () => {
     expect(decodeGenesisCert(encodeGenesisCert(withHash))).toEqual(withHash);
   });
 
+  it('cross-language signature vector v1 — must match Rust', async ({
+    expect,
+  }) => {
+    // Ed25519 is deterministic, so signing the SAME cert with the SAME seed
+    // yields the EXACT signature/DID in both TS and Rust
+    // (`lib/src/genesis.rs::cross_lang_signature_vector_v1`). This byte-for-byte
+    // match is what lets a browser-minted DID verify server-side.
+    const seed = new Uint8Array(32).fill(7);
+    const pub = await getPublicKey(seed);
+    const cert: GenesisCert = {
+      signerPubkey: pub,
+      createdAt: 1,
+      nonce: new Uint8Array(16).fill(2),
+      parent: 'x',
+      drive: 'd',
+    };
+    const sig = await signGenesisCert(cert, seed);
+    expect(sig).toBe(
+      '71Igt-CKD2nhZZn4aKCe8tetVUTCgMMqJ67d97Wrb3pT3LFazyP1lGJjAw2Gg9KY0daGHhHPXj3xFMWEmYVdCw',
+    );
+    expect(subjectForSignature(sig)).toBe(
+      'did:ad:71Igt-CKD2nhZZn4aKCe8tetVUTCgMMqJ67d97Wrb3pT3LFazyP1lGJjAw2Gg9KY0daGHhHPXj3xFMWEmYVdCw',
+    );
+    expect(await verifyGenesisCert(cert, sig)).toBe(true);
+  });
+
   it('sign then verify; a tampered field fails', async ({ expect }) => {
     const priv = new Uint8Array(32).fill(5);
     const pub = await getPublicKey(priv);

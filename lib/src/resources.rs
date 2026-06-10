@@ -118,6 +118,17 @@ impl Resource {
         propvals
     }
 
+    /// Extract the inline `genesis` certificate (base64) from a Loro snapshot,
+    /// if the resource carries one. Used by genesis-commit validation to verify
+    /// the DID against the self-verifying certificate. Returns `None` for legacy
+    /// resources minted before the certificate (DID == commit signature).
+    pub fn genesis_cert_b64_from_loro_update(update: &[u8]) -> Option<String> {
+        let doc = crate::loro::AtomicLoroDoc::new();
+        doc.import_update(update).ok()?;
+        let propvals = Self::materialize_propvals_from_loro_doc(&doc);
+        propvals.get(urls::GENESIS).map(|v| v.to_string())
+    }
+
     /// Derive `createdAt` / `createdBy` from the genesis oplog change and write
     /// them into the materialized projection. This is the single chokepoint
     /// feeding both the index (so collections can sort by `createdAt`) and
@@ -126,6 +137,42 @@ impl Resource {
     /// change's message by the client (`signChanges`); the timestamp comes
     /// from the genesis change, normalised to milliseconds.
     fn materialize_genesis_metadata(doc: &crate::loro::AtomicLoroDoc, propvals: &mut PropVals) {
+        // Prefer the inline genesis certificate — it's the authoritative,
+        // offline-verifiable source of creation facts. `createdBy`/`createdAt`/
+        // `parent`/`drive` are materialized from it (never clobbering a value
+        // already present). Legacy resources without a cert fall through to the
+        // oplog-derived path below.
+        if let Some(cert_val) = propvals.get(urls::GENESIS) {
+            if let Ok(bytes) = crate::agents::decode_base64(&cert_val.to_string()) {
+                if let Ok(cert) = crate::genesis::GenesisCert::decode(&bytes) {
+                    use crate::datatype::DataType;
+                    if cert.created_at > 0 && !propvals.contains_key(urls::CREATED_AT) {
+                        if let Ok(v) =
+                            Value::new(&cert.created_at.to_string(), &DataType::Timestamp)
+                        {
+                            propvals.insert(urls::CREATED_AT.into(), v);
+                        }
+                    }
+                    if !propvals.contains_key(urls::CREATED_BY) {
+                        if let Ok(v) = Value::new(&cert.signer_did(), &DataType::AtomicUrl) {
+                            propvals.insert(urls::CREATED_BY.into(), v);
+                        }
+                    }
+                    if !cert.parent.is_empty() && !propvals.contains_key(urls::PARENT) {
+                        if let Ok(v) = Value::new(&cert.parent, &DataType::AtomicUrl) {
+                            propvals.insert(urls::PARENT.into(), v);
+                        }
+                    }
+                    if !cert.drive.is_empty() && !propvals.contains_key(urls::DRIVE_PROP) {
+                        if let Ok(v) = Value::new(&cert.drive, &DataType::AtomicUrl) {
+                            propvals.insert(urls::DRIVE_PROP.into(), v);
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+
         let Some(genesis) = doc.genesis_change() else {
             return;
         };

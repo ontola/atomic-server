@@ -269,6 +269,40 @@ mod test {
     }
 
     #[test]
+    fn cross_lang_signature_vector_v1() {
+        // Ed25519 is deterministic (RFC 8032), so signing the SAME cert with the
+        // SAME seed must yield this EXACT signature/DID in both Rust and the TS
+        // mirror (`browser/lib/src/genesis.test.ts`). That byte-for-byte match
+        // is what lets a browser-minted DID verify server-side (and vice versa).
+        // If either side drifts, this vector fails on one of them.
+        let seed = [7u8; 32];
+        let signing_key = SigningKey::from_bytes(&seed);
+        let pubkey = *signing_key.verifying_key().as_bytes();
+        assert_eq!(
+            encode_base64(&pubkey),
+            "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
+        );
+        let cert = GenesisCert {
+            signer_pubkey: pubkey,
+            created_at: 1,
+            nonce: [2u8; 16],
+            state_hash: None,
+            parent: "x".to_string(),
+            drive: "d".to_string(),
+        };
+        let sig = cert.sign(&encode_base64(&seed)).unwrap();
+        assert_eq!(
+            sig,
+            "71Igt-CKD2nhZZn4aKCe8tetVUTCgMMqJ67d97Wrb3pT3LFazyP1lGJjAw2Gg9KY0daGHhHPXj3xFMWEmYVdCw"
+        );
+        assert_eq!(
+            GenesisCert::subject_for_signature(&sig),
+            "did:ad:71Igt-CKD2nhZZn4aKCe8tetVUTCgMMqJ67d97Wrb3pT3LFazyP1lGJjAw2Gg9KY0daGHhHPXj3xFMWEmYVdCw"
+        );
+        cert.verify(&sig).unwrap();
+    }
+
+    #[test]
     fn encode_decode_roundtrip_with_state_hash() {
         let (_pk, pubkey) = test_key(2);
         let cert = sample(pubkey, Some([9u8; 32]));
