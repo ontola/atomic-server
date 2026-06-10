@@ -37,6 +37,15 @@
     "https://atomicdata.dev/properties/shortname": "parent"
   },
   {
+    "@id": "https://atomicdata.dev/properties/drive",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The drive (top-level resource) this Resource belongs to. Stamped at genesis from the resource's genesis certificate so authorization can resolve the drive's grant directly, without walking a parent chain that may not be materialized yet. Immutable: a resource does not move between drives.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "drive"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/datatype",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Datatype",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",

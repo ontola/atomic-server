@@ -774,7 +774,16 @@ export async function newResource(klass: string, page: Page) {
     await page.keyboard.press('Enter');
     await waitForResourceForm();
   } else {
-    await page.locator(`button:has-text("${klass}")`).click();
+    // The class button for a non-built-in class only renders once that class
+    // is in the search index (the new-resource page lists classes via the
+    // search API). For a freshly-created custom class under suite-wide load the
+    // index flush + render can exceed the default 10s click auto-wait, so the
+    // click times out. Gate on the button's visibility explicitly — its
+    // appearance IS the "class is searchable" readiness signal — with a budget
+    // that tolerates a slow index flush instead of a blind pre-sleep.
+    const classButton = page.locator(`button:has-text("${klass}")`);
+    await classButton.waitFor({ state: 'visible', timeout: 30000 });
+    await classButton.click();
     // Wait for any of: URL leaves /app/new (basic-instance handlers), a
     // dialog opens (bookmark/table), or the in-place NewFormFullPage shows
     // up (custom user classes — `/app/new?classSubject=...` keeps the path

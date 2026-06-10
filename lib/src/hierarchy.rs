@@ -11,7 +11,7 @@ type AsyncResult<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> 
 #[cfg(not(target_arch = "wasm32"))]
 type AsyncResult<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Right {
     /// Full read access to the resource and its children.
     /// [urls::READ]
@@ -94,7 +94,7 @@ pub async fn check_append(
 /// Recursively checks a Resource and its Parents for rights.
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip_all, fields(subject = %resource.get_subject(), agent = %for_agent_enum, right = ?right))]
 pub fn check_rights<'a>(
     store: &'a impl Storelike,
     resource: &'a Resource,
@@ -165,10 +165,52 @@ pub fn check_rights<'a>(
             }
         }
 
+        // Drive-first (race-free fast path): if this resource carries a `drive`
+        // stamp (set at genesis from its cert), check the grant on the drive
+        // directly. The drive is a stable, long-lived resource whose grants are
+        // always materialized, so this avoids the recursive parent walk that
+        // races a not-yet-materialized parent under concurrent creation (the
+        // parent-before-child 401 cascade). A deny at the drive falls through to
+        // the recursive walk below, which still honors explicit grants on
+        // intermediate parents.
+        if let Ok(drive_val) = resource.get(urls::DRIVE_PROP) {
+            let drive_subject = crate::Subject::from(drive_val.to_string());
+            if &drive_subject != resource.get_subject() {
+                if let Ok(drive_res) = store.get_resource(&drive_subject).await {
+                    if let Ok(reason) =
+                        check_rights(store, &drive_res, for_agent_enum, right).await
+                    {
+                        return Ok(reason);
+                    }
+                }
+            }
+        }
+
         // Try the parents recursively
-        if let Ok(parent) = resource.get_parent(store).await {
-            check_rights(store, &parent, for_agent_enum, right).await
-        } else {
+        tracing::debug!(
+            subject = %resource.get_subject(),
+            "rights walk: no explicit grant here, ascending to parent"
+        );
+        match resource.get_parent(store).await {
+            Ok(parent) => {
+                tracing::debug!(
+                    subject = %resource.get_subject(),
+                    parent = %parent.get_subject(),
+                    "rights walk: ascending"
+                );
+                return check_rights(store, &parent, for_agent_enum, right).await;
+            }
+            Err(parent_err) => {
+                tracing::warn!(
+                    subject = %resource.get_subject(),
+                    agent = %for_agent,
+                    ?right,
+                    parent_err = %parent_err,
+                    "rights walk TERMINATED: get_parent failed (this is where the 401 originates)"
+                );
+            }
+        }
+        {
             if for_agent_enum == &ForAgent::Public {
                 // resource has no parent and agent is not in rights array - check fails
                 let action = match right {

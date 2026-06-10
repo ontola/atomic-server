@@ -66,6 +66,11 @@ pub const IS_GENESIS: &str = "https://atomicdata.dev/properties/isGenesis";
 /// `did:ad:<sign(cert)>`. Decoded for race-free, drive-first rights checks.
 /// See `lib/src/genesis.rs` + `planning/genesis-self-verifying.md`.
 pub const GENESIS: &str = "https://atomicdata.dev/properties/genesis";
+/// The drive a resource belongs to, stamped at genesis (from the cert's
+/// `drive`). Lets `check_rights` consult the stable drive grant directly
+/// instead of walking a possibly-not-yet-materialized parent chain — the fix
+/// for the parent-before-child 401 race. (`DRIVE` above is the Drive *class*.)
+pub const DRIVE_PROP: &str = "https://atomicdata.dev/properties/drive";
 // ... for Agents
 pub const PUBLIC_KEY: &str = "https://atomicdata.dev/properties/publicKey";
 pub const NAME: &str = "https://atomicdata.dev/properties/name";

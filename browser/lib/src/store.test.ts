@@ -174,15 +174,11 @@ describe('Store', () => {
     expect(results).toContain(subject);
   });
 
-  it('only rehydrates local search once when setClientDb is called with the same worker', async ({
+  it('only rehydrates local search once when ensureDriveIndexed is called', async ({
     expect,
   }) => {
-    // `initClientDb.ts` calls `setClientDb(worker)` three times per page
-    // load to refresh sync status (eager, post-init, post-init-error).
-    // Each call used to retrigger a full OPFS → MiniSearch rebuild,
-    // wasting CPU and producing duplicate entries. The fix gates
-    // rehydrate on the worker reference actually changing.
-    // See planning/opfs-double-rehydrate.md.
+    // We now index lazily on first search, not eagerly on setClientDb.
+    // ensureDriveIndexed deduplicates concurrent or sequential builds.
     const store = new Store({ serverUrl: 'https://atomicdata.dev' });
     let exportCallCount = 0;
     const fakeClientDb = {
@@ -203,16 +199,20 @@ describe('Store', () => {
     store.setClientDb(
       fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
     );
-    store.setClientDb(
-      fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
-    );
 
-    // Let the background rehydrate finish — `setClientDb` schedules it
-    // via `void`, so we need a tick to let the awaited chain run.
-    for (let i = 0; i < 50 && exportCallCount === 0; i++) {
-      await new Promise(resolve => setTimeout(resolve, 10));
-    }
+    // Verify eager rehydration did not occur
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(exportCallCount).toBe(0);
+
+    // Trigger drive indexing concurrently
+    const drive = 'https://atomicdata.dev/test-drive';
+    await Promise.all([
+      store.ensureDriveIndexed(drive),
+      store.ensureDriveIndexed(drive),
+      store.ensureDriveIndexed(drive),
+    ]);
 
     expect(exportCallCount).toBe(1);
   });
 });
+

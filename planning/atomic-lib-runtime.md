@@ -6,6 +6,10 @@ Proposal. This document describes the target architecture for making
 `atomic_lib` able to run a complete Atomic node by itself. HTTP remains a
 supported adapter for hosted servers and interoperability, but local app
 runtime behavior must not depend on HTTP endpoints or a loopback server.
+Actix remains the default implementation for the hosted `atomic-server`
+HTTP/WebSocket adapter. The goal is not to replace Actix; it is to move core
+node behavior below Actix so native, mobile, WASM, tests, and future provider
+extensions can use the same runtime without booting a local web server.
 
 Related design docs:
 
@@ -30,12 +34,17 @@ protocol pieces. `atomic-server` still owns too much product behavior through
 HTTP handlers: `/commit`, `/query`, `/search`, `/upload`, `/download`, `/ws`,
 `/iroh-sync`, setup, and static serving.
 
-The desktop and Android runtime currently starts a full Actix server and points
-the frontend at `http://localhost:9883`. That works, but it means the app's
-local runtime depends on a network endpoint, port binding, server startup
-timing, cleartext-network permissions on Android, and server-shaped frontend
-assumptions. It also makes it harder to use the same core from Flutter, embedded
-native apps, tests, or non-HTTP transports.
+The Tauri desktop app currently starts a full Actix server and points the React
+frontend at `http://localhost:9883`. Tauri's generated Android path has the same
+shape. That works, but it means the app's local runtime depends on a network
+endpoint, port binding, server startup timing, cleartext-network permissions on
+Android, and server-shaped frontend assumptions.
+
+Flutter native already goes the other way: it opens `atomic_lib::Db` directly
+through `flutter_rust_bridge`, then optionally opens a WebSocket session to a
+configured server or uses Iroh. That proves the direct-runtime model is viable,
+but today the bridge owns too much app-specific backend glue. The desired end
+state is a shared node API that both Actix and native bindings call.
 
 The desired end state is:
 
@@ -99,8 +108,12 @@ sync its own data.
 - `Storelike::search` builds a `/search` subject and fetches it.
 - Upload/download/blob handling is partly implemented in server handlers and
   partly as direct `Tree::Blobs` access.
-- Desktop and Android start `atomic-server` locally and make the frontend talk
-  to `localhost`.
+- Tauri desktop starts `atomic-server` locally and makes the frontend talk to
+  `localhost`; generated Tauri Android follows the same pattern.
+- Flutter native opens `Db` directly through FRB, but its bridge exposes
+  app-specific operations instead of a reusable node/runtime surface.
+- Flutter web currently has a separate pure-Dart HTTP client path, which should
+  be treated as a compatibility stopgap rather than another runtime model.
 - WebSocket code is an actor adapter around protocol pieces, not a generic node
   transport.
 
@@ -363,7 +376,11 @@ Adapters:
 
 ### `atomic-server`
 
-Server should become an adapter around `AtomicNode`.
+Server should become an adapter around `AtomicNode`. Keep Actix as the server
+framework for this adapter unless there is a separate operational reason to
+change it. Replacing Actix with Axum, Hyper-only, or another framework does not
+solve the runtime boundary problem; moving commit/blob/query/sync semantics
+under `AtomicNode` does.
 
 ```text
 HTTP /commit      -> node.apply_commit(...)
@@ -389,6 +406,17 @@ The server should still own:
 - Public-hosting concerns such as TLS, domains, and federation UX.
 
 It should not own core commit, blob, query, sync, or local runtime semantics.
+
+There are two legitimate ways to embed this adapter:
+
+- **Hosted/self-hosted server mode:** Actix is the product surface. It serves
+  HTTP, WebSocket, static assets, public APIs, and remote clients.
+- **Optional local exposure mode:** a desktop or mobile app may choose to expose
+  its local node over loopback for compatibility, debugging, browser UI reuse,
+  or "serve this node" workflows.
+
+Loopback Actix must not be required for the app's own local reads, writes,
+queries, file-provider callbacks, or background/runtime operations.
 
 ### Browser WASM / OPFS
 
@@ -429,6 +457,12 @@ Tauri webview -> Tauri commands / event streams -> atomic_lib::AtomicNode
 Optional "Expose local HTTP server" can remain as a feature. The app itself
 should not need it.
 
+Desktop can keep the embedded Actix server during migration because it already
+works and keeps the React UI unchanged. The target is to make this a
+compatibility adapter over the same node used by native commands, not a second
+runtime. The tray/menu can expose "Open in browser" by starting or reusing the
+optional local server.
+
 Android-specific benefits:
 
 - No cleartext `localhost` network permission for the app's own data path.
@@ -460,6 +494,29 @@ The bridge should expose node-level commands and streams:
 
 Flutter should not need to know whether the node is backed by native redb, OPFS,
 or a hosted server adapter.
+
+### Native File / Provider Extensions
+
+Mobile and desktop file-provider integrations should use a narrow runtime API,
+not a localhost server dependency.
+
+Examples:
+
+- iOS File Provider extension
+- Android DocumentsProvider
+- macOS / Windows native cloud-file APIs
+- desktop NFS / FUSE frontends from [`virtual-drive.md`](./virtual-drive.md)
+
+These integrations often run in short-lived, OS-managed callbacks. Some run in a
+separate process from the main app. They need operations such as `list`, `stat`,
+`read_range`, `write`, `rename`, `move`, `delete`, and `subscribe`, backed by
+the same `AtomicNode` services. They should not be forced to start Actix,
+connect to loopback, authenticate over WebSocket, and decode HTTP-shaped
+responses just to answer a system file picker.
+
+`VfsBackend` can live in `atomic_lib` or a small `atomic-vfs` crate, but it must
+call the node/runtime layer. It should use the same commit, blob, authorization,
+outbox, and event semantics as HTTP/WS adapters.
 
 ## Protocol Direction
 
@@ -551,6 +608,8 @@ Tests:
 - Refactor `/download` and `/blob` to call `node.get_blob`.
 - Refactor `/upload` to call `node.put_blob` and then node-level file resource
   mutation.
+- Keep Actix behavior and route shape unchanged. This phase is about moving
+  ownership below the handler layer, not changing the server framework.
 
 Tests:
 
@@ -614,12 +673,30 @@ Tests:
 - Add Tauri commands for node get/query/mutate/blob operations.
 - Add an event stream from node events to the webview.
 - Point Tauri frontend at native node commands for local data.
-- Keep optional embedded HTTP server for "serve this node" mode.
+- Keep optional embedded Actix server for "serve this node", "open in browser",
+  development, and compatibility mode.
+- For mobile/provider work, add bindings to the same node-level API rather than
+  introducing a second app-specific backend surface.
 
 Tests:
 
 - Desktop/Android smoke path works with no local server bound.
 - Release build does not require cleartext localhost for core app behavior.
+
+### Phase 7b: VFS / Provider Backend
+
+- Define `VfsBackend` over `AtomicNode` operations.
+- Implement read-only list/stat/read against local resources and blobs.
+- Bind the same backend through uniffi/JNI/Swift/Kotlin for provider
+  extensions, and through Rust directly for NFS/FUSE.
+- Make writes use node-level commit/outbox/blob semantics, not direct DB
+  mutation.
+
+Tests:
+
+- A resource tree can be listed as folders/files with no HTTP server.
+- Reading a File fetches bytes through the node blob service.
+- Rename/move/write emit node events and create normal signed commits.
 
 ### Phase 8: Clean Up Endpoint-Shaped APIs
 
@@ -653,12 +730,24 @@ server endpoint at a time.
   introduced?
 - How much of JSON-AD parsing/serialization belongs in hot local APIs versus
   adapter APIs only?
+- Which local-app surfaces should keep using HTTP/WS during migration for
+  simplicity, and which must move directly to node commands first?
+- Should the optional loopback server be always available in desktop builds, or
+  explicitly enabled per profile / setting?
+- Does `VfsBackend` belong in `atomic_lib` or a separate `atomic-vfs` crate once
+  NFS/FUSE/provider-specific dependencies appear?
 
 ## Decision Record
 
 - `Db` remains the durable store. `AtomicNode` wraps it.
+- Actix remains the default hosted `atomic-server` HTTP/WebSocket adapter.
 - HTTP is an adapter. It must not be required for local app runtime behavior.
 - The binary resource protocol is transport-neutral. WebSocket is one carrier.
+- Local UI/native calls may use Tauri commands, FRB, uniffi, in-process
+  channels, or other bindings. They should share runtime semantics with WS, but
+  they do not need to literally use WS.
 - Authorization checks belong in `atomic_lib`; transport authentication belongs
   in adapters.
 - Browser OPFS and native redb should converge on the same node semantics.
+- File/provider integrations use a `VfsBackend`-style API over `AtomicNode`,
+  not a mandatory localhost server.

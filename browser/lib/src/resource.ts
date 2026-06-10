@@ -681,6 +681,11 @@ export class Resource<C extends OptionalClass = any> {
         ?.toString();
 
       if (datatype === undefined) {
+        // The Property isn't loaded in this store, so we can't tag it here.
+        // This is best-effort: the server is the authoritative enforcement
+        // point — it resolves an untagged property's datatype from its
+        // registered Property (and rejects genuinely-untypeable ones), so a
+        // value is never silently dropped on materialize.
         continue;
       }
 
@@ -2274,6 +2279,72 @@ export class Resource<C extends OptionalClass = any> {
     const lastCommit =
       this._lastCommit ?? this.get(properties.commit.lastCommit)?.toString();
     const isFirstCommit = !lastCommit;
+
+    // Stamp the resource's `drive` at genesis (mirrors
+    // `lib/src/commit.rs::create_did`). This is the genesis chokepoint that
+    // EVERY creation path flows through — including table rows, which set
+    // their parent directly and bypass `store.newResource`. The server's
+    // `check_rights` then resolves via this stable drive grant instead of
+    // walking a parent that may not be materialized yet under concurrent
+    // creation — the fix for the parent-before-child 401 cascade. Drive = the
+    // parent's drive, or the parent itself when the parent is a drive root.
+    const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
+
+    if (isFirstCommit && !this.get(DRIVE_PROP)) {
+      const parentSubject = this.get(core.properties.parent) as
+        | string
+        | undefined;
+
+      // Resolve the resource's drive so the SERVER's drive-first rights check
+      // can authorize against the stable drive grant directly — instead of
+      // recursively walking a parent chain that may not be materialized yet
+      // under concurrent creation (the parent-before-child 401 cascade).
+      //
+      // The store's active drive is the authoritative source. When it isn't
+      // set yet, walk the LOCAL parent chain up to its root: during creation
+      // the whole chain (row → table → drive) is in the local store, so this
+      // reliably finds the real drive even when an intermediate parent hasn't
+      // been stamped — never falling back to a non-drive ancestor, which would
+      // make drive-first no-op into the racy parent walk.
+      const DRIVE_CLASS = 'https://atomicdata.dev/classes/Drive';
+      let drive = this.store.getDrive();
+
+      if (!drive && parentSubject) {
+        let cursor: string | undefined = parentSubject;
+        const seen = new Set<string>();
+
+        while (cursor && !seen.has(cursor)) {
+          seen.add(cursor);
+          const ancestor = this.store.getResourceLoading(cursor);
+          const ancestorDrive = ancestor?.get(DRIVE_PROP) as string | undefined;
+
+          if (ancestorDrive) {
+            drive = ancestorDrive; // ancestor already knows its drive
+            break;
+          }
+
+          const classes =
+            (ancestor?.get(core.properties.isA) as string[] | undefined) ?? [];
+          const grandparent = ancestor?.get(core.properties.parent) as
+            | string
+            | undefined;
+
+          if (classes.includes(DRIVE_CLASS) || !grandparent) {
+            drive = cursor; // reached the Drive (or a top-level root)
+            break;
+          }
+
+          cursor = grandparent;
+        }
+      }
+
+      if (drive) {
+        // `validate: false` — don't trigger a (possibly networked) Property
+        // fetch on the hot creation path. The server resolves `drive`'s
+        // datatype from its registered Property when materializing.
+        await this.set(DRIVE_PROP, drive, false);
+      }
+    }
 
     // Phase 1 (loro-source-of-truth): stamp the sibling `datatypes` map so
     // the server materializes references/arrays exactly. Runs here — after
