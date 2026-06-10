@@ -146,9 +146,10 @@ impl SearchState {
 
         doc.add_text(fields.subject, subject);
         doc.add_text(fields.title, get_resource_title(resource));
-
-        if let Ok(atomic_lib::Value::Markdown(description)) =
-            resource.get(atomic_lib::urls::DESCRIPTION)
+        // HACK: Loro parses each string-like type as Value::String, so eventhough description is a markdown value, it is still returned as a string value. We can remove the string check here once we have fixed this. https://github.com/ontola/atomic-server/issues/1217
+        if let Ok(
+            atomic_lib::Value::Markdown(description) | atomic_lib::Value::String(description),
+        ) = resource.get(atomic_lib::urls::DESCRIPTION)
         {
             doc.add_text(fields.description, description);
         };

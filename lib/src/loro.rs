@@ -853,6 +853,7 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
                 return Some(Value::AtomicUrl(s.into()));
             }
 
+            // TODO: This is an issue, not all values that are Loro strings are Atomic strings. For example, slugs and markdown are encoded as loro strings but in atomic they should be Value::Slug or Value::Markdown. https://github.com/ontola/atomic-server/issues/1217
             Some(Value::String(s))
         }
         loro::LoroValue::I64(i) => Some(Value::Integer(*i)),

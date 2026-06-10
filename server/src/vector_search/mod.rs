@@ -212,12 +212,14 @@ pub fn get_resource_text_parts(
 ) -> (Option<String>, Option<String>, Option<String>) {
     let title = get_resource_title(resource);
 
-    let description = if let Ok(atomic_lib::Value::Markdown(description)) =
+    println!(
+        "description: {:?}",
         resource.get(atomic_lib::urls::DESCRIPTION)
-    {
-        Some(description.to_string())
-    } else {
-        None
+    );
+    let description = match resource.get(atomic_lib::urls::DESCRIPTION) {
+        // HACK: Loro parses each string-like type as Value::String, so eventhough description is a markdown value, it is still returned as a string value. We can remove the string check here once we have fixed this. https://github.com/ontola/atomic-server/issues/1217
+        Ok(atomic_lib::Value::Markdown(s) | atomic_lib::Value::String(s)) => Some(s.to_string()),
+        _ => None,
     };
 
     let doc_content = resource.materialized_state().and_then(|snapshot| {
@@ -1018,6 +1020,26 @@ mod tests {
             .await
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn get_resource_text_parts_reads_description_after_loro_materialize() {
+        let doc = atomic_lib::loro::AtomicLoroDoc::new();
+        doc.set_property(urls::NAME, &Value::String("leave-of-absence.md".into()))
+            .unwrap();
+        doc.set_property(
+            urls::DESCRIPTION,
+            &Value::Markdown("# Leave of absence\n\nEmployees may take lunch breaks.".into()),
+        )
+        .unwrap();
+
+        let mut resource = Resource::new("https://example.com/handbook".into());
+        resource.apply_state_doc(doc).unwrap();
+
+        let (title, description, doc_content) = get_resource_text_parts(&resource);
+        assert_eq!(title.as_deref(), Some("leave-of-absence.md"));
+        assert!(description.unwrap().contains("lunch breaks"));
+        assert!(doc_content.is_none());
     }
 
     #[tokio::test]
