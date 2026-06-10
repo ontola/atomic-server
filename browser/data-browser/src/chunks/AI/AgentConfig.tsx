@@ -44,10 +44,6 @@ const defaultNewAgent: Omit<AIAgent, 'id'> = {
   description: '',
   systemPrompt: '',
   availableTools: [],
-  model: {
-    id: '~google/gemini-flash-latest',
-    provider: AIProvider.OpenRouter,
-  },
   canReadAtomicData: false,
   canWriteAtomicData: false,
   ragEnabled: false,
@@ -64,10 +60,6 @@ const defaultAgents: AIAgent[] = [
       "An agent that is specialized in helping you use AtomicServer. It takes context from what you're doing.",
     systemPrompt: atomicAgentPrompt,
     availableTools: ['dev.atomicdata.mcp.exa'],
-    model: {
-      id: '~google/gemini-flash-latest',
-      provider: AIProvider.OpenRouter,
-    },
     canReadAtomicData: true,
     canWriteAtomicData: true,
     ragEnabled: false,
@@ -81,10 +73,6 @@ const defaultAgents: AIAgent[] = [
     description: "A basic agent that doesn't have any special purpose.",
     systemPrompt: `The current date is {{timestamp}}`,
     availableTools: ['dev.atomicdata.mcp.exa'],
-    model: {
-      id: '~google/gemini-flash-latest',
-      provider: AIProvider.OpenRouter,
-    },
     canReadAtomicData: false,
     canWriteAtomicData: false,
     ragEnabled: false,
@@ -228,7 +216,7 @@ export const AgentConfigTab = ({
       id: generateId(),
       name: `${agentToDuplicate.name} - Copy`,
       availableTools: [...agentToDuplicate.availableTools],
-      model: { ...agentToDuplicate.model },
+      model: agentToDuplicate.model ? { ...agentToDuplicate.model } : undefined,
     };
 
     saveAgents([...agents, duplicatedAgent]);
@@ -313,11 +301,11 @@ interface AgentFormProps {
 }
 
 const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
-  const { mcpServers } = useAISettings();
+  const { mcpServers, defaultChatModel } = useAISettings();
 
   const handleChange = (
     field: keyof AIAgent,
-    value: string | boolean | number | AIModelIdentifier,
+    value: string | boolean | number | AIModelIdentifier | undefined,
   ) => {
     onChange({
       ...agent,
@@ -457,11 +445,22 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
       </StyledField>
 
       <StyledField label="Model" multiInput>
-        <ModelSelect
-          defaultModel={agent.model}
-          onSelect={model => handleChange('model', model)}
-          enforceToolSupport={enforceToolSupport}
-        />
+        <CheckboxLabel style={{ marginBottom: '0.5rem' }}>
+          <Checkbox
+            checked={!agent.model}
+            onChange={checked => {
+              handleChange('model', checked ? undefined : defaultChatModel);
+            }}
+          />
+          Use Default Model
+        </CheckboxLabel>
+        {agent.model && (
+          <ModelSelect
+            defaultModel={agent.model}
+            onSelect={model => handleChange('model', model)}
+            enforceToolSupport={enforceToolSupport}
+          />
+        )}
       </StyledField>
 
       <StyledField

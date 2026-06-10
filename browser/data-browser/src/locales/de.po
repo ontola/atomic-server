@@ -4693,3 +4693,18 @@ msgstr "Das direkte Bearbeiten von LoroDoc wird nicht unterstützt"
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Confirm Delete"
 msgstr "Löschen bestätigen"
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Select Model"
+msgstr "Modell auswählen"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Loading model selector..."
+msgstr "Modellauswahl wird geladen..."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> Use Default Model"
+msgstr "<0/> Standardmodell verwenden"
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Default model"
+msgstr "Standardmodell"

@@ -32,10 +32,24 @@ const TOP_LEVEL_COMMANDS: CommandSuggestion[] = [
     label: 'skill',
     description: 'Use a skill in this conversation',
   },
+  {
+    type: 'slash-command',
+    id: 'model',
+    label: 'model',
+    description: 'Select/edit the active AI model',
+  },
+  {
+    type: 'slash-command',
+    id: 'agent',
+    label: 'agent',
+    description: 'Select/edit the active AI agent',
+  },
 ];
 
 export function skillSuggestionBuilder(
   onCompact?: () => void,
+  onEditModel?: () => void,
+  onEditAgent?: () => void,
 ): Partial<SuggestionOptions<SearchSuggestion>> {
   let state = CommandState.PickingCommand;
   let currentProps: SuggestionProps<SearchSuggestion, SearchSuggestion>;
@@ -44,9 +58,16 @@ export function skillSuggestionBuilder(
     const normalized = query.trim().toLowerCase();
 
     if (state === CommandState.PickingCommand) {
-      const commands = onCompact
-        ? TOP_LEVEL_COMMANDS
-        : TOP_LEVEL_COMMANDS.filter(c => c.id !== 'compact');
+      let commands = TOP_LEVEL_COMMANDS;
+      if (!onCompact) {
+        commands = commands.filter(c => c.id !== 'compact');
+      }
+      if (!onEditModel) {
+        commands = commands.filter(c => c.id !== 'model');
+      }
+      if (!onEditAgent) {
+        commands = commands.filter(c => c.id !== 'agent');
+      }
 
       return normalized
         ? commands.filter(
@@ -130,6 +151,20 @@ export function skillSuggestionBuilder(
                 .deleteRange(currentProps.range)
                 .run();
               onCompact?.();
+            } else if (item.id === 'model') {
+              currentProps.editor
+                .chain()
+                .focus()
+                .deleteRange(currentProps.range)
+                .run();
+              onEditModel?.();
+            } else if (item.id === 'agent') {
+              currentProps.editor
+                .chain()
+                .focus()
+                .deleteRange(currentProps.range)
+                .run();
+              onEditAgent?.();
             } else if (item.id === 'skill') {
               state = CommandState.PickingSkill;
 

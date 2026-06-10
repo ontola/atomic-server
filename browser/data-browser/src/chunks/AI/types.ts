@@ -15,7 +15,7 @@ export interface AIAgent {
   description: string;
   systemPrompt: string;
   availableTools: string[];
-  model: AIModelIdentifier;
+  model?: AIModelIdentifier;
   canReadAtomicData: boolean;
   canWriteAtomicData: boolean;
   ragEnabled: boolean;

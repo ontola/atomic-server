@@ -7,6 +7,8 @@ import {
   FaServer,
   FaTerminal,
   FaWandMagicSparkles,
+  FaRobot,
+  FaUser,
 } from 'react-icons/fa6';
 import type {
   CategorySuggestion,
@@ -202,6 +204,8 @@ const SkillItem: React.FC<DropdownItemProps<SkillSuggestion>> = ({
 const COMMAND_ICONS: Record<CommandSuggestion['id'], React.ComponentType> = {
   compact: FaTerminal,
   skill: FaWandMagicSparkles,
+  model: FaRobot,
+  agent: FaUser,
 };
 
 const CommandItem: React.FC<DropdownItemProps<CommandSuggestion>> = ({

@@ -7,7 +7,7 @@ import {
   type UIMessageChunk,
 } from 'ai';
 import { AIProvider } from '@components/AI/aiContstants';
-import { type AIAgent, type AtomicUIMessage } from './types';
+import { type AIAgent, type AIModelIdentifier, type AtomicUIMessage } from './types';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { useRef } from 'react';
 import { useStore } from '@tomic/react';
@@ -23,6 +23,7 @@ export interface ClientOnlyTransportOptions {
   openRouterAPIKey?: string;
   ollamaURL?: string;
   selectedAgent: AIAgent;
+  model: AIModelIdentifier;
   tools: ToolSet;
   addContextToMessages: (
     messages: AtomicUIMessage[],
@@ -67,12 +68,12 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
 
     const result = streamText({
       messages: await convertToModelMessages(transformedMessages),
-      model: this.getModelFromAgent(agent),
+      model: this.getModel(this.options.model),
       system: await this._prepareSystemPrompt(agent.systemPrompt),
       tools: this.options.tools,
       abortSignal,
       stopWhen: stepCountIs(1000),
-      ...this.getParameters(agent),
+      ...this.getParameters(agent, this.options.model),
     });
 
     const originalStream = result.toUIMessageStream({
@@ -97,12 +98,12 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
     return null;
   }
 
-  private getModelFromAgent(agent: AIAgent) {
+  private getModel(model: AIModelIdentifier) {
     if (
-      agent.model.provider === AIProvider.OpenRouter &&
+      model.provider === AIProvider.OpenRouter &&
       this.options.openRouterAPIKey
     ) {
-      const modalities = this.options.resolveOutputModalities(agent.model.id);
+      const modalities = this.options.resolveOutputModalities(model.id);
 
       const openRouter = createOpenRouter({
         apiKey: this.options.openRouterAPIKey,
@@ -113,38 +114,38 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
         },
       });
 
-      return openRouter(agent.model.id);
+      return openRouter(model.id);
     }
 
-    if (agent.model.provider === AIProvider.Ollama && this.options.ollamaURL) {
+    if (model.provider === AIProvider.Ollama && this.options.ollamaURL) {
       const ollama = createOllama({
         baseURL: `${this.options.ollamaURL}/api`,
       });
 
-      return ollama(agent.model.id);
+      return ollama(model.id);
     }
 
     throw new Error('Invalid model provider');
   }
 
-  private getParameters(agent: AIAgent) {
-    if (agent.model.provider === AIProvider.Ollama) {
+  private getParameters(agent: AIAgent, model: AIModelIdentifier) {
+    if (model.provider === AIProvider.Ollama) {
       // We can't check if Ollama supports specific parameters, so we just return all of them.
       return {
         temperature: agent.temperature,
       };
     }
 
-    if (agent.model.provider === AIProvider.OpenRouter) {
+    if (model.provider === AIProvider.OpenRouter) {
       return {
         ...addFieldsIf(
-          this.options.resolveParameterSupport(agent.model.id, 'temperature'),
+          this.options.resolveParameterSupport(model.id, 'temperature'),
           {
             temperature: agent.temperature,
           },
         ),
         ...addFieldsIf(
-          this.options.resolveParameterSupport(agent.model.id, 'reasoning'),
+          this.options.resolveParameterSupport(model.id, 'reasoning'),
           {
             reasoning: {
               effort: 'low',

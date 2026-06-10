@@ -14,7 +14,7 @@ import { DEFAULT_CHAT_MODEL } from '@components/AI/AISettingsContext';
 import type { AIModelIdentifier } from './types';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { useAIAgentConfig } from './AgentConfig';
-import { applyDefaultModelToBuiltinAgents } from './resolveAgentModel';
+
 
 const ModelSelect = React.lazy(
   () => import('@chunks/AI/ModelSelect/ModelSelect'),
@@ -152,7 +152,7 @@ export const AISetupPanel: React.FC = () => {
 
   const handleStartChatting = () => {
     setDefaultChatModel(pendingModel);
-    saveAgents(applyDefaultModelToBuiltinAgents(agents, pendingModel));
+    saveAgents(agents);
 
     if (syncGenFeatures) {
       setGenFeaturesModel(pendingModel);

@@ -23,7 +23,12 @@ import {
 } from './types';
 import { useAIAgentConfig } from './AgentConfig';
 import { AISettingsDialog } from './AISettingsDialog';
+import { Dialog, useDialog } from '@components/Dialog';
 import { MessageContextItem } from './MessageContextItem';
+
+const ModelSelect = React.lazy(
+  () => import('@chunks/AI/ModelSelect/ModelSelect'),
+);
 import { useProcessMessages } from './useProcessMessages';
 import { AISetupPanel } from './AISetupPanel';
 import { useOpenRouterModels } from './useOpenRouterModels';
@@ -132,10 +137,14 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   const [userInput, setUserInput] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const { defaultChatModel } = useAISettings();
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
   );
-  const modelContextLength = useModelContextLength(selectedAgent.model);
+  const [activeModel, setActiveModel] = useState<AIModelIdentifier>(() => {
+    return selectedAgent.model ?? defaultChatModel;
+  });
+  const modelContextLength = useModelContextLength(activeModel);
   const addContextToMessages = useProcessMessages({
     includeDriveInstructions: selectedAgent.canReadAtomicData,
   });
@@ -148,20 +157,21 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     (selectedAgent.canReadAtomicData || selectedAgent.ragEnabled);
 
   const { reportAIEdit } = useAIChanges();
-  const canUseInput = isProviderAvailable(selectedAgent.model.provider);
+  const canUseInput = isProviderAvailable(activeModel.provider);
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
   >([]);
   const { generateFollowUpQuestions } = useGenerativeData();
   const { generateConversationSummary } = useConversationSummary(
-    selectedAgent.model,
+    activeModel,
   );
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
+  const [modelDialogProps, showModelDialog, closeModelDialog, isModelDialogOpen] = useDialog();
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
 
   const { tools: atomicTools } = useAtomicMCPTools({
-    editModel: selectedAgent.model,
+    editModel: activeModel,
     onResourceEdited: (originalResource: Resource) => {
       reportAIEdit(originalResource);
     },
@@ -171,6 +181,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     openRouterAPIKey: openRouterApiKey,
     ollamaURL: ollamaUrl,
     selectedAgent,
+    model: activeModel,
     additionalSystemPrompt: selectedAgent.skillsEnabled
       ? getSkillsSystemPromptPart()
       : undefined,
@@ -435,7 +446,28 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     const initialAgent = getInitialAgent(false, chatSubject);
 
     setSelectedAgent(initialAgent);
-  }, [chatSubject]);
+    setActiveModel(initialAgent.model ?? defaultChatModel);
+  }, [chatSubject, defaultChatModel]);
+
+  useOnValueChange(() => {
+    if (!selectedAgent.model) {
+      setActiveModel(defaultChatModel);
+    }
+  }, [defaultChatModel]);
+
+  const handleSelectAgent = (agent: AIAgent) => {
+    setSelectedAgent(agent);
+    setActiveModel(agent.model ?? defaultChatModel);
+  };
+
+  const { models: openRouterModels } = useOpenRouterModels();
+  const getModelDisplayName = (model: AIModelIdentifier) => {
+    if (model.provider === AIProvider.OpenRouter) {
+      const found = openRouterModels.find(m => m.id === model.id);
+      if (found) return found.name;
+    }
+    return model.id.split('/').pop() || model.id;
+  };
 
   const isEmptyChat = messages.length === 0;
   const totalTokensUsed = usage.input + usage.output;
@@ -490,7 +522,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
           />
         ))}
       </ChatMessagesContainer>
-      <Column>
+      <Column style={{ minWidth: 0 }}>
         {status === 'streaming' && (
           <Row center gap='0.2ch'>
             <GeneratingIndicator text='Generating' />
@@ -523,7 +555,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
               </Column>
             )}
             <ChatInputWrapper>
-              <Column fullWidth gap='none' style={{ position: 'relative' }}>
+              <Column fullWidth gap='none' style={{ position: 'relative', minWidth: 0 }}>
                 <FloatingChatWidgetsContainer>
                   {attachedFiles.length > 0 && (
                     <Row gap='1ch' wrapItems>
@@ -582,8 +614,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   onChange={setUserInput}
                   onSubmit={handleSubmit}
                   onCompact={compact}
+                  onEditModel={() => showModelDialog()}
+                  onEditAgent={() => setAgentConfigOpen(true)}
                   onFileAdded={
-                    checkModelSupportsImageInput(selectedAgent.model)
+                    checkModelSupportsImageInput(activeModel)
                       ? handleFileUpload
                       : undefined
                   }
@@ -596,11 +630,14 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     )
                   }
                 >
-                  <Row gap='0.5rem'>
+                  <Row gap='0.5rem' style={{ minWidth: 0, overflow: 'hidden', flexWrap: 'nowrap', flex: 1 }}>
                     <SubtleButton onClick={() => setAgentConfigOpen(true)}>
                       {selectedAgent.name}
                     </SubtleButton>
-                    {checkModelSupportsImageInput(selectedAgent.model) && (
+                    <SubtleButton onClick={() => showModelDialog()}>
+                      {getModelDisplayName(activeModel)}
+                    </SubtleButton>
+                    {checkModelSupportsImageInput(activeModel) && (
                       <>
                         <input
                           multiple
@@ -640,8 +677,28 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         open={agentConfigOpen}
         onOpenChange={setAgentConfigOpen}
         selectedAgent={selectedAgent}
-        onSelectAgent={setSelectedAgent}
+        onSelectAgent={handleSelectAgent}
       />
+      <Dialog {...modelDialogProps} width='500px'>
+        {isModelDialogOpen && (
+          <>
+            <Dialog.Title>
+              <h1>Select Model</h1>
+            </Dialog.Title>
+            <Dialog.Content>
+              <React.Suspense fallback={<div>Loading model selector...</div>}>
+                <ModelSelect
+                  defaultModel={activeModel}
+                  onSelect={model => {
+                    setActiveModel(model);
+                    closeModelDialog();
+                  }}
+                />
+              </React.Suspense>
+            </Dialog.Content>
+          </>
+        )}
+      </Dialog>
       {!readonly && <AISetupPanel />}
     </ChatWindow>
   );
@@ -684,6 +741,7 @@ const ChatInputWrapper = styled.div`
   align-items: flex-end;
   gap: ${p => p.theme.size()};
   position: relative;
+  min-width: 0;
 
   ${transition('border-color')}
   &:focus-within {
@@ -741,6 +799,12 @@ const SubtleButton = styled.button`
   border-radius: ${p => p.theme.radius};
   padding: ${p => p.theme.size(1)};
   padding-inline: ${p => p.theme.size(2)};
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex-shrink: 1;
 
   &:focus-visible,
   &:hover {

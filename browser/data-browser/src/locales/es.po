@@ -4698,3 +4698,18 @@ msgstr "La edición directa de LoroDoc no es compatible"
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Confirm Delete"
 msgstr "Confirmar eliminación"
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Select Model"
+msgstr "Seleccionar modelo"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Loading model selector..."
+msgstr "Cargando selector de modelo..."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> Use Default Model"
+msgstr "<0/> Usar modelo predeterminado"
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Default model"
+msgstr "Modelo predeterminado"
