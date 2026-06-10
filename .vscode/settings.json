@@ -29,5 +29,13 @@
   "rust-analyzer.cargo.extraEnv": {
     "ATOMICSERVER_SKIP_JS_BUILD": "true"
   },
+  // The check command runs build scripts: without this, atomic-server's
+  // build.rs shells out to `cargo bin wasm-pack build`, whose nested cargo
+  // builds into the shared `target/` and grabs its lock — blocking terminal
+  // `cargo build/test`. `cargo.extraEnv` does not reliably reach the check
+  // command, so set it on the check too.
+  "rust-analyzer.check.extraEnv": {
+    "ATOMICSERVER_SKIP_JS_BUILD": "true"
+  },
   "java.configuration.updateBuildConfiguration": "automatic"
 }
