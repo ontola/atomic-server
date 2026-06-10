@@ -4701,10 +4701,11 @@ msgstr "Confirmar eliminación"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Select Model"
 msgstr "Seleccionar modelo"
+#~ msgid "Select Model"
+#~ msgstr "Seleccionar modelo"
 
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Loading model selector..."
-msgstr "Cargando selector de modelo..."
+#~ msgid "Loading model selector..."
+#~ msgstr "Cargando selector de modelo..."
 
 #: src/chunks/AI/AgentConfig.tsx
 msgid "<0/> Use Default Model"
@@ -4713,3 +4714,17 @@ msgstr "<0/> Usar modelo predeterminado"
 #: src/chunks/AI/AgentConfigItem.tsx
 msgid "Default model"
 msgstr "Modelo predeterminado"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Local"
+msgstr "Local"
+
+#. placeholder {0}: model.details.parameter_size
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Size: {0}"
+msgstr "Tamaño: {0}"
+
+#. placeholder {0}: model.details.format
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Format: {0}"
+msgstr "Formato: {0}"
