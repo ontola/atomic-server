@@ -441,6 +441,37 @@ impl Subject {
             }
         }
     }
+
+    /// Whether this subject denotes the given `drive` itself, or a resource
+    /// that lives within it. Used to scope drive-wide commit fan-out so a
+    /// commit only ever reaches subscribers of its own drive.
+    ///
+    /// Identity is normalized (`pure_id`), so query hints and trailing slashes
+    /// never cause a false negative. Beyond identity:
+    /// - **URL subjects** (internal/external) belong to a drive when they share
+    ///   its identity prefix up to a path boundary — `…/d/x` is within `…/d`,
+    ///   but `…/d2` is *not* within `…/d` (the boundary check is what a raw
+    ///   `starts_with` lacks).
+    /// - **DID subjects** encode no hierarchy in their id, so they can only
+    ///   match by identity. A caller testing a DID *resource*'s membership
+    ///   should pass that resource's `drive` propval as `self`, not the
+    ///   resource subject itself.
+    pub fn is_within_drive(&self, drive: &Subject) -> bool {
+        let me = self.pure_id();
+        let root = drive.pure_id();
+
+        if me == root {
+            return true;
+        }
+
+        // DID ids are opaque — no path hierarchy to descend into.
+        if matches!(self, Subject::Did { .. }) || matches!(drive, Subject::Did { .. }) {
+            return false;
+        }
+
+        // Same origin + the drive's path is a path-segment prefix of ours.
+        me.starts_with(&root) && me.as_bytes().get(root.len()) == Some(&b'/')
+    }
 }
 
 impl std::fmt::Display for Subject {
@@ -593,6 +624,39 @@ mod tests {
         assert!(matches!(subject, Subject::Did { .. }));
         assert_eq!(subject.drive_hint(), Some("abc"));
         assert_eq!(subject.pure_id(), "did:ad:123");
+    }
+
+    #[test]
+    fn test_is_within_drive() {
+        let base = Some("localhost:9883");
+        let drive = Subject::from_raw("https://localhost:9883/drive1", base);
+
+        // Identity (incl. trailing slash / query-hint normalization).
+        assert!(drive.is_within_drive(&drive));
+        assert!(Subject::from_raw("https://localhost:9883/drive1/", base).is_within_drive(&drive));
+
+        // Genuine descendant lives within the drive.
+        assert!(
+            Subject::from_raw("https://localhost:9883/drive1/table/row", base)
+                .is_within_drive(&drive)
+        );
+
+        // Sibling that merely shares a string prefix is NOT within — the bug a
+        // bare `starts_with` would let through.
+        assert!(
+            !Subject::from_raw("https://localhost:9883/drive12", base).is_within_drive(&drive)
+        );
+
+        // DID drives match only by identity — no hierarchy descent.
+        let did_drive = Subject::from_raw("did:ad:drive1", None);
+        assert!(did_drive.is_within_drive(&did_drive));
+        assert!(
+            Subject::from_raw("did:ad:drive1?drive=x", None).is_within_drive(&did_drive),
+            "drive_hint / query must not defeat identity"
+        );
+        assert!(!Subject::from_raw("did:ad:other", None).is_within_drive(&did_drive));
+        // A DID resource subject is never `within` a DID drive by its own id.
+        assert!(!Subject::from_raw("did:ad:resource", None).is_within_drive(&did_drive));
     }
 
     #[test]

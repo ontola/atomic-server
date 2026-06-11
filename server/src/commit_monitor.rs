@@ -28,11 +28,13 @@ use std::sync::Arc;
 ///   Match commits whose target matches exactly. The `CommitMessage`
 ///   handler scans this map directly.
 /// - **Drive subscriptions** (`drive_subscriptions`): drive only.
-///   Match every commit on resources whose subject is under that drive
-///   (HTTP subjects by prefix; DIDs fan out to every drive subscriber
-///   because they can't be prefix-matched). Both kinds receive a
-///   `SendFrame` carrying the pre-encoded `UPDATE` / `DESTROY` wire
-///   bytes, encoded once at the fanout site and Arc-shared.
+///   Match every commit on resources that belong to that drive — a
+///   resource's owning drive is its genesis-stamped `drive` propval (DID
+///   subjects) or its own URL under the drive (HTTP subjects), tested via
+///   [`atomic_lib::Subject::is_within_drive`]. A commit only ever reaches
+///   subscribers of its OWN drive — never others (no cross-drive leak).
+///   Subscribers receive a `SendFrame` carrying the pre-encoded `UPDATE` /
+///   `DESTROY` wire bytes, encoded once at the fanout site and Arc-shared.
 /// - **Filter subscriptions** (`query_subscriptions`): keyed by encoded
 ///   `QueryFilter` bytes — registered via the `SUBSCRIBE_QUERY` text
 ///   frame. When a resource enters / leaves the filter set,
@@ -571,16 +573,30 @@ impl Handler<CommitMessage> for CommitMonitor {
                 tracing::debug!("No subscribers for {}", target_subject);
             }
 
-            // Drive-wide subscribers. HTTP subjects prefix-match the drive
-            // URL; DID subjects can't be prefix-matched so they fan out to
-            // every drive subscriber (the client's commit-id dedup
-            // absorbs the noise). The connection-id source suppression
-            // still applies, so the originating tab doesn't get its own
-            // commit echoed back.
-            let subject_str = target_subject.to_string();
-            let is_did = subject_str.starts_with("did:");
+            // Drive-wide subscribers. A resource belongs to exactly ONE drive,
+            // and a commit must only ever reach subscribers of THAT drive —
+            // never others. Fanning a `did:ad:` commit out to every drive
+            // subscriber leaks it to agents with no rights on it (a
+            // cross-tenant security hole).
+            //
+            // We test membership via the resource's OWNING subject: for a DID
+            // resource that's its `drive` propval (stamped at genesis); for a
+            // URL resource with no such propval it's the subject itself, which
+            // lives under its drive's URL. `Subject::is_within_drive` then does
+            // the identity / path-boundary check. A DID resource with no drive
+            // propval reaches no drive subscriber rather than fanning out
+            // blindly.
+            let base_domain = self.store.get_base_domain();
+            let resource_drive = msg
+                .commit_response
+                .resource_new
+                .as_ref()
+                .and_then(|r| r.get_drive());
+            let owner = resource_drive.as_ref().unwrap_or(&target_subject);
             for (drive, subscribers) in &self.drive_subscriptions {
-                if !is_did && !subject_str.starts_with(drive.as_str()) {
+                let drive_subject =
+                    atomic_lib::Subject::from_raw(drive, base_domain.as_deref());
+                if !owner.is_within_drive(&drive_subject) {
                     continue;
                 }
                 for (connection, sub_source) in subscribers {

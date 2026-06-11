@@ -52,13 +52,16 @@ fn start_server() -> u16 {
 
 async fn wait_for_server(port: u16) {
     let base = format!("http://localhost:{}", port);
-    for _ in 0..50 {
+    // The server's vector-search (fastembed) init can take ~15-20s on a cold
+    // start, more under CPU contention when another test server is booting.
+    // The readiness signal is the bind, not a fixed timeout — give it headroom.
+    for _ in 0..400 {
         if reqwest::get(&base).await.is_ok() {
             return;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    panic!("Server did not start within 5 seconds");
+    panic!("Server did not start within 40 seconds");
 }
 
 #[tokio::test]
@@ -89,10 +92,12 @@ async fn drive_subscriber_receives_update_for_new_resource() -> AtomicResult<()>
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Alice creates a new DID-subject resource (`did:ad:<signature>`),
-    // mirroring how browser / Flutter clients create resources. HTTP-URL
-    // subjects rely on a drive-URL prefix match for drive-wide fanout,
-    // which doesn't generalize; DID subjects fan out to every drive
-    // subscriber unconditionally — the realistic production path.
+    // mirroring how browser / Flutter clients create resources. DID subjects
+    // can't be prefix-matched to a drive URL, so drive-wide fan-out scopes
+    // delivery by the resource's genesis-stamped `drive` propval — which is
+    // why the creation below MUST go through the drive-stamping `create_did`
+    // path. (Cross-drive isolation of this mechanism is covered by
+    // `ws_commit_isolation`.)
     let mut canvas_res = atomic_lib::Resource::new("did:ad:placeholder".into());
     canvas_res.set_unsafe(
         atomic_lib::urls::IS_A.into(),
@@ -111,9 +116,20 @@ async fn drive_subscriber_receives_update_for_new_resource() -> AtomicResult<()>
         atomic_lib::urls::DESCRIPTION.into(),
         atomic_lib::Value::String("Created while Bob is subscribed drive-wide".into()),
     )?;
-    let response = canvas_res.save_as_genesis(client_a.store()).await?;
-    let commit_json =
-        atomic_lib::client::commit_to_wire_json(&response.commit, client_a.store()).await?;
+    // Build the genesis commit via `create_did` — the SAME path browser /
+    // Flutter clients use. It stamps the resource's `drive` (from its parent)
+    // and folds it into the loro doc, so the materialized resource carries its
+    // `drive` propval. That propval is how the commit fan-out scopes delivery
+    // to this drive's subscribers; `save_as_genesis` would skip the stamp and
+    // the resource would (correctly) reach no drive subscriber.
+    use atomic_lib::Storelike;
+    let store = client_a.store();
+    let agent = store.get_default_agent()?;
+    let mut commit_builder = canvas_res.get_commit_builder().clone();
+    commit_builder.is_genesis = true;
+    let commit = atomic_lib::Commit::create_did(commit_builder, &agent, store).await?;
+    let subject = commit.subject.clone();
+    let commit_json = atomic_lib::client::commit_to_wire_json(&commit, store).await?;
     // Push via a separate WS client so source-id suppression doesn't
     // accidentally hide the broadcast from Bob's connection. We could
     // also POST to /commit, but staying on WS keeps the wire path
@@ -121,7 +137,6 @@ async fn drive_subscriber_receives_update_for_new_resource() -> AtomicResult<()>
     let ws_a = WsClient::connect(&ws_url).await?;
     ws_a.authenticate(&agent_a).await?;
     ws_a.post_commit(1, &commit_json).await?;
-    let subject = response.commit.subject.clone();
 
     // Bob should learn about it via an UPDATE frame on the drive SUB.
     let outcome = tokio::time::timeout(Duration::from_secs(10), async {
