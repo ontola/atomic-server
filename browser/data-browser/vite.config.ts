@@ -370,6 +370,15 @@ export default defineConfig({
     exclude: ['loro-crdt'],
     // this may help when linking + HMR is not working
     // exclude: ['@tomic/lib', '@tomic/react'],
+    //
+    // Vite's boot-time dep scan only follows static imports from index.html, so
+    // it never sees the deps behind `React.lazy` chunks (RTE/tiptap, AI SDK,
+    // code/table/PDF editors). The first time such a chunk loads, Vite
+    // discovers its deps mid-session, re-optimizes, and 504s the in-flight
+    // dynamic import ("Outdated Optimize Dep" → "Failed to fetch dynamically
+    // imported module: CollaborativeEditor.tsx"). Crawling the chunk roots at
+    // boot pre-optimizes everything, so first-open is warm and e2e is stable.
+    entries: ['./index.html', './src/chunks/**/*.{ts,tsx}'],
   },
   build: {
     target: 'baseline-widely-available',
