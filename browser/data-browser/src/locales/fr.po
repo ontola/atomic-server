@@ -4671,9 +4671,8 @@ msgstr "Créateur et heure de création, dérivés du commit de genèse signé (
 msgid "Changes could not sync"
 msgstr "Les modifications n'ont pas pu être synchronisées"
 
-#: src/chunks/RTE/CollaborativeEditor.tsx
-msgid "Start typing…"
-msgstr "Commencez à taper…"
+#~ msgid "Start typing…"
+#~ msgstr "Commencez à taper…"
 
 #: src/chunks/RTE/readDocumentV2TiptapJson.ts
 msgid "Resource is not a document-v2"
@@ -4694,9 +4693,7 @@ msgstr "La modification directe de LoroDoc n'est pas prise en charge"
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Confirm Delete"
 msgstr "Confirmer la suppression"
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Select Model"
-msgstr "Sélectionner le modèle"
+
 #~ msgid "Select Model"
 #~ msgstr "Sélectionner le modèle"
 
@@ -4724,3 +4721,7 @@ msgstr "Taille : {0}"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Format: {0}"
 msgstr "Format : {0}"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Click to focus document…"
+msgstr "Cliquez pour voir le document..."

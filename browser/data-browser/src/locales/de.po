@@ -4670,9 +4670,8 @@ msgstr "Ersteller und Erstellungszeit, abgeleitet vom signierten Genesis-Commit 
 msgid "Changes could not sync"
 msgstr "Änderungen konnten nicht synchronisiert werden"
 
-#: src/chunks/RTE/CollaborativeEditor.tsx
-msgid "Start typing…"
-msgstr "Beginnen Sie zu tippen…"
+#~ msgid "Start typing…"
+#~ msgstr "Beginnen Sie zu tippen…"
 
 #: src/chunks/RTE/readDocumentV2TiptapJson.ts
 msgid "Resource is not a document-v2"
@@ -4693,9 +4692,7 @@ msgstr "Das direkte Bearbeiten von LoroDoc wird nicht unterstützt"
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Confirm Delete"
 msgstr "Löschen bestätigen"
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Select Model"
-msgstr "Modell auswählen"
+
 #~ msgid "Select Model"
 #~ msgstr "Modell auswählen"
 
@@ -4723,3 +4720,7 @@ msgstr "Größe: {0}"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Format: {0}"
 msgstr "Format: {0}"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Click to focus document…"
+msgstr "Klicken, um das Dokument zu fokussieren…"

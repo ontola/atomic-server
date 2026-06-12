@@ -273,7 +273,7 @@ export default function CollaborativeEditor({
           // CSS-only placeholder (see StyledEditorWrapper). Replaces
           // @tiptap/extension-placeholder, whose decoration crashed pm@1.41
           // when grouped with the loro cursor plugin's decorations.
-          'data-placeholder': placeholder ?? 'Start typing…',
+          'data-placeholder': placeholder ?? 'Click to focus document…',
         },
       },
       onContentError({ editor: currentEditor, error, disableCollaboration }) {
@@ -368,7 +368,7 @@ export default function CollaborativeEditor({
           <DragHandle editor={editor}>
             <FaGripVertical />
           </DragHandle>
-          <EditorContent key="rich-editor" editor={editor}>
+          <EditorContent key='rich-editor' editor={editor}>
             <FloatingHint editor={editor}>
               Type &apos;/&apos; for options or &apos;@&apos; for resources
             </FloatingHint>
@@ -400,6 +400,8 @@ export const StyledEditorWrapper = styled(EditorWrapperBase)`
   flex: 1;
   display: flex;
   flex-direction: column;
+  /* Whole editing area reads as a text field on hover. */
+  cursor: text;
 
   & .tiptap {
     width: 100%;
@@ -409,7 +411,7 @@ export const StyledEditorWrapper = styled(EditorWrapperBase)`
      * Decoration-free (unlike @tiptap/extension-placeholder) so it never forms
      * a DecorationGroup with the loro cursor plugin → avoids the pm@1.41
      * DecorationGroup.eq crash. */
-    &[data-placeholder]:has(
+    &[data-placeholder]:not(.ProseMirror-focused):has(
         > p:first-child:last-child > br.ProseMirror-trailingBreak:only-child
       )::before {
       content: attr(data-placeholder);
