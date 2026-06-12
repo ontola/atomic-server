@@ -61,6 +61,7 @@ import { useOnValueChange } from '@helpers/useOnValueChange';
 import { transition } from '@helpers/transition';
 import { useAIChanges } from '@components/AIChangesContext';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
+import { useLocalStorage } from '@hooks/useLocalStorage';
 import { Spinner } from '@components/Spinner';
 
 const AIChatInput = React.lazy(
@@ -176,6 +177,12 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     }),
   ).current;
 
+  // Most recently selected model values (`provider:id`), most-recent-first.
+  const [recentModelValues, setRecentModelValues] = useLocalStorage<string[]>(
+    'atomic.ai.recentModels',
+    [],
+  );
+
   const combinedModelOptions = useMemo(() => {
     const openRouterOptions = openRouterModels.map(model => {
       const promptPrice =
@@ -217,8 +224,21 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       };
     });
 
-    return [...openRouterOptions, ...ollamaOptions];
-  }, [openRouterModels, ollamaModels, currencyFormatter]);
+    const all = [...openRouterOptions, ...ollamaOptions];
+
+    // Surface recently used models at the top. With an empty query the ComboBox
+    // shows the options in this order; once the user types, QuickScore re-ranks.
+    const recentRank = new Map(recentModelValues.map((value, i) => [value, i]));
+    const recent = all
+      .filter(option => recentRank.has(option.value))
+      .sort(
+        (a, b) =>
+          (recentRank.get(a.value) ?? 0) - (recentRank.get(b.value) ?? 0),
+      );
+    const rest = all.filter(option => !recentRank.has(option.value));
+
+    return [...recent, ...rest];
+  }, [openRouterModels, ollamaModels, currencyFormatter, recentModelValues]);
 
   const modelSelectContainerRef = useRef<HTMLDivElement>(null);
 
@@ -740,6 +760,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                               ? AIProvider.OpenRouter
                               : AIProvider.Ollama;
                           setActiveModel({ id, provider });
+                          // Remember this model so it surfaces at the top next time.
+                          setRecentModelValues(prev =>
+                            [value, ...prev.filter(v => v !== value)].slice(
+                              0,
+                              5,
+                            ),
+                          );
                           // Move focus to the chat input so the user can type right away.
                           setInputFocusSignal(n => n + 1);
                         }}
