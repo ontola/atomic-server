@@ -259,6 +259,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   );
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
+  // Bumped to move focus into the chat input (e.g. right after picking a model).
+  const [inputFocusSignal, setInputFocusSignal] = useState(0);
 
   const { tools: atomicTools } = useAtomicMCPTools({
     editModel: activeModel,
@@ -690,6 +692,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 )}
                 <AIChatInput
                   large={isEmptyChat && fullView}
+                  focusSignal={inputFocusSignal}
                   disabled={!canUseInput}
                   disableSubmit={disableSubmit}
                   hasFiles={!!attachedFiles}
@@ -737,6 +740,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                               ? AIProvider.OpenRouter
                               : AIProvider.Ollama;
                           setActiveModel({ id, provider });
+                          // Move focus to the chat input so the user can type right away.
+                          setInputFocusSignal(n => n + 1);
                         }}
                       />
                     </ModelSelectWrapper>

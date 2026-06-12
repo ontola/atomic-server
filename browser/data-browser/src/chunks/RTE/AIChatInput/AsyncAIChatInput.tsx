@@ -7,7 +7,7 @@ import { TiptapContextProvider } from '../TiptapContext';
 import { EditorWrapperBase } from '../EditorWrapperBase';
 import { searchSuggestionBuilder } from './mcpSuggestions';
 import { skillSuggestionBuilder } from './skillSuggestions';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EditorEvents } from '../EditorEvents';
 import { Markdown } from '@tiptap/markdown';
 import { useStore } from '@tomic/react';
@@ -103,6 +103,8 @@ interface AsyncAIChatInputProps {
   onEditAgent?: () => void;
   onFileAdded?: (files: File[]) => void;
   rightAlignedChildren?: React.ReactNode;
+  /** Bump this to imperatively move focus into the editor (e.g. after picking a model). */
+  focusSignal?: number;
 }
 
 const AsyncAIChatInput: React.FC<
@@ -121,6 +123,7 @@ const AsyncAIChatInput: React.FC<
   onEditAgent,
   onFileAdded,
   rightAlignedChildren,
+  focusSignal,
 }) => {
   const store = useStore();
   const { drive } = useSettings();
@@ -255,6 +258,14 @@ const AsyncAIChatInput: React.FC<
     },
     [serversWithResources, searchResourcesOfServer, disabled],
   );
+
+  // Lets the parent move focus into the editor on demand (e.g. right after the
+  // user picks a model) by bumping `focusSignal`.
+  useEffect(() => {
+    if (!focusSignal) return;
+
+    editor?.commands.focus('end');
+  }, [focusSignal, editor]);
 
   const handleChange = () => {
     const value = editor.getMarkdown();
