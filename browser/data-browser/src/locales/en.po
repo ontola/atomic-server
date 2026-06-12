@@ -4692,3 +4692,19 @@ msgstr "Changes could not sync"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Start typing…"
 msgstr "Start typing…"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Select Model"
+msgstr "Select Model"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Loading model selector..."
+msgstr "Loading model selector..."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> Use Default Model"
+msgstr "<0/> Use Default Model"
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Default model"
+msgstr "Default model"

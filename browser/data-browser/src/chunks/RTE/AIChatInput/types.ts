@@ -39,7 +39,7 @@ export type SkillSuggestion = {
 
 export type CommandSuggestion = {
   type: 'slash-command';
-  id: 'compact' | 'skill';
+  id: 'compact' | 'skill' | 'model' | 'agent';
   label: string;
   description: string;
 };

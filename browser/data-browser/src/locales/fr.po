@@ -4675,3 +4675,19 @@ msgstr "Les modifications n'ont pas pu être synchronisées"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Start typing…"
 msgstr "Commencez à taper…"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Select Model"
+msgstr "Sélectionner le modèle"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Loading model selector..."
+msgstr "Chargement du sélecteur de modèle..."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> Use Default Model"
+msgstr "<0/> Utiliser le modèle par défaut"
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Default model"
+msgstr "Modèle par défaut"

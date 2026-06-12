@@ -99,6 +99,8 @@ interface AsyncAIChatInputProps {
   onChange: (markdown: string) => void;
   onSubmit: () => void;
   onCompact?: () => void;
+  onEditModel?: () => void;
+  onEditAgent?: () => void;
   onFileAdded?: (files: File[]) => void;
   rightAlignedChildren?: React.ReactNode;
 }
@@ -115,6 +117,8 @@ const AsyncAIChatInput: React.FC<
   onChange,
   onSubmit,
   onCompact,
+  onEditModel,
+  onEditAgent,
   onFileAdded,
   rightAlignedChildren,
 }) => {
@@ -126,9 +130,13 @@ const AsyncAIChatInput: React.FC<
   const onSubmitRef = useRef(onSubmit);
   const onCompactRef = useRef(onCompact);
   const disableSubmitRef = useRef(disableSubmit);
+  const onEditModelRef = useRef(onEditModel);
+  const onEditAgentRef = useRef(onEditAgent);
   markdownRef.current = markdown;
   onSubmitRef.current = onSubmit;
   onCompactRef.current = onCompact;
+  onEditModelRef.current = onEditModel;
+  onEditAgentRef.current = onEditAgent;
   disableSubmitRef.current = disableSubmit;
 
   const { serversWithResources, searchResourcesOfServer } = useMcpServers();
@@ -197,7 +205,11 @@ const AsyncAIChatInput: React.FC<
           },
           suggestion: {
             char: '/',
-            ...skillSuggestionBuilder(() => onCompactRef.current?.()),
+            ...skillSuggestionBuilder(
+              () => onCompactRef.current?.(),
+              () => onEditModelRef.current?.(),
+              () => onEditAgentRef.current?.(),
+            ),
           },
           renderText({ node }) {
             return `/${node.attrs.label ?? ''}`;
@@ -266,9 +278,9 @@ const AsyncAIChatInput: React.FC<
           <EditorEvents onChange={handleChange} />
         </TiptapContextProvider>
       </EditorWrapper>
-      <Row justify='space-between'>
+      <Row justify='space-between' style={{ minWidth: 0, overflow: 'hidden', width: '100%' }}>
         {children}
-        <Row center>
+        <Row center style={{ flexShrink: 0 }}>
           {rightAlignedChildren}
           <IconButton
             disabled={

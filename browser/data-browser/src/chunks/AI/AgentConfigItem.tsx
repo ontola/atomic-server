@@ -49,10 +49,12 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
 
   const theme = useTheme();
   const { defaultAgentId, setDefaultAgentId } = useAIAgentConfig();
-  const { isProviderAvailable } = useAISettings();
+  const { isProviderAvailable, defaultChatModel } = useAISettings();
 
   const isDefault = defaultAgentId === agent.id;
-  const providerDisabled = !isProviderAvailable(agent.model.provider);
+  const providerDisabled = agent.model
+    ? !isProviderAvailable(agent.model.provider)
+    : !isProviderAvailable(defaultChatModel.provider);
 
   const contextItems: DropdownItem[] = [
     {
@@ -124,7 +126,9 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
                 />
               )}
             </Row>
-            <AgentDescription>{agent.model.id}</AgentDescription>
+            <AgentDescription>
+              {agent.model ? agent.model.id : 'Default model'}
+            </AgentDescription>
           </Column>
           <span style={{ flex: 1 }} />
           <DropdownMenu items={contextItems} Trigger={ContextTrigger} />

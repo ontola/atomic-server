@@ -13,11 +13,4 @@ export const isBuiltinAgent = (agent: AIAgent | string): boolean => {
   return (BUILTIN_AGENT_IDS as readonly string[]).includes(id);
 };
 
-/** Apply a default model preset to built-in agents (e.g. during initial setup). */
-export const applyDefaultModelToBuiltinAgents = (
-  agents: AIAgent[],
-  model: AIModelIdentifier,
-): AIAgent[] =>
-  agents.map(agent =>
-    isBuiltinAgent(agent) ? { ...agent, model: { ...model } } : agent,
-  );
+
