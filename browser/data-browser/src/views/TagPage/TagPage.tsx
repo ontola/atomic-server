@@ -55,7 +55,11 @@ export function TagPage({ resource }: ResourcePageProps<DataBrowser.Tag>) {
           </Card>
         )}
         <TagPropertyCard resource={resource} />
-        <ReferenceUsage resource={resource} initialOpenState={true} />
+        <ReferenceUsage
+          resource={resource}
+          property={dataBrowser.properties.tags}
+          initialOpenState={true}
+        />
       </Column>
     </ContainerNarrow>
   );
