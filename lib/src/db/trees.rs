@@ -33,12 +33,14 @@ const RESOURCES: &str = "resources_v3";
 const VALPROPSUB: &str = "reference_index_v1";
 // v3: QueryFilter key encoding changed to [drive_len][drive_bytes][msgpack rest]
 // so the per-atom matching loop can scan_prefix to just the relevant drive's
-// watched queries instead of decoding every entry. Old v2 entries are
-// unreadable with the new decoder — leaving them stranded under their old tree
-// name is fine; they're pure caches and rebuild on next query.
-const QUERY_MEMBERS: &str = "members_index_v3";
+// watched queries instead of decoding every entry.
+// v4: QueryFilter `property`/`value` replaced by `filters: Vec<PropVal>` (AND
+// multi-property filtering), which changes the msgpack `rest` encoding.
+// Old entries are unreadable with the new decoder — leaving them stranded under
+// their old tree name is fine; they're pure caches and rebuild on next query.
+const QUERY_MEMBERS: &str = "members_index_v4";
 const PROPVALSUB: &str = "prop_val_sub_index";
-const QUERIES_WATCHED: &str = "watched_queries_v3";
+const QUERIES_WATCHED: &str = "watched_queries_v4";
 const PLUGIN_META: &str = "plugin_meta";
 const DRIVE_MAPPING: &str = "drive_mapping";
 const DID_MAPPING: &str = "did_mapping";

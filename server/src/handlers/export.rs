@@ -168,6 +168,7 @@ impl<'a> CSVExporter<'a> {
             value: Some(atomic_lib::Value::String(
                 resource.get_subject().to_string(),
             )),
+            filters: Vec::new(),
             limit: None,
             start_val: None,
             end_val: None,

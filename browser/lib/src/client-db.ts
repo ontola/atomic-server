@@ -41,6 +41,8 @@ export interface ClientDbQueryResult {
 export interface ClientDbQueryOpts {
   property?: string;
   value?: string;
+  /** Extra `(property, value)` constraints, ANDed with `property`/`value`. */
+  filters?: Array<{ property?: string; value?: string }>;
   sortBy?: string;
   sortDesc?: boolean;
   limit?: number;

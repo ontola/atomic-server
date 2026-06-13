@@ -1470,8 +1470,28 @@ impl Db {
             q_filter.watch(self)?;
 
             let mut transaction = Transaction::new();
-            // Build indexes
+            // Build indexes. The candidate atoms come from the primary
+            // (property/value) sub-index; for multi-constraint filters we must
+            // additionally check each candidate's resource against ALL
+            // constraints so the combined index only holds AND-matches.
+            let multi = q_filter.filters.len() > 1;
             for atom in atoms.flatten() {
+                if multi {
+                    match self
+                        .get_resource_extended(&atom.subject, true, &ForAgent::Sudo)
+                        .await
+                    {
+                        Ok(resource) => {
+                            if !query_index::resource_matches_filter(
+                                &resource.to_single(),
+                                &q_filter,
+                            ) {
+                                continue;
+                            }
+                        }
+                        Err(_) => continue,
+                    }
+                }
                 self.build_index_for_atom(&atom, &q_filter, &mut transaction)
                     .await?;
             }

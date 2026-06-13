@@ -43,6 +43,9 @@ pub struct CollectionBuilder {
     pub property: Option<String>,
     /// The value which the results are to be filtered by
     pub value: Option<String>,
+    /// Extra `(property, value)` constraints, ANDed with `property`/`value`.
+    /// Lets a collection filter on multiple properties.
+    pub filters: Vec<(String, String)>,
     /// URL of the value to sort by
     pub sort_by: Option<String>,
     /// Sorts ascending by default
@@ -136,6 +139,7 @@ impl CollectionBuilder {
             subject: format!("/{}", path),
             property: Some(urls::IS_A.into()),
             value: Some(class_url.into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -245,6 +249,14 @@ impl Collection {
         let q = Query {
             property: collection_builder.property.clone(),
             value: value_filter,
+            filters: collection_builder
+                .filters
+                .iter()
+                .map(|(p, v)| crate::storelike::PropVal {
+                    property: Some(p.clone()),
+                    value: Some(Value::String(v.clone())),
+                })
+                .collect(),
             limit: Some(collection_builder.page_size),
             start_val: None,
             end_val: None,
@@ -405,6 +417,7 @@ pub async fn construct_collection_from_params(
     let mut page_size = DEFAULT_PAGE_SIZE;
     let mut value = None;
     let mut property = None;
+    let mut filters: Vec<(String, String)> = Vec::new();
     let mut name = None;
     let mut include_nested = false;
     let mut include_external = false;
@@ -432,6 +445,20 @@ pub async fn construct_collection_from_params(
         match k.as_ref() {
             "property" => property = Some(v.to_string()),
             "value" => value = Some(v.to_string()),
+            // Extra AND constraints as a JSON array: `[{"property":"…","value":"…"}]`.
+            "filters" => {
+                #[derive(serde::Deserialize)]
+                struct FilterParam {
+                    property: String,
+                    value: String,
+                }
+                let parsed: Vec<FilterParam> = serde_json::from_str(v.as_ref()).map_err(|e| {
+                    format!(
+                        "Invalid `filters` param (expected JSON array of {{property, value}}): {e}"
+                    )
+                })?;
+                filters = parsed.into_iter().map(|f| (f.property, f.value)).collect();
+            }
             "sort_by" => sort_by = Some(v.to_string()),
             "sort_desc" => sort_desc = v.parse::<bool>()?,
             "current_page" => current_page = v.parse::<usize>()?,
@@ -448,6 +475,7 @@ pub async fn construct_collection_from_params(
         subject: resource.get_subject().to_string(),
         property,
         value,
+        filters,
         sort_by,
         sort_desc,
         current_page,
@@ -537,6 +565,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::IS_A.into()),
             value: Some(urls::CLASS.into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -560,6 +589,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::IS_A.into()),
             value: Some(urls::CLASS.into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -578,6 +608,61 @@ mod test {
         resource_collection
             .get(urls::COLLECTION_INCLUDE_NESTED)
             .unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn collection_multi_property_and_filter() {
+        let store = crate::db::Db::init_temp("collection_multi_property_and_filter")
+            .await
+            .unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
+        store.populate().await.unwrap();
+
+        // Two tags share `isA = Tag` but differ on `shortname`.
+        let mut tag_a = Resource::new_instance(urls::TAG, &store).await.unwrap();
+        tag_a
+            .set(urls::SHORTNAME.into(), Value::Slug("tag-a".into()), &store)
+            .await
+            .unwrap();
+        tag_a.save(&store).await.unwrap();
+
+        let mut tag_b = Resource::new_instance(urls::TAG, &store).await.unwrap();
+        tag_b
+            .set(urls::SHORTNAME.into(), Value::Slug("tag-b".into()), &store)
+            .await
+            .unwrap();
+        tag_b.save(&store).await.unwrap();
+
+        // AND filter: isA = Tag AND shortname = tag-a → only tag_a.
+        let drive = crate::db::drive_prefix_from_subject(tag_a.get_subject());
+        let collection_builder = CollectionBuilder {
+            subject: "test_subject".into(),
+            property: Some(urls::IS_A.into()),
+            value: Some(urls::TAG.into()),
+            filters: vec![(urls::SHORTNAME.to_string(), "tag-a".to_string())],
+            sort_by: None,
+            sort_desc: false,
+            page_size: DEFAULT_PAGE_SIZE,
+            current_page: 0,
+            name: None,
+            include_nested: false,
+            include_external: false,
+            drive: Some(drive),
+        };
+        let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
+            .await
+            .unwrap();
+
+        assert!(
+            collection.members.contains(&tag_a.get_subject().to_string()),
+            "tag_a matches both constraints and should be a member: {:?}",
+            collection.members
+        );
+        assert!(
+            !collection.members.contains(&tag_b.get_subject().to_string()),
+            "tag_b only matches isA, not shortname, so should be excluded: {:?}",
+            collection.members
+        );
     }
 
     #[tokio::test]
@@ -607,6 +692,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::ENDPOINT_RESULTS.into()),
             value: Some("https://example.com/resource1".into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -641,6 +727,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::ENDPOINT_RESULTS.into()),
             value: Some("https://example.com/resource1".into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -673,6 +760,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::ENDPOINT_RESULTS.into()),
             value: Some("https://example.com/resource2".into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -726,6 +814,7 @@ mod test {
                 subject: "test_subject".into(),
                 property: Some(urls::ENDPOINT_RESULTS.into()),
                 value: Some("https://example.com/item1".into()),
+                filters: Vec::new(),
                 sort_by: None,
                 sort_desc: false,
                 page_size: DEFAULT_PAGE_SIZE,
@@ -763,6 +852,7 @@ mod test {
                 subject: "test_subject".into(),
                 property: Some(urls::ENDPOINT_RESULTS.into()),
                 value: Some("https://example.com/item1".into()),
+                filters: Vec::new(),
                 sort_by: None,
                 sort_desc: false,
                 page_size: DEFAULT_PAGE_SIZE,
@@ -790,6 +880,7 @@ mod test {
                 subject: "test_subject".into(),
                 property: Some(urls::ENDPOINT_RESULTS.into()),
                 value: Some("https://example.com/item2".into()),
+                filters: Vec::new(),
                 sort_by: None,
                 sort_desc: false,
                 page_size: DEFAULT_PAGE_SIZE,
@@ -828,6 +919,7 @@ mod test {
                     subject: "test_subject".into(),
                     property: Some(urls::ENDPOINT_RESULTS.into()),
                     value: Some(format!("https://example.com/{}", item)),
+                    filters: Vec::new(),
                     sort_by: None,
                     sort_desc: false,
                     page_size: DEFAULT_PAGE_SIZE,
@@ -871,6 +963,7 @@ mod test {
                     subject: "test_subject".into(),
                     property: Some(urls::ENDPOINT_RESULTS.into()),
                     value: Some(format!("https://example.com/{}", item)),
+                    filters: Vec::new(),
                     sort_by: None,
                     sort_desc: false,
                     page_size: DEFAULT_PAGE_SIZE,
@@ -900,6 +993,7 @@ mod test {
                 subject: "test_subject".into(),
                 property: Some(urls::ENDPOINT_RESULTS.into()),
                 value: Some("https://example.com/newitem".into()),
+                filters: Vec::new(),
                 sort_by: None,
                 sort_desc: false,
                 page_size: DEFAULT_PAGE_SIZE,
@@ -929,6 +1023,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::IS_A.into()),
             value: Some(urls::CLASS.into()),
+            filters: Vec::new(),
             sort_by: Some(urls::SHORTNAME.into()),
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -1097,6 +1192,7 @@ mod test {
         let q = crate::storelike::Query {
             property: Some(urls::PARENT.into()),
             value: Some(crate::Value::AtomicUrl(chatroom_subject.clone())),
+            filters: Vec::new(),
             sort_by: Some(urls::CREATED_AT.into()),
             sort_desc: true,
             limit: Some(10),

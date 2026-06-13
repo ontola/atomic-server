@@ -40,6 +40,7 @@ pub fn construct_chatroom<'a>(
         let query_children = Query {
             property: Some(PARENT.into()),
             value: Some(Value::AtomicUrl(resource.get_subject().clone())),
+            filters: Vec::new(),
             // We fetch one extra to see if there are more, so we can create a next-page URL
             limit: Some(page_limit + 1),
             start_val: None,

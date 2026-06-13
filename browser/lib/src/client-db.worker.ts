@@ -32,6 +32,7 @@ export type WorkerRequest =
       type: 'query';
       property?: string;
       value?: string;
+      filters?: Array<{ property?: string; value?: string }>;
       sortBy?: string;
       sortDesc?: boolean;
       limit?: number;
@@ -158,6 +159,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.offset ?? null,
         msg.includeResources ?? null,
         msg.drive ?? null,
+        msg.filters ?? null,
       );
     }
 

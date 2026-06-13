@@ -634,6 +634,18 @@ pub trait Storelike: Sized + Send + Sync {
     }
 }
 
+/// A single `(property, value)` constraint used by [Query] and the query index.
+/// Both are optional: property+value (the property must contain the value),
+/// property-only (must have the property), or value-only (any property contains
+/// the value).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PropVal {
+    /// Filtering by property URL
+    pub property: Option<String>,
+    /// Filtering by value
+    pub value: Option<Value>,
+}
+
 /// Use this to construct a list of Resources
 #[derive(Debug)]
 pub struct Query {
@@ -641,6 +653,10 @@ pub struct Query {
     pub property: Option<String>,
     /// Filter by Value
     pub value: Option<Value>,
+    /// Additional `(property, value)` constraints, combined with `property`/`value`
+    /// and each other using **AND**. Lets a query filter on multiple properties
+    /// (e.g. `isA = Commit` AND `signer = <agent>`).
+    pub filters: Vec<PropVal>,
     /// Maximum of items to return, if none returns all items.
     pub limit: Option<usize>,
     /// Value at which to begin lexicographically sorting things.
@@ -670,6 +686,7 @@ impl Query {
         Query {
             property: None,
             value: None,
+            filters: Vec::new(),
             limit: None,
             start_val: None,
             end_val: None,
@@ -697,6 +714,23 @@ impl Query {
         q.property = Some(urls::IS_A.into());
         q.value = Some(Value::AtomicUrl(class.to_string().into()));
         q
+    }
+
+    /// Add an extra `(property, value)` constraint, ANDed with the existing
+    /// filters. Chainable: `Query::new_class(COMMIT).filter(SIGNER, agent_val)`.
+    pub fn filter(mut self, property: &str, value: Value) -> Self {
+        self.filters.push(PropVal {
+            property: Some(property.to_string()),
+            value: Some(value),
+        });
+        self
+    }
+
+    /// Add a class (`isA = class`) constraint, ANDed with the existing filters.
+    /// Use this on top of another filter, e.g. to scope "subject = X" down to
+    /// only Commits: `Query::new_prop_val(SUBJECT, x).class_filter(COMMIT)`.
+    pub fn class_filter(self, class: &str) -> Self {
+        self.filter(urls::IS_A, Value::AtomicUrl(class.to_string().into()))
     }
 }
 

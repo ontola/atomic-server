@@ -1,4 +1,4 @@
-import { Collection, CollectionParams } from './collection.js';
+import { Collection, CollectionParams, PropVal } from './collection.js';
 import { Store } from './store.js';
 
 export class CollectionBuilder {
@@ -31,6 +31,24 @@ export class CollectionBuilder {
 
   public setValue(value: string): CollectionBuilder {
     this.params.value = value;
+
+    return this;
+  }
+
+  /**
+   * Adds an extra `(property, value)` constraint, combined with the rest using
+   * **AND**. Call multiple times to filter on multiple properties, e.g.
+   * `.setProperty(isA).setValue(commit).addFilter({ property: signer, value: agent })`.
+   */
+  public addFilter(filter: PropVal): CollectionBuilder {
+    this.params.filters = [...(this.params.filters ?? []), filter];
+
+    return this;
+  }
+
+  /** Replaces all extra AND constraints at once. */
+  public setFilters(filters: PropVal[]): CollectionBuilder {
+    this.params.filters = filters;
 
     return this;
   }

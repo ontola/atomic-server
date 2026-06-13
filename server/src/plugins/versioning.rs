@@ -79,6 +79,7 @@ fn handle_all_versions_request<'a>(
             subject: subject.to_string(),
             property: Some(urls::SUBJECT.into()),
             value: Some(target.clone()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             current_page: 0,

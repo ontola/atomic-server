@@ -514,12 +514,12 @@ impl CommitMonitor {
 
         let drive_subject =
             atomic_lib::Subject::from_raw(&drive_str, self.store.get_base_domain().as_deref());
-        let q_filter = QueryFilter {
-            property: Some(prop.clone()),
-            value: Some(Value::String(val_str.clone())),
-            sort_by: query.sort_by.clone(),
-            drive: drive_subject,
-        };
+        let q_filter = QueryFilter::single(
+            Some(prop.clone()),
+            Some(Value::String(val_str.clone())),
+            query.sort_by.clone(),
+            drive_subject,
+        );
 
         let filter_bytes = match q_filter.encode() {
             Ok(b) => b,

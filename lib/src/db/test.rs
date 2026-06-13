@@ -258,6 +258,7 @@ async fn destroy_clears_parent_index_count() {
     let q = Query {
         property: Some(urls::PARENT.into()),
         value: Some(Value::AtomicUrl(parent_subject.into())),
+        filters: Vec::new(),
         limit: Some(500),
         start_val: None,
         end_val: None,
@@ -339,6 +340,7 @@ async fn unauthorized_query_count_matches_subjects() {
     let q = Query {
         property: Some(urls::PARENT.into()),
         value: Some(Value::AtomicUrl(parent_subject.into())),
+        filters: Vec::new(),
         limit: Some(500),
         start_val: None,
         end_val: None,
@@ -470,6 +472,7 @@ async fn queries() {
     let mut q = Query {
         property: Some(prop_filter.into()),
         value: Some(demo_reference.clone()),
+        filters: Vec::new(),
         limit: Some(limit),
         start_val: None,
         end_val: None,
@@ -606,6 +609,7 @@ async fn query_include_external() {
     let mut q = Query {
         property: Some(urls::DESCRIPTION.into()),
         value: None,
+        filters: Vec::new(),
         limit: None,
         start_val: None,
         end_val: None,
@@ -749,6 +753,7 @@ async fn test_collection_update_value(
     let q = Query {
         property: Some(filter_prop.into()),
         value: Some(filter_val),
+        filters: Vec::new(),
         limit: Some(limit),
         start_val: None,
         end_val: None,

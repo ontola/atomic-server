@@ -157,10 +157,35 @@ impl ClientDb {
         offset: Option<usize>,
         include_resources: Option<bool>,
         drive: Option<String>,
+        filters: JsValue,
     ) -> Result<JsValue, JsError> {
+        // Extra `(property, value)` AND constraints from JS. `null`/`undefined`
+        // → none, keeping single-filter callers unchanged.
+        #[derive(serde::Deserialize)]
+        struct FilterParam {
+            property: Option<String>,
+            value: Option<String>,
+        }
+
+        let extra: Vec<atomic_lib::storelike::PropVal> =
+            if filters.is_null() || filters.is_undefined() {
+                Vec::new()
+            } else {
+                let parsed: Vec<FilterParam> =
+                    serde_wasm_bindgen::from_value(filters).map_err(to_js_err)?;
+                parsed
+                    .into_iter()
+                    .map(|f| atomic_lib::storelike::PropVal {
+                        property: f.property,
+                        value: f.value.map(Value::String),
+                    })
+                    .collect()
+            };
+
         let q = Query {
             property,
             value: value.map(Value::String),
+            filters: extra,
             sort_by,
             sort_desc: sort_desc.unwrap_or(false),
             limit,

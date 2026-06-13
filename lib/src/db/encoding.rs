@@ -54,8 +54,7 @@ impl super::query_index::QueryFilter {
         // the shape so we can reuse the same msgpack encoding without the
         // drive field.
         let rest = QueryFilterRest {
-            property: &self.property,
-            value: &self.value,
+            filters: &self.filters,
             sort_by: &self.sort_by,
         };
         rest.serialize(&mut Serializer::new(&mut rest_bin))
@@ -86,8 +85,7 @@ impl super::query_index::QueryFilter {
             .map_err(|e| format!("Error decoding QueryFilter rest: {}", e))?;
 
         Ok(QueryFilter {
-            property: rest.property,
-            value: rest.value,
+            filters: rest.filters,
             sort_by: rest.sort_by,
             drive,
         })
@@ -109,15 +107,13 @@ impl super::query_index::QueryFilter {
 
 #[derive(Serialize)]
 struct QueryFilterRest<'a> {
-    property: &'a Option<String>,
-    value: &'a Option<crate::Value>,
+    filters: &'a Vec<crate::db::query_index::PropVal>,
     sort_by: &'a Option<String>,
 }
 
 #[derive(serde::Deserialize)]
 struct QueryFilterRestOwned {
-    property: Option<String>,
-    value: Option<crate::Value>,
+    filters: Vec<crate::db::query_index::PropVal>,
     sort_by: Option<String>,
 }
 

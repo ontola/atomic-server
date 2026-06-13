@@ -189,6 +189,7 @@ pub async fn collect_drive_subjects(
             let q = crate::storelike::Query {
                 property: Some(crate::urls::PARENT.into()),
                 value: Some(crate::Value::AtomicUrl(current.clone().into())),
+                filters: Vec::new(),
                 limit: None,
                 start_val: None,
                 end_val: None,

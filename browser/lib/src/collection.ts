@@ -17,9 +17,39 @@ function filterIndexLeakage(subjects: string[]): string[] {
   return subjects.filter(s => !s.startsWith('did:ad:commit:'));
 }
 
+/**
+ * Whether a resource's `property` holds `value`, matching the server's
+ * "value-in-property" semantics: single-valued props compare directly,
+ * multi-valued props (arrays like `isA`) test membership.
+ */
+function constraintMatches(
+  resource: Resource,
+  property: string,
+  value: string,
+): boolean {
+  const propVal = resource.get(property);
+
+  return Array.isArray(propVal) ? propVal.includes(value) : propVal === value;
+}
+
+/** A single `(property, value)` constraint. Both are optional, mirroring the
+ * server: property-only (resource has the prop), value-only (any prop holds
+ * the value), or both. */
+export interface PropVal {
+  property?: string;
+  value?: string;
+}
+
 export interface QueryFilter {
   property?: string;
   value?: string;
+  /**
+   * Extra constraints, combined with `property`/`value` using **AND**. Use
+   * this to filter on more than one property (e.g. `isA = Commit` AND
+   * `signer = <agent>`). The primary `property`/`value` above stay as
+   * single-filter sugar.
+   */
+  filters?: PropVal[];
   sort_by?: string;
   sort_desc?: boolean;
   drive?: string;
@@ -103,6 +133,10 @@ export class Collection {
 
   public get value(): string | undefined {
     return this.params.value;
+  }
+
+  public get filters(): PropVal[] {
+    return this.params.filters ?? [];
   }
 
   public get sortBy(): string | undefined {
@@ -328,10 +362,16 @@ export class Collection {
     // `r.get(fp)` is a string for single-valued properties (e.g. `parent`)
     // and an array for multi-valued ones (e.g. `isA`). Match like
     // server-side `/query` does ("value-in-property").
-    const propVal = resource?.get(fp);
     const matches =
       !!resource &&
-      (Array.isArray(propVal) ? propVal.includes(fv) : propVal === fv);
+      constraintMatches(resource, fp, fv) &&
+      // Every extra AND constraint must also hold (multi-property filtering).
+      (this.params.filters ?? []).every(
+        f =>
+          f.property === undefined ||
+          f.value === undefined ||
+          constraintMatches(resource, f.property, f.value),
+      );
 
     // O(1) lookup via the maintained subject→page index instead of
     // scanning every loaded page on every incoming event. The within-
@@ -495,9 +535,21 @@ export class Collection {
     const url = new URL(`${this.server}/query`);
 
     for (const [key, value] of Object.entries(this.params)) {
+      // `filters` is an array of constraints — serialise it as JSON below,
+      // not via the scalar `set()` (which would stringify to "[object Object]").
+      if (key === 'filters') {
+        continue;
+      }
+
       if (value !== undefined) {
         url.searchParams.set(key, value);
       }
+    }
+
+    // AND constraints beyond the primary property/value, as a JSON array the
+    // server parses in `construct_collection_from_params`.
+    if (this.params.filters && this.params.filters.length > 0) {
+      url.searchParams.set('filters', JSON.stringify(this.params.filters));
     }
 
     url.searchParams.set('current_page', `${page}`);
@@ -615,6 +667,7 @@ export class Collection {
     const result = await this.store.queryLocalDb({
       property: this.params.property,
       value: this.params.value,
+      filters: this.params.filters,
       includeResources: true,
     });
 
