@@ -92,7 +92,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
         onNewTag={canCreateTags ? handleNewTag : undefined}
         newTagParent={canCreateTags ? driveSubject : undefined}
         Trigger={
-          <TagsButton as={RadixPopover.Trigger}>
+          <TagsButton as={RadixPopover.Trigger} data-testid='navbar-tags-button'>
             <FaTags />
             <span>Tags</span>
             {tags.length > 0 && <TagsCount>+{tags.length}</TagsCount>}
