@@ -135,8 +135,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   // Use a ref for the guard so the stale onFinish closure sees the current value.
   const isCompactingRef = useRef(false);
 
-  const { getInitialAgent, setLastUsedAgentForChat, setLastUsedSidebarAgent } =
-    useAIAgentConfig();
+  const {
+    agents,
+    saveAgents,
+    getInitialAgent,
+    setLastUsedAgentForChat,
+    setLastUsedSidebarAgent,
+  } = useAIAgentConfig();
   const getToolsForAgent = useTools();
   const {
     checkORModelSupportsImageInput,
@@ -248,7 +253,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   const [userInput, setUserInput] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const { defaultChatModel } = useAISettings();
+  const { defaultChatModel, setDefaultChatModel } = useAISettings();
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
   );
@@ -759,7 +764,25 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                             providerStr === 'openrouter'
                               ? AIProvider.OpenRouter
                               : AIProvider.Ollama;
-                          setActiveModel({ id, provider });
+                          const newModel = { id, provider };
+                          setActiveModel(newModel);
+                          // Persist the choice to whichever source the chat reads
+                          // on open (`agent.model ?? defaultChatModel`), so it
+                          // survives refreshes and new chats.
+                          if (selectedAgent.model) {
+                            const updatedAgent = {
+                              ...selectedAgent,
+                              model: newModel,
+                            };
+                            setSelectedAgent(updatedAgent);
+                            saveAgents(
+                              agents.map(a =>
+                                a.id === updatedAgent.id ? updatedAgent : a,
+                              ),
+                            );
+                          } else {
+                            setDefaultChatModel(newModel);
+                          }
                           // Remember this model so it surfaces at the top next time.
                           setRecentModelValues(prev =>
                             [value, ...prev.filter(v => v !== value)].slice(
