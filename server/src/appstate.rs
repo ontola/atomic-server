@@ -124,6 +124,16 @@ impl AppState {
             atomic_lib::populate::bootstrap(&store)
                 .await
                 .map_err(|e| format!("Failed to bootstrap store. {}", e))?;
+        } else if config.repopulate_defaults {
+            // Re-import the built-in ontologies + default resources into an
+            // already-seeded store (without an index rebuild). `import` upserts,
+            // so this only adds new/changed default resources (e.g. a freshly
+            // added Class) and leaves user data untouched. Triggered by
+            // `ATOMIC_REPOPULATE_DEFAULTS=true`.
+            tracing::info!("Repopulating built-in ontologies and default resources...");
+            atomic_lib::populate::populate_default_store(&store)
+                .await
+                .map_err(|e| format!("Failed to repopulate defaults. {}", e))?;
         }
 
         // Initialize search constructs

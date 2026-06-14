@@ -18,26 +18,84 @@ function filterIndexLeakage(subjects: string[]): string[] {
 }
 
 /**
- * Whether a resource's `property` holds `value`, matching the server's
- * "value-in-property" semantics: single-valued props compare directly,
- * multi-valued props (arrays like `isA`) test membership.
+ * How a {@link PropVal} compares the resource's value to the filter value.
+ * `eq` (default) is equality / array membership; the rest are value-comparison
+ * predicates. Mirrors the Rust `FilterOperator`.
+ */
+export type FilterOperator =
+  | 'eq'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'starts_with'
+  | 'contains';
+
+/** Compares two scalar values for the ordering operators — numeric when both
+ * parse as numbers (ints, floats, timestamps), else lexical. */
+function compareValues(actual: string, query: string): number {
+  const a = Number(actual);
+  const b = Number(query);
+
+  if (!Number.isNaN(a) && !Number.isNaN(b)) {
+    return a - b;
+  }
+
+  return actual < query ? -1 : actual > query ? 1 : 0;
+}
+
+/** Whether one scalar value satisfies the filter value + operator. */
+function valueMatches(
+  actual: string,
+  query: string,
+  operator: FilterOperator,
+): boolean {
+  switch (operator) {
+    case 'gt':
+      return compareValues(actual, query) > 0;
+    case 'gte':
+      return compareValues(actual, query) >= 0;
+    case 'lt':
+      return compareValues(actual, query) < 0;
+    case 'lte':
+      return compareValues(actual, query) <= 0;
+    case 'starts_with':
+      return actual.startsWith(query);
+    case 'contains':
+      return actual.includes(query);
+    default:
+      return actual === query;
+  }
+}
+
+/**
+ * Whether a resource's `property` satisfies the constraint, matching the
+ * server's "value-in-property" semantics: single-valued props compare directly,
+ * multi-valued props (arrays like `isA`) test per-element.
  */
 function constraintMatches(
   resource: Resource,
   property: string,
   value: string,
+  operator: FilterOperator = 'eq',
 ): boolean {
   const propVal = resource.get(property);
 
-  return Array.isArray(propVal) ? propVal.includes(value) : propVal === value;
+  if (Array.isArray(propVal)) {
+    return propVal.some(v => valueMatches(`${v}`, value, operator));
+  }
+
+  return valueMatches(`${propVal}`, value, operator);
 }
 
 /** A single `(property, value)` constraint. Both are optional, mirroring the
  * server: property-only (resource has the prop), value-only (any prop holds
- * the value), or both. */
+ * the value), or both. `operator` selects how value is compared (default
+ * `eq`). */
 export interface PropVal {
   property?: string;
   value?: string;
+  operator?: FilterOperator;
 }
 
 export interface QueryFilter {
@@ -370,7 +428,7 @@ export class Collection {
         f =>
           f.property === undefined ||
           f.value === undefined ||
-          constraintMatches(resource, f.property, f.value),
+          constraintMatches(resource, f.property, f.value, f.operator ?? 'eq'),
       );
 
     // O(1) lookup via the maintained subject→page index instead of
@@ -664,10 +722,19 @@ export class Collection {
     // immediately after a page reload `store.resources` is empty, so without
     // it the sort key lookup returns `undefined` for every member and the
     // sort silently degrades to the index's natural order.
+    const hasExtraFilters =
+      !!this.params.filters && this.params.filters.length > 0;
+
     const result = await this.store.queryLocalDb({
       property: this.params.property,
       value: this.params.value,
       filters: this.params.filters,
+      // Extra AND constraints route through the indexed path
+      // (`query_complex`), which requires a drive scope. Single
+      // property/value queries use the basic path and intentionally omit
+      // `drive` (see the sort note above). We still don't pass `sort_by`, so
+      // the indexed query stays drive-scoped without the DID-sort issue.
+      drive: hasExtraFilters ? this.params.drive : undefined,
       includeResources: true,
     });
 

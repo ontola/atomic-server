@@ -41,8 +41,9 @@ export interface ClientDbQueryResult {
 export interface ClientDbQueryOpts {
   property?: string;
   value?: string;
-  /** Extra `(property, value)` constraints, ANDed with `property`/`value`. */
-  filters?: Array<{ property?: string; value?: string }>;
+  /** Extra `(property, value, operator?)` constraints, ANDed with the primary
+   * `property`/`value`. `operator` defaults to `eq`. */
+  filters?: Array<{ property?: string; value?: string; operator?: string }>;
   sortBy?: string;
   sortDesc?: boolean;
   limit?: number;

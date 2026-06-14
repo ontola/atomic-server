@@ -18,7 +18,25 @@ export function useMemberFromCollection<C extends OptionalClass = never>(
   const resource = useResource(subject);
 
   useEffect(() => {
-    collection.getMemberWithIndex(index).then(s => s && setSubject(s));
+    // `index` can momentarily exceed the collection's size — e.g. a filter
+    // shrinks `totalMembers` while a virtualized row for an old index is still
+    // mounted. `getMemberWithIndex` rejects with "Index out of bounds" there;
+    // swallow it (the row unmounts / re-resolves on the next render) instead of
+    // surfacing an unhandled rejection.
+    let cancelled = false;
+
+    collection
+      .getMemberWithIndex(index)
+      .then(s => {
+        if (!cancelled && s) {
+          setSubject(s);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
   }, [collection, index]);
 
   return resource;

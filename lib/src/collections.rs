@@ -43,9 +43,9 @@ pub struct CollectionBuilder {
     pub property: Option<String>,
     /// The value which the results are to be filtered by
     pub value: Option<String>,
-    /// Extra `(property, value)` constraints, ANDed with `property`/`value`.
-    /// Lets a collection filter on multiple properties.
-    pub filters: Vec<(String, String)>,
+    /// Extra constraints, ANDed with `property`/`value`. Lets a collection
+    /// filter on multiple properties, each with its own operator.
+    pub filters: Vec<crate::storelike::PropVal>,
     /// URL of the value to sort by
     pub sort_by: Option<String>,
     /// Sorts ascending by default
@@ -249,14 +249,7 @@ impl Collection {
         let q = Query {
             property: collection_builder.property.clone(),
             value: value_filter,
-            filters: collection_builder
-                .filters
-                .iter()
-                .map(|(p, v)| crate::storelike::PropVal {
-                    property: Some(p.clone()),
-                    value: Some(Value::String(v.clone())),
-                })
-                .collect(),
+            filters: collection_builder.filters.clone(),
             limit: Some(collection_builder.page_size),
             start_val: None,
             end_val: None,
@@ -417,7 +410,7 @@ pub async fn construct_collection_from_params(
     let mut page_size = DEFAULT_PAGE_SIZE;
     let mut value = None;
     let mut property = None;
-    let mut filters: Vec<(String, String)> = Vec::new();
+    let mut filters: Vec<crate::storelike::PropVal> = Vec::new();
     let mut name = None;
     let mut include_nested = false;
     let mut include_external = false;
@@ -445,19 +438,30 @@ pub async fn construct_collection_from_params(
         match k.as_ref() {
             "property" => property = Some(v.to_string()),
             "value" => value = Some(v.to_string()),
-            // Extra AND constraints as a JSON array: `[{"property":"…","value":"…"}]`.
+            // Extra AND constraints as a JSON array, each with an optional
+            // operator: `[{"property":"…","value":"…","operator":"gt"}]`.
             "filters" => {
                 #[derive(serde::Deserialize)]
                 struct FilterParam {
                     property: String,
                     value: String,
+                    operator: Option<String>,
                 }
                 let parsed: Vec<FilterParam> = serde_json::from_str(v.as_ref()).map_err(|e| {
                     format!(
-                        "Invalid `filters` param (expected JSON array of {{property, value}}): {e}"
+                        "Invalid `filters` param (expected JSON array of {{property, value, operator?}}): {e}"
                     )
                 })?;
-                filters = parsed.into_iter().map(|f| (f.property, f.value)).collect();
+                filters = parsed
+                    .into_iter()
+                    .map(|f| crate::storelike::PropVal {
+                        property: Some(f.property),
+                        value: Some(Value::String(f.value)),
+                        operator: crate::storelike::filter_operator_from_str(
+                            f.operator.as_deref(),
+                        ),
+                    })
+                    .collect();
             }
             "sort_by" => sort_by = Some(v.to_string()),
             "sort_desc" => sort_desc = v.parse::<bool>()?,
@@ -639,7 +643,11 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::IS_A.into()),
             value: Some(urls::TAG.into()),
-            filters: vec![(urls::SHORTNAME.to_string(), "tag-a".to_string())],
+            filters: vec![crate::storelike::PropVal {
+                property: Some(urls::SHORTNAME.to_string()),
+                value: Some(Value::String("tag-a".to_string())),
+                ..Default::default()
+            }],
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,

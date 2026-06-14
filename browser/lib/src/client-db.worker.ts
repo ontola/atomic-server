@@ -32,7 +32,7 @@ export type WorkerRequest =
       type: 'query';
       property?: string;
       value?: string;
-      filters?: Array<{ property?: string; value?: string }>;
+      filters?: Array<{ property?: string; value?: string; operator?: string }>;
       sortBy?: string;
       sortDesc?: boolean;
       limit?: number;

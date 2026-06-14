@@ -16,7 +16,7 @@ pub type IndexIterator = Box<dyn Iterator<Item = AtomicResult<IndexAtom>> + Send
 // `PropVal` lives in `storelike` (always compiled, unlike the feature-gated
 // `db` module) so `Query` can reference it. Re-exported here for the index code
 // and existing `query_index::PropVal` consumers.
-pub use crate::storelike::PropVal;
+pub use crate::storelike::{FilterOperator, PropVal};
 
 /// A subset of a full [Query].
 /// Represents a sorted filter on the Store.
@@ -82,7 +82,11 @@ impl QueryFilter {
         drive: Subject,
     ) -> Self {
         QueryFilter {
-            filters: vec![PropVal { property, value }],
+            filters: vec![PropVal {
+                property,
+                value,
+                ..Default::default()
+            }],
             sort_by,
             drive,
         }
@@ -99,6 +103,7 @@ impl QueryFilter {
             filters.push(PropVal {
                 property: q.property.clone(),
                 value: q.value.clone(),
+                operator: crate::storelike::FilterOperator::Equal,
             });
         }
         // Additional ANDed constraints.
@@ -205,19 +210,59 @@ pub async fn query_sorted_indexed(
     Ok((subjects, resources, count))
 }
 
+/// Compares two values for ordering operators. Numeric when both parse as
+/// numbers (covers Integer/Float/Timestamp and numeric strings); otherwise a
+/// lexical comparison of their string forms (ISO dates sort correctly this way).
+fn compare_values(actual: &Value, query: &Value) -> std::cmp::Ordering {
+    let a = actual.to_string();
+    let b = query.to_string();
+
+    match (a.parse::<f64>(), b.parse::<f64>()) {
+        (Ok(x), Ok(y)) => x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal),
+        _ => a.cmp(&b),
+    }
+}
+
+/// Whether a single resource value satisfies the constraint's value + operator.
+fn value_matches(actual: &Value, query: &Value, operator: FilterOperator) -> bool {
+    use std::cmp::Ordering;
+    use FilterOperator::*;
+
+    match operator {
+        // Scalar equality or array membership — the historical behaviour.
+        Equal => actual.contains_value(query),
+        StartsWith => actual.to_string().starts_with(&query.to_string()),
+        Contains => actual.to_string().contains(&query.to_string()),
+        GreaterThan => compare_values(actual, query) == Ordering::Greater,
+        GreaterThanOrEqual => {
+            matches!(
+                compare_values(actual, query),
+                Ordering::Greater | Ordering::Equal
+            )
+        }
+        LessThan => compare_values(actual, query) == Ordering::Less,
+        LessThanOrEqual => {
+            matches!(
+                compare_values(actual, query),
+                Ordering::Less | Ordering::Equal
+            )
+        }
+    }
+}
+
 /// Whether a single `(property, value)` constraint matches a resource.
 fn constraint_matches(resource: &Resource, c: &PropVal) -> bool {
     match (&c.property, &c.value) {
         (Some(property), Some(value)) => {
-            matches!(resource.get(property), Ok(v) if v.contains_value(value))
+            matches!(resource.get(property), Ok(v) if value_matches(v, value, c.operator))
         }
         // Property only: the resource must have that property.
         (Some(property), None) => resource.get(property).is_ok(),
-        // Value only: any property of the resource contains the value.
+        // Value only: any property of the resource satisfies the constraint.
         (None, Some(value)) => resource
             .get_propvals()
             .iter()
-            .any(|(_p, v)| v.contains_value(value)),
+            .any(|(_p, v)| value_matches(v, value, c.operator)),
         // No constraint at all is vacuously true (filtered out by `watch`).
         (None, None) => true,
     }
@@ -778,10 +823,12 @@ pub mod test {
                 PropVal {
                     property: Some(urls::IS_A.to_string()),
                     value: Some(Value::AtomicUrl(class.to_string().into())),
+                    ..Default::default()
                 },
                 PropVal {
                     property: Some(urls::DESCRIPTION.to_string()),
                     value: Some(Value::String("hello".into())),
+                    ..Default::default()
                 },
             ],
             sort_by: None,
@@ -794,10 +841,12 @@ pub mod test {
                 PropVal {
                     property: Some(urls::IS_A.to_string()),
                     value: Some(Value::AtomicUrl(class.to_string().into())),
+                    ..Default::default()
                 },
                 PropVal {
                     property: Some(urls::DESCRIPTION.to_string()),
                     value: Some(Value::String("different".into())),
+                    ..Default::default()
                 },
             ],
             sort_by: None,
@@ -827,5 +876,55 @@ pub mod test {
             sort_value: "hello".to_string(),
         };
         assert!(should_update_property(&matching, &desc_atom, &resource).is_some());
+    }
+
+    #[tokio::test]
+    async fn operator_filters() {
+        let store = &Db::init_temp("operator_filters").await.unwrap();
+        let drive = Subject::from("https://example.com");
+
+        let mut resource = Resource::new_instance(urls::AGENT, store).await.unwrap();
+        resource
+            .set(
+                urls::DESCRIPTION.into(),
+                Value::Markdown("hello world".into()),
+                store,
+            )
+            .await
+            .unwrap();
+        // A numeric value to exercise the comparison operators.
+        resource
+            .set_unsafe(urls::COLLECTION_PAGE_SIZE.into(), Value::Integer(42))
+            .unwrap();
+
+        let f = |property: &str, value: Value, operator: FilterOperator| QueryFilter {
+            filters: vec![PropVal {
+                property: Some(property.to_string()),
+                value: Some(value),
+                operator,
+            }],
+            sort_by: None,
+            drive: drive.clone(),
+        };
+
+        use FilterOperator::*;
+
+        // starts_with / contains on the markdown description.
+        let sw = |v: &str| f(urls::DESCRIPTION, Value::String(v.into()), StartsWith);
+        assert!(resource_matches_filter(&resource, &sw("hello")));
+        assert!(!resource_matches_filter(&resource, &sw("world")));
+
+        let ct = |v: &str| f(urls::DESCRIPTION, Value::String(v.into()), Contains);
+        assert!(resource_matches_filter(&resource, &ct("lo wo")));
+        assert!(!resource_matches_filter(&resource, &ct("xyz")));
+
+        // Numeric comparisons against 42.
+        let num = |v: i64, op: FilterOperator| f(urls::COLLECTION_PAGE_SIZE, Value::Integer(v), op);
+        assert!(resource_matches_filter(&resource, &num(10, GreaterThan)));
+        assert!(!resource_matches_filter(&resource, &num(50, GreaterThan)));
+        assert!(resource_matches_filter(&resource, &num(42, GreaterThanOrEqual)));
+        assert!(resource_matches_filter(&resource, &num(100, LessThan)));
+        assert!(!resource_matches_filter(&resource, &num(42, LessThan)));
+        assert!(resource_matches_filter(&resource, &num(42, LessThanOrEqual)));
     }
 }

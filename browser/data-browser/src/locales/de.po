@@ -1749,6 +1749,7 @@ msgid "External Property"
 msgstr "Externe Eigenschaft"
 
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "View"
 msgstr "Ansicht"
 
@@ -4724,3 +4725,70 @@ msgstr "Format: {0}"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Click to focus document…"
 msgstr "Klicken, um das Dokument zu fokussieren…"
+
+#: src/chunks/TablePage/TableFilterBar.tsx
+msgid "Table filters"
+msgstr "Tabellenfilter"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Remove filter"
+msgstr "Filter entfernen"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Any"
+msgstr "Beliebig"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "True"
+msgstr "Wahr"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "False"
+msgstr "Falsch"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Value…"
+msgstr "Wert…"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Filter"
+msgstr "Filtern"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Filter operator"
+msgstr "Filteroperator"
+
+#: src/chunks/TablePage/useTableView.ts
+#: src/chunks/TablePage/useTableView.ts
+msgid "Default View"
+msgstr "Standardansicht"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Hide in this view"
+msgstr "In dieser Ansicht ausblenden"
+
+#: src/chunks/TablePage/TableToolbar.tsx
+msgid "View name"
+msgstr "Ansichtsname"
+
+#: src/chunks/TablePage/TableToolbar.tsx
+msgid "Columns"
+msgstr "Spalten"
+
+#. placeholder {0}: views.length + 1
+#: src/chunks/TablePage/useTableView.ts
+msgid "View {0}"
+msgstr "Ansicht {0}"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Ansicht hinzufügen"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Untitled view"
+msgstr "Unbenannte Ansicht"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Show / hide columns"
+msgstr "Spalten ein-/ausblenden"

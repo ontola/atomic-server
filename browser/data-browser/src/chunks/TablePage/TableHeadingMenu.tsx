@@ -9,7 +9,14 @@ import {
 import { useCallback, useContext, useMemo, useState, type JSX } from 'react';
 import { DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
-import { FaPencil, FaEllipsisVertical, FaEye, FaXmark } from 'react-icons/fa6';
+import {
+  FaPencil,
+  FaEllipsisVertical,
+  FaEye,
+  FaEyeSlash,
+  FaXmark,
+  FaFilter,
+} from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { EditPropertyDialog } from './PropertyForm/EditPropertyDialog';
 import { TablePageContext } from './tablePageContext';
@@ -52,7 +59,8 @@ export function TableHeadingMenu({
     }
   }, []);
 
-  const { tableClassSubject } = useContext(TablePageContext);
+  const { tableClassSubject, addFilter, hideColumn } =
+    useContext(TablePageContext);
   const tableClassResource = useResource(tableClassSubject);
   const canWriteClass = useCanWrite(tableClassResource);
   const canWriteProperty = useCanWrite(resource);
@@ -106,6 +114,18 @@ export function TableHeadingMenu({
         icon: <FaEye />,
       },
       {
+        id: 'filter',
+        label: 'Filter',
+        onClick: () => addFilter(resource.subject),
+        icon: <FaFilter />,
+      },
+      {
+        id: 'hide',
+        label: 'Hide in this view',
+        onClick: () => hideColumn(resource.subject),
+        icon: <FaEyeSlash />,
+      },
+      {
         id: 'edit',
         label: 'Edit',
         onClick: () => setShowEditDialog(true),
@@ -121,6 +141,8 @@ export function TableHeadingMenu({
       },
     ],
     [
+      addFilter,
+      hideColumn,
       canWriteClass,
       canWriteProperty,
       navigate,

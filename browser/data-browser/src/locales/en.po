@@ -1338,6 +1338,7 @@ msgid "Add"
 msgstr "Add"
 
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "View"
 msgstr "View"
 
@@ -4742,3 +4743,70 @@ msgstr "Format: {0}"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Click to focus document…"
 msgstr "Click to focus document…"
+
+#: src/chunks/TablePage/TableFilterBar.tsx
+msgid "Table filters"
+msgstr "Table filters"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Remove filter"
+msgstr "Remove filter"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Any"
+msgstr "Any"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "True"
+msgstr "True"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "False"
+msgstr "False"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Value…"
+msgstr "Value…"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Filter"
+msgstr "Filter"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Filter operator"
+msgstr "Filter operator"
+
+#: src/chunks/TablePage/useTableView.ts
+#: src/chunks/TablePage/useTableView.ts
+msgid "Default View"
+msgstr "Default View"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Hide in this view"
+msgstr "Hide in this view"
+
+#: src/chunks/TablePage/TableToolbar.tsx
+msgid "View name"
+msgstr "View name"
+
+#: src/chunks/TablePage/TableToolbar.tsx
+msgid "Columns"
+msgstr "Columns"
+
+#. placeholder {0}: views.length + 1
+#: src/chunks/TablePage/useTableView.ts
+msgid "View {0}"
+msgstr "View {0}"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Add view"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Untitled view"
+msgstr "Untitled view"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Show / hide columns"
+msgstr "Show / hide columns"

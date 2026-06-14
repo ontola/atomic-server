@@ -165,6 +165,7 @@ impl ClientDb {
         struct FilterParam {
             property: Option<String>,
             value: Option<String>,
+            operator: Option<String>,
         }
 
         let extra: Vec<atomic_lib::storelike::PropVal> =
@@ -178,6 +179,9 @@ impl ClientDb {
                     .map(|f| atomic_lib::storelike::PropVal {
                         property: f.property,
                         value: f.value.map(Value::String),
+                        operator: atomic_lib::storelike::filter_operator_from_str(
+                            f.operator.as_deref(),
+                        ),
                     })
                     .collect()
             };

@@ -634,16 +634,60 @@ pub trait Storelike: Sized + Send + Sync {
     }
 }
 
+/// How a [PropVal] constraint compares the resource's value to the filter
+/// value. `Equal` keeps the historical behaviour (`contains_value`: scalar
+/// equality or array membership); the rest are value-comparison predicates
+/// applied during post-filtering. Index-accelerated range scans are a separate,
+/// later optimisation — see `planning/table-view-filters.md`.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
+)]
+pub enum FilterOperator {
+    /// Scalar equality or array membership (`contains_value`). The default.
+    #[default]
+    Equal,
+    /// Numeric/lexical greater-than.
+    GreaterThan,
+    /// Numeric/lexical greater-than-or-equal.
+    GreaterThanOrEqual,
+    /// Numeric/lexical less-than.
+    LessThan,
+    /// Numeric/lexical less-than-or-equal.
+    LessThanOrEqual,
+    /// String prefix match.
+    StartsWith,
+    /// String substring match.
+    Contains,
+}
+
+/// Parses a wire operator string (from a `/query` param or the WASM bridge)
+/// into a [FilterOperator]. Unknown/missing → `Equal` (back-compat). Accepts
+/// both short and symbolic spellings.
+pub fn filter_operator_from_str(op: Option<&str>) -> FilterOperator {
+    match op {
+        Some("gt") | Some(">") => FilterOperator::GreaterThan,
+        Some("gte") | Some(">=") => FilterOperator::GreaterThanOrEqual,
+        Some("lt") | Some("<") => FilterOperator::LessThan,
+        Some("lte") | Some("<=") => FilterOperator::LessThanOrEqual,
+        Some("starts_with") => FilterOperator::StartsWith,
+        Some("contains") => FilterOperator::Contains,
+        _ => FilterOperator::Equal,
+    }
+}
+
 /// A single `(property, value)` constraint used by [Query] and the query index.
 /// Both are optional: property+value (the property must contain the value),
 /// property-only (must have the property), or value-only (any property contains
-/// the value).
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// the value). `operator` selects how value is compared (default `Equal`).
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct PropVal {
     /// Filtering by property URL
     pub property: Option<String>,
     /// Filtering by value
     pub value: Option<Value>,
+    /// How `value` is compared. Defaults to `Equal` for back-compat.
+    #[serde(default)]
+    pub operator: FilterOperator,
 }
 
 /// Use this to construct a list of Resources
@@ -722,6 +766,7 @@ impl Query {
         self.filters.push(PropVal {
             property: Some(property.to_string()),
             value: Some(value),
+            operator: FilterOperator::Equal,
         });
         self
     }

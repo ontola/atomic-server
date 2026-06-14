@@ -32,6 +32,8 @@ import {
 import { FancyTable } from '@chunks/TableEditor/TableEditor';
 import { NewColumnButton } from './NewColumnButton';
 import { TableHeading } from './TableHeading';
+import { TableFilterBar } from './TableFilterBar';
+import { TableViewTabs } from './TableViewTabs';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
 
 interface TableResourceProps {
@@ -49,12 +51,26 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     tableClass,
     sorting,
     setSortBy,
+    filters,
+    addFilter,
+    setFilterValue,
+    setFilterOperator,
+    removeFilter,
+    viewColumns,
+    setViewColumns,
+    viewName,
+    renameView,
+    views,
+    activeView,
+    setActiveView,
+    createView,
     collection,
     ready,
     invalidateCollection,
   } = useTableData(resource);
 
-  const { columns, reorderColumns } = useTableColumns(tableClass);
+  const { columns, allColumns, reorderColumns, hideColumn, showColumn } =
+    useTableColumns(tableClass, viewColumns, setViewColumns);
 
   const { undoLastItem, addItemsToHistoryStack } =
     useTableHistory(invalidateCollection);
@@ -105,16 +121,55 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   // session row can sort into the member range and briefly render twice until a
   // reload re-seeds the session. For a fresh table `memberCount` is 0, so this
   // never happens — covering new-table entry, the common case.
+  // Identity of the current query: value-bearing filters (incl. operator),
+  // sort, and active view. `useCollection` returns a NEW collection instance
+  // both when this changes (a filter/sort/view edit) and on same-query
+  // refreshes (e.g. after a new row materializes). The baseline must re-capture
+  // in the former case but stay frozen in the latter (so session/new rows keep
+  // a stable identity and don't duplicate — "fast entry").
+  const queryKey = useMemo(
+    () =>
+      JSON.stringify({
+        f: filters
+          .filter(x => x.value !== '')
+          .map(x => [x.property, x.operator, x.value]),
+        s: [sorting.prop, sorting.sortDesc],
+        v: activeView ?? null,
+      }),
+    [filters, sorting, activeView],
+  );
+
   const baselineMemberCountRef = useRef<number | null>(null);
+  const baselineQueryKeyRef = useRef<string | null>(null);
+  const prevCollectionRef = useRef(collection);
+
+  if (prevCollectionRef.current !== collection) {
+    prevCollectionRef.current = collection;
+
+    if (baselineQueryKeyRef.current !== queryKey) {
+      baselineMemberCountRef.current = null;
+    }
+  }
 
   if (ready && baselineMemberCountRef.current === null) {
     baselineMemberCountRef.current = collection.totalMembers;
+    baselineQueryKeyRef.current = queryKey;
   }
 
   // Before the collection is ready, track its live count so existing members
   // render as `TableRow`s during load (matching the old behaviour); once ready,
   // the frozen baseline takes over.
-  const memberCount = baselineMemberCountRef.current ?? collection.totalMembers;
+  //
+  // Clamp to the collection's CURRENT size: when a filter shrinks the
+  // collection the frozen baseline would otherwise exceed `totalMembers`, and
+  // `getMemberWithIndex(index)` throws "Index out of bounds" for the now-
+  // missing rows (surfacing as an unhandled rejection in
+  // `useMemberFromCollection`). The clamp guards that instant; the filter
+  // rebase effect below then recaptures a fresh baseline.
+  const memberCount = Math.min(
+    baselineMemberCountRef.current ?? collection.totalMembers,
+    collection.totalMembers,
+  );
 
   // Applying a sort must visibly reorder the rows. Session rows render from
   // `newRowSubjects` in INSERTION order, bypassing the collection's sort, so a
@@ -129,11 +184,16 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   // initial mount.
   const newRowSubjectsRef = useRef(newRowSubjects);
   newRowSubjectsRef.current = newRowSubjects;
-  const sortInitialisedRef = useRef(false);
+  const rebaseInitialisedRef = useRef(false);
 
+  // When the query changes (filter/sort/view edit — keyed on `queryKey`), the
+  // collection rebuilds, so rebase the session: force-save any in-progress new
+  // row, then reset to a single trailing placeholder. The baseline itself is
+  // re-captured by the `queryKey`-aware block above (NOT here — doing it here
+  // raced the still-`ready` old collection and captured its count).
   useEffect(() => {
-    if (!sortInitialisedRef.current) {
-      sortInitialisedRef.current = true;
+    if (!rebaseInitialisedRef.current) {
+      rebaseInitialisedRef.current = true;
 
       return;
     }
@@ -146,9 +206,8 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       }
     }
 
-    baselineMemberCountRef.current = null;
     setNewRowSubjects([generateRowSubject()]);
-  }, [sorting, store, generateRowSubject]);
+  }, [queryKey, store, generateRowSubject]);
 
   const decrementMemberCount = useCallback(() => {
     if (baselineMemberCountRef.current && baselineMemberCountRef.current > 0) {
@@ -189,6 +248,12 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       tableClassSubject: tableClass.subject,
       sorting,
       setSortBy,
+      filters,
+      addFilter,
+      setFilterValue,
+      setFilterOperator,
+      removeFilter,
+      hideColumn,
       addItemsToHistoryStack,
     }),
     [
@@ -196,6 +261,12 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       tableClass.subject,
       sorting,
       setSortBy,
+      filters,
+      addFilter,
+      setFilterValue,
+      setFilterOperator,
+      removeFilter,
+      hideColumn,
       addItemsToHistoryStack,
     ],
   );
@@ -291,11 +362,32 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
 
     // Resource can update a lot but its internals are stable so removing it from the array saves a lot of rerenders and shouldn't cause issues.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [collection, columns, memberCount, newRowSubjects, resource.subject, addNewRow],
+    [
+      collection,
+      columns,
+      memberCount,
+      newRowSubjects,
+      resource.subject,
+      addNewRow,
+    ],
   );
 
   return (
     <TablePageContext value={tablePageContext}>
+      <TableViewTabs
+        views={views}
+        activeView={activeView}
+        setActiveView={setActiveView}
+        createView={createView}
+        viewName={viewName}
+        renameView={renameView}
+        allColumns={allColumns}
+        columns={columns}
+        showColumn={showColumn}
+        hideColumn={hideColumn}
+        canWrite={canWrite}
+      />
+      <TableFilterBar columns={columns} />
       <FancyTable
         readOnly={!canWrite}
         columns={columns}

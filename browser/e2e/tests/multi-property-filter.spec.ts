@@ -141,4 +141,112 @@ test.describe('multi-property (AND) filtering', () => {
       'Server /query AND-filter must return only folder A',
     ).toEqual([created.a]);
   });
+
+  test('operator filters (starts_with / contains) agree on local and server paths', async ({
+    page,
+  }) => {
+    await page.waitForFunction(
+      () =>
+        window.store.getClientDb()?.isReady === true &&
+        window.store.getSyncStatus().serverConnected === true,
+      undefined,
+      { timeout: 30000 },
+    );
+
+    // Three folders under the drive; filter on `name` with operators.
+    const created = await page.evaluate(
+      async ({ nameProp, folder }) => {
+        const store = window.store;
+        const drive = store.getDrive();
+
+        const make = async (name: string) => {
+          const r = await store.newResource({
+            parent: drive,
+            isA: folder,
+            propVals: { [nameProp]: name },
+          });
+          await r.save();
+
+          return r.subject;
+        };
+
+        const apple = await make('Apple');
+        const apricot = await make('Apricot');
+        const banana = await make('Banana');
+
+        return { drive, apple, apricot, banana };
+      },
+      { nameProp: NAME, folder: FOLDER },
+    );
+
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 30000 },
+    );
+
+    const PARENT = 'https://atomicdata.dev/properties/parent';
+    const sorted = (xs: string[]) => [...xs].sort();
+
+    // Wait until the local DB sees all three children (indexed) before asserting.
+    await page.waitForFunction(
+      async ([nameProp, drive, ...subjects]) => {
+        const res = await window.store.queryLocalDb({
+          property: nameProp,
+          value: 'Apple',
+          drive,
+        });
+
+        return (res?.subjects ?? []).includes(subjects[0]);
+      },
+      [NAME, created.drive, created.apple] as const,
+      { timeout: 30000, polling: 500 },
+    );
+
+    // --- Local WASM/OPFS path: name starts_with "Ap" → Apple + Apricot ---
+    const localStarts = await page.evaluate(
+      async ({ parent, nameProp, drive }) => {
+        const res = await window.store.queryLocalDb({
+          property: parent,
+          value: drive,
+          filters: [{ property: nameProp, value: 'Ap', operator: 'starts_with' }],
+          drive,
+        });
+
+        return res?.subjects ?? [];
+      },
+      { parent: PARENT, nameProp: NAME, drive: created.drive },
+    );
+
+    expect(sorted(localStarts), 'local starts_with "Ap"').toEqual(
+      sorted([created.apple, created.apricot]),
+    );
+
+    // --- Server /query path: name contains "an" → Banana ---
+    const serverContains = await page.evaluate(
+      async ({ parent, nameProp, drive }) => {
+        const store = window.store;
+        const url = new URL(`${store.getServerUrl()}/query`);
+        url.searchParams.set('property', parent);
+        url.searchParams.set('value', drive);
+        url.searchParams.set(
+          'filters',
+          JSON.stringify([
+            { property: nameProp, value: 'an', operator: 'contains' },
+          ]),
+        );
+        url.searchParams.set('drive', drive);
+
+        const res = await store.fetchResourceFromServer(url.toString());
+        const members = res?.get(
+          'https://atomicdata.dev/properties/collection/members',
+        );
+
+        return Array.isArray(members) ? (members as string[]) : [];
+      },
+      { parent: PARENT, nameProp: NAME, drive: created.drive },
+    );
+
+    expect(serverContains, 'server contains "an"').toEqual([created.banana]);
+  });
 });

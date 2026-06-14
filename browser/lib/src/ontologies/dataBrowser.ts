@@ -26,6 +26,7 @@ export const dataBrowser = {
     rangeProperty: 'https://atomicdata.dev/classes/RangeProperty',
     selectProperty: 'https://atomicdata.dev/classes/SelectProperty',
     table: 'https://atomicdata.dev/classes/Table',
+    view: 'https://atomicdata.dev/classes/View',
     tag: 'https://atomicdata.dev/classes/Tag',
     template: 'https://atomicdata.dev/ontology/data-browser/class/template',
     documentV2: 'https://atomicdata.dev/classes/DocumentV2',
@@ -58,6 +59,13 @@ export const dataBrowser = {
     sortOrder: 'https://atomicdata.dev/properties/sortOrder',
     subResources: 'https://atomicdata.dev/properties/subresources',
     tableColumnWidths: 'https://atomicdata.dev/properties/tableColumnWidths',
+    tableViews: 'https://atomicdata.dev/properties/table-views',
+    tableDefaultView: 'https://atomicdata.dev/properties/table-default-view',
+    viewKind: 'https://atomicdata.dev/properties/view-kind',
+    viewFilters: 'https://atomicdata.dev/properties/view-filters',
+    viewSortBy: 'https://atomicdata.dev/properties/view-sort-by',
+    viewSortDesc: 'https://atomicdata.dev/properties/view-sort-desc',
+    viewColumns: 'https://atomicdata.dev/properties/view-columns',
     tags: 'https://atomicdata.dev/properties/tags',
     tagList: 'https://atomicdata.dev/ontology/data-browser/property/tag-list',
     url: 'https://atomicdata.dev/property/url',
@@ -133,6 +141,17 @@ export const dataBrowser = {
     ['https://atomicdata.dev/classes/Table']: [
       'https://atomicdata.dev/properties/classtype',
       'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/tableColumnWidths',
+      'https://atomicdata.dev/properties/table-views',
+      'https://atomicdata.dev/properties/table-default-view',
+    ],
+    ['https://atomicdata.dev/classes/View']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/view-kind',
+      'https://atomicdata.dev/properties/view-filters',
+      'https://atomicdata.dev/properties/view-sort-by',
+      'https://atomicdata.dev/properties/view-sort-desc',
+      'https://atomicdata.dev/properties/view-columns',
     ],
     ['https://atomicdata.dev/classes/Tag']: [
       'https://atomicdata.dev/properties/shortname',
@@ -284,7 +303,21 @@ declare module '../index.js' {
         | BaseProps
         | 'https://atomicdata.dev/properties/classtype'
         | 'https://atomicdata.dev/properties/name';
-      recommends: never;
+      recommends:
+        | typeof dataBrowser.properties.tableColumnWidths
+        | typeof dataBrowser.properties.tableViews
+        | typeof dataBrowser.properties.tableDefaultView;
+    };
+    [dataBrowser.classes.view]: {
+      requires:
+        | BaseProps
+        | 'https://atomicdata.dev/properties/name'
+        | typeof dataBrowser.properties.viewKind;
+      recommends:
+        | typeof dataBrowser.properties.viewFilters
+        | typeof dataBrowser.properties.viewSortBy
+        | typeof dataBrowser.properties.viewSortDesc
+        | typeof dataBrowser.properties.viewColumns;
     };
     [dataBrowser.classes.tag]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/shortname';
@@ -341,6 +374,17 @@ declare module '../index.js' {
     [dataBrowser.properties.resources]: string[];
     [dataBrowser.properties.subResources]: string[];
     [dataBrowser.properties.tableColumnWidths]: number[];
+    [dataBrowser.properties.tableViews]: string[];
+    [dataBrowser.properties.tableDefaultView]: string;
+    [dataBrowser.properties.viewKind]: string;
+    [dataBrowser.properties.viewFilters]: Array<{
+      property?: string;
+      value?: string;
+      operator?: string;
+    }>;
+    [dataBrowser.properties.viewSortBy]: string;
+    [dataBrowser.properties.viewSortDesc]: boolean;
+    [dataBrowser.properties.viewColumns]: string[];
     [dataBrowser.properties.tags]: string[];
     [dataBrowser.properties.tagList]: string[];
     [dataBrowser.properties.url]: string;
@@ -371,6 +415,13 @@ declare module '../index.js' {
     [dataBrowser.properties.resources]: 'resources';
     [dataBrowser.properties.subResources]: 'subResources';
     [dataBrowser.properties.tableColumnWidths]: 'tableColumnWidths';
+    [dataBrowser.properties.tableViews]: 'tableViews';
+    [dataBrowser.properties.tableDefaultView]: 'tableDefaultView';
+    [dataBrowser.properties.viewKind]: 'viewKind';
+    [dataBrowser.properties.viewFilters]: 'viewFilters';
+    [dataBrowser.properties.viewSortBy]: 'viewSortBy';
+    [dataBrowser.properties.viewSortDesc]: 'viewSortDesc';
+    [dataBrowser.properties.viewColumns]: 'viewColumns';
     [dataBrowser.properties.tags]: 'tags';
     [dataBrowser.properties.tagList]: 'tagList';
     [dataBrowser.properties.url]: 'url';
