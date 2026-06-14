@@ -32,6 +32,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - [#1008](https://github.com/atomicdata-dev/atomic-server/issues/1008) Add 'open' option to classes and properties in the ontology edit view.
 - [#1008](https://github.com/atomicdata-dev/atomic-server/issues/1008) Updated the look of the resource selector and made it more responsive.
 - [#1008](https://github.com/atomicdata-dev/atomic-server/issues/1008) Add info dropdowns to different sections of the ontology editor for more information about the section.
+- [#1219](https://github.com/atomicdata-dev/atomic-server/issues/1219) Add filters to tables
+- [#1219](https://github.com/atomicdata-dev/atomic-server/issues/1219) Persist table views
 
 ### @tomic/lib
 
