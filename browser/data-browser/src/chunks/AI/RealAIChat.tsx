@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Column, Row } from '@components/Row';
 import { useAtomicMCPTools } from './useAtomicTools';
 import { skillTools, getSkillsSystemPromptPart } from './skills/skill';
@@ -26,9 +26,21 @@ import { AISettingsDialog } from './AISettingsDialog';
 import { Dialog, useDialog } from '@components/Dialog';
 import { MessageContextItem } from './MessageContextItem';
 
-const ModelSelect = React.lazy(
-  () => import('@chunks/AI/ModelSelect/ModelSelect'),
-);
+import { ComboBox } from '@components/ComboBox';
+import { effectFetch } from '@helpers/effectFetch';
+
+type OllamaModel = {
+  name: string;
+  model: string;
+  size: number;
+  details: {
+    format: string;
+    parent_model: string;
+    family: string;
+    parameter_size: string;
+    quantization_level: string;
+  };
+};
 import { useProcessMessages } from './useProcessMessages';
 import { AISetupPanel } from './AISetupPanel';
 import { useOpenRouterModels } from './useOpenRouterModels';
@@ -129,7 +141,86 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     checkORModelSupportsImageInput,
     checkORModelSupport,
     getOutputModalities,
+    models: openRouterModels,
   } = useOpenRouterModels();
+
+  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
+
+  useEffect(() => {
+    if (!ollamaUrl) {
+      setOllamaModels([]);
+      return;
+    }
+
+    return effectFetch(`${ollamaUrl}/api/tags`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })(
+      data => {
+        setOllamaModels(data.models || []);
+      },
+      e => {
+        console.error('Failed to fetch Ollama models:', e);
+        setOllamaModels([]);
+      },
+    );
+  }, [ollamaUrl]);
+
+  const currencyFormatter = useRef(
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+    }),
+  ).current;
+
+  const combinedModelOptions = useMemo(() => {
+    const openRouterOptions = openRouterModels.map(model => {
+      const promptPrice =
+        model.pricing?.prompt !== undefined
+          ? `${currencyFormatter.format(model.pricing.prompt * 1000000)}/M input`
+          : '';
+      const completionPrice =
+        model.pricing?.completion !== undefined
+          ? `${currencyFormatter.format(model.pricing.completion * 1000000)}/M output`
+          : '';
+      const pricingStr = [promptPrice, completionPrice]
+        .filter(Boolean)
+        .join(' • ');
+
+      return {
+        label: model.name,
+        searchLabel: model.name.toLowerCase(),
+        description: pricingStr ? `${pricingStr}` : undefined,
+        value: `openrouter:${model.id}`,
+      };
+    });
+
+    const ollamaOptions = ollamaModels.map(model => {
+      const details = [
+        'Local',
+        model.details?.parameter_size
+          ? `Size: ${model.details.parameter_size}`
+          : '',
+        model.details?.format ? `Format: ${model.details.format}` : '',
+      ]
+        .filter(Boolean)
+        .join(' • ');
+
+      return {
+        label: model.name,
+        searchLabel: model.name.toLowerCase(),
+        description: details,
+        value: `ollama:${model.model}`,
+      };
+    });
+
+    return [...openRouterOptions, ...ollamaOptions];
+  }, [openRouterModels, ollamaModels, currencyFormatter]);
+
+  const modelSelectContainerRef = useRef<HTMLDivElement>(null);
 
   const getRAGData = useRAG();
   const [isRagging, setIsRagging] = useState(false);
@@ -167,7 +258,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     activeModel,
   );
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
-  const [modelDialogProps, showModelDialog, closeModelDialog, isModelDialogOpen] = useDialog();
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
 
   const { tools: atomicTools } = useAtomicMCPTools({
@@ -460,14 +550,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     setActiveModel(agent.model ?? defaultChatModel);
   };
 
-  const { models: openRouterModels } = useOpenRouterModels();
-  const getModelDisplayName = (model: AIModelIdentifier) => {
-    if (model.provider === AIProvider.OpenRouter) {
-      const found = openRouterModels.find(m => m.id === model.id);
-      if (found) return found.name;
-    }
-    return model.id.split('/').pop() || model.id;
-  };
+
 
   const isEmptyChat = messages.length === 0;
   const totalTokensUsed = usage.input + usage.output;
@@ -614,7 +697,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   onChange={setUserInput}
                   onSubmit={handleSubmit}
                   onCompact={compact}
-                  onEditModel={() => showModelDialog()}
+                  onEditModel={() => {
+                    const input = modelSelectContainerRef.current?.querySelector('input');
+                    if (input) {
+                      input.focus();
+                      input.select();
+                    }
+                  }}
                   onEditAgent={() => setAgentConfigOpen(true)}
                   onFileAdded={
                     checkModelSupportsImageInput(activeModel)
@@ -634,9 +723,23 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     <SubtleButton onClick={() => setAgentConfigOpen(true)}>
                       {selectedAgent.name}
                     </SubtleButton>
-                    <SubtleButton onClick={() => showModelDialog()}>
-                      {getModelDisplayName(activeModel)}
-                    </SubtleButton>
+                    <ModelSelectWrapper ref={modelSelectContainerRef}>
+                      <ComboBox
+                        subtle
+                        selectedItem={`${activeModel.provider}:${activeModel.id}`}
+                        options={combinedModelOptions}
+                        onSelect={value => {
+                          if (!value) return;
+                          const [providerStr, ...idParts] = value.split(':');
+                          const id = idParts.join(':');
+                          const provider =
+                            providerStr === 'openrouter'
+                              ? AIProvider.OpenRouter
+                              : AIProvider.Ollama;
+                          setActiveModel({ id, provider });
+                        }}
+                      />
+                    </ModelSelectWrapper>
                     {checkModelSupportsImageInput(activeModel) && (
                       <>
                         <input
@@ -679,26 +782,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         selectedAgent={selectedAgent}
         onSelectAgent={handleSelectAgent}
       />
-      <Dialog {...modelDialogProps} width='500px'>
-        {isModelDialogOpen && (
-          <>
-            <Dialog.Title>
-              <h1>Select Model</h1>
-            </Dialog.Title>
-            <Dialog.Content>
-              <React.Suspense fallback={<div>Loading model selector...</div>}>
-                <ModelSelect
-                  defaultModel={activeModel}
-                  onSelect={model => {
-                    setActiveModel(model);
-                    closeModelDialog();
-                  }}
-                />
-              </React.Suspense>
-            </Dialog.Content>
-          </>
-        )}
-      </Dialog>
+
       {!readonly && <AISetupPanel />}
     </ChatWindow>
   );
@@ -848,4 +932,14 @@ const HistoricalMessageWrapper = styled.div`
   animation: ${historicalExitFade} linear both;
   animation-timeline: view();
   animation-range: exit 0% exit 80%;
+`;
+
+const ModelSelectWrapper = styled.div`
+  min-width: 14rem;
+  flex: 1.5;
+  flex-shrink: 1;
+
+  & > div {
+    width: 100%;
+  }
 `;
