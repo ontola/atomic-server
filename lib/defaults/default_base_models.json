@@ -46,6 +46,15 @@
     "https://atomicdata.dev/properties/shortname": "drive"
   },
   {
+    "@id": "https://atomicdata.dev/properties/genesis",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The self-verifying genesis certificate: base64 of a compact binary cert (signer public key, createdAt, nonce, original parent, drive). The resource's DID is the creating agent's Ed25519 signature over this certificate, so authorship and identity are verifiable offline without fetching a commit. Server-managed and immutable.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "genesis"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/datatype",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Datatype",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",

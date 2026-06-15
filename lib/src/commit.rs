@@ -233,20 +233,59 @@ impl Commit {
             }
         }
 
-        let loro_update = if let Some(update) = commit_builder.loro_update {
-            Some(update)
-        } else if !commit_builder.set.is_empty() || !commit_builder.remove.is_empty() {
-            let doc = crate::loro::AtomicLoroDoc::new();
+        // ---- Self-verifying genesis certificate ----
+        // The resource's identity (DID) is the agent's Ed25519 signature over a
+        // compact binary cert (signer, createdAt, nonce, parent, drive), stored
+        // inline as the immutable `genesis` propval. This makes authorship +
+        // identity verifiable offline, with no commit fetch. The cert — NOT the
+        // commit — is what the DID is derived from. See
+        // `planning/genesis-self-verifying.md`.
+        let private_key = agent.private_key.clone().ok_or("No private key in agent")?;
+        let signer_pubkey: [u8; 32] = crate::agents::decode_base64(&agent.public_key)?
+            .try_into()
+            .map_err(|_| "Agent public key must be 32 bytes for the genesis certificate")?;
+        let mut nonce = [0u8; 16];
+        {
+            use rand::RngCore;
+            rand::thread_rng().fill_bytes(&mut nonce);
+        }
+        let parent = commit_builder
+            .set
+            .get(urls::PARENT)
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let drive = commit_builder
+            .set
+            .get(urls::DRIVE_PROP)
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let cert = crate::genesis::GenesisCert {
+            signer_pubkey,
+            created_at: now,
+            nonce,
+            state_hash: None,
+            parent,
+            drive,
+        };
+        let cert_b64 = crate::agents::encode_base64(&cert.encode());
+        let genesis_signature = cert.sign(&private_key)?;
+        let did = crate::genesis::GenesisCert::subject_for_signature(&genesis_signature);
+
+        // Build the loro snapshot WITH the `genesis` propval — whether or not a
+        // loro_update was pre-set (e.g. by `save_remote`). The cert rides inline.
+        let doc = crate::loro::AtomicLoroDoc::new();
+        if let Some(update) = &commit_builder.loro_update {
+            doc.import_update(update)?;
+        } else {
             for (prop, val) in &commit_builder.set {
                 doc.set_property(prop, val)?;
             }
             for prop in &commit_builder.remove {
                 doc.remove_property(prop)?;
             }
-            Some(doc.export_snapshot())
-        } else {
-            None
-        };
+        }
+        doc.set_property(urls::GENESIS, &crate::values::Value::String(cert_b64))?;
+        let loro_update = Some(doc.export_snapshot());
 
         let mut commit = Commit {
             subject: temp_subject.into(),
@@ -260,13 +299,15 @@ impl Commit {
             url: None,
         };
 
-        // Serialize without subject
+        // The commit also carries a CONTENT signature (authorship of the initial
+        // state) — distinct from the cert signature that mints the DID. Genesis
+        // commits serialize without the subject, so deriving the subject from the
+        // cert below does not affect this signature.
         let stringified = commit
             .serialize_deterministically_json_ad(store)
             .await
             .map_err(|e| format!("Failed serializing commit: {}", e))?;
 
-        let private_key = agent.private_key.clone().ok_or("No private key in agent")?;
         let signature =
             sign_message(&stringified, &private_key, &agent.public_key).map_err(|e| {
                 format!(
@@ -275,8 +316,7 @@ impl Commit {
                 )
             })?;
 
-        commit.signature = Some(signature.clone());
-        let did = format!("did:ad:{}", signature);
+        commit.signature = Some(signature);
         commit.subject = did.into();
 
         Ok(commit)
@@ -337,13 +377,23 @@ impl Commit {
                 )
             })?;
 
-        // For genesis resource commits, the subject is DERIVED from the
-        // signature (did:ad:{signature}), so the two must match. The
-        // discriminator is the explicit `is_genesis: true` flag — NOT
-        // `previous_commit.is_none()`, which is also true for destroy
-        // commits and any other non-genesis commit now that we no longer
-        // require previousCommit chaining for validation.
-        // Agent DIDs (did:ad:agent:{pubkey}) are identity-based and exempt.
+        // For a genesis DID resource, identity is verified one of two ways
+        // (dual-accept, during the migration to self-verifying certs):
+        //
+        //  1. SELF-VERIFYING CERTIFICATE (preferred): the subject `did:ad:<sig>`
+        //     is the agent's signature over a compact binary `GenesisCert`,
+        //     carried inline as the `genesis` propval. Verify the cert and that
+        //     its signer is this commit's signer. Server-minted resources take
+        //     this path (see planning/genesis-self-verifying.md).
+        //
+        //  2. LEGACY commit-signature DID: the subject `did:ad:<sig>` is the
+        //     agent's signature over the genesis *commit* itself. Browser-minted
+        //     resources still take this path until the client mints certs.
+        //
+        // The discriminator is the explicit `is_genesis: true` flag — NOT
+        // `previous_commit.is_none()`, which is also true for destroy and other
+        // non-genesis commits. Agent DIDs (did:ad:agent:{pubkey}) are
+        // identity-based and exempt.
         if commit.is_genesis == Some(true)
             && commit.subject.is_did()
             && !commit.subject.is_agent_did()
@@ -353,7 +403,24 @@ impl Commit {
                 .as_str()
                 .strip_prefix("did:ad:")
                 .ok_or("Invalid did:ad subject")?;
-            if subject_val != signature {
+
+            let cert_b64 = commit
+                .loro_update
+                .as_ref()
+                .and_then(|u| crate::Resource::genesis_cert_b64_from_loro_update(u));
+
+            if let Some(cert_b64) = cert_b64 {
+                // Path 1: self-verifying genesis certificate.
+                let cert_bytes = decode_base64(&cert_b64)?;
+                let cert = crate::genesis::GenesisCert::decode(&cert_bytes)?;
+                cert.verify(subject_val)?;
+                if cert.signer_pubkey != pubkey_bytes {
+                    return Err(
+                        "Genesis certificate signer does not match the commit signer".into(),
+                    );
+                }
+            } else if subject_val != signature {
+                // Path 2: legacy commit-signature DID.
                 return Err(format!(
                     "Invalid did:ad subject. Expected 'did:ad:{}' but got '{}'",
                     signature, commit.subject

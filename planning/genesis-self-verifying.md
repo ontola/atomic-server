@@ -274,21 +274,62 @@ nested-grant checks.
 
 ## Code impact / implementation order
 
-1. **Spec freeze** — the v1 byte layout above (version + flags).
-2. **DID derivation** — sign the binary cert instead of the loroUpdate-bearing
-   commit: `lib/src/commit.rs` `create_did`, browser `lib/src/resource.ts`
-   `signChanges`, and the wasm path.
-3. **Store + reserve** — write the `genesis` blob onto the resource at apply
-   (server `commit.rs` + `wasm`), reject overwrites.
-4. **Materialize** — derive `createdBy` / `createdAt` / `parent` / `drive`
-   from the cert at apply (reuses the existing materialization chokepoint), so
-   they are present from the get-go (the race fix above).
-5. **Rights** — `check_rights` consults the cert's `drive` first (race-free),
-   recursive `parent` walk only as fallback; drive-scope the watched-query
-   lookup for did: subjects.
+1. ✅ **Spec freeze** — the v1 byte layout above (version + flags). Done
+   (`genesis.rs` / `genesis.ts`, pinned known-byte-vector test).
+2. 🟡 **DID derivation** — **Rust done**: `create_did` (`lib/src/commit.rs`) now
+   signs the binary cert and derives the DID from it (the commit keeps a
+   separate content signature). **Browser + wasm pending** — browser-minted
+   resources still use the legacy commit-signature DID, accepted via the
+   dual-accept path below.
+
+   > **Browser minting attempt — root cause of the desync (diagnosed, then
+   > reverted to dual-accept).** A first browser implementation (mint cert in
+   > `mintGenesisCert`, derive DID from `signBytes` of the cert, stamp it as the
+   > `genesis` propval, call from `signChanges`) failed e2e with "Genesis
+   > certificate signature is invalid": the subject DID and the shipped propval
+   > were derived from **two different mints**. Proof from instrumentation: the
+   > browser computed `sign(certC1) = a6aUk…` and stored `certC1` as the propval,
+   > but the resource's subject DID embedded `xHe1SZ…` — a signature over a
+   > *different* cert. The cert is non-deterministic (`Date.now()` createdAt +
+   > random 16-byte nonce), so re-minting yields a new cert each time. The
+   > sequence: **mint #1** sets the subject DID (locked once the resource is
+   > registered under it / the genesis commit drains) → **mint #2** (a freshly
+   > reconstructed `Resource` instance whose per-instance `_mintedGenesisCertB64`
+   > cache is empty, and whose `this.get(GENESIS)` returns `undefined` because
+   > the propval was dropped by `rebuildCacheFromLoro`) re-mints and *overwrites*
+   > the propval, but cannot change the already-locked subject. Result: subject
+   > from C0/C1, propval from C2.
+   >
+   > **The fix for the follow-up** (not a per-instance cache — that's what
+   > failed): mint **exactly once per resource**, keyed somewhere that survives
+   > `Resource` reconstruction (store-level, keyed by the placeholder subject),
+   > and never re-derive the subject without re-reading the *same* stored cert.
+   > Equivalently: make the cert deterministic for a given resource so any
+   > re-mint reproduces identical bytes. Adding `genesis` to the `serverManaged`
+   > preserve list in `rebuildCacheFromLoro` is necessary but **not sufficient**
+   > on its own (the second instance still re-minted).
+3. ✅ **Store** — the `genesis` blob rides inline in the loro snapshot and is
+   materialized + persisted at apply. (Reject-overwrite intentionally omitted:
+   forge-resistance is the signature, like `createdAt`/`createdBy`.) `genesis`
+   registered as a Property (`default_base_models.json`).
+4. ✅ **Materialize** — `createdBy` / `createdAt` / `parent` / `drive` derive
+   from the cert at apply (`resources.rs::materialize_genesis_metadata`), legacy
+   oplog fallback for cert-less resources.
+   - **Validation is dual-accept** (`validate_signature`): verify the cert when a
+     `genesis` propval is present, else the legacy DID==commit-sig rule — so the
+     not-yet-cert browser keeps working. Verified: 185 lib tests, `drive_rights`,
+     genesis unit, `ws_commit_isolation`, `ws_drive_membership`, full 2-worker e2e.
+5. **Rights** — `check_rights` already resolves drive-first via the `drive`
+   propval (drive-in-genesis); moving it to read the cert's signed `drive` is a
+   follow-up.
 6. **`verifyGenesis(resource)`** in `@tomic/lib` — decode + Ed25519 verify + DID
-   check (+ optional stateHash check). Returns `{ valid, signer, error? }`.
-7. **UI** — decoded display + "Verify signature" button in `DataRoute`.
+   check. Pending (needs the browser slice).
+7. **UI** — decoded display + "Verify signature" button in `DataRoute`. Pending.
+
+> **Status (this branch):** server mints + validates + materializes genesis certs
+> (dual-accept). Remaining: browser cert minting (step 2) + `verifyGenesis` +
+> UI. The dev-server `optimizeDeps.entries` fix (pre-bundling lazy chunks) was
+> needed to get a stable e2e while verifying this.
 
 ## Migration
 
