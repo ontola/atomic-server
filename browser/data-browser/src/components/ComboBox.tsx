@@ -52,6 +52,16 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
     return new QuickScore(options, ['label']);
   }, [options]);
 
+  // Drive downshift as a fully controlled component: the selected item is always
+  // derived from the `selectedItem` prop. This is the single source of truth.
+  // (Previously a useEffect pushed the prop into downshift via selectItem(), which
+  // fired onSelectedItemChange -> onSelect -> parent setState, feeding back into the
+  // effect and causing an infinite update loop when switching models.)
+  const selectedOption = useMemo(
+    () => options.find(option => option.value === selectedItem) ?? null,
+    [options, selectedItem],
+  );
+
   const {
     isOpen,
     getInputProps,
@@ -60,12 +70,12 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
     getItemProps,
     highlightedIndex,
     setHighlightedIndex,
-    selectItem,
     selectedItem: downshiftSelectedItem,
     setInputValue,
     openMenu,
   } = useCombobox({
     items,
+    selectedItem: selectedOption,
     onInputValueChange: ({ inputValue }) => {
       setHighlightedIndex(0);
 
@@ -77,18 +87,12 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
       setItems(quickScore.search(inputValue).map(r => r.item));
     },
     itemToString: item => item?.label ?? '',
-    initialSelectedItem: options.find(option => option.value === selectedItem),
     onSelectedItemChange: ({ selectedItem: item }) => {
-      onSelect(item?.value);
+      if (item?.value !== selectedItem) {
+        onSelect(item?.value);
+      }
     },
   });
-
-  useEffect(() => {
-    const targetItem = options.find(option => option.value === selectedItem);
-    if (targetItem?.value !== downshiftSelectedItem?.value) {
-      selectItem(targetItem || null);
-    }
-  }, [selectedItem, options, downshiftSelectedItem, selectItem]);
 
   useEffect(() => {
     setItems(options);
