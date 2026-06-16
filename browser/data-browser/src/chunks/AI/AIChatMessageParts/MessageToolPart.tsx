@@ -13,6 +13,7 @@ import {
   FaWrench,
 } from 'react-icons/fa6';
 import { Details } from '@components/Details';
+import { Shimmer } from '@components/Shimmer';
 import { SearchToolMessageContent } from './SearchToolMessageContent';
 import { TOOL_NAMES } from '../useAtomicTools';
 import { InlineFormattedResourceList } from '@components/InlineFormattedResourceList';
@@ -31,12 +32,14 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
 
   if (part.state === 'input-streaming' || part.state === 'input-available') {
     return (
-      <ToolUseMessage>
-        <TitleRow center gap='0.5ch'>
-          <Icon />
-          <ToolTitle toolName={toolName} part={part} />
-        </TitleRow>
-      </ToolUseMessage>
+      <Shimmer>
+        <ToolUseMessage>
+          <TitleRow center gap="0.5ch">
+            <Icon />
+            <ToolTitle toolName={toolName} part={part} />
+          </TitleRow>
+        </ToolUseMessage>
+      </Shimmer>
     );
   }
 
@@ -46,7 +49,7 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
         noIndent
         titleButton={
           <ToolUseMessage>
-            <TitleRow center gap='0.5ch'>
+            <TitleRow center gap="0.5ch">
               <Icon />
               <ToolTitle toolName={toolName} part={part} />
             </TitleRow>

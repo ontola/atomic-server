@@ -76,6 +76,7 @@ These components help with rendering resources in different contexts.
 ## Feedback, Loading, And Content Blocks
 
 - `src/components/Loader.tsx` - `LoaderInline` and `LoaderBlock` skeleton pulse placeholders.
+- `src/components/Shimmer.tsx` - Wrapper that sweeps a highlight over visible children while a process is loading or running; toggle with `active`.
 - `src/components/Spinner.tsx` - Circular SVG loading indicator.
 - `src/components/ProgressBar.tsx` - Theme-styled `<progress>` element.
 - `src/components/CodeBlock.tsx` - Code `<pre>` wrapper with a copy button and toast feedback.
