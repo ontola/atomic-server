@@ -234,6 +234,7 @@ export class AtomicServer {
           '/code/atomic-plugin',
           this.source.directory('atomic-plugin'),
         )
+        .withDirectory('/code/tools', this.source.directory('tools'))
         .withMountedCache('/code/target', dag.cacheVolume('rust-wasm-target'))
         .withWorkdir('/code/wasm')
         // Install + build in a single exec so the install is part of the
@@ -292,6 +293,7 @@ export class AtomicServer {
           '/code/atomic-plugin',
           this.source.directory('atomic-plugin'),
         )
+        .withDirectory('/code/tools', this.source.directory('tools'))
         .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target'))
         .withWorkdir('/code')
         .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
@@ -605,6 +607,7 @@ export class AtomicServer {
         source.directory('plugin-examples'),
       )
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
+      .withDirectory('/code/tools', source.directory('tools'))
       .withMountedCache('/code/target', dag.cacheVolume('rust-target'))
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch']);
@@ -691,6 +694,7 @@ export class AtomicServer {
           source.directory('plugin-examples'),
         )
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
+        .withDirectory('/code/tools', source.directory('tools'))
         .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target'))
         .withWorkdir('/code')
         // build.rs in atomic-server wants to bundle a JS dist. Skip it —
