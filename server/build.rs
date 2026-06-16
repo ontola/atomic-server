@@ -174,36 +174,96 @@ fn should_build(dirs: &Dirs) -> bool {
     }
 }
 
-/// Runs JS package manager to install packages and build the JS bundle
+/// Runs JS package manager to install packages and build the JS bundle.
+///
+/// Cargo buffers ALL build-script output (`cargo:warning=` lines) until this
+/// script returns, and the previous implementation captured the child's
+/// stdout/stderr with `.output()` — so while `pnpm` (and the nested
+/// `wasm-pack` → `cargo` build it triggers) ran, NOTHING was visible. A stuck
+/// build looked like a frozen `atomic-server(build)` with zero feedback. To
+/// keep it observable we stream every child's output LIVE to a log file
+/// (`server/js-build.log`) that can be `tail -f`'d during the build.
+///
+/// IMPORTANT (the recursive-cargo deadlock): `pnpm run build` eventually runs
+/// `wasm-pack build` in `../../wasm`, which invokes a NESTED `cargo`. If that
+/// nested cargo built into the shared workspace `target/`, it would block on
+/// the artifact-directory lock the OUTER `cargo run`/`cargo build` (or
+/// rust-analyzer's `cargo check`) already holds — a deadlock that hangs here
+/// forever ("Blocking waiting for file lock on artifact directory"). The
+/// `build:wasm` npm script now sets `CARGO_TARGET_DIR=../target/wasm-pack` so
+/// the nested build uses a SEPARATE lock root and can't contend. To skip the JS
+/// build entirely (faster backend-only iteration), set
+/// `ATOMICSERVER_SKIP_JS_BUILD=true` (assets are reused from `assets_tmp`).
 fn build_js(dirs: &Dirs) {
+    use std::fs::File;
+    use std::process::Stdio;
+
     let pkg_manager = "pnpm";
 
-    p!("install js packages...");
+    // A log file the child writes to LIVE — the only output visible while the
+    // build runs (Cargo hides build-script output until completion). Path is
+    // relative to the server crate dir (build.rs's CWD).
+    let log_path = PathBuf::from("js-build.log");
+    let log_display = std::fs::canonicalize(".")
+        .map(|d| d.join(&log_path))
+        .unwrap_or_else(|_| log_path.clone());
+    p!(
+        "Building JS+WASM assets via `{} run build`. This invokes wasm-pack \
+         (nested cargo) and can take minutes — live output streams to {}. \
+         If it hangs, it is the recursive-cargo lock: re-run with \
+         ATOMICSERVER_SKIP_JS_BUILD=true to skip this step.",
+        pkg_manager,
+        log_display.display(),
+    );
 
-    std::process::Command::new(pkg_manager)
-        .current_dir(&dirs.browser_root)
-        .args(["install"])
-        .output()
-        .unwrap_or_else(|_| {
+    // Open (truncate) the log; stdout+stderr of both child commands go here.
+    let open_log = || {
+        File::create(&log_path).unwrap_or_else(|e| {
+            panic!("Failed to create JS build log {}: {}", log_path.display(), e)
+        })
+    };
+
+    let run_streamed = |args: &[&str], step: &str| {
+        let log = open_log();
+        let log_err = log
+            .try_clone()
+            .expect("Failed to clone JS build log handle");
+        let status = std::process::Command::new(pkg_manager)
+            .current_dir(&dirs.browser_root)
+            .args(args)
+            .stdout(Stdio::from(log))
+            .stderr(Stdio::from(log_err))
+            .status()
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to spawn `{} {}` (is {} installed?): {}",
+                    pkg_manager,
+                    args.join(" "),
+                    pkg_manager,
+                    e
+                )
+            });
+
+        if !status.success() {
+            // Surface the captured log in the panic — the live stream is gone
+            // from the terminal by the time Cargo prints this.
+            let tail = std::fs::read_to_string(&log_path).unwrap_or_default();
             panic!(
-                "Failed to install js packages. Make sure you have {} installed.",
-                pkg_manager
-            )
-        });
+                "js {} failed (see {}):\n{}",
+                step,
+                log_path.display(),
+                tail
+            );
+        }
+    };
+
+    p!("install js packages...");
+    run_streamed(&["install"], "install");
+
     p!("build js assets...");
-    let out = std::process::Command::new(pkg_manager)
-        .current_dir(&dirs.browser_root)
-        .args(["run", "build"])
-        .output()
-        .expect("Failed to build js bundle");
-    // Check if out contains errors
-    if out.status.success() {
-        p!("js build successful");
-    } else {
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        panic!("js build failed:\nStdout:\n{}\nStderr:\n{}", stdout, stderr);
-    }
+    run_streamed(&["run", "build"], "build");
+
+    p!("js build successful");
 }
 
 /// Pre-compress eligible files (`.wasm`, `.js`, `.css`, `.html`, `.svg`,

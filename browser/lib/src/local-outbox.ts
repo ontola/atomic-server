@@ -123,6 +123,17 @@ export function isTerminalCommitErrorMessage(message: string): boolean {
     return true;
   }
 
+  // Required-property validation failure: the commit produces a resource that
+  // is missing a property its class `requires`, so the server rejects it on
+  // EVERY attempt — the commit is structurally invalid, not transiently
+  // unsyncable. Retrying floods the ingest pipeline forever (this is the
+  // ai-message `content`-missing loop that peaked our ingest API). Dropping it
+  // is correct: no retry can ever satisfy the constraint. The server emits
+  // "Property <p> missing. Is required in class <c> " (resources.rs).
+  if (message.includes('missing. Is required in class')) {
+    return true;
+  }
+
   return false;
 }
 

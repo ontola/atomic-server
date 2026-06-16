@@ -22,12 +22,12 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
     "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content",
       "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/provided-context",
       "https://atomicdata.dev/properties/serverProvidedContext"
     ],
     "https://atomicdata.dev/properties/requires": [
-      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role",
-      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content"
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role"
     ],
     "https://atomicdata.dev/properties/shortname": "ai-message"
   },

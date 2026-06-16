@@ -68,9 +68,17 @@ export const uiMessageToResource = async (
   // Summary messages are stored with role 'summary' regardless of their UI role.
   const persistedRole = message.metadata?.isSummary ? 'summary' : message.role;
 
-  // `content` (parts) is required on ai-message. Genesis is signed inside
-  // `newResource` before child parts exist, so seed an empty list here and
-  // push part subjects afterward in a follow-up commit.
+  // `content` (parts) is required on ai-message. For a DID drive the subject is
+  // derived from the genesis SIGNATURE, while parts are children whose `parent`
+  // is that very subject — so real parts can't exist before the genesis is
+  // signed. The genesis therefore MUST seed an empty list and push the part
+  // subjects in a follow-up commit. An empty `content` is valid: the server
+  // materializes an empty list as `ResourceArray([])` (loro.rs) and the required
+  // check only tests presence (resources.rs), so the constraint is satisfied.
+  // NOTE: if a server ever drops empty arrays, this genesis is rejected on every
+  // attempt — that was the ai-message ingest loop. The outbox now classifies
+  // "missing. Is required in class" as terminal (local-outbox.ts) so a malformed
+  // commit is dropped instead of retried forever.
   const messageResource = await store.newResource<Ai.AiMessage>({
     isA: ai.classes.aiMessage,
     parent: parent.subject,

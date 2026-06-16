@@ -1153,6 +1153,46 @@ mod test {
         loro_value_to_atomic_value_tagged(val, tag)
     }
 
+    /// Documents WHY `content` must be `recommends`, not `requires`, on the
+    /// ai-message class (`lib/defaults/ai.json`): an EMPTY Loro array container
+    /// is dropped from the genesis snapshot entirely (Loro does not persist an
+    /// op-less container), so a genesis that seeds `content: []` materializes
+    /// WITHOUT `content`. A DID resource can't carry real `content` at genesis
+    /// either — the subject is derived from the genesis signature, but the parts
+    /// are children whose `parent` is that subject. So `content` is structurally
+    /// absent from every ai-message genesis; requiring it made creation fail on
+    /// every retry ("content missing. Is required in class ai-message" — the
+    /// ingest loop). Bytes are the verbatim `loroUpdate` from a rejected commit.
+    #[test]
+    fn empty_required_array_is_dropped_from_genesis() {
+        use base64::Engine;
+        const CONTENT: &str =
+            "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content";
+        const ISA: &str = "https://atomicdata.dev/properties/isA";
+        let b64 = "bG9ybwAAAAAAAAAAAAAAALmxW4oAA8UBAABMT1JPAAQiTRhgQIKUAQAA8AgBrZ/h/bqn945qDAAMAGod3TuvuE+tAAEA8AEHAAcBEAGtT7ivO90dagEBFADwCAAJAaD+9aENAAEAEAMEAQAABgQAAQAACgD/GwikASVodHRwczovL2F0b21pY2RhdGEuZGV2L3Byb3BlcnRpZXMvaXNBKCYAD39wYXJlbnQ/KQAE9AswMWp0anh0c2E5c3l4bWZjYTJ6eDVnY25tamoAdnkvcm9sZQp4ABAJjAD/G3R5cGVzABoBBAgJAAIBAAQEAAgEAAQCBQADAgIOCwIOAQCNAgkBBwEFQnkAH/9iY2xhc3MvYWktbWVzc2FnZQVdZGlkOmFkOmZTckl5STgwWnYxYlJXeG5KTE5fYjZTZElSdEJjemRpeEVValFxODlqSFBlODIzODBXbk5jejA1eE1aUUpBRG9iZ0hnSFNEOS11d3BjMWFKMWZ6UURBBT9rAQQPHAEI8gB0YWcvYXNzaXN0YW50BQmkAfcDVXJsBQ1yZXNvdXJjZUFycmF5GgBWAAIAdnYiApAOAAALAB0CAwAAAAAArXuYDQEAAAAFAAAAAgBmcgECAHZ2cMoZlqwBAAC8AQAATE9STwAEIk0YYECCdgEAAP9tAQIBAApwcm9wZXJ0aWVzAQEEQmh0dHBzOi8vYXRvbWljZGF0YS5kZXYvMDFqdGp4dHNhOXN5eG1mY2Eyeng1Z2NubWovY2xhc3MvYWktbWVzc2FnZQGtT7ivO90dagEDAgEAAgECAgEAAAsAgAlkYXRhdHlwZXMAAQADP2kAHwOpAIJ5L3JvbGUECaIAT1VybCVLAAQDMAD/CGllcy9pc0EEDXJlc291cmNlQXJyYXkoNQAPZ3BhcmVudGkAFQDbAKcABAAFAAYADACAPwEP1wAyHz+YAAQPgQEI33RhZy9hc3Npc3RhbnQNARPvBwGtn+H9uqf3jmoAAihzAAQHQAEDCwH3T11kaWQ6YWQ6ZlNySXlJODBadjFiUld4bkpMTl9iNlNkSVJ0QmN6ZGl4RVVqUXE4OWpIUGU4MjM4MFduTmN6MDV4TVpRSkFEb2JnSGdIU0Q5LXV3cGMxYUoxZnpRREFfAdADAAAAAgAAaQA/AQMAAAAAAMRY9EsBAAAABQAAAA0AAa1PuK873R1qAAAAAAEMAIAKcHJvcGVydGllc2zom/mOAQAAAAAAAA==";
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .expect("valid base64");
+
+        let doc = AtomicLoroDoc::new();
+        doc.import_update(&bytes).expect("import genesis snapshot");
+        let props = doc.get_all_properties();
+
+        // The non-empty array (isA) round-trips...
+        assert!(props.contains_key(ISA), "isA (non-empty array) should survive");
+        // ...but the empty `content` array is gone — not just skipped by
+        // `for_each`, it is absent from the doc's `properties` map entirely.
+        assert!(
+            !props.contains_key(CONTENT),
+            "empty `content` is dropped from the genesis — hence it must not be \
+             `requires` on ai-message",
+        );
+        assert!(
+            doc.doc().get_map("properties").get(CONTENT).is_none(),
+            "the empty content container is not persisted in the snapshot at all",
+        );
+    }
+
     #[test]
     fn genesis_change_is_earliest_and_carries_message() {
         let doc = AtomicLoroDoc::new();

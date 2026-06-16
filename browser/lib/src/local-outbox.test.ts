@@ -42,6 +42,14 @@ describe('isTerminalCommitErrorMessage', () => {
     ).toBe(true);
   });
 
+  it('flags required-property validation failures', ({ expect }) => {
+    expect(
+      isTerminalCommitErrorMessage(
+        'Property https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content missing. Is required in class https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-message ',
+      ),
+    ).toBe(true);
+  });
+
   it("doesn't flag normal errors", ({ expect }) => {
     expect(isTerminalCommitErrorMessage('Invalid signature')).toBe(false);
     expect(isTerminalCommitErrorMessage('Network timeout')).toBe(false);
