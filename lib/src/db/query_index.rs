@@ -279,21 +279,21 @@ pub fn resource_matches_filter(resource: &Resource, q_filter: &QueryFilter) -> b
 /// Whether this atom is part of any of the filter's constraints (so a change
 /// to it can flip membership and must trigger an index update).
 fn atom_touches_constraint(q_filter: &QueryFilter, index_atom: &IndexAtom) -> bool {
-    q_filter.filters.iter().any(|c| match (&c.property, &c.value) {
-        (Some(property), _) => property == &index_atom.property,
-        (None, Some(value)) => value.to_string() == index_atom.ref_value,
-        (None, None) => false,
-    })
+    q_filter
+        .filters
+        .iter()
+        .any(|c| match (&c.property, &c.value) {
+            (Some(property), _) => property == &index_atom.property,
+            (None, Some(value)) => value.to_string() == index_atom.ref_value,
+            (None, None) => false,
+        })
 }
 
 /// The property whose value is written into the index key for this filter.
 /// `sort_by` wins (so members sort by it); otherwise the first constraint
 /// property gives a stable bucket; failing that (all value-only) the atom's
 /// own property is used.
-fn index_key_property<'a>(
-    q_filter: &'a QueryFilter,
-    index_atom: &'a IndexAtom,
-) -> &'a String {
+fn index_key_property<'a>(q_filter: &'a QueryFilter, index_atom: &'a IndexAtom) -> &'a String {
     if let Some(sort_by) = &q_filter.sort_by {
         return sort_by;
     }
@@ -922,9 +922,15 @@ pub mod test {
         let num = |v: i64, op: FilterOperator| f(urls::COLLECTION_PAGE_SIZE, Value::Integer(v), op);
         assert!(resource_matches_filter(&resource, &num(10, GreaterThan)));
         assert!(!resource_matches_filter(&resource, &num(50, GreaterThan)));
-        assert!(resource_matches_filter(&resource, &num(42, GreaterThanOrEqual)));
+        assert!(resource_matches_filter(
+            &resource,
+            &num(42, GreaterThanOrEqual)
+        ));
         assert!(resource_matches_filter(&resource, &num(100, LessThan)));
         assert!(!resource_matches_filter(&resource, &num(42, LessThan)));
-        assert!(resource_matches_filter(&resource, &num(42, LessThanOrEqual)));
+        assert!(resource_matches_filter(
+            &resource,
+            &num(42, LessThanOrEqual)
+        ));
     }
 }

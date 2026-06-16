@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { FRONTEND_URL, before } from './test-utils';
+import { before } from './test-utils';
 
 /**
  * Initialization performance probe — focuses on the WASM/OPFS ClientDb boot.
@@ -107,6 +107,7 @@ test.describe('init performance (OPFS / WASM ClientDb)', () => {
     await page.evaluate(async () => {
       try {
         const root = await navigator.storage.getDirectory();
+
         // @ts-expect-error - entries() is available on OPFS dirs in Chromium
         for await (const [name] of root.entries()) {
           await root
@@ -116,6 +117,7 @@ test.describe('init performance (OPFS / WASM ClientDb)', () => {
       } catch {
         // ignore
       }
+
       localStorage.removeItem('atomic.client-db.bootstrap-fingerprint');
     });
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -128,7 +130,10 @@ test.describe('init performance (OPFS / WASM ClientDb)', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     const warm2 = await captureInitPerf(page);
     // eslint-disable-next-line no-console
-    console.log('[INIT-PERF] WARM (OPFS populated → rehydrate):', JSON.stringify(warm2));
+    console.log(
+      '[INIT-PERF] WARM (OPFS populated → rehydrate):',
+      JSON.stringify(warm2),
+    );
 
     // VERSION CHANGE: a non-null but stale fingerprint must trigger a FULL
     // (unfiltered) reseed so changed default values overwrite — correctness

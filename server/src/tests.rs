@@ -68,7 +68,8 @@ async fn server_tests() {
         .expect("failed init config");
     // This prevents folder access issues when running concurrent tests
     config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
-    config.vector_search_index_path = format!("./.temp/{}/vector_search_index", unique_string).into();
+    config.vector_search_index_path =
+        format!("./.temp/{}/vector_search_index", unique_string).into();
 
     let appstate = crate::appstate::AppState::init(config.clone())
         .await

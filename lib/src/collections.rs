@@ -457,9 +457,7 @@ pub async fn construct_collection_from_params(
                     .map(|f| crate::storelike::PropVal {
                         property: Some(f.property),
                         value: Some(Value::String(f.value)),
-                        operator: crate::storelike::filter_operator_from_str(
-                            f.operator.as_deref(),
-                        ),
+                        operator: crate::storelike::filter_operator_from_str(f.operator.as_deref()),
                     })
                     .collect();
             }
@@ -662,12 +660,16 @@ mod test {
             .unwrap();
 
         assert!(
-            collection.members.contains(&tag_a.get_subject().to_string()),
+            collection
+                .members
+                .contains(&tag_a.get_subject().to_string()),
             "tag_a matches both constraints and should be a member: {:?}",
             collection.members
         );
         assert!(
-            !collection.members.contains(&tag_b.get_subject().to_string()),
+            !collection
+                .members
+                .contains(&tag_b.get_subject().to_string()),
             "tag_b only matches isA, not shortname, so should be excluded: {:?}",
             collection.members
         );

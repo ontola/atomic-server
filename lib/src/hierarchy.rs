@@ -177,8 +177,7 @@ pub fn check_rights<'a>(
             let drive_subject = crate::Subject::from(drive_val.to_string());
             if &drive_subject != resource.get_subject() {
                 if let Ok(drive_res) = store.get_resource(&drive_subject).await {
-                    if let Ok(reason) =
-                        check_rights(store, &drive_res, for_agent_enum, right).await
+                    if let Ok(reason) = check_rights(store, &drive_res, for_agent_enum, right).await
                     {
                         return Ok(reason);
                     }

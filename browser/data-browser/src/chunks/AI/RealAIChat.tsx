@@ -23,7 +23,6 @@ import {
 } from './types';
 import { useAIAgentConfig } from './AgentConfig';
 import { AISettingsDialog } from './AISettingsDialog';
-import { Dialog, useDialog } from '@components/Dialog';
 import { MessageContextItem } from './MessageContextItem';
 
 import { ComboBox } from '@components/ComboBox';
@@ -155,6 +154,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   useEffect(() => {
     if (!ollamaUrl) {
       setOllamaModels([]);
+
       return;
     }
 
@@ -279,9 +279,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     AIMessageContext[]
   >([]);
   const { generateFollowUpQuestions } = useGenerativeData();
-  const { generateConversationSummary } = useConversationSummary(
-    activeModel,
-  );
+  const { generateConversationSummary } = useConversationSummary(activeModel);
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
   // Bumped to move focus into the chat input (e.g. right after picking a model).
@@ -577,8 +575,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     setActiveModel(agent.model ?? defaultChatModel);
   };
 
-
-
   const isEmptyChat = messages.length === 0;
   const totalTokensUsed = usage.input + usage.output;
 
@@ -665,7 +661,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
               </Column>
             )}
             <ChatInputWrapper>
-              <Column fullWidth gap='none' style={{ position: 'relative', minWidth: 0 }}>
+              <Column
+                fullWidth
+                gap='none'
+                style={{ position: 'relative', minWidth: 0 }}
+              >
                 <FloatingChatWidgetsContainer>
                   {attachedFiles.length > 0 && (
                     <Row gap='1ch' wrapItems>
@@ -726,7 +726,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   onSubmit={handleSubmit}
                   onCompact={compact}
                   onEditModel={() => {
-                    const input = modelSelectContainerRef.current?.querySelector('input');
+                    const input =
+                      modelSelectContainerRef.current?.querySelector('input');
+
                     if (input) {
                       input.focus();
                       input.select();
@@ -747,7 +749,15 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     )
                   }
                 >
-                  <Row gap='0.5rem' style={{ minWidth: 0, overflow: 'hidden', flexWrap: 'nowrap', flex: 1 }}>
+                  <Row
+                    gap='0.5rem'
+                    style={{
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      flexWrap: 'nowrap',
+                      flex: 1,
+                    }}
+                  >
                     <SubtleButton onClick={() => setAgentConfigOpen(true)}>
                       {selectedAgent.name}
                     </SubtleButton>
@@ -766,6 +776,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                               : AIProvider.Ollama;
                           const newModel = { id, provider };
                           setActiveModel(newModel);
+
                           // Persist the choice to whichever source the chat reads
                           // on open (`agent.model ?? defaultChatModel`), so it
                           // survives refreshes and new chats.
@@ -783,6 +794,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                           } else {
                             setDefaultChatModel(newModel);
                           }
+
                           // Remember this model so it surfaces at the top next time.
                           setRecentModelValues(prev =>
                             [value, ...prev.filter(v => v !== value)].slice(

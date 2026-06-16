@@ -17,7 +17,7 @@ export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
     <UserMessageWrapper>
       <SenderName>You</SenderName>
       {visibleContext && visibleContext.length > 0 && (
-        <ContextItemRow wrapItems center gap="1ch">
+        <ContextItemRow wrapItems center gap='1ch'>
           {visibleContext.map(item => (
             <MessageContextItem key={item.id} contextItem={item} />
           ))}

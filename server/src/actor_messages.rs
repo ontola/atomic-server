@@ -177,4 +177,3 @@ pub struct MembershipNotification {
     /// Source connection id for echo suppression.
     pub source_id: Option<String>,
 }
-

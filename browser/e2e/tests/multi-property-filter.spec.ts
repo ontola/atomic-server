@@ -209,7 +209,9 @@ test.describe('multi-property (AND) filtering', () => {
         const res = await window.store.queryLocalDb({
           property: parent,
           value: drive,
-          filters: [{ property: nameProp, value: 'Ap', operator: 'starts_with' }],
+          filters: [
+            { property: nameProp, value: 'Ap', operator: 'starts_with' },
+          ],
           drive,
         });
 

@@ -16,12 +16,15 @@ export function getDocumentDiffSerializeContext(store: Store): {
   };
 }
 
-function extractTextFromNode(node: any): string {
-  if (!node) return '';
-  if (node.text) return node.text;
+function extractTextFromNode(node: unknown): string {
+  if (!node || typeof node !== 'object') return '';
 
-  if (Array.isArray(node.content)) {
-    return node.content.map(extractTextFromNode).join(' ');
+  const n = node as { text?: unknown; content?: unknown };
+
+  if (typeof n.text === 'string') return n.text;
+
+  if (Array.isArray(n.content)) {
+    return n.content.map(extractTextFromNode).join(' ');
   }
 
   return '';

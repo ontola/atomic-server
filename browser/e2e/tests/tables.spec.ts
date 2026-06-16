@@ -346,6 +346,7 @@ test.describe('tables', async () => {
     const namedRowCount = () =>
       page.evaluate(() => {
         const NAME = 'https://atomicdata.dev/properties/name';
+
         return Array.from(window.store.resources?.values?.() ?? []).filter(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (r: any) => /^row\d+$/.test(r.get?.(NAME) ?? ''),
@@ -422,6 +423,7 @@ test.describe('tables', async () => {
       await page.keyboard.type(name, { delay: 20 });
       await page.waitForTimeout(100);
     }
+
     await page.keyboard.press('Escape');
     await page.waitForFunction(
       () => window.store.getSyncStatus().pendingDirtyCount === 0,
@@ -438,7 +440,10 @@ test.describe('tables', async () => {
     ).toBeVisible();
 
     // Click the "name" column header to sort by name (ascending).
-    await page.getByRole('button', { name: 'name', exact: true }).first().click();
+    await page
+      .getByRole('button', { name: 'name', exact: true })
+      .first()
+      .click();
     await page.waitForTimeout(500);
 
     // After sort, the freshly-entered virtual rows must reorder: "alpha" first.

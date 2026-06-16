@@ -1293,22 +1293,22 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         )}
         <BottomToolbar>
           <CircleButton
-            type="button"
-            title="Canvas help"
+            type='button'
+            title='Canvas help'
             onClick={showHelp}
-            aria-label="Show canvas help"
+            aria-label='Show canvas help'
           >
             <FaCircleInfo />
           </CircleButton>
           <CircleButton
-            type="button"
-            title="New canvas"
+            type='button'
+            title='New canvas'
             onClick={handleNewCanvas}
           >
             <FaPlus />
           </CircleButton>
           <CircleButton
-            type="button"
+            type='button'
             title={eraserMode ? 'Switch to draw' : 'Eraser'}
             $active={eraserMode}
             onClick={handleEraserToggle}
@@ -1316,29 +1316,29 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             {eraserMode ? <FaPen /> : <FaEraser />}
           </CircleButton>
           <ColorCircleButton
-            type="button"
-            title="Pen color (tap to swap with previous, drag to pick from fan)"
+            type='button'
+            title='Pen color (tap to swap with previous, drag to pick from fan)'
             $color={penColor}
             onPointerDown={e => openFanFromButton(e, 'color')}
             onPointerMove={updateFanFromButton}
             onPointerUp={closeFanFromButton}
             onPointerCancel={cancelFanFromButton}
-            aria-label="Pen color"
+            aria-label='Pen color'
           />
           <WidthCircleButton
-            type="button"
+            type='button'
             title={`Stroke width: ${penWidth} (tap to swap with previous, drag to pick from fan)`}
             onPointerDown={e => openFanFromButton(e, 'width')}
             onPointerMove={updateFanFromButton}
             onPointerUp={closeFanFromButton}
             onPointerCancel={cancelFanFromButton}
-            aria-label="Stroke width"
+            aria-label='Stroke width'
           >
             <WidthDot $size={widthDotPx} />
           </WidthCircleButton>
           <CircleButton
-            type="button"
-            title="Undo (Ctrl+Z) — drag horizontally to scrub history"
+            type='button'
+            title='Undo (Ctrl+Z) — drag horizontally to scrub history'
             onPointerDown={onUndoPointerDown}
             onPointerMove={onUndoPointerMove}
             onPointerUp={onUndoPointerUp}
@@ -1349,16 +1349,16 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             <FaRotateLeft />
           </CircleButton>
           <CircleButton
-            type="button"
-            title="Redo (Ctrl+Shift+Z)"
+            type='button'
+            title='Redo (Ctrl+Shift+Z)'
             onClick={handleRedo}
             disabled={!canRedo}
           >
             <FaRotateRight />
           </CircleButton>
           <CircleButton
-            type="button"
-            title="Zoom to fit (tap) — drag horizontally to zoom-scrub"
+            type='button'
+            title='Zoom to fit (tap) — drag horizontally to zoom-scrub'
             onPointerDown={onZoomPointerDown}
             onPointerMove={onZoomPointerMove}
             onPointerUp={onZoomPointerUp}

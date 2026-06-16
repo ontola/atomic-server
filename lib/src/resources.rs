@@ -319,11 +319,7 @@ impl Resource {
     /// to `dateEdited`, sync bookkeeping like `lastCommit`, etc. Without
     /// this, drawing a stroke and then ticking `dateEdited` produces two
     /// undo steps and the user's first undo tap looks like a no-op.
-    pub fn patch_loro_property_sys(
-        &mut self,
-        property: &str,
-        value: Value,
-    ) -> AtomicResult<()> {
+    pub fn patch_loro_property_sys(&mut self, property: &str, value: Value) -> AtomicResult<()> {
         self.ensure_materialized()?;
         // Flush any pending non-system ops first so they don't get lumped
         // into the sys-tagged commit (which would smuggle a user edit past
@@ -1898,7 +1894,10 @@ mod test {
                 "https://atomicdata.dev/ontology/canvas/Canvas",
                 &drive,
                 "Date touch undo",
-                Some(vec![(STROKE_DATA, Value::Json(serde_json::Value::Array(vec![])))]),
+                Some(vec![(
+                    STROKE_DATA,
+                    Value::Json(serde_json::Value::Array(vec![])),
+                )]),
             )
             .await
             .unwrap();
@@ -1942,7 +1941,10 @@ mod test {
                 "https://atomicdata.dev/ontology/canvas/Canvas",
                 &drive,
                 "Undo export test",
-                Some(vec![(STROKE_DATA, Value::Json(serde_json::Value::Array(vec![])))]),
+                Some(vec![(
+                    STROKE_DATA,
+                    Value::Json(serde_json::Value::Array(vec![])),
+                )]),
             )
             .await
             .unwrap();
@@ -2004,7 +2006,10 @@ mod test {
                 "https://atomicdata.dev/ontology/canvas/Canvas",
                 &drive,
                 "Stroke test",
-                Some(vec![(stroke_data, Value::Json(serde_json::Value::Array(vec![])))]),
+                Some(vec![(
+                    stroke_data,
+                    Value::Json(serde_json::Value::Array(vec![])),
+                )]),
             )
             .await
             .unwrap();
@@ -2052,7 +2057,10 @@ mod test {
                 "https://atomicdata.dev/ontology/canvas/Canvas",
                 &drive,
                 "Stroke test",
-                Some(vec![(stroke_data, Value::Json(serde_json::Value::Array(vec![])))]),
+                Some(vec![(
+                    stroke_data,
+                    Value::Json(serde_json::Value::Array(vec![])),
+                )]),
             )
             .await
             .unwrap();

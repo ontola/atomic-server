@@ -90,7 +90,7 @@ export function Details(props: PropsWithChildren<DetailsProps>): JSX.Element {
       >
         {'titleButton' in props ? (
           <TitleAsButton
-            type="button"
+            type='button'
             $subtle={subtle}
             onClick={toggleOpen}
             disabled={!!disabled}
@@ -102,7 +102,7 @@ export function Details(props: PropsWithChildren<DetailsProps>): JSX.Element {
           <>
             {showCaret ? (
               <StyledIconButton
-                type="button"
+                type='button'
                 title={isOpen ? 'collapse' : 'expand'}
                 onClick={e => {
                   e.stopPropagation();

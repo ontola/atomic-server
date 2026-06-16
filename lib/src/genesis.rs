@@ -54,8 +54,9 @@ impl GenesisCert {
     pub fn encode(&self) -> Vec<u8> {
         let parent_bytes = self.parent.as_bytes();
         let drive_bytes = self.drive.as_bytes();
-        let mut out =
-            Vec::with_capacity(2 + 32 + 8 + 16 + 32 + 2 + parent_bytes.len() + 2 + drive_bytes.len());
+        let mut out = Vec::with_capacity(
+            2 + 32 + 8 + 16 + 32 + 2 + parent_bytes.len() + 2 + drive_bytes.len(),
+        );
 
         out.push(GENESIS_VERSION_V1);
         let mut flags = 0u8;
@@ -128,11 +129,13 @@ impl GenesisCert {
             None
         };
 
-        let parent_len = u16::from_le_bytes(take(bytes, &mut cursor, 2)?.try_into().unwrap()) as usize;
+        let parent_len =
+            u16::from_le_bytes(take(bytes, &mut cursor, 2)?.try_into().unwrap()) as usize;
         let parent = String::from_utf8(take(bytes, &mut cursor, parent_len)?.to_vec())
             .map_err(|e| format!("Genesis parent is not valid UTF-8: {e}"))?;
 
-        let drive_len = u16::from_le_bytes(take(bytes, &mut cursor, 2)?.try_into().unwrap()) as usize;
+        let drive_len =
+            u16::from_le_bytes(take(bytes, &mut cursor, 2)?.try_into().unwrap()) as usize;
         let drive = String::from_utf8(take(bytes, &mut cursor, drive_len)?.to_vec())
             .map_err(|e| format!("Genesis drive is not valid UTF-8: {e}"))?;
 
@@ -321,7 +324,10 @@ mod test {
 
         let subject = GenesisCert::subject_for_signature(&signature);
         assert!(subject.starts_with("did:ad:"));
-        assert_eq!(cert.signer_did(), format!("did:ad:agent:{}", encode_base64(&pubkey)));
+        assert_eq!(
+            cert.signer_did(),
+            format!("did:ad:agent:{}", encode_base64(&pubkey))
+        );
     }
 
     #[test]

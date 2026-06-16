@@ -33,7 +33,9 @@
 //! cargo bench -p atomic_lib --bench query_subscription_bench --features db-redb
 //! ```
 
-use atomic_lib::{db::QueryFilter, urls, utils::random_string, Db, Subject, Value};
+use atomic_lib::{
+    db::QueryFilter, storelike::PropVal, urls, utils::random_string, Db, Subject, Value,
+};
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
 /// Build a child resource and create-commit it under `parent`. `update_index`
@@ -51,8 +53,11 @@ async fn create_child(store: &Db, parent: &str, name: &str) {
 async fn seed_distinct_parent_filters(store: &Db, drive: &Subject, count: usize) {
     for i in 0..count {
         let f = QueryFilter {
-            property: Some(urls::PARENT.to_string()),
-            value: Some(Value::String(format!("did:ad:bench:parent:{i}"))),
+            filters: vec![PropVal {
+                property: Some(urls::PARENT.to_string()),
+                value: Some(Value::String(format!("did:ad:bench:parent:{i}"))),
+                operator: Default::default(),
+            }],
             sort_by: Some(urls::NAME.to_string()),
             drive: drive.clone(),
         };
@@ -67,8 +72,11 @@ async fn seed_distinct_parent_filters(store: &Db, drive: &Subject, count: usize)
 async fn seed_same_target_filters(store: &Db, drive: &Subject, target_parent: &str, count: usize) {
     for i in 0..count {
         let f = QueryFilter {
-            property: Some(urls::PARENT.to_string()),
-            value: Some(Value::String(target_parent.to_string())),
+            filters: vec![PropVal {
+                property: Some(urls::PARENT.to_string()),
+                value: Some(Value::String(target_parent.to_string())),
+                operator: Default::default(),
+            }],
             sort_by: Some(format!("https://example.com/bench/sort/{i}")),
             drive: drive.clone(),
         };
@@ -173,11 +181,14 @@ fn bench_query_subscriptions(c: &mut Criterion) {
                             // Use values from a high range so they don't collide with
                             // the seeded filters and we genuinely pay the insert cost.
                             let f = QueryFilter {
-                                property: Some(urls::PARENT.to_string()),
-                                value: Some(Value::String(format!(
-                                    "did:ad:bench:fresh:{}",
-                                    n + i as usize
-                                ))),
+                                filters: vec![PropVal {
+                                    property: Some(urls::PARENT.to_string()),
+                                    value: Some(Value::String(format!(
+                                        "did:ad:bench:fresh:{}",
+                                        n + i as usize
+                                    ))),
+                                    operator: Default::default(),
+                                }],
                                 sort_by: Some(urls::NAME.to_string()),
                                 drive: drive.clone(),
                             };

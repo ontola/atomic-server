@@ -3,7 +3,7 @@
 //! Run (single-threaded — tests share global `LIVE_PEERS` / `ROUTER` state):
 //! `cargo test -p atomic_lib --features "iroh,db-redb" --lib -- sync::iroh_e2e -- --test-threads=1`
 
-use crate::{Db, Storelike, agents::ForAgent};
+use crate::{agents::ForAgent, Db, Storelike};
 use iroh::protocol::Router;
 
 const STROKE_DATA: &str = "https://atomicdata.dev/ontology/canvas/strokeData";
@@ -161,10 +161,10 @@ async fn e2e_hello_exchanges_device_names() {
     let ok = wait_until(std::time::Duration::from_secs(2), || async {
         let a_known = peer::get_known_peers(&pair.db_a);
         let ep_b_node_id = pair.ep_b.node_id().to_string();
-        a_known
-            .iter()
-            .any(|p| peer::normalize_node_id(&p.node_id) == peer::normalize_node_id(&ep_b_node_id)
-                && p.name == "Bob's Phone")
+        a_known.iter().any(|p| {
+            peer::normalize_node_id(&p.node_id) == peer::normalize_node_id(&ep_b_node_id)
+                && p.name == "Bob's Phone"
+        })
     })
     .await;
     assert!(
@@ -187,7 +187,9 @@ async fn e2e_bidirectional_bulk_sync() {
             "Canvas A",
             Some(vec![(
                 STROKE_DATA,
-                crate::Value::Json(serde_json::Value::Array(vec![serde_json::json!({"color": 1})])),
+                crate::Value::Json(serde_json::Value::Array(vec![
+                    serde_json::json!({"color": 1}),
+                ])),
             )]),
         )
         .await
@@ -201,7 +203,9 @@ async fn e2e_bidirectional_bulk_sync() {
             "Canvas B",
             Some(vec![(
                 STROKE_DATA,
-                crate::Value::Json(serde_json::Value::Array(vec![serde_json::json!({"color": 2})])),
+                crate::Value::Json(serde_json::Value::Array(vec![
+                    serde_json::json!({"color": 2}),
+                ])),
             )]),
         )
         .await
@@ -330,7 +334,9 @@ async fn e2e_new_resource_after_bulk_resync() {
             "After sync",
             Some(vec![(
                 STROKE_DATA,
-                crate::Value::Json(serde_json::Value::Array(vec![serde_json::json!({"color": 99})])),
+                crate::Value::Json(serde_json::Value::Array(vec![
+                    serde_json::json!({"color": 99}),
+                ])),
             )]),
         )
         .await

@@ -54,7 +54,10 @@ describe('GenesisCert', () => {
     };
     expect(decodeGenesisCert(encodeGenesisCert(base))).toEqual(base);
 
-    const withHash: GenesisCert = { ...base, stateHash: new Uint8Array(32).fill(9) };
+    const withHash: GenesisCert = {
+      ...base,
+      stateHash: new Uint8Array(32).fill(9),
+    };
     expect(decodeGenesisCert(encodeGenesisCert(withHash))).toEqual(withHash);
   });
 

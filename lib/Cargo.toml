@@ -117,6 +117,10 @@ tokio-tungstenite = ["dep:tokio-tungstenite"]
 [[bench]]
 name = "benchmarks"
 harness = false
+# Uses `Db::init_temp` + a tokio runtime, so it only builds with the db backend
+# enabled (run via `cargo bench --features db-redb` / `--all-features`). Without
+# this, `cargo clippy --all-targets` on default features fails to compile it.
+required-features = ["db-redb"]
 
 [[bench]]
 name = "loro_bench"

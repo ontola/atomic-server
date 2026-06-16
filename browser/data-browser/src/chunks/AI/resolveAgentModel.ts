@@ -1,4 +1,4 @@
-import type { AIAgent, AIModelIdentifier } from './types';
+import type { AIAgent } from './types';
 
 export const BUILTIN_AGENT_IDS = [
   'dev.atomicdata.atomic-agent',
@@ -12,5 +12,3 @@ export const isBuiltinAgent = (agent: AIAgent | string): boolean => {
 
   return (BUILTIN_AGENT_IDS as readonly string[]).includes(id);
 };
-
-

@@ -57,7 +57,7 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
     // engine isn't available. Show why instead of an endless spinner.
     if (loroReady || graceExpired) {
       return (
-        <ErrorWrapper role="alert">
+        <ErrorWrapper role='alert'>
           <h2>Couldn&apos;t open the document editor</h2>
           <p>
             The collaborative editing engine (Loro / WebAssembly) failed to
@@ -86,7 +86,7 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
 
         <Suspense fallback={<div>Loading...</div>}>
           <CollaborativeEditor
-            id="document-editor"
+            id='document-editor'
             resource={resource}
             doc={doc}
             property={dataBrowser.properties.documentContent}

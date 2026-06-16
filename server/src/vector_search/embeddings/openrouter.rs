@@ -68,7 +68,10 @@ async fn openrouter_embed_http(
         },
     };
 
-    tracing::info!("Sending OpenRouter request with number of chunks: {}", inputs.len());
+    tracing::info!(
+        "Sending OpenRouter request with number of chunks: {}",
+        inputs.len()
+    );
     let response = client
         .post(url)
         .header("Authorization", format!("Bearer {}", api_key))

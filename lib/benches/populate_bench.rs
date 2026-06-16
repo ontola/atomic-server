@@ -30,6 +30,7 @@ async fn seed_watched_queries_with_drive(store: &atomic_lib::Db, count: usize, d
         let q = Query {
             property: Some(format!("https://example.com/bench/prop/{i}")),
             value: None,
+            filters: vec![],
             limit: Some(1),
             offset: 0,
             // `sort_by` makes `requires_query_index(q)` return true, which

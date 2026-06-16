@@ -140,7 +140,7 @@ const AISettings: React.FC = () => {
       >
         <SettingsContent>
           <SettingsSearchProvider value={childContext}>
-            <Column gap="0.75rem">
+            <Column gap='0.75rem'>
               <CheckboxLabel>
                 <Checkbox checked={enableAI} onChange={setEnableAI} /> Enable AI
                 Features
@@ -154,8 +154,8 @@ const AISettings: React.FC = () => {
                   Show token usage in chats
                 </CheckboxLabel>
 
-                <SubSectionTitle as="h3">Default chat model</SubSectionTitle>
-                <Subtle as="p">
+                <SubSectionTitle as='h3'>Default chat model</SubSectionTitle>
+                <Subtle as='p'>
                   Pre-selected when creating new agents. Does not override
                   models you have already set per agent.
                 </Subtle>
@@ -178,13 +178,13 @@ const AISettings: React.FC = () => {
                 <SubGroup>
                   <SubSection>
                     <SubSectionTitle>OpenRouter</SubSectionTitle>
-                    <Column gap="0.5rem">
+                    <Column gap='0.5rem'>
                       <ConditionalSettings
                         fullWidth
-                        gap="0.5rem"
+                        gap='0.5rem'
                         enabled={true}
                       >
-                        <label htmlFor="openrouter-api-key">
+                        <label htmlFor='openrouter-api-key'>
                           OpenRouter API Key
                         </label>
                         <Row center>
@@ -196,15 +196,15 @@ const AISettings: React.FC = () => {
                           )}
                           <InputWrapper>
                             <InputStyled
-                              id="openrouter-api-key"
-                              type="password"
+                              id='openrouter-api-key'
+                              type='password'
                               value={openRouterApiKey || ''}
                               onChange={e =>
                                 handleSetOpenRouterKey(
                                   e.target.value || undefined,
                                 )
                               }
-                              placeholder="Enter your OpenRouter API key"
+                              placeholder='Enter your OpenRouter API key'
                             />
                           </InputWrapper>
                         </Row>
@@ -228,45 +228,45 @@ const AISettings: React.FC = () => {
 
                   <SubSection>
                     <SubSectionTitle>Ollama</SubSectionTitle>
-                    <Column gap="0.5rem">
+                    <Column gap='0.5rem'>
                       <Subtle>
                         Host your own AI models locally using{' '}
                         <a
-                          href="https://ollama.com/"
-                          target="_blank"
-                          rel="noreferrer"
+                          href='https://ollama.com/'
+                          target='_blank'
+                          rel='noreferrer'
                         >
                           Ollama
                         </a>
                       </Subtle>
                       <ConditionalSettings
                         fullWidth
-                        gap="0.5rem"
+                        gap='0.5rem'
                         enabled={true}
                       >
-                        <Row center gap="1ch">
+                        <Row center gap='1ch'>
                           {isOllamaUrlValid ? (
                             <FaCheck
-                              title="Server found"
+                              title='Server found'
                               color={theme.colors.main}
                             />
                           ) : (
                             <FaTriangleExclamation
-                              title="Server not responding"
+                              title='Server not responding'
                               color={theme.colors.warning}
                             />
                           )}
-                          <label htmlFor="ollama-url">Ollama API Url</label>
+                          <label htmlFor='ollama-url'>Ollama API Url</label>
                         </Row>
                         <InputWrapper>
                           <InputStyled
-                            id="ollama-url"
+                            id='ollama-url'
                             value={ollamaUrl || ''}
                             onChange={e =>
                               setOllamaUrl(e.target.value || undefined)
                             }
-                            type="url"
-                            placeholder="http://localhost:11434"
+                            type='url'
+                            placeholder='http://localhost:11434'
                           />
                         </InputWrapper>
                       </ConditionalSettings>
@@ -283,7 +283,7 @@ const AISettings: React.FC = () => {
                         </WarningBlock.Title>
                       </WarningBlock>
                     )}
-                    <Column gap="0.5rem">
+                    <Column gap='0.5rem'>
                       <CheckboxLabel>
                         <Checkbox
                           checked={shouldGenerateTitles}
@@ -292,8 +292,8 @@ const AISettings: React.FC = () => {
                         Generate AI Chat titles
                       </CheckboxLabel>
                       <CheckboxDescriptor
-                        label="Show follow up prompts in chats"
-                        description="Uses a small model to generate a follow up prompt based on the last message in the chat."
+                        label='Show follow up prompts in chats'
+                        description='Uses a small model to generate a follow up prompt based on the last message in the chat.'
                       >
                         {id => (
                           <Checkbox
@@ -303,7 +303,7 @@ const AISettings: React.FC = () => {
                           />
                         )}
                       </CheckboxDescriptor>
-                      <Details title="Change what model is used for generative features">
+                      <Details title='Change what model is used for generative features'>
                         <Suspense>
                           <Subtle>(Tip) Choose a cheap and fast model</Subtle>
                           <ModelSelect

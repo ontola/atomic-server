@@ -92,7 +92,10 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
         onNewTag={canCreateTags ? handleNewTag : undefined}
         newTagParent={canCreateTags ? driveSubject : undefined}
         Trigger={
-          <TagsButton as={RadixPopover.Trigger} data-testid='navbar-tags-button'>
+          <TagsButton
+            as={RadixPopover.Trigger}
+            data-testid='navbar-tags-button'
+          >
             <FaTags />
             <span>Tags</span>
             {tags.length > 0 && <TagsCount>+{tags.length}</TagsCount>}
@@ -220,30 +223,30 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
   );
 
   return (
-    <NavBarWrapper aria-label="Breadcrumbs">
+    <NavBarWrapper aria-label='Breadcrumbs'>
       <IconButton
-        color="textLight"
-        type="button"
+        color='textLight'
+        type='button'
         onClick={() => setSideBarLocked(!sideBarLocked)}
         title={`Show / hide sidebar (${shortcuts.sidebarToggle})`}
-        data-test="sidebar-toggle"
+        data-test='sidebar-toggle'
       >
         <FaBars />
       </IconButton>
       {isInStandaloneMode && (
         <>
           <IconButton
-            color="textLight"
-            type="button"
-            title="Go back"
+            color='textLight'
+            type='button'
+            title='Go back'
             onClick={back}
           >
             <FaArrowLeft />
           </IconButton>
           <IconButton
-            color="textLight"
-            type="button"
-            title="Go forward"
+            color='textLight'
+            type='button'
+            title='Go forward'
             onClick={forward}
           >
             <FaArrowRight />
@@ -251,8 +254,8 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         </>
       )}
       <IconButton
-        color="textLight"
-        type="button"
+        color='textLight'
+        type='button'
         title={`Search (${shortcuts.search})`}
         onClick={() => openSearchOverlay()}
       >
@@ -264,7 +267,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
       <Spacer />
       <ButtonArea>
         {hasAiChanges && (
-          <Row gap="0.5rem" center>
+          <Row gap='0.5rem' center>
             <SmallButton clean onClick={() => revertResource(resource.subject)}>
               Revert
             </SmallButton>
@@ -276,7 +279,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         <ShareDialog
           subject={resource.subject}
           trigger={
-            <LabelButton as="button">
+            <LabelButton as='button'>
               <FaShare />
               <span>Share</span>
             </LabelButton>
@@ -486,9 +489,9 @@ function EditableBreadcrumb({
     return (
       <BreadCrumbInput
         ref={inputRef}
-        type="text"
+        type='text'
         value={text || ''}
-        placeholder="Untitled"
+        placeholder='Untitled'
         onChange={e => setText(e.target.value)}
         onBlur={() => setIsEditing(false)}
         onKeyDown={e => {

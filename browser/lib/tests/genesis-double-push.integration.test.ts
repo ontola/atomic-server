@@ -82,6 +82,7 @@ describe('parallel pushCommits race on genesis commits', () => {
     ) => {
       const url =
         typeof input === 'string' ? input : (input as Request | URL).toString();
+
       if (url.endsWith('/commit') && init?.method === 'POST') {
         commitPostCount++;
         // Add a small delay so the second parallel push has a chance
@@ -90,8 +91,10 @@ describe('parallel pushCommits race on genesis commits', () => {
         // reliably under Node's single-threaded scheduler.
         await delay(80);
         const res = await realFetch(input as RequestInfo, init);
+
         if (!res.ok) {
           const body = await res.clone().text();
+
           if (body.includes('but the resource already exists')) {
             alreadyExistsCount++;
           }

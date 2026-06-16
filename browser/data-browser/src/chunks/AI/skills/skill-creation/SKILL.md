@@ -32,7 +32,7 @@ Use this flow when the user starts by describing a skill they want you to create
      - What are the specific tools, APIs, or project conventions to use?
      - Are there any common edge cases or "Gotchas" to watch out for?
      - What is the expected input and output format?
-     - Are there multiple ways to do this? (If so, ask what the *default* should be).
+     - Are there multiple ways to do this? (If so, ask what the _default_ should be).
 2. **Draft the Skill**:
    - Once the context is clear, draft the skill applying the best practices below.
    - Present it to the user for review before calling the `create_skill` tool.
@@ -48,9 +48,9 @@ When writing the `content` of the skill, strictly adhere to these principles:
 
 ### 2. Calibrate Control
 
-- **Match specificity to fragility**: Give the agent freedom (explain *why*) when tasks tolerate variation. Be highly prescriptive (e.g., providing exact tool calls) for fragile sequences.
+- **Match specificity to fragility**: Give the agent freedom (explain _why_) when tasks tolerate variation. Be highly prescriptive (e.g., providing exact tool calls) for fragile sequences.
 - **Provide defaults, not menus**: When multiple tools could work, pick a clear default and briefly mention the fallback.
-- **Favor procedures over declarations**: Teach the agent *how to approach* a class of problems rather than exactly what to produce for a single instance.
+- **Favor procedures over declarations**: Teach the agent _how to approach_ a class of problems rather than exactly what to produce for a single instance.
 
 ### 3. Use Effective Patterns
 
@@ -69,13 +69,16 @@ Your generated skill `content` should generally follow this markdown structure:
 [Brief general explanation of things the agent needs to know to perform the task.]
 
 ## Workflow / Procedure
+
 1. Step one
 2. Step two...
 
 ## Templates / Checklists (if applicable)
+
 [Output templates or explicit checklists]
 
 ## Gotchas (if applicable)
+
 - [Specific edge case 1]
 - [Specific project convention]
 ```

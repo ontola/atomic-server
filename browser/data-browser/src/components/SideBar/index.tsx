@@ -64,7 +64,7 @@ export function SideBar(): JSX.Element {
       <StyledNav
         ref={mountRefs}
         size={size}
-        data-testid="sidebar"
+        data-testid='sidebar'
         locked={isWideScreen && sideBarLocked}
         exposed={sidebarVisible}
         {...listeners}
@@ -76,19 +76,19 @@ export function SideBar(): JSX.Element {
           onIsRearangingChange={setIsRearanging}
         />
         <MenuWrapper>
-          <Column gap="0.5rem" align="stretch">
+          <Column gap='0.5rem' align='stretch'>
             {enabledPanels.has(Panel.AIChats) && (
-              <SideBarPanel title="AI Chats" key={drive}>
+              <SideBarPanel title='AI Chats' key={drive}>
                 <AIChatsPanel />
               </SideBarPanel>
             )}
             {enabledPanels.has(Panel.Ontologies) && (
-              <SideBarPanel title="Ontologies" key={drive}>
+              <SideBarPanel title='Ontologies' key={drive}>
                 <OntologiesPanel />
               </SideBarPanel>
             )}
-            <SideBarPanel title="App">
-              <Column gap="0.5rem" align="stretch">
+            <SideBarPanel title='App'>
+              <Column gap='0.5rem' align='stretch'>
                 <AppMenu onItemClick={closeSideBar} />
                 <About />
               </Column>

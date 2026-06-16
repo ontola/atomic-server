@@ -219,7 +219,11 @@ fn build_js(dirs: &Dirs) {
     // Open (truncate) the log; stdout+stderr of both child commands go here.
     let open_log = || {
         File::create(&log_path).unwrap_or_else(|e| {
-            panic!("Failed to create JS build log {}: {}", log_path.display(), e)
+            panic!(
+                "Failed to create JS build log {}: {}",
+                log_path.display(),
+                e
+            )
         })
     };
 
@@ -248,12 +252,7 @@ fn build_js(dirs: &Dirs) {
             // Surface the captured log in the panic — the live stream is gone
             // from the terminal by the time Cargo prints this.
             let tail = std::fs::read_to_string(&log_path).unwrap_or_default();
-            panic!(
-                "js {} failed (see {}):\n{}",
-                step,
-                log_path.display(),
-                tail
-            );
+            panic!("js {} failed (see {}):\n{}", step, log_path.display(), tail);
         }
     };
 

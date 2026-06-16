@@ -409,10 +409,10 @@ function SearchOverlay(): JSX.Element {
           value={query}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder="Search for resources..."
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
+          placeholder='Search for resources...'
+          autoComplete='off'
+          autoCorrect='off'
+          autoCapitalize='off'
           spellCheck={false}
         />
         <ShortcutHint onClick={closeOverlay}>esc</ShortcutHint>
@@ -425,7 +425,7 @@ function SearchOverlay(): JSX.Element {
           {tags.length > 0 && (
             <Row
               center
-              gap="1ch"
+              gap='1ch'
               style={{
                 padding: '0.5rem 1rem',
                 borderBottom: '1px solid',
@@ -440,7 +440,7 @@ function SearchOverlay(): JSX.Element {
           <PanelContent>
             <ResultsList>
               <ResultsArea ref={resultsRef}>
-                <Column gap="0">
+                <Column gap='0'>
                   {results.map((subject, index) => (
                     <ResultCard
                       key={subject}
@@ -657,7 +657,7 @@ function ShortcutsOverlay(): JSX.Element {
         <OverlayInput
           ref={inputRef}
           onKeyDown={handleKeyDown}
-          placeholder="Press esc to close..."
+          placeholder='Press esc to close...'
           readOnly
           style={{ cursor: 'default', fontSize: '0.875rem' }}
         />

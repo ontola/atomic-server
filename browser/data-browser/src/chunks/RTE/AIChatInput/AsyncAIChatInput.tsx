@@ -289,7 +289,10 @@ const AsyncAIChatInput: React.FC<
           <EditorEvents onChange={handleChange} />
         </TiptapContextProvider>
       </EditorWrapper>
-      <Row justify='space-between' style={{ minWidth: 0, overflow: 'hidden', width: '100%' }}>
+      <Row
+        justify='space-between'
+        style={{ minWidth: 0, overflow: 'hidden', width: '100%' }}
+      >
         {children}
         <Row center style={{ flexShrink: 0 }}>
           {rightAlignedChildren}

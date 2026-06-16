@@ -79,7 +79,7 @@ const PropertyLine = ({
 
   return (
     <PropLineWrapper>
-      <Row center gap="1ch">
+      <Row center gap='1ch'>
         <DiffTag type={type}>{type}</DiffTag>
         <Title>
           <ResourceInline subject={prop} />

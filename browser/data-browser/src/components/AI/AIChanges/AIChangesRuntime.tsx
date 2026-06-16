@@ -225,7 +225,7 @@ export const AIChangesRuntime: React.FC<{
           editCount={changes.length}
         />
       )}
-      <Dialog {...dialogProps} width="80ch">
+      <Dialog {...dialogProps} width='80ch'>
         {dialogVisible && (
           <>
             <Dialog.Title>
@@ -324,7 +324,7 @@ const DiffItem: React.FC<DiffItemProps> = ({
   return (
     <Details
       title={
-        <Row center justify="space-between">
+        <Row center justify='space-between'>
           <h2>{currentResource.title}</h2>
           <ConfirmChangesButtons
             onRevert={onRevert}
@@ -351,13 +351,13 @@ const ConfirmChangesButtons: React.FC<ConfirmChangesButtonsProps> = ({
 }) => {
   return (
     <Row>
-      <IconButton title="Revert Changes" onClick={onRevert}>
+      <IconButton title='Revert Changes' onClick={onRevert}>
         <FaXmark />
       </IconButton>
       <IconButton
         variant={IconButtonVariant.Colored}
-        color="main"
-        title="Confirm Changes"
+        color='main'
+        title='Confirm Changes'
         onClick={onConfirm}
       >
         <FaCheck />

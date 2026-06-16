@@ -643,9 +643,7 @@ mod tests {
 
         // Sibling that merely shares a string prefix is NOT within — the bug a
         // bare `starts_with` would let through.
-        assert!(
-            !Subject::from_raw("https://localhost:9883/drive12", base).is_within_drive(&drive)
-        );
+        assert!(!Subject::from_raw("https://localhost:9883/drive12", base).is_within_drive(&drive));
 
         // DID drives match only by identity — no hierarchy descent.
         let did_drive = Subject::from_raw("did:ad:drive1", None);

@@ -24,7 +24,7 @@ export const AISidebarContainer: React.FC = () => {
       ref={targetRef}
       data-open={isOpen ? '' : undefined}
       size={size}
-      data-testid="ai-sidebar"
+      data-testid='ai-sidebar'
     >
       <AISidebarDragArea
         ref={dragAreaRef}

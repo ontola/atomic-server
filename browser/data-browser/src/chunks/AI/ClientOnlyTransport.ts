@@ -7,7 +7,11 @@ import {
   type UIMessageChunk,
 } from 'ai';
 import { AIProvider } from '@components/AI/aiContstants';
-import { type AIAgent, type AIModelIdentifier, type AtomicUIMessage } from './types';
+import {
+  type AIAgent,
+  type AIModelIdentifier,
+  type AtomicUIMessage,
+} from './types';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { useRef } from 'react';
 import { useStore } from '@tomic/react';

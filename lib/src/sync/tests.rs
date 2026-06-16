@@ -147,7 +147,10 @@ mod peer_sync_tests {
                 "https://atomicdata.dev/ontology/canvas/Canvas",
                 &drive_a,
                 "Undo sync canvas",
-                Some(vec![(STROKE_DATA, crate::Value::Json(serde_json::Value::Array(vec![])))]),
+                Some(vec![(
+                    STROKE_DATA,
+                    crate::Value::Json(serde_json::Value::Array(vec![])),
+                )]),
             )
             .await
             .unwrap();

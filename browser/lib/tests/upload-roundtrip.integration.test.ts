@@ -71,9 +71,11 @@ describe('upload roundtrip via unified sync path', () => {
     const deadline = Date.now() + 15_000;
     let lastStatus = 0;
     let lastBody = '';
+
     while (Date.now() < deadline) {
       const res = await fetch(downloadUrl);
       lastStatus = res.status;
+
       if (res.ok) {
         const buf = new Uint8Array(await res.arrayBuffer());
         expect(Array.from(buf)).toEqual(Array.from(data));
@@ -83,8 +85,10 @@ describe('upload roundtrip via unified sync path', () => {
         // module while pending WS callbacks still hold references panics
         // with "null pointer passed to rust" / "Rust value borrowed".
         store.disconnect();
+
         return;
       }
+
       lastBody = await res.text().catch(() => '');
       await delay(250);
     }

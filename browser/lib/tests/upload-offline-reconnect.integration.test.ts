@@ -73,6 +73,7 @@ describe('upload offline → reconnect → server has blob', () => {
         // applyPendingCommitsLocally + markDirtyForSync path.
         return Promise.reject(new TypeError('Failed to fetch'));
       }
+
       return realFetch(input, init);
     }) as typeof fetch);
 
@@ -83,12 +84,14 @@ describe('upload offline → reconnect → server has blob', () => {
 
     // ---- 2. Upload while offline. Bytes go to clientDb, commit fails. ----
     let subject: string | undefined;
+
     try {
       [subject] = await store.uploadFiles([file], drive);
     } catch {
       // Network error during commit POST is expected; the resource still
       // ends up queued in dirtyForSync and the bytes in the local ClientDb.
     }
+
     void subject;
     // The blob bytes should be in the local clientDb regardless.
 
@@ -123,9 +126,11 @@ describe('upload offline → reconnect → server has blob', () => {
     // ---- 4. Poll /download/files/<hash> until the bytes show up ----
     const deadline = Date.now() + 15_000;
     let lastStatus = 0;
+
     while (Date.now() < deadline) {
       const res = await realFetch(downloadUrl);
       lastStatus = res.status;
+
       if (res.ok) {
         const buf = new Uint8Array(await res.arrayBuffer());
         expect(Array.from(buf)).toEqual(Array.from(data));
@@ -133,8 +138,10 @@ describe('upload offline → reconnect → server has blob', () => {
         // with pending callbacks. The vitest fork exits on file end and
         // GCs the WASM module cleanly.
         store.disconnect();
+
         return;
       }
+
       await delay(250);
     }
 

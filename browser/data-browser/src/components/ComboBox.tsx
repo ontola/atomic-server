@@ -76,6 +76,7 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
 
       if (inputValue === '') {
         setItems(options);
+
         return;
       }
 
@@ -156,6 +157,7 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
           {...getInputProps({
             onFocus: () => {
               setIsFocused(true);
+
               if (subtle) {
                 setTimeout(() => {
                   setInputValue('');
@@ -165,6 +167,7 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
             },
             onBlur: () => {
               setIsFocused(false);
+
               if (subtle) {
                 setInputValue(downshiftSelectedItem?.label ?? '');
               }

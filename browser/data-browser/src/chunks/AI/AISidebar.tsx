@@ -425,22 +425,22 @@ const AISidebar: React.FC = () => {
         onDeleteMessage={handleMessageDelete}
         onRegenerateMessage={onRegenerateMessage}
       >
-        <Row center justify="space-between" fullWidth>
-          <Row center gap="0.5ch">
+        <Row center justify='space-between' fullWidth>
+          <Row center gap='0.5ch'>
             <IconButton
-              title="New Chat"
+              title='New Chat'
               onClick={startNewChat}
-              color="textLight"
+              color='textLight'
               style={{ alignSelf: 'flex-end' }}
             >
               <FaPlus />
             </IconButton>
             <Heading>Atomic Assistant</Heading>
           </Row>
-          <Row center gap="0.5ch">
+          <Row center gap='0.5ch'>
             <IconButton
-              title="Close AI Sidebar"
-              color="textLight"
+              title='Close AI Sidebar'
+              color='textLight'
               style={{ alignSelf: 'flex-end' }}
               onClick={() => {
                 setIsOpen(false);

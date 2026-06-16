@@ -74,7 +74,9 @@ async fn drive_subscriber_receives_update_for_new_resource() -> AtomicResult<()>
     // Author + public drive.
     let client_a = Client::new(&server_url).await?;
     let agent_a = client_a.new_agent("Alice").await?;
-    let drive = client_a.new_public_drive(&agent_a, "Membership Drive").await?;
+    let drive = client_a
+        .new_public_drive(&agent_a, "Membership Drive")
+        .await?;
 
     // Subscriber (Bob) registers drive-wide BEFORE any new resource is created.
     let client_b = Client::new(&server_url).await?;
@@ -103,10 +105,7 @@ async fn drive_subscriber_receives_update_for_new_resource() -> AtomicResult<()>
         atomic_lib::urls::IS_A.into(),
         atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
     )?;
-    canvas_res.set_unsafe(
-        atomic_lib::urls::PARENT.into(),
-        drive.clone().into(),
-    )?;
+    canvas_res.set_unsafe(atomic_lib::urls::PARENT.into(), drive.clone().into())?;
     canvas_res.set_name("New Member")?;
     canvas_res.set_unsafe(
         atomic_lib::urls::SHORTNAME.into(),

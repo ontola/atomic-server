@@ -94,10 +94,10 @@ export function AIChatsPanel(): JSX.Element | null {
 
   return (
     <Wrapper>
-      <StyledScrollArea key={personalDrive} type="hover">
+      <StyledScrollArea key={personalDrive} type='hover'>
         {!loading && canWriteToDrive && personalDrive && (
           <SideBarItem onClick={createNewChat}>
-            <Row gap="1ch" center>
+            <Row gap='1ch' center>
               <FaPlus />
               New Chat
             </Row>
@@ -144,7 +144,7 @@ function Item({ subject }: ItemProps): JSX.Element {
   return (
     <StyledLink subject={subject} clean>
       <SideBarItem>
-        <Row gap="1ch" center>
+        <Row gap='1ch' center>
           {resource.title}
         </Row>
       </SideBarItem>

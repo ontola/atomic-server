@@ -50,7 +50,10 @@ test.describe('AI Chat', () => {
       timeout: 15_000,
     });
 
-    await page.getByTestId('ai-sidebar').getByRole('button', { name: 'New Chat' }).click();
+    await page
+      .getByTestId('ai-sidebar')
+      .getByRole('button', { name: 'New Chat' })
+      .click();
     await expect(page.getByText(MOCK_RESPONSE)).not.toBeVisible();
   });
 });

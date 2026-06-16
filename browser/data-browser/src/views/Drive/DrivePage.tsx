@@ -62,8 +62,8 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
 
   return (
     <ContainerNarrow>
-      <Column gap="2rem">
-        <Row align="center" wrapItems gap="1rem">
+      <Column gap='2rem'>
+        <Row align='center' wrapItems gap='1rem'>
           <EditableTitle resource={resource} />
           {vectorIndexing && <VectorIndexingIndicator />}
           {baseURL !== resource.subject && (
@@ -77,12 +77,12 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
           resource={resource}
           propertyURL={core.properties.description}
           datatype={Datatype.MARKDOWN}
-          buttonLabel="Add description"
+          buttonLabel='Add description'
         />
         {canEdit && <QuickCreateRow parent={resource.subject} />}
 
         <SettingsGroup>
-          <SettingsSection label="Resources">
+          <SettingsSection label='Resources'>
             <DriveSubResourcesSection>
               <ScrollArea>
                 {subResources.map(child => (
@@ -96,10 +96,10 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
               </ScrollArea>
             </DriveSubResourcesSection>
           </SettingsSection>
-          <SettingsSection label="Tags">
+          <SettingsSection label='Tags'>
             <DriveTagList resource={resource} />
           </SettingsSection>
-          <SettingsSection label="LLM Instructions">
+          <SettingsSection label='LLM Instructions'>
             <p>
               A short description given to the AI Agent, use this to tell it
               what this drive is about, link important resources etc.
@@ -108,10 +108,10 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
               resource={resource}
               propertyURL={core.properties.description}
               datatype={Datatype.MARKDOWN}
-              buttonLabel="Add LLM instructions"
+              buttonLabel='Add LLM instructions'
             />
           </SettingsSection>
-          <SettingsSection label="Default Ontology">
+          <SettingsSection label='Default Ontology'>
             <InputSwitcher
               commit
               resource={resource}
@@ -119,8 +119,8 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
               disabled={!canEdit}
             />
           </SettingsSection>
-          <SettingsSection label="Plugins">
-            <Column gap="1rem">
+          <SettingsSection label='Plugins'>
+            <Column gap='1rem'>
               <PluginList drive={resource} />
               {canEdit && (
                 <Suspense fallback={null}>
@@ -163,8 +163,8 @@ function DriveTagList({ resource }: { resource: Resource }) {
   }
 
   return (
-    <Column gap="0.75rem">
-      <Row gap="0.5rem" wrapItems>
+    <Column gap='0.75rem'>
+      <Row gap='0.5rem' wrapItems>
         {tags.map(tag => (
           <TagItem key={tag}>
             <TagLink href={constructOpenURL(tag)} onClick={handleTagClick(tag)}>
@@ -172,8 +172,8 @@ function DriveTagList({ resource }: { resource: Resource }) {
             </TagLink>
             {canEdit && (
               <DeleteTagButton
-                type="button"
-                title="Remove tag"
+                type='button'
+                title='Remove tag'
                 onClick={() => handleDelete(tag)}
               >
                 <FaXmark />

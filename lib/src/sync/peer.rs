@@ -13,8 +13,8 @@
 //! immediately after `AUTH_OK` — see `encode_hello` / `decode_hello` in
 //! [`super::protocol`].
 
-use crate::{Db, Storelike, agents::ForAgent};
-use iroh::{Endpoint, NodeId, protocol::Router};
+use crate::{agents::ForAgent, Db, Storelike};
+use iroh::{protocol::Router, Endpoint, NodeId};
 use std::sync::OnceLock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -623,7 +623,12 @@ fn register_live_peer(
             if buf[0] == super::protocol::tag::UPDATE {
                 if let Some(decoded) = super::protocol::decode_update(&buf[1..]) {
                     if !decoded.loro_bytes.is_empty() {
-                        let _ = super::ws_apply::apply_state_update(&store, &decoded.subject, &decoded.loro_bytes).await;
+                        let _ = super::ws_apply::apply_state_update(
+                            &store,
+                            &decoded.subject,
+                            &decoded.loro_bytes,
+                        )
+                        .await;
                         tracing::trace!(
                             "[live] imported update for {} from {}",
                             &decoded.subject[..decoded.subject.len().min(20)],

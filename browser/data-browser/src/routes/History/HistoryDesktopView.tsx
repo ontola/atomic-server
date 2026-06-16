@@ -72,16 +72,16 @@ export function HistoryDesktopView({
     <>
       <CurrentItem>
         <Column fullHeight>
-          <Title resource={resource} prefix="History of" link />
+          <Title resource={resource} prefix='History of' link />
           <>
             <VersionTitle version={selectedVersion} />
             <StyledCard>
-              <Tabs tabs={tabs} label="History">
+              <Tabs tabs={tabs} label='History'>
                 <Card.Content>
-                  <Tabs.Panel value="changes">
+                  <Tabs.Panel value='changes'>
                     <ResourceDiff diff={diff} />
                   </Tabs.Panel>
-                  <Tabs.Panel value="resource">
+                  <Tabs.Panel value='resource'>
                     <ResourceCardDefault resource={selectedVersionResource} />
                   </Tabs.Panel>
                 </Card.Content>

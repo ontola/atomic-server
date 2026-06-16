@@ -303,11 +303,16 @@ test.describe('search', async () => {
               const store = window.store as unknown as {
                 driveOf(s: string): string;
                 localSearch: {
-                  search(q: string, d: string, n: number): {
+                  search(
+                    q: string,
+                    d: string,
+                    n: number,
+                  ): {
                     subjects: string[];
                   };
                 };
               };
+
               try {
                 const drive = store.driveOf(subj);
 

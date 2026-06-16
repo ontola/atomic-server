@@ -75,16 +75,16 @@ const AppSettings: React.FunctionComponent = () => {
         <SettingsSearchWrapper hasPrefix>
           <FaMagnifyingGlass />
           <InputStyled
-            type="text"
-            placeholder="Search settings..."
+            type='text'
+            placeholder='Search settings...'
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
           {searchQuery && (
             <ClearButton
-              type="button"
+              type='button'
               onClick={() => setSearchQuery('')}
-              title="Clear search"
+              title='Clear search'
             >
               <FaXmark />
             </ClearButton>
@@ -92,7 +92,7 @@ const AppSettings: React.FunctionComponent = () => {
         </SettingsSearchWrapper>
         <SettingsSearchProvider value={searchContext}>
           <SettingsGroup>
-            <SettingsSection label="Language">
+            <SettingsSection label='Language'>
               <BasicSelect
                 value={locale}
                 onChange={e => setLocale(e.target.value)}
@@ -104,9 +104,9 @@ const AppSettings: React.FunctionComponent = () => {
                 ))}
               </BasicSelect>
             </SettingsSection>
-            <SettingsSection label="Appearance">
-              <Column gap="1rem">
-                <Column gap="0.5rem">
+            <SettingsSection label='Appearance'>
+              <Column gap='1rem'>
+                <Column gap='0.5rem'>
                   <SubLabel>Theme</SubLabel>
                   <Row>
                     <Button
@@ -130,7 +130,7 @@ const AppSettings: React.FunctionComponent = () => {
                     </Button>
                   </Row>
                 </Column>
-                <Column gap="0.5rem">
+                <Column gap='0.5rem'>
                   <SubLabel>NavBar position</SubLabel>
                   <Row>
                     <Button
@@ -147,14 +147,14 @@ const AppSettings: React.FunctionComponent = () => {
                     </Button>
                   </Row>
                 </Column>
-                <Column gap="0.5rem">
+                <Column gap='0.5rem'>
                   <SubLabel>Main color</SubLabel>
                   <MainColorPicker />
                 </Column>
               </Column>
             </SettingsSection>
-            <SettingsSection label="Panels & Templates">
-              <Column gap="0.5rem">
+            <SettingsSection label='Panels & Templates'>
+              <Column gap='0.5rem'>
                 <CheckboxLabel>
                   <Checkbox
                     checked={enabledPanels.has(Panel.Ontologies)}
@@ -179,10 +179,10 @@ const AppSettings: React.FunctionComponent = () => {
               </Column>
             </SettingsSection>
             <SettingsSection
-              label="Accessibility"
-              childSearchKeywords="disable page transition animations view transitions motion"
+              label='Accessibility'
+              childSearchKeywords='disable page transition animations view transitions motion'
             >
-              <Column gap="0.5rem">
+              <Column gap='0.5rem'>
                 <CheckboxLabel>
                   <Checkbox
                     checked={viewTransitionsDisabled}

@@ -639,9 +639,7 @@ pub trait Storelike: Sized + Send + Sync {
 /// equality or array membership); the rest are value-comparison predicates
 /// applied during post-filtering. Index-accelerated range scans are a separate,
 /// later optimisation — see `planning/table-view-filters.md`.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum FilterOperator {
     /// Scalar equality or array membership (`contains_value`). The default.
     #[default]

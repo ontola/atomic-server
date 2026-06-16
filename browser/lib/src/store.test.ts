@@ -215,4 +215,3 @@ describe('Store', () => {
     expect(exportCallCount).toBe(1);
   });
 });
-

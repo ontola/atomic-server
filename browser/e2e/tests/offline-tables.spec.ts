@@ -36,7 +36,9 @@ test.describe('offline tables', () => {
       .click();
     await page.getByRole('button', { name: 'Disconnect' }).click();
     await expect
-      .poll(() => page.evaluate(() => window.store.getSyncStatus().serverConnected))
+      .poll(() =>
+        page.evaluate(() => window.store.getSyncStatus().serverConnected),
+      )
       .toBe(false);
 
     // 3. Create a table — offline.
@@ -80,7 +82,9 @@ test.describe('offline tables', () => {
       timeout: 30000,
     });
     await expect
-      .poll(() => page.evaluate(() => window.store.getSyncStatus().serverConnected))
+      .poll(() =>
+        page.evaluate(() => window.store.getSyncStatus().serverConnected),
+      )
       .toBe(false);
 
     await expect(

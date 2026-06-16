@@ -15,7 +15,6 @@ import type { AIModelIdentifier } from './types';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { useAIAgentConfig } from './AgentConfig';
 
-
 const ModelSelect = React.lazy(
   () => import('@chunks/AI/ModelSelect/ModelSelect'),
 );

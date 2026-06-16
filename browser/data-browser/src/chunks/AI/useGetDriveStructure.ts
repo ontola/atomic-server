@@ -71,7 +71,8 @@ export function useGetDriveStructure() {
   return async (): Promise<TreeNode> => {
     const driveResource = await store.getResource(drive);
     const rootSubjects =
-      (driveResource.get(dataBrowser.properties.subResources) as string[]) || [];
+      (driveResource.get(dataBrowser.properties.subResources) as string[]) ||
+      [];
 
     return buildTree(rootSubjects, new Set([drive]));
   };

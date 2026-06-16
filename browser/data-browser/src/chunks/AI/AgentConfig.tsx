@@ -4,7 +4,6 @@ import { styled } from 'styled-components';
 import { Column } from '@components/Row';
 import { FaPlus } from 'react-icons/fa6';
 import { ModelSelect } from './ModelSelect/ModelSelect';
-import { AIProvider } from '@components/AI/aiContstants';
 import { type AIAgent, type AIModelIdentifier } from './types';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { Button } from '@components/Button';
@@ -257,7 +256,7 @@ export const AgentConfigTab = ({
         </Column>
       ) : (
         <Column>
-          <AgentsList role="radiogroup" aria-label="AI Agents">
+          <AgentsList role='radiogroup' aria-label='AI Agents'>
             {agents.map((agent: AIAgent) => (
               <AgentConfigItem
                 key={agent.id}
@@ -273,7 +272,7 @@ export const AgentConfigTab = ({
           </AgentsList>
 
           <CreateButton onClick={handleCreateNewAgent}>
-            <FaPlus title="" /> Create New Agent
+            <FaPlus title='' /> Create New Agent
           </CreateButton>
         </Column>
       )}
@@ -344,49 +343,49 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
 
   return (
     <FormContainer>
-      <StyledField label="Name" fieldId="agent-name">
+      <StyledField label='Name' fieldId='agent-name'>
         <Input
-          id="agent-name"
+          id='agent-name'
           required
           max={50}
           readOnly={isDefaultAgent}
           value={agent.name}
           onChange={e => handleChange('name', e.target.value)}
-          placeholder="Agent name"
+          placeholder='Agent name'
         />
       </StyledField>
 
-      <StyledField label="Description" fieldId="agent-description">
+      <StyledField label='Description' fieldId='agent-description'>
         <Input
-          id="agent-description"
+          id='agent-description'
           readOnly={isDefaultAgent}
           value={agent.description}
           onChange={e => handleChange('description', e.target.value)}
-          placeholder="Agent description"
+          placeholder='Agent description'
         />
       </StyledField>
 
       <StyledField
-        label="System Prompt"
-        fieldId="agent-system-prompt"
-        helper="The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive."
+        label='System Prompt'
+        fieldId='agent-system-prompt'
+        helper='The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive.'
       >
         {isDefaultAgent ? (
-          <SystemPromptPreview id="agent-system-prompt">
+          <SystemPromptPreview id='agent-system-prompt'>
             <Markdown text={agent.systemPrompt} maxLength={Infinity} />
           </SystemPromptPreview>
         ) : (
           <MarkdownInput
             key={agent.id}
-            id="agent-system-prompt"
+            id='agent-system-prompt'
             initialContent={agent.systemPrompt}
             onChange={content => handleChange('systemPrompt', content)}
-            placeholder="System prompt that defines how the agent behaves"
+            placeholder='System prompt that defines how the agent behaves'
           />
         )}
       </StyledField>
 
-      <StyledField label="Atomic Data Access" multiInput>
+      <StyledField label='Atomic Data Access' multiInput>
         <CheckboxLabel>
           <Checkbox
             checked={agent.canReadAtomicData}
@@ -410,7 +409,7 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
           your prompt.
         </CheckboxLabel>
       </StyledField>
-      <StyledField label="Tools" multiInput>
+      <StyledField label='Tools' multiInput>
         <ToolList>
           {mcpServers.map(server => (
             <li key={server.id}>
@@ -431,9 +430,9 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
         </ToolList>
       </StyledField>
       <StyledField
-        label="Skills"
+        label='Skills'
         multiInput
-        helper="Give the agent access to skills that provide domain-specific knowledge and guidance. A list of skills will be added to the end of the system prompt."
+        helper='Give the agent access to skills that provide domain-specific knowledge and guidance. A list of skills will be added to the end of the system prompt.'
       >
         <CheckboxLabel>
           <Checkbox
@@ -444,7 +443,7 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
         </CheckboxLabel>
       </StyledField>
 
-      <StyledField label="Model" multiInput>
+      <StyledField label='Model' multiInput>
         <CheckboxLabel style={{ marginBottom: '0.5rem' }}>
           <Checkbox
             checked={!agent.model}
@@ -464,24 +463,24 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
       </StyledField>
 
       <StyledField
-        label="Temperature"
-        fieldId="agent-temperature"
-        helper="Trade accuracy for creativity"
+        label='Temperature'
+        fieldId='agent-temperature'
+        helper='Trade accuracy for creativity'
       >
         <SliderInput
-          id="agent-temperature"
+          id='agent-temperature'
           min={0}
           max={2}
           step={0.01}
           value={agent.temperature ?? 0}
           onChange={value => handleChange('temperature', value)}
           formatValue={temperatureFormatter.format}
-          numberAriaLabel="Temperature value"
+          numberAriaLabel='Temperature value'
         />
       </StyledField>
 
       <StyledField
-        label="Auto-compact threshold"
+        label='Auto-compact threshold'
         labelPrefix={
           <Checkbox
             checked={
@@ -494,22 +493,22 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
                 checked ? DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT : 0,
               )
             }
-            aria-label="Enable auto-compact"
+            aria-label='Enable auto-compact'
           />
         }
-        fieldId="agent-auto-compact-threshold"
-        helper="Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled."
+        fieldId='agent-auto-compact-threshold'
+        helper='Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled.'
       >
         {(agent.autoCompactThresholdPercent ??
           DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT) === 0 ? (
           <SubtleText>Don&apos;t auto compact conversation</SubtleText>
         ) : (
           <SliderInput
-            id="agent-auto-compact-threshold"
+            id='agent-auto-compact-threshold'
             min={1}
             max={100}
             step={1}
-            suffix="%"
+            suffix='%'
             value={
               agent.autoCompactThresholdPercent ??
               DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT
@@ -517,7 +516,7 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
             onChange={value =>
               handleChange('autoCompactThresholdPercent', value)
             }
-            numberAriaLabel="Auto-compact threshold percent"
+            numberAriaLabel='Auto-compact threshold percent'
           />
         )}
       </StyledField>

@@ -598,8 +598,7 @@ impl Handler<CommitMessage> for CommitMonitor {
                 .and_then(|r| r.get_drive());
             let owner = resource_drive.as_ref().unwrap_or(&target_subject);
             for (drive, subscribers) in &self.drive_subscriptions {
-                let drive_subject =
-                    atomic_lib::Subject::from_raw(drive, base_domain.as_deref());
+                let drive_subject = atomic_lib::Subject::from_raw(drive, base_domain.as_deref());
                 if !owner.is_within_drive(&drive_subject) {
                     continue;
                 }

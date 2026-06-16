@@ -757,11 +757,8 @@ impl Commit {
                         // planning/commit-fanout-drive-isolation.md.
                         if applied.resource_new.get(urls::DRIVE_PROP).is_err() {
                             if let Ok(parent_val) = applied.resource_new.get(urls::PARENT) {
-                                let parent_subject =
-                                    crate::Subject::from(parent_val.to_string());
-                                if let Ok(parent_res) =
-                                    store.get_resource(&parent_subject).await
-                                {
+                                let parent_subject = crate::Subject::from(parent_val.to_string());
+                                if let Ok(parent_res) = store.get_resource(&parent_subject).await {
                                     let drive = match parent_res.get(urls::DRIVE_PROP) {
                                         Ok(d) => d.to_string(),
                                         Err(_) => parent_subject.to_string(),

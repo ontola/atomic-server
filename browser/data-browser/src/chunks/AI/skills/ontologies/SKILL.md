@@ -13,6 +13,7 @@ This skill provides a systematic procedure for building a formal Atomic Data Ont
    - Create a resource of class [Ontology](https://atomicdata.dev/class/ontology) first.
    - This resource will serve as the `parent` for all subsequent Classes and Properties.
    - Give it a fitting shortname and description.
+
 2. **Create Classes**:
    - Define classes using the [Class](https://atomicdata.dev/classes/Class) class.
    - Give the class a fitting shortname and description.

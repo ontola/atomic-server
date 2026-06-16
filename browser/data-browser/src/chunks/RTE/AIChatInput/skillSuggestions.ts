@@ -59,12 +59,15 @@ export function skillSuggestionBuilder(
 
     if (state === CommandState.PickingCommand) {
       let commands = TOP_LEVEL_COMMANDS;
+
       if (!onCompact) {
         commands = commands.filter(c => c.id !== 'compact');
       }
+
       if (!onEditModel) {
         commands = commands.filter(c => c.id !== 'model');
       }
+
       if (!onEditAgent) {
         commands = commands.filter(c => c.id !== 'agent');
       }

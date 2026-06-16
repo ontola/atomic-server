@@ -33,7 +33,9 @@ fn handle_vector_search<'a>(
         } = context;
         let params = subject.query_pairs();
         if params.into_iter().next().is_none() {
-            return vector_search_endpoint().to_resource_response(store, &subject.to_string()).await;
+            return vector_search_endpoint()
+                .to_resource_response(store, &subject.to_string())
+                .await;
         }
         return Err(
             "Vector search endpoint is only available through HTTP requests, not through webhooks"

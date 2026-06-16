@@ -167,9 +167,7 @@ test.describe('table filtering + views', () => {
     // name starts_with "A" → only Alice.
     await addFilter(page, 'name', 'starts_with', 'A');
     await expect(page.getByRole('gridcell', { name: 'Alice' })).toBeVisible();
-    await expect(
-      page.getByRole('gridcell', { name: 'Bob' }),
-    ).not.toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Bob' })).not.toBeVisible();
     await expect(
       page.getByRole('gridcell', { name: 'Charlie' }),
     ).not.toBeVisible();

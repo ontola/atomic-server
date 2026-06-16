@@ -76,7 +76,7 @@ export const SidebarItemTitle = memo(
             expandable ? (
               <>
                 <ExpandToggleButton
-                  type="button"
+                  type='button'
                   aria-expanded={expanded}
                   aria-label={expandLabel}
                   title={`Rearrange ${title}`}
@@ -117,7 +117,7 @@ export const SidebarItemTitle = memo(
                       title={`Rearange ${title}`}
                       {...(listeners ?? {})}
                       {...(attributes ?? {})}
-                      role="link"
+                      role='link'
                     >
                       <Icon />
                       <FaGripVertical />
@@ -131,7 +131,7 @@ export const SidebarItemTitle = memo(
           ) : expandable ? (
             <>
               <ExpandToggleButton
-                type="button"
+                type='button'
                 aria-expanded={expanded}
                 aria-label={expandLabel}
                 title={expandLabel}

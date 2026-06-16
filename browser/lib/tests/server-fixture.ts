@@ -31,6 +31,7 @@ async function freePort(): Promise<number> {
     srv.on('error', reject);
     srv.listen(0, () => {
       const addr = srv.address();
+
       if (addr && typeof addr === 'object') {
         const port = addr.port;
         srv.close(() => resolve(port));
@@ -44,6 +45,7 @@ async function freePort(): Promise<number> {
 async function waitForReady(url: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let lastErr: unknown;
+
   while (Date.now() < deadline) {
     try {
       const res = await fetch(url, { method: 'GET' });
@@ -51,8 +53,10 @@ async function waitForReady(url: string, timeoutMs: number): Promise<void> {
     } catch (e) {
       lastErr = e;
     }
+
     await delay(200);
   }
+
   throw new Error(
     `Server at ${url} did not become ready in ${timeoutMs}ms: ${String(lastErr)}`,
   );
@@ -70,24 +74,29 @@ function parseConfigToml(text: string): MinimalConfigToml {
   // `shared.initialDrive`. Avoids pulling a full TOML dep.
   const out: MinimalConfigToml = { shared: {} };
   let section = '';
+
   for (const rawLine of text.split('\n')) {
     const line = rawLine.trim();
     if (!line || line.startsWith('#')) continue;
     const sec = line.match(/^\[([^\]]+)\]$/);
+
     if (sec) {
       section = sec[1];
       continue;
     }
+
     const kv = line.match(/^([A-Za-z_][\w]*)\s*=\s*"([^"]*)"\s*$/);
     if (!kv || section !== 'shared') continue;
     if (kv[1] === 'agent_secret') out.shared!.agent_secret = kv[2];
     if (kv[1] === 'initialDrive') out.shared!.initialDrive = kv[2];
   }
+
   return out;
 }
 
 export async function startServer(): Promise<ServerHandle> {
   const binPath = path.join(REPO_ROOT, 'target/debug/atomic-server');
+
   if (!existsSync(binPath)) {
     throw new Error(
       `atomic-server binary not found at ${binPath}. Build it first: ` +
@@ -145,6 +154,7 @@ export async function startServer(): Promise<ServerHandle> {
   const configFile = path.join(configDir, 'config.toml');
   const configText = await readFile(configFile, 'utf8');
   const cfg = parseConfigToml(configText);
+
   if (!cfg.shared?.agent_secret) {
     child.kill('SIGTERM');
     throw new Error(`agent_secret not found in ${configFile}`);

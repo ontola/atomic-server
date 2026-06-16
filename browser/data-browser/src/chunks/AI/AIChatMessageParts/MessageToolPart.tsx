@@ -32,7 +32,7 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
   if (part.state === 'input-streaming' || part.state === 'input-available') {
     return (
       <ToolUseMessage>
-        <TitleRow center gap="0.5ch">
+        <TitleRow center gap='0.5ch'>
           <Icon />
           <ToolTitle toolName={toolName} part={part} />
         </TitleRow>
@@ -46,7 +46,7 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
         noIndent
         titleButton={
           <ToolUseMessage>
-            <TitleRow center gap="0.5ch">
+            <TitleRow center gap='0.5ch'>
               <Icon />
               <ToolTitle toolName={toolName} part={part} />
             </TitleRow>

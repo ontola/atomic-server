@@ -698,13 +698,7 @@ mod tests {
         let commit_id = "did:ad:commit:123";
         let subject = "did:ad:test";
 
-        let encoded = encode_update(
-            flag_bits,
-            1,
-            subject,
-            Some(commit_id),
-            original_loro,
-        );
+        let encoded = encode_update(flag_bits, 1, subject, Some(commit_id), original_loro);
 
         // Simulate legacy peer.rs slicing behavior:
         let payload = &encoded[1..];
@@ -712,7 +706,7 @@ mod tests {
         let legacy_loro_bytes = &payload[5 + subject_len..];
 
         // The legacy parser slices starting at 5 + subject_len.
-        // Since HAS_COMMIT_ID is set, the payload at 5 + subject_len contains 
+        // Since HAS_COMMIT_ID is set, the payload at 5 + subject_len contains
         // 2 bytes of commit_id length, then the commit_id, then the original loro bytes.
         // Therefore, legacy_loro_bytes starts with the commit ID data, not original_loro!
         assert_ne!(legacy_loro_bytes, original_loro);

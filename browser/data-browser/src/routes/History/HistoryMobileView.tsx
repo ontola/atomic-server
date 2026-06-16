@@ -92,12 +92,12 @@ export function HistoryMobileView({
               <>
                 <VersionTitle version={selectedVersion} />
                 <StyledCard>
-                  <Tabs tabs={tabs} label="History">
+                  <Tabs tabs={tabs} label='History'>
                     <Card.Content>
-                      <Tabs.Panel value="changes">
+                      <Tabs.Panel value='changes'>
                         <ResourceDiff diff={diff} />
                       </Tabs.Panel>
-                      <Tabs.Panel value="resource">
+                      <Tabs.Panel value='resource'>
                         <ResourceCardDefault
                           resource={selectedVersionResource}
                         />
