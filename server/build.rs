@@ -80,17 +80,31 @@ fn main() -> std::io::Result<()> {
     // Pre-compress big, compressible assets with brotli quality 11. The
     // runtime `middleware::Compress` only uses brotli at its default
     // quality (~3), which leaves significant size on the table for big
-    // assets (the Loro WASM goes 941 KB → 691 KB with q11). Files are
+    // assets (the 5.6 MB Loro WASM is the bulk of the cost). Files are
     // re-used across builds — `precompress_assets` skips when the `.br`
     // sibling is newer than the source.
-    let start_precompress = Instant::now();
-    if let Err(e) = precompress_assets(&dirs.js_dist_tmp) {
-        p!("Pre-compression failed (continuing without): {}", e);
+    //
+    // This is a *production-serving* optimization and is pure overhead for
+    // local iteration (q11 over the wasm alone is ~100s, and the
+    // `rm -rf assets_tmp` above invalidates the `.br` cache on every real
+    // build). So only run it for release builds; debug `cargo run` — the dev
+    // iteration loop — skips it and lets the runtime middleware compress on
+    // the fly. Override with `ATOMICSERVER_PRECOMPRESS=true` if you need to
+    // test the precompressed path in debug.
+    let want_precompress = std::env::var("PROFILE").as_deref() == Ok("release")
+        || std::env::var("ATOMICSERVER_PRECOMPRESS").as_deref() == Ok("true");
+    if want_precompress {
+        let start_precompress = Instant::now();
+        if let Err(e) = precompress_assets(&dirs.js_dist_tmp) {
+            p!("Pre-compression failed (continuing without): {}", e);
+        }
+        p!(
+            "Pre-compressing assets took: {:.3}s",
+            start_precompress.elapsed().as_secs_f32()
+        );
+    } else {
+        p!("Skipping asset pre-compression (debug build; runtime middleware compresses on the fly). Set ATOMICSERVER_PRECOMPRESS=true to force.");
     }
-    p!(
-        "Pre-compressing assets took: {:.3}s",
-        start_precompress.elapsed().as_secs_f32()
-    );
 
     // Makes the static files available for compilation
     let start_bundle = Instant::now();
@@ -271,15 +285,16 @@ fn build_js(dirs: &Dirs) {
 /// existing `.br` outputs when they're newer than the source — so
 /// incremental builds don't re-pay the (slow) q11 cost.
 fn precompress_assets(root: &Path) -> std::io::Result<()> {
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+
     const COMPRESSIBLE: &[&str] = &["wasm", "js", "css", "html", "svg", "json"];
     const MIN_SIZE: u64 = 4096;
     const QUALITY: u32 = 11;
     const WINDOW: u32 = 22;
 
-    let mut compressed = 0usize;
-    let mut total_in = 0u64;
-    let mut total_out = 0u64;
-
+    // Pass 1 (serial walk): collect the files that actually need (re)compression
+    // as `(source, .br destination, source size)`.
+    let mut jobs: Vec<(PathBuf, PathBuf, u64)> = Vec::new();
     for entry in walkdir::WalkDir::new(root)
         .into_iter()
         .filter_map(|e| e.ok())
@@ -305,8 +320,7 @@ fn precompress_assets(root: &Path) -> std::io::Result<()> {
         }
 
         let mut br_path = path.to_path_buf();
-        let new_ext = format!("{}.br", ext);
-        br_path.set_extension(&new_ext);
+        br_path.set_extension(format!("{}.br", ext));
 
         // Skip if .br is up-to-date relative to the source.
         if let Ok(br_meta) = fs::metadata(&br_path) {
@@ -317,24 +331,56 @@ fn precompress_assets(root: &Path) -> std::io::Result<()> {
             }
         }
 
-        let data = fs::read(path)?;
-        let mut out: Vec<u8> = Vec::with_capacity(data.len() / 3);
-        {
-            let mut w = brotli::CompressorWriter::new(&mut out, 4096, QUALITY, WINDOW);
-            w.write_all(&data)?;
-            w.flush()?;
-        }
-        // Only emit if compression actually paid off — for tiny files
-        // brotli sometimes inflates.
-        if (out.len() as u64) < meta.len() {
-            fs::write(&br_path, &out)?;
-            compressed += 1;
-            total_in += meta.len();
-            total_out += out.len() as u64;
-        }
+        jobs.push((path.to_path_buf(), br_path, meta.len()));
     }
 
+    if jobs.is_empty() {
+        return Ok(());
+    }
+
+    // Pass 2 (parallel): each file is independent, so brotli q11 runs on all
+    // cores at once. Wall-clock collapses to the slowest single file (the
+    // 5.6 MB wasm) instead of the serial sum over every asset. Per-file errors
+    // are non-fatal — a file that fails to compress is simply served raw.
+    let next = AtomicUsize::new(0);
+    let compressed = AtomicUsize::new(0);
+    let total_in = AtomicU64::new(0);
+    let total_out = AtomicU64::new(0);
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(jobs.len());
+
+    std::thread::scope(|s| {
+        for _ in 0..threads {
+            s.spawn(|| loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                let Some((src, br_path, len)) = jobs.get(i) else {
+                    break;
+                };
+                let Ok(data) = fs::read(src) else { continue };
+                let mut out: Vec<u8> = Vec::with_capacity(data.len() / 3);
+                {
+                    let mut w = brotli::CompressorWriter::new(&mut out, 4096, QUALITY, WINDOW);
+                    if w.write_all(&data).is_err() || w.flush().is_err() {
+                        continue;
+                    }
+                }
+                // Only emit if compression actually paid off — for tiny files
+                // brotli sometimes inflates.
+                if (out.len() as u64) < *len && fs::write(br_path, &out).is_ok() {
+                    compressed.fetch_add(1, Ordering::Relaxed);
+                    total_in.fetch_add(*len, Ordering::Relaxed);
+                    total_out.fetch_add(out.len() as u64, Ordering::Relaxed);
+                }
+            });
+        }
+    });
+
+    let compressed = compressed.into_inner();
     if compressed > 0 {
+        let total_in = total_in.into_inner();
+        let total_out = total_out.into_inner();
         let saved = total_in.saturating_sub(total_out);
         p!(
             "Pre-compressed {} files: {} KB → {} KB (saved {} KB, {:.1}% ratio)",
