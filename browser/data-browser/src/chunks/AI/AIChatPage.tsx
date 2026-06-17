@@ -54,7 +54,11 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
       title === DEFAULT_AICHAT_NAME &&
       shouldGenerateTitles
     ) {
-      generateTitleFromConversation(newMessages).then(setTitle);
+      generateTitleFromConversation(newMessages).then(generatedTitle => {
+        if (generatedTitle) {
+          setTitle(generatedTitle);
+        }
+      });
     }
 
     try {

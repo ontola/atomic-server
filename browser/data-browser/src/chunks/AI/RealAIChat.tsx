@@ -261,16 +261,14 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     return selectedAgent.model ?? defaultChatModel;
   });
   const modelContextLength = useModelContextLength(activeModel);
-  const addContextToMessages = useProcessMessages({
-    includeDriveInstructions: selectedAgent.canReadAtomicData,
-  });
-
   const vectorIndexing = useVectorIndexStatus();
-
-  // The user should be blocked from posting if the indexes are updating while using an agent that is dependent on those indexes.
-  const disableSubmit =
+  const searchDependentIndexing =
     vectorIndexing &&
     (selectedAgent.canReadAtomicData || selectedAgent.ragEnabled);
+  const addContextToMessages = useProcessMessages({
+    includeDriveInstructions: selectedAgent.canReadAtomicData,
+    includeIndexingWarning: searchDependentIndexing,
+  });
 
   const { reportAIEdit } = useAIChanges();
   const canUseInput = isProviderAvailable(activeModel.provider);
@@ -719,7 +717,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   large={isEmptyChat && fullView}
                   focusSignal={inputFocusSignal}
                   disabled={!canUseInput}
-                  disableSubmit={disableSubmit}
+                  disableSubmit={false}
                   hasFiles={!!attachedFiles}
                   onMentionUpdate={handleMentionUpdate}
                   onChange={setUserInput}

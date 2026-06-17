@@ -1,10 +1,10 @@
 // @wc-ignore-file
-import { generateText, Output } from 'ai';
-import { type AtomicUIMessage } from './types';
-import z from 'zod';
+import { generateText } from 'ai';
+import { type AIModelIdentifier, type AtomicUIMessage } from './types';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useGetModel } from './useModel';
 import { simplifyConversation } from './simplifyConversation';
+import { AIProvider } from '@components/AI/aiContstants';
 
 const titleSystemPrompt = `You are a specialized AI system that generates titles for AI conversations.
 You will be given the first part of a conversation between the user and an AI assistant.
@@ -12,6 +12,7 @@ Think of a short title that fits the given conversation. This title will be show
 
 ALWAYS write the title in the same natural language as the user's own message text.
 Do NOT use the language of quoted text, existing titles, URLs, resource names, or language names mentioned by the user.
+Respond with only the title text. Do not wrap it in JSON, quotes, markdown, or commentary.
 `;
 
 const generateFollowUpQuestionsSystemPrompt = (
@@ -23,6 +24,7 @@ The prompt can be a follow up question or response to a question from the assist
 DO NOT ask for clarification or information from the user, just generate the follow up prompt.
 Be concise and to the point. Keep the scentence as short as possible.
 DO NOT INCLUDE ANY TEXT FORMATTING.
+Respond with only the prompt text. Do not wrap it in JSON, quotes, markdown, or commentary.
 
 If the assistant asks the user a question, generate follow up prompt that answer the question.
 If the assistant makes a suggestion, generate follow up prompt that follows up on the suggestion.
@@ -42,14 +44,20 @@ ${conversation}
 `;
 
 export const useGenerativeData = () => {
-  const { genFeaturesModel } = useAISettings();
+  const { defaultChatModel, genFeaturesModel, isProviderAvailable } =
+    useAISettings();
 
   const getModel = useGetModel();
+  const modelIdentifier = selectGenerativeFeaturesModel(
+    genFeaturesModel,
+    defaultChatModel,
+    isProviderAvailable,
+  );
 
   const generateTitleFromConversation = async (
     conversation: AtomicUIMessage[],
   ) => {
-    const model = getModel(genFeaturesModel);
+    const model = modelIdentifier ? getModel(modelIdentifier) : undefined;
 
     if (!model) {
       return undefined;
@@ -60,36 +68,27 @@ export const useGenerativeData = () => {
     );
     const convoString = JSON.stringify(filteredConversation);
 
-    const { output } = await generateText({
-      model,
-      system: titleSystemPrompt,
-      output: Output.object({
-        schema: z.object({
-          title: z.string(),
-        }),
-      }),
-      prompt: `Generate a title for the following conversation:
+    return optionalGeneratedData(
+      'AI chat title generation failed',
+      undefined,
+      async () => {
+        const { text } = await generateText({
+          model,
+          system: titleSystemPrompt,
+          prompt: `Generate a title for the following conversation:
 \`\`\`json
 ${convoString}
 \`\`\`
 `,
-    });
+        });
 
-    if (!output.title) {
-      return undefined;
-    }
-
-    const cleaned = output.title.trim();
-
-    if (cleaned) {
-      return cleaned;
-    }
-
-    return undefined;
+        return cleanGeneratedTextLine(text);
+      },
+    );
   };
 
   const generateFollowUpQuestions = async (conversation: AtomicUIMessage[]) => {
-    const model = getModel(genFeaturesModel);
+    const model = modelIdentifier ? getModel(modelIdentifier) : undefined;
 
     if (!model) {
       return [];
@@ -100,17 +99,19 @@ ${convoString}
     );
     const convoString = JSON.stringify(filteredConversation);
 
-    const { output } = await generateText({
-      model,
-      prompt: generateFollowUpQuestionsSystemPrompt(convoString),
-      output: Output.object({
-        schema: z.object({
-          prompt: z.string(),
-        }),
-      }),
-    });
+    return optionalGeneratedData(
+      'AI chat follow-up prompt generation failed',
+      [],
+      async () => {
+        const { text } = await generateText({
+          model,
+          prompt: generateFollowUpQuestionsSystemPrompt(convoString),
+        });
+        const prompt = cleanGeneratedTextLine(text);
 
-    return output.prompt && output.prompt.trim() !== '' ? [output.prompt] : [];
+        return prompt ? [prompt] : [];
+      },
+    );
   };
 
   return {
@@ -118,3 +119,45 @@ ${convoString}
     generateFollowUpQuestions,
   };
 };
+
+export async function optionalGeneratedData<T>(
+  message: string,
+  fallback: T,
+  generate: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await generate();
+  } catch (error) {
+    console.warn(message, error);
+
+    return fallback;
+  }
+}
+
+export function cleanGeneratedTextLine(text: string): string | undefined {
+  const withoutReasoning = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  const withoutFences = withoutReasoning.replace(/```(?:\w+)?|```/g, '');
+  const trimmed = withoutFences
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, '')
+    .trim();
+  const [firstLine] = trimmed.split(/\r?\n/).map(line => line.trim());
+
+  return firstLine || undefined;
+}
+
+export function selectGenerativeFeaturesModel(
+  genFeaturesModel: AIModelIdentifier,
+  defaultChatModel: AIModelIdentifier,
+  isProviderAvailable: (provider: AIProvider) => boolean,
+): AIModelIdentifier | undefined {
+  if (isProviderAvailable(genFeaturesModel.provider)) {
+    return genFeaturesModel;
+  }
+
+  if (isProviderAvailable(defaultChatModel.provider)) {
+    return defaultChatModel;
+  }
+
+  return undefined;
+}
