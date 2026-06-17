@@ -106,7 +106,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
             </p>
             <ValueFormAddButton
               resource={resource}
-              propertyURL={core.properties.description}
+              propertyURL={server.properties.llmTxt}
               datatype={Datatype.MARKDOWN}
               buttonLabel='Add LLM instructions'
             />
