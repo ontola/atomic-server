@@ -97,6 +97,7 @@ impl AppState {
         store.add_endpoint(plugins::prunetests::prune_tests_endpoint())?;
         store.add_endpoint(plugins::query::query_endpoint())?;
         store.add_endpoint(plugins::search::search_endpoint())?;
+        #[cfg(feature = "vector-search")]
         store.add_endpoint(plugins::vector_search::vector_search_endpoint())?;
 
         // Get and register Wasm class extender plugins

@@ -255,13 +255,14 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
         web::resource("/search")
             .guard(guard::Method(Method::GET))
             .to(handlers::search::search_query),
-    )
-    .service(
+    );
+    #[cfg(feature = "vector-search")]
+    app.service(
         web::resource("/vector_search")
             .guard(guard::Method(Method::GET))
             .to(handlers::vector_search::vector_search_query),
-    )
-    .service(
+    );
+    app.service(
         web::resource(ANY)
             .guard(guard::Method(Method::POST))
             .to(handlers::post_resource::handle_post_resource),

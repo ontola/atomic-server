@@ -17,6 +17,7 @@ pub mod post_resource;
 pub mod search;
 pub mod single_page_app;
 pub mod upload;
+#[cfg(feature = "vector-search")]
 pub mod vector_search;
 pub mod web_sockets;
 pub mod ws_v2;

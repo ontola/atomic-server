@@ -46,6 +46,7 @@ pub mod prunetests;
 pub mod query;
 pub mod search;
 pub mod setup;
+#[cfg(feature = "vector-search")]
 pub mod vector_search;
 pub mod versioning;
 #[cfg(feature = "wasm-plugins")]

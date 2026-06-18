@@ -73,15 +73,21 @@ async fn rebuild_indexes(
     if matches!(
         mode,
         crate::config::RebuildIndexMode::All | crate::config::RebuildIndexMode::Vector
-    ) && appstate.vector_search_state.is_enabled()
-    {
-        tracing::info!("Removing existing vector search index...");
-        // vector search index was already wiped in VectorSearchState::new if rebuild_indexes was passed
+    ) {
+        #[cfg(not(feature = "vector-search"))]
+        tracing::warn!(
+            "Vector index rebuild requested but this build was compiled without the vector-search feature"
+        );
+        #[cfg(feature = "vector-search")]
+        if appstate.vector_search_state.is_enabled() {
+            tracing::info!("Removing existing vector search index...");
+            // vector search index was already wiped in VectorSearchState::new if rebuild_indexes was passed
 
-        appstate
-            .vector_search_state
-            .add_all_resources(&appstate.store)
-            .await?;
+            appstate
+                .vector_search_state
+                .add_all_resources(&appstate.store)
+                .await?;
+        }
     }
 
     Ok(())
