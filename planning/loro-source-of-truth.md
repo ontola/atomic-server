@@ -362,6 +362,97 @@ ordered steps:
       on remote-import cache eviction — see `unified-sync.md`).
 - [ ] Reconcile Dart's two undo trees (`_allActions` vs `_loroStrokeStates`).
 
+## Amendment (2026-06-16): the collapse premise was wrong; toward a primitive-first `Value`
+
+The Phase 1 decision rested on *"nothing pattern-matches cosmetic variants
+meaningfully"* (the 71-site audit). **That is false.** Vector indexing branches
+on the cosmetic datatype: `get_resource_text_parts`
+(`server/src/vector_search/mod.rs:215`) matched `Value::Markdown` for the
+`description` field, so once a resource round-tripped through Loro the
+description came back `Value::String` and **silently dropped out of the index**.
+It is currently papered over with `Ok(Value::Markdown(s) | Value::String(s))`
+(a `// HACK` referencing #1217), and `get_resource_title` (same file, L203)
+likewise branches `String` vs `Slug`, and `server/src/search.rs:151` repeats the
+`Markdown | String` workaround. So the cosmetic/load-bearing split is not as
+clean as the audit claimed — at least the text-extraction path needs the
+distinction.
+
+### Decision: stop projecting a rich enum down to primitives and guessing it back
+
+Rather than keep widening the heuristic / tag map to re-derive a 14-variant enum
+from Loro primitives, make the **in-memory `Value` mirror the Loro primitive
+set** and recover datatypes *at the point of use* via `try_into`. This is the
+honest consequence of "Loro is the source of truth": the canonical value shape
+*is* the primitive shape, not a richer enum we lossily flatten.
+
+- **Cosmetic types** (`Markdown`/`Slug`/`Uri`/`Date` → `String`;
+  `Timestamp` → `I64`) carry **no** stored type info. The few callers that care
+  (vector text extraction, title, validation) know the `DataType` they want and
+  do `value.try_into::<Markdown>()` / resolve it against the Property. The
+  `vector_search` / `search.rs` HACKs delete.
+- **Reference-ness** (`AtomicUrl` vs `String`, `ResourceArray` vs `JsonArray`,
+  `NestedResource` vs `Json`) **cannot be recovered from a Loro primitive** — a
+  `String` may be a ref or plain text; a `List` may hold subjects or JSON. This
+  is the genuinely load-bearing distinction (~47 sites: reference indexing,
+  hierarchy, permissions, class membership). `try_into::<AtomicUrl>()` has no
+  basis to succeed-or-not without external info, and generic index building
+  doesn't know the target type. **So the sparse `datatypes` tag is retained, but
+  narrowed to exactly the 5 reference/shape tags Loro primitives can't express**
+  (`atomicUrl`, `json`, `resourceArray`, `jsonArray`, `resource`) — its current
+  load-bearing core, minus any cosmetic tags.
+
+Net: the `datatypes` map does **not** disappear — it shrinks to what primitives
+truly can't encode, which is the honest end state. The earlier "tag everything
+including a `string` tag" gate step (Phase 1, last box) is **superseded** —
+plain strings stay untagged by design, because a primitive-first `Value` has no
+ambiguity to resolve for them.
+
+### Rejected alternative: encode datatype in the property DID
+
+"Infer the type from the key" was considered (fold the tag into the property's
+DID so the key *is* the type). Rejected: it couples a property's **identity** to
+its datatype (a datatype change mints a new DID — a breaking change), datatype is
+only one of a Property's frozen fields so a whole-definition DID can't be cheaply
+parsed back into "just the datatype" (you'd need a lookup table — i.e. the map
+again), and existing/foreign properties can't be re-minted. Keep it in mind only
+for the content-addressed frozen-schema work (#1207), where identity legitimately
+derives from the definition.
+
+### Blast radius (measured 2026-06-16)
+
+`Value::` references in non-test `lib/`+`server/`: **704**. Reshaping the enum to
+~7 primitive variants + `try_into` touches all of them mechanically. By variant:
+`String` 277, `ResourceArray` 101, `AtomicUrl` 88, `Json` 65 (load-bearing —
+gated by the retained tag); `Slug` 29, `Markdown` 26, `Uri`/`Date` 6 each
+(cosmetic — collapse, ~56 non-test sites become `try_into` at use sites or fold
+into `String`). Large, mechanical, low-conceptual-risk — but its own phase.
+
+### Migration (phased — correctness first, reshape second)
+
+- **Phase 1.5 (LANDED 2026-06-16, unblocks #1217).** *Without* reshaping
+  `Value`: `datatype_tag` / `atomic_value_from_tag` (`loro.rs`) now tag and
+  recover `markdown`/`slug`/`uri`/`date`/`timestamp`; TS `datatypeTag`
+  (`datatypes.ts`) emits the same in lockstep; the `vector_search`/`search.rs`
+  `Markdown | String` HACKs are deleted (match `Markdown` only). Tests:
+  `datatype_tags_preserve_load_bearing_variants` extended;
+  `get_resource_text_parts_reads_description_after_loro_materialize` is the
+  end-to-end proof (markdown description survives `apply_state_doc`). Green:
+  atomic_lib lib 117, loro 39, vector_search 5, browser/lib vitest 103.
+  **Caveat:** descriptions written *before* this change are untagged → still
+  materialize as `String` → drop from the index until re-saved/re-indexed (the
+  heuristic cannot recover `Markdown`). A backfill/re-index pass is the only
+  thing left for full coverage.
+- **Phase 1.6 (the reshape).** Introduce primitive-first `Value`; make
+  cosmetic variants `try_into`-only at use sites; keep the 5 reference/shape
+  tags as the sole stored type info. Retire the cosmetic tags added in 1.5.
+  Land behind the existing Rust + TS test suites; the 704 sites migrate
+  mechanically, variant by variant.
+
+> Open: whether Phase 1.6 is worth the 704-site churn, or whether Phase 1.5
+> (faithful tags) is a sufficient steady state. 1.5 is strictly smaller and
+> unblocks the indexing bug regardless; 1.6 is the architecturally clean form
+> that makes "Loro is the source of truth" literally true of the type.
+
 ## Open questions
 
 1. Bootstrap vocabulary — CRDT-backed (a snapshot per property/class) or native?
@@ -369,6 +460,8 @@ ordered steps:
    Atomic datatype URLs? Tokens are compact; URLs match the Property's
    `datatype` field directly. Leaning tokens — snapshots compress repeated
    strings anyway.
+3. Phase 1.5 vs 1.6 — ship faithful tags as the steady state, or commit to the
+   primitive-first `Value` reshape? (See Amendment above.)
 
 Resolved: B changes the `loroUpdate` wire payload (it now carries the
 `datatypes` map). Since nothing is deployed, no compatibility shim is needed —

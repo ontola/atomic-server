@@ -340,12 +340,12 @@ impl AtomicLoroDoc {
     /// This is the Loro equivalent of a `set` in a commit.
     pub fn set_property(&self, property: &str, value: &Value) -> AtomicResult<()> {
         let root = self.doc.get_map("properties");
-        // Phase 1 (loro-source-of-truth): record a datatype tag in a sibling
-        // `datatypes` map for the load-bearing cases — reference strings,
-        // lists and nested objects — so materialization need not guess the
-        // `Value` variant from the bare primitive. Cosmetic types
-        // (`Markdown`/`Slug`/`Date`/`Uri`/`Timestamp`) carry no tag and
-        // collapse on read.
+        // Phase 1 / 1.5 (loro-source-of-truth): record a datatype tag in a
+        // sibling `datatypes` map so materialization need not guess the
+        // `Value` variant from the bare primitive. Covers reference/shape
+        // cases (ref strings, lists, nested objects) and the cosmetic
+        // string-likes (`Markdown`/`Slug`/`Uri`/`Date`/`Timestamp`) — see
+        // [`datatype_tag`]. Plain `String` stays untagged as the default.
         if let Some(tag) = datatype_tag(value) {
             self.doc
                 .get_map("datatypes")
@@ -758,15 +758,28 @@ impl AtomicLoroDoc {
 
 /// The `datatypes`-map tag for a `Value`, or `None` for values whose Loro
 /// primitive already pins the variant (`Integer`/`Float`/`Boolean`) or which
-/// collapse to a plain string (`String`/`Markdown`/`Slug`/`Date`/`Uri`) or to
-/// `Integer` (`Timestamp`). Only the load-bearing reference / shape
-/// distinctions are tagged. See the `loro-source-of-truth` plan.
+/// is a plain `String` (the untagged default).
+///
+/// Two groups are tagged (see the `loro-source-of-truth` plan, Phase 1.5):
+/// - **Reference / shape** (`atomicUrl`, `resourceArray`, `json`, `resource`):
+///   genuinely *cannot* be recovered from the Loro primitive — a `String` may
+///   be a ref or plain text, a `List` may hold subjects or JSON.
+/// - **Cosmetic string-likes** (`markdown`, `slug`, `uri`, `date`) and
+///   `timestamp`: collapse to the same primitive as `String`/`Integer`, but at
+///   least one consumer (vector / search text extraction) branches on the
+///   variant, so we preserve them rather than guess. Plain `String` stays
+///   untagged as the default.
 pub fn datatype_tag(value: &Value) -> Option<&'static str> {
     match value {
         Value::AtomicUrl(_) => Some("atomicUrl"),
         Value::ResourceArray(_) => Some("resourceArray"),
         Value::Json(_) => Some("json"),
         Value::NestedResource(_) => Some("resource"),
+        Value::Markdown(_) => Some("markdown"),
+        Value::Slug(_) => Some("slug"),
+        Value::Uri(_) => Some("uri"),
+        Value::Date(_) => Some("date"),
+        Value::Timestamp(_) => Some("timestamp"),
         _ => None,
     }
 }
@@ -814,6 +827,13 @@ fn atomic_value_from_tag(lv: &loro::LoroValue, tag: &str) -> Option<Value> {
                 .collect();
             Some(Value::ResourceArray(subjects))
         }
+        // Cosmetic string-likes: same primitive as a plain String, recovered
+        // to their variant via the tag (Phase 1.5).
+        ("markdown", loro::LoroValue::String(s)) => Some(Value::Markdown(s.to_string())),
+        ("slug", loro::LoroValue::String(s)) => Some(Value::Slug(s.to_string())),
+        ("uri", loro::LoroValue::String(s)) => Some(Value::Uri(s.to_string())),
+        ("date", loro::LoroValue::String(s)) => Some(Value::Date(s.to_string())),
+        ("timestamp", loro::LoroValue::I64(i)) => Some(Value::Timestamp(*i)),
         _ => None,
     }
 }
@@ -853,7 +873,9 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
                 return Some(Value::AtomicUrl(s.into()));
             }
 
-            // TODO: This is an issue, not all values that are Loro strings are Atomic strings. For example, slugs and markdown are encoded as loro strings but in atomic they should be Value::Slug or Value::Markdown. https://github.com/ontola/atomic-server/issues/1217
+            // Untagged fallback only: tagged docs recover Slug/Markdown/Uri/Date
+            // via `atomic_value_from_tag` (Phase 1.5, #1217). A bare untagged
+            // string (legacy snapshot / pre-tag write) collapses to String.
             Some(Value::String(s))
         }
         loro::LoroValue::I64(i) => Some(Value::Integer(*i)),
@@ -1395,6 +1417,19 @@ mod test {
             .unwrap();
         doc.set_property(&p("text"), &Value::String("plain".into()))
             .unwrap();
+        // Cosmetic string-likes (Phase 1.5): same primitive as String, but
+        // their variant must survive — at least vector/search text extraction
+        // branches on `Value::Markdown`.
+        doc.set_property(&p("desc"), &Value::Markdown("# Hi".into()))
+            .unwrap();
+        doc.set_property(&p("handle"), &Value::Slug("my-slug".into()))
+            .unwrap();
+        doc.set_property(&p("link"), &Value::Uri("mailto:a@b.c".into()))
+            .unwrap();
+        doc.set_property(&p("day"), &Value::Date("2026-06-16".into()))
+            .unwrap();
+        doc.set_property(&p("ts"), &Value::Timestamp(1_700_000_000_000))
+            .unwrap();
 
         // Round-trip through a snapshot, as sync / persistence does.
         let doc2 = AtomicLoroDoc::from_snapshot(&doc.export_snapshot()).unwrap();
@@ -1428,9 +1463,19 @@ mod test {
         }
         // Plain text carries no tag and stays string-like.
         assert!(matches!(mat("text"), Some(Value::String(_))));
+        // Cosmetic string-likes recover their exact variant via the tag.
+        assert!(matches!(mat("desc"), Some(Value::Markdown(s)) if s == "# Hi"));
+        assert!(matches!(mat("handle"), Some(Value::Slug(s)) if s == "my-slug"));
+        assert!(matches!(mat("link"), Some(Value::Uri(s)) if s == "mailto:a@b.c"));
+        assert!(matches!(mat("day"), Some(Value::Date(s)) if s == "2026-06-16"));
+        assert!(matches!(
+            mat("ts"),
+            Some(Value::Timestamp(1_700_000_000_000))
+        ));
         // Scalars and plain strings get no `datatypes` entry — the map is sparse.
         assert!(!tags.contains_key(&p("text")));
         assert!(tags.contains_key(&p("ref")));
+        assert_eq!(tags.get(&p("desc")).map(String::as_str), Some("markdown"));
     }
 
     #[test]

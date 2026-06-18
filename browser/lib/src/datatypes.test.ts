@@ -82,11 +82,17 @@ describe('datatypeTag', () => {
     // property) stays untagged — the server heuristic handles `{...}`.
     expect(datatypeTag(Datatype.ATOMIC_URL, '{"a":1}')).toBeUndefined();
 
-    // Cosmetic / scalar datatypes collapse — no tag.
+    // Cosmetic string-likes (Phase 1.5) are tagged so the server can recover
+    // the exact variant — at least vector/search text extraction branches on
+    // `Value::Markdown`.
+    expect(datatypeTag(Datatype.MARKDOWN, '# heading')).toBe('markdown');
+    expect(datatypeTag(Datatype.SLUG, 'a-slug')).toBe('slug');
+    expect(datatypeTag(Datatype.URI, 'mailto:a@b.c')).toBe('uri');
+    expect(datatypeTag(Datatype.DATE, '2026-05-21')).toBe('date');
+    expect(datatypeTag(Datatype.TIMESTAMP, 1700000000000)).toBe('timestamp');
+
+    // Plain string and scalars stay untagged (the default).
     expect(datatypeTag(Datatype.STRING, 'hello')).toBeUndefined();
-    expect(datatypeTag(Datatype.MARKDOWN, '# heading')).toBeUndefined();
-    expect(datatypeTag(Datatype.SLUG, 'a-slug')).toBeUndefined();
-    expect(datatypeTag(Datatype.DATE, '2026-05-21')).toBeUndefined();
     expect(datatypeTag(Datatype.INTEGER, 5)).toBeUndefined();
     expect(datatypeTag(Datatype.BOOLEAN, true)).toBeUndefined();
   });

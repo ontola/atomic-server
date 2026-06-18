@@ -47,9 +47,12 @@ export const datatypeFromUrl = (url: string): Datatype => {
  * `datatype_tag` (`lib/src/loro.rs`). Lets the server materialize a value to
  * the exact `Value` variant instead of guessing from the primitive.
  *
- * Only the load-bearing reference / array distinctions are tagged; cosmetic
- * datatypes (string/markdown/slug/date/uri) and scalars collapse and carry no
- * tag. A nested resource (an object stored as a JSON string under an
+ * Tagged: the load-bearing reference / array distinctions (which the server
+ * cannot recover from the bare primitive) plus the cosmetic string-likes
+ * (markdown/slug/date/uri) and timestamp — at least vector/search text
+ * extraction branches on `Value::Markdown`, so we preserve the variant rather
+ * than let the server guess. Plain string and scalars stay untagged (the
+ * default). A nested resource (an object stored as a JSON string under an
  * `atomicURL` property) is left untagged for the server's heuristic — see
  * `planning/loro-source-of-truth.md`.
  *
@@ -68,6 +71,16 @@ export const datatypeTag = (
       return 'resourceArray';
     case Datatype.JSON:
       return 'json';
+    case Datatype.MARKDOWN:
+      return 'markdown';
+    case Datatype.SLUG:
+      return 'slug';
+    case Datatype.URI:
+      return 'uri';
+    case Datatype.DATE:
+      return 'date';
+    case Datatype.TIMESTAMP:
+      return 'timestamp';
     default:
       return undefined;
   }

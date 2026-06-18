@@ -25,8 +25,7 @@ pub fn get_resource_text_parts(
     let title = get_resource_title(resource);
 
     let description = match resource.get(atomic_lib::urls::DESCRIPTION) {
-        // HACK: Loro parses each string-like type as Value::String, so eventhough description is a markdown value, it is still returned as a string value. We can remove the string check here once we have fixed this. https://github.com/ontola/atomic-server/issues/1217
-        Ok(atomic_lib::Value::Markdown(s) | atomic_lib::Value::String(s)) => Some(s.to_string()),
+        Ok(atomic_lib::Value::Markdown(s)) => Some(s.to_string()),
         _ => None,
     };
 
