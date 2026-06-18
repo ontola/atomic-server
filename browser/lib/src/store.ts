@@ -1106,6 +1106,16 @@ export class Store {
     // erase that entry — so leave it dirty and nudge another drain.
     if (caughtUp) {
       this.outbox.clearDirty(subject);
+
+      // Persist the now-synced state to the local ClientDb (OPFS). The
+      // `applyToStore('local-acked')` above ran while this subject still had a
+      // pending outbox entry, so `addResource`'s `!hasPendingCommits` gate
+      // skipped the snapshot write. `clearDirty` just removed the entry, so
+      // `hasPendingCommits` is false now — re-run the persist. Without this an
+      // edit reaches the server but the local cache keeps the pre-edit
+      // snapshot, and a reload reads the stale state (the WS commit echo is
+      // deduped by commitId, so it won't re-persist it either).
+      this.addResource(resource, { skipCommitCompare: true });
     } else {
       this.outbox.markDirty(subject);
     }
