@@ -149,6 +149,17 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
             subject: urls::SHARED_WITH_ME.into(),
             allows_only: None,
         },
+        // The `genesis` property is read/written while parsing DID resources
+        // (the self-verifying genesis certificate). Bootstrap it locally so a
+        // base-models-only store doesn't fetch it from `atomicdata.dev`.
+        Property {
+            class_type: None,
+            data_type: DataType::String,
+            shortname: "genesis".into(),
+            description: "The self-verifying genesis certificate: base64 of a compact binary cert (signer public key, createdAt, nonce, original parent, drive). The resource's DID is the creating agent's Ed25519 signature over this certificate, so authorship and identity are verifiable offline without fetching a commit. Server-managed and immutable.".into(),
+            subject: urls::GENESIS.into(),
+            allows_only: None,
+        },
     ];
     let classes = vec![
         Class {
@@ -187,7 +198,33 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
             description:
                 "An Agent is a user that can create or modify data. For DID-based agents (did:ad:agent:{publicKey}), the public key is derived from the subject.".into(),
             subject: urls::AGENT.into(),
-        }
+        },
+        // The Commit class is fundamental: commit serialization
+        // (`CommitBuilder::into_resource` → `Resource::new_instance(COMMIT)`)
+        // resolves this class, so it must be available locally. Without it a
+        // base-models-only store (`Store::init`) would fetch it from
+        // `atomicdata.dev` over the network — which strands offline and made
+        // the commit-serialization tests depend on the public domain.
+        Class {
+            requires: vec![
+                urls::CREATED_AT.into(),
+                urls::SIGNATURE.into(),
+                urls::SIGNER.into(),
+                urls::SUBJECT.into(),
+            ],
+            recommends: vec![
+                urls::DESTROY.into(),
+                urls::IS_GENESIS.into(),
+                urls::PREVIOUS_COMMIT.into(),
+                urls::REMOVE.into(),
+                urls::SET.into(),
+                urls::PUSH.into(),
+                urls::LORO_UPDATE.into(),
+            ],
+            shortname: "commit".into(),
+            description: "A Commit is a signed Resource that describes how a Resource must be updated. Used for auditing, versioning and synchronization.".into(),
+            subject: urls::COMMIT.into(),
+        },
     ];
 
     for p in properties {
