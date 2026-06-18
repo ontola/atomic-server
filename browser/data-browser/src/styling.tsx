@@ -22,7 +22,7 @@ export const ThemeWrapper = ({ children }: ThemeWrapperProps): JSX.Element => {
 
   return (
     <>
-      <ThemeProvider key={mainColor} theme={buildTheme(darkMode, mainColor)}>
+      <ThemeProvider theme={buildTheme(darkMode, mainColor)}>
         {children}
       </ThemeProvider>
     </>
