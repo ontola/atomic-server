@@ -77,6 +77,7 @@ describe('datatypeTag', () => {
       'resourceArray',
     );
     expect(datatypeTag(Datatype.JSON, '{"a":1}')).toBe('json');
+    expect(datatypeTag(Datatype.JSON, [300, 214])).toBe('json');
 
     // A nested resource (object stored as a JSON string under an atomicURL
     // property) stays untagged — the server heuristic handles `{...}`.

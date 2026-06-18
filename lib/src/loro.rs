@@ -893,11 +893,20 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
             }
 
             // Check the first item to determine list type:
-            // - Map items → Json (native LoroMap elements)
+            // - Map / primitive JSON items → Json (native LoroList elements)
             // - String items → ResourceArray or legacy Json
             match &items[0] {
                 loro::LoroValue::Map(_) => {
                     // Native LoroMaps → Json
+                    let json_items: Vec<serde_json::Value> =
+                        items.iter().map(loro_value_to_json).collect();
+                    Some(Value::Json(serde_json::Value::Array(json_items)))
+                }
+                loro::LoroValue::I64(_)
+                | loro::LoroValue::Double(_)
+                | loro::LoroValue::Bool(_)
+                | loro::LoroValue::Null
+                | loro::LoroValue::List(_) => {
                     let json_items: Vec<serde_json::Value> =
                         items.iter().map(loro_value_to_json).collect();
                     Some(Value::Json(serde_json::Value::Array(json_items)))
@@ -1394,6 +1403,24 @@ mod test {
         match av {
             Value::ResourceArray(arr) => assert!(arr.is_empty()),
             other => panic!("expected empty ResourceArray, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn untagged_numeric_loro_list_materializes_as_json() {
+        // Column widths are stored as a native numeric LoroList. If the
+        // datatype tag is absent (e.g. the Property was not cached client-side
+        // when signing), the untagged fallback still needs to keep the value.
+        let lv = loro::LoroValue::List(
+            vec![loro::LoroValue::I64(300), loro::LoroValue::I64(214)].into(),
+        );
+
+        let av = loro_value_to_atomic_value(&lv)
+            .expect("numeric list must materialize into a Value, not None");
+
+        match av {
+            Value::Json(json) => assert_eq!(json, serde_json::json!([300, 214])),
+            other => panic!("expected Json array, got {other:?}"),
         }
     }
 
