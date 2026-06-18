@@ -1,9 +1,20 @@
 import { describe, it, beforeEach } from 'vitest';
 import { Agent, Store, core, commits, JSCryptoProvider } from './index.js';
+import { bootstrapCoreVocab } from './test-vocab.js';
 
-/** Creates a fresh Store with the given agent. */
-function freshStore(agent: Agent): Store {
+/** Creates a fresh Store with the given agent.
+ *
+ * These tests exercise the OFFLINE path, so the store must never touch the
+ * network. `newResource`/`set` opportunistically fetch a property's definition
+ * to validate it; against an unreachable host that attempt stalls until the
+ * test times out (and made the suite depend on `atomicdata.dev` being up).
+ * Seeding the core vocab locally lets validation resolve from cache instead. */
+async function freshStore(agent: Agent): Promise<Store> {
   const store = new Store({ serverUrl: 'https://example.com' });
+  store.injectFetch(async () => {
+    throw new Error('offline test: network disabled');
+  });
+  await bootstrapCoreVocab(store);
   store.setAgent(agent);
 
   return store;
@@ -19,7 +30,7 @@ describe('Offline persistence', () => {
   });
 
   it('offline save sets createdAt for sorting', async ({ expect }) => {
-    const store = freshStore(agent);
+    const store = await freshStore(agent);
     const drive = await store.createDrive('Timestamp Test');
 
     const child = await store.newResource({
@@ -36,7 +47,7 @@ describe('Offline persistence', () => {
   });
 
   it('children are sorted by name', async ({ expect }) => {
-    const store = freshStore(agent);
+    const store = await freshStore(agent);
     const drive = await store.createDrive('Sort Test');
 
     // Create 3 children — they'll be created in this order

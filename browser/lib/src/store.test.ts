@@ -1,5 +1,6 @@
 import { describe, it, vi, afterEach } from 'vitest';
 import { Resource, Store, core, Core, Datatype } from './index.js';
+import { bootstrapCoreVocab } from './test-vocab.js';
 
 describe('Store', () => {
   afterEach(() => {
@@ -22,6 +23,25 @@ describe('Store', () => {
 
   it('fetches a resource', async ({ expect }) => {
     const store = new Store({ serverUrl: 'https://atomicdata.dev' });
+    // Hermetic: serve the resource from a mock instead of the live domain, so
+    // the test exercises the fetch+parse path without depending on the network.
+    store.injectFetch(
+      async () =>
+        new Response(
+          JSON.stringify({
+            '@id': 'https://atomicdata.dev/properties/createdAt',
+            'https://atomicdata.dev/properties/shortname': 'created-at',
+            'https://atomicdata.dev/properties/description':
+              'When the resource was created.',
+            'https://atomicdata.dev/properties/datatype':
+              'https://atomicdata.dev/datatypes/timestamp',
+            'https://atomicdata.dev/properties/isA': [
+              'https://atomicdata.dev/classes/Property',
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/ad+json' } },
+        ),
+    );
     const resource = await store.getResource(
       'https://atomicdata.dev/properties/createdAt',
     );
@@ -62,6 +82,9 @@ describe('Store', () => {
 
   it('creates new resources using store.newResource()', async ({ expect }) => {
     const store = new Store({ serverUrl: 'https://myserver.dev' });
+    // Seed core vocab so property validation resolves from cache instead of
+    // fetching atomicdata.dev (keeps the test hermetic + fast).
+    await bootstrapCoreVocab(store);
 
     const resource1 = await store.newResource<Core.Property>({
       subject: 'https://myserver.dev/testthing',
