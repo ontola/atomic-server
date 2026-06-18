@@ -307,7 +307,7 @@ mod test {
     use crate::Storelike;
 
     /// Drops the `loroUpdate` snapshot from a serialized object so golden
-    /// fixtures stay stable. Since Phase 2a, every materialized resource
+    /// fixtures stay stable. Every materialized resource
     /// carries a live Loro doc, and `to_json_ad` / `to_json` / `to_json_ld`
     /// emit its snapshot — whose bytes embed a random peer id and so cannot
     /// be pinned in a literal fixture. The snapshot riding the wire is

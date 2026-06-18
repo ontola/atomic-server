@@ -913,8 +913,7 @@ export class Store {
    *  entry stays dirty and the next drain trigger retries.)
    *
    *  Re-posting a server-applied commit is safe thanks to idempotent
-   *  replay accept (`commit-retention-and-state-certificates.md`
-   *  Phase 1).
+   *  replay accept.
    */
   private drainOutboxSubject = async (subject: string): Promise<void> => {
     let entry = this.outbox.getEntry(subject);

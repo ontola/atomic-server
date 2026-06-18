@@ -1043,8 +1043,8 @@ impl Db {
             });
         }
 
-        // Phase 2c (loro-source-of-truth): the `loroUpdate` propval is the
-        // resource's CRDT snapshot — it belongs in `Tree::LoroSnapshots`, not
+        // The `loroUpdate` propval is the resource's CRDT snapshot — it
+        // belongs in `Tree::LoroSnapshots`, not
         // duplicated inside the resource blob, which is now a pure derived
         // projection. Commit resources are the exception: a commit's
         // `loroUpdate` is its signed payload and must stay in the blob.
@@ -1788,8 +1788,8 @@ impl Storelike for Db {
                     .map_err(|e| format!("Failed to add atom to index {}. {}", a, e))?;
             }
         }
-        // Phase 2b/2c (loro-source-of-truth): the snapshot in
-        // `Tree::LoroSnapshots` is the authoritative CRDT state. Derive and
+        // The snapshot in `Tree::LoroSnapshots` is the authoritative CRDT
+        // state. Derive and
         // persist it here UNCONDITIONALLY for every CRDT resource — in the
         // same transaction as the `Tree::Resources` write — so the invariant
         // holds that every resource blob is paired with a current snapshot.

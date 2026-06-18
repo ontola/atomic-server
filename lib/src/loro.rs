@@ -340,8 +340,8 @@ impl AtomicLoroDoc {
     /// This is the Loro equivalent of a `set` in a commit.
     pub fn set_property(&self, property: &str, value: &Value) -> AtomicResult<()> {
         let root = self.doc.get_map("properties");
-        // Phase 1 / 1.5 (loro-source-of-truth): record a datatype tag in a
-        // sibling `datatypes` map so materialization need not guess the
+        // Record a datatype tag in a sibling `datatypes` map so
+        // materialization need not guess the
         // `Value` variant from the bare primitive. Covers reference/shape
         // cases (ref strings, lists, nested objects) and the cosmetic
         // string-likes (`Markdown`/`Slug`/`Uri`/`Date`/`Timestamp`) — see
@@ -760,7 +760,7 @@ impl AtomicLoroDoc {
 /// primitive already pins the variant (`Integer`/`Float`/`Boolean`) or which
 /// is a plain `String` (the untagged default).
 ///
-/// Two groups are tagged (see the `loro-source-of-truth` plan, Phase 1.5):
+/// Two groups are tagged:
 /// - **Reference / shape** (`atomicUrl`, `resourceArray`, `json`, `resource`):
 ///   genuinely *cannot* be recovered from the Loro primitive — a `String` may
 ///   be a ref or plain text, a `List` may hold subjects or JSON.
@@ -828,7 +828,7 @@ fn atomic_value_from_tag(lv: &loro::LoroValue, tag: &str) -> Option<Value> {
             Some(Value::ResourceArray(subjects))
         }
         // Cosmetic string-likes: same primitive as a plain String, recovered
-        // to their variant via the tag (Phase 1.5).
+        // to their variant via the tag.
         ("markdown", loro::LoroValue::String(s)) => Some(Value::Markdown(s.to_string())),
         ("slug", loro::LoroValue::String(s)) => Some(Value::Slug(s.to_string())),
         ("uri", loro::LoroValue::String(s)) => Some(Value::Uri(s.to_string())),
@@ -874,7 +874,7 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
             }
 
             // Untagged fallback only: tagged docs recover Slug/Markdown/Uri/Date
-            // via `atomic_value_from_tag` (Phase 1.5, #1217). A bare untagged
+            // via `atomic_value_from_tag` (#1217). A bare untagged
             // string (legacy snapshot / pre-tag write) collapses to String.
             Some(Value::String(s))
         }
@@ -1399,8 +1399,8 @@ mod test {
 
     #[test]
     fn datatype_tags_preserve_load_bearing_variants() {
-        // Phase 1 (loro-source-of-truth): load-bearing variants survive a
-        // snapshot round-trip exactly, via the sibling `datatypes` map —
+        // Load-bearing variants survive a snapshot round-trip exactly, via
+        // the sibling `datatypes` map —
         // not via the lossy heuristics.
         let p = |n: &str| format!("https://atomicdata.dev/properties/{n}");
         let doc = AtomicLoroDoc::new();
@@ -1417,7 +1417,7 @@ mod test {
             .unwrap();
         doc.set_property(&p("text"), &Value::String("plain".into()))
             .unwrap();
-        // Cosmetic string-likes (Phase 1.5): same primitive as String, but
+        // Cosmetic string-likes: same primitive as String, but
         // their variant must survive — at least vector/search text extraction
         // branches on `Value::Markdown`.
         doc.set_property(&p("desc"), &Value::Markdown("# Hi".into()))

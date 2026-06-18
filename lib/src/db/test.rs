@@ -1370,8 +1370,7 @@ async fn loro_non_property_container_survives_commit_roundtrip() {
 
 /// A deleted resource must not leave its Loro snapshot orphaned in
 /// `Tree::LoroSnapshots`, and the subject must be tombstoned so bulk sync
-/// does not resurrect it. Regression test for Phase 0 of the
-/// `loro-source-of-truth` plan.
+/// does not resurrect it.
 #[tokio::test]
 #[timeout(30000)]
 async fn remove_resource_deletes_loro_snapshot() {
@@ -1459,7 +1458,7 @@ async fn remove_resource_with_drive_hint_subject_deletes_snapshot() {
     );
 }
 
-/// Phase 2b/2c (loro-source-of-truth): `add_resource_opts` persists a Loro
+/// `add_resource_opts` persists a Loro
 /// snapshot for every CRDT resource — including when the resource already
 /// carries a `loroUpdate` propval — and the `Tree::Resources` blob is a pure
 /// projection with no `loroUpdate`.

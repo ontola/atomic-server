@@ -655,7 +655,7 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * Phase 1 (loro-source-of-truth): populate the sibling `datatypes` Loro map
+   * Populate the sibling `datatypes` Loro map
    * so the server recovers reference / array `Value` variants exactly instead
    * of guessing. The map is sparse — only load-bearing datatypes get a tag;
    * see {@link datatypeTag}. Idempotent: re-signing rewrites nothing.
@@ -2364,8 +2364,8 @@ export class Resource<C extends OptionalClass = any> {
       }
     }
 
-    // Phase 1 (loro-source-of-truth): stamp the sibling `datatypes` map so
-    // the server materializes references/arrays exactly. Runs here — after
+    // Stamp the sibling `datatypes` map so the server materializes
+    // references/arrays exactly. Runs here — after
     // every property is in the doc, before the snapshot export below — so it
     // covers props set via `set()` and via cache hydration alike.
     //

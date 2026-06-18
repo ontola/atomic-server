@@ -82,7 +82,7 @@ describe('datatypeTag', () => {
     // property) stays untagged — the server heuristic handles `{...}`.
     expect(datatypeTag(Datatype.ATOMIC_URL, '{"a":1}')).toBeUndefined();
 
-    // Cosmetic string-likes (Phase 1.5) are tagged so the server can recover
+    // Cosmetic string-likes are tagged so the server can recover
     // the exact variant — at least vector/search text extraction branches on
     // `Value::Markdown`.
     expect(datatypeTag(Datatype.MARKDOWN, '# heading')).toBe('markdown');
