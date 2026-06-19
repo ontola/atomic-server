@@ -431,12 +431,11 @@ export class Store {
   };
   private _commitLog: CommitLogEntry[] = [];
   /**
-   * Per-subject prior Loro snapshot bytes, used by `summarizeCommitProperties`
-   * to diff against the new commit so the Sync page's commit log shows ONLY
-   * the properties this commit changed (rather than every property that
-   * happens to be present in the snapshot — `loroUpdate` is full state, not a
-   * delta, so without this tracking every entry looks identical regardless of
-   * what the user actually changed).
+   * Per-subject ACCUMULATED Loro snapshot bytes (genesis + every commit seen
+   * so far), used by `summarizeCommitProperties` to diff each new commit and
+   * show ONLY the properties it changed. A non-genesis commit's `loroUpdate`
+   * is a delta, so the diff must be against this running full state — diffing
+   * against the bare delta would make untouched properties look removed.
    */
   private _commitLogPriorSnapshots = new Map<string, Uint8Array>();
 
@@ -3495,44 +3494,44 @@ export class Store {
     }
 
     try {
-      const materialized = new Resource(commit.subject);
-      materialized.importLoroUpdate(commit.loroUpdate);
+      const entriesOf = (resource: Resource): Map<string, JSONValue> => {
+        const map = new Map<string, JSONValue>();
 
-      const currentEntries = new Map<string, JSONValue>();
+        for (const [prop, value] of resource.getEntries()) {
+          if (
+            prop === commits.properties.loroUpdate ||
+            prop === commits.properties.lastCommit
+          ) {
+            continue;
+          }
 
-      for (const [prop, value] of materialized.getEntries()) {
-        if (
-          prop === commits.properties.loroUpdate ||
-          prop === commits.properties.lastCommit
-        ) {
-          continue;
+          map.set(prop, value as JSONValue);
         }
 
-        currentEntries.set(prop, value as JSONValue);
-      }
+        return map;
+      };
 
+      // A non-genesis commit's `loroUpdate` is a DELTA, not full state. To show
+      // what THIS commit changed we must diff against the accumulated state of
+      // all prior commits — `_commitLogPriorSnapshots` holds that running
+      // snapshot. Importing a bare delta into a fresh doc would drop the base
+      // and make every untouched genesis property look "removed".
+      const acc = new Resource(commit.subject);
       const priorBytes = this._commitLogPriorSnapshots.get(commit.subject);
-      const priorEntries = new Map<string, JSONValue>();
 
       if (priorBytes) {
         try {
-          const prior = new Resource(commit.subject);
-          prior.importLoroUpdate(priorBytes);
-
-          for (const [prop, value] of prior.getEntries()) {
-            if (
-              prop === commits.properties.loroUpdate ||
-              prop === commits.properties.lastCommit
-            ) {
-              continue;
-            }
-
-            priorEntries.set(prop, value as JSONValue);
-          }
+          acc.importLoroUpdate(priorBytes);
         } catch (e) {
           console.warn('[summarizeCommitProperties] prior decode failed:', e);
         }
       }
+
+      const priorEntries = entriesOf(acc);
+
+      // Apply this commit on top of the accumulated state.
+      acc.importLoroUpdate(commit.loroUpdate);
+      const currentEntries = entriesOf(acc);
 
       const summaries: CommitLogPropertySummary[] = [];
 
@@ -3554,7 +3553,13 @@ export class Store {
         }
       }
 
-      this._commitLogPriorSnapshots.set(commit.subject, commit.loroUpdate);
+      // Persist the ACCUMULATED snapshot (not this commit's delta) so the next
+      // commit diffs against full state.
+      const snapshot = acc.getLoroDoc?.()?.export({ mode: 'snapshot' });
+
+      if (snapshot) {
+        this._commitLogPriorSnapshots.set(commit.subject, snapshot);
+      }
 
       return summaries.length > 0 ? summaries.slice(0, 20) : undefined;
     } catch (e) {
