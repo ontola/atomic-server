@@ -253,12 +253,22 @@ export function initClientDb(store: Store): void {
       // init window queued automatically. The reseed was paying ~1s
       // of wasm-bindgen crossings every cold load for zero new state.
       store.setClientDb(clientDb);
+
+      // init() resolves even when the local DB parked in a degraded,
+      // server-only mode (insecure context with no Web Locks/OPFS, or a
+      // ghost-leader lock it couldn't reclaim). Surface that to the user —
+      // otherwise the app silently renders empty, unpersisted resources with
+      // no explanation of why local caching/offline isn't working.
+      if (clientDb.initError) {
+        store.notifyError(clientDb.initError);
+      }
     })
     .catch(err => {
       console.warn('[ClientDb] Failed to initialize:', err);
       // Re-emit so the Sync page can show the error (clientDbError).
       // clientDb.initError was populated in the send() catch inside doInit.
       store.setClientDb(clientDb);
+      store.notifyError(clientDb.initError ?? err);
     });
 
   // Vite HMR: accept updates and re-initialize cleanly.

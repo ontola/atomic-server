@@ -188,6 +188,29 @@ export class ClientDbWorker {
       );
     }
 
+    // Web Locks and OPFS — the two browser APIs the local database depends on —
+    // are only exposed in a *secure context*. Served over plain HTTP on a
+    // non-localhost origin (e.g. a self-hosted `http://host.local:9883`
+    // deployment), `navigator.locks` is `undefined`, so the leader election
+    // below would throw an opaque `TypeError` and leave the ClientDb
+    // half-initialized — the app then renders empty, unpersisted resources with
+    // no explanation. Park cleanly in server-only mode instead, with an
+    // actionable message, exactly like the ghost-leader degraded path below.
+    if (typeof navigator === 'undefined' || !navigator.locks) {
+      this.role = 'failed';
+      this._initError = new Error(
+        'Local caching and offline support are disabled: this site is served ' +
+          'over an insecure connection (plain HTTP on a non-localhost origin), ' +
+          'where the browser withholds the Web Locks and OPFS APIs the local ' +
+          'database needs. The app still works, reading directly from the ' +
+          'server. To enable local caching and offline support, serve the app ' +
+          'over HTTPS (or open it via localhost).',
+      );
+      console.warn('[ClientDb]', this._initError.message);
+
+      return;
+    }
+
     this.bc = new BroadcastChannel(RPC_CHANNEL);
     this.bc.onmessage = (event: MessageEvent<BroadcastMessage>) =>
       this.handleBroadcast(event.data);
