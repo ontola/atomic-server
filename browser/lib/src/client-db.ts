@@ -145,6 +145,13 @@ export class ClientDbWorker {
   private initPromise: Promise<void> | null = null;
   private seedPromise: Promise<void> | null = null;
   private _initError: Error | undefined = undefined;
+  /** Resolves the leader lock's "hold forever" promise so `destroy()` can
+   *  release the lock instead of leaking it until tab unload — otherwise an
+   *  HMR cycle (which calls `destroy()` but keeps the page alive) leaves a
+   *  ghost lock that the next instance can't reclaim on Firefox/Safari. */
+  private releaseLeaderHold: (() => void) | null = null;
+  /** Aborts a still-queued (not-yet-granted) leader-lock request on destroy. */
+  private leaderLockAbort: AbortController | null = null;
   /** Resolved when we become leader (own the DB locally). */
   private onBecameLeader!: () => void;
   private leadershipGained: Promise<void>;
@@ -274,9 +281,18 @@ export class ClientDbWorker {
    * fires after we already stole is harmless.
    */
   private requestLeaderLock(baseUrl: string | undefined, steal: boolean): void {
-    const opts: LockOptions = steal
-      ? { mode: 'exclusive', steal: true }
-      : { mode: 'exclusive' };
+    // `steal` and `signal` are mutually exclusive in the Web Locks spec, so
+    // the abort path only applies to the normal queued request (the
+    // Chromium-only steal recovery doesn't need it).
+    let opts: LockOptions;
+
+    if (steal) {
+      opts = { mode: 'exclusive', steal: true };
+    } else {
+      this.leaderLockAbort = new AbortController();
+      opts = { mode: 'exclusive', signal: this.leaderLockAbort.signal };
+    }
+
     void navigator.locks
       .request(LEADER_LOCK, opts, async () => {
         try {
@@ -287,13 +303,19 @@ export class ClientDbWorker {
           throw e;
         }
 
-        return new Promise<void>(() => {
-          // Hold the lock for the lifetime of this tab. Never resolve.
-          // When the tab unloads, the browser reaps this promise + releases
-          // the lock, and one of the queued followers is promoted.
+        return new Promise<void>(resolve => {
+          // Hold the lock until the tab unloads OR `destroy()` releases it
+          // (HMR / explicit teardown). Resolving here frees the lock so the
+          // next instance — or a queued follower — can take over immediately,
+          // rather than leaving a ghost lock that Firefox/Safari can't steal.
+          this.releaseLeaderHold = resolve;
         });
       })
       .catch(e => {
+        // A deliberate abort from `destroy()` (the request was still queued)
+        // is teardown, not a failure — ignore it.
+        if (e instanceof DOMException && e.name === 'AbortError') return;
+
         // Rejects if the callback throws OR if our hold was aborted by
         // another tab stealing the lock. The latter is fine if we're
         // already past `becomeLeader` (we just lost leadership); only
@@ -606,6 +628,15 @@ export class ClientDbWorker {
   }
 
   destroy(): void {
+    // Release the leader lock FIRST. If we're the leader, resolving the hold
+    // frees the `navigator.locks` lease; if we're still queued, abort the
+    // pending request. Without this, `destroy()` (notably the HMR dispose
+    // hook) leaks the lock for the page's lifetime — a ghost leader the next
+    // instance can't reclaim on Firefox/Safari (no lock-steal).
+    this.releaseLeaderHold?.();
+    this.releaseLeaderHold = null;
+    this.leaderLockAbort?.abort();
+    this.leaderLockAbort = null;
     this.bc?.close();
     this.worker?.terminate();
     this.bc = null;
