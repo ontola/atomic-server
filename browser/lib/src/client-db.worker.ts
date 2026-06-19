@@ -284,11 +284,56 @@ async function ensureInit(): Promise<void> {
 // server because the local DB query came back with 0 hits.
 let workQueue: Promise<void> = Promise.resolve();
 
+// Message types that mutate the DB. After any of these we owe the OPFS a
+// durable `flush()` (see below).
+const WRITE_OPS: ReadonlySet<WorkerRequest['type']> = new Set([
+  'putResource',
+  'putResources',
+  'putResourceWithSnapshot',
+  'applyCommit',
+  'removeResource',
+  'putBlob',
+  'importAllResources',
+  'populate',
+]);
+
+// Per-write redb commits use `Durability::None` (no fsync) for throughput;
+// they're only persisted to OPFS once a *subsequent* Immediate commit
+// (`db.flush()`) lands. Without that, every write is rolled back on the next
+// open (a page reload) — invisible online (the server re-fetches) but data
+// loss when offline. So we flush on a short periodic tick whenever there have
+// been writes since the last flush, mirroring the native server's flush tick
+// (server/src/serve.rs). One fsync amortises a whole sync burst instead of
+// paying one per write; an idle tab (no writes) does nothing.
+const FLUSH_INTERVAL_MS = 1000;
+let dirty = false;
+
+setInterval(() => {
+  if (!dirty || !db) return;
+
+  dirty = false;
+  // Route the flush through the same queue as writes so it never races an
+  // in-flight mutation against the single redb instance.
+  workQueue = workQueue.then(async () => {
+    try {
+      db!.flush();
+    } catch (e) {
+      // Re-arm so the next tick retries; a transient flush failure shouldn't
+      // permanently strand un-persisted writes.
+      dirty = true;
+      console.error('[ClientDb] OPFS flush failed:', e);
+    }
+  });
+}, FLUSH_INTERVAL_MS);
+
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const msg = event.data;
   workQueue = workQueue.then(async () => {
     try {
       const data = await handleMessage(msg);
+
+      if (WRITE_OPS.has(msg.type)) dirty = true;
+
       const response: WorkerResponse = { id: msg.id, type: 'ok', data };
       self.postMessage(response);
     } catch (e) {

@@ -55,6 +55,19 @@ impl ClientDb {
         Ok(ClientDb { db })
     }
 
+    /// Persist buffered writes to durable OPFS storage.
+    ///
+    /// Per-write redb commits use `Durability::None` (no fsync) for throughput;
+    /// redb only persists those once a *subsequent* Immediate commit lands, so
+    /// this is what actually makes recent writes survive. Without it, redb rolls
+    /// recent writes back to the last durable commit on the next open (a page
+    /// reload), so the local cache reads empty — invisible while online (the
+    /// server re-fetches) but data loss the moment you're disconnected. The
+    /// worker calls this on a short periodic tick, mirroring the native server.
+    pub fn flush(&self) -> Result<(), JsError> {
+        self.db.flush().map_err(to_js_err)
+    }
+
     /// Get a resource by its subject URL. Returns JSON-AD string or null.
     #[wasm_bindgen(js_name = "getResource")]
     pub async fn get_resource(&self, subject: &str) -> Result<JsValue, JsError> {
