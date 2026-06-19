@@ -547,9 +547,25 @@ impl Resource {
     /// by URL prefix. Used by the commit fan-out to scope delivery to the
     /// owning drive's subscribers and never leak commits across drives.
     pub fn get_drive(&self) -> Option<Subject> {
-        self.get(urls::DRIVE_PROP)
-            .ok()
-            .map(|val| Subject::from(val.to_string()))
+        if let Ok(val) = self.get(urls::DRIVE_PROP) {
+            return Some(Subject::from(val.to_string()));
+        }
+        // A Drive is its own drive. A drive's own DID can't reference itself
+        // before the genesis signature exists, so a Drive root carries no
+        // `drive` propval — its authoritative drive is its own subject. Without
+        // this, fan-out and rights resolution for edits to the drive root
+        // itself would find no owning drive.
+        let is_drive = self
+            .propvals
+            .get(urls::IS_A)
+            .and_then(|is_a| is_a.to_subjects(None).ok())
+            .is_some_and(|classes| classes.iter().any(|c| c == urls::DRIVE));
+
+        if is_drive {
+            return Some(self.subject.clone());
+        }
+
+        None
     }
 
     /// Walks the parent tree upwards until there is no parent, then returns them as a vector.

@@ -2353,7 +2353,21 @@ export class Resource<C extends OptionalClass = any> {
       }
 
       if (!drive) {
-        drive = this.store.getDrive();
+        // A Drive IS its own drive. Its authoritative drive is its own subject
+        // (a DID derived from the genesis signature — unknown here, before
+        // signing), resolved by children walking the parent chain and by the
+        // server. Do NOT fall back to the *active* drive: `createDrive` sets
+        // the new drive active only AFTER creating it, so the active drive at
+        // this point is the PREVIOUS one — stamping it makes every drive (and,
+        // via inheritance, its children) point at the wrong drive. Leave it
+        // unset; children resolve correctly from the parent chain.
+        const isADrive = (
+          (this.get(core.properties.isA) as string[] | undefined) ?? []
+        ).includes(DRIVE_CLASS);
+
+        if (!isADrive) {
+          drive = this.store.getDrive();
+        }
       }
 
       if (drive) {
