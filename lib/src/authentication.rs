@@ -120,7 +120,17 @@ pub async fn get_agent_from_auth_values_and_check(
         let public_key_trimmed = auth_vals.public_key.trim();
 
         if agent_subject.is_did() {
-            if agent_subject.as_str().ends_with(public_key_trimmed) {
+            // The DID subject embeds the agent's public key
+            // (`did:ad:agent:{pubkey}`) and the auth header carries the same
+            // key. The two may use different base64 alphabets — the url-safe
+            // alphabet (the new default) vs the legacy standard alphabet
+            // (`+` `/` `=`) — so a raw-string `ends_with` wrongly rejects a key
+            // whose decoded BYTES are identical. Compare the decoded bytes.
+            let did_pubkey = agent_subject
+                .as_str()
+                .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)
+                .unwrap_or_else(|| agent_subject.as_str());
+            if public_keys_match(did_pubkey, public_key_trimmed) {
                 return Ok(ForAgent::AgentSubject(agent_subject));
             } else {
                 return Err(format!(
@@ -133,7 +143,7 @@ pub async fn get_agent_from_auth_values_and_check(
 
         let agent_resource = store.get_resource(&agent_subject).await?;
         let found_public_key = agent_resource.get(urls::PUBLIC_KEY)?;
-        if found_public_key.to_string().trim() != public_key_trimmed {
+        if !public_keys_match(found_public_key.to_string().trim(), public_key_trimmed) {
             Err(
                 "The public key in the auth headers does not match the public key in the agent"
                     .to_string()
@@ -145,6 +155,25 @@ pub async fn get_agent_from_auth_values_and_check(
     } else {
         Ok(ForAgent::Public)
     }
+}
+
+/// Two base64-encoded public keys match if their decoded bytes are equal.
+/// Tolerates differing base64 alphabets (url-safe — the new default — vs the
+/// legacy standard alphabet with `+` `/` `=`), so an agent whose DID or stored
+/// key was minted with one alphabet still authenticates against an auth header
+/// using the other. Falls back to `false` if either string can't be decoded.
+fn public_keys_match(a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+
+    matches!(
+        (
+            crate::agents::decode_base64(a),
+            crate::agents::decode_base64(b),
+        ),
+        (Ok(da), Ok(db)) if da == db
+    )
 }
 
 // fn get_agent_from_value_index() {
@@ -160,3 +189,32 @@ pub async fn get_agent_from_auth_values_and_check(
 //         for_agent = Some(found.to_string());
 //     }
 // }
+
+#[cfg(test)]
+mod test {
+    use super::public_keys_match;
+
+    /// The same ed25519 key, encoded in the legacy standard base64 alphabet
+    /// (as embedded in a legacy agent DID) and in the url-safe alphabet (as
+    /// sent in modern auth headers), must be recognised as the same key —
+    /// otherwise legacy agents can't authenticate (WS AUTH fails → the client
+    /// never gets AUTH_OK → it falls offline and edits never sync).
+    #[test]
+    fn public_keys_match_across_base64_alphabets() {
+        let standard = "gJRZVTGPngaG3mSPA/e6LEewKixYpZtuUYQhNg+t7Y4=";
+        let url_safe = "gJRZVTGPngaG3mSPA_e6LEewKixYpZtuUYQhNg-t7Y4";
+        assert!(
+            public_keys_match(standard, url_safe),
+            "standard and url-safe encodings of the same key should match"
+        );
+        assert!(public_keys_match(standard, standard));
+        assert!(public_keys_match(url_safe, url_safe));
+    }
+
+    #[test]
+    fn public_keys_match_rejects_different_keys() {
+        let a = "gJRZVTGPngaG3mSPA_e6LEewKixYpZtuUYQhNg-t7Y4";
+        let b = "AAAAVTGPngaG3mSPA_e6LEewKixYpZtuUYQhNg-t7Y4";
+        assert!(!public_keys_match(a, b));
+    }
+}
