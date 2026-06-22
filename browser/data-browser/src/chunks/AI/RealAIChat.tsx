@@ -271,7 +271,26 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   });
 
   const { reportAIEdit } = useAIChanges();
+  // Whether the active model's provider can actually be reached. We NEVER use
+  // this to block typing (a user must always be able to compose a message, even
+  // while a provider is unreachable or still being set up) — only to disable the
+  // SEND and to surface a clear reason.
   const canUseInput = isProviderAvailable(activeModel.provider);
+
+  // Re-opens the provider setup overlay (`AISetupPanel` renders while
+  // `atomic.ai.setupComplete` is false).
+  const [, setSetupComplete] = useLocalStorage(
+    'atomic.ai.setupComplete',
+    false,
+  );
+
+  const providerNotice = canUseInput
+    ? null
+    : activeModel.provider === AIProvider.Ollama
+      ? `Can't reach Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime.`
+      : activeModel.provider === AIProvider.OpenRouter
+        ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
+        : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
@@ -713,11 +732,21 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     ))}
                   </ContextItemRow>
                 )}
+                {providerNotice && (
+                  <ProviderNotice>
+                    <span>{providerNotice}</span>
+                    <SubtleButton onClick={() => setSetupComplete(false)}>
+                      Set up a model
+                    </SubtleButton>
+                  </ProviderNotice>
+                )}
                 <AIChatInput
                   large={isEmptyChat && fullView}
                   focusSignal={inputFocusSignal}
-                  disabled={!canUseInput}
-                  disableSubmit={false}
+                  // Never block typing — only the SEND is gated on an available
+                  // provider (the notice above explains why).
+                  disabled={false}
+                  disableSubmit={!canUseInput}
                   hasFiles={!!attachedFiles}
                   onMentionUpdate={handleMentionUpdate}
                   onChange={setUserInput}
@@ -958,6 +987,25 @@ const SubtleButton = styled.button`
   &:focus-visible,
   &:hover {
     background-color: ${p => p.theme.colors.bg1};
+  }
+`;
+
+const ProviderNotice = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: ${p => p.theme.size(2)} ${p => p.theme.size(3)};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.alert}1a;
+  border: 1px solid ${p => p.theme.colors.alert}55;
+  color: ${p => p.theme.colors.text};
+  font-size: 0.85rem;
+
+  span {
+    min-width: 0;
   }
 `;
 
