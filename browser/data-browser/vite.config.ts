@@ -94,9 +94,16 @@ export default defineConfig({
     // which MUST run before `react()` ("the compiler must run before other
     // transforms" — React Compiler docs):
     //
-    //  - babel-plugin-react-compiler: auto-memoising compiler. No SWC/OXC
-    //    port exists yet (Oct 2026); React's official Vite recipe is this
-    //    same two-pass setup.
+    //  - babel-plugin-react-compiler: auto-memoising compiler. A native Rust
+    //    port now exists (React's official port, vendored by oxc), but as of
+    //    2026-06 it's not production-ready for us, so we stay on Babel:
+    //      * released `oxc-transform@0.137` `reactCompiler` option is a no-op
+    //        (zero memoisation in testing);
+    //      * community `oxc-plugin-react-compiler@0.2` (now archived) DOES run
+    //        the Rust compiler, but emits duplicate `_temp` helpers that break
+    //        files with multiple memoised components (e.g. our AI chunks).
+    //    Revisit once oxc-transform ships a working pass.
+    //    React's official Vite recipe is this same two-pass setup.
     //  - babel-plugin-styled-components: emits `displayName` so DOM classes
     //    read `Foo-sc-XXX` instead of opaque `sc-XXX` hashes. plugin-react
     //    v6 dropped its own `babel` option, so this is now the only hook.
