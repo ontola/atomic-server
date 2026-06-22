@@ -29,18 +29,13 @@ describe('optionalGeneratedData', () => {
       ),
     ).resolves.toBeUndefined();
 
-    expect(warn).toHaveBeenCalledWith(
-      'AI chat title generation failed',
-      error,
-    );
+    expect(warn).toHaveBeenCalledWith('AI chat title generation failed', error);
   });
 });
 
 describe('cleanGeneratedTextLine', () => {
   it('keeps a plain generated line', () => {
-    expect(cleanGeneratedTextLine('Project planning')).toBe(
-      'Project planning',
-    );
+    expect(cleanGeneratedTextLine('Project planning')).toBe('Project planning');
   });
 
   it('strips Qwen reasoning blocks and surrounding formatting', () => {

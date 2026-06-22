@@ -24,10 +24,7 @@ export function appendTransientContextToLastUser(
     index === lastUserMessageIndex
       ? {
           ...message,
-          parts: [
-            ...message.parts,
-            { type: 'text', text: transientContext },
-          ],
+          parts: [...message.parts, { type: 'text', text: transientContext }],
         }
       : message,
   );
