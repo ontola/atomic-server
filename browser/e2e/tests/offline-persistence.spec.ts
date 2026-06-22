@@ -21,7 +21,7 @@ test('cached drive survives reload while offline', async ({ page }) => {
   await page.reload();
   await page.waitForTimeout(2500);
 
-  const r = await page.evaluate(async (d) => {
+  const r = await page.evaluate(async d => {
     const s = window.store;
     let viaGet = -1; // -1 ⇒ threw "Offline: resource not available locally"
 

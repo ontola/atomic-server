@@ -27,7 +27,11 @@ test('a fresh-OPFS second device loads an existing drive’s contents', async ({
       parent: d,
       isA: 'https://atomicdata.dev/classes/Folder',
     });
-    await f.set('https://atomicdata.dev/properties/name', 'SecondDeviceChild', false);
+    await f.set(
+      'https://atomicdata.dev/properties/name',
+      'SecondDeviceChild',
+      false,
+    );
     await f.save();
 
     return d;
@@ -40,7 +44,9 @@ test('a fresh-OPFS second device loads an existing drive’s contents', async ({
   const p2 = await ctx2.newPage();
   await p2.goto(FRONTEND_URL);
   await signIn(p2, secret);
-  await p2.goto(`${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`);
+  await p2.goto(
+    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
+  );
 
   await expect(p2.getByText('SecondDeviceChild').first()).toBeVisible({
     timeout: 12000,
