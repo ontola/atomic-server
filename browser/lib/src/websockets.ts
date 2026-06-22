@@ -793,6 +793,11 @@ export class WSClient {
             loroBytes: msg.loroBytes,
             commitId: msg.commitId,
             source: 'ws-pending-get',
+            // A GET response with the SNAPSHOT flag is authoritative full
+            // state — replace any partial doc the client seeded from an
+            // earlier SUB push, rather than merging (which can keep only the
+            // seed's props and render the resource class-less).
+            replaceLoroDocsFromRemote: !!(msg.flags & Flags.SNAPSHOT),
           });
           // The resource we just hydrated is what the GET caller is
           // waiting for — read it back from the store map.

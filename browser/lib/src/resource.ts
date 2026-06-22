@@ -218,11 +218,27 @@ export class Resource<C extends OptionalClass = any> {
         (buf instanceof Uint8Array && buf.length > 0) ||
         (typeof buf === 'string' && buf.length > 0);
 
-      if (hasBuffered) {
-        // Object.create(null)-style #cache → use Object.keys to count
-        // own props. Hot path; cheap.
-        const hasCache = Object.keys(this.#cache).length > 0;
-        if (!hasCache) return true;
+      // Buffered bytes only count as "still loading" while Loro WASM ISN'T
+      // ready — that's the only time they can't materialize. Once Loro IS
+      // loaded, the very next `get()`/`getEntries()` builds the doc and applies
+      // the buffer, so the resource is effectively renderable; reporting
+      // `loading` then sticks a spinner on top of real data (observed: a Drive
+      // with `isA` + 6 entries rendering a spinner). So: only buffered AND
+      // Loro-not-loaded AND a non-renderable (skeleton-only) cache is loading.
+      // A WS UPDATE stamps `lastCommit` from the frame's commit-id while the
+      // snapshot is still buffered, so a lone `lastCommit` is NOT renderable;
+      // treating it as loaded renders the bare subject ("flash of wrong state")
+      // and makes consumers that gate on `isReady()` (the sidebar) show empty.
+      if (hasBuffered && !LoroLoader.isLoaded()) {
+        // Object.create(null) #cache → Object.keys is the cheap own-prop scan.
+        const hasRenderable = Object.keys(this.#cache).some(
+          k =>
+            k !== properties.commit.lastCommit &&
+            k !== commits.properties.createdAt &&
+            k !== core.properties.parent &&
+            k !== 'https://atomicdata.dev/properties/drive',
+        );
+        if (!hasRenderable) return true;
       }
     }
 
@@ -451,8 +467,20 @@ export class Resource<C extends OptionalClass = any> {
       // freshly-materialized data. Without this, a resource that arrived
       // via SYNC_PUSH before Loro was ready would stay stuck on its
       // loading indicator until some other event happens to fire.
-      if (initializedFromSnapshot && !this._loading) {
-        this.eventManager.emit(ResourceEvents.LoadingChange, false);
+      if (initializedFromSnapshot) {
+        // Materialized from a snapshot → the content is now available. If it's
+        // RENDERABLE (has a class), clear any `_loading` flag that was set
+        // before the buffer could apply — a snapshot buffered before Loro WASM
+        // was ready leaves `getResourceLoading`'s `_loading=true` in place, and
+        // the top-of-getter `if (this._loading)` would otherwise keep reporting
+        // loading and stick a spinner on top of the real data (observed: a
+        // Drive with isA + 6 entries). Gate on the class so an INCOMPLETE
+        // snapshot (no isA) stays loading for the store's refetch guard.
+        if (this._loading && this.#cache[core.properties.isA] !== undefined) {
+          this._loading = false;
+        }
+
+        this.eventManager.emit(ResourceEvents.LoadingChange, this.loading);
       }
 
       // Sign-at-drain: any local Loro op marks the subject dirty in
@@ -2864,7 +2892,23 @@ export class Resource<C extends OptionalClass = any> {
    *  apply (threw, or left pending ops awaiting base deps we don't
    *  have). Callers persisting / displaying the result should treat
    *  `complete: false` as "this state is unusable," not "loaded." */
-  public importLoroUpdate(loroUpdate: Uint8Array): { complete: boolean } {
+  public importLoroUpdate(
+    loroUpdate: Uint8Array,
+    /**
+     * Replace the local Loro doc with these bytes instead of merging. Use ONLY
+     * for authoritative FULL snapshots (e.g. a WS GET response carrying the
+     * SNAPSHOT flag): merging a full snapshot into a doc that was previously
+     * seeded with PARTIAL state (a SUB push delivering only some props) can
+     * surface only the seed's props, leaving the resource class-less. A clean
+     * replace makes the authoritative state win. Never pass `true` for a delta.
+     */
+    replace = false,
+  ): { complete: boolean } {
+    // Drop any seeded/partial state so the incoming snapshot is authoritative.
+    if (replace) {
+      this.resetLoroState();
+    }
+
     // Ensure the LoroDoc exists, then import the update into it.
     const doc = this.getLoroDoc();
 
@@ -2874,6 +2918,26 @@ export class Resource<C extends OptionalClass = any> {
       // buffered bytes and keeps reporting `true` until then, so
       // consumers don't fall back to the truncated DID.
       this._loroSnapshotBytes = loroUpdate;
+
+      // RACE FIX: a WS GET/SUB snapshot can arrive BEFORE Loro WASM finishes
+      // loading. We buffer it above, but nothing guarantees the buffer is ever
+      // applied — the React hooks that re-render `onReady` only materialize the
+      // doc if they happen to read a prop, and the Compiler can memoize the
+      // (empty) render so they don't. Apply the buffer ourselves the moment
+      // Loro is ready and re-notify so consumers re-render (`getLoroDoc` clears
+      // `_loading` when it materializes renderable content — see its
+      // `initializedFromSnapshot` branch). Without this, the resource is stuck
+      // showing its bare subject until something else pokes it — the flaky "dev
+      // drive sometimes doesn't show" bug.
+      LoroLoader.onReady(() => {
+        if (!this._loroDoc && this._loroSnapshotBytes) {
+          this.getLoroDoc();
+          // Re-notify THROUGH THE STORE — `useResource`/`useValue` re-render
+          // only on `store.notify` (snapshot-tuple bump), NOT on the Resource's
+          // own eventManager.
+          this._store?.notifyResourceUpdated(this);
+        }
+      });
 
       // Not applied yet, but not a failure — `getLoroDoc()` will
       // import the buffer and the `loading` getter keeps it gated.
@@ -2885,6 +2949,7 @@ export class Resource<C extends OptionalClass = any> {
       this.rebuildCacheFromLoro();
       this.#cacheDirty = false;
       this.initLoroSaveCursorIfFresh();
+
       // Mirror what `markDirty` / `undo` / `redo` already do: when the
       // resource's Loro state changes out-of-band of `set` / `pushListItem`,
       // emit a wildcard `LocalChange` so React consumers (canvas page,

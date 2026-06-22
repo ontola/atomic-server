@@ -1,4 +1,5 @@
 import { isNumber } from './datatypes.js';
+import { enableLoro } from './loro-loader.js';
 import { Collections, collections } from './ontologies/collections.js';
 import { Resource } from './resource.js';
 import { Store, StoreEvents } from './store.js';
@@ -857,6 +858,16 @@ export class Collection {
         `Invalid collection: resource has error: ${resource.error}`,
       );
     }
+
+    // The `/query` response is a Loro snapshot. If it arrived before Loro WASM
+    // finished loading it was BUFFERED (not materialized), so `members` /
+    // `totalMembers` read as undefined — the collection lands empty and the
+    // `total-members is not a number` throw below is swallowed by the caller's
+    // `.catch`, leaving the sidebar/table blank with no error. This is the same
+    // GET-before-Loro-ready race that affected the drive resource. Ensure Loro
+    // is loaded and force-materialize the doc before reading its props.
+    await enableLoro();
+    resource.getLoroDoc();
 
     // Same leak as `fetchPageFromLocalDb`: the server's atom-by-atom index
     // can register a Commit's `subject` (a `did:ad:commit:` URI) under the

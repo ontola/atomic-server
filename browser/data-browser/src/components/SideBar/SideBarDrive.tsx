@@ -117,39 +117,43 @@ export function SideBarDrive({
               prevSubject={undefined}
               nextSubject={subResources[0]}
             />
-            {driveResource.isReady() ? (
-              childrenLoading ? (
-                <SideBarLoader />
-              ) : (
-                subResources.map((child, index) => {
-                  return (
-                    <Fragment key={child}>
-                      <ResourceSideBar
-                        subject={child}
-                        renderedHierarchy={[drive]}
-                        ancestry={ancestry}
-                        onClick={onItemClick}
-                      />
-                      <DropEdge
-                        parentHierarchy={[drive]}
-                        index={index + 1}
-                        prevSubject={child}
-                        nextSubject={subResources[index + 1]}
-                      />
-                    </Fragment>
-                  );
-                })
-              )
-            ) : driveResource.loading ? null : (
+            {/* Gate on `subResources` (reactive `useChildren` state), NOT on
+                `driveResource.isReady()`. The latter is a proxy read the React
+                Compiler memoizes on the stable ref, so when the drive flips to
+                ready it doesn't re-render and the sidebar stays empty even
+                though the children are in state (confirmed: `setSubjects([3])`
+                ran but the list rendered nothing). If we HAVE children, show
+                them; otherwise fall back to a loader / error. */}
+            {subResources.length > 0 ? (
+              subResources.map((child, index) => {
+                return (
+                  <Fragment key={child}>
+                    <ResourceSideBar
+                      subject={child}
+                      renderedHierarchy={[drive]}
+                      ancestry={ancestry}
+                      onClick={onItemClick}
+                    />
+                    <DropEdge
+                      parentHierarchy={[drive]}
+                      index={index + 1}
+                      prevSubject={child}
+                      nextSubject={subResources[index + 1]}
+                    />
+                  </Fragment>
+                );
+              })
+            ) : childrenLoading ? (
+              <SideBarLoader />
+            ) : driveResource.error ? (
               <SideBarErr>
-                {driveResource.error &&
-                  (driveResource.isUnauthorized()
-                    ? agent
-                      ? 'unauthorized'
-                      : 'This drive is private, sign in to view it'
-                    : driveResource.error.message)}
+                {driveResource.isUnauthorized()
+                  ? agent
+                    ? 'unauthorized'
+                    : 'This drive is private, sign in to view it'
+                  : driveResource.error.message}
               </SideBarErr>
-            )}
+            ) : null}
             {agentCanWrite && (
               <NewResourceRow gap='0' center>
                 <QuickCreateRow

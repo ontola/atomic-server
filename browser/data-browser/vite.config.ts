@@ -367,9 +367,15 @@ export default defineConfig({
     // next to a collaborator's caret). One optimize graph + `resolve.dedupe`
     // above keeps it a single instance. (Prod is unaffected: rollup bundles
     // once.)
-    exclude: ['loro-crdt'],
-    // this may help when linking + HMR is not working
-    // exclude: ['@tomic/lib', '@tomic/react'],
+    // `@tomic/lib` / `@tomic/react` are workspace packages built in watch mode
+    // (tsup) alongside this dev server. If Vite PRE-BUNDLES them into
+    // `.vite/deps`, that cache is keyed on the lockfile/config hash — NOT on the
+    // packages' `dist` content — so a rebuilt `dist` is invisible until a
+    // `--force` re-optimize. Excluding them makes Vite serve their `dist`
+    // directly, so every watch rebuild shows up on a plain reload (the documented
+    // workspace-link workaround). They don't drag in WASM/ProseMirror, so there's
+    // no single-instance concern like `loro-crdt` below.
+    exclude: ['loro-crdt', '@tomic/lib', '@tomic/react'],
     //
     // Vite's boot-time dep scan only follows static imports from index.html, so
     // it never sees the deps behind `React.lazy` chunks (RTE/tiptap, AI SDK,

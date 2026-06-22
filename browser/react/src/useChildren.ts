@@ -56,17 +56,26 @@ export function useChildren(parentSubject: string | undefined): {
     async (members: readonly string[]): Promise<string[]> => {
       const keyed = await Promise.all(
         members.map(async (subject, index) => {
-          const resource = await store.getResource(subject);
-          const explicit = resource.get(dataBrowser.properties.sortOrder);
-          const createdAt = resource.get(commits.properties.createdAt);
-          const key =
-            typeof explicit === 'number'
-              ? explicit
-              : typeof createdAt === 'number'
-                ? createdAt
-                : 0;
+          // RESILIENT: a single child that fails to load (a fetch timeout /
+          // transient error during the WS-reconnect race) must NOT reject the
+          // whole `Promise.all` — that throws out of `extractMembers` and the
+          // sidebar goes fully empty. Keep the member with a fallback key
+          // (server creation-order index) instead.
+          try {
+            const resource = await store.getResource(subject);
+            const explicit = resource.get(dataBrowser.properties.sortOrder);
+            const createdAt = resource.get(commits.properties.createdAt);
+            const key =
+              typeof explicit === 'number'
+                ? explicit
+                : typeof createdAt === 'number'
+                  ? createdAt
+                  : index;
 
-          return { subject, key, index };
+            return { subject, key, index };
+          } catch {
+            return { subject, key: index, index };
+          }
         }),
       );
 

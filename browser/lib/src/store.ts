@@ -275,6 +275,21 @@ export interface IncomingChange {
 /** Returns True if the client has WebSocket support */
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
 
+/**
+ * The server-managed props that `Resource.rebuildCacheFromLoro` preserves even
+ * when a Loro doc carries no delta for them (drive/parent/lastCommit/createdAt).
+ * A resource that has ONLY these — no class, no user content — is a skeleton,
+ * not a renderable resource. Used by the OPFS cold-load guard to decide whether
+ * a local hit is authoritative. Keep in sync with the `serverManaged` list in
+ * resource.ts.
+ */
+const SERVER_MANAGED_SKELETON_PROPS: ReadonlySet<string> = new Set([
+  commits.properties.lastCommit,
+  commits.properties.createdAt,
+  'https://atomicdata.dev/properties/drive',
+  core.properties.parent,
+]);
+
 /** Yield control back to the event loop so pending render/input tasks can run.
  *  Uses a MessageChannel (macrotask without the ~4ms `setTimeout` clamp). */
 function yieldToEventLoop(): Promise<void> {
@@ -1467,7 +1482,17 @@ export class Store {
 
     const resource =
       existing ?? this.getResourceLoading(subject, { newResource: false });
-    const { complete } = resource.importLoroUpdate(change.loroBytes);
+    // A GET response carrying the SNAPSHOT flag is authoritative full state
+    // (`replaceLoroDocsFromRemote`). REPLACE rather than merge it — merging a
+    // full snapshot into a doc the client already seeded with partial state (a
+    // SUB push that delivered only some props) can surface only the seed's
+    // props, leaving the resource class-less (the "deeply broken drive"). Don't
+    // replace a commit-detail delta, and don't clobber unsaved local edits.
+    const replace =
+      !!change.replaceLoroDocsFromRemote &&
+      !subject.startsWith('did:ad:commit:') &&
+      !resource.hasUnsavedChanges();
+    const { complete } = resource.importLoroUpdate(change.loroBytes, replace);
 
     // Commit-detail resources (`did:ad:commit:<sig>`) carry a single
     // commit's `loroUpdate`, which is a DELTA by design — importing it
@@ -2030,28 +2055,57 @@ export class Store {
           );
         }
 
+        let importComplete = true;
+
         if (hasLocalData && hasSnapshot) {
           const resource = this.resources.get(subject);
 
           if (resource) {
-            resource.importLoroUpdate(snapshot);
+            // Capture `complete`: the snapshot may be an unapplyable delta
+            // (missing base ops, buffered by Loro as pending → nothing
+            // materialises). The WS path (`applyIncoming`) already acts on this
+            // signal; the OPFS path used to drop it on the floor.
+            ({ complete: importComplete } =
+              resource.importLoroUpdate(snapshot));
           }
         }
 
         // An OPFS hit is only authoritative if it actually hydrated to
-        // something renderable. If we end up with no properties at all — an
-        // incomplete write: a jsonAd-only placeholder with no Loro snapshot, or
-        // an empty snapshot — trusting it would suppress the server GET below
-        // and render a contentless resource (bare subject as title, no body)
-        // that never recovers. The slow (cache-cold) reload dodges this only
-        // because the ClientDb isn't initialized yet and skips OPFS entirely;
-        // the fast service-worker reload hits it. Treat such a hit as a miss
-        // and let the server GET populate it — keep `loading` so the UI shows a
-        // spinner, never an empty resource.
+        // something RENDERABLE. Otherwise we'd render a contentless resource
+        // (bare subject as title, no body) with NO error that never recovers —
+        // the "deeply broken folder" bug. There are several routes into that
+        // contentless state, so we guard on the OUTCOME (is the resource
+        // renderable?) rather than on any single cause:
+        //   - nothing hydrated at all (`getEntries().length === 0`);
+        //   - a skeleton JSON-AD with no snapshot (only the server-managed
+        //     props survive, and no import ran to add a class);
+        //   - an unapplyable-delta snapshot (`!importComplete`) that buffers as
+        //     pending and materialises nothing, leaving only the skeleton.
+        // In all of these the resource carries at most the server-managed
+        // skeleton props that `rebuildCacheFromLoro` preserves
+        // (drive/parent/lastCommit/createdAt) — `length` is > 0, so the old
+        // `length === 0` guard missed it.
+        //
+        // Renderable ⇔ it has a class (`isA`) — covers commit-detail
+        // (`isA: Commit`, whose delta `loroUpdate` legitimately leaves
+        // `!importComplete`, mirroring the `applyIncoming` guard) — OR it has
+        // real content beyond the skeleton AND that content actually applied
+        // (a clean import). Anything else is treated as a miss: keep `loading`
+        // so the UI shows a spinner, drop `hasLocalData` so the server GET
+        // below repopulates it — or, offline, fails it with a real error
+        // instead of leaving it silently broken. The slow (cache-cold) reload
+        // dodges this naturally (ClientDb not initialized yet ⇒ OPFS skipped);
+        // the fast service-worker reload is what hits it.
         if (hasLocalData) {
           const resource = this.resources.get(subject);
+          const hasClass = !!resource?.get(core.properties.isA);
+          const hasRealContent = !!resource
+            ?.getEntries()
+            .some(([prop]) => !SERVER_MANAGED_SKELETON_PROPS.has(prop));
+          const renderable =
+            !!resource && (hasClass || (importComplete && hasRealContent));
 
-          if (!resource || resource.getEntries().length === 0) {
+          if (!renderable) {
             hasLocalData = false;
 
             if (resource) {
@@ -2072,12 +2126,23 @@ export class Store {
         // data, surface the offline state to the caller rather than leaving
         // the resource stuck in `loading`.
         if (!hasLocalData) {
-          this.failResource(
-            subject,
-            new Error(
-              'Offline: resource not available locally. Reconnect to fetch.',
-            ),
-          );
+          // BUT: a page reload starts with the WS disconnected and reconnects
+          // within a few hundred ms. Failing the resource as "offline" during
+          // that handshake flashes an ErrorPage before the real load (the
+          // user-visible "error state" flicker). Wait briefly for the WS; if it
+          // connects, fetch from the server. Only fail if it stays down.
+          const connected = await this.waitForServerConnected(5000);
+
+          if (connected) {
+            await this.fetchResourceFromServer(subject, opts);
+          } else {
+            this.failResource(
+              subject,
+              new Error(
+                'Offline: resource not available locally. Reconnect to fetch.',
+              ),
+            );
+          }
         }
       } else if (hasLocalData) {
         // Online with local data: trust OPFS + live WS updates. SUB
@@ -2464,7 +2529,11 @@ export class Store {
       return resource;
     }
 
-    if (!opts.allowIncomplete && resource.loading === false) {
+    if (
+      !opts.allowIncomplete &&
+      resource.loading === false &&
+      !resource.error
+    ) {
       // In many cases, a user will always need a complete resource.
       // This checks if the resource is incomplete and fetches it if it is.
       if (resource.get(core.properties.incomplete)) {
@@ -4055,6 +4124,44 @@ export class Store {
     }
 
     return snap;
+  }
+
+  /**
+   * Public re-notify for callers that mutated a Resource OUT OF BAND of a
+   * commit / fetch and need `useSyncExternalStore` consumers to re-render —
+   * specifically applying a buffered Loro snapshot once WASM finishes loading
+   * (the snapshot arrived before Loro was ready). Bumps the snapshot tuple so
+   * `useResource` / `useValue` re-render and observe `loading=false` + the
+   * now-materialized props.
+   */
+  public notifyResourceUpdated(resource: Resource): void {
+    void this.notify(resource);
+  }
+
+  /**
+   * Resolves `true` as soon as the server WS is connected, or `false` if it
+   * isn't within `timeoutMs`. Resolves immediately when already connected. Used
+   * to avoid flashing an "offline" error during the brief disconnect→reconnect
+   * window of a page reload.
+   */
+  private waitForServerConnected(timeoutMs: number): Promise<boolean> {
+    if (this._serverConnected) return Promise.resolve(true);
+
+    return new Promise<boolean>(resolve => {
+      let unsub: (() => void) | undefined;
+      const timer = setTimeout(() => {
+        unsub?.();
+        resolve(false);
+      }, timeoutMs);
+
+      unsub = this.on(StoreEvents.ConnectionChanged, connected => {
+        if (connected) {
+          clearTimeout(timer);
+          unsub?.();
+          resolve(true);
+        }
+      });
+    });
   }
 
   /** Lets subscribers know that a resource has been changed. */
