@@ -940,6 +940,7 @@ msgid "Credits used: {0} /{1} {2}"
 msgstr "Crédits utilisés : {0} / {1} {2}"
 
 #: src/chunks/AI/AISetupPanel.tsx
+#: src/chunks/AI/RealAIChat.tsx
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter"
 msgstr "OpenRouter"
@@ -4709,9 +4710,8 @@ msgstr "<0/> Utiliser le modèle par défaut"
 msgid "Default model"
 msgstr "Modèle par défaut"
 
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Local"
-msgstr "Local"
+#~ msgid "Local"
+#~ msgstr "Local"
 
 #. placeholder {0}: model.details.parameter_size
 #: src/chunks/AI/RealAIChat.tsx
@@ -4793,3 +4793,51 @@ msgstr "Vue sans titre"
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Show / hide columns"
 msgstr "Afficher / masquer les colonnes"
+
+#: src/chunks/AI/useGenerativeData.test.ts
+msgid "No object generated: could not parse the response."
+msgstr "Aucun objet généré : impossible d'analyser la réponse."
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "First"
+msgstr "Premier"
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "Reply"
+msgstr "Répondre"
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "Second"
+msgstr "Deuxième"
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "Hello"
+msgstr "Bonjour"
+
+#: src/components/CodeBlock.tsx
+msgid "Clipboard access is blocked. Select the text and copy it."
+msgstr "L'accès au presse-papiers est bloqué. Sélectionnez le texte et copiez-le."
+
+#~ msgid "DEFAULT(bare-subject)"
+#~ msgstr "PAR DÉFAUT(sujet-nu)"
+
+#. placeholder {0}: ollamaUrl ? ` at ${ollamaUrl}` : ''
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Can't reach Ollama{0}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime."
+msgstr "Impossible d'atteindre Ollama{0}. Assurez-vous qu'il est en cours d'exécution, ou passez à un modèle cloud — vous pouvez continuer à taper en attendant."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime."
+msgstr "Aucune clé API OpenRouter n'est définie. Ajoutez-en une ou passez à un modèle Ollama local — vous pouvez continuer à taper en attendant."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "No AI model provider is available. Set one up to send — you can keep typing in the meantime."
+msgstr "Aucun fournisseur de modèle d'IA n'est disponible. Configurez-en un pour envoyer — vous pouvez continuer à taper en attendant."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Set up a model"
+msgstr "Configurer un modèle"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Ollama (local)"
+msgstr "Ollama (local)"
