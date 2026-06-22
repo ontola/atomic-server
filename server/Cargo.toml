@@ -143,7 +143,10 @@ features = ["rustls-0_23"]
 version = "4.13.0"
 
 [dependencies.atomic_lib]
-features = ["config", "db-redb", "rdf", "discovery", "iroh", "ring"]
+# `db-sled` is included so an in-place upgrade from a pre-redb (sled) store
+# auto-migrates to redb on first boot. It is inert unless a legacy sled DB is
+# present, so it adds no runtime cost for fresh installs.
+features = ["config", "db-redb", "db-sled", "rdf", "discovery", "iroh", "ring"]
 path = "../lib"
 version = "0.41.0-beta.0"
 

@@ -283,10 +283,38 @@ impl Db {
 
         let redb_path = path.join("atomic.redb");
 
-        // Migration logic: if sled exists but redb doesn't, migrate
+        // Migration logic: if a sled store exists but redb doesn't, migrate it.
         #[cfg(feature = "db-sled")]
         if !redb_path.exists() {
             let sled_path = path.join("sled");
+
+            // Pre-redb servers stored the sled DB directly in the store dir
+            // (`store/db`, `store/conf`), NOT in a `sled/` subdir. Detect that
+            // legacy layout and relocate the sled files into `sled/` first.
+            // Without this the auto-migration never fires on a real in-place
+            // upgrade, and `migrate_from_sled`'s rename-to-`.bak` would try to
+            // rename the whole store dir — clobbering the redb we just wrote.
+            let legacy_root_sled = !sled_path.exists()
+                && path.join("db").exists()
+                && path.join("conf").exists();
+            if legacy_root_sled {
+                tracing::warn!(
+                    "Detected a legacy sled store at the store root; relocating it into `sled/` before migration."
+                );
+                std::fs::create_dir_all(&sled_path)?;
+                // Collect first, then move — don't mutate the dir mid-iteration.
+                // Everything in the store dir is sled's (uploads live elsewhere);
+                // skip the `sled/` dir we just created.
+                let names: Vec<std::ffi::OsString> = std::fs::read_dir(path)?
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.file_name())
+                    .filter(|name| name.as_os_str() != "sled")
+                    .collect();
+                for name in names {
+                    std::fs::rename(path.join(&name), sled_path.join(&name))?;
+                }
+            }
+
             if sled_path.exists() {
                 Self::migrate_from_sled(
                     &sled_path,
