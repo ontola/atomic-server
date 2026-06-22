@@ -337,6 +337,16 @@ impl Db {
         tracing::warn!("Migrating data from Sled to ReDB and files to CAS...");
 
         let sled_store = sled_store::SledStore::open(sled_path)?;
+
+        // Bring the sled schema fully up to date BEFORE reading Tree::Resources.
+        // A pre-v3 backup keeps its data in `resources_v2` (or `resources_v1`);
+        // without this, the loop below reads the empty `resources_v3` tree and
+        // silently migrates ZERO user resources — then renames the source dir to
+        // `.bak`. `migrate_maybe` chains v0→v1→v2→v3 in place so the read sees
+        // every resource. (Verified against a real v2 backup: 61,804 resources
+        // were invisible without this call.)
+        migrations::migrate_maybe(&sled_store)?;
+
         let redb_store = redb_store::RedbStore::new_file(redb_path)?;
 
         let mut count_resources = 0;

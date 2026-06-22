@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose, Engine};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -15,8 +16,20 @@ pub enum ValueV2 {
     NestedResource(SubResourceV2),
     Boolean(bool),
     Uri(String),
+    // v2 data on disk was written when this variant was named `JSON` (the
+    // `DID refactor #1139` later renamed it to `Json`). rmp_serde tags enum
+    // variants by NAME, so without this rename a real v2 store fails to migrate
+    // with `unknown variant 'JSON'`. ValueV2 must speak the historical wire name.
+    #[serde(rename = "JSON")]
     Json(serde_json::Value),
     LoroDoc(Vec<u8>),
+    // Yjs document bytes from the unreleased `#998` experiment, dropped from the
+    // live `Value` enum when the project standardised on Loro. The Yjs feature
+    // never shipped, so there is no production data to carry forward — but a dev
+    // store can still hold these values, and the v2 deserializer must accept the
+    // variant or the whole migration aborts with `unknown variant 'YDoc'`.
+    // Tolerated as an inert Unsupported value in `into_v3`.
+    YDoc(Vec<u8>),
     Unsupported(crate::values::UnsupportedValue),
 }
 
@@ -66,6 +79,15 @@ impl ValueV2 {
             ValueV2::Uri(v) => crate::values::Value::Uri(v),
             ValueV2::Json(v) => crate::values::Value::Json(v),
             ValueV2::LoroDoc(v) => crate::values::Value::LoroDoc(v),
+            // Yjs was an unreleased experiment — there's nothing to convert.
+            // Carry the value across as an inert Unsupported (bytes kept as
+            // base64, not interpreted) so a dev store migrates without aborting.
+            ValueV2::YDoc(bin) => {
+                crate::values::Value::Unsupported(crate::values::UnsupportedValue {
+                    value: general_purpose::STANDARD.encode(&bin),
+                    datatype: "https://atomicdata.dev/datatypes/ydoc".to_string(),
+                })
+            }
             ValueV2::Unsupported(unsupported_value) => {
                 crate::values::Value::Unsupported(unsupported_value)
             }
