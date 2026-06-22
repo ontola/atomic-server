@@ -570,7 +570,7 @@ export class AtomicServer {
       .container()
       .from(image)
       .withExec(['apt-get', 'update', '-qq'])
-      .withExec(['apt', 'install', '-y', 'nasm'])
+      .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler'])
       .withMountedCache('/usr/local/cargo/registry', cargoCache, {
         sharing: CacheSharingMode.Locked,
       })
@@ -624,6 +624,13 @@ export class AtomicServer {
     const buildArgs = release
       ? ['cargo', 'build', '--release', '-p', 'atomic-server']
       : ['cargo', 'build', '-p', 'atomic-server'];
+
+    // The local fastembed/ORT vector-search stack does not ship ONNX Runtime
+    // binaries for aarch64 musl. Build that release target with the existing
+    // portable server feature set instead.
+    if (target === 'aarch64-unknown-linux-musl') {
+      buildArgs.push('--no-default-features', '--features', 'light');
+    }
     const targetPath = release
       ? `/code/target/${target}/release/atomic-server`
       : `/code/target/${target}/debug/atomic-server`;
