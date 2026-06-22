@@ -16,7 +16,9 @@ Talk with other devs on our [Discord][discord-url]!
 - make sure `atomic-server` is running on `localhost`.
 - `pnpm test`
 - `pnpm test-e2e`
-- Update the `package.json` files for `lib`, `react`, and `data-browser` with a new version number. Match the version number with `atomic-data-rust`
+- Update the `package.json` files for all published `@tomic/*` packages with the same version number as the Rust release. This includes beta versions such as `0.41.0-beta.0`.
+- Update starter template dependencies that point to `@tomic/*`.
+- Run `pnpm install --lockfile-only` from `/browser` after version changes.
 - Check the [changelog](changelog.md), make sure the headers are correct
 - Now do the rust libraries
 - Commit any changes, name it `vX.XX.XX`

@@ -7,6 +7,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+## [v0.41.0-beta.0] - 2026-06-22
+
 - [#1139](https://github.com/ontola/atomic-server/issues/1139) AtomicServer can now create data without being dependent on a server! AtomicServer is now Local-First, using the new `did:ad` schema. Instead of relying on HTTP, Atomic can resolve resources over DHT Mainline. It combines true decentralization, cryptographic proof of ownership and high performance. User's agents are now also truly decentralized, relying solely on a private key.
 - #584 Replace ureq with reqwest (async HTTP calls)
 - #481 Drive scoped queries
@@ -14,11 +16,23 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - #1174 Live queries / real-time queries
 - #1164 #1166 New Agents get private drives, shared resources through invites listed there
 - #420 Fix OTLP / OpenTelemetry, update docs from Jaeger to SigNoz, add metrics
+- Added self-verifying genesis certificates, including server-minted genesis support and dual-acceptance of the new certificates during migration.
+- Stamp drives at resource creation and check write rights drive-first. This fixes resources being assigned the wrong drive and prevents drive-scoped commit fan-out from leaking cross-tenant updates.
+- Added drive-scoped commit log diffing by accumulating Loro state before computing deltas, so history diffs reflect the actual resource state.
+- Preserve cosmetic datatypes through the Loro round-trip and migrate away from stringified JSON datatype metadata in Loro properties.
+- Reworked signed local commits so the outbox owns signed-but-not-acknowledged commits and drains them with per-agent scoping, retry backoff, and unrecoverable-commit parking.
+- Added and hardened Iroh/Mainline peer sync, including smaller sync frames, faster version-vector decoding, and better websocket drop handling.
+- Added vector search and made the vector-search stack optional. The server now uses rustls-backed FastEmbed/ORT features and disables the heavy vector stack for ARM64 musl builds.
+- Relaxed redb durability with periodic flushes for better write performance.
+- Speed up server development builds by skipping asset pre-compression in debug builds and parallelizing release asset work.
+- Fixed WS/HTTP auth for agents whose key uses a different base64 alphabet.
+- Fixed the default Commit class/genesis property population.
 - [#590](https://github.com/ontola/atomic-server/issues/590) Get rid of the `SERVER_URL` env var, which makes moving & setup easier. All resources are now relative to the hosted domain, and AtomicServer can be available from multiple domains at once.
 - [#544](https://github.com/ontola/atomicdata-dev/atomic-server/issues/544) Stateless invites, using JWTs. Server setup now requires you to check the logs for the invite token.
 - We changed the binary format in which resources are stored. This means your data will be migrated the first time you run the server. This could take some time depending on the size of your database.
 - [#1048](https://github.com/ontola/atomic-server/issues/1048) Fix search index not removing old versions of resources.
-- [#1056](https://github.com/ontola/atomic-server/issues/1056) Switched from Earthly to Dagger for CI. Also made improvements to E2E test publishing and building docker images.
+- [#1056](https://github.com/ontola/atomic-server/issues/1056) Switched from Earthly to Dagger for CI. Also made improvements to E2E test publishing, cross-target builds, and multi-architecture Docker images.
+- Fixed Dagger CI workspace mounting after adding the `tools/cargo-bin` workspace member.
 - [#979](https://github.com/ontola/atomic-server/issues/979) Fix nested resource deletion, use transactions
 - [#1057](https://github.com/ontola/atomic-server/issues/1057) Fix double slashes in search bar
 - [#986](https://github.com/ontola/atomic-server/issues/986) CLI should use Agent in requests - get
