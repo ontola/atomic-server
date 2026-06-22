@@ -6,7 +6,8 @@ export const useProviderAvailability = (
   ollamaUrl: string | undefined,
 ) => {
   const openRouterAvailable = Boolean(openRouterApiKey);
-  const ollamaAvailable = useIsOllamaUrlValid(ollamaUrl);
+  const { valid: ollamaAvailable, checking: ollamaChecking } =
+    useIsOllamaUrlValid(ollamaUrl);
 
   const isProviderAvailable = (provider: AIProvider) => {
     if (provider === AIProvider.OpenRouter) {
@@ -33,6 +34,7 @@ export const useProviderAvailability = (
   return {
     openRouterAvailable,
     ollamaAvailable,
+    ollamaChecking,
     isProviderAvailable,
     availableProviders,
   };

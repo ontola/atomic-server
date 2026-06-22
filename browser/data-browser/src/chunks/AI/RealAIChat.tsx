@@ -8,6 +8,7 @@ import { useTools } from './useTools';
 import { styled, keyframes } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
 import { IconButton } from '@components/IconButton/IconButton';
+import { Button } from '@components/Button';
 import { FaXmark, FaPaperclip, FaFile } from 'react-icons/fa6';
 import { ChatMessagesContainer } from './ChatMessagesContainer';
 import { useStore, type Resource } from '@tomic/react';
@@ -204,15 +205,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
       return {
         label: model.name,
-        searchLabel: model.name.toLowerCase(),
-        description: pricingStr ? `${pricingStr}` : undefined,
+        // Include the provider so searching "openrouter" surfaces all of them.
+        searchLabel: `${model.name.toLowerCase()} openrouter`,
+        // Show the provider in the subtitle alongside the cost.
+        description: ['OpenRouter', pricingStr].filter(Boolean).join(' • '),
         value: `openrouter:${model.id}`,
       };
     });
 
     const ollamaOptions = ollamaModels.map(model => {
       const details = [
-        'Local',
+        'Ollama (local)',
         model.details?.parameter_size
           ? `Size: ${model.details.parameter_size}`
           : '',
@@ -223,7 +226,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
       return {
         label: model.name,
-        searchLabel: model.name.toLowerCase(),
+        // Include the provider so searching "ollama" surfaces all of them.
+        searchLabel: `${model.name.toLowerCase()} ollama`,
         description: details,
         value: `ollama:${model.model}`,
       };
@@ -677,6 +681,14 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 ))}
               </Column>
             )}
+            {providerNotice && (
+              <ProviderNotice>
+                <span>{providerNotice}</span>
+                <Button onClick={() => setSetupComplete(false)}>
+                  Set up a model
+                </Button>
+              </ProviderNotice>
+            )}
             <ChatInputWrapper>
               <Column
                 fullWidth
@@ -732,19 +744,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     ))}
                   </ContextItemRow>
                 )}
-                {providerNotice && (
-                  <ProviderNotice>
-                    <span>{providerNotice}</span>
-                    <SubtleButton onClick={() => setSetupComplete(false)}>
-                      Set up a model
-                    </SubtleButton>
-                  </ProviderNotice>
-                )}
                 <AIChatInput
                   large={isEmptyChat && fullView}
                   focusSignal={inputFocusSignal}
                   // Never block typing — only the SEND is gated on an available
-                  // provider (the notice above explains why).
+                  // provider (the notice above the input explains why).
                   disabled={false}
                   disableSubmit={!canUseInput}
                   hasFiles={!!attachedFiles}

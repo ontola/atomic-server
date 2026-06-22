@@ -82,7 +82,7 @@ export const AISetupPanel: React.FC = () => {
     false,
   );
 
-  const isOllamaUrlValid = useIsOllamaUrlValid(ollamaUrl);
+  const { checking: ollamaChecking } = useIsOllamaUrlValid(ollamaUrl);
   const hasProvider = availableProviders.length > 0;
   const [step, setStep] = useState<SetupStep>(() =>
     getInitialStep(hasProvider),
@@ -245,7 +245,7 @@ export const AISetupPanel: React.FC = () => {
               <ProviderStatus
                 connected={ollamaAvailable}
                 configured={Boolean(ollamaUrl)}
-                checking={Boolean(ollamaUrl) && !isOllamaUrlValid}
+                checking={ollamaChecking}
               />
               <FullWidthField>
                 <InputStyled

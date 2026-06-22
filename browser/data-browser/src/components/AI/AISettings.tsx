@@ -87,7 +87,7 @@ const AISettings: React.FC = () => {
     defaultChatModel.provider,
   );
 
-  const isOllamaUrlValid = useIsOllamaUrlValid(ollamaUrl);
+  const { valid: isOllamaUrlValid } = useIsOllamaUrlValid(ollamaUrl);
 
   useEffect(() => {
     if (!openRouterApiKey) {

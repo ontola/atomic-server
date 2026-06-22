@@ -8,7 +8,16 @@ type OllamaCheckResult = {
   valid: boolean;
 };
 
-export const useIsOllamaUrlValid = (url: string | undefined) => {
+export type OllamaUrlStatus = {
+  /** A reachability check completed for the current URL and it responded. */
+  valid: boolean;
+  /** A URL is configured but no completed check has landed for it yet. */
+  checking: boolean;
+};
+
+export const useIsOllamaUrlValid = (
+  url: string | undefined,
+): OllamaUrlStatus => {
   const deferredUrl = useDeferredValue(url);
   const [checkResult, setCheckResult] = useState<OllamaCheckResult | null>(
     null,
@@ -37,10 +46,17 @@ export const useIsOllamaUrlValid = (url: string | undefined) => {
   }, [deferredUrl]);
 
   if (!url) {
-    return false;
+    return { valid: false, checking: false };
   }
 
-  return (
-    checkResult !== null && checkResult.url === deferredUrl && checkResult.valid
-  );
+  // A settled result exists only when the completed check matches the URL we're
+  // currently showing (`deferredUrl`). Until then we're genuinely checking —
+  // NOT "not responding" (the bug: a failed check used to read as "checking
+  // forever" because callers derived `checking` from `!valid`).
+  const settled = checkResult !== null && checkResult.url === deferredUrl;
+
+  return {
+    valid: settled && checkResult.valid,
+    checking: !settled,
+  };
 };
