@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import toast from 'react-hot-toast';
 import {
@@ -7,8 +7,6 @@ import {
   type CommitLogEntry,
   useStore,
   useProperty,
-  useResource,
-  useTitle,
   truncateUrl,
   Datatype,
 } from '@tomic/react';
@@ -25,6 +23,13 @@ import { Button } from '../components/Button';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
 import { Card } from '../components/Card';
+import {
+  fetchManagedInfo,
+  type ManagedInfo,
+  fetchNodeDriveUsage,
+  type NodeDriveUsage,
+} from '../helpers/managedServer';
+import { getDriveUsage } from '../helpers/saasRecovery';
 import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
@@ -34,11 +39,6 @@ import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
 import { useSettings } from '../helpers/AppSettings';
 import { serverURLStorage } from '../helpers/serverURLStorage';
-import { DriveSwitcher } from '../components/SideBar/DriveSwitcher';
-import type {
-  DropdownTriggerComponent,
-  DropdownTriggerProps,
-} from '../components/Dropdown/DropdownTrigger';
 
 export const SyncRoute = createRoute({
   path: pathNames.sync,
@@ -131,6 +131,19 @@ function statusLabel(status: NodeStatus): string {
   }
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+
+  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
+}
+
 function SyncPage() {
   const store = useStore();
   const [status, setStatus] = useState<StoreSyncStatus>(() =>
@@ -163,6 +176,93 @@ function SyncPage() {
       return [];
     }
   });
+
+  // Whether the connected server is a managed node (and where its dashboard
+  // lives), read from the generic `/node-info` endpoint. This is the ONLY thing
+  // the FOSS data-browser knows about "being managed" — a flag and a URL the
+  // server hands it. Self-hosted servers report `managed:false` and no portal
+  // link is shown; anything plan/billing-specific lives behind the link, on the
+  // operator's portal.
+  const [managedInfo, setManagedInfo] = useState<ManagedInfo>({
+    managed: false,
+    dashboardUrl: null,
+  });
+
+  useEffect(() => {
+    const serverUrl = status.serverUrl;
+
+    if (!serverUrl) {
+      setManagedInfo({ managed: false, dashboardUrl: null });
+
+      return;
+    }
+
+    let cancelled = false;
+    fetchManagedInfo(serverUrl).then(info => {
+      if (!cancelled) setManagedInfo(info);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [status.serverUrl]);
+
+  // Resource count + bytes from the connected node's `/drive-usage` — generic,
+  // works on any atomic-server (self-hosted included). Signed with the agent
+  // because the endpoint enforces read access to the drive.
+  const [nodeUsage, setNodeUsage] = useState<NodeDriveUsage | null>(null);
+
+  useEffect(() => {
+    const drive = status.drive;
+    const serverUrl = status.serverUrl;
+    const agent = store.getAgent();
+
+    if (!drive || !serverUrl || !agent) {
+      setNodeUsage(null);
+
+      return;
+    }
+
+    let cancelled = false;
+    fetchNodeDriveUsage(serverUrl, drive, agent)
+      .then(usage => {
+        if (!cancelled) setNodeUsage(usage);
+      })
+      .catch(() => {
+        if (!cancelled) setNodeUsage(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [status.drive, status.serverUrl, store]);
+
+  // Plan quota — managed nodes only, from the control plane. Billing stays a
+  // managed concern; the usage numbers above are generic to every node.
+  const [quotaBytes, setQuotaBytes] = useState<number | null>(null);
+
+  useEffect(() => {
+    const drive = status.drive;
+
+    if (!managedInfo.dashboardUrl || !drive) {
+      setQuotaBytes(null);
+
+      return;
+    }
+
+    let cancelled = false;
+    getDriveUsage(drive)
+      .then(info => {
+        if (!cancelled) setQuotaBytes(info?.quotaBytes ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setQuotaBytes(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [managedInfo.dashboardUrl, status.drive]);
 
   useEffect(() => {
     fetch('/iroh-node-id')
@@ -283,7 +383,7 @@ function SyncPage() {
         <Lead>
           {isRunningInTauri()
             ? 'Your data lives on this device. Add peers or a remote server to sync.'
-            : 'Your data is stored locally on this device. When connected to a server, changes sync automatically.'}
+            : 'Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects.'}
         </Lead>
 
         {isRunningInTauri() ? (
@@ -353,6 +453,29 @@ function SyncPage() {
                   Reconnect
                 </NodeAction>
               )}
+              {managedInfo.managed && managedInfo.dashboardUrl && (
+                <ManagedLink
+                  href={managedInfo.dashboardUrl}
+                  target='_blank'
+                  rel='noopener noreferrer'
+                >
+                  {'Manage account & plan →'}
+                </ManagedLink>
+              )}
+              {nodeUsage && (
+                <DriveUsageBlock>
+                  <DriveUsageLabel>
+                    {nodeUsage.driveName
+                      ? `This drive (${nodeUsage.driveName})`
+                      : 'This drive'}
+                  </DriveUsageLabel>
+                  <DriveUsageStats>
+                    {nodeUsage.resourceCount.toLocaleString()} resources ·{' '}
+                    {formatBytes(nodeUsage.blobBytes + nodeUsage.loroBytes)}
+                    {quotaBytes ? ` of ${formatBytes(quotaBytes)}` : ''} used
+                  </DriveUsageStats>
+                </DriveUsageBlock>
+              )}
             </SyncNode>
           </SyncDiagram>
         )}
@@ -361,16 +484,6 @@ function SyncPage() {
         <Section>
           <SectionTitle>Details</SectionTitle>
           <DetailsGrid>
-            <DetailItem>
-              <DetailLabel>Drive</DetailLabel>
-              <DetailValue title={status.drive}>
-                {status.drive ? (
-                  <DriveDetailSwitcher drive={status.drive} />
-                ) : (
-                  'none'
-                )}
-              </DetailValue>
-            </DetailItem>
             <DetailItem>
               <DetailLabel>
                 {isRunningInTauri() ? 'Remote server' : 'Server'}
@@ -707,40 +820,6 @@ function LocalDbControl({
   );
 }
 
-function DriveDetailSwitcher({ drive }: { drive: string }) {
-  const driveResource = useResource(drive);
-  const [title] = useTitle(driveResource);
-  const label = driveResource.isUnauthorized()
-    ? 'Unauthorized'
-    : (title ?? truncateUrl(drive, 24, true));
-
-  const Trigger = useMemo<DropdownTriggerComponent>(() => {
-    const DriveDetailTrigger: DropdownTriggerComponent = forwardRef<
-      HTMLButtonElement,
-      Omit<DropdownTriggerProps, 'ref'>
-    >(({ onClick, menuId, isActive, id }, ref) => (
-      <DriveSwitchTriggerButton
-        id={id}
-        aria-controls={menuId}
-        aria-expanded={isActive}
-        aria-haspopup='menu'
-        onClick={onClick}
-        ref={ref}
-        title='Open Drive Settings'
-        type='button'
-      >
-        {label}
-      </DriveSwitchTriggerButton>
-    ));
-
-    DriveDetailTrigger.displayName = 'DriveDetailTrigger';
-
-    return DriveDetailTrigger;
-  }, [label]);
-
-  return <DriveSwitcher Trigger={Trigger} />;
-}
-
 function PropertyName({ propertyURL }: { propertyURL: string }) {
   const property = useProperty(propertyURL);
   const label = property.loading
@@ -863,6 +942,34 @@ const NodeAction = styled.button`
   &:hover {
     text-decoration: underline;
   }
+`;
+
+const ManagedLink = styled.a`
+  color: ${p => p.theme.colors.main};
+  font-size: 0.8rem;
+  text-decoration: none;
+  margin-top: 0.15rem;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
+const DriveUsageBlock = styled.div`
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid ${p => p.theme.colors.bg2};
+  text-align: center;
+`;
+
+const DriveUsageLabel = styled.div`
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const DriveUsageStats = styled.div`
+  font-size: 0.85rem;
+  color: ${p => p.theme.colors.text};
 `;
 
 const Muted = styled.p`
@@ -1055,31 +1162,6 @@ const DetailValue = styled.span`
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-`;
-
-const DriveSwitchTriggerButton = styled.button`
-  appearance: none;
-  background: none;
-  border: none;
-  color: ${p => p.theme.colors.main};
-  cursor: pointer;
-  font: inherit;
-  margin: 0;
-  max-width: 100%;
-  overflow: hidden;
-  padding: 0;
-  text-align: start;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  &:hover {
-    text-decoration: underline;
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${p => p.theme.colors.main};
-    outline-offset: 2px;
-  }
 `;
 
 // --- Activity log ---

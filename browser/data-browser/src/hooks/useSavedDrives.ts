@@ -1,45 +1,15 @@
-import { urls, useArray, useResource } from '@tomic/react';
-import { useCallback } from 'react';
-import { useSettings } from '../helpers/AppSettings';
+import { urls } from '@tomic/react';
+import { usePersonalDriveList } from './usePersonalDriveList';
 
-const arrayOpts = {
-  commit: true,
-};
-
+/**
+ * The user's saved drives (the drive-switcher list). Stored as the `drives`
+ * ResourceArray on the user's PRIVATE DRIVE — the per-user home index — not on
+ * the Agent. See {@link usePersonalDriveList}.
+ */
 export function useSavedDrives(): [
   savedDrives: string[],
   add: (drive: string) => void,
   remove: (drive: string) => void,
 ] {
-  const { agent } = useSettings();
-  const agentResource = useResource(agent?.subject);
-  const [drives, setDrives] = useArray(
-    agentResource,
-    urls.properties.drives,
-    arrayOpts,
-  );
-
-  const add = useCallback(
-    (drive: string) => {
-      if (!drives.includes(drive)) {
-        setDrives([...drives, drive]).then(() => {
-          agentResource.stable.save();
-        });
-      }
-    },
-    [drives, setDrives, agentResource.stable],
-  );
-
-  const remove = useCallback(
-    (drive: string) => {
-      if (drives.includes(drive)) {
-        setDrives(drives.filter(d => d !== drive)).then(() => {
-          agentResource.stable.save();
-        });
-      }
-    },
-    [drives, setDrives, agentResource.stable],
-  );
-
-  return [drives, add, remove];
+  return usePersonalDriveList(urls.properties.drives);
 }

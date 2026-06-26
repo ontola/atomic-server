@@ -167,9 +167,38 @@ pub struct Db {
     path: std::path::PathBuf,
     /// The base domain of the store.
     pub base_domain: Option<String>,
+    /// Sync admission/quota policy consulted before importing a `SYNC_PUSH`.
+    /// Defaults to the permissive [`crate::sync::policy::OpenPolicy`] so
+    /// self-hosted / local-first nodes are unrestricted; a managed node
+    /// installs a concrete policy via [`Db::set_sync_policy`].
+    sync_policy: Arc<RwLock<Arc<dyn crate::sync::policy::SyncPolicy>>>,
+}
+
+/// The default (permissive) sync policy reference used by every `Db` until a
+/// managed node installs one.
+fn default_sync_policy() -> Arc<RwLock<Arc<dyn crate::sync::policy::SyncPolicy>>> {
+    Arc::new(RwLock::new(Arc::new(crate::sync::policy::OpenPolicy)))
 }
 
 impl Db {
+    /// Install a sync admission/quota policy (managed nodes). The default is
+    /// [`crate::sync::policy::OpenPolicy`] (allow everything, no quotas).
+    pub fn set_sync_policy(
+        &self,
+        policy: Arc<dyn crate::sync::policy::SyncPolicy>,
+    ) {
+        if let Ok(mut guard) = self.sync_policy.write() {
+            *guard = policy;
+        }
+    }
+
+    /// The currently-installed sync policy.
+    pub fn sync_policy(&self) -> Arc<dyn crate::sync::policy::SyncPolicy> {
+        self.sync_policy
+            .read()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|_| Arc::new(crate::sync::policy::OpenPolicy))
+    }
     /// Creates a new store at the specified path, or opens the store if it already exists.
     /// Uses sled as the storage backend.
     #[cfg(feature = "db-sled")]
@@ -193,6 +222,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
+            sync_policy: default_sync_policy(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -224,6 +254,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
+            sync_policy: default_sync_policy(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -253,6 +284,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
+            sync_policy: default_sync_policy(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -344,6 +376,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
+            sync_policy: default_sync_policy(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -482,6 +515,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
+            sync_policy: default_sync_policy(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;

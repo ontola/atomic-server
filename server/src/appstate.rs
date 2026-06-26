@@ -33,6 +33,15 @@ pub struct AppState {
     pub search_state: SearchState,
     pub vector_search_state: crate::vector_search::VectorSearchState,
     pub index_status_broadcast: Arc<IndexStatusBroadcast>,
+    /// Whether this node is managed (reports to a control plane). Set at runtime
+    /// by an embedder hook (see `serve_with_hook`); surfaced via the managed
+    /// manifest endpoint. Always false on self-hosted nodes.
+    pub managed: Arc<std::sync::atomic::AtomicBool>,
+    /// User-facing portal URL for a managed node, populated at runtime by the
+    /// embedder's policy poll (empty on self-hosted nodes). Read by the managed
+    /// manifest endpoint so the welcome screen can route account creation to the
+    /// dashboard.
+    pub managed_dashboard_url: Arc<std::sync::RwLock<Option<String>>>,
 }
 
 impl AppState {
@@ -193,6 +202,8 @@ impl AppState {
             search_state,
             vector_search_state,
             index_status_broadcast,
+            managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            managed_dashboard_url: Arc::new(std::sync::RwLock::new(None)),
         })
     }
 

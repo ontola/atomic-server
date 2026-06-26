@@ -15,23 +15,20 @@ import { router } from './routes/Router';
 import { errorHandler } from './handlers/errorHandler';
 import { PerformanceProfiler, attachStoreToProfiler } from './helpers/profiler';
 
-function fixDevUrl(url: string) {
-  if (isDev()) {
-    return url.replace('5173', '9883');
-  }
-
-  return url;
-}
-
 /**
- * In Tauri, window.location.origin is a custom-protocol URL (e.g. `tauri://localhost`),
- * not the embedded atomic-server. Point the Store at the local server instead.
- * In dev: Vite serves at 5173; the Store talks to atomic-server at 9883.
- * In prod (browser): default to the current origin.
+ * The atomic-server the Store talks to.
+ *
+ * Normally the SPA is *served by* atomic-server, so its own origin IS the
+ * server. Two exceptions:
+ * - Tauri: `window.location.origin` is a custom-protocol URL, not the server.
+ * - Vite dev: vite serves the SPA on a separate port from the server, so set
+ *   `VITE_ATOMIC_SERVER_URL` (see `.env.development`) to point at the real
+ *   server (e.g. `http://localhost:9883`). This is the only "dev edge case" —
+ *   no hardcoded vite port lives in the app anymore.
  */
 const defaultServerUrl = isRunningInTauri()
   ? 'http://localhost:9883'
-  : fixDevUrl(window.location.origin);
+  : (import.meta.env.VITE_ATOMIC_SERVER_URL ?? window.location.origin);
 const storedServerUrl = serverURLStorage.get();
 // Reject obviously-invalid stored URLs (e.g. `tauri://localhost` left behind
 // by an earlier buggy release). The Store requires http(s) URLs.

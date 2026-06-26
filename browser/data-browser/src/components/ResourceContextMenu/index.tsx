@@ -26,7 +26,10 @@ import {
   FaPlus,
   FaArrowUpRightFromSquare,
   FaMessage,
+  FaStar,
+  FaRegStar,
 } from 'react-icons/fa6';
+import { useFavorites } from '../../hooks/useFavorites';
 import { useQueryScopeHandler } from '../../hooks/useQueryScope';
 import {
   ConfirmationDialog,
@@ -64,6 +67,7 @@ export const ContextMenuOptions = {
   Export: 'export',
   Open: 'open',
   AddToChat: 'addToChat',
+  Favorite: 'favorite',
 } as const;
 
 export type ContextMenuOptionsUnion =
@@ -109,6 +113,8 @@ export function ResourceContextMenu({
   const { enableScope } = useQueryScopeHandler(subject);
   const { setContextItems, isOpen, setIsOpen } = useAISidebar();
   const { items: customItems } = useCustomContextItemsContext();
+  const [favorites, addFavorite, removeFavorite] = useFavorites();
+  const isFavorite = favorites.includes(subject);
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
 
   const addToChat = () => {
@@ -204,6 +210,14 @@ export function ResourceContextMenu({
       },
       DIVIDER,
     ),
+    {
+      id: ContextMenuOptions.Favorite,
+      label: isFavorite ? 'Remove from favorites' : 'Add to favorites',
+      helper: 'Toggle whether this resource appears in your Favorites.',
+      icon: isFavorite ? <FaStar /> : <FaRegStar />,
+      onClick: () =>
+        isFavorite ? removeFavorite(subject) : addFavorite(subject),
+    },
     ...addIf(!!external, {
       id: ContextMenuOptions.Open,
       label: 'Open',

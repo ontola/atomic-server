@@ -425,6 +425,10 @@ export default defineConfig({
     cspNonce: isTauri ? undefined : 'ATOMICSERVER_NONCE',
   },
   server: {
+    // Fixed, uncommon port so the atomicbrowser dev server never collides with
+    // vite's default 5173 (used by other local apps — e.g. the SaaS portal).
+    // strictPort makes a collision fail loudly instead of silently shifting.
+    port: 6747,
     strictPort: true,
     host: true,
     allowedHosts: ['.tunn.dev', 't-1sk9qbdw.tunn.dev'],

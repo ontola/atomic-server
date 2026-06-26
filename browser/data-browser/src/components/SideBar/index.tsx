@@ -7,6 +7,7 @@ import { DragAreaBase, useResizable } from '../../hooks/useResizable';
 import { useCombineRefs } from '../../hooks/useCombineRefs';
 import { OverlapSpacer } from './OverlapSpacer';
 import { AppMenu } from './AppMenu';
+import { SideBarHomePanels } from './SideBarHomePanels';
 import { About } from './About';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { Column } from '../Row';
@@ -77,6 +78,7 @@ export function SideBar(): JSX.Element {
         />
         <MenuWrapper>
           <Column gap='0.5rem' align='stretch'>
+            <SideBarHomePanels onItemClick={closeSideBar} />
             {enabledPanels.has(Panel.AIChats) && (
               <SideBarPanel title='AI Chats' key={drive}>
                 <AIChatsPanel />

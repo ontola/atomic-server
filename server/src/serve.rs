@@ -195,6 +195,21 @@ const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Start the server
 pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
+    serve_with_hook(config, |_appstate| {}).await
+}
+
+/// Like [`serve`], but invokes `on_ready(&AppState)` once the store, indexes and
+/// transports are up but before the HTTP server begins accepting connections.
+/// Embedders (e.g. a managed-node wrapper) use this to install a sync policy and
+/// spawn background tasks without forking the server. Self-hosted use goes
+/// through [`serve`] with a no-op hook.
+pub async fn serve_with_hook<F>(
+    config: crate::config::Config,
+    on_ready: F,
+) -> AtomicServerResult<()>
+where
+    F: FnOnce(&crate::appstate::AppState),
+{
     println!(
         "Atomic-server {} \nUse --help for instructions. Visit https://docs.atomicdata.dev and https://github.com/atomicdata-dev/atomic-server for more info.",
         env!("CARGO_PKG_VERSION")

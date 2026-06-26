@@ -1,5 +1,10 @@
 import { test } from '@playwright/test';
-import { SERVER_URL, devDrive, currentDriveTitle } from './test-utils';
+import {
+  SERVER_URL,
+  FRONTEND_URL,
+  devDrive,
+  currentDriveTitle,
+} from './test-utils';
 import { applyCpuThrottle, envCpuThrottle } from './perf-attach';
 
 /**
@@ -40,12 +45,9 @@ test('first paint timing — meta-tag fast path', async ({ page }) => {
 
   // Now grab the drive URL — devDrive ends on the drive page.
   const driveUrlInFrontend = page.url();
-  // Swap the Vite host (5173) for atomic-server (9883) so SSR meta-tag
-  // is emitted.
-  const driveUrl = driveUrlInFrontend.replace(
-    /^http:\/\/localhost:5173/,
-    SERVER_URL,
-  );
+  // Swap the vite dev host (FRONTEND_URL) for atomic-server (SERVER_URL) so the
+  // SSR meta-tag is emitted.
+  const driveUrl = driveUrlInFrontend.replace(FRONTEND_URL, SERVER_URL);
 
   // Cold-navigate to the drive directly on atomic-server.
   const t0 = Date.now();

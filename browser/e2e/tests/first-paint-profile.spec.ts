@@ -1,5 +1,10 @@
 import { test } from '@playwright/test';
-import { SERVER_URL, devDrive, currentDriveTitle } from './test-utils';
+import {
+  SERVER_URL,
+  FRONTEND_URL,
+  devDrive,
+  currentDriveTitle,
+} from './test-utils';
 
 /**
  * Detailed first-paint breakdown — where does the 800ms post-goto window go?
@@ -17,7 +22,7 @@ test.skip(
 );
 test('first paint — phase breakdown', async ({ page }) => {
   await devDrive(page);
-  const driveUrl = page.url().replace(/^http:\/\/localhost:5173/, SERVER_URL);
+  const driveUrl = page.url().replace(FRONTEND_URL, SERVER_URL);
 
   // Start collecting Long Tasks BEFORE navigation.
   await page.addInitScript(() => {

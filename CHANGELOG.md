@@ -7,6 +7,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Add `GET /drive-usage?subject=<drive>` — per-drive resource and byte usage (from `per_drive_usage`), signed by the requesting agent and gated on read access to the drive. Generic node metadata, available to self-hosted nodes too (not just managed ones).
+- Add a `favorites` property to the default store, so clients can keep a per-user favorites list (alongside `drives` / `sharedWithMe`) on the user's private drive.
+
 ## [v0.41.0-beta.0] - 2026-06-22
 
 - [#1139](https://github.com/ontola/atomic-server/issues/1139) AtomicServer can now create data without being dependent on a server! AtomicServer is now Local-First, using the new `did:ad` schema. Instead of relying on HTTP, Atomic can resolve resources over DHT Mainline. It combines true decentralization, cryptographic proof of ownership and high performance. User's agents are now also truly decentralized, relying solely on a private key.

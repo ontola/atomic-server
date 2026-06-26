@@ -4,6 +4,14 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Cloud Sync: the Sync page now shows the connected node's per-drive usage (resources + bytes, from the generic `/drive-usage` endpoint), with plan quota for managed nodes, plus a "Manage account & plan" link for managed nodes. The redundant Drive row was removed.
+- Cloud Sync identity: when signed in to Cloud Sync with a device agent that differs from the account, the app now converges **silently** — it adopts the device agent (when the account has none) or restores the account's agent — instead of blocking on a "resolve identity mismatch" screen that surfaced agent DIDs.
+
+- Favorites: favorite any resource from its context menu and find it back in a new sidebar **Favorites** panel.
+- The per-user index lists — `favorites`, `sharedWithMe` and saved `drives` — are now stored on the user's **private drive** (the per-user home index) instead of on the Agent identity resource. They hold pointers to resources that may live on any drive, resolved per-pointer.
+- The **Favorites** and **Shared with me** panels now sit at the bottom of the sidebar (above App settings) rather than scrolling with the active drive's tree.
+- Updating any of these lists now surfaces an error toast on failure instead of failing silently.
+
 ## [v0.41.0-beta.0] - 2026-06-22
 
 ### Atomic Browser

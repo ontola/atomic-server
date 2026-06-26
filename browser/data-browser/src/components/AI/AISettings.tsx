@@ -62,8 +62,6 @@ const AISettings: React.FC = () => {
     showFollowUpPrompts,
     setShowFollowUpPrompts,
     isProviderAvailable,
-    defaultChatModel,
-    setDefaultChatModel,
     shouldGenerateTitles,
     setShouldGenerateTitles,
     genFeaturesModel,
@@ -82,9 +80,6 @@ const AISettings: React.FC = () => {
 
   const genFeaturesUnavailable = !isProviderAvailable(
     genFeaturesModel.provider,
-  );
-  const defaultModelUnavailable = !isProviderAvailable(
-    defaultChatModel.provider,
   );
 
   const { valid: isOllamaUrlValid } = useIsOllamaUrlValid(ollamaUrl);
@@ -153,27 +148,6 @@ const AISettings: React.FC = () => {
                   />
                   Show token usage in chats
                 </CheckboxLabel>
-
-                <SubSectionTitle as='h3'>Default chat model</SubSectionTitle>
-                <Subtle as='p'>
-                  Pre-selected when creating new agents. Does not override
-                  models you have already set per agent.
-                </Subtle>
-                {defaultModelUnavailable && (
-                  <WarningBlock>
-                    <WarningBlock.Title>
-                      The selected default model&apos;s provider is not
-                      available. Choose a model from a connected provider below.
-                    </WarningBlock.Title>
-                  </WarningBlock>
-                )}
-                <Suspense>
-                  <ModelSelect
-                    defaultModel={defaultChatModel}
-                    onSelect={setDefaultChatModel}
-                    enforceToolSupport
-                  />
-                </Suspense>
 
                 <SubGroup>
                   <SubSection>

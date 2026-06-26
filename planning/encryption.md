@@ -52,6 +52,8 @@ The following features should not be treated as one toggle:
 2. **Local encryption at rest**
    - Protects a verifier's redb/OPFS data and derived indexes when the device is
      locked, stolen, or copied.
+   - Is also the basis for **logout / shared-browser session isolation** — see
+     [Local cache and session isolation](#local-cache-and-session-isolation).
    - Does not hide data from the running verifier process.
 
 3. **Encrypted backups**
@@ -61,6 +63,66 @@ The following features should not be treated as one toggle:
 4. **Transport encryption**
    - TLS, Noise, Iroh, or Reticulum protects a connection.
    - Does not protect data from the receiving node.
+
+## Local cache and session isolation
+
+"Local encryption at rest" (#2 above) is usually motivated by a lost or stolen
+device. There is a second, nearer-term motivation that the same mechanism must
+cover: **multiple agents — or none — sharing one browser/device.** When you log
+out, the private data you cached must stop being readable on that machine.
+
+### Current gap
+
+The browser ClientDb is a single OPFS store **per origin**, not per agent
+(`data-browser/src/helpers/initClientDb.ts`: "Singleton per origin, so all tabs
+talk to one DB instance automatically"). Reading a private resource caches its
+plaintext there. Sign-out only clears the in-memory agent
+(`setAgent(undefined)` in `SettingsAgent.tsx`); it never touches OPFS, and there
+is currently **no clear/reset path on the ClientDb at all**. So after logout —
+or after switching to a different agent — the previous agent's private resources
+remain in OPFS as plaintext, readable locally with no server round-trip and
+therefore **no authorization check**.
+
+### Requirement and chosen direction
+
+After logout, and when switching to a different agent, a session must no longer
+be able to read the previous agent's private cached data. We have chosen to
+solve this with **encryption keyed to the active session, not by wiping the
+cache** — so a user's offline cache survives a logout/login of the *same* agent
+while remaining inaccessible to a logged-out or different session. (Wiping OPFS
+on logout is strictly simpler and a valid interim guard, but it throws away the
+offline cache, which defeats much of the local-first value.)
+
+### Mechanism
+
+- Private-drive cache content is encrypted with that drive's key (see "Keys"
+  below). The minimal first step — a single personal drive — can use one
+  per-agent cache key.
+- That key is **wrapped by the agent's identity key** and persisted in wrapped
+  form (OPFS / IndexedDB). It is **unwrapped into memory only for the active
+  session.**
+- Login: the active agent unwraps its drive/cache keys into memory; the cache
+  decrypts.
+- Logout / agent-switch: drop the in-memory keys. The on-disk OPFS is now
+  ciphertext the current session cannot read. A different agent can only unwrap
+  the keys wrapped for *it*, so it never reads another agent's cache.
+- Public/bootstrap data (the ~200 default-vocabulary resources) need not be
+  encrypted; only private-drive content and any index/derived state computed
+  from it (search, query-members, backlinks) must be.
+
+### Open questions
+
+- Does the cache key derive from / get wrapped by the same per-drive key used
+  for encrypted replication, so a device holding the drive key can both sync and
+  cache it? (Preferred — avoids a second key hierarchy.)
+- How are derived indexes (search, query-members) over private content
+  encrypted or partitioned, rather than leaking plaintext through the index?
+- What is the unit of encryption in the WASM redb — whole values, whole trees,
+  or the redb file? Value-level keeps public/private mixed in one store at the
+  cost of per-read crypto.
+- Key recovery: a lost agent secret makes the encrypted cache unrecoverable.
+  Acceptable, since it is a cache that re-syncs from a verifier — but the UX
+  must make that clear rather than appearing as data loss.
 
 ## Keys
 

@@ -59,6 +59,7 @@ export const properties = {
   datatype: 'https://atomicdata.dev/properties/datatype',
   description: 'https://atomicdata.dev/properties/description',
   drives: 'https://atomicdata.dev/properties/drives',
+  favorites: 'https://atomicdata.dev/properties/favorites',
   incomplete: 'https://atomicdata.dev/properties/incomplete',
   isA: 'https://atomicdata.dev/properties/isA',
   isDynamic: 'https://atomicdata.dev/properties/isDynamic',

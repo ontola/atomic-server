@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { Agent, core, urls, useCurrentAgent, useStore } from '@tomic/react';
-import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
+import { core, urls, useCurrentAgent, useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { Button } from '../components/Button';
 import { Margin } from '../components/Card';
@@ -18,8 +17,6 @@ import { appRoute } from './RootRoutes';
 import { saveAgentToIDB } from '@helpers/agentStorage';
 import { FaUser } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { NewIdentitySection } from '../components/NewIdentitySection';
-import { LoggedOutAgentPanel } from '../components/LoggedOutAgentPanel';
 import { LabelStyled } from '../components/forms/InputStyles';
 import { DrivesCard } from './SettingsServer/DrivesCard';
 import { useSavedDrives } from '../hooks/useSavedDrives';
@@ -41,10 +38,7 @@ const SettingsAgent: React.FunctionComponent = () => {
   // logged-out panel for signed-in users.
   const [storeAgent] = useCurrentAgent();
   const effectiveAgent = agent ?? storeAgent ?? store.getAgent();
-  const [error, setError] = useState<Error | undefined>(undefined);
-  const [signInLoading, setSignInLoading] = useState(false);
   const navigate = useNavigateWithTransition();
-  const [showCreate, setShowCreate] = useState(false);
 
   const [savedDrives] = useSavedDrives();
   const [, addToHistory] = useDriveHistory(savedDrives);
@@ -68,27 +62,6 @@ const SettingsAgent: React.FunctionComponent = () => {
     } catch {
       // If we can't determine visibility, default to welcome.
       navigate({ to: paths.welcome, replace: true });
-    }
-  }
-
-  async function handleSignInWithSecret(secret: string) {
-    setError(undefined);
-    setSignInLoading(true);
-
-    try {
-      const newAgent = await Agent.fromSecret(secret);
-      setAgent(newAgent);
-      await saveAgentToIDB(secret);
-      const home = await fetchPersonalDriveSubject(store, newAgent);
-
-      if (home) {
-        setDrive(home);
-        addToHistory(home);
-      }
-    } catch (e) {
-      setError(new Error('Invalid secret. ' + e));
-    } finally {
-      setSignInLoading(false);
     }
   }
 

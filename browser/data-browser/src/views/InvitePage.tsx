@@ -103,36 +103,42 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   };
 
   /**
-   * Persist agent after invite in a SINGLE commit: name, isA, personal drive,
-   * host drive bookmark, sharedWithMe. Don't split this into multiple saves —
-   * the personal-drive + sharedWithMe must land together, otherwise the
-   * sidebar sees an intermediate state with no `sharedWithMe` and the
-   * "Shared with me" panel never appears.
+   * Persist everything needed after accepting an invite.
+   *
+   * The Agent keeps only IDENTITY: name, isA, and the `personalDrive` pointer.
+   * The per-user index lists (`sharedWithMe`, `drives`) live on the PRIVATE
+   * DRIVE — the home index — not on the Agent. So this writes two resources:
+   *  1. the Agent (identity + pointer), then
+   *  2. the personal drive (the lists).
+   * Order matters: the Agent's `personalDrive` must be saved before the drive's
+   * lists, so the sidebar can resolve agent → personalDrive → lists.
    */
   const persistAgentAfterInvite = async (
     subject: string,
     destination: string | undefined,
     name?: string,
   ): Promise<string | undefined> => {
-    const resourceToSave = store.getResourceLoading(subject);
+    const agentToSave = store.getResourceLoading(subject);
     let personalDriveSubject: string | undefined;
+    let createdDrive = false;
 
     try {
+      // --- 1. Agent identity: name, isA, personalDrive pointer ---
       if (name?.trim()) {
-        await resourceToSave.set(core.properties.name, name.trim());
+        await agentResource.set(core.properties.name, name.trim());
       }
 
       const currentIsA =
-        (await resourceToSave.get(core.properties.isA)) ?? ([] as string[]);
+        (await agentResource.get(core.properties.isA)) ?? ([] as string[]);
 
       if (!currentIsA.includes(core.classes.agent)) {
-        await resourceToSave.set(core.properties.isA, [
+        await agentResource.set(core.properties.isA, [
           ...currentIsA,
           core.classes.agent,
         ]);
       }
 
-      const existingPersonal = resourceToSave.get(
+      const existingPersonal = agentResource.get(
         core.properties.personalDrive,
       ) as string | undefined;
 
@@ -153,38 +159,54 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         });
 
         await pd.save();
-        await resourceToSave.set(core.properties.personalDrive, pd.subject);
-        resourceToSave.push(server.properties.drives, [pd.subject], true);
+        await agentResource.set(core.properties.personalDrive, pd.subject);
         personalDriveSubject = pd.subject;
+        createdDrive = true;
       }
 
-      if (destination) {
-        // sharedWithMe is what the sidebar's "Shared with me" panel reads.
-        // Set it first so a failure in the drive-bookmark code below doesn't
-        // bubble to the outer catch and skip `resourceToSave.save()`.
-        resourceToSave.push(core.properties.sharedWithMe, [destination], true);
+      await agentResource.save();
 
-        // Drive bookmark (so the destination's drive shows in the switcher)
-        // is best-effort — walking the ancestry can fail transiently right
-        // after invite acceptance while the server propagates the rights
-        // grant. Log so we notice if it stops working entirely.
-        try {
-          await store.fetchResourceFromServer(destination);
-          const target = store.getResourceLoading(destination);
-          const hostDrive = await getResourcesDrive(target, store);
+      // --- 2. Home-index lists, stored on the PRIVATE DRIVE ---
+      if (personalDriveSubject) {
+        const driveResource = store.getResourceLoading(personalDriveSubject);
 
-          if (hostDrive && hostDrive !== personalDriveSubject) {
-            resourceToSave.push(server.properties.drives, [hostDrive], true);
-          }
-        } catch (e) {
-          console.warn(
-            '[invite] could not bookmark host drive (sharedWithMe still set):',
-            e,
+        // The personal drive itself belongs in the switcher.
+        if (createdDrive) {
+          driveResource.push(
+            server.properties.drives,
+            [personalDriveSubject],
+            true,
           );
         }
-      }
 
-      await resourceToSave.save();
+        if (destination) {
+          // sharedWithMe is what the sidebar's "Shared with me" panel reads.
+          // Set it first so a failure in the drive-bookmark code below doesn't
+          // bubble to the outer catch and skip the drive `save()`.
+          driveResource.push(core.properties.sharedWithMe, [destination], true);
+
+          // Drive bookmark (so the destination's drive shows in the switcher)
+          // is best-effort — walking the ancestry can fail transiently right
+          // after invite acceptance while the server propagates the rights
+          // grant. Log so we notice if it stops working entirely.
+          try {
+            await store.fetchResourceFromServer(destination);
+            const target = store.getResourceLoading(destination);
+            const hostDrive = await getResourcesDrive(target, store);
+
+            if (hostDrive && hostDrive !== personalDriveSubject) {
+              driveResource.push(server.properties.drives, [hostDrive], true);
+            }
+          } catch (e) {
+            console.warn(
+              '[invite] could not bookmark host drive (sharedWithMe still set):',
+              e,
+            );
+          }
+        }
+
+        await driveResource.save();
+      }
     } catch (e) {
       store.notifyError(
         e instanceof Error

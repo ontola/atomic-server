@@ -62,14 +62,23 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
         noParent: true,
         skipNavigation,
         onCreated: async resource => {
-          // Add drive to the agents drive list.
-          // DID agents may not have a local resource, so we ignore errors here.
+          // Add the new drive to the user's saved-drives list. That list lives
+          // on their PRIVATE DRIVE (the per-user home index), not on the Agent.
+          // Best-effort: a user may not have provisioned a personal drive yet.
           try {
             const agentResource = await store.getResource(agent.subject!);
-            agentResource.push(server.properties.drives, [resource.subject]);
-            await agentResource.save();
+            const personalDrive = agentResource.get(
+              core.properties.personalDrive,
+            ) as string | undefined;
+
+            if (personalDrive) {
+              const driveResource = await store.getResource(personalDrive);
+              driveResource.push(server.properties.drives, [resource.subject]);
+              await driveResource.save();
+            }
           } catch (_e) {
-            // Agent resource update failed (e.g., DID agents don't have a local resource)
+            // Ignore (e.g. no personal drive yet, or DID agent without a
+            // writable local resource).
           }
 
           // Create a default ontology.

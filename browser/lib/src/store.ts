@@ -1792,6 +1792,14 @@ export class Store {
 
     await drive.save();
 
+    // The user's saved-drives switcher list lives on the personal DRIVE itself
+    // (the per-user home index), not on the Agent. Seed it with this drive so
+    // it shows up in the switcher. This must be a second commit: the drive's
+    // real `did:ad:` subject is only derived at save (before save it's a
+    // `_new:` placeholder), so we can't reference it in the creation commit.
+    drive.push(server.properties.drives, [drive.subject], true);
+    await drive.save();
+
     // Link the drive to the Agent resource. We MUST force a fresh fetch
     // from the server here. The agent may already be in the store (from a
     // stale clientDb cache or a previous partial load) with `loading=false`,
@@ -1818,7 +1826,6 @@ export class Store {
       drive.subject,
       false,
     );
-    agentResource.push(server.properties.drives, [drive.subject], true);
 
     if (agentName) {
       await agentResource.set(core.properties.name, agentName, false);

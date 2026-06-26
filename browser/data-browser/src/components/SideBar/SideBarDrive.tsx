@@ -1,6 +1,4 @@
 import {
-  core,
-  useArray,
   useCanWrite,
   useChildren,
   useResource,
@@ -27,8 +25,7 @@ import { createPortal } from 'react-dom';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { LoaderInline } from '../Loader';
 import { QuickCreateRow } from '../NewInstanceButton';
-import { SideBarPanel } from './SideBarPanel';
-import { SharedWithMeLink } from './SharedWithMeLink';
+
 
 interface SideBarDriveProps {
   onItemClick: () => unknown;
@@ -52,8 +49,6 @@ export function SideBarDrive({
     announcements,
   } = useSidebarDnd(onIsRearangingChange);
   const driveResource = useResource(drive);
-  const agentResource = useResource(agent?.subject);
-  const [sharedWithMe] = useArray(agentResource, core.properties.sharedWithMe);
   const { subjects: subResources, loading: childrenLoading } =
     useChildren(drive);
   const [title] = useTitle(driveResource);
@@ -163,22 +158,6 @@ export function SideBarDrive({
                 />
               </NewResourceRow>
             )}
-            {agent && sharedWithMe.length > 0 ? (
-              <SideBarPanel
-                title='Shared with me'
-                embedded
-                data-testid='shared-with-me'
-              >
-                {sharedWithMe.map((subject: string) => (
-                  <SharedWithMeLink
-                    key={subject}
-                    subject={subject}
-                    onClick={onItemClick}
-                    data-testid='shared-with-me-item'
-                  />
-                ))}
-              </SideBarPanel>
-            ) : null}
           </ListWrapper>
         </StyledScrollArea>
         {createPortal(

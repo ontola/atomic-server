@@ -29,11 +29,11 @@ export const DEV_DRIVE_AGENT_NAME = 'Dev User';
  *  origin. Vite-served pages fall back to the hardcoded default. */
 function resolveDevServer(): string {
   if (typeof window === 'undefined') return DEV_SERVER;
-  const origin = window.location.origin;
-  // Vite dev server runs on :5173 by default — that's not an atomic-server.
-  if (/:5173$/.test(origin)) return DEV_SERVER;
-
-  return origin;
+  // The SPA's own origin IS the server, except on the Vite dev server (which
+  // serves the SPA on a separate port). There, `VITE_ATOMIC_SERVER_URL`
+  // (see `.env.development`) overrides to the real server — no hardcoded vite
+  // port here.
+  return import.meta.env.VITE_ATOMIC_SERVER_URL ?? window.location.origin;
 }
 
 /**

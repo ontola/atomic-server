@@ -317,6 +317,32 @@ test.describe('data-browser', async () => {
     ).toBeVisible();
   });
 
+  // Resource-level favorites. Favoriting writes the `favorites` ResourceArray
+  // on the user's PRIVATE DRIVE (home index), which the sidebar's bottom
+  // "Favorites" panel reads back. Requires a server whose default store defines
+  // the `favorites` property.
+  test('favorite a resource shows it in the Favorites panel', async ({
+    page,
+  }) => {
+    await newResource('folder', page);
+
+    // No Favorites panel before anything is favorited.
+    await expect(page.getByTestId('favorites')).toBeHidden();
+
+    // Favorite the current resource via its context menu.
+    await contextMenuClick('favorite', page);
+
+    // The Favorites panel appears with the favorited resource.
+    await expect(page.getByTestId('favorites')).toBeVisible({ timeout: 15000 });
+    await expect(
+      page.getByTestId('favorites').getByTestId('favorite-item').first(),
+    ).toBeVisible();
+
+    // Toggling it off (same menu item) removes the panel again.
+    await contextMenuClick('favorite', page);
+    await expect(page.getByTestId('favorites')).toBeHidden();
+  });
+
   test('quick edit text typing ux', async ({ page }) => {
     await newResource('folder', page);
 

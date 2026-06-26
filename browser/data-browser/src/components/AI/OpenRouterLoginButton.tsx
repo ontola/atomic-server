@@ -42,7 +42,10 @@ export const OpenRouterLoginButton = () => {
     const verifier = crypto.randomUUID ? crypto.randomUUID() : randomString(32);
     const generatedChallenge = createSHA256CodeChallenge(verifier);
     setChallenge(generatedChallenge);
-    sessionStorage.setItem('atomic.ai.openrouter-code-verifier', verifier);
+    // Stored in localStorage (not sessionStorage) so the verifier survives the
+    // OpenRouter round-trip even if the callback lands in a different tab or a
+    // fresh session. It is removed again as soon as the code is exchanged.
+    localStorage.setItem('atomic.ai.openrouter-code-verifier', verifier);
   }, []);
 
   if (!challenge) {
