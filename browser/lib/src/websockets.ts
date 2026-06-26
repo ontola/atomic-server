@@ -1203,12 +1203,3 @@ export class WSClient {
 export function supportsWebSockets(): boolean {
   return typeof WebSocket !== 'undefined';
 }
-
-// [RECOVERED from transcript 2026-05-28] helper dropped by the did-base recovery.
-export function shouldFetchOnQueryUpdate(subject: string, store: Store): boolean {
-  if (subject.startsWith('did:ad:commit:') && store.resources.has(subject)) {
-    return false;
-  }
-
-  return true;
-}
