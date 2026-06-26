@@ -75,3 +75,5 @@ export {
   type PerfEvent,
   type PerfSnapshot,
 } from './perf-trace.js';
+export * from './schema.js';
+export * from './schema-lock.js';
