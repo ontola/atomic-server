@@ -684,7 +684,6 @@ msgid "Provider not enabled"
 msgstr "Proveedor no habilitado"
 
 #: src/components/SideBar/SideBarDrive.tsx
-#: src/routes/SyncRoute.tsx
 #: src/views/ErrorPage.tsx
 msgid "Unauthorized"
 msgstr "No autorizado"
@@ -1638,10 +1637,12 @@ msgstr "No se pudo cargar la vista previa 😞"
 msgid "Children"
 msgstr "Hijos"
 
+#: src/components/ResourceContextMenu/index.tsx
 #: src/routes/SettingsServer/FavoriteButton.tsx
 msgid "Remove from favorites"
 msgstr "Eliminar de favoritos"
 
+#: src/components/ResourceContextMenu/index.tsx
 #: src/routes/SettingsServer/FavoriteButton.tsx
 msgid "Add to favorites"
 msgstr "Agregar a favoritos"
@@ -2665,9 +2666,8 @@ msgstr "v{0}"
 msgid "by {0}"
 msgstr "por {0}"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Invalid secret."
-msgstr "Secreto no válido."
+#~ msgid "Invalid secret."
+#~ msgstr "Secreto no válido."
 
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
@@ -3399,7 +3399,7 @@ msgstr "Creando unidad…"
 msgid "Save & continue"
 msgstr "Guardar y continuar"
 
-#: src/components/SideBar/SideBarDrive.tsx
+#: src/components/SideBar/SideBarHomePanels.tsx
 msgid "Shared with me"
 msgstr "Compartido conmigo"
 
@@ -3692,9 +3692,8 @@ msgstr "Servidor"
 msgid "Details"
 msgstr "Detalles"
 
-#: src/routes/SyncRoute.tsx
-msgid "Drive"
-msgstr "Unidad"
+#~ msgid "Drive"
+#~ msgstr "Unidad"
 
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/AI/ProviderStatus.tsx
@@ -3844,9 +3843,8 @@ msgstr "Pegar did:ad:node:..."
 msgid "Your data lives on this device. Add peers or a remote server to sync."
 msgstr "Tus datos residen en este dispositivo. Agrega pares o un servidor remoto para sincronizar."
 
-#: src/routes/SyncRoute.tsx
-msgid "Your data is stored locally on this device. When connected to a server, changes sync automatically."
-msgstr "Tus datos se almacenan localmente en este dispositivo. Cuando se conecta a un servidor, los cambios se sincronizan automáticamente."
+#~ msgid "Your data is stored locally on this device. When connected to a server, changes sync automatically."
+#~ msgstr "Tus datos se almacenan localmente en este dispositivo. Cuando se conecta a un servidor, los cambios se sincronizan automáticamente."
 
 #: src/routes/SyncRoute.tsx
 msgid "Local storage ready"
@@ -3901,13 +3899,11 @@ msgstr "No se pudo restaurar la versión: {0}"
 msgid "Server settings have moved to the <0>Sync page</0>."
 msgstr "La configuración del servidor se ha movido a la <0>página de Sincronización</0>."
 
-#: src/routes/SyncRoute.tsx
-msgid "Open Drive Settings"
-msgstr "Abrir la configuración de Drive"
+#~ msgid "Open Drive Settings"
+#~ msgstr "Abrir la configuración de Drive"
 
-#: src/routes/SyncRoute.tsx
-msgid "DriveDetailTrigger"
-msgstr "Activador de detalles de Drive"
+#~ msgid "DriveDetailTrigger"
+#~ msgstr "Activador de detalles de Drive"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Pen color"
@@ -4441,25 +4437,22 @@ msgstr "Sin texto alternativo"
 msgid "Editor was destroyed before it finished initializing"
 msgstr "El editor fue destruido antes de que terminara de inicializarse"
 
-#: src/components/AI/AISettings.tsx
-msgid "Default chat model"
-msgstr "Modelo de chat predeterminado"
+#~ msgid "Default chat model"
+#~ msgstr "Modelo de chat predeterminado"
 
-#: src/components/AI/AISettings.tsx
-msgid ""
-"Pre-selected when creating new agents. Does not override\n"
-"models you have already set per agent."
-msgstr ""
-"Preseleccionado al crear nuevos agentes. No anula los\n"
-"modelos que ya haya configurado por agente."
+#~ msgid ""
+#~ "Pre-selected when creating new agents. Does not override\n"
+#~ "models you have already set per agent."
+#~ msgstr ""
+#~ "Preseleccionado al crear nuevos agentes. No anula los\n"
+#~ "modelos que ya haya configurado por agente."
 
-#: src/components/AI/AISettings.tsx
-msgid ""
-"The selected default model's provider is not\n"
-"available. Choose a model from a connected provider below."
-msgstr ""
-"El proveedor del modelo predeterminado seleccionado no está\n"
-"disponible. Elija un modelo de un proveedor conectado a continuación."
+#~ msgid ""
+#~ "The selected default model's provider is not\n"
+#~ "available. Choose a model from a connected provider below."
+#~ msgstr ""
+#~ "El proveedor del modelo predeterminado seleccionado no está\n"
+#~ "disponible. Elija un modelo de un proveedor conectado a continuación."
 
 #: src/components/AI/AISettings.tsx
 msgid ""
@@ -4845,3 +4838,40 @@ msgstr "Configurar un modelo"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Ollama (local)"
 msgstr "Ollama (local)"
+
+#: src/components/SideBar/SideBarHomePanels.tsx
+msgid "Favorites"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Manage account & plan →"
+msgstr ""
+
+#. placeholder {0}: nodeUsage.driveName
+#: src/routes/SyncRoute.tsx
+msgid "This drive ({0})"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive"
+msgstr ""
+
+#. placeholder {0}: nodeUsage.resourceCount.toLocaleString()
+#. placeholder {1}: ' '
+#. placeholder {2}: formatBytes(nodeUsage.blobBytes + nodeUsage.loroBytes)
+#. placeholder {3}: quotaBytes ? ` of ${formatBytes(quotaBytes)}` : ''
+#: src/routes/SyncRoute.tsx
+msgid "{0} resources ·{1} {2} {3} used"
+msgstr ""
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Toggle whether this resource appears in your Favorites."
+msgstr ""
+
+#: src/hooks/usePersonalDriveList.ts
+msgid "Could not update your list: no personal drive is set up for this account yet."
+msgstr ""

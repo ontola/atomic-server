@@ -143,3 +143,24 @@ export async function saveRecoverySecret(input: RecoverySecretInput) {
 }
 
 export async function getRecoverySecret(): Promise<RecoverySecret | null> {
+  // [RECOVERY-RECONSTRUCTED] body — only this function's signature survived in
+  // the transcripts. Reconstructed as the GET counterpart of saveRecoverySecret
+  // (PUT) above; 204/401/404 all mean "no recovery secret stored".
+  const response = await fetch(`${getCloudApiBase()}/recovery-secret`, {
+    credentials: 'include',
+  });
+
+  if (
+    response.status === 204 ||
+    response.status === 401 ||
+    response.status === 404
+  ) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error('Could not load encrypted recovery backup.');
+  }
+
+  return (await response.json()) as RecoverySecret;
+}

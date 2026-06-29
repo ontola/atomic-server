@@ -1,3 +1,15 @@
+// [RECOVERY] This file was truncated in the recovery (only ~73 of ~268 lines
+// survived in the transcripts). The `getSaasApiBase` helper (used throughout but
+// lost from the original top of the file) and the `createSaasEnrollment` body
+// below are reconstructed. `getSaasApiBase` resolves the same atomic-saas
+// control-plane `/api` base as the cloud helpers, so it delegates to them.
+import { getCloudApiBase } from './cloud/api';
+
+/** Base URL of the atomic-saas control plane (same endpoint as the cloud helpers). */
+function getSaasApiBase(): string {
+  return getCloudApiBase();
+}
+
 export type SaasUser = {
   email: string;
   created_at: number;
@@ -70,4 +82,29 @@ export async function getDriveUsage(
   };
 }
 
+// [RECOVERY-RECONSTRUCTED] Only the signature `createSaasEnrollment({` survived.
+// Reconstructed from the equivalent helpers/cloud/enrollment.ts:createCloudSyncEnrollment
+// (POST /sync-enrollments). No code currently imports this export.
 export async function createSaasEnrollment({
+  driveSubject,
+  agentSubject,
+}: {
+  driveSubject: string;
+  agentSubject: string;
+}): Promise<unknown> {
+  const response = await fetch(`${getSaasApiBase()}/sync-enrollments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      drive_subject: driveSubject,
+      agent_subject: agentSubject,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Could not enable cloud sync backup.');
+  }
+
+  return response.json();
+}
