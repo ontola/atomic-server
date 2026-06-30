@@ -427,3 +427,61 @@ async fn e2e_engine_pull_after_iroh_bulk_sync() {
 
     assert_eq!(stroke_count(&pair.db_b, &canvas).await, 2);
 }
+
+/// The managed-node replication path, end to end on localhost: a drive that
+/// lives on A but not on B is pulled to B — exactly what
+/// `node.rs::pull_allowed_drives` does, minus the pkarr lookup (which we replace
+/// with a direct address; pkarr only maps drive DID → NodeID). Afterwards B
+/// hosts the drive (`has_resource_locally`, the managed-node skip check) and can
+/// account for its usage (`per_drive_usage`).
+#[tokio::test]
+async fn e2e_managed_node_replicates_missing_drive() {
+    let pair = setup_pair("e2e_replicate").await;
+
+    // A has content under the drive; B starts without the drive at all.
+    let doc = pair
+        .db_a
+        .create_resource(
+            CANVAS_CLASS,
+            &pair.drive,
+            "Doc on A",
+            Some(vec![(
+                STROKE_DATA,
+                crate::Value::Json(serde_json::Value::Array(vec![serde_json::json!({"n": 1})])),
+            )]),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        !pair.db_b.has_resource_locally(&pair.drive),
+        "B should not host the drive before replicating"
+    );
+
+    // Replicate: the same Iroh pull the managed node performs.
+    let imported = sync_b_from_a(&pair).await;
+    assert!(imported > 0, "B should import the drive's resources");
+
+    // B now has the drive's content...
+    pair.db_b
+        .get_resource(&doc.as_str().into())
+        .await
+        .expect("B should have A's resource after replicating");
+
+    // ...reports usage for it...
+    let usage = pair.db_b.per_drive_usage(&[pair.drive.clone()]).await.unwrap();
+    let row = usage
+        .iter()
+        .find(|u| u.drive_subject == pair.drive)
+        .expect("usage row for the replicated drive");
+    assert!(
+        row.resource_count > 0,
+        "replicated drive should report resources, got {row:?}"
+    );
+
+    // ...and now counts as hosted, so the managed-node pull skips it next cycle.
+    assert!(
+        pair.db_b.has_resource_locally(&pair.drive),
+        "B should host the drive after replicating"
+    );
+}
