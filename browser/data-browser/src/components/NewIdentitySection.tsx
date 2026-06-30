@@ -37,6 +37,8 @@ interface NewIdentitySectionProps {
   verifySecret?: boolean;
   /** Optional portal target for the step dots indicator. */
   stepIndicatorPortal?: Element | null;
+  /** Prefill the profile-name field (e.g. from a SaaS account email). */
+  defaultProfileName?: string;
 }
 
 interface IdentityData {
@@ -58,6 +60,7 @@ export function NewIdentitySection({
   autoStart = false,
   verifySecret = false,
   stepIndicatorPortal,
+  defaultProfileName,
 }: NewIdentitySectionProps) {
   const store = useStore();
   const { setAgent, setDrive } = useSettings();
@@ -260,6 +263,7 @@ export function NewIdentitySection({
           error={error}
           loading={loading}
           onSave={handleProfileSave}
+          defaultName={defaultProfileName}
         />
       )}
 
@@ -504,12 +508,14 @@ function ProfileStep({
   error,
   loading,
   onSave,
+  defaultName,
 }: {
   error: string | undefined;
   loading: boolean;
   onSave: (name: string) => void;
+  defaultName?: string;
 }) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(defaultName ?? '');
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();

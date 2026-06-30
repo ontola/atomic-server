@@ -12,6 +12,8 @@ import { paths } from '../../routes/paths';
 import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
+import { getCloudAccount } from '../../helpers/cloud/session';
+import { createCloudSyncEnrollment } from '../../helpers/cloud/enrollment';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
 import atomicServerLogoUrl from '../../../../../logo.svg?url';
@@ -42,13 +44,65 @@ export function GettingStartedFlow({
   const store = useStore();
   const navigate = useNavigateWithTransition();
   const { setAgent, setDrive } = useSettings();
-  const [step, setStep] = useState<Step>(initialStep);
+  // A user who just verified their email via the cloud portal lands at
+  // /app/welcome?from_saas=true. Skip the generic Create/Sign-in choice and go
+  // straight into identity creation, with the username prefilled from their
+  // account email and the new drive auto-enrolled in cloud sync after create.
+  const fromSaas =
+    new URLSearchParams(window.location.search).get('from_saas') === 'true';
+  const [step, setStep] = useState<Step>(fromSaas ? 'create' : initialStep);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | undefined>();
   const stepDotsSlotRef = useRef<HTMLDivElement | null>(null);
   const signInFormRef = useRef<HTMLFormElement | null>(null);
   const [secretValue, setSecretValue] = useState('');
   const lastSubmittedSecret = useRef<string>('');
+  const [saasUsername, setSaasUsername] = useState<string | undefined>(
+    undefined,
+  );
+  // For non-SaaS flows there's nothing to wait for, so we're "ready" immediately.
+  const [saasReady, setSaasReady] = useState(!fromSaas);
+
+  // Fetch the cloud account email and derive a default username before showing
+  // the profile step, so the field comes prefilled.
+  useEffect(() => {
+    if (!fromSaas) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const account = await getCloudAccount();
+
+        if (!cancelled && account?.email) {
+          setSaasUsername(account.email.split('@')[0]);
+        }
+      } catch {
+        // Not signed in to the cloud (or unreachable) — continue without a
+        // prefill; the user can still type a name.
+      } finally {
+        if (!cancelled) setSaasReady(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fromSaas]);
+
+  // Best-effort: enroll the freshly-created drive in cloud sync. The identity
+  // and drive already exist by the time this runs, so a failure here never
+  // blocks onboarding — the user can retry from Cloud Sync settings.
+  async function enrollCloudSync(driveSubject: string) {
+    const agentSubject = store.getAgent()?.subject;
+
+    if (!agentSubject) return;
+
+    try {
+      await createCloudSyncEnrollment({ driveSubject, agentSubject });
+    } catch {
+      // swallow — see above.
+    }
+  }
 
   const slogans: string[] = useMemo(
     () => ['Make your knowledge work for you.'],
@@ -229,18 +283,20 @@ export function GettingStartedFlow({
           <OnboardingWrap>
             <OnboardingCard>
               <Column gap='1.5rem'>
-                {/* <CardTitle>Create account</CardTitle>Note  */}
-                <NewIdentitySection
-                  autoStart
-                  verifySecret
-                  stepIndicatorPortal={stepDotsSlotRef.current}
-                  onAfterCreate={async () => {
-                    // no-op: NewIdentitySection handles drive + secret persistence
-                  }}
-                  onDone={() => {
-                    // After verify, NewIdentitySection navigates to personalDrive / home
-                  }}
-                />
+                {fromSaas && !saasReady ? (
+                  <p>Setting up your account…</p>
+                ) : (
+                  <NewIdentitySection
+                    autoStart
+                    verifySecret
+                    stepIndicatorPortal={stepDotsSlotRef.current}
+                    defaultProfileName={saasUsername}
+                    onAfterCreate={fromSaas ? enrollCloudSync : undefined}
+                    onDone={() => {
+                      // After verify, NewIdentitySection navigates to personalDrive / home
+                    }}
+                  />
+                )}
               </Column>
             </OnboardingCard>
             <FooterBar>
