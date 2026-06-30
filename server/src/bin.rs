@@ -17,6 +17,7 @@ mod invite_token;
 mod jsonerrors;
 mod loro_sync_broadcaster;
 mod metrics;
+pub mod node;
 pub mod plugins;
 mod routes;
 pub mod serve;

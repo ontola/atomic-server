@@ -114,6 +114,18 @@ pub struct DriveInfo {
     pub name: String,
 }
 
+/// Per-drive storage usage. A managed node reports these to its control plane
+/// (`POST /api/node-usage`) for quota tracking; field names match that wire
+/// contract. See [`Db::per_drive_usage`].
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DriveUsage {
+    pub drive_subject: String,
+    pub name: Option<String>,
+    pub resource_count: u64,
+    pub blob_bytes: u64,
+    pub loro_bytes: u64,
+}
+
 /// Result of loading an agent from a secret.
 pub struct AgentLoadResult {
     pub agent: crate::agents::Agent,
@@ -759,6 +771,93 @@ impl Db {
         }
 
         Ok(drives)
+    }
+
+    /// Per-drive storage usage (resource count, Loro snapshot bytes, blob
+    /// bytes), for a managed node's control-plane usage report. Walks the Loro
+    /// and resource trees once each. Blobs are content-addressed and counted
+    /// once — a blob shared across drives is attributed to whichever drive's
+    /// resource is visited first.
+    pub async fn per_drive_usage(&self) -> AtomicResult<Vec<DriveUsage>> {
+        use std::collections::{HashMap, HashSet};
+
+        let drives = self.list_drives().await?;
+        if drives.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Map every resource subject (pure id) → its drive, and seed a row per drive.
+        let mut subject_to_drive: HashMap<String, String> = HashMap::new();
+        let mut usage: HashMap<String, DriveUsage> = HashMap::new();
+        for drive in &drives {
+            usage.insert(
+                drive.subject.clone(),
+                DriveUsage {
+                    drive_subject: drive.subject.clone(),
+                    name: Some(drive.name.clone()),
+                    resource_count: 0,
+                    blob_bytes: 0,
+                    loro_bytes: 0,
+                },
+            );
+            let drive_subject: crate::Subject = drive.subject.as_str().into();
+            for subject in
+                crate::sync::engine::collect_drive_subjects(self, &drive_subject).await
+            {
+                subject_to_drive.insert(subject, drive.subject.clone());
+            }
+        }
+
+        // Loro snapshot bytes — one pass over the snapshots tree (subject-keyed).
+        for item in self.kv.iter_tree(Tree::LoroSnapshots) {
+            let Ok((key, val)) = item else { continue };
+            let subject = String::from_utf8_lossy(&key);
+            if let Some(drive) = subject_to_drive.get(subject.as_ref()) {
+                if let Some(row) = usage.get_mut(drive) {
+                    row.loro_bytes += val.len() as u64;
+                }
+            }
+        }
+
+        // Resource counts + blob bytes — one pass over resources.
+        let mut seen_blobs: HashSet<[u8; 32]> = HashSet::new();
+        for resource in self.all_resources(false) {
+            let subject = resource.get_subject().pure_id();
+            let Some(drive) = subject_to_drive.get(&subject).cloned() else {
+                continue;
+            };
+
+            if let Some(row) = usage.get_mut(&drive) {
+                row.resource_count += 1;
+            }
+
+            let Ok(blob_val) = resource.get(urls::BLOB) else {
+                continue;
+            };
+            let blob_did = blob_val.to_string();
+            let blob_subject = crate::Subject::from_raw(&blob_did, None);
+            let Some(hash_hex) = blob_subject.blob_hash_hex() else {
+                continue;
+            };
+            let Ok(hash_bytes) = hex::decode(hash_hex) else {
+                continue;
+            };
+            if hash_bytes.len() != 32 {
+                continue;
+            }
+            let mut hash = [0u8; 32];
+            hash.copy_from_slice(&hash_bytes);
+            if !seen_blobs.insert(hash) {
+                continue;
+            }
+            if let Ok(Some(bytes)) = self.kv.get(Tree::Blobs, &hash) {
+                if let Some(row) = usage.get_mut(&drive) {
+                    row.blob_bytes += bytes.len() as u64;
+                }
+            }
+        }
+
+        Ok(usage.into_values().collect())
     }
 
     /// Get children of a resource, optionally filtered by class.

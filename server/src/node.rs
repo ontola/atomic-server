@@ -198,7 +198,7 @@ async fn send_usage(
     store: &Db,
     policy: &AllowlistPolicy,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let drives = store.per_drive_usage()?;
+    let drives = store.per_drive_usage().await?;
     if drives.is_empty() {
         return Ok(());
     }

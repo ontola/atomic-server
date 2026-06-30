@@ -73,6 +73,30 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_DASHBOARD_URL")]
     pub dashboard_url: Option<String>,
 
+    /// Control-plane API base URL (e.g. https://saas.example.com). When set,
+    /// this server runs as a "managed node": it heartbeats to the control
+    /// plane, polls it for which drives to host, and reports per-drive usage.
+    /// Leave unset for self-hosted / FOSS servers.
+    #[clap(long, env = "ATOMIC_CONTROL_PLANE_URL")]
+    pub control_plane_url: Option<String>,
+
+    /// Explicit node id reported to the control plane. Defaults to the Iroh
+    /// node id, then the server origin.
+    #[clap(long, env = "ATOMIC_CONTROL_PLANE_NODE_ID")]
+    pub control_plane_node_id: Option<String>,
+
+    /// Region label reported to the control plane (purely informational).
+    #[clap(long, default_value = "", env = "ATOMIC_CONTROL_PLANE_REGION")]
+    pub control_plane_region: String,
+
+    /// Seconds between control-plane heartbeats / policy polls (min 5).
+    #[clap(
+        long,
+        default_value = "30",
+        env = "ATOMIC_CONTROL_PLANE_HEARTBEAT_INTERVAL"
+    )]
+    pub control_plane_heartbeat_interval: u64,
+
     /// Custom JS script to include in the body of the HTML template
     #[clap(long, default_value = "", env = "ATOMIC_SCRIPT")]
     pub script: String,
