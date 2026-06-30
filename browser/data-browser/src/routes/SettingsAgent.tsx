@@ -32,7 +32,7 @@ export const AgentSettingsRoute = createRoute({
 
 const SettingsAgent: React.FunctionComponent = () => {
   const store = useStore();
-  const { agent, drive, setAgent, setDrive } = useSettings();
+  const { agent, drive, baseURL, setAgent, setDrive } = useSettings();
   // Sometimes the settings context can briefly lag behind the store on first
   // navigation. Fall back to the store-backed hook to avoid flashing the
   // logged-out panel for signed-in users.
@@ -65,10 +65,14 @@ const SettingsAgent: React.FunctionComponent = () => {
       const isPublic = readArray.includes(urls.instances.publicAgent);
 
       if (!isPublic) {
+        // The private drive is no longer readable signed-out — don't leave it
+        // lingering as the active drive. Reset to the public server root.
+        setDrive(baseURL || '');
         navigate({ to: paths.welcome, replace: true });
       }
     } catch {
-      // If we can't determine visibility, default to welcome.
+      // If we can't determine visibility, default to welcome + server root.
+      setDrive(baseURL || '');
       navigate({ to: paths.welcome, replace: true });
     }
   }
