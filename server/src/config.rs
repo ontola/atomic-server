@@ -66,6 +66,13 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_EMAIL")]
     pub email: Option<String>,
 
+    /// User-facing SaaS dashboard / portal URL. When set, this node reports as
+    /// "managed" via `GET /node-info`, and the data-browser routes account
+    /// creation to the portal (e.g. for email verification). Leave unset for
+    /// self-hosted / FOSS nodes.
+    #[clap(long, env = "ATOMIC_DASHBOARD_URL")]
+    pub dashboard_url: Option<String>,
+
     /// Custom JS script to include in the body of the HTML template
     #[clap(long, default_value = "", env = "ATOMIC_SCRIPT")]
     pub script: String,

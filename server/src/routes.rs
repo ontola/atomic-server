@@ -91,6 +91,37 @@ async fn iroh_node_id_handler() -> actix_web::HttpResponse {
         .body(r#"{"nodeId":null}"#)
 }
 
+/// Read-only node metadata the data-browser fetches to adapt its onboarding:
+/// a `managed` node (one configured to report to a SaaS control plane) sets
+/// `managed: true` and a `dashboardUrl` (the user-facing portal, learned from
+/// the control plane). Self-hosted / FOSS nodes report `managed: false`.
+#[derive(serde::Serialize)]
+struct NodeInfo {
+    managed: bool,
+    #[serde(rename = "dashboardUrl")]
+    dashboard_url: Option<String>,
+}
+
+async fn node_info_handler(
+    appstate: web::Data<crate::appstate::AppState>,
+) -> actix_web::HttpResponse {
+    // A node is "managed" when it's configured with a dashboard/portal URL
+    // (ATOMIC_DASHBOARD_URL). Self-hosted / FOSS nodes leave it unset.
+    let dashboard_url = appstate
+        .config
+        .opts
+        .dashboard_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+
+    actix_web::HttpResponse::Ok().json(NodeInfo {
+        managed: dashboard_url.is_some(),
+        dashboard_url,
+    })
+}
+
 fn node_id_from_did(node_did: &str) -> Result<&str, &'static str> {
     let Some(rest) = node_did.strip_prefix("did:ad:node:") else {
         return Err("Expected nodeId to use did:ad:node:<node-id>");
@@ -213,6 +244,7 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .to(handlers::post_resource::handle_post_resource),
     )
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
+    .service(web::resource("/node-info").to(node_info_handler))
     .service(web::resource("/iroh-node-id").to(iroh_node_id_handler))
     .service(web::resource("/iroh-sync").to(iroh_sync_handler))
     .service(web::resource("/export").to(handlers::export::handle_export))

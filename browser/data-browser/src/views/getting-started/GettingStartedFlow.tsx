@@ -13,6 +13,7 @@ import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
 import { getCloudAccount } from '../../helpers/cloud/session';
+import { fetchManagedInfo } from '../../helpers/managedServer';
 import { createCloudSyncEnrollment } from '../../helpers/cloud/enrollment';
 import {
   buildEncryptedRecoverySecret,
@@ -56,7 +57,23 @@ export function GettingStartedFlow({
   useWelcomeLayoutEffect();
   const store = useStore();
   const navigate = useNavigateWithTransition();
-  const { setAgent, setDrive } = useSettings();
+  const { setAgent, setDrive, baseURL } = useSettings();
+  // When the connected node is "managed" (reports a dashboard/portal URL via
+  // /node-info), account creation goes through the SaaS portal (email
+  // verification). Self-hosted / FOSS nodes report nothing here, so we keep the
+  // local DID-agent creation unchanged.
+  const [portalUrl, setPortalUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchManagedInfo(baseURL).then(info => {
+      if (!cancelled) setPortalUrl(info.managed ? info.dashboardUrl : null);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseURL]);
   // A user who just verified their email via the cloud portal lands at
   // /app/welcome?from_saas=true. Skip the generic Create/Sign-in choice and go
   // straight into identity creation, with the username prefilled from their
@@ -304,7 +321,18 @@ export function GettingStartedFlow({
               <Card>
                 <CardTitle>Get started</CardTitle>
                 <Column gap='0.75rem'>
-                  <CtaButton type='button' onClick={() => setStep('create')}>
+                  <CtaButton
+                    type='button'
+                    onClick={() => {
+                      // Managed node → create the account on the SaaS portal
+                      // (email verification). FOSS node → local identity.
+                      if (portalUrl) {
+                        window.location.assign(portalUrl);
+                      } else {
+                        setStep('create');
+                      }
+                    }}
+                  >
                     Create account
                   </CtaButton>
                   <CtaButton
