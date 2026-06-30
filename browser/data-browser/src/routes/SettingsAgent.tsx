@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { useState } from 'react';
-import { Agent, core, urls, useCurrentAgent, useStore } from '@tomic/react';
+import { useEffect } from 'react';
+import { core, urls, useCurrentAgent, useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { Button } from '../components/Button';
 import { Margin } from '../components/Card';
@@ -19,10 +19,6 @@ import { FaUser } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { LabelStyled } from '../components/forms/InputStyles';
 import { DrivesCard } from './SettingsServer/DrivesCard';
-// [RECOVERY] these two imports + the sign-in state/handler below were lost in the
-// truncated reconstruction (file was 154/221 lines). Both components exist.
-import { NewIdentitySection } from '../components/NewIdentitySection';
-import { LoggedOutAgentPanel } from '../components/LoggedOutAgentPanel';
 import { useSavedDrives } from '../hooks/useSavedDrives';
 import { useDriveHistory } from '../hooks/useDriveHistory';
 import { constructOpenURL } from '../helpers/navigation';
@@ -44,36 +40,22 @@ const SettingsAgent: React.FunctionComponent = () => {
   const effectiveAgent = agent ?? storeAgent ?? store.getAgent();
   const navigate = useNavigateWithTransition();
 
-  // [RECOVERY-RECONSTRUCTED] sign-in/create-account UI state (lost in truncation).
-  const [showCreate, setShowCreate] = useState(false);
-  const [error, setError] = useState<Error | undefined>(undefined);
-  const [signInLoading, setSignInLoading] = useState(false);
-
   const [savedDrives] = useSavedDrives();
   const [, addToHistory] = useDriveHistory(savedDrives);
 
-  // [RECOVERY-RECONSTRUCTED] modelled on the equivalent handler in
-  // GettingStartedFlow: sign in from a pasted agent secret.
-  async function handleSignInWithSecret(secret: string) {
-    setSignInLoading(true);
-    setError(undefined);
-
-    try {
-      const newAgent = await Agent.fromSecret(secret);
-      setAgent(newAgent);
-      await saveAgentToIDB(secret);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Invalid agent secret.'));
-    } finally {
-      setSignInLoading(false);
+  // Signed out → there is a single canonical sign-in / onboarding surface at
+  // /app/welcome (GettingStartedFlow). Redirect there rather than rendering a
+  // second, parallel login form on this settings page.
+  useEffect(() => {
+    if (!effectiveAgent) {
+      navigate({ to: paths.welcome, replace: true });
     }
-  }
+  }, [effectiveAgent]);
 
   async function handleSignOut() {
     const currentDrive = drive;
 
     setAgent(undefined);
-    setError(undefined);
     saveAgentToIDB(undefined);
 
     try {
@@ -100,16 +82,7 @@ const SettingsAgent: React.FunctionComponent = () => {
   return (
     <Main>
       <ContainerNarrow>
-        {showCreate ? (
-          <>
-            <h1>Create account</h1>
-            <NewIdentitySection
-              autoStart
-              verifySecret
-              onDone={() => setShowCreate(false)}
-            />
-          </>
-        ) : effectiveAgent ? (
+        {effectiveAgent ? (
           <>
             <h1>User Settings</h1>
             <Column>
@@ -153,27 +126,11 @@ const SettingsAgent: React.FunctionComponent = () => {
               />
             </Column>
           </>
-        ) : (
-          <LoggedOutCenter>
-            <LoggedOutAgentPanel
-              heading='Login / New User'
-              onCreateIdentityClick={() => setShowCreate(true)}
-              onSignInWithSecret={handleSignInWithSecret}
-              error={error}
-              loading={signInLoading}
-            />
-          </LoggedOutCenter>
-        )}
+        ) : null}
       </ContainerNarrow>
     </Main>
   );
 };
-
-const LoggedOutCenter = styled.div`
-  display: flex;
-  justify-content: center;
-  padding-block: ${p => p.theme.size(7)};
-`;
 
 const Heading = styled.h1`
   margin: 0;
