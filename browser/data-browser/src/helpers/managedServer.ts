@@ -50,6 +50,29 @@ export async function fetchManagedInfo(serverUrl: string): Promise<ManagedInfo> 
   }
 }
 
+/**
+ * Where the welcome screen's "Create account" should go, given a node's
+ * {@link ManagedInfo}:
+ *  - a managed node with a dashboard URL → the cloud portal (which handles
+ *    sign-up + email verification);
+ *  - anything else (self-hosted / FOSS, or managed-but-no-URL) → the local
+ *    DID-agent creation flow. This is what keeps the FOSS UX intact.
+ *
+ * Pure on purpose, so the FOSS-vs-managed branch is unit-tested without a
+ * server or the portal. The full cross-system journey is covered in atomic-saas.
+ */
+export type AccountCreationTarget =
+  | { kind: 'portal'; url: string }
+  | { kind: 'local' };
+
+export function accountCreationTarget(info: ManagedInfo): AccountCreationTarget {
+  if (info.managed && info.dashboardUrl) {
+    return { kind: 'portal', url: info.dashboardUrl };
+  }
+
+  return { kind: 'local' };
+}
+
 export type NodeDriveUsage = {
   driveName: string | null;
   resourceCount: number;

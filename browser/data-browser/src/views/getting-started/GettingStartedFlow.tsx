@@ -13,7 +13,11 @@ import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
 import { getCloudAccount } from '../../helpers/cloud/session';
-import { fetchManagedInfo } from '../../helpers/managedServer';
+import {
+  fetchManagedInfo,
+  accountCreationTarget,
+  type AccountCreationTarget,
+} from '../../helpers/managedServer';
 import { createCloudSyncEnrollment } from '../../helpers/cloud/enrollment';
 import {
   buildEncryptedRecoverySecret,
@@ -62,12 +66,14 @@ export function GettingStartedFlow({
   // /node-info), account creation goes through the portal (email
   // verification). Self-hosted / FOSS nodes report nothing here, so we keep the
   // local DID-agent creation unchanged.
-  const [portalUrl, setPortalUrl] = useState<string | null>(null);
+  const [createTarget, setCreateTarget] = useState<AccountCreationTarget>({
+    kind: 'local',
+  });
 
   useEffect(() => {
     let cancelled = false;
     void fetchManagedInfo(baseURL).then(info => {
-      if (!cancelled) setPortalUrl(info.managed ? info.dashboardUrl : null);
+      if (!cancelled) setCreateTarget(accountCreationTarget(info));
     });
 
     return () => {
@@ -326,8 +332,8 @@ export function GettingStartedFlow({
                     onClick={() => {
                       // Managed node → create the account on the portal
                       // (email verification). FOSS node → local identity.
-                      if (portalUrl) {
-                        window.location.assign(portalUrl);
+                      if (createTarget.kind === 'portal') {
+                        window.location.assign(createTarget.url);
                       } else {
                         setStep('create');
                       }
