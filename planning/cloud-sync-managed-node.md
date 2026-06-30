@@ -65,6 +65,31 @@ Matches `atomic-saas` exactly (locked by its `node_policy_matches_managed_node_w
 - A node's heartbeat `id` **must equal** that `node_id`. `node.rs` defaults `id` to `control_plane_node_id` → iroh id → origin, so a managed node must be configured with its control-plane id: **`ATOMIC_CONTROL_PLANE_NODE_ID`** (dev: `local-dev`).
 - With the ids aligned: `GET /api/node-policy` returns the enrollment in `allowed_drives`; the node installs it as `AllowlistPolicy`; `enrich_node_identity` backfills `node_iroh_id` + live `http_origin` onto the enrollment; and the usage report flips the enrollment **Active** (`record_usage`).
 
+## Admission enforcement (paid-service abuse prevention)
+
+A managed node must only accept writes/sync for drives it actually hosts (the
+control-plane allowlist) — otherwise a random user (no SaaS account, no email)
+could point a drive at the paid node and use it for free. The `AllowlistPolicy`
+existed but was **inert** (`drive_is_allowed` was never called).
+
+- ✅ **Commit path enforced.** `Storelike::drive_is_allowed` (default allow-all;
+  `Db` overrides to consult its `sync_policy`) is now checked in
+  `commit.rs::validate_and_build_response`, inside the `validate_rights` block,
+  so it covers external commits (HTTP `POST /commit` and WS `COMMIT` both run
+  `handlers::commit::apply_commit_json` with `validate_rights: true`) while
+  internal/bootstrap commits (`validate_rights: false`) and FOSS/self-hosted
+  nodes (`OpenPolicy`) are unaffected. Regression test:
+  `commit.rs::managed_node_enforces_drive_allowlist` (fails without the gate,
+  passes with it).
+- ⏳ **Sync (Loro push) path NOT yet gated.** `sync::engine::handle_frame`
+  (`SYNC_PUSH`/`UPDATE`, used by iroh peer-sync and WS-binary sync) applies Loro
+  state directly, bypassing the commit path. The likely gate is the `AUTH`
+  handler (`AuthValues.requested_subject` carries the drive), but it must resolve
+  the drive *root* of `requested_subject` (it may be a sub-resource) before
+  calling `drive_is_allowed`, to avoid rejecting legitimate sync.
+- Note: enrollment itself requires a verified-email session (`require_user` →
+  magic-link); there is no payment/plan gate yet (billing concern, separate).
+
 ## Status
 
 - ✅ Onboarding: new user (username-from-email, auto cloud-sync, recovery backup), sign-in, restore (forgot secret).
