@@ -14,12 +14,25 @@ import { Column } from '../../components/Row';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
 import { getCloudAccount } from '../../helpers/cloud/session';
 import { createCloudSyncEnrollment } from '../../helpers/cloud/enrollment';
+import {
+  buildEncryptedRecoverySecret,
+  saveRecoverySecret,
+  getRecoverySecret,
+  decryptRecoverySecret,
+  type RecoverySecret,
+} from '../../helpers/cloud/recovery';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
 import atomicServerLogoUrl from '../../../../../logo.svg?url';
 import { welcomeBackgroundCss } from './welcomeBackground';
 
-type Step = 'welcome' | 'signin' | 'create';
+type Step = 'welcome' | 'signin' | 'create' | 'restore';
+
+type RestoreState =
+  | { phase: 'checking' }
+  | { phase: 'no-session' }
+  | { phase: 'no-backup'; email: string }
+  | { phase: 'ready'; secret: RecoverySecret; email: string };
 
 type Props = {
   subject: string;
@@ -92,7 +105,12 @@ export function GettingStartedFlow({
   // Best-effort: enroll the freshly-created drive in cloud sync. The identity
   // and drive already exist by the time this runs, so a failure here never
   // blocks onboarding — the user can retry from Cloud Sync settings.
+  // The new drive's subject, captured during onAfterCreate so the recovery
+  // backup step can reference it.
+  const newDriveSubject = useRef<string | undefined>(undefined);
+
   async function enrollCloudSync(driveSubject: string) {
+    newDriveSubject.current = driveSubject;
     const agentSubject = store.getAgent()?.subject;
 
     if (!agentSubject) return;
@@ -101,6 +119,90 @@ export function GettingStartedFlow({
       await createCloudSyncEnrollment({ driveSubject, agentSubject });
     } catch {
       // swallow — see above.
+    }
+  }
+
+  // Encrypt the agent secret with the user's recovery password and store it on
+  // the cloud account, so they can restore it later ("Forgot your secret?").
+  async function backupRecovery(secret: string, password: string) {
+    const agentSubject = store.getAgent()?.subject;
+
+    if (!agentSubject) {
+      throw new Error('No agent to back up. Try again.');
+    }
+
+    const input = await buildEncryptedRecoverySecret({
+      secret,
+      password,
+      agentSubject,
+      driveSubject: newDriveSubject.current ?? null,
+    });
+    await saveRecoverySecret(input);
+  }
+
+  // ─── Restore ("Forgot your secret?") ─────────────────────────────────────
+  const [restore, setRestore] = useState<RestoreState>({ phase: 'checking' });
+  const [restorePassword, setRestorePassword] = useState('');
+
+  // When the restore step opens, check for a cloud session + a stored backup.
+  useEffect(() => {
+    if (step !== 'restore') return;
+    let cancelled = false;
+    setRestore({ phase: 'checking' });
+    setError(undefined);
+
+    void (async () => {
+      try {
+        const account = await getCloudAccount();
+
+        if (!account?.email) {
+          if (!cancelled) setRestore({ phase: 'no-session' });
+
+          return;
+        }
+
+        const secret = await getRecoverySecret();
+
+        if (cancelled) return;
+
+        setRestore(
+          secret
+            ? { phase: 'ready', secret, email: account.email }
+            : { phase: 'no-backup', email: account.email },
+        );
+      } catch {
+        if (!cancelled) setRestore({ phase: 'no-session' });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [step]);
+
+  async function handleRestore(e: FormEvent) {
+    e.preventDefault();
+
+    if (restore.phase !== 'ready' || loading) return;
+
+    const password = restorePassword.trim();
+
+    if (!password) return;
+
+    setLoading(true);
+    setError(undefined);
+
+    try {
+      const secret = await decryptRecoverySecret(restore.secret, password);
+      // Reuse the normal sign-in path: parses the secret, sets the agent, and
+      // navigates to the user's home drive.
+      await handleSignInWithSecret(secret);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err : new Error('Could not restore your account.'),
+      );
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -255,6 +357,17 @@ export function GettingStartedFlow({
                     >
                       {loading ? 'Signing in…' : 'Continue'}
                     </Button>
+                    <Button
+                      type='button'
+                      subtle
+                      onClick={() => {
+                        setError(undefined);
+                        setRestorePassword('');
+                        setStep('restore');
+                      }}
+                    >
+                      Forgot your secret?
+                    </Button>
                   </Column>
                 </form>
               </Column>
@@ -267,6 +380,87 @@ export function GettingStartedFlow({
                   setError(undefined);
                   setSecretValue('');
                   setStep('welcome');
+                }}
+              >
+                <BackLabel>
+                  <FaArrowLeft aria-hidden />
+                  Back
+                </BackLabel>
+              </Button>
+              <StepDotsSlot ref={stepDotsSlotRef} />
+            </FooterBar>
+          </OnboardingWrap>
+        </Swap>
+      ) : step === 'restore' ? (
+        <Swap key='restore'>
+          <OnboardingWrap>
+            <OnboardingCard>
+              <Column gap='1rem'>
+                <CardTitle>Restore account</CardTitle>
+                {restore.phase === 'checking' ? (
+                  <p>Checking your cloud account…</p>
+                ) : restore.phase === 'no-session' ? (
+                  <Column gap='0.75rem'>
+                    <p>
+                      To restore your account, sign in to your cloud account
+                      first, then come back here.
+                    </p>
+                    <Button
+                      type='button'
+                      onClick={() => {
+                        // Dev portal; in production this comes from the node's
+                        // dashboardUrl (see managedServer.ts).
+                        window.location.assign('http://localhost:49237');
+                      }}
+                    >
+                      Sign in to your cloud account
+                    </Button>
+                  </Column>
+                ) : restore.phase === 'no-backup' ? (
+                  <p>
+                    No recovery backup was found for {restore.email}. Account
+                    recovery only works if you enabled it earlier.
+                  </p>
+                ) : (
+                  <form onSubmit={handleRestore}>
+                    <Column gap='1rem'>
+                      <p>
+                        Enter the recovery password you set for {restore.email}.
+                      </p>
+                      <InputWrapper hasPrefix>
+                        <FaKey />
+                        <InputStyled
+                          value={restorePassword}
+                          onChange={e => setRestorePassword(e.target.value)}
+                          type='password'
+                          autoComplete='current-password'
+                          placeholder='Recovery password'
+                          aria-label='Recovery password'
+                          autoFocus
+                        />
+                      </InputWrapper>
+                      {error ? (
+                        <CardError role='alert'>{error.message}</CardError>
+                      ) : null}
+                      <Button
+                        type='submit'
+                        disabled={loading || !restorePassword.trim()}
+                      >
+                        {loading ? 'Restoring…' : 'Restore & sign in'}
+                      </Button>
+                    </Column>
+                  </form>
+                )}
+              </Column>
+            </OnboardingCard>
+            <FooterBar>
+              <Button
+                type='button'
+                subtle
+                onClick={() => {
+                  setError(undefined);
+                  setRestorePassword('');
+                  setStep('signin');
                 }}
               >
                 <BackLabel>
@@ -291,6 +485,8 @@ export function GettingStartedFlow({
                     verifySecret
                     stepIndicatorPortal={stepDotsSlotRef.current}
                     defaultProfileName={saasUsername}
+                    offerRecoveryBackup={fromSaas}
+                    onBackupRecovery={fromSaas ? backupRecovery : undefined}
                     onAfterCreate={fromSaas ? enrollCloudSync : undefined}
                     onDone={() => {
                       // After verify, NewIdentitySection navigates to personalDrive / home

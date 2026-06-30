@@ -20,6 +20,7 @@ type Step =
   | 'creating'
   | 'profile'
   | 'creating-drive'
+  | 'recovery-backup'
   | 'secret'
   | 'verify';
 
@@ -39,6 +40,15 @@ interface NewIdentitySectionProps {
   stepIndicatorPortal?: Element | null;
   /** Prefill the profile-name field (e.g. from a SaaS account email). */
   defaultProfileName?: string;
+  /**
+   * If true, after creating the identity, offer to back up the agent secret
+   * (encrypted with a recovery password) so the account can be restored. Only
+   * makes sense when signed in to a cloud account that can store it.
+   */
+  offerRecoveryBackup?: boolean;
+  /** Encrypt + store the secret. Called with the new secret and the user's
+   * recovery password. Throws to surface an error in the backup step. */
+  onBackupRecovery?: (secret: string, password: string) => Promise<void>;
 }
 
 interface IdentityData {
@@ -61,6 +71,8 @@ export function NewIdentitySection({
   verifySecret = false,
   stepIndicatorPortal,
   defaultProfileName,
+  offerRecoveryBackup = false,
+  onBackupRecovery,
 }: NewIdentitySectionProps) {
   const store = useStore();
   const { setAgent, setDrive } = useSettings();
@@ -173,10 +185,38 @@ export function NewIdentitySection({
         await onAfterCreate(resource.subject);
       }
 
-      setStep('secret');
+      setStep(
+        offerRecoveryBackup && onBackupRecovery ? 'recovery-backup' : 'secret',
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setStep('profile');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ─── Step: Back up secret (encrypted recovery) ───────────────────────────
+
+  async function handleBackupRecovery(password: string) {
+    if (!identity || !onBackupRecovery) {
+      setStep('secret');
+
+      return;
+    }
+
+    setLoading(true);
+    setError(undefined);
+
+    try {
+      await onBackupRecovery(identity.secret, password);
+      setStep('secret');
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Could not back up your secret. You can still save it yourself.',
+      );
     } finally {
       setLoading(false);
     }
@@ -271,6 +311,18 @@ export function NewIdentitySection({
         <Column gap='1rem'>
           <p>Creating your personal drive…</p>
         </Column>
+      )}
+
+      {step === 'recovery-backup' && identity && (
+        <RecoveryBackupStep
+          error={error}
+          loading={loading}
+          onBackup={handleBackupRecovery}
+          onSkip={() => {
+            setError(undefined);
+            setStep('secret');
+          }}
+        />
       )}
 
       {step === 'secret' && identity && (
@@ -552,6 +604,72 @@ function ProfileStep({
             <ContinueButton type='submit' disabled={loading || !name.trim()}>
               {loading ? 'Creating drive…' : 'Save & continue'}
             </ContinueButton>
+          </Row>
+        </Column>
+      </form>
+    </Column>
+  );
+}
+
+function RecoveryBackupStep({
+  error,
+  loading,
+  onBackup,
+  onSkip,
+}: {
+  error: string | undefined;
+  loading: boolean;
+  onBackup: (password: string) => void;
+  onSkip: () => void;
+}) {
+  const [password, setPassword] = useState('');
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!password.trim() || loading) return;
+
+    onBackup(password.trim());
+  }
+
+  return (
+    <Column gap='1rem'>
+      <h3>Back up your secret?</h3>
+      <p>
+        This lets you recover your account if you lose your secret. We won't get
+        access to your data — your secret is encrypted with the recovery
+        password below before it leaves your device.
+      </p>
+      <form onSubmit={handleSubmit}>
+        <Column gap='1rem'>
+          <Field
+            label='Recovery password'
+            fieldId='recovery-password'
+            error={error ? new Error(error) : undefined}
+          >
+            <InputWrapper>
+              <InputStyled
+                id='recovery-password'
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                type='password'
+                placeholder='Choose a recovery password'
+                autoComplete='new-password'
+                autoFocus
+                disabled={loading}
+              />
+            </InputWrapper>
+          </Field>
+          <Row gap='1rem'>
+            <ContinueButton
+              type='submit'
+              disabled={loading || !password.trim()}
+            >
+              {loading ? 'Backing up…' : 'Back up & continue'}
+            </ContinueButton>
+            <Button type='button' subtle onClick={onSkip} disabled={loading}>
+              Skip, I&apos;ll save it myself
+            </Button>
           </Row>
         </Column>
       </form>

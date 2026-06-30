@@ -120,6 +120,34 @@ export async function buildEncryptedRecoverySecret({
   };
 }
 
+/**
+ * Reverse of {@link buildEncryptedRecoverySecret}: derive the AES-GCM key from
+ * the recovery password + stored salt, then decrypt the agent secret. Throws a
+ * friendly error on a wrong password (AES-GCM auth-tag failure).
+ */
+export async function decryptRecoverySecret(
+  recovery: RecoverySecret,
+  password: string,
+): Promise<string> {
+  const salt = base64ToBytes(recovery.salt);
+  const nonce = base64ToBytes(recovery.nonce);
+  const key = await deriveRecoveryKey(password, salt, ['decrypt']);
+
+  let plaintext: ArrayBuffer;
+
+  try {
+    plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: nonce },
+      key,
+      base64ToBytes(recovery.encrypted_secret),
+    );
+  } catch {
+    throw new Error('Wrong recovery password, or the backup is corrupted.');
+  }
+
+  return new TextDecoder().decode(plaintext);
+}
+
 export async function saveRecoverySecret(input: RecoverySecretInput) {
   const response = await fetch(`${getCloudApiBase()}/recovery-secret`, {
     method: 'PUT',
