@@ -87,6 +87,15 @@ impl AllowlistPolicy {
         }
     }
 
+    /// The drive subjects currently allowed (i.e. the drives this node hosts).
+    /// Used to scope the control-plane usage report to hosted drives.
+    pub fn allowed_drive_subjects(&self) -> Vec<String> {
+        self.inner
+            .read()
+            .map(|guard| guard.allowed.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
     /// Record the latest per-drive usage (bytes) for quota checks.
     pub fn record_drive_usage<I, S>(&self, usage: I)
     where

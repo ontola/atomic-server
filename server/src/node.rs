@@ -198,7 +198,10 @@ async fn send_usage(
     store: &Db,
     policy: &AllowlistPolicy,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let drives = store.per_drive_usage().await?;
+    // Report usage for the drives this node hosts (the control-plane allowlist),
+    // which belong to enrolled users — not the node's own agent drives.
+    let allowed = policy.allowed_drive_subjects();
+    let drives = store.per_drive_usage(&allowed).await?;
     if drives.is_empty() {
         return Ok(());
     }

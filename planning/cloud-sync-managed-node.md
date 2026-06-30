@@ -59,12 +59,19 @@ Matches `atomic-saas` exactly (locked by its `node_policy_matches_managed_node_w
 - `GET /api/node-policy?node_id=` — `{ portal_url?, allowed_drives: [{ drive_subject, quota_bytes? }] }`. Installed as `AllowlistPolicy`; `portal_url` → `managed_dashboard_url` → `/node-info`.
 - `POST /api/node-usage` — `{ node_id, drives: [DriveUsage{ drive_subject, name?, resource_count, blob_bytes, loro_bytes }] }` → `{ updated }`.
 
+## Enrollment ⇆ node matching (the join key)
+
+- The control plane picks a node at **enrollment creation** (`nodes::get_available_node`) and writes `enrollment.node_id`. In dev that's the seeded `Node.id = "local-dev"` (`atomic-saas/src/nodes.rs::seed_dev_node`).
+- A node's heartbeat `id` **must equal** that `node_id`. `node.rs` defaults `id` to `control_plane_node_id` → iroh id → origin, so a managed node must be configured with its control-plane id: **`ATOMIC_CONTROL_PLANE_NODE_ID`** (dev: `local-dev`).
+- With the ids aligned: `GET /api/node-policy` returns the enrollment in `allowed_drives`; the node installs it as `AllowlistPolicy`; `enrich_node_identity` backfills `node_iroh_id` + live `http_origin` onto the enrollment; and the usage report flips the enrollment **Active** (`record_usage`).
+
 ## Status
 
 - ✅ Onboarding: new user (username-from-email, auto cloud-sync, recovery backup), sign-in, restore (forgot secret).
 - ✅ Managed-node detection: `Create account` → portal when managed, else local (FOSS).
 - ✅ Drive sign-in guard: returning user on a new device → sign-in/recover → lands in the clicked drive.
 - ✅ Naming: `saas` scrubbed from FOSS code (`node.rs`, `cloud*`, `from_cloud`, `VITE_CLOUD_API_BASE`).
-- ✅ Heartbeat/policy/usage wiring compiles + spawns for managed nodes.
-- ⏳ End-to-end verification of heartbeat reaching the control plane (in progress).
-- ⏳ Enrollment ⇆ node matching by `iroh_node_id`, and actual Iroh data sync of allowlisted drives.
+- ✅ Heartbeat/policy/usage verified end-to-end against the control plane (zero failures; node registered; `portal_url` learned).
+- ✅ Enrollment ⇆ node matching via `ATOMIC_CONTROL_PLANE_NODE_ID`: enrolled drive lands in `allowed_drives`, enrollment goes **Active**, node identity (iroh id + `http_origin`) shown.
+- ✅ Usage report scoped to the **allowlisted** (hosted) drives, not the node's own agent drives (`per_drive_usage(drive_subjects)` + `AllowlistPolicy::allowed_drive_subjects`).
+- ⏳ **Actual data sync**: `resource_count`/bytes stay 0 until the drive's Loro data is in the node's store. Today a drive only reaches the node when a browser pushes it over WebSocket; the node does **not yet proactively pull** allowlisted drives it's missing (the always-on-replica behavior). This is the remaining "actually syncs" work — the node should iroh-pull each allowlisted drive it doesn't have.

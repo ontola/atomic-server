@@ -774,37 +774,47 @@ impl Db {
     }
 
     /// Per-drive storage usage (resource count, Loro snapshot bytes, blob
-    /// bytes), for a managed node's control-plane usage report. Walks the Loro
+    /// bytes) for the given `drive_subjects`, for a managed node's control-plane
+    /// usage report. A managed node passes its allowlisted (hosted) drives —
+    /// these belong to enrolled users, not the node's own agent. Walks the Loro
     /// and resource trees once each. Blobs are content-addressed and counted
     /// once — a blob shared across drives is attributed to whichever drive's
     /// resource is visited first.
-    pub async fn per_drive_usage(&self) -> AtomicResult<Vec<DriveUsage>> {
+    pub async fn per_drive_usage(
+        &self,
+        drive_subjects: &[String],
+    ) -> AtomicResult<Vec<DriveUsage>> {
         use std::collections::{HashMap, HashSet};
 
-        let drives = self.list_drives().await?;
-        if drives.is_empty() {
+        if drive_subjects.is_empty() {
             return Ok(vec![]);
         }
 
         // Map every resource subject (pure id) → its drive, and seed a row per drive.
         let mut subject_to_drive: HashMap<String, String> = HashMap::new();
         let mut usage: HashMap<String, DriveUsage> = HashMap::new();
-        for drive in &drives {
+        for drive_subject in drive_subjects {
+            // Best-effort display name from the drive resource.
+            let name = match self.get_resource(&drive_subject.as_str().into()).await {
+                Ok(r) => r.get(urls::NAME).ok().map(|v| v.to_string()),
+                Err(_) => None,
+            };
             usage.insert(
-                drive.subject.clone(),
+                drive_subject.clone(),
                 DriveUsage {
-                    drive_subject: drive.subject.clone(),
-                    name: Some(drive.name.clone()),
+                    drive_subject: drive_subject.clone(),
+                    name,
                     resource_count: 0,
                     blob_bytes: 0,
                     loro_bytes: 0,
                 },
             );
-            let drive_subject: crate::Subject = drive.subject.as_str().into();
-            for subject in
-                crate::sync::engine::collect_drive_subjects(self, &drive_subject).await
-            {
-                subject_to_drive.insert(subject, drive.subject.clone());
+            let ds: crate::Subject = drive_subject.as_str().into();
+            // The drive root resource itself is part of the drive;
+            // collect_drive_subjects only walks its children.
+            subject_to_drive.insert(ds.pure_id(), drive_subject.clone());
+            for subject in crate::sync::engine::collect_drive_subjects(self, &ds).await {
+                subject_to_drive.insert(subject, drive_subject.clone());
             }
         }
 
