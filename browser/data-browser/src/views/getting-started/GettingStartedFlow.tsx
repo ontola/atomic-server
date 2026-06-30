@@ -59,7 +59,7 @@ export function GettingStartedFlow({
   const navigate = useNavigateWithTransition();
   const { setAgent, setDrive, baseURL } = useSettings();
   // When the connected node is "managed" (reports a dashboard/portal URL via
-  // /node-info), account creation goes through the SaaS portal (email
+  // /node-info), account creation goes through the portal (email
   // verification). Self-hosted / FOSS nodes report nothing here, so we keep the
   // local DID-agent creation unchanged.
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
@@ -75,28 +75,28 @@ export function GettingStartedFlow({
     };
   }, [baseURL]);
   // A user who just verified their email via the cloud portal lands at
-  // /app/welcome?from_saas=true. Skip the generic Create/Sign-in choice and go
+  // /app/welcome?from_cloud=true. Skip the generic Create/Sign-in choice and go
   // straight into identity creation, with the username prefilled from their
   // account email and the new drive auto-enrolled in cloud sync after create.
-  const fromSaas =
-    new URLSearchParams(window.location.search).get('from_saas') === 'true';
-  const [step, setStep] = useState<Step>(fromSaas ? 'create' : initialStep);
+  const fromCloud =
+    new URLSearchParams(window.location.search).get('from_cloud') === 'true';
+  const [step, setStep] = useState<Step>(fromCloud ? 'create' : initialStep);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | undefined>();
   const stepDotsSlotRef = useRef<HTMLDivElement | null>(null);
   const signInFormRef = useRef<HTMLFormElement | null>(null);
   const [secretValue, setSecretValue] = useState('');
   const lastSubmittedSecret = useRef<string>('');
-  const [saasUsername, setSaasUsername] = useState<string | undefined>(
+  const [cloudUsername, setCloudUsername] = useState<string | undefined>(
     undefined,
   );
-  // For non-SaaS flows there's nothing to wait for, so we're "ready" immediately.
-  const [saasReady, setSaasReady] = useState(!fromSaas);
+  // For non-cloud flows there's nothing to wait for, so we're "ready" immediately.
+  const [cloudReady, setCloudReady] = useState(!fromCloud);
 
   // Fetch the cloud account email and derive a default username before showing
   // the profile step, so the field comes prefilled.
   useEffect(() => {
-    if (!fromSaas) return;
+    if (!fromCloud) return;
     let cancelled = false;
 
     void (async () => {
@@ -104,20 +104,20 @@ export function GettingStartedFlow({
         const account = await getCloudAccount();
 
         if (!cancelled && account?.email) {
-          setSaasUsername(account.email.split('@')[0]);
+          setCloudUsername(account.email.split('@')[0]);
         }
       } catch {
         // Not signed in to the cloud (or unreachable) — continue without a
         // prefill; the user can still type a name.
       } finally {
-        if (!cancelled) setSaasReady(true);
+        if (!cancelled) setCloudReady(true);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [fromSaas]);
+  }, [fromCloud]);
 
   // Best-effort: enroll the freshly-created drive in cloud sync. The identity
   // and drive already exist by the time this runs, so a failure here never
@@ -324,7 +324,7 @@ export function GettingStartedFlow({
                   <CtaButton
                     type='button'
                     onClick={() => {
-                      // Managed node → create the account on the SaaS portal
+                      // Managed node → create the account on the portal
                       // (email verification). FOSS node → local identity.
                       if (portalUrl) {
                         window.location.assign(portalUrl);
@@ -505,17 +505,17 @@ export function GettingStartedFlow({
           <OnboardingWrap>
             <OnboardingCard>
               <Column gap='1.5rem'>
-                {fromSaas && !saasReady ? (
+                {fromCloud && !cloudReady ? (
                   <p>Setting up your account…</p>
                 ) : (
                   <NewIdentitySection
                     autoStart
                     verifySecret
                     stepIndicatorPortal={stepDotsSlotRef.current}
-                    defaultProfileName={saasUsername}
-                    offerRecoveryBackup={fromSaas}
-                    onBackupRecovery={fromSaas ? backupRecovery : undefined}
-                    onAfterCreate={fromSaas ? enrollCloudSync : undefined}
+                    defaultProfileName={cloudUsername}
+                    offerRecoveryBackup={fromCloud}
+                    onBackupRecovery={fromCloud ? backupRecovery : undefined}
+                    onAfterCreate={fromCloud ? enrollCloudSync : undefined}
                     onDone={() => {
                       // After verify, NewIdentitySection navigates to personalDrive / home
                     }}

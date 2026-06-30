@@ -29,7 +29,7 @@ import {
   fetchNodeDriveUsage,
   type NodeDriveUsage,
 } from '../helpers/managedServer';
-import { getDriveUsage } from '../helpers/saasRecovery';
+import { getDriveUsage } from '../helpers/cloudUsage';
 import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';

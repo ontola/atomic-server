@@ -38,7 +38,7 @@ interface NewIdentitySectionProps {
   verifySecret?: boolean;
   /** Optional portal target for the step dots indicator. */
   stepIndicatorPortal?: Element | null;
-  /** Prefill the profile-name field (e.g. from a SaaS account email). */
+  /** Prefill the profile-name field (e.g. from a cloud account email). */
   defaultProfileName?: string;
   /**
    * If true, after creating the identity, offer to back up the agent secret

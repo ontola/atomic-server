@@ -66,7 +66,7 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_EMAIL")]
     pub email: Option<String>,
 
-    /// User-facing SaaS dashboard / portal URL. When set, this node reports as
+    /// User-facing dashboard / portal URL. When set, this node reports as
     /// "managed" via `GET /node-info`, and the data-browser routes account
     /// creation to the portal (e.g. for email verification). Leave unset for
     /// self-hosted / FOSS nodes.

@@ -2,9 +2,9 @@
 // any transcript. Reconstructed from its call sites:
 //   - reconcile.ts: getCloudEnrollments() -> CloudEnrollmentSummary[]
 //        reads `.status` (compared to 'Disabled') and `.agent_subject`
-//   - getDriveUsage() in saasRecovery.ts reads the same shape (drive_subject,
+//   - getDriveUsage() in cloudUsage.ts reads the same shape (drive_subject,
 //        drive_name, resource_count, blob_bytes, loro_bytes, quota_bytes)
-// against the atomic-saas `GET /api/sync-enrollments` route.
+// against the control-plane `GET /api/sync-enrollments` route.
 
 import { getCloudApiBase } from './api';
 

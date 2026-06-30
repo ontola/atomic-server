@@ -3025,7 +3025,6 @@ msgid "Yes, I've stored it safely"
 msgstr "Oui, je l'ai stocké en toute sécurité"
 
 #: src/components/SideBar/AppMenu.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Login / New User"
 msgstr "Connexion / Nouvel utilisateur"
 
@@ -3442,7 +3441,6 @@ msgid "New"
 msgstr "Nouveau"
 
 #: src/components/LoggedOutAgentPanel.tsx
-#: src/routes/SettingsAgent.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
 msgstr "Créer un compte"
@@ -3468,6 +3466,7 @@ msgstr "Mettez vos connaissances à votre service."
 msgid "Generative features"
 msgstr "Fonctionnalités génératives"
 
+#: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "<0/> Back"
@@ -4870,4 +4869,98 @@ msgstr ""
 
 #: src/hooks/usePersonalDriveList.ts
 msgid "Could not update your list: no personal drive is set up for this account yet."
+msgstr ""
+
+#: src/helpers/cloud/reconcile.ts
+msgid "Disabled"
+msgstr ""
+
+#~ msgid "Invalid agent secret."
+#~ msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Setting up your account…"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Could not back up your secret. You can still save it yourself."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Back up your secret?"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"This lets you recover your account if you lose your secret. We won't get\n"
+"access to your data — your secret is encrypted with the recovery\n"
+"password below before it leaves your device."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Choose a recovery password"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Recovery password"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Backing up…"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Back up & continue"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Skip, I'll save it myself"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Could not restore your account."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Forgot your secret?"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Restore account"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Checking your cloud account…"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"To restore your account, sign in to your cloud account\n"
+"first, then come back here."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in to your cloud account"
+msgstr ""
+
+#. placeholder {0}: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"No recovery backup was found for {0}. Account\n"
+"recovery only works if you enabled it earlier."
+msgstr ""
+
+#. placeholder {0}: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Enter the recovery password you set for {0}."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Restoring…"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Restore & sign in"
 msgstr ""

@@ -6,8 +6,8 @@ use std::sync::{Arc, RwLock};
 use std::{path::Path, time::Duration};
 
 #[derive(Clone)]
-pub struct SaaSHeartbeatConfig {
-    pub saas_url: String,
+pub struct ControlPlaneHeartbeatConfig {
+    pub control_plane_url: String,
     pub node_id: String,
     pub iroh_node_id: Option<String>,
     pub http_origin: String,
@@ -35,12 +35,12 @@ struct NodePolicyResponse {
     allowed_drives: Vec<NodePolicyDrive>,
 }
 
-/// Whether this server is a managed node (configured to report to a SaaS
+/// Whether this server is a managed node (configured to report to a ControlPlane
 /// control plane).
 pub fn is_managed(config: &Config) -> bool {
     config
         .opts
-        .saas_url
+        .control_plane_url
         .as_deref()
         .map(str::trim)
         .is_some_and(|s| !s.is_empty())
@@ -62,10 +62,10 @@ struct NodeUsageRequest<'a> {
 pub fn heartbeat_config(
     config: &Config,
     iroh_node_id: Option<String>,
-) -> Option<SaaSHeartbeatConfig> {
-    let saas_url = config
+) -> Option<ControlPlaneHeartbeatConfig> {
+    let control_plane_url = config
         .opts
-        .saas_url
+        .control_plane_url
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())?
@@ -74,7 +74,7 @@ pub fn heartbeat_config(
 
     let node_id = config
         .opts
-        .saas_node_id
+        .control_plane_node_id
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -82,27 +82,27 @@ pub fn heartbeat_config(
         .or_else(|| iroh_node_id.clone())
         .unwrap_or_else(|| config.get_origin());
 
-    Some(SaaSHeartbeatConfig {
-        saas_url,
+    Some(ControlPlaneHeartbeatConfig {
+        control_plane_url,
         node_id,
         iroh_node_id,
         http_origin: config.get_origin(),
-        region: config.opts.saas_region.clone(),
-        interval: Duration::from_secs(config.opts.saas_heartbeat_interval.max(5)),
+        region: config.opts.control_plane_region.clone(),
+        interval: Duration::from_secs(config.opts.control_plane_heartbeat_interval.max(5)),
         store_path: config.store_path.clone(),
         uploads_path: config.uploads_path.clone(),
     })
 }
 
-pub fn spawn_heartbeat(config: SaaSHeartbeatConfig, store: Db, policy: Arc<AllowlistPolicy>) {
+pub fn spawn_heartbeat(config: ControlPlaneHeartbeatConfig, store: Db, policy: Arc<AllowlistPolicy>) {
     actix_web::rt::spawn(async move {
         let client = reqwest::Client::new();
         loop {
             if let Err(e) = send_heartbeat(&client, &config, &store).await {
-                tracing::warn!("Atomic SaaS heartbeat failed: {e}");
+                tracing::warn!("Atomic ControlPlane heartbeat failed: {e}");
             }
             if let Err(e) = send_usage(&client, &config, &store, &policy).await {
-                tracing::warn!("Atomic SaaS usage report failed: {e}");
+                tracing::warn!("Atomic ControlPlane usage report failed: {e}");
             }
             actix_web::rt::time::sleep(config.interval).await;
         }
@@ -110,7 +110,7 @@ pub fn spawn_heartbeat(config: SaaSHeartbeatConfig, store: Db, policy: Arc<Allow
 }
 
 pub fn spawn_policy_poll(
-    config: SaaSHeartbeatConfig,
+    config: ControlPlaneHeartbeatConfig,
     policy: Arc<AllowlistPolicy>,
     dashboard_url: Arc<RwLock<Option<String>>>,
 ) {
@@ -118,7 +118,7 @@ pub fn spawn_policy_poll(
         let client = reqwest::Client::new();
         loop {
             if let Err(e) = refresh_policy(&client, &config, &policy, &dashboard_url).await {
-                tracing::warn!("Atomic SaaS policy refresh failed: {e}");
+                tracing::warn!("Atomic ControlPlane policy refresh failed: {e}");
             }
             actix_web::rt::time::sleep(config.interval).await;
         }
@@ -127,7 +127,7 @@ pub fn spawn_policy_poll(
 
 async fn send_heartbeat(
     client: &reqwest::Client,
-    config: &SaaSHeartbeatConfig,
+    config: &ControlPlaneHeartbeatConfig,
     store: &Db,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let used_bytes = path_size(&config.store_path) + path_size(&config.uploads_path);
@@ -147,7 +147,7 @@ async fn send_heartbeat(
         active_drive_count,
     };
 
-    let url = format!("{}/api/nodes/heartbeat", config.saas_url);
+    let url = format!("{}/api/nodes/heartbeat", config.control_plane_url);
     let response = client.post(url).json(&body).send().await?;
     if !response.status().is_success() {
         let status = response.status();
@@ -160,12 +160,12 @@ async fn send_heartbeat(
 
 async fn refresh_policy(
     client: &reqwest::Client,
-    config: &SaaSHeartbeatConfig,
+    config: &ControlPlaneHeartbeatConfig,
     policy: &AllowlistPolicy,
     dashboard_url: &RwLock<Option<String>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let node_id = urlencoding::encode(&config.node_id);
-    let url = format!("{}/api/node-policy?node_id={node_id}", config.saas_url);
+    let url = format!("{}/api/node-policy?node_id={node_id}", config.control_plane_url);
     let response = client.get(url).send().await?;
 
     if !response.status().is_success() {
@@ -185,7 +185,7 @@ async fn refresh_policy(
             .into_iter()
             .map(|drive| (drive.drive_subject, drive.quota_bytes)),
     );
-    tracing::debug!("Atomic SaaS policy refreshed: {drive_count} allowed drives");
+    tracing::debug!("Atomic ControlPlane policy refreshed: {drive_count} allowed drives");
 
     Ok(())
 }
@@ -194,7 +194,7 @@ async fn refresh_policy(
 /// records the usage locally so the sync engine can enforce quotas.
 async fn send_usage(
     client: &reqwest::Client,
-    config: &SaaSHeartbeatConfig,
+    config: &ControlPlaneHeartbeatConfig,
     store: &Db,
     policy: &AllowlistPolicy,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -214,7 +214,7 @@ async fn send_usage(
         node_id: &config.node_id,
         drives,
     };
-    let url = format!("{}/api/node-usage", config.saas_url);
+    let url = format!("{}/api/node-usage", config.control_plane_url);
     let response = client.post(url).json(&body).send().await?;
     if !response.status().is_success() {
         let status = response.status();

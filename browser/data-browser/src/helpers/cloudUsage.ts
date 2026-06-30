@@ -1,22 +1,14 @@
-// [RECOVERY] This file was truncated in the recovery (only ~73 of ~268 lines
-// survived in the transcripts). The `getSaasApiBase` helper (used throughout but
-// lost from the original top of the file) and the `createSaasEnrollment` body
-// below are reconstructed. `getSaasApiBase` resolves the same atomic-saas
-// control-plane `/api` base as the cloud helpers, so it delegates to them.
+// Cloud account + per-drive usage helpers, talking to the control-plane `/api`
+// base (same endpoint as the other cloud helpers).
 import { getCloudApiBase } from './cloud/api';
 
-/** Base URL of the atomic-saas control plane (same endpoint as the cloud helpers). */
-function getSaasApiBase(): string {
-  return getCloudApiBase();
-}
-
-export type SaasUser = {
+export type CloudUser = {
   email: string;
   created_at: number;
 };
 
-export async function getSaasUser(): Promise<SaasUser | null> {
-  const response = await fetch(`${getSaasApiBase()}/me`, {
+export async function getCloudUser(): Promise<CloudUser | null> {
+  const response = await fetch(`${getCloudApiBase()}/me`, {
     credentials: 'include',
   });
 
@@ -25,7 +17,7 @@ export async function getSaasUser(): Promise<SaasUser | null> {
   }
 
   if (!response.ok) {
-    throw new Error('Could not check SaaS session.');
+    throw new Error('Could not check cloud session.');
   }
 
   return response.json();
@@ -49,7 +41,7 @@ export async function getDriveUsage(
 ): Promise<DriveUsageInfo | null> {
   if (!driveSubject) return null;
 
-  const response = await fetch(`${getSaasApiBase()}/sync-enrollments`, {
+  const response = await fetch(`${getCloudApiBase()}/sync-enrollments`, {
     credentials: 'include',
   });
 
@@ -82,17 +74,17 @@ export async function getDriveUsage(
   };
 }
 
-// [RECOVERY-RECONSTRUCTED] Only the signature `createSaasEnrollment({` survived.
+// [RECOVERY-RECONSTRUCTED] Only the signature `createCloudEnrollment({` survived.
 // Reconstructed from the equivalent helpers/cloud/enrollment.ts:createCloudSyncEnrollment
 // (POST /sync-enrollments). No code currently imports this export.
-export async function createSaasEnrollment({
+export async function createCloudEnrollment({
   driveSubject,
   agentSubject,
 }: {
   driveSubject: string;
   agentSubject: string;
 }): Promise<unknown> {
-  const response = await fetch(`${getSaasApiBase()}/sync-enrollments`, {
+  const response = await fetch(`${getCloudApiBase()}/sync-enrollments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',

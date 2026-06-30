@@ -16,7 +16,7 @@ type GateProps = {
  * Keeps the device's Atomic agent aligned with the signed-in Cloud Sync account
  * — **silently**. There is no "resolve mismatch" screen: the agent layer is
  * never surfaced to a user who only thinks in terms of their Cloud Sync account.
- * (See atomic-saas/planning/SAAS_ATOMIC_SERVER_CONTRACT.md, decision 2026-06-25.)
+ * (See the control-plane contract doc, decision 2026-06-25.)
  *
  * On a Cloud Sync session whose account agent differs from the device agent:
  * - **Account has a restorable backup** (`recovery_agent`) → send the user to

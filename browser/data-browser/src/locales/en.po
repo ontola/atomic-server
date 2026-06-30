@@ -137,6 +137,9 @@ msgstr "<0/> Create New Agent"
 #: src/chunks/AI/AgentConfig.tsx
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
@@ -284,6 +287,9 @@ msgid "Automatically compact the conversation when input tokens exceed this perc
 msgstr "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled."
 
 #: src/chunks/AI/MessageContextItem.tsx
+#: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 #: src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Remove"
@@ -306,6 +312,7 @@ msgid "Also use for chat titles and follow-up prompts"
 msgstr "Also use for chat titles and follow-up prompts"
 
 #: src/chunks/AI/AISetupPanel.tsx
+#: src/components/LoggedOutAgentPanel.tsx
 msgid "Back"
 msgstr "Back"
 
@@ -347,6 +354,7 @@ msgid "Ollama"
 msgstr "Ollama"
 
 #: src/chunks/AI/AISetupPanel.tsx
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -569,6 +577,7 @@ msgid "Optional HTTP headers to send when connecting to this MCP server"
 msgstr "Optional HTTP headers to send when connecting to this MCP server"
 
 #: src/chunks/AI/AgentConfigItem.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/ResourceContextMenu/index.tsx
 #: src/routes/EditRoute.tsx
 #: src/views/ResourcePageDefault.tsx
@@ -596,6 +605,9 @@ msgstr "Provider not enabled"
 msgid "Default model"
 msgstr "Default model"
 
+#: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
+#: src/chunks/TablePage/EditorCells/SelectCell.tsx
 #: src/components/ComboBox.tsx
 msgid "No results"
 msgstr "No results"
@@ -656,6 +668,7 @@ msgstr "Required field."
 
 #. placeholder {0}: JSON.stringify(error)
 #. placeholder {0}: searchError.message
+#. placeholder {0}: data.error
 #. placeholder {0}: e
 #. placeholder {0}: resource.error.message
 #: src/components/forms/Field.tsx
@@ -742,8 +755,10 @@ msgstr "Thinking"
 msgid "Unable to connect to Ollama server. Check if the server is running and you configured the correct url in the settings"
 msgstr "Unable to connect to Ollama server. Check if the server is running and you configured the correct url in the settings"
 
+#: src/chunks/AI/AIChatPage.tsx
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/components/HighlightedCodeBlock.tsx
+#: src/components/Searchbar/TagSuggestionOverlay.tsx
 #: src/views/Card/ResourceCard.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
@@ -853,6 +868,7 @@ msgstr "Check the browser console for details, or try navigating back."
 msgid "404 Not found"
 msgstr "404 Not found"
 
+#: src/routes/Search/SearchOverlay.tsx
 #: src/routes/Search/SearchRoute.tsx
 #: src/views/EndpointPage.tsx
 msgid "No hits"
@@ -887,6 +903,7 @@ msgid "{0}{1} {2} for{3} <0/>"
 msgstr "{0}{1} {2} for{3} <0/>"
 
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 #: src/routes/Search/SearchRoute.tsx
 msgid "With Tags:"
 msgstr "With Tags:"
@@ -927,8 +944,10 @@ msgstr "Learn more & get involved"
 msgid "Atomic Data Browser"
 msgstr "Atomic Data Browser"
 
+#. placeholder {0}: metadata.version
 #. placeholder {0}: __APP_VERSION__
 #. placeholder {0}: resource.props.version
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/routes/AboutRoute.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "v{0}"
@@ -962,7 +981,6 @@ msgid "User Settings"
 msgstr "User Settings"
 
 #: src/components/SideBar/AppMenu.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Login / New User"
 msgstr "Login / New User"
 
@@ -1298,6 +1316,7 @@ msgstr "Be the first to say something"
 msgid "Chat input"
 msgstr "Chat input"
 
+#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 #: src/views/ChatRoomPage.tsx
 msgid "Send"
 msgstr "Send"
@@ -1330,6 +1349,7 @@ msgstr "Copy link to this message"
 msgid "Copy message text"
 msgstr "Copy message text"
 
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 #: src/views/BookmarkPage/BookmarkPreview.tsx
 #: src/views/ChatRoomPage.tsx
 msgid "loading..."
@@ -1544,11 +1564,13 @@ msgid "Resource is loading..."
 msgstr "Resource is loading..."
 
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 msgid "Search for resources..."
 msgstr "Search for resources..."
 
 #: src/components/OverlayContainer.tsx
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 msgid "esc"
 msgstr "esc"
 
@@ -1558,6 +1580,7 @@ msgid "Start AI Chat with \"{0}\""
 msgstr "Start AI Chat with \"{0}\""
 
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 msgid "<0/> <1/> navigate"
 msgstr "<0/> <1/> navigate"
 
@@ -1570,12 +1593,16 @@ msgid "<0/> chat"
 msgstr "<0/> chat"
 
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 msgid "<0>esc</0> close"
 msgstr "<0>esc</0> close"
 
 #. placeholder {0}: results.length
 #. placeholder {1}: results.length !== 1 ? 's' : ''
+#. placeholder {0}: results.length
+#. placeholder {1}: results.length !== 1 ? 's' : ''
 #: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 msgid "{0} result{1}"
 msgstr "{0} result{1}"
 
@@ -1674,7 +1701,9 @@ msgstr "Keyboard shortcuts"
 msgid "Press esc to close..."
 msgstr "Press esc to close..."
 
+#. placeholder {0}: metadata.author
 #. placeholder {0}: resource.props.pluginAuthor
+#: src/chunks/Plugins/NewPluginButton.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "by {0}"
 msgstr "by {0}"
@@ -1802,6 +1831,7 @@ msgid "Text Flow <0/>"
 msgstr "Text Flow <0/>"
 
 #: src/chunks/RTE/ImagePicker.tsx
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
@@ -1991,7 +2021,7 @@ msgstr "Turtle / N-triples / N3"
 msgid "Usage"
 msgstr "Usage"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
 msgstr "Create account"
@@ -2163,6 +2193,7 @@ msgstr "Embedded (local)"
 msgid "+ Add"
 msgstr "+ Add"
 
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Add"
 msgstr "Add"
@@ -2285,6 +2316,7 @@ msgstr "Custom Drive URL"
 msgid "Enter a Drive DID or URL"
 msgstr "Enter a Drive DID or URL"
 
+#: src/chunks/RTE/EditLinkForm.tsx
 #: src/routes/SettingsServer/index.tsx
 msgid "Set"
 msgstr "Set"
@@ -2410,6 +2442,7 @@ msgstr "Click to edit title"
 msgid "Download file ({0})"
 msgstr "Download file ({0})"
 
+#: src/chunks/TablePage/TableExportDialog.tsx
 #: src/views/File/DownloadButton.tsx
 msgid "<0/> Download"
 msgstr "<0/> Download"
@@ -2434,6 +2467,7 @@ msgstr "Preview hidden because the file is larger than{0} {1}."
 msgid "Load anyway ({0})"
 msgstr "Load anyway ({0})"
 
+#: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
 #: src/hooks/useCreateAndNavigate.ts
 #: src/routes/History/HistoryDesktopView.tsx
@@ -2518,6 +2552,7 @@ msgstr "Instances"
 msgid "No instances"
 msgstr "No instances"
 
+#: src/chunks/RTE/AIChatInput/mcpSuggestions.ts
 #: src/components/MetaSetter.tsx
 msgid "Atomic Data"
 msgstr "Atomic Data"
@@ -2563,6 +2598,7 @@ msgstr "Nothing to copy."
 msgid "Copied error to clipboard"
 msgstr "Copied error to clipboard"
 
+#: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
 #: src/components/Toaster.tsx
 msgid "Clear"
 msgstr "Clear"
@@ -2701,6 +2737,7 @@ msgstr "Edit value"
 msgid "Create {0}:{1} <0/>"
 msgstr "Create {0}:{1} <0/>"
 
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/components/SignInButton.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -2773,15 +2810,19 @@ msgstr ""
 msgid "Get started"
 msgstr "Get started"
 
+#: src/components/LoggedOutAgentPanel.tsx
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Agent secret"
 msgstr "Agent secret"
 
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
 msgstr "Signing in…"
 
+#: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "<0/> Back"
@@ -2903,6 +2944,7 @@ msgstr ""
 msgid "Shortname"
 msgstr "Shortname"
 
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/InviteForm.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
@@ -3003,6 +3045,7 @@ msgstr "<0/> Resource with error"
 msgid "New tag"
 msgstr "New tag"
 
+#: src/chunks/TablePage/EditorCells/SelectCell.tsx
 #: src/components/Tag/CreateTagRow.tsx
 msgid "Add tag"
 msgstr "Add tag"
@@ -3444,6 +3487,7 @@ msgstr "New Property"
 msgid "Invalid value"
 msgstr "Invalid value"
 
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 #: src/components/forms/FilePicker/FilePicker.tsx
 #: src/components/forms/InputDate.tsx
 #: src/components/forms/InputMarkdown.tsx
@@ -3857,6 +3901,8 @@ msgid "More"
 msgstr "More"
 
 #. placeholder {0}: shortcuts.menu
+#. placeholder {0}: shortcuts.menu
+#: src/components/ResourceContextMenu/MenuBarDropdownTrigger.tsx
 #: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
 msgid "Open menu ({0})"
 msgstr "Open menu ({0})"
@@ -3902,6 +3948,7 @@ msgstr "Toggle show Class details"
 msgid "Remove drive from list"
 msgstr "Remove drive from list"
 
+#: src/chunks/TablePage/NewColumnButton.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/routes/SettingsServer/DriveRow.tsx
 msgid "Select"
@@ -4031,7 +4078,11 @@ msgstr "<0/> properties have {0}{1} as a classtype."
 msgid "This resource has <0/> children"
 msgstr "This resource has <0/> children"
 
+#. placeholder {0}: prop.shortname
+#. placeholder {0}: prop.shortname
 #. placeholder {0}: title
+#: src/chunks/TablePage/EditorCells/JSONCell.tsx
+#: src/chunks/TablePage/EditorCells/MarkdownCell.tsx
 #: src/components/forms/EditFormDialog.tsx
 msgid "Edit {0}"
 msgstr "Edit {0}"
@@ -4125,3 +4176,754 @@ msgstr "No Results"
 #: src/views/CodeUsage/PropSelector.tsx
 msgid "None"
 msgstr "None"
+
+#. placeholder {0}: DEV_DRIVE_PRUNE_MARKER
+#: src/hooks/useDevDrive.ts
+msgid ""
+"Created via `/app/dev-drive` for local development and E2E. You can remove these with Prune test data on `/app/prunetests`.\n"
+"\n"
+"{0}"
+msgstr ""
+"Created via `/app/dev-drive` for local development and E2E. You can remove these with Prune test data on `/app/prunetests`.\n"
+"\n"
+"{0}"
+
+#: src/hooks/useDevDrive.ts
+msgid "Dev agent created — secret copied to clipboard"
+msgstr "Dev agent created — secret copied to clipboard"
+
+#: src/hooks/useDevDrive.ts
+msgid "Dev agent created — secret available in localStorage (clipboard write blocked)"
+msgstr "Dev agent created — secret available in localStorage (clipboard write blocked)"
+
+#: src/routes/DevDriveRoute.tsx
+msgid "Setting up dev drive..."
+msgstr "Setting up dev drive..."
+
+#: src/routes/PruneTestsRoute.tsx
+msgid "Prune Test Data"
+msgstr "Prune Test Data"
+
+#. placeholder {0}: ' '
+#. placeholder {1}: ' '
+#: src/routes/PruneTestsRoute.tsx
+msgid ""
+"This removes drives created for automated tests or local dev: names\n"
+"containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
+msgstr ""
+"This removes drives created for automated tests or local dev: names\n"
+"containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
+
+#: src/routes/PruneTestsRoute.tsx
+msgid "Prune"
+msgstr "Prune"
+
+#: src/routes/PruneTestsRoute.tsx
+msgid "Pruning, this might take a while..."
+msgstr "Pruning, this might take a while..."
+
+#~ msgid "Invalid agent secret."
+#~ msgstr "Invalid agent secret."
+
+#: src/chunks/AI/AIChatPage.tsx
+msgid "Failed to create message resource"
+msgstr "Failed to create message resource"
+
+#: src/chunks/AI/AIChatPage.tsx
+msgid "Failed to remove message resource"
+msgstr "Failed to remove message resource"
+
+#: src/chunks/AI/AIChatPage.tsx
+msgid "Failed to save summary message"
+msgstr "Failed to save summary message"
+
+#: src/chunks/AI/useGenerativeData.test.ts
+msgid "No object generated: could not parse the response."
+msgstr "No object generated: could not parse the response."
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "First"
+msgstr "First"
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "Reply"
+msgstr "Reply"
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "Second"
+msgstr "Second"
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "Hello"
+msgstr "Hello"
+
+#: src/chunks/EmojiInput/EmojiInput.tsx
+msgid "Pick an emoji"
+msgstr "Pick an emoji"
+
+#: src/chunks/HighlightedCode/HighlightedCodeBlock.tsx
+msgid "Copy code"
+msgstr "Copy code"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "The update's identifier does not match the existing plugin."
+msgstr "The update's identifier does not match the existing plugin."
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "<0/> Update"
+msgstr "<0/> Update"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Change Version"
+msgstr "Change Version"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "New Permissions"
+msgstr "New Permissions"
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Your config is not fully compatible with the new version."
+msgstr "Your config is not fully compatible with the new version."
+
+#: src/chunks/Plugins/UpdatePluginButton.tsx
+msgid "Apply"
+msgstr "Apply"
+
+#: src/chunks/CodeEditor/AsyncJSONEditor.tsx
+msgid "Enter valid JSON..."
+msgstr "Enter valid JSON..."
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Please fill in all fields"
+msgstr "Please fill in all fields"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Failed to install plugin"
+msgstr "Failed to install plugin"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "<0/> Upload Plugin"
+msgstr "<0/> Upload Plugin"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Add Plugin"
+msgstr "Add Plugin"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Config"
+msgstr "Config"
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Install"
+msgstr "Install"
+
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+msgid "unset"
+msgstr "unset"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Note"
+msgstr "Note"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Data Table"
+msgstr "Data Table"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Untitled Agent"
+msgstr "Untitled Agent"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Rich Text Editor"
+msgstr "Rich Text Editor"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Click to focus document…"
+msgstr "Click to focus document…"
+
+#. placeholder {0}: ' '
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid ""
+"There was an error in the editor, please refresh the page to\n"
+"continue.{0} <0>Refresh</0>"
+msgstr ""
+"There was an error in the editor, please refresh the page to\n"
+"continue.{0} <0>Refresh</0>"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Type '/' for options or '@' for resources"
+msgstr "Type '/' for options or '@' for resources"
+
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+msgid "Start typing..."
+msgstr "Start typing..."
+
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+msgid "Type '/' for options"
+msgstr "Type '/' for options"
+
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
+msgid "Edit raw markdown"
+msgstr "Edit raw markdown"
+
+#: src/chunks/RTE/ColorMenu.tsx
+msgid "Edit text color"
+msgstr "Edit text color"
+
+#: src/chunks/RTE/ColorMenu.tsx
+msgid "Edit background color"
+msgstr "Edit background color"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Paragraph"
+msgstr "Paragraph"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Codeblock"
+msgstr "Codeblock"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Ordered List"
+msgstr "Ordered List"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Bullet List"
+msgstr "Bullet List"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Task List"
+msgstr "Task List"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 1"
+msgstr "Heading 1"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 2"
+msgstr "Heading 2"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 3"
+msgstr "Heading 3"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 4"
+msgstr "Heading 4"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 5"
+msgstr "Heading 5"
+
+#: src/chunks/RTE/NodeSelectMenu.tsx
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Heading 6"
+msgstr "Heading 6"
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Toggle bold"
+msgstr "Toggle bold"
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Toggle italic"
+msgstr "Toggle italic"
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Toggle strikethrough"
+msgstr "Toggle strikethrough"
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Toggle blockquote"
+msgstr "Toggle blockquote"
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Toggle inline code"
+msgstr "Toggle inline code"
+
+#: src/chunks/RTE/comparePlugin.ts
+msgid "No alt text"
+msgstr "No alt text"
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "Text"
+msgstr "Text"
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
+msgid "Number"
+msgstr "Number"
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "Date"
+msgstr "Date"
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "Checkbox"
+msgstr "Checkbox"
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "File"
+msgstr "File"
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "Relation"
+msgstr "Relation"
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "External Property"
+msgstr "External Property"
+
+#: src/chunks/TablePage/TableExportDialog.tsx
+msgid "Export table as CSV"
+msgstr "Export table as CSV"
+
+#. placeholder {0}: ' '
+#: src/chunks/TablePage/TableExportDialog.tsx
+msgid "<0/>{0} Reference resources by subject instead of name."
+msgstr "<0/>{0} Reference resources by subject instead of name."
+
+#: src/chunks/TablePage/TableFilterBar.tsx
+msgid "Table filters"
+msgstr "Table filters"
+
+#: src/chunks/TablePage/TableHeading.tsx
+msgid "Drag column"
+msgstr "Drag column"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "View"
+msgstr "View"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Filter"
+msgstr "Filter"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Hide in this view"
+msgstr "Hide in this view"
+
+#. placeholder {0}: ' '
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Remove <0/> from{0} <1/>"
+msgstr "Remove <0/> from{0} <1/>"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "<0/> Delete property and its children"
+msgstr "<0/> Delete property and its children"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Delete property"
+msgstr "Delete property"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Remove column"
+msgstr "Remove column"
+
+#: src/chunks/TablePage/TablePage.tsx
+msgid "Export to CSV"
+msgstr "Export to CSV"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Add view"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Untitled view"
+msgstr "Untitled view"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Show / hide columns"
+msgstr "Show / hide columns"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Any"
+msgstr "Any"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "True"
+msgstr "True"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "False"
+msgstr "False"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Value…"
+msgstr "Value…"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Remove filter"
+msgstr "Remove filter"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Filter operator"
+msgstr "Filter operator"
+
+#. placeholder {0}: views.length + 1
+#: src/chunks/TablePage/useTableView.ts
+msgid "View {0}"
+msgstr "View {0}"
+
+#: src/chunks/TablePage/useTableView.ts
+#: src/chunks/TablePage/useTableView.ts
+msgid "Default View"
+msgstr "Default View"
+
+#: src/chunks/TablePage/TableRow.tsx
+msgid "Row is incomplete or has invalid data"
+msgstr "Row is incomplete or has invalid data"
+
+#: src/chunks/TableEditor/Cell.tsx
+msgid "Open resource"
+msgstr "Open resource"
+
+#: src/components/ResourceUsage/UsageRow.tsx
+msgid "Insufficient rights to view resource"
+msgstr "Insufficient rights to view resource"
+
+#: src/components/Searchbar/Searchbar.tsx
+msgid "Search (Cmd+K)"
+msgstr "Search (Cmd+K)"
+
+#. placeholder {0}: title
+#: src/components/Searchbar/Searchbar.tsx
+msgid "in:{0}"
+msgstr "in:{0}"
+
+#: src/components/Searchbar/Searchbar.tsx
+msgid "Clear scope"
+msgstr "Clear scope"
+
+#: src/components/Searchbar/TagSuggestionOverlay.tsx
+msgid "No tags found"
+msgstr "No tags found"
+
+#: src/components/Searchbar/SearchbarInput.tsx
+msgid "Caret"
+msgstr "Caret"
+
+#: src/components/Searchbar/SearchbarInput.tsx
+msgid "Enter an Atomic URL or search  (press \"/\")"
+msgstr "Enter an Atomic URL or search  (press \"/\")"
+
+#: src/components/Searchbar/SearchbarInput.tsx
+msgid "Search"
+msgstr "Search"
+
+#: src/helpers/cloud/reconcile.ts
+msgid "Disabled"
+msgstr "Disabled"
+
+#: src/components/forms/MinMaxInput.tsx
+#: src/components/forms/MinMaxInput.tsx
+msgid "Value should be a round number."
+msgstr "Value should be a round number."
+
+#: src/components/forms/MinMaxInput.tsx
+msgid "Min must be a less than max"
+msgstr "Min must be a less than max"
+
+#: src/routes/History/VersionContent.tsx
+msgid "Document body"
+msgstr "Document body"
+
+#: src/routes/History/VersionContent.tsx
+msgid "(empty)"
+msgstr "(empty)"
+
+#: src/routes/Search/SearchOverlay.tsx
+msgid "Searching..."
+msgstr "Searching..."
+
+#: src/routes/Search/SearchOverlay.tsx
+msgid ""
+"Search matches on the names and descriptions of resources.\n"
+"Additionally you can filter by tag using <0/>"
+msgstr ""
+"Search matches on the names and descriptions of resources.\n"
+"Additionally you can filter by tag using <0/>"
+
+#: src/routes/Search/SearchOverlay.tsx
+msgid "<0/> open"
+msgstr "<0/> open"
+
+#: src/routes/SettingsServer/ServersCard.tsx
+msgid "No known servers"
+msgstr "No known servers"
+
+#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
+msgid "Ask me anything, / for commands, @ for context"
+msgstr "Ask me anything, / for commands, @ for context"
+
+#: src/chunks/RTE/AIChatInput/MentionList.tsx
+msgid "No result"
+msgstr "No result"
+
+#: src/chunks/RTE/SlashMenu/CommandList.tsx
+msgid "No results found"
+msgstr "No results found"
+
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
+msgid "Failed to save changes"
+msgstr "Failed to save changes"
+
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
+msgid "Review Edits"
+msgstr "Review Edits"
+
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
+msgid "edit"
+msgid_plural "edits"
+msgstr[0] "edit"
+msgstr[1] "edits"
+
+#. placeholder {0}: editCount
+#. placeholder {1}: plural(editCount, ['edit', 'edits'])
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
+msgid "Review {0} {1}"
+msgstr "Review {0} {1}"
+
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
+msgid "Revert Changes"
+msgstr "Revert Changes"
+
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
+msgid "Confirm Changes"
+msgstr "Confirm Changes"
+
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Quote"
+msgstr "Quote"
+
+#: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+msgid "Image"
+msgstr "Image"
+
+#: src/chunks/TablePage/PropertyForm/DatePropertyForm.tsx
+msgid "<0/> Include Time"
+msgstr "<0/> Include Time"
+
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "Edit Column"
+msgstr "Edit Column"
+
+#: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+msgid "Add external property"
+msgstr "Add external property"
+
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
+msgid "Number Format"
+msgstr "Number Format"
+
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
+msgid "Percentage"
+msgstr "Percentage"
+
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
+msgid "Currency"
+msgstr "Currency"
+
+#: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
+msgid "Range"
+msgstr "Range"
+
+#. placeholder {0}: ' '
+#. placeholder {1}: selectedCategory ? selectedCategory[0].toUpperCase() + selectedCategory.slice(1) : ''
+#. placeholder {2}: ' '
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "New{0} {1}{2} Column"
+msgstr "New{0} {1}{2} Column"
+
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Invalid Name"
+msgstr "Invalid Name"
+
+#: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
+msgid "New Column"
+msgstr "New Column"
+
+#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
+msgid "Resource type:"
+msgstr "Resource type:"
+
+#: src/chunks/TablePage/PropertyForm/RelationPropertyForm.tsx
+msgid "<0/> Allow multiple values"
+msgstr "<0/> Allow multiple values"
+
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+msgid "Text Format:"
+msgstr "Text Format:"
+
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+msgid "Plain text"
+msgstr "Plain text"
+
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+msgid "Rich text"
+msgstr "Rich text"
+
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+msgid "Slug"
+msgstr "Slug"
+
+#: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+msgid "Length"
+msgstr "Length"
+
+#. placeholder {0}: classType.title
+#. placeholder {0}: classType.title
+#: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
+msgid "Search {0}"
+msgstr "Search {0}"
+
+#: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
+msgid "Search..."
+msgstr "Search..."
+
+#: src/chunks/TablePage/PropertyForm/categories.tsx
+msgid "No Type selected"
+msgstr "No Type selected"
+
+#: src/chunks/TablePage/EditorCells/JSONCell.tsx
+#: src/chunks/TablePage/EditorCells/MarkdownCell.tsx
+msgid "Open edit dialog"
+msgstr "Open edit dialog"
+
+#: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
+msgid "Add resource"
+msgstr "Add resource"
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+msgid "Numeric"
+msgstr "Numeric"
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+msgid "Long"
+msgstr "Long"
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+msgid "Relative"
+msgstr "Relative"
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
+msgid "Value must be between 0 and 20."
+msgstr "Value must be between 0 and 20."
+
+#: src/chunks/TablePage/PropertyForm/Inputs/DecimalPlacesInput.tsx
+msgid "Decimal Places"
+msgstr "Decimal Places"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Setting up your account…"
+msgstr "Setting up your account…"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Could not back up your secret. You can still save it yourself."
+msgstr "Could not back up your secret. You can still save it yourself."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Back up your secret?"
+msgstr "Back up your secret?"
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"This lets you recover your account if you lose your secret. We won't get\n"
+"access to your data — your secret is encrypted with the recovery\n"
+"password below before it leaves your device."
+msgstr ""
+"This lets you recover your account if you lose your secret. We won't get\n"
+"access to your data — your secret is encrypted with the recovery\n"
+"password below before it leaves your device."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Choose a recovery password"
+msgstr "Choose a recovery password"
+
+#: src/components/NewIdentitySection.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Recovery password"
+msgstr "Recovery password"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Backing up…"
+msgstr "Backing up…"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Back up & continue"
+msgstr "Back up & continue"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Skip, I'll save it myself"
+msgstr "Skip, I'll save it myself"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Could not restore your account."
+msgstr "Could not restore your account."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Forgot your secret?"
+msgstr "Forgot your secret?"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Restore account"
+msgstr "Restore account"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Checking your cloud account…"
+msgstr "Checking your cloud account…"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"To restore your account, sign in to your cloud account\n"
+"first, then come back here."
+msgstr ""
+"To restore your account, sign in to your cloud account\n"
+"first, then come back here."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in to your cloud account"
+msgstr "Sign in to your cloud account"
+
+#. placeholder {0}: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"No recovery backup was found for {0}. Account\n"
+"recovery only works if you enabled it earlier."
+msgstr ""
+"No recovery backup was found for {0}. Account\n"
+"recovery only works if you enabled it earlier."
+
+#. placeholder {0}: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Enter the recovery password you set for {0}."
+msgstr "Enter the recovery password you set for {0}."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Restoring…"
+msgstr "Restoring…"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Restore & sign in"
+msgstr "Restore & sign in"

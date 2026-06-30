@@ -1,7 +1,7 @@
 // [RECOVERY-RECONSTRUCTED] `helpers/cloud/session.ts` was never captured in any
 // transcript. Reconstructed from its call sites (reconcile.ts / enrollment.ts
-// use `getCloudAccount()` and read `.email`) and the atomic-saas `GET /api/me`
-// route. Mirrors the captured `getSaasUser()` in helpers/saasRecovery.ts.
+// use `getCloudAccount()` and read `.email`) and the control-plane `GET /api/me`
+// route. Mirrors the captured `getCloudUser()` in helpers/cloudUsage.ts.
 
 import { getCloudApiBase } from './api';
 

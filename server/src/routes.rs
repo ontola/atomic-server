@@ -92,7 +92,7 @@ async fn iroh_node_id_handler() -> actix_web::HttpResponse {
 }
 
 /// Read-only node metadata the data-browser fetches to adapt its onboarding:
-/// a `managed` node (one configured to report to a SaaS control plane) sets
+/// a `managed` node (one configured to report to a control plane) sets
 /// `managed: true` and a `dashboardUrl` (the user-facing portal, learned from
 /// the control plane). Self-hosted / FOSS nodes report `managed: false`.
 #[derive(serde::Serialize)]

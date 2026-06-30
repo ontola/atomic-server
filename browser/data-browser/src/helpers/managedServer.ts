@@ -8,7 +8,7 @@ import type { Agent } from '@tomic/react';
  */
 export type ManagedInfo = {
   managed: boolean;
-  /** User-facing SaaS dashboard URL, when the node is managed. */
+  /** User-facing cloud dashboard URL, when the node is managed. */
   dashboardUrl: string | null;
 };
 
