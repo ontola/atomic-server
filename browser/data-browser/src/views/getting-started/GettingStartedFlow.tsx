@@ -86,7 +86,14 @@ export function GettingStartedFlow({
   // account email and the new drive auto-enrolled in cloud sync after create.
   const fromCloud =
     new URLSearchParams(window.location.search).get('from_cloud') === 'true';
-  const [step, setStep] = useState<Step>(fromCloud ? 'create' : initialStep);
+  // A sign-in guard (clicking a drive you're not signed in for) sends the user
+  // here with `next` carrying that drive's subject, so we open straight to the
+  // sign-in step and return them to that drive afterwards (not their home).
+  const nextDrive =
+    new URLSearchParams(window.location.search).get('next') || undefined;
+  const [step, setStep] = useState<Step>(
+    fromCloud ? 'create' : nextDrive ? 'signin' : initialStep,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | undefined>();
   const stepDotsSlotRef = useRef<HTMLDivElement | null>(null);
@@ -243,6 +250,14 @@ export function GettingStartedFlow({
       setAgent(newAgent);
       await saveAgentToIDB(secret);
 
+      // Came in via a drive sign-in guard → return to that drive.
+      if (nextDrive) {
+        setDrive(nextDrive);
+        navigate(constructOpenURL(nextDrive));
+
+        return;
+      }
+
       const home = await fetchPersonalDriveSubject(store, newAgent);
 
       if (home) {
@@ -365,7 +380,14 @@ export function GettingStartedFlow({
           <OnboardingWrap>
             <OnboardingCard>
               <Column gap='1rem'>
-                <CardTitle>Sign in</CardTitle>
+                <CardTitle>
+                  {nextDrive ? 'Sign in to access this drive' : 'Sign in'}
+                </CardTitle>
+                {nextDrive ? (
+                  <CardSubtitle>
+                    Enter your agent secret to unlock this drive on this device.
+                  </CardSubtitle>
+                ) : null}
                 <form ref={signInFormRef} onSubmit={handleSubmitSignIn}>
                   <Column gap='1rem'>
                     <InputWrapper hasPrefix>
@@ -709,6 +731,13 @@ export const CardTitle = styled.h2`
   font-size: 1.4rem;
   font-weight: 700;
   line-height: 1.25;
+  text-align: center;
+`;
+
+const CardSubtitle = styled.p`
+  margin: 0 0 ${p => p.theme.size(2)} 0;
+  font-size: 0.95rem;
+  color: ${p => p.theme.colors.textLight};
   text-align: center;
 `;
 

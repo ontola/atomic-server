@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { isUnauthorized, useStore } from '@tomic/react';
-import { useLocation } from '@tanstack/react-router';
+import { useLocation, useNavigate } from '@tanstack/react-router';
 import { ContainerWide } from '../components/Containers';
 import { ErrorBlock } from '../components/ErrorLook';
 import { Button } from '../components/Button';
@@ -12,8 +12,8 @@ import CrashPage from './CrashPage';
 import { AtomicLink } from '../components/AtomicLink';
 import { paths } from '../routes/paths';
 import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceError';
+import { isDriveSignInError } from '../helpers/isDriveSignInError';
 import { RootWelcomeGate } from './RootWelcomeGate';
-import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 
 import type { JSX } from 'react';
 
@@ -24,19 +24,36 @@ import type { JSX } from 'react';
 function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
   const { agent, baseURL } = useSettings();
   const store = useStore();
-  const navigate = useNavigateWithTransition();
+  const navigate = useNavigate();
   const location = useLocation();
 
-  const shouldGoToWelcome =
-    (!agent && isRootWelcomeResourceError(resource, agent, baseURL)) ||
-    (!agent && isUnauthorized(resource.error));
+  const isHomeWelcome = isRootWelcomeResourceError(resource, agent, baseURL);
+  // Not signed in + can't read this (non-home) resource → send to the welcome
+  // panel's sign-in step, carrying the resource as `next` so we return the user
+  // here once they sign in. (Already signed in? No redirect — that agent just
+  // lacks access, handled below.)
+  const isDriveSignIn = isDriveSignInError(resource, agent, baseURL);
+  const shouldGoToWelcome = (!agent && isHomeWelcome) || isDriveSignIn;
 
   React.useEffect(() => {
     if (!shouldGoToWelcome) return;
     if (location.pathname === paths.welcome) return;
 
-    navigate({ to: paths.welcome, replace: true });
-  }, [location.pathname, navigate, shouldGoToWelcome]);
+    navigate({
+      to: paths.welcome,
+      search: {
+        next: isDriveSignIn ? resource.subject : undefined,
+        from_cloud: undefined,
+      },
+      replace: true,
+    });
+  }, [
+    location.pathname,
+    navigate,
+    shouldGoToWelcome,
+    isDriveSignIn,
+    resource.subject,
+  ]);
 
   if (isRootWelcomeResourceError(resource, agent, baseURL)) {
     // Redirect effect above will handle the URL; render something safe meanwhile.
