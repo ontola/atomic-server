@@ -302,7 +302,12 @@ where
             let policy = std::sync::Arc::new(atomic_lib::sync::policy::AllowlistPolicy::new());
             appstate.store.set_sync_policy(policy.clone());
             crate::node::spawn_heartbeat(hb.clone(), appstate.store.clone(), policy.clone());
-            crate::node::spawn_policy_poll(hb, policy, appstate.managed_dashboard_url.clone());
+            crate::node::spawn_policy_poll(
+                hb,
+                appstate.store.clone(),
+                policy,
+                appstate.managed_dashboard_url.clone(),
+            );
             tracing::info!(
                 "Managed node: reporting to control plane at {}",
                 config

@@ -773,6 +773,15 @@ impl Db {
         Ok(drives)
     }
 
+    /// Cheap local-presence check (no network fetch): is this subject's resource
+    /// already stored locally? Used by managed-node replication to skip drives it
+    /// already hosts before resolving/pulling them from a peer.
+    pub fn has_resource_locally(&self, subject: &str) -> bool {
+        self.kv
+            .contains_key(Tree::Resources, subject.as_bytes())
+            .unwrap_or(false)
+    }
+
     /// Per-drive storage usage (resource count, Loro snapshot bytes, blob
     /// bytes) for the given `drive_subjects`, for a managed node's control-plane
     /// usage report. A managed node passes its allowlisted (hosted) drives —
