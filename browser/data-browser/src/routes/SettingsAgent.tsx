@@ -23,6 +23,7 @@ import { useSavedDrives } from '../hooks/useSavedDrives';
 import { useDriveHistory } from '../hooks/useDriveHistory';
 import { constructOpenURL } from '../helpers/navigation';
 import { paths } from './paths';
+import { logoutManagedSession } from '../helpers/managed';
 
 export const AgentSettingsRoute = createRoute({
   path: pathNames.agentSettings,
@@ -57,6 +58,12 @@ const SettingsAgent: React.FunctionComponent = () => {
 
     setAgent(undefined);
     saveAgentToIDB(undefined);
+
+    // Unified sign-out: also end the control-plane session so signing out on
+    // this device signs the user out of their managed account too (no-op when
+    // self-hosted / not signed in). Best-effort — never blocks the local
+    // sign-out below.
+    void logoutManagedSession();
 
     try {
       const driveResource = await store.getResource(currentDrive);

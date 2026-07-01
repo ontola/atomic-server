@@ -30,3 +30,19 @@ export async function getManagedAccount(): Promise<ManagedAccount | null> {
 
   return (await response.json()) as ManagedAccount;
 }
+
+/**
+ * End the control-plane session too, so signing out on this device is a full
+ * sign-out (not just the local Atomic agent). Best-effort: self-hosted / FOSS
+ * nodes have no control plane, and an already-signed-out session is a no-op.
+ */
+export async function logoutManagedSession(): Promise<void> {
+  try {
+    await fetch(`${getManagedApiBase()}/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch {
+    // No control plane reachable (self-hosted) — nothing to sign out of.
+  }
+}
