@@ -83,9 +83,16 @@ test.describe('onboarding', () => {
     await page2.goto(`${FRONTEND_URL}/app/agent`);
     await page2.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page2.getByLabel('Agent secret').fill(secret!);
-    await page2.getByRole('button', { name: 'Continue' }).click();
+    // Submit via Enter rather than racing the Continue button, which can briefly
+    // re-mount as the welcome panel settles (managed-info fetch) right after the
+    // step transition.
+    await page2.getByLabel('Agent secret').press('Enter');
 
-    // Wait for "User Settings" heading which indicates successful sign-in
+    // Signing in lands the user on their home drive (sign-in is unified through
+    // /app/welcome now; /app/agent no longer hosts its own login form). Wait for
+    // the signed-in drive URL, then open settings to confirm the account.
+    await expect(page2).toHaveURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 10000 });
+    await page2.goto(`${FRONTEND_URL}/app/agent`);
     await expect(
       page2.getByRole('heading', { name: 'User Settings' }),
     ).toBeVisible({ timeout: 10000 });
