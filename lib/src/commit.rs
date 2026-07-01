@@ -714,36 +714,6 @@ impl Commit {
         }
 
         if opts.validate_rights {
-            // Managed-node admission: only accept writes to drives this node
-            // actually hosts (the control-plane allowlist). FOSS / self-hosted
-            // nodes use the default OpenPolicy (allow all), so this is a no-op
-            // there. Internal/bootstrap commits run with validate_rights=false
-            // and are not subject to admission.
-            let drive_subject = match applied.resource_new.get(urls::DRIVE_PROP) {
-                Ok(d) => d.to_string(),
-                Err(_) => match applied.resource_new.get(urls::PARENT) {
-                    Ok(parent_val) => {
-                        let parent_subject = crate::Subject::from(parent_val.to_string());
-                        match store.get_resource(&parent_subject).await {
-                            Ok(parent_res) => parent_res
-                                .get(urls::DRIVE_PROP)
-                                .map(|d| d.to_string())
-                                .unwrap_or_else(|_| parent_subject.to_string()),
-                            Err(_) => parent_subject.to_string(),
-                        }
-                    }
-                    // Top-level resource (no parent) is its own drive.
-                    Err(_) => applied.resource_new.get_subject().to_string(),
-                },
-            };
-            if !store.drive_is_allowed(&drive_subject) {
-                return Err(format!(
-                    "Sync admission denied: drive {drive_subject} is not enrolled \
-                     for sync on this node."
-                )
-                .into());
-            }
-
             let signer_str = commit.signer.to_string();
             let validate_for = opts.validate_for_agent.as_ref().unwrap_or(&signer_str);
             if is_new {
@@ -1570,85 +1540,6 @@ mod test {
                 err
             );
         }
-    }
-
-    /// A managed node must only accept writes to drives it actually hosts (the
-    /// control-plane allowlist). The same agent owns two drives, but only one is
-    /// enrolled — writing under the un-enrolled one must be rejected by
-    /// admission, independent of ownership/rights. (FOSS nodes use the default
-    /// `OpenPolicy` and allow everything.)
-    #[cfg(feature = "db-sled")]
-    #[tokio::test]
-    async fn managed_node_enforces_drive_allowlist() {
-        use crate::datatype::DataType;
-        use crate::sync::policy::AllowlistPolicy;
-        use crate::values::Value;
-        use std::sync::Arc;
-
-        let store = crate::Db::init_temp("drive_admission").await.unwrap();
-        let agent = store.get_default_agent().unwrap();
-
-        // The same agent owns two drives (created under the default OpenPolicy).
-        let enrolled = store.create_drive("Enrolled").await.unwrap();
-        let other = store.create_drive("NotEnrolled").await.unwrap();
-
-        // Only `enrolled` is in the node's allowlist.
-        let policy = Arc::new(AllowlistPolicy::new());
-        policy.set_drive_policies([(enrolled.clone(), None)]);
-        store.set_sync_policy(policy);
-
-        let opts = CommitOpts {
-            validate_schema: true,
-            validate_signature: true,
-            validate_timestamp: true,
-            validate_previous_commit: true,
-            validate_loro_causality: true,
-            validate_rights: true,
-            validate_for_agent: None,
-            update_index: true,
-            source_id: None,
-        };
-
-        async fn write_under(
-            store: &crate::Db,
-            agent: &Agent,
-            parent: &str,
-            child: &str,
-            opts: &CommitOpts,
-        ) -> AtomicResult<()> {
-            let resource = Resource::new(child.into());
-            let mut b = CommitBuilder::new(child.into());
-            b.set(
-                crate::urls::PARENT.into(),
-                Value::new(parent, &DataType::AtomicUrl).unwrap(),
-            );
-            b.set(
-                crate::urls::DESCRIPTION.into(),
-                Value::new("child", &DataType::Markdown).unwrap(),
-            );
-            b.set_loro_update(crate::loro::AtomicLoroDoc::new().export_snapshot());
-            let commit = b.sign(agent, store, &resource).await?;
-            store.apply_commit(commit, opts).await?;
-            Ok(())
-        }
-
-        // Enrolled drive → writable.
-        write_under(&store, &agent, &enrolled, "https://localhost/in-enrolled", &opts)
-            .await
-            .expect("writing under the enrolled drive should succeed");
-
-        // Un-enrolled drive → rejected by admission, even though the agent owns it.
-        let err = write_under(&store, &agent, &other, "https://localhost/in-other", &opts)
-            .await
-            .expect_err("writing under an un-enrolled drive must be rejected on a managed node");
-        let msg = err.to_string().to_lowercase();
-        assert!(
-            msg.contains("enroll")
-                || msg.contains("admission")
-                || msg.contains("not hosted")
-                || msg.contains("not allowed"),
-            "expected a drive-admission error, got: {err}"
-        );
     }
 
     // ── DID commit tests ────────────────────────────────────────────────────

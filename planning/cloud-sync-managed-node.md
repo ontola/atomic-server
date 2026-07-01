@@ -67,26 +67,36 @@ Matches `atomic-saas` exactly (locked by its `node_policy_matches_managed_node_w
 
 ## Admission enforcement (paid-service abuse prevention)
 
-A managed node must only accept writes/sync for drives it actually hosts (the
+A managed node should only accept writes/sync for drives it actually hosts (the
 control-plane allowlist) — otherwise a random user (no SaaS account, no email)
-could point a drive at the paid node and use it for free. The `AllowlistPolicy`
-existed but was **inert** (`drive_is_allowed` was never called).
+could point a drive at the paid node and use it for free.
 
-- ✅ **Commit path enforced.** `Storelike::drive_is_allowed` (default allow-all;
-  `Db` overrides to consult its `sync_policy`) is now checked in
-  `commit.rs::validate_and_build_response`, inside the `validate_rights` block,
-  so it covers external commits (HTTP `POST /commit` and WS `COMMIT` both run
-  `handlers::commit::apply_commit_json` with `validate_rights: true`) while
-  internal/bootstrap commits (`validate_rights: false`) and FOSS/self-hosted
-  nodes (`OpenPolicy`) are unaffected. Regression test:
-  `commit.rs::managed_node_enforces_drive_allowlist` (fails without the gate,
-  passes with it).
-- ⏳ **Sync (Loro push) path NOT yet gated.** `sync::engine::handle_frame`
-  (`SYNC_PUSH`/`UPDATE`, used by iroh peer-sync and WS-binary sync) applies Loro
-  state directly, bypassing the commit path. The likely gate is the `AUTH`
-  handler (`AuthValues.requested_subject` carries the drive), but it must resolve
-  the drive *root* of `requested_subject` (it may be a sub-resource) before
-  calling `drive_is_allowed`, to avoid rejecting legitimate sync.
+**Status: NO gate currently. A commit-time gate was tried and reverted.**
+
+- ❌ **Commit-time `drive_is_allowed` gate — tried, reverted.** Checking the
+  allowlist in `commit.rs::validate_and_build_response` (covering HTTP `POST
+  /commit` + WS `COMMIT`, both via `apply_commit_json` with
+  `validate_rights: true`) is the **wrong layer** — it broke onboarding on
+  managed nodes and every patch revealed another hole:
+  - **Create-before-enroll ordering.** A new drive is created *before* it can be
+    enrolled (you need the drive DID to enroll), so its genesis push is rejected;
+    even skipping genesis, the drive's non-genesis *setup* commits are rejected.
+  - **Agents caught in the net.** An agent (`did:ad:agent:…`) has no parent, so
+    the drive-resolver treats it as its own "drive", which is never enrolled →
+    the agent's own profile commits get denied.
+  - Making it work would require special-casing agents, drive-setup commits, the
+    enrollment window, *and* the 5s policy-poll lag — a losing game.
+  - Reverted: removed the check + `Storelike::drive_is_allowed` + the
+    `managed_node_enforces_drive_allowlist` test. Onboarding works again.
+- 🔜 **Proper gate (later).** The commit-time approach is dead. A **reaper** is
+  the leading candidate: accept all commits, but the node periodically deletes
+  any *drive* (isA Drive, not an agent) that isn't in its allowlist after a short
+  grace window. Sidesteps ordering, agent, and poll-lag issues; the
+  `AllowlistPolicy` + policy poll already built feed it directly. Trade-off: a
+  brief free-storage window (standard for paid services). Not yet built.
+- The `AllowlistPolicy`, `set_sync_policy`, `allowed_drive_subjects`, and
+  `has_resource_locally` plumbing is **kept** — still used by the proactive pull,
+  and reusable by the future gate.
 - Note: enrollment itself requires a verified-email session (`require_user` →
   magic-link); there is no payment/plan gate yet (billing concern, separate).
 

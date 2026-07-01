@@ -171,15 +171,6 @@ pub type ResourceCollection = Vec<Resource>;
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait Storelike: Sized + Send + Sync {
-    /// Whether this store admits writes/sync for the given drive subject.
-    /// Default: allow everything — the right behavior for FOSS / self-hosted /
-    /// in-memory stores. A managed [`crate::Db`] overrides this to consult its
-    /// installed sync policy (the control-plane allowlist), so only enrolled
-    /// drives may be written or synced on a paid node.
-    fn drive_is_allowed(&self, _drive_subject: &str) -> bool {
-        true
-    }
-
     /// Adds Atoms to the store.
     /// Will replace existing Atoms that share Subject / Property combination.
     /// Validates datatypes and required props presence.

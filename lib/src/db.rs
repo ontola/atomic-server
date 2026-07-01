@@ -1847,10 +1847,6 @@ impl Db {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl Storelike for Db {
-    fn drive_is_allowed(&self, drive_subject: &str) -> bool {
-        self.sync_policy().drive_is_allowed(drive_subject)
-    }
-
     fn normalize_subject(&self, subject: &Subject) -> Subject {
         Subject::from_raw(subject.as_str(), self.get_base_domain().as_deref())
     }
