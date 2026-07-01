@@ -92,32 +92,44 @@ A managed node should only accept writes/sync for drives it actually hosts (the
 control-plane allowlist) — otherwise a random user (no SaaS account, no email)
 could point a drive at the paid node and use it for free.
 
-**Status: NO gate currently. A commit-time gate was tried and reverted.**
+**Status: implemented (2026-07) as a bootstrap-grace admission gate.** The
+commit-time approach described below as "reverted/dead" was reintroduced with a
+grace window that specifically fixes the ordering/agent problems that sank the
+first attempt. Design + status: `atomic-saas/planning/ENFORCEMENT_GATE.md`.
 
-- ❌ **Commit-time `drive_is_allowed` gate — tried, reverted.** Checking the
-  allowlist in `commit.rs::validate_and_build_response` (covering HTTP `POST
-  /commit` + WS `COMMIT`, both via `apply_commit_json` with
-  `validate_rights: true`) is the **wrong layer** — it broke onboarding on
-  managed nodes and every patch revealed another hole:
-  - **Create-before-enroll ordering.** A new drive is created *before* it can be
-    enrolled (you need the drive DID to enroll), so its genesis push is rejected;
-    even skipping genesis, the drive's non-genesis *setup* commits are rejected.
-  - **Agents caught in the net.** An agent (`did:ad:agent:…`) has no parent, so
-    the drive-resolver treats it as its own "drive", which is never enrolled →
-    the agent's own profile commits get denied.
-  - Making it work would require special-casing agents, drive-setup commits, the
-    enrollment window, *and* the 5s policy-poll lag — a losing game.
-  - Reverted: removed the check + `Storelike::drive_is_allowed` + the
-    `managed_node_enforces_drive_allowlist` test. Onboarding works again.
-- 🔜 **Proper gate (later).** The commit-time approach is dead. A **reaper** is
-  the leading candidate: accept all commits, but the node periodically deletes
-  any *drive* (isA Drive, not an agent) that isn't in its allowlist after a short
-  grace window. Sidesteps ordering, agent, and poll-lag issues; the
-  `AllowlistPolicy` + policy poll already built feed it directly. Trade-off: a
-  brief free-storage window (standard for paid services). Not yet built.
+- ✅ **`SyncPolicy::admit_drive_write`** (`lib/src/sync/policy.rs`) — allowlist +
+  quota, plus a bootstrap grace (default 10 min) keyed on **first-seen-on-node**,
+  so a drive can sync while its enrollment is still propagating. No-op under the
+  default `OpenPolicy` (self-hosted / FOSS unaffected).
+- ✅ Enforced in `commit.rs::validate_and_build_response` (HTTP `POST /commit` +
+  WS `COMMIT`, both via `apply_commit_json` with `validate_rights: true`) and in
+  `sync::engine::import_sync_push` (bulk `SYNC_PUSH`). This is the commit-time
+  approach the earlier note called dead — the two problems that broke it before
+  are now handled explicitly:
+  - **Create-before-enroll ordering** → covered by the bootstrap grace: the
+    drive's genesis + setup commits land during the grace window; once enrolled,
+    admission is permanent regardless of grace expiry.
+  - **Agents caught in the net** → the exemption is keyed on
+    `commit.subject.is_agent_did()` (the commit's actual signed DID structure),
+    **not** a claimed `IS_A` propval — an earlier version of this exemption used
+    `IS_A`, which is an ordinary client-controlled property with no required-props
+    gate on the `Agent` class, and let any client skip the gate by tagging
+    arbitrary data `IS_A: [Agent]`. Fixed; regression tests in `commit.rs`
+    (`admission_gate_rejects_spoofed_agent_tag_on_unenrolled_drive`,
+    `admission_gate_admits_real_agent_did_on_unenrolled_node`) lock this in.
+- ❌ **Not covered: Iroh live-sync `UPDATE`/`DESTROY`.** `peer.rs`'s
+  `AtomicHandler::accept` has no peer allowlist, and once a connection reaches
+  "live mode" (any `SYNC` that yields `SYNC_OK`/an empty diff is enough — no
+  `AUTH` frame required), the read loop calls `ws_apply::apply_state_update` /
+  `apply_destroy` directly with **no rights check and no policy check at all**
+  (pre-existing since ~April 2026, predates this feature). This is a full
+  bypass of both the ACL and the admission gate, reachable by any Iroh peer
+  that completes a handshake — not just an admission-gate gap. Needs a design
+  decision (peer allowlist vs. gate-check inside `ws_apply`) before a managed
+  node's Iroh port can be considered safe from either angle. See
+  `atomic-saas/planning/ENFORCEMENT_GATE.md`.
 - The `AllowlistPolicy`, `set_sync_policy`, `allowed_drive_subjects`, and
-  `has_resource_locally` plumbing is **kept** — still used by the proactive pull,
-  and reusable by the future gate.
+  `has_resource_locally` plumbing is shared with the proactive pull.
 - Note: enrollment itself requires a verified-email session (`require_user` →
   magic-link); there is no payment/plan gate yet (billing concern, separate).
 
