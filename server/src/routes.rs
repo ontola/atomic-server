@@ -105,28 +105,20 @@ struct NodeInfo {
 async fn node_info_handler(
     appstate: web::Data<crate::appstate::AppState>,
 ) -> actix_web::HttpResponse {
-    // Prefer the portal URL learned from the control plane (set by the policy
-    // poll); fall back to a directly-configured ATOMIC_DASHBOARD_URL.
-    let learned = appstate
+    // Both are generic and default to unmanaged/none. An embedder (the closed
+    // managed-node wrapper, via `serve_with_hook`) flips `managed` and sets the
+    // dashboard URL it learned from its control plane. The open server itself
+    // has no control-plane knowledge.
+    let dashboard_url = appstate
         .managed_dashboard_url
         .read()
         .ok()
         .and_then(|guard| guard.clone());
-    let configured = appstate
-        .config
-        .opts
-        .dashboard_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string);
-    let dashboard_url = learned.or(configured);
 
-    // Managed when reporting to a control plane (ATOMIC_CONTROL_PLANE_URL), or
-    // when a portal URL is configured directly. Self-hosted / FOSS nodes are
-    // neither and report managed: false.
     actix_web::HttpResponse::Ok().json(NodeInfo {
-        managed: crate::node::is_managed(&appstate.config) || dashboard_url.is_some(),
+        managed: appstate
+            .managed
+            .load(std::sync::atomic::Ordering::Relaxed),
         dashboard_url,
     })
 }

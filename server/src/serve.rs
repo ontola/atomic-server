@@ -261,12 +261,10 @@ where
     }
 
     // Start Iroh peer-to-peer transport
-    let mut iroh_node_id: Option<String> = None;
     let _iroh_router = {
         let store = appstate.store.clone();
         match crate::iroh_transport::start(store.clone()).await {
             Ok((node_id, router)) => {
-                iroh_node_id = Some(node_id.to_string());
                 tracing::info!(
                     "Iroh transport ready as \"{}\". Connect with: did:ad:node:{node_id}",
                     atomic_lib::sync::peer::effective_device_name(&store)
@@ -292,35 +290,12 @@ where
         }
     };
 
-    // Managed-node control-plane integration. When ATOMIC_CONTROL_PLANE_URL is
-    // set, this server heartbeats to the control plane (so it appears online and
-    // its drives gain an http_origin), polls it for the allowlist of drives to
-    // host (installed as the sync admission policy), and reports per-drive usage.
-    // Self-hosted / FOSS servers skip all of this and stay unrestricted.
-    if crate::node::is_managed(&config) {
-        if let Some(hb) = crate::node::heartbeat_config(&config, iroh_node_id.clone()) {
-            let policy = std::sync::Arc::new(atomic_lib::sync::policy::AllowlistPolicy::new());
-            appstate.store.set_sync_policy(policy.clone());
-            crate::node::spawn_heartbeat(hb.clone(), appstate.store.clone(), policy.clone());
-            crate::node::spawn_policy_poll(
-                hb.clone(),
-                policy.clone(),
-                appstate.managed_dashboard_url.clone(),
-            );
-            // Replication runs on its own task so a slow Iroh pull can't starve
-            // the policy poll (which is what freezes the allowlist otherwise).
-            crate::node::spawn_replication_pull(hb, appstate.store.clone(), policy);
-            tracing::info!(
-                "Managed node: reporting to control plane at {}",
-                config
-                    .opts
-                    .control_plane_url
-                    .as_deref()
-                    .unwrap_or_default()
-                    .trim_end_matches('/')
-            );
-        }
-    }
+    // Embedder hook: the store, indexes and transports are up, but the HTTP
+    // server hasn't started accepting connections yet. A managed-node wrapper
+    // (atomic-saas/managed-node) uses this to flip the `managed` flag, install
+    // its sync admission policy, and spawn its control-plane tasks. The open
+    // server passes a no-op (see `serve`), so it never phones home.
+    on_ready(&appstate);
 
     let server = HttpServer::new(move || {
         let cors = Cors::permissive().expose_headers([SERVER_VERSION_HEADER]);
