@@ -1,1242 +1,1523 @@
 [
-    {
-        "@id": "https://atomicdata.dev",
-        "https://atomicdata.dev/properties/read": [
-            "https://atomicdata.dev/agents/publicAgent"
-        ],
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Drive"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/endpoint/parameters",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The query parameters of the endpoint",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "parameters"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/endpoint/results",
-        "https://atomicdata.dev/properties/isDynamic": true,
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The results of the endpoint",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "results"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/name",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "The name of a thing or person.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "name"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/search/query",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "A full-text search query. \n\nFor all features, see [the Tantivy docs](https://docs.rs/tantivy/0.16.1/tantivy/query/struct.QueryParser.html)",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/name": "Full-text search query",
-        "https://atomicdata.dev/properties/shortname": "q"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/search/limit",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
-        "https://atomicdata.dev/properties/description": "Maximum number of search results.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "limit"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/search/property",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "Filter results by this property URL.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
-        "https://atomicdata.dev/properties/shortname": "property"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/isDynamic",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
-        "https://atomicdata.dev/properties/description": "If this is true, a Property is calculated server side and should therefore not appear in forms.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "is-dynamic"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/atom/property",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "The property of an Atom is the relationship between the resource (subject) and the value. For example, in the sentence `john is born in 1991`, the property is `is born in`.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
-        "https://atomicdata.dev/properties/shortname": "property"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/atom/subject",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "The subject of an Atom is the (URL of the) Resource that is being described. For example, in the sentence `john is born in 1991`, the subject is `john`.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "subject"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/atom/value",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "The value of an Atom is the actual content of the information that is being described. For example, in the sentence `john is born in 1991`, the value is `1991`. When you use this property, the datatype is always a String, even if the actual property would set something different.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "value"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/append",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The agents that create new child Resources for this one. This is more strict then [write](https://atomicdata.dev/properties/append), as it only allows for creating Resources that have the current one as their parent.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "append"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/auth/agent",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "The Agent making the signature.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "agent"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/auth/requestedSubject",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "The URL of the requested resource.\n\n- If we're authenticating a WebSocket, we use the wss address as the requestedSubject. (e.g. `wss://example.com/ws`)\n- If we're authenticating a Cookie, we use the origin of the server (e.g. `https://example.com`)\n- If we're authentication a single HTTP request, use the same URL as the GET address (e.g. `https://example.com/myResource`)\n",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "requested-subject"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/auth/publicKey",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "The base64 serialized ED25519 public key of the agent setting the signature.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "public-key"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/auth/signedAt",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
-        "https://atomicdata.dev/properties/description": "When the signature was created",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
-        "https://atomicdata.dev/properties/shortname": "signed-at"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/auth/signature",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "A base64 serialized signature of the string `{requestedSubject} {timestamp}`, using the `privateKey` of the Agent, using ed25519 encryption.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
-        "https://atomicdata.dev/properties/shortname": "signature"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/drives",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Drive",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The set of Drives that the user often will want to access. Note that this list does not necessarily imply any read / write rights. This list is used to show a dropdown for Users to quickly switch between their Drives / workspaces.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "drives"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/edit",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The Agents (users) who are allowed to edit this Resource and all children (those that have the current Resource as their parent).",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "edit"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/read",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The Agents (users) who are allowed to read this Resource and all children (those that have the current Resource as their parent).",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "read"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/checksum",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "Base64 encoded SHA-256 checksum of a binary object.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isDynamic": true,
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "checksum"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/filename",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "A filename does not contain strings, and ends with a dot and a file extension.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "filename"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/filesize",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
-        "https://atomicdata.dev/properties/description": "Size of a file in bytes",
-        "https://atomicdata.dev/properties/isDynamic": true,
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "filesize"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/mimetype",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "Mimetype of a file sets is the type of data that is stored in the file. See https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types",
-        "https://atomicdata.dev/properties/isDynamic": true,
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "mimetype"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/internalId",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "An identifier used internally by the system.",
-        "https://atomicdata.dev/properties/isDynamic": true,
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "internal-id"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/downloadURL",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "The URL where a file can be downloaded.",
-        "https://atomicdata.dev/properties/isDynamic": true,
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "download-url"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/attachments",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/File",
-        "https://atomicdata.dev/properties/description": "File attachments related to this Resource. This relationship can automatically be created by the `/upload` endpoint.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "attachments"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/children",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/description": "The children of a Resource are the items that have this Resource set as Parent. Children are 'below' their Parents, hierarchically. Parents are the boss of children, which means that parents influents things like read and write rights.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/isDynamic": true,
-        "https://atomicdata.dev/properties/shortname": "children"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/currentPage",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
-        "https://atomicdata.dev/properties/description": "The current page number of the collection. Defaults to 0.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "current-page"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/includeExternal",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
-        "https://atomicdata.dev/properties/description": "If true, resources will be included in this collection that are not present in the Server.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "include-external"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/includeNested",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
-        "https://atomicdata.dev/properties/description": "If true, full resources will be included in the response, which is often faster for clients.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "include-nested"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/members",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/description": "The members are the list of resources in a collection.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/isDynamic": true,
-        "https://atomicdata.dev/properties/shortname": "members"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/pageSize",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
-        "https://atomicdata.dev/properties/description": "The maximum number of members per page.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "page-size"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/property",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "Filter collection by the Property of Atoms. The property is the second field of an atom. Similar to `predicate` in RDF.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "property"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/subject",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "Filter collection by the Subject of Atoms. The subject is the first field of an atom.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "subject"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/sortBy",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "Sort collection by this property. Sorts ascending by default.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "sort-by"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/sortDesc",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
-        "https://atomicdata.dev/properties/description": "Sort collection descendingly. Sorts ascending by default.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "sort-desc"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/totalMembers",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
-        "https://atomicdata.dev/properties/description": "The count of items (members) in the collection.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/isDynamic": true,
-        "https://atomicdata.dev/properties/shortname": "total-members"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/totalPages",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
-        "https://atomicdata.dev/properties/description": "The total number of pages in the collection.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/isDynamic": true,
-        "https://atomicdata.dev/properties/shortname": "total-pages"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/collection/value",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "Filter collection by the Value of Atoms. The Value is the third field of an Atom. Similar to `object` in RDF.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "value"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/createdAt",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
-        "https://atomicdata.dev/properties/description": "Timestamp when the Commit was created (usually when it was signed).",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "created-at"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/createdBy",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "Who created this resource.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "created-by"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/destination",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "Where a redirect should point to.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "destination"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/destroy",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
-        "https://atomicdata.dev/properties/description": "If set to true, the entire Subject resource will be removed in this commit. This will be executed _before_ other commands, such as set.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "destroy"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/documents/elements",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/description": "Set of sections in a document",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "elements"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/importer/json",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "A JSON-AD string to be imported. See https://docs.atomicdata.dev/create-json-ad.html",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "json"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/importer/parent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "The parent to where the Resources will be imported. If a Resource does not have an explicit parent by itself, it will default to this parent. ",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "import-parent"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/importer/url",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "A URL to a JSON-AD string to be imported. See https://docs.atomicdata.dev/create-json-ad.html",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "url"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/importer/overwrite-outside",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
-        "https://atomicdata.dev/properties/description": "If true, the importer will overwrite Resources that are _outside_ of the parent specified. This could be dangerous, so make sure you trust the source of the data.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "overwrite-outside"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/localId",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "A `localId` is used to derive the Subject (`@id`, the URL) of an imported Resource. This is useful when some data owner has Atomic Data but does not have the technology to host all Resources at their respective URLs. [See docs](https://docs.atomicdata.dev/create-json-ad.html#preventing-duplication-with-localid).",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "local-id"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/incomplete",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "If this is true, this Resource does not contain all the values that it should. This is probably done because it was included as part of a larger Resource, such as a Collection, Fetch this resource directly (send a GET request to its Subject URL) to get all the properties.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "incomplete"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/invite/target",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "The resource that the invite will grant rights for. It will often also be the target of a redirection.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "target"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/invite/usagesLeft",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
-        "https://atomicdata.dev/properties/description": "The amount of usages that are left for this invite. When this reaches 0, the invite will no longer be functional.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "usages-left"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/invite/users",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The list of Agents that have used this Invite.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "users"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/invite/write",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
-        "https://atomicdata.dev/properties/description": "If true, provides the one who is invited with Write rights, which means allowing to edit the resource, its properties and its children.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "write"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/invite/publicKey",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "The public key of the Agent that wants to use an Invite. This will create an Agent on the Store using this private key.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "public-key"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/invite/agent",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The Agent that should be given the rights for this Invite.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "agent"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/invite/redirectAgent",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The Agent that is created in a Redirect action. See the [Invite docs](https://docs.atomicdata.dev/invitations.html).",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "redirect-agent"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/invite/expiresAt",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
-        "https://atomicdata.dev/properties/description": "When the Invite should stop working.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "expires-at"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/isLocked",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
-        "https://atomicdata.dev/properties/description": "If this is true, the Property should probably not be edited, because doing so could lead to serious errors.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "is-locked"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/lastCommit",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Commit",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "The last Commit that was applied to this Resource. This is used when checking whether two systems have the same version of a resource.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/isDynamic": true,
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "last-commit"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/localId",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "A `localId` is used to derive the Subject (`@id`, the URL) of an imported Resource. This is useful when some data owner has Atomic Data but does not have the technology to host all Resources at their respective URLs. [See docs](https://docs.atomicdata.dev/create-json-ad.html#preventing-duplication-with-localid).",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "local-id"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/paymentPointer",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "Payment Pointers are a standardized identifier for payment accounts. In the same way that an email address provides an identifier for a mailbox in the email ecosystem a payment pointer is used by an account holder to share the details of their account with a counter-party.\n\nSee https://paymentpointers.org/\n\nE.g. `$ilp.uphold.com/WBQrZEphkFxj`",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "payment-pointer"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/path",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "An Atomic Path is a string that starts with the URL of some Atomic Resource, followed by one or multiple other Property URLs or Property Shortnames. It resolves to one specific Resource or Value.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "path"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/previousCommit",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Commit",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "The previous Commit that was applied to the target resource (the subject) of this Commit. You should be able to follow these from Commit to Commit to establish an audit trail.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "previous-commit"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/privateKey",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "The private key of an Agent. Is a base64 serialized Ed25519 private key. Used to sign [Commits](https://atomicdata.dev/classes/Commit). Never share this with others.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "private-key"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/publicKey",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "The publicKey of an Agent. Is a base64 serialized Ed25519 public key. Can be derived from a [privateKey](https://atomicdata.dev/properties/privateKey).",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "public-key"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/published-at",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/date",
-        "https://atomicdata.dev/properties/description": "DateTime at which an item is made public.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes/Article",
-        "https://atomicdata.dev/properties/shortname": "published-at"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/push",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "Pushing is adding one (or more) Resources to a [ResourceArray](https://atomicdata.dev/datatypes/resourceArray). It is a method that is parsed on Commits.\n\nThe `push` field should be a JSON object where each key is a Property URL, and each value is a ResourceArray. \n\nWhen applying `push`, append all the elements to the corresponding existing ResourceArray. If it does not exist yet, create the ResourceArray.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "push"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/read",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The agents that can read this resource and its children.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "read"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/remove",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "A list of property URLs that should be removed from the resource. ",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "remove"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/set",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "The `set` Property describes the fields that are changed in the Commit. It is a Nested Resource, and each of its Property-Value combinations will be added to the Subject resource. If the Property existed before, it will be overwritten.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "set"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/yUpdate",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "A field in a commit.\\\nNested resource mapping properties to Yjs state updates.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "y-update"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/secret",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "A base64 serialized JSON object containing a [`privateKey`](https://atomicdata.dev/properties/privateKey) and an [`agent`](https://atomicdata.dev/classes/Agent) URL. It is used as a single string that can sign in to Atomic Data apps.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "secret"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/signature",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "The signature proves that a Commit is created by a specific Agent. It is a cryptographic proof - an RSA signature of the JSON serialized commit, minus the signature.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "signature"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/signer",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The signer is the agent (person, organization or something else) that issued the commit.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "signer"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/subject",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "The thing that the Commit is changing - the resource ID that is being targeted. It must not contain any query parameters.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "subject"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/subresources",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/description": "A list of resources (usually its children) that appear under this resource in a hierarchy.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/lastCommit": "https://atomicdata.dev/commits/VB3gtWMkysTX5hKjbYjIM1hfVGPywT3pEPL8c7NwaUAJID6RzptGRPzmix8aKKDeb8Pj1WFv0UPV0YVPxcduBg==",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "sub-resources"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/tags",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Tag",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/description": "List of tags / categories / themes. Useful for categorizing posts.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/lastCommit": "https://atomicdata.dev/commits/fS0krtm1wDk0lodH0psnUKmBHBMKLuxnjkd7E7QbkzDk/irQ43gNW3lWxkwQj58ZNg6rUAUMDGJrLy1X3cHwBQ==",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "tags"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/write",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/description": "The agents that can edit this resource and its children.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/shortname": "write"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/Article",
-        "https://atomicdata.dev/properties/description": "A written article / blogpost / blog. \n\nUse the `name` as a Title, and the `description` for the content of the Blogpost (in markdown).",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/properties/tags",
-            "https://atomicdata.dev/properties/published-at"
-        ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/description",
-            "https://atomicdata.dev/properties/name"
-        ],
-        "https://atomicdata.dev/properties/shortname": "article"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/Atom",
-        "https://atomicdata.dev/properties/description": "An Atom is the smallest piece of meaningful data in Atomic Data. It consists of a Subject, a Property and a Value.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/atom/subject",
-            "https://atomicdata.dev/properties/atom/property",
-            "https://atomicdata.dev/properties/atom/value"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/shortname": "atom"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/Collection",
-        "https://atomicdata.dev/properties/description": "A paginated set of resources that can be sorted. Accepts query parameters for setting the current page number, page size, sort attribute, sort direction",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/properties/name",
-            "https://atomicdata.dev/properties/description",
-            "https://atomicdata.dev/properties/collection/currentPage",
-            "https://atomicdata.dev/properties/collection/members",
-            "https://atomicdata.dev/properties/collection/pageSize",
-            "https://atomicdata.dev/properties/collection/property",
-            "https://atomicdata.dev/properties/collection/sortBy",
-            "https://atomicdata.dev/properties/collection/sortDesc",
-            "https://atomicdata.dev/properties/collection/totalMembers",
-            "https://atomicdata.dev/properties/collection/totalPages",
-            "https://atomicdata.dev/properties/collection/value",
-            "https://atomicdata.dev/properties/collection/includeExternal",
-            "https://atomicdata.dev/properties/incomplete"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/shortname": "collection"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/Commit",
-        "https://atomicdata.dev/properties/description": "A Commit is a Resource that describes how a Resource must be updated.\nIt can be used for auditing, versioning and feeds.\nIt is cryptographically signed by an [Agent](https://atomicdata.dev/classes/Agent).\n\nThe **required fields** are:\n\n- `subject` - The thing being changed. A Resource Subject URL (HTTP identifier) that the Commit is changing about. A Commit Subject must not contain query parameters, as these are reserved for dynamic resources.\n- `signer` - Who's making the change. The Atomic URL of the Author's profile - which in turn must contain a `publicKey`.\n- `signature` - Cryptographic proof of the change. A hash of the JSON-AD serialized Commit (without the `signature` field), signed by the Agent's `private-key`. This proves that the author is indeed the one who created this exact commit. The signature of the Commit is also used as the identifier of the commit.\n- `created-at` - When the change was made. A UNIX timestamp number of when the commit was created.\n\nThe **optional method fields** describe how the data must be changed:\n\n- `destroy` - If true, the existing Resource will be removed.\n- `remove` - an array of Properties that need to be removed (including their values).\n- `set` - a Nested Resource which contains all the new or edited fields.\n\nThese commands are executed in the order above.\nThis means that you can set `destroy` to `true` and include `set`, which empties the existing resource and sets new values.\n\n### Posting commits using HTTP\n\nSince Commits contains cryptographic proof of authorship, they can be accepted at a public endpoint.\nThere is no need for authentication.\n\nA commit should be sent (using an HTTPS POST request) to a `/commmit` endpoint of an Atomic Server.\nThe server then checks the signature and the author rights, and responds with a `2xx` status code if it succeeded, or an `5xx` error if something went wrong.\nThe error will be a JSON object.\n\n### Serialization with JSON-AD\n\nLet's look at an example Commit:\n\n```json\n{\n  \"@id\": \"https://atomicdata.dev/commits/3n+U/3OvymF86Ha6S9MQZtRVIQAAL0rv9ZQpjViht4emjnqKxj4wByiO9RhfL+qwoxTg0FMwKQsNg6d0QU7pAw==\",\n  \"https://atomicdata.dev/properties/createdAt\": 1611489929370,\n  \"https://atomicdata.dev/properties/isA\": [\n    \"https://atomicdata.dev/classes/Commit\"\n  ],\n  \"https://atomicdata.dev/properties/set\": {\n    \"https://atomicdata.dev/properties/shortname\": \"1611489928\"\n  },\n  \"https://atomicdata.dev/properties/signature\": \"3n+U/3OvymF86Ha6S9MQZtRVIQAAL0rv9ZQpjViht4emjnqKxj4wByiO9RhfL+qwoxTg0FMwKQsNg6d0QU7pAw==\",\n  \"https://atomicdata.dev/properties/signer\": \"https://surfy.ddns.net/agents/9YCs7htDdF4yBAiA4HuHgjsafg+xZIrtZNELz4msCmc=\",\n  \"https://atomicdata.dev/properties/subject\": \"https://atomicdata.dev/test\"\n}\n```\n\nThis Commit can be sent to any Atomic Server.\nThis server, in turn, should verify the signature and the author's rights before the server applies the Commit.\n\n### Calculating the signature\n\nThe signature is a base64 encoded Ed25519 signature of the deterministically serialized Commit.\nCalculating the signature is a delicate process that should be followed to the letter - even a single character in the wrong place will result in an incorrect signature, which makes the Commit invalid.\n\nThe first step is **serializing the commit deterministically**.\nThis means that the process will always end in the exact same string.\n\n- Serialize the Commit as JSON-AD.\n- Do not serialize the signature field.\n- Do not include empty objects or arrays.\n- If `destroy` is false, do not include it.\n- All keys are sorted alphabetically - both in the root object, as in any nested objects.\n- The JSON-AD is minified: no newlines, no spaces.\n\nThis will result in a string.\nThe next step is to sign this string using the Ed25519 private key from the Author.\nThis signature is a byte array, which should be encoded in base64 for serialization.\nMake sure that the Author's URL resolves to a Resource that contains the linked public key.\n\nCongratulations, you've just created a valid Commit!\n\nHere are currently working implementations of this process, including serialization and signing (links are permalinks).\n\n- [in Rust (atomic-lib)](https://github.com/atomicdata-dev/atomic-server/blob/ceb88c1ae58811f2a9e6bacb7eaa39a2a7aa1513/lib/src/commit.rs#L81).\n- [in Typescript / Javascript (atomic-data-browser)](https://github.com/atomicdata-dev/atomic-data-browser/blob/fc899bb2cf54bdff593ee6b4debf52e20a85619e/src/atomic-lib/commit.ts#L51).\n\nIf you want validate your implementation, check out the tests for these two projects.\n\n### Applying the Commit\n\nIf you're on the receiving end of a Commit (e.g. if you're writing a server or a client who has to parse Commits), you will _apply_ the Commit to your Store.\nIf you have to _persist_ the Commit, you must perform all of the checks.\nIf you're writing a client, and you trust the source of the Commit, you can probably skip the validation steps.\n\nHere's how you apply a Commit:\n\n1. Check if the Subject URL is valid\n2. Validate the signature. This means serialize the Commit deterministically (see above), check the Agent's publickey (you might need to fetch this one), verify if the signature matches.\n3. Check if the timestamp matches is OK. I think an acceptable window is 10 seconds.\n4. If the Commit is for an existing resource, get it.\n5. Validate the Rights of the one making the Commit.\n6. Check if the `previousCommit` of the Commit matches with the `previousCommit` of the Resource.\n7. Iterate over the `set` fields. Overwrite existing, or add the new Values. Make sure the Datatypes match with the respective Properties.\n8. Iterate over the `remove` fields. Remove existing properties.\n9. If the Resource has one or more classes, check if the required Properties are there.\n10. You might want to perform some custom validations now (e.g. if you accept an Invite, you should make sure that the one creating the Invite has the correct rights to actually make it!)\n11. Store the created Commit as a Resource, and store the modified Resource!\n\n## Limitations\n\n- Commits adjust **only one Resource at a time**, which means that you cannot change multiple in one commit.\n- The one creating the Commit will **need to sign it**, which may make clients that write data more complicated than you'd like. You can also let Servers write Commits, but this makes them less verifiable / decentralized.\n- Commits require signatures, which means **key management**. Doing this securely is no trivial matter.\n- The signatures **require JSON-AD** serialization\n- If your implementation persists all Commits, you might need to **store a lot of data**.\n",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/properties/destroy",
-            "https://atomicdata.dev/properties/remove",
-            "https://atomicdata.dev/properties/set",
-            "https://atomicdata.dev/properties/push",
-            "https://atomicdata.dev/properties/yUpdate"
-        ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/createdAt",
-            "https://atomicdata.dev/properties/signature",
-            "https://atomicdata.dev/properties/signer",
-            "https://atomicdata.dev/properties/subject"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/shortname": "commit"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/Document",
-        "https://atomicdata.dev/properties/description": "A nice documnet",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/properties/documents/elements",
-            "https://atomicdata.dev/properties/name"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/shortname": "document"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/Drive",
-        "https://atomicdata.dev/properties/description": "The Drive node is at the top of the hierarchy in an Atomic Server. It can be thought of as a hard drive at the top of a filesystem. It can be used as a starting point to navigate to any Resource. A Drive needs to provide read and write access at least to one node.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/properties/read",
-            "https://atomicdata.dev/properties/children",
-            "https://atomicdata.dev/properties/description",
-            "https://atomicdata.dev/properties/subresources",
-            "https://atomicdata.dev/properties/write"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/shortname": "drive"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/elements/Paragraph",
-        "https://atomicdata.dev/properties/description": "A single paragraph in a Document",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/description",
-            "https://atomicdata.dev/properties/parent"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/shortname": "paragraph"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/Endpoint",
-        "https://atomicdata.dev/properties/description": "Endpoints are dynamic Resources, which means that their values can be generated by a computer. They can be used to do things like construct, filter and sort lists (done in [Collections](https://atomicdata.dev/classes/Collection), for example), or to construct a version of a resource (see the [Version endpoint](https://atomicdata.dev/version)).\nen you request an Endpoint _without any query parameters_ (e.g. `https://atomicdata.dev/version`), you will receive a description of the endpoint. In this description, you will see which query parameters can be used.\n\nWhen you request the Endpoint _with a filled in query param_, you will get some constructed / generated Resource depending on the Endpoint. For example, if you pass a commit URL to the earlier mentioned `/version` endpoint, you'll see a specific version of the Resource that the Commit URL describes.\n[`https://atomicdata.dev/show?subject=https...a_long_string`](https://atomicdata.dev/show?subject=https%3A%2F%2Fatomicdata.dev%2Fversion%3Fsubject%3Dhttps%253A%252F%252Fatomicdata.dev%252Fcommits%252F03GfY%252F0coC3TglVCxL2hHCYSlRmVCDGAu40OdUVw3PypidYp06bMOts7q67%252B51vY0XxfEn4NCqLi6LCO17%252BrDw%253D%253D)",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/description",
-            "https://atomicdata.dev/properties/endpoint/parameters"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/shortname": "endpoint"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/File",
-        "https://atomicdata.dev/properties/description": "A single binary file.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/downloadURL"
-        ],
-        "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/properties/description",
-            "https://atomicdata.dev/properties/filesize",
-            "https://atomicdata.dev/properties/filename",
-            "https://atomicdata.dev/properties/checksum",
-            "https://atomicdata.dev/properties/mimetype",
-            "https://atomicdata.dev/properties/internalId"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/shortname": "file"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/Importer",
-        "https://atomicdata.dev/properties/description": "An Importer helps with importing data from external sources. You can post JSON-AD bodies to it, or give it a URL of a JSON-AD resource, and it will import the data into Atomic Data.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/endpoint/parameters": [
-            "https://atomicdata.dev/properties/importer/json"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/shortname": "importer"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/Invite",
-        "https://atomicdata.dev/properties/description": "An Invite allows you to share a link that, upon opening, grants the visitor some read or write rights. See the [Invite docs](https://docs.atomicdata.dev/invitations.html).",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/invite/target"
-        ],
-        "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/properties/invite/write",
-            "https://atomicdata.dev/properties/createdBy",
-            "https://atomicdata.dev/properties/invite/users",
-            "https://atomicdata.dev/properties/invite/usagesLeft"
-        ],
-        "https://atomicdata.dev/properties/endpoint/parameters": [
-            "https://atomicdata.dev/properties/invite/publicKey",
-            "https://atomicdata.dev/properties/invite/agent"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/shortname": "invite"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/Redirect",
-        "https://atomicdata.dev/properties/description": "A Resource that should redirect the browser to a new location. It can also set a `redirectAgent`, which is used in Invites to create an Agent Resource on the Server from a Public Key that the user posesses. See the [Invite docs](https://docs.atomicdata.dev/invitations.html).",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/destination"
-        ],
-        "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/properties/invite/redirectAgent"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/shortname": "redirect"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/atomicURL",
-        "https://atomicdata.dev/properties/description": "Every single page or thing that you look at in Atomic Data, is a Resource. The resource datatype can either be a link to a Resource (an HTTP URL) or a Nested Resource. When a HTTP(S) GET request is sent to that URL with an `Accept: application/ad+json` header, the server should reply with MIME type `application/ad+json`, and a body with valid [JSON-AD](https://docs.atomicdata.dev/core/json-ad.html) describing the entire resource. Contrary to regular Resources, Nested Resources don't have their own HTTP URL, and only exist in the context of their outer resource. However, you can use [Atomic Paths](https://docs.atomicdata.dev/core/paths.html) to provide resolvable identifiers to Nested Resources. In JSON, a Resource is either an HTTP URL string, or a nested Object.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "resource"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/boolean",
-        "https://atomicdata.dev/properties/description": "Either `true` or `false`. In JSON-AD, this uses the native JSON boolean values.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "boolean"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/date",
-        "https://atomicdata.dev/properties/description": "ISO date _without time_.\nYYYY-MM-DD.\n\ne.g. `1991-01-20`\n.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "date"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/float",
-        "https://atomicdata.dev/properties/description": "Number with a comma / decimal place. Not an integer. Serialized as string with a dot `1.123`. In JSON-AD, this uses the Number datatype.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "float"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/integer",
-        "https://atomicdata.dev/properties/description": "Signed Integer, max 64 bit.\nMax value: [`9223372036854775807`](https://en.wikipedia.org/wiki/9,223,372,036,854,775,807)\n\ne.g. `-420`\nIn JSON-AD, this uses the Number datatype.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "integer"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/markdown",
-        "https://atomicdata.dev/properties/description": "Markdown UTF-8 String with [Commonmark syntax](https://commonmark.org/). [Here's a tutorial](https://commonmark.org/help/tutorial/).",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "markdown"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/description": "An array of Resources. Every single Resource can either be an Atomic URL (an HTTPS URL resolving to an Atomic Data Resource), or a Nested Resource. In JSON-AD, a resourceArray is an Array with HTTP strings and nested objects for Nested Resources.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "resource-array"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/slug",
-        "https://atomicdata.dev/properties/description": "Lowercase string without spaces. Only characters, numbers and dashes (`-`) in between. These are used for things like JSON keys.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "slug"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/string",
-        "https://atomicdata.dev/properties/description": "A UTF-8 string. Allows newlines with `\\n`. This is a generic string datatype - don't use this for things like [markdown](https://atomicdata.dev/datatypes/markdown) or html.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "string"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/timestamp",
-        "https://atomicdata.dev/properties/description": "Similar to [Unix Timestamp](https://www.unixtimestamp.com/).\nMilliseconds since midnight UTC 1970 jan 01 (aka the [Unix Epoch](https://en.wikipedia.org/wiki/Unix_time)).\nUse this for most DateTime fields.\nSigned 64 bit integer (instead of 32 bit in Unix systems).\n\ne.g. `1596798919` (= 07 Aug 2020 11:15:19)",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "timestamp"
-    },
-    {
-        "@id": "https://atomicdata.dev/agents/publicAgent",
-        "https://atomicdata.dev/properties/description": "This abstract Agent represents all potential users or visitors. If you want a Resource to be publicly available or editable, use this in your [read](https://atomicdata.dev/properties/read) or [write](https://atomicdata.dev/properties/read) property.",
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/agents",
-        "https://atomicdata.dev/properties/shortname": "public-agent"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/uri",
-        "https://atomicdata.dev/properties/description": "A Uniform Resource Identifier (URI) is a unique sequence of characters that identifies a logical or physical resource used by web technologies",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "uri"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/json",
-        "https://atomicdata.dev/properties/description": "An untyped JSON object.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "json"
-    },
-    {
-        "@id": "https://atomicdata.dev/datatypes/ydoc",
-        "https://atomicdata.dev/properties/description": "A Yjs update-v2 encoded as base64",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Datatype"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
-        "https://atomicdata.dev/properties/shortname": "ydoc"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/Folder",
-        "https://atomicdata.dev/properties/description": "Acts as a parent for resources, useful for ordering data.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/properties/subresources"
-        ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/name",
-            "https://atomicdata.dev/property/display-style"
-        ],
-        "https://atomicdata.dev/properties/shortname": "folder"
-    },
-    {
-        "@id": "https://atomicdata.dev/class/Bookmark",
-        "https://atomicdata.dev/properties/description": "A named reference to a web page. Can include a markdown version of the HTML document.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/property/preview",
-            "https://atomicdata.dev/properties/description",
-            "https://atomicdata.dev/properties/imageUrl"
-        ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/name",
-            "https://atomicdata.dev/property/url"
-        ],
-        "https://atomicdata.dev/properties/shortname": "bookmark"
-    },
-    {
-        "@id": "https://atomicdata.dev/ontology/data-browser/property/tag-list",
-        "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Tag",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-        "https://atomicdata.dev/properties/description": "List of tags available in a drive.",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "tag-list"
-    },
-    {
-        "@id": "https://atomicdata.dev/classes/DocumentV2",
-        "https://atomicdata.dev/properties/description": "A collaborative document containing rich text",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Class"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-        "https://atomicdata.dev/properties/recommends": [
-            "https://atomicdata.dev/properties/documentContent"
-        ],
-        "https://atomicdata.dev/properties/requires": [
-            "https://atomicdata.dev/properties/name"
-        ],
-        "https://atomicdata.dev/properties/shortname": "document-v2"
-    },
-    {
-        "@id": "https://atomicdata.dev/properties/documentContent",
-        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/ydoc",
-        "https://atomicdata.dev/properties/description": "The content of a Document",
-        "https://atomicdata.dev/properties/isA": [
-            "https://atomicdata.dev/classes/Property"
-        ],
-        "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-        "https://atomicdata.dev/properties/shortname": "document-content"
-    }
+  {
+    "@id": "https://atomicdata.dev",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ],
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Drive"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/endpoint/parameters",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The query parameters of the endpoint",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "parameters"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/endpoint/results",
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The results of the endpoint",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "results"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/endpoint/isPost",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "If true, this endpoint expects a POST request. The UI will submit params via POST instead of navigating to a GET URL.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "is-post"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/name",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The name of a thing or person.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "name"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/search/query",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A full-text search query. \n\nFor all features, see [the Tantivy docs](https://docs.rs/tantivy/0.16.1/tantivy/query/struct.QueryParser.html)",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Full-text search query",
+    "https://atomicdata.dev/properties/shortname": "q"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/search/limit",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "Maximum number of search results.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "limit"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/search/property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Filter results by this property URL.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/shortname": "property"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/setup/reset",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "If true, resets the server's onboarding state for the current host, clearing the drive mapping. Intended for development use.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Reset onboarding",
+    "https://atomicdata.dev/properties/shortname": "reset"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/isDynamic",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "If this is true, a Property is calculated server side and should therefore not appear in forms.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "is-dynamic"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/isGenesis",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "If true, this is the first Commit for the target resource and there is no previous commit. Required for resources with a `did:ad:` subject, where the subject is derived from the genesis commit signature. The `subject` field is excluded from the signed bytes for genesis commits (it is the signature itself), but `isGenesis` is included in the signed bytes so both sides sign and verify the same content.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "is-genesis"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/atom/property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The property of an Atom is the relationship between the resource (subject) and the value. For example, in the sentence `john is born in 1991`, the property is `is born in`.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/shortname": "property"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/atom/subject",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The subject of an Atom is the (URL of the) Resource that is being described. For example, in the sentence `john is born in 1991`, the subject is `john`.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "subject"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/atom/value",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The value of an Atom is the actual content of the information that is being described. For example, in the sentence `john is born in 1991`, the value is `1991`. When you use this property, the datatype is always a String, even if the actual property would set something different.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "value"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/append",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The agents that create new child Resources for this one. This is more strict then [write](https://atomicdata.dev/properties/append), as it only allows for creating Resources that have the current one as their parent.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "append"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/auth/agent",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The Agent making the signature.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "agent"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/auth/requestedSubject",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The URL of the requested resource.\n\n- If we're authenticating a WebSocket, we use the wss address as the requestedSubject. (e.g. `wss://example.com/ws`)\n- If we're authenticating a Cookie, we use the origin of the server (e.g. `https://example.com`)\n- If we're authentication a single HTTP request, use the same URL as the GET address (e.g. `https://example.com/myResource`)\n",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "requested-subject"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/auth/publicKey",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The base64 serialized ED25519 public key of the agent setting the signature.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "public-key"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/auth/signedAt",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "When the signature was created",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
+    "https://atomicdata.dev/properties/shortname": "signed-at"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/auth/signature",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A base64 serialized signature of the string `{requestedSubject} {timestamp}`, using the `privateKey` of the Agent, using ed25519 encryption.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
+    "https://atomicdata.dev/properties/shortname": "signature"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/drives",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Drive",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The set of Drives that the user often will want to access. Note that this list does not necessarily imply any read / write rights. This list is used to show a dropdown for Users to quickly switch between their Drives / workspaces.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "drives"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/personalDrive",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Drive",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The agent's personal (private) drive on this server. Clients resolve this from the agent DID to use as home, shared-with-me roots, and other per-agent data. At most one per agent.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "personal-drive"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/sharedWithMe",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "Resources this agent can access via invites or other shares. Clients often show these in a Shared with me list.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "shared-with-me"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/favorites",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "Resources the agent has favorited for quick access. A curated list of references to resources that may live on any drive. Clients often show these in a Favorites list.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "favorites"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/availableDomains",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The set of domains where this resource should be available. Allows multi-server accessibility while maintaining DID identity. If this is concerns a `did:ad:` resource, it will be available on the `/did` endpoint of that domain.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "available-domains"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/edit",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The Agents (users) who are allowed to edit this Resource and all children (those that have the current Resource as their parent).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "edit"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/checksum",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Base64 encoded SHA-256 checksum of a binary object.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "checksum"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/blake3",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A BLAKE3 hash of a file. Used for content-addressed storage and integrity verification.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "blake3"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/blob",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Content-addressed reference to the file's bytes. Always a `did:ad:blob:{blake3-hex}` subject; the server (or any peer) resolves it to the raw bytes via `/download/files/{hash}` or the `BLOB_REQUEST`/`BLOB_RESPONSE` sync frames.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "blob"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/filename",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A filename does not contain strings, and ends with a dot and a file extension.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "filename"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/filesize",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "Size of a file in bytes",
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "filesize"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mimetype",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Mimetype of a file sets is the type of data that is stored in the file. See https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types",
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "mimetype"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/internalId",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "An identifier used internally by the system.",
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "internal-id"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/downloadURL",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The URL where a file can be downloaded.",
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "download-url"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/attachments",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/File",
+    "https://atomicdata.dev/properties/description": "File attachments related to this Resource. This relationship can automatically be created by the `/upload` endpoint.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "attachments"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/children",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The children of a Resource are the items that have this Resource set as Parent. Children are 'below' their Parents, hierarchically. Parents are the boss of children, which means that parents influents things like read and write rights.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/shortname": "children"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/currentPage",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "The current page number of the collection. Defaults to 0.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "current-page"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/includeExternal",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "If true, resources will be included in this collection that are not present in the Server.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "include-external"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/includeNested",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "If true, full resources will be included in the response, which is often faster for clients.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "include-nested"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/members",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The members are the list of resources in a collection.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/shortname": "members"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/pageSize",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "The maximum number of members per page.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "page-size"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "Filter collection by the Property of Atoms. The property is the second field of an atom. Similar to `predicate` in RDF.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "property"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/subject",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Filter collection by the Subject of Atoms. The subject is the first field of an atom.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "subject"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/sortBy",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "Sort collection by this property. Sorts ascending by default.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "sort-by"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/sortDesc",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "Sort collection descendingly. Sorts ascending by default.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "sort-desc"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/totalMembers",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "The count of items (members) in the collection.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/shortname": "total-members"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/totalPages",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "The total number of pages in the collection.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/shortname": "total-pages"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/collection/value",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Filter collection by the Value of Atoms. The Value is the third field of an Atom. Similar to `object` in RDF.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "value"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/createdAt",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "Timestamp when the Commit was created (usually when it was signed).",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "created-at"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/createdBy",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "Who created this resource.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "created-by"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/destination",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Where a redirect should point to.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "destination"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/destroy",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "If set to true, the entire Subject resource will be removed in this commit. This will be executed _before_ other commands, such as set.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "destroy"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/documents/elements",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "Set of sections in a document",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "elements"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/importer/json",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A JSON-AD string to be imported. See https://docs.atomicdata.dev/create-json-ad.html",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "json"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/importer/parent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The parent to where the Resources will be imported. If a Resource does not have an explicit parent by itself, it will default to this parent. ",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "import-parent"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/importer/url",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A URL to a JSON-AD string to be imported. See https://docs.atomicdata.dev/create-json-ad.html",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "url"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/importer/overwrite-outside",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "If true, the importer will overwrite Resources that are _outside_ of the parent specified. This could be dangerous, so make sure you trust the source of the data.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "overwrite-outside"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/localId",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A `localId` is used to derive the Subject (`@id`, the URL) of an imported Resource. This is useful when some data owner has Atomic Data but does not have the technology to host all Resources at their respective URLs. [See docs](https://docs.atomicdata.dev/create-json-ad.html#preventing-duplication-with-localid).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "local-id"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/incomplete",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "If this is true, this Resource does not contain all the values that it should. This is probably done because it was included as part of a larger Resource, such as a Collection, Fetch this resource directly (send a GET request to its Subject URL) to get all the properties.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "incomplete"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/invite/target",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The resource that the invite will grant rights for. It will often also be the target of a redirection.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "target"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/invite/usagesLeft",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "The amount of usages that are left for this invite. When this reaches 0, the invite will no longer be functional.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "usages-left"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/invite/users",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The list of Agents that have used this Invite.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "users"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/invite/write",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "If true, provides the one who is invited with Write rights, which means allowing to edit the resource, its properties and its children.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "write"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/invite/publicKey",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The public key of the Agent that wants to use an Invite. This will create an Agent on the Store using this private key.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "public-key"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/invite/agent",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The Agent that should be given the rights for this Invite.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "agent"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/invite/redirectAgent",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The Agent that is created in a Redirect action. See the [Invite docs](https://docs.atomicdata.dev/invitations.html).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "redirect-agent"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/invite/expiresAt",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "When the Invite should stop working.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "expires-at"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/isLocked",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "If this is true, the Property should probably not be edited, because doing so could lead to serious errors.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "is-locked"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/lastCommit",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Commit",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The last Commit that was applied to this Resource. This is used when checking whether two systems have the same version of a resource.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "last-commit"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/localId",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A `localId` is used to derive the Subject (`@id`, the URL) of an imported Resource. This is useful when some data owner has Atomic Data but does not have the technology to host all Resources at their respective URLs. [See docs](https://docs.atomicdata.dev/create-json-ad.html#preventing-duplication-with-localid).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "local-id"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/paymentPointer",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Payment Pointers are a standardized identifier for payment accounts. In the same way that an email address provides an identifier for a mailbox in the email ecosystem a payment pointer is used by an account holder to share the details of their account with a counter-party.\n\nSee https://paymentpointers.org/\n\nE.g. `$ilp.uphold.com/WBQrZEphkFxj`",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "payment-pointer"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/path",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "An Atomic Path is a string that starts with the URL of some Atomic Resource, followed by one or multiple other Property URLs or Property Shortnames. It resolves to one specific Resource or Value.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "path"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/previousCommit",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Commit",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The previous Commit that was applied to the target resource (the subject) of this Commit. You should be able to follow these from Commit to Commit to establish an audit trail.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "previous-commit"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/privateKey",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The private key of an Agent. Is a base64 serialized Ed25519 private key. Used to sign [Commits](https://atomicdata.dev/classes/Commit). Never share this with others.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "private-key"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/publicKey",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The publicKey of an Agent. Is a base64 serialized Ed25519 public key. Can be derived from a [privateKey](https://atomicdata.dev/properties/privateKey).",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "public-key"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/drive/publicKey",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The public key of a Drive. Used for identifying and verifying the drive.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "drive-public-key"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/drive/privateKey",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The private key of a Drive. Keep this secret! used for signing operations on behalf of the drive.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "drive-private-key"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/published-at",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/date",
+    "https://atomicdata.dev/properties/description": "DateTime at which an item is made public.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes/Article",
+    "https://atomicdata.dev/properties/shortname": "published-at"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/push",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Pushing is adding one (or more) Resources to a [ResourceArray](https://atomicdata.dev/datatypes/resourceArray). It is a method that is parsed on Commits.\n\nThe `push` field should be a JSON object where each key is a Property URL, and each value is a ResourceArray. \n\nWhen applying `push`, append all the elements to the corresponding existing ResourceArray. If it does not exist yet, create the ResourceArray.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "push"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/read",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The agents that can read this resource and its children.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "read"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/remove",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "A list of property URLs that should be removed from the resource. ",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "remove"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/set",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The `set` Property describes the fields that are changed in the Commit. It is a Nested Resource, and each of its Property-Value combinations will be added to the Subject resource. If the Property existed before, it will be overwritten.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "set"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/secret",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A base64 serialized JSON object containing a [`privateKey`](https://atomicdata.dev/properties/privateKey) and an [`agent`](https://atomicdata.dev/classes/Agent) URL. It is used as a single string that can sign in to Atomic Data apps.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "secret"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/signature",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The signature proves that a Commit is created by a specific Agent. It is a cryptographic proof - an RSA signature of the JSON serialized commit, minus the signature.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "signature"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/signer",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The signer is the agent (person, organization or something else) that issued the commit.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "signer"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/subject",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The thing that the Commit is changing - the resource ID that is being targeted. It must not contain any query parameters.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "subject"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/subresources",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "A list of resources (usually its children) that appear under this resource in a hierarchy.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/lastCommit": "https://atomicdata.dev/commits/VB3gtWMkysTX5hKjbYjIM1hfVGPywT3pEPL8c7NwaUAJID6RzptGRPzmix8aKKDeb8Pj1WFv0UPV0YVPxcduBg==",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "sub-resources"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/tags",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Tag",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "List of tags / categories / themes. Useful for categorizing posts.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/lastCommit": "https://atomicdata.dev/commits/fS0krtm1wDk0lodH0psnUKmBHBMKLuxnjkd7E7QbkzDk/irQ43gNW3lWxkwQj58ZNg6rUAUMDGJrLy1X3cHwBQ==",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "tags"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/write",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The agents that can edit this resource and its children.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "write"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Article",
+    "https://atomicdata.dev/properties/description": "A written article / blogpost / blog. \n\nUse the `name` as a Title, and the `description` for the content of the Blogpost (in markdown).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/tags",
+      "https://atomicdata.dev/properties/published-at"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/shortname": "article"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Atom",
+    "https://atomicdata.dev/properties/description": "An Atom is the smallest piece of meaningful data in Atomic Data. It consists of a Subject, a Property and a Value.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/atom/subject",
+      "https://atomicdata.dev/properties/atom/property",
+      "https://atomicdata.dev/properties/atom/value"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "atom"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Collection",
+    "https://atomicdata.dev/properties/description": "A paginated set of resources that can be sorted. Accepts query parameters for setting the current page number, page size, sort attribute, sort direction",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/collection/currentPage",
+      "https://atomicdata.dev/properties/collection/members",
+      "https://atomicdata.dev/properties/collection/pageSize",
+      "https://atomicdata.dev/properties/collection/property",
+      "https://atomicdata.dev/properties/collection/sortBy",
+      "https://atomicdata.dev/properties/collection/sortDesc",
+      "https://atomicdata.dev/properties/collection/totalMembers",
+      "https://atomicdata.dev/properties/collection/totalPages",
+      "https://atomicdata.dev/properties/collection/value",
+      "https://atomicdata.dev/properties/collection/includeExternal",
+      "https://atomicdata.dev/properties/incomplete"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "collection"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Commit",
+    "https://atomicdata.dev/properties/description": "A Commit is a Resource that describes how a Resource must be updated.\nIt can be used for auditing, versioning and feeds.\nIt is cryptographically signed by an [Agent](https://atomicdata.dev/classes/Agent).\n\nThe **required fields** are:\n\n- `subject` - The thing being changed. A Resource Subject URL (HTTP identifier) that the Commit is changing about. A Commit Subject must not contain query parameters, as these are reserved for dynamic resources.\n- `signer` - Who's making the change. The Atomic URL of the Author's profile - which in turn must contain a `publicKey`.\n- `signature` - Cryptographic proof of the change. A hash of the JSON-AD serialized Commit (without the `signature` field), signed by the Agent's `private-key`. This proves that the author is indeed the one who created this exact commit. The signature of the Commit is also used as the identifier of the commit.\n- `created-at` - When the change was made. A UNIX timestamp number of when the commit was created.\n\nThe **optional method fields** describe how the data must be changed:\n\n- `destroy` - If true, the existing Resource will be removed.\n- `remove` - an array of Properties that need to be removed (including their values).\n- `set` - a Nested Resource which contains all the new or edited fields.\n\nThese commands are executed in the order above.\nThis means that you can set `destroy` to `true` and include `set`, which empties the existing resource and sets new values.\n\n### Posting commits using HTTP\n\nSince Commits contains cryptographic proof of authorship, they can be accepted at a public endpoint.\nThere is no need for authentication.\n\nA commit should be sent (using an HTTPS POST request) to a `/commmit` endpoint of an Atomic Server.\nThe server then checks the signature and the author rights, and responds with a `2xx` status code if it succeeded, or an `5xx` error if something went wrong.\nThe error will be a JSON object.\n\n### Serialization with JSON-AD\n\nLet's look at an example Commit:\n\n```json\n{\n  \"@id\": \"https://atomicdata.dev/commits/3n+U/3OvymF86Ha6S9MQZtRVIQAAL0rv9ZQpjViht4emjnqKxj4wByiO9RhfL+qwoxTg0FMwKQsNg6d0QU7pAw==\",\n  \"https://atomicdata.dev/properties/createdAt\": 1611489929370,\n  \"https://atomicdata.dev/properties/isA\": [\n    \"https://atomicdata.dev/classes/Commit\"\n  ],\n  \"https://atomicdata.dev/properties/set\": {\n    \"https://atomicdata.dev/properties/shortname\": \"1611489928\"\n  },\n  \"https://atomicdata.dev/properties/signature\": \"3n+U/3OvymF86Ha6S9MQZtRVIQAAL0rv9ZQpjViht4emjnqKxj4wByiO9RhfL+qwoxTg0FMwKQsNg6d0QU7pAw==\",\n  \"https://atomicdata.dev/properties/signer\": \"https://surfy.ddns.net/agents/9YCs7htDdF4yBAiA4HuHgjsafg+xZIrtZNELz4msCmc=\",\n  \"https://atomicdata.dev/properties/subject\": \"https://atomicdata.dev/test\"\n}\n```\n\nThis Commit can be sent to any Atomic Server.\nThis server, in turn, should verify the signature and the author's rights before the server applies the Commit.\n\n### Calculating the signature\n\nThe signature is a base64 encoded Ed25519 signature of the deterministically serialized Commit.\nCalculating the signature is a delicate process that should be followed to the letter - even a single character in the wrong place will result in an incorrect signature, which makes the Commit invalid.\n\nThe first step is **serializing the commit deterministically**.\nThis means that the process will always end in the exact same string.\n\n- Serialize the Commit as JSON-AD.\n- Do not serialize the signature field.\n- Do not include empty objects or arrays.\n- If `destroy` is false, do not include it.\n- All keys are sorted alphabetically - both in the root object, as in any nested objects.\n- The JSON-AD is minified: no newlines, no spaces.\n\nThis will result in a string.\nThe next step is to sign this string using the Ed25519 private key from the Author.\nThis signature is a byte array, which should be encoded in base64 for serialization.\nMake sure that the Author's URL resolves to a Resource that contains the linked public key.\n\nCongratulations, you've just created a valid Commit!\n\nHere are currently working implementations of this process, including serialization and signing (links are permalinks).\n\n- [in Rust (atomic-lib)](https://github.com/atomicdata-dev/atomic-server/blob/ceb88c1ae58811f2a9e6bacb7eaa39a2a7aa1513/lib/src/commit.rs#L81).\n- [in Typescript / Javascript (atomic-data-browser)](https://github.com/atomicdata-dev/atomic-data-browser/blob/fc899bb2cf54bdff593ee6b4debf52e20a85619e/src/atomic-lib/commit.ts#L51).\n\nIf you want validate your implementation, check out the tests for these two projects.\n\n### Applying the Commit\n\nIf you're on the receiving end of a Commit (e.g. if you're writing a server or a client who has to parse Commits), you will _apply_ the Commit to your Store.\nIf you have to _persist_ the Commit, you must perform all of the checks.\nIf you're writing a client, and you trust the source of the Commit, you can probably skip the validation steps.\n\nHere's how you apply a Commit:\n\n1. Check if the Subject URL is valid\n2. Validate the signature. This means serialize the Commit deterministically (see above), check the Agent's publickey (you might need to fetch this one), verify if the signature matches.\n3. Check if the timestamp matches is OK. I think an acceptable window is 10 seconds.\n4. If the Commit is for an existing resource, get it.\n5. Validate the Rights of the one making the Commit.\n6. Check if the `previousCommit` of the Commit matches with the `previousCommit` of the Resource.\n7. Iterate over the `set` fields. Overwrite existing, or add the new Values. Make sure the Datatypes match with the respective Properties.\n8. Iterate over the `remove` fields. Remove existing properties.\n9. If the Resource has one or more classes, check if the required Properties are there.\n10. You might want to perform some custom validations now (e.g. if you accept an Invite, you should make sure that the one creating the Invite has the correct rights to actually make it!)\n11. Store the created Commit as a Resource, and store the modified Resource!\n\n## Limitations\n\n- Commits adjust **only one Resource at a time**, which means that you cannot change multiple in one commit.\n- The one creating the Commit will **need to sign it**, which may make clients that write data more complicated than you'd like. You can also let Servers write Commits, but this makes them less verifiable / decentralized.\n- Commits require signatures, which means **key management**. Doing this securely is no trivial matter.\n- The signatures **require JSON-AD** serialization\n- If your implementation persists all Commits, you might need to **store a lot of data**.\n",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/destroy",
+      "https://atomicdata.dev/properties/isGenesis",
+      "https://atomicdata.dev/properties/previousCommit",
+      "https://atomicdata.dev/properties/remove",
+      "https://atomicdata.dev/properties/set",
+      "https://atomicdata.dev/properties/push",
+      "https://atomicdata.dev/properties/loroUpdate"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/createdAt",
+      "https://atomicdata.dev/properties/signature",
+      "https://atomicdata.dev/properties/signer",
+      "https://atomicdata.dev/properties/subject"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "commit"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Document",
+    "https://atomicdata.dev/properties/description": "A nice documnet",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/documents/elements",
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "document"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Drive",
+    "https://atomicdata.dev/properties/description": "The Drive node is at the top of the hierarchy in an Atomic Server. It can be thought of as a hard drive at the top of a filesystem. It can be used as a starting point to navigate to any Resource. A Drive needs to provide read and write access at least to one node. Every Drive has a unique cryptographic identity.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/requires": [],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/read",
+      "https://atomicdata.dev/properties/children",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/subresources",
+      "https://atomicdata.dev/properties/write",
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/llm-txt"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "drive"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/elements/Paragraph",
+    "https://atomicdata.dev/properties/description": "A single paragraph in a Document",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/parent"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "paragraph"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Endpoint",
+    "https://atomicdata.dev/properties/description": "Endpoints are dynamic Resources, which means that their values can be generated by a computer. They can be used to do things like construct, filter and sort lists (done in [Collections](https://atomicdata.dev/classes/Collection), for example), or to construct a version of a resource (see the [Version endpoint](https://atomicdata.dev/version)).\nen you request an Endpoint _without any query parameters_ (e.g. `https://atomicdata.dev/version`), you will receive a description of the endpoint. In this description, you will see which query parameters can be used.\n\nWhen you request the Endpoint _with a filled in query param_, you will get some constructed / generated Resource depending on the Endpoint. For example, if you pass a commit URL to the earlier mentioned `/version` endpoint, you'll see a specific version of the Resource that the Commit URL describes.\n[`https://atomicdata.dev/show?subject=https...a_long_string`](https://atomicdata.dev/show?subject=https%3A%2F%2Fatomicdata.dev%2Fversion%3Fsubject%3Dhttps%253A%252F%252Fatomicdata.dev%252Fcommits%252F03GfY%252F0coC3TglVCxL2hHCYSlRmVCDGAu40OdUVw3PypidYp06bMOts7q67%252B51vY0XxfEn4NCqLi6LCO17%252BrDw%253D%253D)",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/endpoint/parameters"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "endpoint"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/File",
+    "https://atomicdata.dev/properties/description": "A single binary file.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/downloadURL"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/filesize",
+      "https://atomicdata.dev/properties/filename",
+      "https://atomicdata.dev/properties/checksum",
+      "https://atomicdata.dev/properties/blake3",
+      "https://atomicdata.dev/properties/blob",
+      "https://atomicdata.dev/properties/mimetype",
+      "https://atomicdata.dev/properties/internalId"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "file"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Importer",
+    "https://atomicdata.dev/properties/description": "An Importer helps with importing data from external sources. You can post JSON-AD bodies to it, or give it a URL of a JSON-AD resource, and it will import the data into Atomic Data.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/endpoint/parameters": [
+      "https://atomicdata.dev/properties/importer/json"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "importer"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Invite",
+    "https://atomicdata.dev/properties/description": "An Invite allows you to share a link that, upon opening, grants the visitor some read or write rights. See the [Invite docs](https://docs.atomicdata.dev/invitations.html).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/invite/target"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/invite/write",
+      "https://atomicdata.dev/properties/createdBy",
+      "https://atomicdata.dev/properties/invite/users",
+      "https://atomicdata.dev/properties/invite/usagesLeft"
+    ],
+    "https://atomicdata.dev/properties/endpoint/parameters": [
+      "https://atomicdata.dev/properties/invite/publicKey",
+      "https://atomicdata.dev/properties/invite/agent"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "invite"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Redirect",
+    "https://atomicdata.dev/properties/description": "A Resource that should redirect the browser to a new location. It can also set a `redirectAgent`, which is used in Invites to create an Agent Resource on the Server from a Public Key that the user posesses. See the [Invite docs](https://docs.atomicdata.dev/invitations.html).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/destination"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/invite/redirectAgent"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "redirect"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Every single page or thing that you look at in Atomic Data, is a Resource. The resource datatype can either be a link to a Resource (an HTTP URL) or a Nested Resource. When a HTTP(S) GET request is sent to that URL with an `Accept: application/ad+json` header, the server should reply with MIME type `application/ad+json`, and a body with valid [JSON-AD](https://docs.atomicdata.dev/core/json-ad.html) describing the entire resource. Contrary to regular Resources, Nested Resources don't have their own HTTP URL, and only exist in the context of their outer resource. However, you can use [Atomic Paths](https://docs.atomicdata.dev/core/paths.html) to provide resolvable identifiers to Nested Resources. In JSON, a Resource is either an HTTP URL string, or a nested Object.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "resource"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "Either `true` or `false`. In JSON-AD, this uses the native JSON boolean values.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "boolean"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/date",
+    "https://atomicdata.dev/properties/description": "ISO date _without time_.\nYYYY-MM-DD.\n\ne.g. `1991-01-20`\n.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "date"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "Number with a comma / decimal place. Not an integer. Serialized as string with a dot `1.123`. In JSON-AD, this uses the Number datatype.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "float"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "Signed Integer, max 64 bit.\nMax value: [`9223372036854775807`](https://en.wikipedia.org/wiki/9,223,372,036,854,775,807)\n\ne.g. `-420`\nIn JSON-AD, this uses the Number datatype.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "integer"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/markdown",
+    "https://atomicdata.dev/properties/description": "Markdown UTF-8 String with [Commonmark syntax](https://commonmark.org/). [Here's a tutorial](https://commonmark.org/help/tutorial/).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "markdown"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "An array of Resources. Every single Resource can either be an Atomic URL (an HTTPS URL resolving to an Atomic Data Resource), or a Nested Resource. In JSON-AD, a resourceArray is an Array with HTTP strings and nested objects for Nested Resources.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "resource-array"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/slug",
+    "https://atomicdata.dev/properties/description": "Lowercase string without spaces. Only characters, numbers and dashes (`-`) in between. These are used for things like JSON keys.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "slug"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A UTF-8 string. Allows newlines with `\\n`. This is a generic string datatype - don't use this for things like [markdown](https://atomicdata.dev/datatypes/markdown) or html.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "string"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "Similar to [Unix Timestamp](https://www.unixtimestamp.com/).\nMilliseconds since midnight UTC 1970 jan 01 (aka the [Unix Epoch](https://en.wikipedia.org/wiki/Unix_time)).\nUse this for most DateTime fields.\nSigned 64 bit integer (instead of 32 bit in Unix systems).\n\ne.g. `1596798919` (= 07 Aug 2020 11:15:19)",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "timestamp"
+  },
+  {
+    "@id": "https://atomicdata.dev/agents/publicAgent",
+    "https://atomicdata.dev/properties/description": "This abstract Agent represents all potential users or visitors. If you want a Resource to be publicly available or editable, use this in your [read](https://atomicdata.dev/properties/read) or [write](https://atomicdata.dev/properties/read) property.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/agents",
+    "https://atomicdata.dev/properties/shortname": "public-agent"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/uri",
+    "https://atomicdata.dev/properties/description": "A Uniform Resource Identifier (URI) is a unique sequence of characters that identifies a logical or physical resource used by web technologies",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "uri"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "An untyped JSON object.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "json"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Folder",
+    "https://atomicdata.dev/properties/description": "Acts as a parent for resources, useful for ordering data.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/subresources",
+      "https://atomicdata.dev/property/display-style"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/shortname": "folder"
+  },
+  {
+    "@id": "https://atomicdata.dev/class/Bookmark",
+    "https://atomicdata.dev/properties/description": "A named reference to a web page. Can include a markdown version of the HTML document.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/property/preview",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/imageUrl"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/property/url"
+    ],
+    "https://atomicdata.dev/properties/shortname": "bookmark"
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/data-browser/property/tag-list",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Tag",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "List of tags available in a drive.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "tag-list"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/DocumentV2",
+    "https://atomicdata.dev/properties/description": "A collaborative document containing rich text",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/documentContent"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/shortname": "document-v2"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/documentContent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/lorodoc",
+    "https://atomicdata.dev/properties/description": "The content of a Document",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "document-content"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/subdomain",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/slug",
+    "https://atomicdata.dev/properties/description": "The subdomain associated with a Drive.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "subdomain"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/isUninitialized",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "True if the server node has not been initialized yet.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "is-uninitialized"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/initialDrive",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The DID of the drive that should be mapped to the current host during onboarding.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "initial-drive"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Server",
+    "https://atomicdata.dev/properties/description": "An Atomic Data server node.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/isUninitialized"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/shortname"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "server"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/loroUpdate",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/lorodoc",
+    "https://atomicdata.dev/properties/description": "A Loro CRDT binary update for the resource, serialized as a base64 string.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "loro-update"
+  },
+  {
+    "@id": "https://atomicdata.dev/datatypes/lorodoc",
+    "https://atomicdata.dev/properties/description": "A Loro CRDT document binary, serialized as a base64 string.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "lorodoc"
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/canvas",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev"
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/canvas/strokeData",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Array of stroke objects, each containing color (int), width (float), and path (array of [x, y] coordinate pairs). Stored as a LoroList of LoroMaps so concurrent strokes from multiple devices merge per-element.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/canvas",
+    "https://atomicdata.dev/properties/shortname": "stroke-data"
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/canvas/dateEdited",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "Unix milliseconds when this canvas was last edited (strokes, folder, etc.). Used for gallery sort order.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/canvas",
+    "https://atomicdata.dev/properties/shortname": "date-edited"
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/canvas/Canvas",
+    "https://atomicdata.dev/properties/description": "An infinite canvas drawing. Contains stroke data for pen/brush drawings with color, width, and path points.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/canvas",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/ontology/canvas/strokeData",
+      "https://atomicdata.dev/ontology/canvas/dateEdited"
+    ],
+    "https://atomicdata.dev/properties/requires": [],
+    "https://atomicdata.dev/properties/shortname": "canvas"
+  },
+  {
+    "@id": "https://atomicdata.dev/property/display-style",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "How a folder (or similar container) should visually display its contents. Points to a DisplayStyle.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
+    "https://atomicdata.dev/properties/shortname": "display-style"
+  },
+  {
+    "@id": "https://atomicdata.dev/property/preview",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/markdown",
+    "https://atomicdata.dev/properties/description": "A rendered preview (markdown) of a linked resource, e.g. the body of a Bookmark's target URL.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
+    "https://atomicdata.dev/properties/shortname": "preview"
+  },
+  {
+    "@id": "https://atomicdata.dev/property/url",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "An absolute URL pointing to an external web resource.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
+    "https://atomicdata.dev/properties/shortname": "url"
+  },
+  {
+    "@id": "https://atomicdata.dev/class/DisplayStyle",
+    "https://atomicdata.dev/properties/description": "One of the display modes a Folder (or similar container) can render its children in — e.g. list, grid, card.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
+    "https://atomicdata.dev/properties/recommends": [],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/shortname": "display-style"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/sortOrder",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "Fractional sort key used to order a resource among its siblings under the same parent. Lower values come first. On reorder, set the dragged item's sortOrder to the midpoint between its new neighbors' sortOrders (or the surrounding values' `createdAt` if a neighbor has none yet) so existing siblings never need to be renumbered.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "sort-order"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/llm-txt",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/markdown",
+    "https://atomicdata.dev/properties/description": "Information for an AI agent about a drive. This could include things like common patterns or where to find important resources.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "llm-txt"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/PlainText",
+    "https://atomicdata.dev/properties/description": "A simple class with a name and a description used to store plain text as resource.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/description"
+    ],
+    "https://atomicdata.dev/properties/shortname": "plain-text"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/search/chunks",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "A JSON Array of text-chunks returned from a (vector)search endpoint",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/isDynamic": true,
+    "https://atomicdata.dev/properties/isLocked": true,
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "search-chunks"
+  }
 ]

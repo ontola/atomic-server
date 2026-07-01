@@ -70,7 +70,7 @@ export function FilePickerDialog({
   };
 
   const updateQuery = (value: string) => {
-    if (Client.isValidSubject(value)) {
+    if (value !== '' && Client.isValidSubject(value)) {
       setQueryIsURL(true);
       setQuery(value);
     } else {

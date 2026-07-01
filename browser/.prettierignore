@@ -5,5 +5,7 @@ build
 **/yarn.lock
 **/package-lock.json
 **/.eslintrc.js
+**/*.spec.ts
+**/*.test.ts
 **/tsconfig.json
 **/.svelte-kit/**

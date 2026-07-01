@@ -8,7 +8,6 @@ use atomic_lib::{
     schema::{Class, Property},
     Resource, Storelike, Value,
 };
-use base64::engine::{general_purpose, Engine};
 use colored::Colorize;
 use promptly::prompt_opt;
 use regex::Regex;
@@ -170,7 +169,7 @@ async fn prompt_field(
             check_valid_uri(&uri).unwrap();
             return Ok(Some(uri));
         }
-        DataType::JSON => {
+        DataType::Json => {
             let msg = format!("JSON{}", msg_appendix);
             let Some(json) = prompt_opt::<String, String>(msg)? else {
                 return Ok(None);
@@ -178,15 +177,6 @@ async fn prompt_field(
 
             check_valid_json(&json).unwrap();
             return Ok(Some(json));
-        }
-        DataType::YDoc => {
-            let msg = format!("YDoc{}", msg_appendix);
-            let Some(ydoc) = prompt_opt::<String, String>(msg)? else {
-                return Ok(None);
-            };
-            // Check if it is a valid Base64 string
-            general_purpose::STANDARD.decode(&ydoc).unwrap();
-            return Ok(Some(ydoc));
         }
         DataType::Integer => {
             let msg = format!("integer{}", msg_appendix);
@@ -280,7 +270,7 @@ async fn prompt_field(
                                 );
                                 let (resource, _shortname) =
                                     prompt_instance(context, class, Some(item.into())).await?;
-                                urls.push(resource.get_subject().clone());
+                                urls.push(resource.get_subject().to_string());
                                 continue;
                             }
                         }
@@ -329,6 +319,11 @@ async fn prompt_field(
                 }
                 None => return Ok(None),
             }
+        }
+        DataType::LoroDoc => {
+            // Binary/complex types cannot be created via CLI prompt
+            // (`Json` and `JsonArray` were merged into `Json`, handled above).
+            return Ok(None);
         }
     };
 }

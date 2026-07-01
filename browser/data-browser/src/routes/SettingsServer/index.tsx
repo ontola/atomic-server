@@ -28,24 +28,25 @@ export const ServerSettingsRoute = createRoute({
 
 function SettingsServer(): JSX.Element {
   const currentDriveId = useId();
-  const { drive: baseURL, setDrive: setBaseURL } = useSettings();
+  const { drive, setDrive } = useSettings();
   const navigate = useNavigateWithTransition();
-  const [baseUrlInput, setBaseUrlInput] = useState<string>(baseURL);
-  const [baseUrlErr, setErrBaseUrl] = useState<Error | undefined>();
+
+  const [driveInput, setDriveInput] = useState<string>(drive);
+  const [driveErr, setDriveErr] = useState<Error | undefined>();
 
   const [savedDrives] = useSavedDrives();
 
   const [history, addDriveToHistory, removeFromHistory] =
     useDriveHistory(savedDrives);
 
-  function handleSetBaseUrl(url: string) {
+  function handleSetDrive(url: string) {
     try {
-      setBaseURL(url);
-      setBaseUrlInput(url);
+      setDrive(url);
+      setDriveInput(url);
       addDriveToHistory(url);
       navigate(constructOpenURL(url));
     } catch (e) {
-      setErrBaseUrl(e);
+      setDriveErr(e);
     }
   }
 
@@ -54,37 +55,45 @@ function SettingsServer(): JSX.Element {
       <ContainerWide>
         <Column>
           <Heading>Drive Configuration</Heading>
-          <LabelStyled htmlFor={currentDriveId}>Current Drive</LabelStyled>
+
+          <Heading as='h2'>Saved Drives</Heading>
+          <DrivesCard
+            showNewOption
+            drives={savedDrives}
+            onDriveSelect={subject => handleSetDrive(subject)}
+          />
+
+          <LabelStyled htmlFor={currentDriveId}>Custom Drive URL</LabelStyled>
           <Row>
             <InputWrapper>
               <InputStyled
                 id={currentDriveId}
-                data-testid='server-url-input'
-                value={baseUrlInput}
-                onChange={e => setBaseUrlInput(e.target.value)}
+                data-testid='drive-url-input'
+                value={driveInput}
+                onChange={e => setDriveInput(e.target.value)}
+                placeholder='Enter a Drive DID or URL'
               />
             </InputWrapper>
             <Button
-              onClick={() => handleSetBaseUrl(baseUrlInput)}
-              disabled={baseURL === baseUrlInput}
-              data-test='server-url-save'
+              onClick={() => handleSetDrive(driveInput)}
+              disabled={drive === driveInput}
+              data-test='drive-url-save'
             >
-              Save
+              Set
             </Button>
           </Row>
-          {baseUrlErr && <ErrorLook>{baseUrlErr?.message}</ErrorLook>}
-          <Heading as='h2'>Saved</Heading>
-          <DrivesCard
-            showNewOption
-            drives={savedDrives}
-            onDriveSelect={subject => handleSetBaseUrl(subject)}
-          />
-          <Heading as='h2'>Other</Heading>
+          {driveErr && <ErrorLook>{driveErr?.message}</ErrorLook>}
+
+          <Heading as='h2'>History</Heading>
           <DrivesCard
             drives={history}
-            onDriveSelect={subject => handleSetBaseUrl(subject)}
+            onDriveSelect={subject => handleSetDrive(subject)}
             onDriveRemove={subject => removeFromHistory(subject)}
           />
+
+          <p>
+            Server settings have moved to the <a href='/app/sync'>Sync page</a>.
+          </p>
         </Column>
       </ContainerWide>
     </Main>

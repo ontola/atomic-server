@@ -1,5 +1,5 @@
-import { useState, type JSX } from 'react';
-import { useCanWrite, useResource } from '@tomic/react';
+import { useEffect, useState, type JSX } from 'react';
+import { core, ResourceEvents, useCanWrite, useResource } from '@tomic/react';
 import { ContainerNarrow } from '../../components/Containers';
 import { Card, CardInsideFull } from '../../components/Card';
 import { Button } from '../../components/Button';
@@ -46,6 +46,23 @@ function SharePage(): JSX.Element {
 
   const [resourceRights, updateResourceRights] = useRights(resource, setErr);
 
+  // `useRights` mutates the resource locally with `commit: false`, so the Save
+  // button's `resource.hasUnsavedChanges()` read would never re-evaluate
+  // without a re-render trigger. Track the dirty state explicitly via the
+  // LocalChange event for read/write.
+  const [hasLocalChanges, setHasLocalChanges] = useState(false);
+
+  useEffect(() => {
+    setHasLocalChanges(resource.hasUnsavedChanges());
+    const stable = resource.stable;
+
+    return stable.on(ResourceEvents.LocalChange, prop => {
+      if (prop === core.properties.read || prop === core.properties.write) {
+        setHasLocalChanges(stable.hasUnsavedChanges());
+      }
+    });
+  }, [resource.stable]);
+
   if (!subject) {
     return <>No subject passed</>;
   }
@@ -53,6 +70,7 @@ function SharePage(): JSX.Element {
   async function handleSave() {
     try {
       await resource.save();
+      setHasLocalChanges(false);
       toast.success('Share settings saved');
       navigate(constructOpenURL(subject!));
     } catch (e) {
@@ -96,10 +114,7 @@ function SharePage(): JSX.Element {
           </Card>
           {canWrite && (
             <span>
-              <Button
-                disabled={!resource.hasUnsavedChanges()}
-                onClick={handleSave}
-              >
+              <Button disabled={!hasLocalChanges} onClick={handleSave}>
                 Save
               </Button>
             </span>

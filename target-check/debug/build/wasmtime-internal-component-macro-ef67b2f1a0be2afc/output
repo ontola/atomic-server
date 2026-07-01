@@ -1,0 +1,2 @@
+cargo:rerun-if-changed=build.rs
+cargo:rustc-env=DEBUG_OUTPUT_DIR=/Users/joep/dev/atomic-server/target-check/debug/build/wasmtime-internal-component-macro-ef67b2f1a0be2afc/out

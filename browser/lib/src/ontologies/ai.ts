@@ -47,6 +47,8 @@ export const ai = {
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-result',
     toolResultIsError:
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/tool-result-is-error',
+    serverProvidedContext:
+      'https://atomicdata.dev/properties/serverProvidedContext',
   },
   __classDefs: {
     ['https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-chat']: [
@@ -57,6 +59,7 @@ export const ai = {
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role',
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content',
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/provided-context',
+      'https://atomicdata.dev/properties/serverProvidedContext',
     ],
     ['https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/file-part']: [
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/data',
@@ -117,7 +120,9 @@ declare module '../index.js' {
         | BaseProps
         | typeof ai.properties.role
         | typeof ai.properties.parts;
-      recommends: typeof ai.properties.providedContext;
+      recommends:
+        | typeof ai.properties.providedContext
+        | typeof ai.properties.serverProvidedContext;
     };
     [ai.classes.filePart]: {
       requires: BaseProps | typeof ai.properties.data;
@@ -173,6 +178,7 @@ declare module '../index.js' {
     [ai.properties.toolName]: string;
     [ai.properties.toolOutput]: JSONValue;
     [ai.properties.toolResultIsError]: boolean;
+    [ai.properties.serverProvidedContext]: string;
   }
 
   interface PropSubjectToNameMapping {
@@ -189,5 +195,6 @@ declare module '../index.js' {
     [ai.properties.toolName]: 'toolName';
     [ai.properties.toolOutput]: 'toolOutput';
     [ai.properties.toolResultIsError]: 'toolResultIsError';
+    [ai.properties.serverProvidedContext]: 'serverProvidedContext';
   }
 }

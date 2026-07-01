@@ -3,7 +3,7 @@ import {
   Resource,
   Store,
   useStore,
-  type PropVals,
+  type AtomicValue,
 } from '@tomic/react';
 import { useCallback, useState } from 'react';
 
@@ -28,7 +28,7 @@ interface ResourceCreatedItem {
 interface ResourceDeletedItem {
   type: HistoryItemType.ResourceDeleted;
   subject: string;
-  propVals: PropVals;
+  propVals: [string, AtomicValue][];
 }
 
 type HistoryItem = ValueChangeItem | ResourceCreatedItem | ResourceDeletedItem;
@@ -78,7 +78,7 @@ export function createResourceDeletedHistoryItem(
   return {
     type: HistoryItemType.ResourceDeleted,
     subject: resource.subject,
-    propVals: resource.getPropVals(),
+    propVals: resource.getEntries(),
   };
 }
 

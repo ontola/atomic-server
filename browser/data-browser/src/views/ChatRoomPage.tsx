@@ -2,9 +2,10 @@ import {
   commits,
   core,
   dataBrowser,
-  getTimestampNow,
-  useArray,
   useCanWrite,
+  useCollection,
+  useCreatedAt,
+  useCreatedBy,
   useResource,
   useStore,
   useString,
@@ -13,7 +14,14 @@ import {
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { FaCopy, FaLink, FaPencil, FaReply, FaXmark } from 'react-icons/fa6';
+import {
+  FaCopy,
+  FaLink,
+  FaMessage,
+  FaPencil,
+  FaReply,
+  FaXmark,
+} from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { AtomicLink } from '../components/AtomicLink';
 import { Button } from '../components/Button';
@@ -21,17 +29,23 @@ import { CommitDetail } from '../components/CommitDetail';
 import Markdown from '../components/datatypes/Markdown';
 import { Detail } from '../components/Detail';
 import { EditableTitle } from '../components/EditableTitle';
-import { NavBarSpacer } from '../components/NavBarSpacer';
+import { LoaderInline } from '../components/Loader';
 import { editURL } from '../helpers/navigation';
 import { ResourceInline } from './ResourceInline';
 import { ResourcePageProps } from './ResourcePage';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
-import { TagBar } from '../components/Tag/TagBar';
+
 import { Column } from '../components/Row';
+
+const CHAT_PAGE_SIZE = 50;
 
 /** Full page ChatRoom that shows a message list and a form to add Messages. */
 export function ChatRoomPage({ resource }: ResourcePageProps) {
-  const [messages] = useArray(resource, dataBrowser.properties.messages);
+  const {
+    messages,
+    loading: messagesLoading,
+    invalidate,
+  } = useChatMessages(resource.subject);
   const [newMessageVal, setNewMessage] = useState('');
   const store = useStore();
   const [isReplyTo, setReplyTo] = useState<string | undefined>(undefined);
@@ -39,33 +53,42 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [textAreaHight, setTextAreaHight] = useState(1);
 
+  const shouldAutoScroll = useRef(true);
+
   const scrollToBottom = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   };
 
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    shouldAutoScroll.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+  };
+
   const disableSend = newMessageVal.length === 0;
 
   /** Creates a message using the internal state */
   const sendMessage = async (e?: React.SyntheticEvent) => {
+    e?.preventDefault();
     const messageBackup = newMessageVal;
 
     try {
       scrollToBottom();
       setNewMessage('');
-      e?.preventDefault();
 
       if (!disableSend) {
-        const subject = store.createSubject(resource.subject);
-
         const msgResource = await store.newResource({
-          subject,
           parent: resource.subject,
           isA: dataBrowser.classes.message,
           propVals: {
             [core.properties.description]: newMessageVal,
-            [commits.properties.createdAt]: getTimestampNow(),
+            // `createdAt` is NOT set here: it's derived from the genesis Loro
+            // change (timestamp) and materialized server-side. Authoring it
+            // explicitly is now rejected by the server.
             ...(isReplyTo && {
               [dataBrowser.properties.replyTo]: isReplyTo,
             }),
@@ -73,6 +96,8 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
         });
 
         await msgResource.save();
+        store.notifyResourceManuallyCreated(msgResource);
+        invalidate();
         setReplyTo(undefined);
       }
     } catch (err) {
@@ -81,13 +106,22 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
     }
   };
 
+  // `useHotkeys` with `deps: []` locks the callback closure to the first
+  // render, so the captured `sendMessage` always reads the *initial*
+  // `newMessageVal` (= ''). Result: every Enter-press saves an empty
+  // message and the user's typed text vanishes. Pass through a ref so
+  // the latest `sendMessage` is always invoked, while still telling the
+  // hotkey hook there's nothing to re-bind on.
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
+
   useHotkeys(
     'enter',
     e => {
       e.preventDefault();
-      sendMessage();
+      sendMessageRef.current();
     },
-    { enableOnTags: ['TEXTAREA'] },
+    { enableOnFormTags: ['TEXTAREA'] },
     [],
   );
 
@@ -96,10 +130,30 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
     _e => {
       inputRef?.current?.blur();
     },
-    { enableOnTags: ['TEXTAREA'] },
+    { enableOnFormTags: ['TEXTAREA'] },
     [],
   );
-  useEffect(scrollToBottom, [messages.length, resource]);
+  // Scroll to bottom when new messages arrive, and re-enable auto-scroll
+  useEffect(() => {
+    shouldAutoScroll.current = true;
+    scrollToBottom();
+  }, [messages.length, resource]);
+
+  // Continue scrolling as async message content loads and expands the container
+  useEffect(() => {
+    const content = scrollRef.current?.firstElementChild;
+    if (!content) return;
+
+    const observer = new ResizeObserver(() => {
+      if (shouldAutoScroll.current) {
+        scrollToBottom();
+      }
+    });
+
+    observer.observe(content);
+
+    return () => observer.disconnect();
+  }, []);
 
   const handleReply = useCallback(
     (subject: string) => {
@@ -138,10 +192,30 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
   return (
     <FullPageWrapper>
       <Column fullHeight>
-        <EditableTitle resource={resource} />
-        <TagBar resource={resource} />
-        <ScrollingContent ref={scrollRef}>
-          <MessagesPage subject={resource.subject} setReplyTo={handleReply} />
+        <EditableTitle
+          resource={resource}
+          onCommit={() => inputRef.current?.focus()}
+        />
+        <ScrollingContent ref={scrollRef} onScroll={handleScroll}>
+          <div>
+            {messagesLoading ? (
+              <LoaderInline>Loading messages...</LoaderInline>
+            ) : messages.length === 0 ? (
+              <EmptyChatState>
+                <FaMessage />
+                <p>No messages yet</p>
+                <span>Be the first to say something</span>
+              </EmptyChatState>
+            ) : (
+              messages.map(message => (
+                <Message
+                  key={message}
+                  subject={message}
+                  setReplyTo={handleReply}
+                />
+              ))
+            )}
+          </div>
         </ScrollingContent>
         {isReplyTo && (
           <Detail>
@@ -170,7 +244,6 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
             Send
           </SendButton>
         </MessageForm>
-        <NavBarSpacer baseMargin='2rem' position='bottom' />
       </Column>
     </FullPageWrapper>
   );
@@ -191,7 +264,11 @@ const MESSAGE_MAX_LEN = 500;
 const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   const resource = useResource(subject);
   const [description] = useString(resource, core.properties.description);
-  const [lastCommit] = useSubject(resource, commits.properties.lastCommit);
+  // Creation date + creator come from the genesis change in the resource's own
+  // Loro oplog (materialized into propvals) — no commit fetch, so they survive
+  // a refresh. The commit subject is intentionally NOT passed.
+  const createdAt = useCreatedAt(resource);
+  const createdBy = useCreatedBy(resource);
   const [replyTo] = useSubject(resource, dataBrowser.properties.replyTo);
   const navigate = useNavigateWithTransition();
   const canWrite = useCanWrite(resource);
@@ -209,7 +286,7 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   return (
     <MessageComponent about={subject}>
       <MessageDetails>
-        <CommitDetail commitSubject={lastCommit!} />
+        <CommitDetail createdAt={createdAt} createdBy={createdBy} />
         {replyTo && <MessageLine subject={replyTo} />}
         <MessageActions>
           {canWrite && (
@@ -263,13 +340,11 @@ const MESSAGE_LINE_MAX_LEN = 50;
 function MessageLine({ subject }: MessageLineProps) {
   const resource = useResource(subject);
   const [description] = useString(resource, core.properties.description);
-  const [lastCommit] = useSubject(resource, commits.properties.lastCommit);
+  // Author from the resource's own genesis metadata (createdBy) — not a commit
+  // fetch, so it survives a refresh.
+  const author = useCreatedBy(resource);
 
-  // Traverse path to find the author
-  const commitResource = useResource(lastCommit);
-  const [signer] = useSubject(commitResource, commits.properties.signer);
-
-  if (!resource.isReady() || !commitResource.isReady()) {
+  if (!resource.isReady()) {
     return <MessageLineStyled>loading...</MessageLineStyled>;
   }
 
@@ -281,7 +356,7 @@ function MessageLine({ subject }: MessageLineProps) {
   return (
     <MessageLineStyled>
       <span>to </span>
-      <ResourceInline subject={signer!} />
+      {author && <ResourceInline subject={author} />}
       <AtomicLink subject={subject}>{`: ${truncated}${ellipsis}`}</AtomicLink>
     </MessageLineStyled>
   );
@@ -382,10 +457,35 @@ const MessageForm = styled.form`
 const FullPageWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  /* I think this warrants a prettier solution */
-  height: calc(100vh - 4rem);
+  height: 100%;
   padding: 1rem;
   flex: 1;
+`;
+
+const EmptyChatState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding-block: 4rem;
+  color: ${p => p.theme.colors.textLight};
+  opacity: 0.5;
+
+  & > svg {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  & > p {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  & > span {
+    font-size: 0.8rem;
+  }
 `;
 
 const ScrollingContent = styled.div`
@@ -395,31 +495,54 @@ const ScrollingContent = styled.div`
   flex: 1;
 `;
 
-interface MessagesPageProps {
-  subject: string;
-  setReplyTo: SetReplyToType;
-}
+/**
+ * Fetches messages (children) of a chatroom using the Collection system.
+ * Sorts by createdAt ascending (oldest first) with pagination.
+ */
+function useChatMessages(chatSubject: string) {
+  const [messages, setMessages] = useState<string[]>([]);
 
-/** Shows Messages for this page. Recursively fetches the next page, if in view */
-function MessagesPage({ subject, setReplyTo }: MessagesPageProps) {
-  const resource = useResource(subject);
-  const [messages] = useArray(resource, dataBrowser.properties.messages);
-  const [nextPage] = useString(resource, dataBrowser.properties.nextPage);
-
-  if (!resource.isReady()) {
-    return <>loading...</>;
-  }
-
-  return (
-    <div>
-      {nextPage && <MessagesPage subject={nextPage} setReplyTo={setReplyTo} />}
-      {messages.map(message => (
-        <Message
-          key={'message' + message}
-          subject={message}
-          setReplyTo={setReplyTo}
-        />
-      ))}
-    </div>
+  const { collection, ready, invalidateCollection } = useCollection(
+    {
+      property: core.properties.parent,
+      value: chatSubject,
+      sort_by: commits.properties.createdAt,
+      sort_desc: false,
+    },
+    { pageSize: CHAT_PAGE_SIZE },
   );
+
+  useEffect(() => {
+    const extractMembers = async () => {
+      await collection.waitForReady();
+      const members: string[] = [];
+
+      for (let i = 0; i < collection.totalMembers; i++) {
+        const member = await collection.getMemberWithIndex(i);
+
+        if (member) {
+          members.push(member);
+        }
+      }
+
+      setMessages(members);
+    };
+
+    extractMembers();
+  }, [collection]);
+
+  // `useCollection` (used internally by this hook) now routes
+  // `ResourceManuallyCreated` through `applyResourceChange` for an
+  // optimistic append — sent messages appear instantly without a
+  // server round-trip. The previous duplicate listener here called
+  // `invalidateCollection` which clobbered the optimistic add: it
+  // cleared the pages and re-fetched, so under parallel load the
+  // freshly-sent message vanished from the UI until `/query` caught
+  // up.
+
+  return {
+    messages,
+    loading: !ready,
+    invalidate: invalidateCollection,
+  };
 }

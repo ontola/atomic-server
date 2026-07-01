@@ -16,19 +16,35 @@ export function CreateInstanceButton({ ontology }: CreateInstanceButtonProps) {
   const [createdInstanceSubject, setCreatedInstanceSubject] =
     useState<string>();
 
-  const [dialogProps, show, close, isOpen] = useDialog({
+  const [dialogProps, show, close] = useDialog({
     onSuccess: async () => {
       ontology.push(core.properties.instances, [createdInstanceSubject], true);
       await ontology.save();
 
-      requestAnimationFrame(() => {
-        document
-          .querySelector(`[about="${createdInstanceSubject}"]`)
-          ?.scrollIntoView({ behavior: 'smooth' });
+      // Wait for the new instance card to render, then scroll it into view.
+      // The card uses IntersectionObserver to defer expensive content; if it
+      // never enters the viewport its title stays as a raw DID placeholder.
+      let attempts = 0;
 
-        setCreatedInstanceSubject(undefined);
-        setClassSubject(undefined);
-      });
+      const tryScroll = () => {
+        const el = document.querySelector(
+          `[about="${createdInstanceSubject}"]`,
+        );
+
+        if (el) {
+          el.scrollIntoView({ behavior: 'instant', block: 'center' });
+          setCreatedInstanceSubject(undefined);
+          setClassSubject(undefined);
+
+          return;
+        }
+
+        if (attempts++ < 30) {
+          requestAnimationFrame(tryScroll);
+        }
+      };
+
+      requestAnimationFrame(tryScroll);
     },
   });
 
@@ -44,7 +60,13 @@ export function CreateInstanceButton({ ontology }: CreateInstanceButtonProps) {
 
   const handleSaveClick = (subject: string) => {
     setCreatedInstanceSubject(subject);
+    setClassSubject(undefined);
     close(true);
+  };
+
+  const handleCancel = () => {
+    setClassSubject(undefined);
+    close(false);
   };
 
   return (
@@ -60,10 +82,10 @@ export function CreateInstanceButton({ ontology }: CreateInstanceButtonProps) {
         ontologies={[ontology.subject]}
       />
       <Dialog {...dialogProps} width='50rem'>
-        {isOpen && classSubject && (
+        {dialogProps.show && classSubject && (
           <NewFormDialog
             classSubject={classSubject}
-            onCancel={() => close(false)}
+            onCancel={handleCancel}
             onSaveClick={handleSaveClick}
             parent={ontology.subject}
           />

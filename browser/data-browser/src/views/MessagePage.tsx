@@ -1,4 +1,9 @@
-import { useString, properties } from '@tomic/react';
+import {
+  useString,
+  useCreatedAt,
+  useCreatedBy,
+  properties,
+} from '@tomic/react';
 
 import { CommitDetail } from '../components/CommitDetail';
 import { ContainerNarrow } from '../components/Containers';
@@ -11,7 +16,10 @@ import { ResourcePageProps } from './ResourcePage';
 export function MessagePage({ resource }: ResourcePageProps) {
   const [description] = useString(resource, properties.description);
   const [parent] = useString(resource, properties.parent);
-  const [lastCommit] = useString(resource, properties.commit.lastCommit);
+  // Creation date + creator from the genesis change in the resource's own Loro
+  // oplog — no commit fetch, so they survive a refresh.
+  const createdAt = useCreatedAt(resource);
+  const createdBy = useCreatedBy(resource);
 
   return (
     <ContainerNarrow>
@@ -19,7 +27,7 @@ export function MessagePage({ resource }: ResourcePageProps) {
         Message in <ResourceInline subject={parent!} />
       </h3>
       <Details>
-        <CommitDetail commitSubject={lastCommit!} />
+        <CommitDetail createdAt={createdAt} createdBy={createdBy} />
       </Details>
       <Markdown text={description || ''} />
     </ContainerNarrow>

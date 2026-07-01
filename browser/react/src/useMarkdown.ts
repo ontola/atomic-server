@@ -47,7 +47,7 @@ export function useMarkdown(resource: Resource): string {
     async function getPropValTexts() {
       let propValLines = '';
 
-      for await (const [prop, val] of resource.getPropVals()) {
+      for (const [prop, val] of resource.getEntries()) {
         if (!hiddenProps.includes(prop)) {
           propValLines = propValLines + (await propertyLine(prop, val, store));
         }

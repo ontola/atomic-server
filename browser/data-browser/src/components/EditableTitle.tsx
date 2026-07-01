@@ -1,6 +1,11 @@
-import { Resource, useCanWrite, useTitle } from '@tomic/react';
+import {
+  Resource,
+  StoreEvents,
+  useCanWrite,
+  useStore,
+  useTitle,
+} from '@tomic/react';
 import { useEffect, useRef, useState, type JSX } from 'react';
-import { useHotkeys } from 'react-hotkeys-hook';
 import { FaPencil } from 'react-icons/fa6';
 import { styled, css } from 'styled-components';
 import {
@@ -17,6 +22,8 @@ export interface EditableTitleProps {
   parentRef?: React.RefObject<HTMLInputElement | null>;
   id?: string;
   className?: string;
+  /** Called when the user commits the title (Enter or blur) */
+  onCommit?: () => void;
 }
 
 const opts = {
@@ -29,8 +36,11 @@ export function EditableTitle({
   parentRef,
   id,
   className,
+  onCommit,
   ...props
 }: EditableTitleProps): JSX.Element {
+  const store = useStore();
+
   const [text, setText] = useTitle(resource, Infinity, opts);
   const [isEditing, setIsEditing] = useState(false);
   const innerRef = useRef<HTMLInputElement>(null);
@@ -38,21 +48,23 @@ export function EditableTitle({
 
   const canEdit = useCanWrite(resource);
 
-  useHotkeys(
-    'enter',
-    () => {
-      setIsEditing(false);
-    },
-    { enableOnTags: ['INPUT'] },
-  );
+  useEffect(() => {
+    // Two ways to learn this resource was just manually created:
+    //   1. The flag set synchronously by notifyResourceManuallyCreated, in
+    //      case the event already fired before this component subscribed
+    //      (the navigate-then-emit race).
+    //   2. The event itself, for the live case where creation happens while
+    //      this component is already mounted.
+    if (store.consumeRecentlyCreated(resource.subject)) {
+      setIsEditing(true);
+    }
 
-  useHotkeys(
-    'esc',
-    () => {
-      setIsEditing(false);
-    },
-    { enableOnTags: ['INPUT'] },
-  );
+    return store.on(StoreEvents.ResourceManuallyCreated, created => {
+      if (created.subject === resource.subject) {
+        setIsEditing(true);
+      }
+    });
+  }, [store, resource.subject]);
 
   function handleClick() {
     setIsEditing(true);
@@ -65,6 +77,33 @@ export function EditableTitle({
     ref.current?.select();
   }, [isEditing]);
 
+  // The keystroke debounce in `useValue` (`commitDebounce: 100ms`)
+  // means the commit for the last typed character is still parked in
+  // a `setTimeout` when the user exits the editor. The next interaction
+  // — back-to-back rename, route change, reload — can run before the
+  // timer fires, so a quick "type → Escape → type again" sequence ends
+  // up with the second value chained onto the wrong `previousCommit`
+  // and the server only keeping the first one. Force-flush on every
+  // exit path (Enter, Escape, blur) so the commit posts before the
+  // editor unmounts. `save()` is a no-op when there are no dirty
+  // changes, so the still-armed debounce timer that fires afterwards
+  // is harmless.
+  const flushPending = () => {
+    void resource.__internalObject.save().catch(() => undefined);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      flushPending();
+      setIsEditing(false);
+      onCommit?.();
+    } else if (e.key === 'Escape') {
+      flushPending();
+      setIsEditing(false);
+    }
+  };
+
   return isEditing ? (
     <TitleInput
       ref={ref}
@@ -75,7 +114,12 @@ export function EditableTitle({
       placeholder={placeholder}
       onChange={e => setText(e.target.value)}
       value={text || ''}
-      onBlur={() => setIsEditing(false)}
+      onKeyDown={handleKeyDown}
+      onBlur={() => {
+        flushPending();
+        setIsEditing(false);
+        onCommit?.();
+      }}
       className={className}
     />
   ) : (

@@ -4,12 +4,15 @@ import {
   Resource,
   Store,
   core,
+  dataBrowser,
+  server,
   useArray,
   useStore,
 } from '@tomic/react';
 import { useCallback, useEffect, useState, type JSX } from 'react';
-import { styled } from 'styled-components';
-import { Button } from '@components/Button';
+import { stringToSlug } from '@helpers/stringToSlug';
+import { PropertyFormCategory } from './categories';
+import { sortSubjectList } from '@views/OntologyPage/sortSubjectList';
 import {
   Dialog,
   DialogActions,
@@ -17,11 +20,9 @@ import {
   DialogTitle,
   useDialog,
 } from '@components/Dialog';
+import { Button } from '@components/Button';
 import { FormValidationContextProvider } from '@components/forms/formValidation/FormValidationContextProvider';
-import { randomString } from '@helpers/randomString';
 import { PropertyForm } from './PropertyForm';
-import { PropertyFormCategory } from './categories';
-import { sortSubjectList } from '@views/OntologyPage/sortSubjectList';
 
 interface NewPropertyDialogProps {
   showDialog: boolean;
@@ -30,44 +31,66 @@ interface NewPropertyDialogProps {
   selectedCategory?: string;
 }
 
-const createSubjectWithBase = (base: string) => {
-  const sepperator = base.endsWith('/') ? '' : '/';
-
-  return `${base}${sepperator}property-${randomString(8)}`;
-};
-
-const populatePropertyWithDefaults = async (
-  property: Resource,
-  tableClass: Resource<Core.Class>,
-) => {
-  await property.set(core.properties.isA, [core.classes.property]);
-  await property.set(core.properties.parent, tableClass.props.parent);
-  await property.set(core.properties.shortname, 'new-column', false);
-  await property.set(core.properties.name, '', false);
-  await property.set(core.properties.description, 'A column in a table');
-  await property.set(core.properties.datatype, Datatype.STRING);
-
-  await property.save();
+/** Returns the isA classes and propVals for a given category, for inclusion in the genesis commit. */
+const getCategoryGenesisPropVals = (
+  category: PropertyFormCategory | undefined,
+): { isA: string | string[]; propVals: Record<string, unknown> } => {
+  switch (category) {
+    case 'number':
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.INTEGER },
+      };
+    case 'date':
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.DATE },
+      };
+    case 'checkbox':
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.BOOLEAN },
+      };
+    case 'file':
+      return {
+        isA: core.classes.property,
+        propVals: {
+          [core.properties.datatype]: Datatype.ATOMIC_URL,
+          [core.properties.classtype]: server.classes.file,
+        },
+      };
+    case 'json':
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.JSON },
+      };
+    case 'select':
+      return {
+        isA: [core.classes.property, dataBrowser.classes.selectProperty],
+        propVals: {
+          [core.properties.datatype]: Datatype.RESOURCEARRAY,
+          [core.properties.classtype]: dataBrowser.classes.tag,
+          [core.properties.allowsOnly]: [],
+        },
+      };
+    case 'relation':
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.ATOMIC_URL },
+      };
+    case 'text':
+    default:
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.STRING },
+      };
+  }
 };
 
 const getChildren = (store: Store, resource: Resource) =>
   store.clientSideQuery(
     res => res.get(core.properties.parent) === resource?.subject,
   );
-
-const destroyChildren = async (store: Store, resource: Resource) => {
-  const children = getChildren(store, resource);
-
-  await Promise.all(
-    children.map(child => {
-      try {
-        child.destroy();
-      } catch (e) {
-        return;
-      }
-    }),
-  );
-};
 
 const saveChildren = async (store: Store, resource: Resource) => {
   const children = getChildren(store, resource);
@@ -80,121 +103,126 @@ export function NewPropertyDialog({
   tableClassResource,
   bindShow,
 }: NewPropertyDialogProps): JSX.Element {
-  const [valid, setValid] = useState(false);
-
   const store = useStore();
-  const [resource, setResource] = useState<Resource | null>(null);
+  const [propertyResource, setPropertyResource] = useState<Resource | null>(
+    null,
+  );
+  const [valid, setValid] = useState(true);
+
   const [_properties, _setProperties, pushProp] = useArray(
     tableClassResource,
     core.properties.recommends,
-    {
-      commit: true,
-    },
+    { commit: true },
   );
 
-  const handleUserCancelAction = useCallback(async () => {
-    if (!resource) {
-      return;
-    }
-
-    try {
-      await destroyChildren(store, resource);
-      await resource.destroy();
-    } finally {
-      // Server does not have this resource yet so it will nag at us. We set the state to null anyway.
-      setResource(null);
-    }
-  }, [resource, store]);
-
-  const handleUserSuccessAction = useCallback(async () => {
-    if (!resource) {
-      return;
-    }
-
-    const tableClassParent = await store.getResource(
-      tableClassResource.props.parent,
-    );
-
-    if (tableClassParent.hasClasses(core.classes.ontology)) {
-      await resource.set(core.properties.parent, tableClassParent.subject);
-
-      const ontologyProps =
-        tableClassParent.get(core.properties.properties) ?? [];
-
-      await tableClassParent.set(
-        core.properties.properties,
-        await sortSubjectList(store, [...ontologyProps, resource.subject]),
+  const savePropertyToTable = useCallback(
+    async (prop: Resource) => {
+      const tableClassParent = await store.getResource(
+        tableClassResource.props.parent,
       );
 
-      await tableClassParent.save();
+      if (tableClassParent.hasClasses(core.classes.ontology)) {
+        const ontologyProps =
+          tableClassParent.get(core.properties.properties) ?? [];
+
+        await tableClassParent.set(
+          core.properties.properties,
+          await sortSubjectList(store, [...ontologyProps, prop.subject]),
+        );
+
+        await tableClassParent.save();
+      }
+
+      await prop.save();
+      await saveChildren(store, prop);
+      pushProp([prop.subject]);
+    },
+    [store, tableClassResource, pushProp],
+  );
+
+  const onSuccess = useCallback(async () => {
+    if (propertyResource) {
+      await savePropertyToTable(propertyResource);
     }
+  }, [propertyResource, savePropertyToTable]);
 
-    await resource.save();
-    await saveChildren(store, resource);
-
-    pushProp([resource.subject]);
-    setResource(null);
-  }, [resource, store, tableClassResource, pushProp]);
-
-  const [dialogProps, show, hide] = useDialog({
-    bindShow,
-    onCancel: handleUserCancelAction,
-    onSuccess: handleUserSuccessAction,
-  });
-
-  const createProperty = async () => {
-    const subject = createSubjectWithBase(tableClassResource.subject);
-    const propertyResource = store.getResourceLoading(subject, {
-      newResource: true,
-    });
-
-    await populatePropertyWithDefaults(propertyResource, tableClassResource);
-
-    setResource(propertyResource);
-  };
-
-  const handleCancelClick = useCallback(() => {
-    hide();
-  }, [hide]);
-
-  const handleCreateClick = useCallback(() => {
-    if (valid) {
-      hide(true);
-    }
-  }, [hide, valid]);
+  const [dialogProps, show, hide] = useDialog({ bindShow, onSuccess });
 
   useEffect(() => {
-    if (showDialog) {
-      createProperty().then(() => {
-        show();
-      });
+    if (!showDialog) {
+      setPropertyResource(null);
+
+      return;
     }
+
+    const init = async () => {
+      // Determine the correct parent before signing the genesis commit, since
+      // the parent is baked into the commit and controls authorization.
+      const tableClassParent = await store.getResource(
+        tableClassResource.props.parent,
+      );
+      const parentSubject = tableClassParent.hasClasses(core.classes.ontology)
+        ? tableClassParent.subject
+        : tableClassResource.subject;
+
+      const name = selectedCategory ?? 'column';
+      const { isA, propVals } = getCategoryGenesisPropVals(
+        selectedCategory as PropertyFormCategory,
+      );
+
+      const resource = await store.newResource({
+        parent: parentSubject,
+        isA,
+        propVals: {
+          [core.properties.shortname]: stringToSlug(name),
+          [core.properties.name]: name,
+          [core.properties.description]: '',
+          ...propVals,
+        },
+      });
+
+      setPropertyResource(resource);
+      // show() is called in a separate effect after propertyResource is set,
+      // so the Dialog is already in the DOM when show() runs.
+    };
+
+    init().catch(console.error);
   }, [showDialog]);
 
-  if (!resource) {
-    return <></>;
-  }
+  // Open dialog after propertyResource is set and Dialog is mounted.
+  useEffect(() => {
+    if (propertyResource && showDialog) {
+      show();
+    }
+  }, [propertyResource]);
+
+  const handleCreateClick = useCallback(() => {
+    hide(true);
+  }, [hide]);
 
   return (
     <FormValidationContextProvider onValidationChange={setValid}>
       <Dialog {...dialogProps}>
         <DialogTitle>
           <h1>
-            New <Capitalize>{selectedCategory}</Capitalize> Column
+            New{' '}
+            {selectedCategory
+              ? selectedCategory[0].toUpperCase() + selectedCategory.slice(1)
+              : ''}{' '}
+            Column
           </h1>
         </DialogTitle>
         <DialogContent>
-          <PropertyForm
-            resource={resource}
-            category={selectedCategory as PropertyFormCategory}
-            onSubmit={handleCreateClick}
-          />
+          {propertyResource && (
+            <PropertyForm
+              resource={propertyResource}
+              category={selectedCategory as PropertyFormCategory}
+              onSubmit={handleCreateClick}
+            />
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancelClick} subtle>
-            Cancel
-          </Button>
-          <Button onClick={handleCreateClick} disabled={!valid} type='submit'>
+          <Button onClick={handleCreateClick} disabled={!valid}>
             Create
           </Button>
         </DialogActions>
@@ -202,7 +230,3 @@ export function NewPropertyDialog({
     </FormValidationContextProvider>
   );
 }
-
-const Capitalize = styled('span')`
-  text-transform: capitalize;
-`;

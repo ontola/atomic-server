@@ -1,7 +1,17 @@
 {
   // The linter in the CI is quite strict, so running `cargo fmt` on save is probably a good idea!
   "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
+  "editor.defaultFormatter": "oxc.oxc-vscode",
   "rust-analyzer.checkOnSave.command": "clippy",
+  // Use a separate target dir so rust-analyzer's background check doesn't
+  // hold the workspace `target/` lock while we run `cargo run` / `cargo test`
+  // from the terminal. See planning/dev-cargo-lock-contention.md.
+  "rust-analyzer.cargo.targetDir": "target/rust-analyzer",
+  "rust-analyzer.check.targetDir": "target/rust-analyzer",
+  // Use rustup's rust-analyzer so proc-macro ABI matches `cargo`/`rustc` (Cursor's
+  // bundled analyzer can lag stable and report spurious errors on #[async_trait] etc.).
+  "rust-analyzer.server.path": "rust-analyzer",
   "search.exclude": {
     "**/.git": true,
     "**/node_modules": true,
@@ -9,27 +19,23 @@
     "**/coverage": true,
     "**/dist": true
   },
-  "eslint.validate": [
-    "javascript",
-    "javascriptreact",
-    "typescript",
-    "typescriptreact",
-    "svelte",
-    "svlete.ts"
-  ],
+  "oxc.configPath": "browser/.oxlintrc.json",
+  "oxc.fmt.configPath": "browser/.oxfmtrc.json",
   "typescript.preferences.importModuleSpecifierEnding": "minimal",
-  "eslint.alwaysShowStatus": true,
-  "eslint.format.enable": true,
-  "eslint.lintTask.enable": true,
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit"
-  },
-  "eslint.workingDirectories": [{ "directory": "browser" }],
   "typescript.preferences.preferTypeOnlyAutoImports": true,
   "rustTestExplorer.rootCargoManifestFilePath": "./Cargo.toml",
   // This won't work in multi-root workspaces, could be fixed by using a rust-analyzer.toml once there is some more documentation on that.
   // For now you need to set this in your own vscode settings file.
   "rust-analyzer.cargo.extraEnv": {
     "ATOMICSERVER_SKIP_JS_BUILD": "true"
-  }
+  },
+  // The check command runs build scripts: without this, atomic-server's
+  // build.rs shells out to `cargo bin wasm-pack build`, whose nested cargo
+  // builds into the shared `target/` and grabs its lock — blocking terminal
+  // `cargo build/test`. `cargo.extraEnv` does not reliably reach the check
+  // command, so set it on the check too.
+  "rust-analyzer.check.extraEnv": {
+    "ATOMICSERVER_SKIP_JS_BUILD": "true"
+  },
+  "java.configuration.updateBuildConfiguration": "automatic"
 }

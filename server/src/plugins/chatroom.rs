@@ -5,14 +5,12 @@ They list a bunch of Messages.
 */
 
 use atomic_lib::{
-    class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
-    commit::{CommitBuilder, CommitOpts},
+    class_extender::{BoxFuture, ClassExtender, GetExtenderContext},
+    db::drive_prefix_from_subject,
     errors::AtomicResult,
     storelike::{Query, QueryResult, ResourceResponse},
     urls::{self, PARENT},
-    utils,
-    values::SubResource,
-    Storelike, Value,
+    utils, Storelike, Value,
 };
 
 // Find the messages for the ChatRoom.
@@ -42,6 +40,7 @@ pub fn construct_chatroom<'a>(
         let query_children = Query {
             property: Some(PARENT.into()),
             value: Some(Value::AtomicUrl(resource.get_subject().clone())),
+            filters: Vec::new(),
             // We fetch one extra to see if there are more, so we can create a next-page URL
             limit: Some(page_limit + 1),
             start_val: None,
@@ -52,6 +51,7 @@ pub fn construct_chatroom<'a>(
             include_external: false,
             include_nested: true,
             for_agent: for_agent.clone(),
+            drive: Some(drive_prefix_from_subject(resource.get_subject())),
         };
 
         let QueryResult {
@@ -69,13 +69,13 @@ pub fn construct_chatroom<'a>(
             let last_resource = store.get_resource(last_subject).await?;
             let last_timestamp = last_resource.get(urls::CREATED_AT)?;
             let next_page_url = url::Url::parse_with_params(
-                resource.get_subject(),
+                resource.get_subject().as_str(),
                 &[("before-timestamp", last_timestamp.to_string())],
             )?;
             resource
                 .set(
                     urls::NEXT_PAGE.into(),
-                    Value::AtomicUrl(next_page_url.to_string()),
+                    Value::AtomicUrl(next_page_url.to_string().into()),
                     store,
                 )
                 .await?;
@@ -95,55 +95,6 @@ pub fn construct_chatroom<'a>(
     })
 }
 
-/// Update the ChatRoom with the new message, make sure this is sent to all Subscribers
-#[tracing::instrument(skip(context))]
-pub fn after_apply_commit_message<'a>(
-    context: CommitExtenderContext<'a>,
-) -> BoxFuture<'a, AtomicResult<()>> {
-    Box::pin(async move {
-        let CommitExtenderContext {
-            store,
-            commit: applied_commit,
-            resource,
-            is_new: _,
-        } = context;
-
-        // only update the ChatRoom for _new_ messages, not for edits
-        if applied_commit.previous_commit.is_none() {
-            // Get the related ChatRoom
-            let parent_subject = resource
-                .get(urls::PARENT)
-                .map_err(|_e| "Message must have a Parent!")?
-                .to_string();
-
-            // We need to push the Appended messages to all listeners of the ChatRoom.
-            // We do this by creating a new Commit and sending that.
-            // We do not save the actual changes in the ChatRoom itself for performance reasons.
-
-            // We use the ChatRoom only for its `last_commit`
-            let chat_room = store.get_resource(&parent_subject).await?;
-
-            let mut commit_builder = CommitBuilder::new(parent_subject);
-
-            commit_builder.push_propval(
-                urls::MESSAGES,
-                SubResource::Subject(resource.get_subject().to_string()),
-            )?;
-
-            let commit = commit_builder
-                .sign(&store.get_default_agent()?, store, &chat_room)
-                .await?;
-
-            let resp = commit
-                .validate_and_build_response(&CommitOpts::no_validations_no_index(), store)
-                .await?;
-
-            store.handle_commit(&resp);
-        }
-        Ok(())
-    })
-}
-
 pub fn build_chatroom_extender() -> ClassExtender {
     ClassExtender::builder()
         .id("chatroom".to_string())
@@ -156,8 +107,86 @@ pub fn build_message_extender() -> ClassExtender {
     ClassExtender::builder()
         .id("message".to_string())
         .classes(vec![urls::MESSAGE.to_string()])
-        .after_commit(ClassExtender::wrap_commit_handler(
-            after_apply_commit_message,
-        ))
         .build()
+}
+
+#[tokio::test]
+async fn test_ws_push_chatroom() {
+    use atomic_lib::commit::CommitOpts;
+    use atomic_lib::{commit::CommitBuilder, urls, values::SubResource, Db, Storelike, Value};
+
+    let test_dir = std::env::temp_dir().join("atomic-test-db-chat");
+    let uploads_dir = test_dir.join("uploads");
+    let mut db = Db::init_redb_file(&test_dir, Some("http://localhost".into()), &uploads_dir)
+        .await
+        .unwrap();
+
+    db.add_class_extender(build_chatroom_extender()).unwrap();
+    db.add_class_extender(build_message_extender()).unwrap();
+
+    let agent = db.create_agent(Some("agent")).await.unwrap();
+    db.set_default_agent(agent.clone());
+
+    let mut chatroom = atomic_lib::Resource::new("http://localhost/chat".into());
+    chatroom.set_class(urls::CHATROOM).unwrap();
+    let mut chatroom_builder = CommitBuilder::new(chatroom.get_subject().clone());
+    chatroom_builder
+        .push_propval(urls::IS_A, SubResource::Subject(urls::CHATROOM.into()))
+        .unwrap();
+    let chatroom_commit = chatroom_builder.sign(&agent, &db, &chatroom).await.unwrap();
+
+    db.apply_commit(chatroom_commit, &CommitOpts::no_validations_no_index())
+        .await
+        .unwrap();
+
+    let fetched = db
+        .get_resource(&"http://localhost/chat".into())
+        .await
+        .unwrap();
+    println!("Fetched chatroom: {}", fetched.get_subject());
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+    db.set_handle_commit(Box::new(move |resp| {
+        let _ = tx.try_send(resp.clone());
+    }));
+
+    let mut message = atomic_lib::Resource::new("http://localhost/msg1".into());
+    message.set_class(urls::MESSAGE).unwrap();
+    message
+        .set_unsafe(
+            urls::PARENT.into(),
+            Value::AtomicUrl("http://localhost/chat".into()),
+        )
+        .unwrap();
+
+    let mut message_builder = CommitBuilder::new(message.get_subject().clone());
+    message_builder
+        .push_propval(urls::IS_A, SubResource::Subject(urls::MESSAGE.into()))
+        .unwrap();
+
+    message_builder.set(
+        urls::PARENT.to_string(),
+        Value::AtomicUrl("http://localhost/chat".into()),
+    );
+
+    let message_commit = message_builder.sign(&agent, &db, &message).await.unwrap();
+
+    println!("All subjects in Sled:");
+    for item in db.all_resources(true) {
+        println!(" - {}", item.get_subject());
+    }
+
+    db.apply_commit(message_commit, &CommitOpts::no_validations_no_index())
+        .await
+        .unwrap();
+
+    while let Ok(resp) = rx.try_recv() {
+        println!("Received commit for: {}", resp.commit.subject);
+        println!(
+            "JSON: {}",
+            resp.commit_resource
+                .to_json_ad(Some("http://localhost"))
+                .unwrap()
+        );
+    }
 }

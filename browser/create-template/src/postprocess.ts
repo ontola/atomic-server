@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { ErrorType, isAtomicError, Store, type Resource } from '@tomic/lib';
+import { ErrorType, isAtomicError, Store } from '@tomic/lib';
+import type { Resource } from '@tomic/lib';
 import {
   type ExecutionContext,
   type TemplateKey,

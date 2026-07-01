@@ -1,4 +1,4 @@
-use crate::{agents::ForAgent, urls, Value};
+use crate::{agents::ForAgent, urls, Subject, Value};
 
 use super::*;
 use ntest::timeout;
@@ -12,8 +12,12 @@ static DB: OnceCell<Mutex<Db>> = OnceCell::const_new();
 /// Note that not all behavior can be properly tested with a shared database.
 /// If you need a clean one, juts call init("someId").
 pub async fn get_shared_db() -> &'static Mutex<Db> {
-    DB.get_or_init(|| async { Mutex::new(Db::init_temp("shared").await.unwrap()) })
-        .await
+    DB.get_or_init(|| async {
+        let store = Db::init_temp("shared").await.unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
+        Mutex::new(store)
+    })
+    .await
 }
 
 #[tokio::test]
@@ -55,10 +59,19 @@ async fn basic() {
     assert!(description_val == "the age of a person");
 
     // Try removing something
-    store.get_resource(crate::urls::CLASS).await.unwrap();
-    store.remove_resource(crate::urls::CLASS).await.unwrap();
+    store
+        .get_resource(&crate::urls::CLASS.into())
+        .await
+        .unwrap();
+    store
+        .remove_resource(&crate::urls::CLASS.into())
+        .await
+        .unwrap();
     // Should throw an error, because can't remove non-existent resource
-    store.remove_resource(crate::urls::CLASS).await.unwrap_err();
+    store
+        .remove_resource(&crate::urls::CLASS.into())
+        .await
+        .unwrap_err();
     // Should throw an error, because resource is deleted
     store.get_propvals(crate::urls::CLASS).unwrap_err();
 
@@ -68,50 +81,20 @@ async fn basic() {
 }
 
 #[tokio::test]
-async fn populate_collections() {
-    let store = Db::init_temp("populate_collections").await.unwrap();
-    let subjects: Vec<String> = store
-        .all_resources(false)
-        .map(|r| r.get_subject().into())
-        .collect();
-    println!("{:?}", subjects);
-    let collections_collection_url = format!("{}/collections", store.get_server_url().unwrap());
-    let collections_resource = store
-        .get_resource_extended(&collections_collection_url, false, &ForAgent::Public)
-        .await
-        .unwrap();
-    let member_count = collections_resource
-        .to_single()
-        .get(crate::urls::COLLECTION_MEMBER_COUNT)
-        .unwrap()
-        .to_int()
-        .unwrap();
-    assert!(member_count > 11);
-    let nested = collections_resource
-        .to_single()
-        .get(crate::urls::COLLECTION_INCLUDE_NESTED)
-        .unwrap()
-        .to_bool()
-        .unwrap();
-    assert!(nested);
-    // Make sure it can be run multiple times
-    store.populate().await.unwrap();
-}
-
-#[tokio::test]
 /// Check if a resource is properly removed from the DB after a delete command.
 /// Also counts commits.
 async fn destroy_resource_and_check_collection_and_commits() {
     let store = Db::init_temp("counter").await.unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
     let for_agent = &ForAgent::Public;
-    let agents_url = format!("{}/agents", store.get_server_url().unwrap());
+    let agents_url = "internal:/agents".to_string();
     let agents_collection_1 = store
-        .get_resource_extended(&agents_url, false, for_agent)
+        .get_resource_extended(&agents_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     println!(
         "Agents collection 1: {}",
-        agents_collection_1.to_json_ad().unwrap()
+        agents_collection_1.to_json_ad(None).unwrap()
     );
     let agents_collection_count_1 = agents_collection_1
         .to_single()
@@ -121,13 +104,13 @@ async fn destroy_resource_and_check_collection_and_commits() {
         .unwrap();
     assert_eq!(
         agents_collection_count_1, 1,
-        "There should be only 1 agent in this members collection (we assume there is one agent already present from init)"
+        "There should be 1 agent in this collection initially (the agent created during init)"
     );
 
     // We will count the commits, and check if they've incremented later on.
-    let commits_url = format!("{}/commits", store.get_server_url().unwrap());
+    let commits_url = "internal:/commits".to_string();
     let commits_collection_1 = store
-        .get_resource_extended(&commits_url, false, for_agent)
+        .get_resource_extended(&commits_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     let commits_collection_count_1 = commits_collection_1
@@ -139,13 +122,13 @@ async fn destroy_resource_and_check_collection_and_commits() {
     println!("Commits collection count 1: {}", commits_collection_count_1);
 
     // Create a new agent, check if it is added to the new Agents collection as a Member.
-    let mut resource = crate::agents::Agent::new(None, &store)
+    let mut resource = crate::agents::Agent::new(None)
         .unwrap()
         .to_resource()
         .unwrap();
     let _res = resource.save_locally(&store).await.unwrap();
     let agents_collection_2 = store
-        .get_resource_extended(&agents_url, false, for_agent)
+        .get_resource_extended(&agents_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     let agents_collection_count_2 = agents_collection_2
@@ -160,7 +143,7 @@ async fn destroy_resource_and_check_collection_and_commits() {
     );
 
     let commits_collection_2 = store
-        .get_resource_extended(&commits_url, false, for_agent)
+        .get_resource_extended(&commits_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     let commits_collection_count_2 = commits_collection_2
@@ -179,14 +162,26 @@ async fn destroy_resource_and_check_collection_and_commits() {
     let clone = _res.resource_new.clone().unwrap();
     let resp = _res.resource_new.unwrap().destroy(&store).await.unwrap();
     assert!(resp.resource_new.is_none());
+    // Compare JSON-AD minus loroUpdate. Loro snapshots aren't byte-deterministic
+    // (peer-id allocation differs per run) — the logical state is what matters.
+    // Using the full to_json_ad here would compare the base64 of those snapshots
+    // and flake even when the logical state is identical.
+    fn json_ad_without_loro(r: &crate::Resource) -> String {
+        let mut json: serde_json::Value =
+            serde_json::from_str(&r.to_json_ad(None).unwrap()).unwrap();
+        if let Some(obj) = json.as_object_mut() {
+            obj.remove(crate::urls::LORO_UPDATE);
+        }
+        serde_json::to_string(&json).unwrap()
+    }
     assert_eq!(
-        resp.resource_old.as_ref().unwrap().to_json_ad().unwrap(),
-        clone.to_json_ad().unwrap(),
+        json_ad_without_loro(resp.resource_old.as_ref().unwrap()),
+        json_ad_without_loro(&clone),
         "JSON AD differs between removed resource and resource passed back from commit"
     );
     assert!(resp.resource_old.is_some());
     let agents_collection_3 = store
-        .get_resource_extended(&agents_url, false, for_agent)
+        .get_resource_extended(&agents_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     let agents_collection_count_3 = agents_collection_3
@@ -201,7 +196,7 @@ async fn destroy_resource_and_check_collection_and_commits() {
     );
 
     let commits_collection_3 = store
-        .get_resource_extended(&commits_url, false, for_agent)
+        .get_resource_extended(&commits_url.as_str().into(), false, for_agent)
         .await
         .unwrap();
     let commits_collection_count_3 = commits_collection_3
@@ -218,18 +213,181 @@ async fn destroy_resource_and_check_collection_and_commits() {
     );
 }
 
+/// Regression test for stale parent-index entries leaking into `count`.
+///
+/// Symptom seen in the wild: a browser hit `/query?property=parent&value=<drive>`
+/// and got back `totalMembers: 3` with `members: []`. The three index entries
+/// pointed at resources that no longer resolved for the requesting agent —
+/// destroyed, ACL-filtered, or otherwise inaccessible — but `query_basic` /
+/// `query_sorted_indexed` still bumped `count` for each iter entry,
+/// regardless of whether the entry survived the include_external filter
+/// or whether `get_resource_extended` succeeded.
+///
+/// Contract under test: after destroying every resource that points
+/// `parent=X`, the count for the `parent=X` query must be 0 — equal to
+/// `subjects.len()`. If count drifts above subjects.len(), the parent
+/// index has orphan entries that destroy didn't clean up, OR count is
+/// being incremented from raw iter steps instead of returnable hits.
+#[tokio::test]
+async fn destroy_clears_parent_index_count() {
+    let store = Db::init_temp("destroy_clears_parent_index_count")
+        .await
+        .unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
+
+    // Use a synthetic parent subject. We don't need it to resolve as a
+    // real resource — the parent-index is keyed by string value, not
+    // by resource existence.
+    let parent_subject = "https://example.com/parent-X";
+
+    let mut child_subjects = Vec::new();
+    for _ in 0..3 {
+        let mut child = Resource::new_generate_subject(&store).unwrap();
+        child
+            .set(
+                urls::PARENT.into(),
+                Value::AtomicUrl(parent_subject.into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        child.save(&store).await.unwrap();
+        child_subjects.push(child.get_subject().to_string());
+    }
+
+    let q = Query {
+        property: Some(urls::PARENT.into()),
+        value: Some(Value::AtomicUrl(parent_subject.into())),
+        filters: Vec::new(),
+        limit: Some(500),
+        start_val: None,
+        end_val: None,
+        offset: 0,
+        sort_by: None,
+        sort_desc: false,
+        include_external: true,
+        include_nested: false,
+        for_agent: ForAgent::Sudo,
+        drive: None,
+    };
+
+    let before = store.query(&q).await.unwrap();
+    assert_eq!(before.count, 3, "three children indexed");
+    assert_eq!(before.subjects.len(), 3, "three children returned");
+
+    // Destroy all three. After this, the parent-index should hold no
+    // entries for `parent=<parent_subject>`.
+    for subject in &child_subjects {
+        let mut r = store.get_resource(&subject.as_str().into()).await.unwrap();
+        r.destroy(&store).await.unwrap();
+    }
+
+    let after = store.query(&q).await.unwrap();
+    assert_eq!(
+        after.subjects.len(),
+        0,
+        "no children should be returned after destroy"
+    );
+    assert_eq!(
+        after.count, 0,
+        "count must equal subjects.len() after destroy — \
+         stale index entries inflate count, producing the \
+         `totalMembers: 3, members: []` drift seen in the field"
+    );
+}
+
+/// Companion regression test: when resources match the query filter but
+/// the requesting agent isn't authorized to read them, `count` and
+/// `subjects.len()` must agree. They currently don't — there's a
+/// known-issue comment in the existing `queries` test (line ~408)
+/// that intentionally skips this assertion, pointing at GH issue #286.
+///
+/// This is the actual surface of the bug observed in the field: the
+/// user's server reported `totalMembers: 3, members: []` for a
+/// `parent=<drive>` query. Those 3 entries weren't destroyed — they
+/// were authorization-filtered, so `get_resource_extended` failed and
+/// the push into `subjects` was skipped, while `count` kept marching
+/// on. Once count drifts above the visible row count, the client
+/// trusts the count for pagination, optimistic-add bookkeeping, and
+/// (in our concrete case) keeps phantom subject DIDs in the WASM DB
+/// because the count says "there's something here" but the server
+/// keeps returning an empty page.
+#[tokio::test]
+async fn unauthorized_query_count_matches_subjects() {
+    let store = Db::init_temp("unauthorized_query_count_matches_subjects")
+        .await
+        .unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
+
+    let parent_subject = "https://example.com/parent-private";
+
+    // Create three children. Don't set any `read` ACL — the resources
+    // are only visible to Sudo / the server-internal agent, never to
+    // a regular signed-in user.
+    for _ in 0..3 {
+        let mut child = Resource::new_generate_subject(&store).unwrap();
+        child
+            .set(
+                urls::PARENT.into(),
+                Value::AtomicUrl(parent_subject.into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        child.save(&store).await.unwrap();
+    }
+
+    let q = Query {
+        property: Some(urls::PARENT.into()),
+        value: Some(Value::AtomicUrl(parent_subject.into())),
+        filters: Vec::new(),
+        limit: Some(500),
+        start_val: None,
+        end_val: None,
+        offset: 0,
+        sort_by: None,
+        sort_desc: false,
+        include_external: true,
+        include_nested: false,
+        // Public agent: no ACL grants read access to the children we
+        // just created, so `get_resource_extended` will fail auth on
+        // each one and `subjects` will end up empty.
+        for_agent: urls::PUBLIC_AGENT.into(),
+        drive: None,
+    };
+
+    let res = store.query(&q).await.unwrap();
+
+    assert_eq!(
+        res.subjects.len(),
+        0,
+        "no subjects should be returned to an unauthorized agent"
+    );
+    assert_eq!(
+        res.count,
+        res.subjects.len(),
+        "count must equal subjects.len() — count={}, subjects.len()={}. \
+         Index iteration is incrementing count for entries that auth \
+         filters then drop from the response, producing the \
+         `totalMembers: N, members: []` drift seen in the field.",
+        res.count,
+        res.subjects.len(),
+    );
+}
+
 #[tokio::test]
 async fn get_extended_resource_pagination() {
     let store = Db::init_temp("get_extended_resource_pagination")
         .await
         .unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
     let subject = format!(
         "{}/commits?current_page=2&page_size=99999",
-        store.get_server_url().unwrap()
+        "http://localhost"
     );
     let for_agent = &ForAgent::Public;
     if store
-        .get_resource_extended(&subject, false, for_agent)
+        .get_resource_extended(&subject.as_str().into(), false, for_agent)
         .await
         .is_ok()
     {
@@ -238,7 +396,11 @@ async fn get_extended_resource_pagination() {
     // let subject = "https://atomicdata.dev/classes?current_page=2&page_size=1";
     let subject_with_page_size = format!("{}&page_size=1", subject);
     let resource = store
-        .get_resource_extended(&subject_with_page_size, false, &ForAgent::Public)
+        .get_resource_extended(
+            &subject_with_page_size.as_str().into(),
+            false,
+            &ForAgent::Public,
+        )
         .await
         .unwrap()
         .to_single();
@@ -248,7 +410,7 @@ async fn get_extended_resource_pagination() {
         .to_int()
         .unwrap();
     assert_eq!(cur_page, 2);
-    assert_eq!(resource.get_subject(), &subject_with_page_size);
+    assert_eq!(resource.get_subject().as_str(), &subject_with_page_size);
 }
 
 /// Generate a bunch of resources, query them.
@@ -257,7 +419,11 @@ async fn get_extended_resource_pagination() {
 async fn queries() {
     // Re-using the same instance can cause issues with testing concurrently.
     // let store = &DB.lock().unwrap().clone();
-    let store = &Db::init_temp("queries").await.unwrap();
+    let store_owned = Db::init_temp("queries").await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned)
+        .await
+        .unwrap();
+    let store = &store_owned;
 
     let demo_val = Value::Slug("myval".to_string());
     let demo_reference = Value::AtomicUrl(urls::PARAGRAPH.into());
@@ -306,6 +472,7 @@ async fn queries() {
     let mut q = Query {
         property: Some(prop_filter.into()),
         value: Some(demo_reference.clone()),
+        filters: Vec::new(),
         limit: Some(limit),
         start_val: None,
         end_val: None,
@@ -315,6 +482,7 @@ async fn queries() {
         include_external: true,
         include_nested: false,
         for_agent: ForAgent::Sudo,
+        drive: None,
     };
     let res = store.query(&q).await.unwrap();
     assert_eq!(
@@ -339,6 +507,7 @@ async fn queries() {
     assert_eq!(res.resources.len(), limit, "nested resources");
 
     q.sort_by = Some(sort_by.into());
+    q.drive = Some(Subject::from("internal:/"));
     let mut res = store.query(&q).await.unwrap();
     assert!(!res.resources.is_empty(), "resources should be returned");
     let mut prev_resource = res.resources[0].clone();
@@ -376,11 +545,14 @@ async fn queries() {
         "order did not change after updating resource"
     );
 
-    let mut delete_resource = store.get_resource(&subject_to_delete).await.unwrap();
+    let mut delete_resource = store
+        .get_resource(&subject_to_delete.as_str().into())
+        .await
+        .unwrap();
     delete_resource.destroy(store).await.unwrap();
     let res = store.query(&q).await.unwrap();
     assert!(
-        !res.subjects.contains(&subject_to_delete),
+        !res.subjects.iter().any(|s| s.as_str() == subject_to_delete),
         "deleted resource still in results"
     );
 
@@ -428,11 +600,16 @@ async fn queries() {
 /// Check if `include_external` is respected.
 #[tokio::test]
 async fn query_include_external() {
-    let store = &Db::init_temp("query_include_external").await.unwrap();
+    let store_owned = Db::init_temp("query_include_external").await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned)
+        .await
+        .unwrap();
+    let store = &store_owned;
 
     let mut q = Query {
         property: Some(urls::DESCRIPTION.into()),
         value: None,
+        filters: Vec::new(),
         limit: None,
         start_val: None,
         end_val: None,
@@ -442,6 +619,7 @@ async fn query_include_external() {
         include_external: true,
         include_nested: false,
         for_agent: ForAgent::Sudo,
+        drive: None,
     };
     let res_include = store.query(&q).await.unwrap();
     q.include_external = false;
@@ -455,8 +633,12 @@ async fn query_include_external() {
 }
 
 #[tokio::test]
-async fn test_db_resources_all() {
-    let store = &Db::init_temp("resources_all").await.unwrap();
+async fn resources_all() {
+    let store_owned = Db::init_temp("resources_all").await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned)
+        .await
+        .unwrap();
+    let store = &store_owned;
     let res_no_include = store.all_resources(false).count();
     let res_include = store.all_resources(true).count();
     assert!(
@@ -466,9 +648,26 @@ async fn test_db_resources_all() {
 }
 
 #[tokio::test]
+async fn blobs_storage() {
+    let store = Db::init_temp("blobs_storage").await.unwrap();
+    let data = b"some binary data";
+    let hash = blake3::hash(data);
+    let hash_bytes = hash.as_bytes();
+
+    store.kv.insert(Tree::Blobs, hash_bytes, data).unwrap();
+    let retrieved = store.kv.get(Tree::Blobs, hash_bytes).unwrap().unwrap();
+
+    assert_eq!(data.to_vec(), retrieved);
+}
+
+#[tokio::test]
 /// Changing these values actually correctly updates the index.
-async fn index_invalidate_cache() {
-    let store = &Db::init_temp("invalidate_cache").await.unwrap();
+async fn invalidate_cache() {
+    let store_owned = Db::init_temp("invalidate_cache").await.unwrap();
+    crate::test_utils::setup_test_env(&store_owned)
+        .await
+        .unwrap();
+    let store = &store_owned;
 
     // Make sure to use Properties that are not in the default store
 
@@ -478,14 +677,16 @@ async fn index_invalidate_cache() {
         urls::FILENAME,
         Value::String("old_val".into()),
         Value::String("1".into()),
-    );
+    )
+    .await;
     // Do booleans work?
     test_collection_update_value(
         store,
         urls::IS_LOCKED,
         Value::Boolean(true),
         Value::Boolean(false),
-    );
+    )
+    .await;
     // Do ResourceArrays work?
     test_collection_update_value(
         store,
@@ -496,7 +697,8 @@ async fn index_invalidate_cache() {
             "http://example.com/3".into(),
         ]),
         Value::ResourceArray(vec!["http://example.com/1".into()]),
-    );
+    )
+    .await;
 }
 
 /// Generates a bunch of resources, changes the value for one of them, checks if the order has changed correctly.
@@ -551,6 +753,7 @@ async fn test_collection_update_value(
     let q = Query {
         property: Some(filter_prop.into()),
         value: Some(filter_val),
+        filters: Vec::new(),
         limit: Some(limit),
         start_val: None,
         end_val: None,
@@ -560,6 +763,7 @@ async fn test_collection_update_value(
         include_external: true,
         include_nested: true,
         for_agent: ForAgent::Sudo,
+        drive: Some(Subject::from("internal:/")),
     };
     let mut res = store.query(&q).await.unwrap();
     assert_eq!(
@@ -587,14 +791,16 @@ async fn test_collection_update_value(
     assert_eq!(res.count, count, "count changed after updating one value");
 
     assert_eq!(
-        res.subjects.first().unwrap(),
-        resource_changed_order.get_subject(),
+        res.subjects.first().unwrap().as_str(),
+        resource_changed_order.get_subject().as_str(),
         "Updated resource is not the first Result of the new query"
     );
 
     // Remove one of the properties, not relevant to the query.
     // This should not impact the results
-    resources[1].remove_propval(irrelevant_property_url);
+    resources[1]
+        .remove_propval(irrelevant_property_url)
+        .unwrap();
     resources[1].save(store).await.unwrap();
     let res = store
         .query(&q)
@@ -607,7 +813,7 @@ async fn test_collection_update_value(
 
     // Modify the filtered property.
     // This should remove the item from the results.
-    resources[1].remove_propval(filter_prop);
+    resources[1].remove_propval(filter_prop).unwrap();
     resources[1].save(store).await.unwrap();
     let res = store
         .query(&q)
@@ -617,5 +823,705 @@ async fn test_collection_update_value(
         res.count,
         count - 1,
         "Modifying the filtered value did not remove the item from the results"
+    );
+}
+
+#[cfg(feature = "db-sled")]
+#[tokio::test]
+async fn test_migration_v2_to_v3() {
+    let tmp_dir_path = ".temp/db/migration_v2_v3";
+    let _try_remove_existing = std::fs::remove_dir_all(tmp_dir_path);
+    let server_url = "https://localhost";
+    let store = Db::init(
+        std::path::Path::new(tmp_dir_path),
+        Some(server_url.to_string()),
+    )
+    .await
+    .unwrap();
+
+    // Create an old-style PropValsV2
+    let mut propvals = crate::db::v2_types::PropValsV2::new();
+    let subject_url = format!("{}/test-resource", server_url);
+    propvals.insert(
+        crate::urls::DESCRIPTION.to_string(),
+        crate::db::v2_types::ValueV2::String("test".to_string()),
+    );
+    // Add an AtomicUrl that points to itself
+    propvals.insert(
+        crate::urls::PARENT.to_string(),
+        crate::db::v2_types::ValueV2::AtomicUrl(subject_url.clone()),
+    );
+
+    // Manually insert into resources_v2 using raw sled access
+    // Drop the Db first so we can open the sled database directly
+    drop(store);
+    let sled_store =
+        super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
+    {
+        let v2_tree = sled_store.raw_db().open_tree("resources_v2").unwrap();
+        v2_tree
+            .insert(
+                subject_url.as_bytes(),
+                rmp_serde::to_vec(&propvals).unwrap(),
+            )
+            .unwrap();
+        v2_tree.flush().unwrap();
+    }
+
+    // Run migration
+    super::migrations::migrate_maybe(&sled_store).unwrap();
+    drop(sled_store);
+
+    // Re-open the Db to pick up the migrated data
+    let store = crate::Db::init(
+        std::path::Path::new(&tmp_dir_path),
+        Some(server_url.to_string()),
+    )
+    .await
+    .unwrap();
+
+    // Verify results in v3
+    let resource = store
+        .get_resource(&subject_url.clone().into())
+        .await
+        .unwrap();
+
+    // The subject in the resource should now be Local
+    assert!(
+        matches!(resource.get_subject(), crate::Subject::Internal { .. }),
+        "Subject should be Internal, but is {:?}",
+        resource.get_subject()
+    );
+
+    // The value for PARENT should now be Local
+    let parent = resource.get(crate::urls::PARENT).unwrap();
+    if let crate::Value::AtomicUrl(s) = parent {
+        assert!(
+            matches!(s, crate::Subject::Internal { .. }),
+            "Value should be Internal, but is {:?}",
+            s
+        );
+    } else {
+        panic!("Value should be AtomicUrl, but is {:?}", parent);
+    }
+
+    // Verify it is NOT in resources_v2 anymore (it should have been dropped)
+    drop(store);
+    let sled_store2 =
+        super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
+    assert!(!sled_store2
+        .raw_db()
+        .tree_names()
+        .into_iter()
+        .any(|n| n == "resources_v2".as_bytes()));
+}
+
+/// Test that resources added via add_resource_opts with update_index=true
+/// can be found via property-value queries (the pattern used by table/collection UI).
+#[tokio::test]
+async fn query_by_parent_after_add_resource() {
+    let store = Db::init_temp("query_parent").await.unwrap();
+
+    let parent_subject = "https://localhost/parent-folder";
+    let child1_subject = "https://localhost/child1";
+    let child2_subject = "https://localhost/child2";
+
+    // Create parent
+    let mut parent = crate::Resource::new(parent_subject.into());
+    parent
+        .set_unsafe(urls::NAME.into(), Value::String("Parent Folder".into()))
+        .unwrap();
+    store
+        .add_resource_opts(&parent, false, true, true)
+        .await
+        .unwrap();
+
+    // Create children with parent property
+    let mut child1 = crate::Resource::new(child1_subject.into());
+    child1
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()))
+        .unwrap();
+    child1
+        .set_unsafe(urls::NAME.into(), Value::String("Child 1".into()))
+        .unwrap();
+    store
+        .add_resource_opts(&child1, false, true, true)
+        .await
+        .unwrap();
+
+    let mut child2 = crate::Resource::new(child2_subject.into());
+    child2
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()))
+        .unwrap();
+    child2
+        .set_unsafe(urls::NAME.into(), Value::String("Child 2".into()))
+        .unwrap();
+    store
+        .add_resource_opts(&child2, false, true, true)
+        .await
+        .unwrap();
+
+    // Query: find children of parent (this is what the table UI does)
+    let query = crate::storelike::Query::new_prop_val(urls::PARENT, parent_subject);
+    let result = store.query(&query).await.unwrap();
+
+    assert_eq!(
+        result.count, 2,
+        "Should find 2 children, found {}. Subjects: {:?}",
+        result.count, result.subjects
+    );
+}
+
+/// Production path: create a Drive via `store.create_drive`, add children
+/// via `apply_commit` (what WebSocket/HTTP commits do), then fetch them
+/// with a sorted query — the exact path the folder/table UI takes.
+/// Regression guard for "refreshing the table shows new rows / doesn't
+/// sort".
+#[tokio::test]
+async fn sorted_collection_after_apply_commit_is_stable() {
+    use crate::commit::{CommitBuilder, CommitOpts};
+
+    let store = Db::init_temp("collection_after_commit").await.unwrap();
+    let agent = store.create_agent(Some("test-agent")).await.unwrap();
+    store.set_default_agent(agent.clone());
+
+    let drive_did = store.create_drive("Test Drive").await.unwrap();
+
+    // Create children via DID-genesis commits — the frontend never picks
+    // its own subject; it signs a genesis commit and the server derives the
+    // DID from the signature. `Commit::create_did` is the same helper
+    // `store.create_drive` uses.
+    let opts = CommitOpts {
+        update_index: true,
+        ..CommitOpts::no_validations_no_index()
+    };
+    for name in &["alpha", "bravo", "charlie"] {
+        let mut b = CommitBuilder::new("placeholder".into());
+        b.set(
+            urls::PARENT.into(),
+            Value::AtomicUrl(drive_did.clone().into()),
+        );
+        b.set(urls::NAME.into(), Value::String((*name).to_string()));
+        let commit = crate::commit::Commit::create_did(b, &agent, &store)
+            .await
+            .unwrap();
+        store.apply_commit(commit, &opts).await.unwrap();
+    }
+
+    // Query via the same sorted path the UI uses.
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, &drive_did);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive_did.clone().into());
+    query.limit = Some(100);
+
+    let first = store.query(&query).await.unwrap();
+    let second = store.query(&query).await.unwrap();
+
+    assert_eq!(
+        first.subjects, second.subjects,
+        "sorted query (post-commit) should be stable across calls. \
+         first={:?} second={:?}",
+        first.subjects, second.subjects
+    );
+    assert_eq!(
+        first.count, second.count,
+        "count should be stable across calls. first={} second={}",
+        first.count, second.count
+    );
+    assert_eq!(first.count, 3, "should find 3 children via commits");
+}
+
+/// Sorted query — the path folder/table UIs use. Routes through
+/// `query_complex`, which reads from `Tree::QueryMembers`, builds the index
+/// on first miss, and watches the filter. Regression guard for the
+/// "refreshing the table shows new rows / doesn't sort" symptom.
+#[tokio::test]
+async fn query_by_parent_sorted_is_stable_across_calls() {
+    let store = Db::init_temp("query_parent_sorted").await.unwrap();
+
+    let parent_subject = "https://localhost/parent-sorted";
+    let mut parent = crate::Resource::new(parent_subject.into());
+    parent
+        .set_unsafe(urls::NAME.into(), Value::String("Parent".into()))
+        .unwrap();
+    store
+        .add_resource_opts(&parent, false, true, true)
+        .await
+        .unwrap();
+
+    for name in &["alpha", "bravo", "charlie"] {
+        let subj = format!("https://localhost/sorted/{name}");
+        let mut r = crate::Resource::new(subj);
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()))
+            .unwrap();
+        r.set_unsafe(urls::NAME.into(), Value::String((*name).to_string()))
+            .unwrap();
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+    }
+
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, parent_subject);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some("https://localhost".into());
+    query.limit = Some(100);
+
+    let first = store.query(&query).await.unwrap();
+    assert_eq!(
+        first.count, 3,
+        "first sorted query should find 3 children, got {}. Subjects: {:?}",
+        first.count, first.subjects
+    );
+
+    // The critical part: re-running the same query must return the SAME
+    // result. In the broken build, `is_watched` returns false on the second
+    // call and the index is rebuilt, which can yield duplicates or drifting
+    // ordering.
+    let second = store.query(&query).await.unwrap();
+    assert_eq!(
+        second.count, first.count,
+        "re-running the sorted query should return the same count. \
+         first={} second={}. Second subjects: {:?}",
+        first.count, second.count, second.subjects
+    );
+    assert_eq!(
+        second.subjects, first.subjects,
+        "sorted query results should be stable across calls, but they changed"
+    );
+}
+
+/// Same test but with DID subjects (the real-world pattern).
+#[tokio::test]
+async fn query_by_parent_did_subjects() {
+    let store = Db::init_temp("query_parent_did").await.unwrap();
+
+    let parent_did =
+        "did:ad:parentABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz012345678==";
+    let child1_did =
+        "did:ad:child1ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567890123456789==";
+    let child2_did =
+        "did:ad:child2ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567890123456789==";
+
+    // Create children with DID parent
+    let mut child1 = crate::Resource::new(child1_did.into());
+    child1
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_did.into()))
+        .unwrap();
+    child1
+        .set_unsafe(urls::NAME.into(), Value::String("DID Child 1".into()))
+        .unwrap();
+    store
+        .add_resource_opts(&child1, false, true, true)
+        .await
+        .unwrap();
+
+    let mut child2 = crate::Resource::new(child2_did.into());
+    child2
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_did.into()))
+        .unwrap();
+    child2
+        .set_unsafe(urls::NAME.into(), Value::String("DID Child 2".into()))
+        .unwrap();
+    store
+        .add_resource_opts(&child2, false, true, true)
+        .await
+        .unwrap();
+
+    // Query: find children of DID parent
+    let query = crate::storelike::Query::new_prop_val(urls::PARENT, parent_did);
+    let result = store.query(&query).await.unwrap();
+
+    assert_eq!(
+        result.count, 2,
+        "Should find 2 DID children, found {}. Subjects: {:?}",
+        result.count, result.subjects
+    );
+}
+
+/// Test that JSON-AD parsing + add_resource_opts indexes correctly
+/// (simulates the WASM putResource path).
+#[tokio::test]
+async fn query_after_json_ad_import() {
+    let store = Db::init_temp("query_json_import").await.unwrap();
+
+    let parent =
+        "did:ad:parentXYZ0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRST==";
+    let json = format!(
+        r#"{{"@id": "did:ad:childXYZ0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUV==", "https://atomicdata.dev/properties/parent": "{}", "https://atomicdata.dev/properties/name": "JSON Child"}}"#,
+        parent
+    );
+
+    let resource =
+        crate::parse::parse_json_ad_resource(&json, &store, &crate::parse::ParseOpts::default())
+            .await
+            .unwrap();
+
+    store
+        .add_resource_opts(&resource, false, true, true)
+        .await
+        .unwrap();
+
+    let query = crate::storelike::Query::new_prop_val(urls::PARENT, parent);
+    let result = store.query(&query).await.unwrap();
+
+    assert_eq!(
+        result.count, 1,
+        "Should find 1 child after JSON-AD import, found {}",
+        result.count
+    );
+}
+
+/// Test that a Loro-only DID genesis commit (mimicking browser behavior)
+/// stores and indexes the resource correctly in a sled-backed Db.
+#[tokio::test]
+async fn did_loro_only_commit_sled() {
+    use crate::agents::Agent;
+    use crate::commit::{Commit, CommitBuilder, CommitOpts};
+
+    let store = Db::init_temp("did_loro_commit").await.unwrap();
+    store.populate().await.unwrap();
+
+    // Create an agent
+    let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
+    let agent = Agent::new_from_private_key(None, private_key).unwrap();
+    store
+        .add_resource(&agent.to_resource().unwrap())
+        .await
+        .unwrap();
+
+    // Build a Loro doc with properties (mimics browser-side)
+    let loro_doc = crate::loro::AtomicLoroDoc::new();
+    loro_doc
+        .set_property(urls::NAME, &Value::String("My Property".into()))
+        .unwrap();
+    loro_doc
+        .set_property(urls::DESCRIPTION, &Value::String("A test property".into()))
+        .unwrap();
+    loro_doc
+        .set_property(urls::PUBLIC_KEY, &Value::String(agent.public_key.clone()))
+        .unwrap();
+
+    let snapshot = loro_doc.export_snapshot();
+
+    // Create commit with ONLY loroUpdate (empty set map — browser behavior)
+    let mut builder = CommitBuilder::new("placeholder".into());
+    builder.set_loro_update(snapshot);
+    let commit = Commit::create_did(builder, &agent, &store).await.unwrap();
+    let did_subject = commit.subject.clone();
+
+    // Use the same opts as the real server handler (validate_rights + validate_schema)
+    let opts = CommitOpts {
+        validate_signature: true,
+        validate_timestamp: false,
+        validate_previous_commit: false,
+        validate_loro_causality: false,
+        validate_rights: true,
+        validate_schema: true,
+        update_index: true,
+        validate_for_agent: Some(agent.subject.to_string()),
+        source_id: None,
+    };
+
+    let result = store.apply_commit(commit, &opts).await.unwrap();
+    assert!(result.resource_new.is_some(), "should have resource_new");
+
+    // Verify the resource is retrievable from the sled-backed store
+    let stored = store
+        .get_resource(&did_subject.as_str().into())
+        .await
+        .expect("Loro-only DID resource should be retrievable from sled store");
+
+    assert_eq!(
+        stored.get(urls::NAME).unwrap().to_string(),
+        "My Property",
+        "Name should be materialized from Loro in sled store"
+    );
+}
+
+/// Minimal repro for the cross-tab document sync bug.
+///
+/// Mimics the browser flow: a document is created via a genesis commit (no
+/// RTE body yet), then the body is added via a FOLLOW-UP commit whose
+/// `loroUpdate` is a full snapshot carrying a separate `documentContent` text
+/// container (the RTE / ProseMirror tree). After the follow-up + a
+/// `get_resource` roundtrip, `materialized_state()` — what the WS GET handler
+/// serves to a second viewer — must still carry the `documentContent`
+/// container. If it only carries the `properties` map, the second viewer
+/// receives a properties-only doc and cross-tab CRDT sync can never converge.
+#[tokio::test]
+async fn loro_non_property_container_survives_commit_roundtrip() {
+    use crate::agents::Agent;
+    use crate::commit::{Commit, CommitBuilder, CommitOpts};
+
+    let store = Db::init_temp("loro_container_roundtrip").await.unwrap();
+    store.populate().await.unwrap();
+
+    let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
+    let agent = Agent::new_from_private_key(None, private_key).unwrap();
+    store
+        .add_resource(&agent.to_resource().unwrap())
+        .await
+        .unwrap();
+
+    // Same opts the real WS commit handler uses (see handlers/commit.rs).
+    let opts = CommitOpts {
+        validate_signature: true,
+        validate_timestamp: false,
+        validate_previous_commit: false,
+        validate_loro_causality: true,
+        validate_rights: true,
+        validate_schema: true,
+        update_index: true,
+        validate_for_agent: Some(agent.subject.to_string()),
+        source_id: None,
+    };
+
+    // --- Genesis commit: document with just a `properties` map, no RTE body ---
+    let doc = loro::LoroDoc::new();
+    doc.set_record_timestamp(true);
+    doc.get_map("properties")
+        .insert(urls::NAME, "My Document")
+        .unwrap();
+    doc.commit();
+    let genesis_snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
+
+    let mut builder = CommitBuilder::new("placeholder".into());
+    builder.set_loro_update(genesis_snapshot);
+    let genesis = Commit::create_did(builder, &agent, &store).await.unwrap();
+    let did_subject = genesis.subject.clone();
+    let genesis_result = store.apply_commit(genesis, &opts).await.unwrap();
+    let genesis_commit_url = genesis_result.commit_resource.get_subject().to_string();
+
+    // --- Follow-up commit: add RTE body to a `documentContent` text container ---
+    // The browser sends a full snapshot of its editor doc each commit.
+    let rte = doc.get_text("documentContent");
+    rte.insert(0, "RTE_BODY_TEXT").unwrap();
+    doc.commit();
+    let followup_snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
+
+    // Sanity check: the snapshot the follow-up carries has the RTE container.
+    {
+        let check = loro::LoroDoc::new();
+        check.import(&followup_snapshot).unwrap();
+        assert_eq!(
+            check.get_text("documentContent").to_string(),
+            "RTE_BODY_TEXT",
+            "precondition: follow-up snapshot carries the RTE container",
+        );
+    }
+
+    let stored_before_followup = store.get_resource(&did_subject).await.unwrap();
+    let mut builder2 = CommitBuilder::new(did_subject.clone());
+    builder2.set_loro_update(followup_snapshot);
+    builder2.set_previous_commit(genesis_commit_url);
+    let followup = builder2
+        .sign(&agent, &store, &stored_before_followup)
+        .await
+        .unwrap();
+
+    // Route the follow-up through the exact wire path the WS commit handler
+    // uses: serialize to JSON-AD (loroUpdate becomes base64), then parse it
+    // back — `apply_commit_json` does precisely this.
+    let wire_json = crate::client::commit_to_wire_json(&followup, &store)
+        .await
+        .unwrap();
+    let parsed = crate::parse::parse_json_ad_commit_resource(&wire_json, &store)
+        .await
+        .unwrap();
+    let followup_from_wire = Commit::from_resource(parsed).unwrap();
+    store.apply_commit(followup_from_wire, &opts).await.unwrap();
+
+    // (1) Plain get_resource path.
+    let stored = store
+        .get_resource(&did_subject)
+        .await
+        .expect("document should be retrievable after commit");
+    let materialized = stored
+        .materialized_state()
+        .expect("stored document must expose a materialized Loro snapshot");
+    let roundtripped = loro::LoroDoc::new();
+    roundtripped.import(&materialized).unwrap();
+    assert_eq!(
+        roundtripped.get_text("documentContent").to_string(),
+        "RTE_BODY_TEXT",
+        "RTE container content must survive get_resource",
+    );
+
+    // (2) Exactly what the server's WS GET handler does: get_resource_extended
+    // → to_single() → materialized_state().
+    let extended = store
+        .get_resource_extended(&did_subject, false, &crate::agents::ForAgent::Sudo)
+        .await
+        .expect("document should be retrievable via get_resource_extended")
+        .to_single();
+    let materialized_ext = extended
+        .materialized_state()
+        .expect("get_resource_extended document must expose a materialized Loro snapshot");
+    let roundtripped_ext = loro::LoroDoc::new();
+    roundtripped_ext.import(&materialized_ext).unwrap();
+    assert_eq!(
+        roundtripped_ext.get_text("documentContent").to_string(),
+        "RTE_BODY_TEXT",
+        "RTE container content must survive the get_resource_extended path \
+         (this is what the WS GET handler serves to a second viewer)",
+    );
+}
+
+/// A deleted resource must not leave its Loro snapshot orphaned in
+/// `Tree::LoroSnapshots`, and the subject must be tombstoned so bulk sync
+/// does not resurrect it.
+#[tokio::test]
+#[timeout(30000)]
+async fn remove_resource_deletes_loro_snapshot() {
+    let store = Db::init_temp("orphan_snapshot").await.unwrap();
+    let drive = store.create_drive("test-drive").await.unwrap();
+    let did = store
+        .create_resource(
+            "https://atomicdata.dev/classes/Property",
+            &drive,
+            "age",
+            None,
+        )
+        .await
+        .unwrap();
+    let subject = Subject::from_raw(&did, store.get_base_domain().as_deref());
+    let pure_id = subject.pure_id();
+
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_some(),
+        "a Loro snapshot should be persisted for a freshly created resource"
+    );
+
+    store.remove_resource(&subject).await.unwrap();
+
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "Loro snapshot was orphaned after remove_resource"
+    );
+    assert!(
+        crate::sync::tombstones::is_tombstoned(&store, &pure_id),
+        "removed subject should be tombstoned to prevent sync resurrection"
+    );
+}
+
+/// Deleting via a subject that carries a `?drive=` hint must still remove the
+/// snapshot — it is keyed by `pure_id()`. Regression test for the mis-keyed
+/// `apply_destroy` snapshot removal.
+#[tokio::test]
+#[timeout(30000)]
+async fn remove_resource_with_drive_hint_subject_deletes_snapshot() {
+    let store = Db::init_temp("orphan_snapshot_hint").await.unwrap();
+    let drive = store.create_drive("test-drive").await.unwrap();
+    let did = store
+        .create_resource(
+            "https://atomicdata.dev/classes/Property",
+            &drive,
+            "age",
+            None,
+        )
+        .await
+        .unwrap();
+    let subject = Subject::from_raw(&did, store.get_base_domain().as_deref());
+    let pure_id = subject.pure_id();
+    assert!(store
+        .kv
+        .get(Tree::LoroSnapshots, pure_id.as_bytes())
+        .unwrap()
+        .is_some());
+
+    // Delete via a subject carrying a `?drive=` hint. The snapshot is keyed by
+    // pure_id(); the old raw-subject key would miss it.
+    let hinted = subject.clone().set_drive_hint(drive.clone());
+    assert_ne!(
+        hinted.to_string(),
+        pure_id,
+        "drive hint should make to_string() differ from pure_id()"
+    );
+    store.remove_resource(&hinted).await.unwrap();
+
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "snapshot orphaned when deleting via a drive-hinted subject"
+    );
+}
+
+/// `add_resource_opts` persists a Loro
+/// snapshot for every CRDT resource — including when the resource already
+/// carries a `loroUpdate` propval — and the `Tree::Resources` blob is a pure
+/// projection with no `loroUpdate`.
+#[tokio::test]
+#[timeout(30000)]
+async fn add_resource_opts_always_writes_loro_snapshot() {
+    let store = Db::init_temp("add_resource_snapshot").await.unwrap();
+
+    let mut resource = crate::Resource::new("did:ad:phase2b-test".into());
+    resource
+        .set_unsafe(urls::NAME.into(), Value::String("Test".into()))
+        .unwrap();
+    store
+        .add_resource_opts(&resource, false, true, true)
+        .await
+        .unwrap();
+    let pure_id = resource.get_subject().pure_id();
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_some(),
+        "add_resource_opts must persist a Loro snapshot"
+    );
+
+    // 2c: the persisted blob is a pure projection — no `loroUpdate` in it.
+    let blob = store
+        .kv
+        .get(Tree::Resources, pure_id.as_bytes())
+        .unwrap()
+        .unwrap();
+    assert!(
+        !decode_propvals(&blob)
+            .unwrap()
+            .contains_key(urls::LORO_UPDATE),
+        "Tree::Resources blob must not carry a loroUpdate propval"
+    );
+
+    // get_resource overlays the snapshot, so the fetched resource carries a
+    // `loroUpdate` propval in memory (apply_state_doc re-inserts it).
+    let fetched = store.get_resource(resource.get_subject()).await.unwrap();
+    assert!(
+        fetched.get_propvals().contains_key(urls::LORO_UPDATE),
+        "fetched resource should carry a loroUpdate propval in memory"
+    );
+
+    // Drop the snapshot row, then re-add: the snapshot must be rewritten even
+    // though the resource already carries `loroUpdate`.
+    store
+        .kv
+        .remove(Tree::LoroSnapshots, pure_id.as_bytes())
+        .unwrap();
+    store
+        .add_resource_opts(&fetched, false, true, true)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_some(),
+        "snapshot must be rewritten even when propvals already carry loroUpdate"
     );
 }

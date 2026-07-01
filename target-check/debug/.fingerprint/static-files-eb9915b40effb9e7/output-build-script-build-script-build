@@ -1,0 +1,5 @@
+info: syncing channel updates for 1.78-aarch64-apple-darwin
+info: latest update on 2024-05-02 for version 1.78.0 (9b00956e5 2024-04-29)
+info: downloading 6 components
+error: the `-Z unstable-options` flag must also be passed to enable the flag `check-cfg`
+

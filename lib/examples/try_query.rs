@@ -1,7 +1,7 @@
 use atomic_lib::errors::AtomicResult;
 use atomic_lib::{storelike::Query, Store, Storelike};
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> AtomicResult<()> {
     // Initialize a new store
     let store = Store::init().await?;
@@ -21,7 +21,7 @@ async fn main() -> AtomicResult<()> {
     // Iterate through all found resources
     for subject in result.subjects {
         // Get the full resource
-        match store.get_resource(&subject).await {
+        match store.get_resource(&subject.clone()).await {
             Ok(resource) => {
                 // Try to get the shortname and description
                 let shortname = resource

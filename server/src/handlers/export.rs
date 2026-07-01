@@ -39,7 +39,7 @@ pub async fn handle_export(
         return Err("No format provided".into());
     };
 
-    let for_agent = get_client_agent(headers, &appstate, subject.clone()).await?;
+    let for_agent = get_client_agent(headers, &appstate, &subject).await?;
     let display_refs_as_name = params.display_refs_as_name.unwrap_or(false);
 
     match format.as_str() {
@@ -77,7 +77,7 @@ impl<'a> CSVExporter<'a> {
         println!("Exporting resource to CSV: {}", subject);
         let resource = self
             .store
-            .get_resource_extended(subject, false, self.agent)
+            .get_resource_extended(&subject.into(), false, self.agent)
             .await?
             .to_single();
 
@@ -112,7 +112,7 @@ impl<'a> CSVExporter<'a> {
         let propvals = match class_value {
             Value::AtomicUrl(subject) => self
                 .store
-                .get_resource_extended(subject, false, self.agent)
+                .get_resource_extended(&subject.clone(), false, self.agent)
                 .await?
                 .to_single()
                 .get_propvals()
@@ -120,7 +120,7 @@ impl<'a> CSVExporter<'a> {
             Value::NestedResource(nested) => match nested {
                 SubResource::Subject(subject) => self
                     .store
-                    .get_resource_extended(subject, false, self.agent)
+                    .get_resource_extended(&subject.clone(), false, self.agent)
                     .await?
                     .to_single()
                     .get_propvals()
@@ -146,7 +146,7 @@ impl<'a> CSVExporter<'a> {
                 for value in requires.iter().chain(recommends.iter()) {
                     match value {
                         SubResource::Subject(subject) => {
-                            order.push(subject.clone());
+                            order.push(subject.to_string());
                         }
                         SubResource::Nested(_) => {}
                     }
@@ -165,7 +165,10 @@ impl<'a> CSVExporter<'a> {
     ) -> AtomicResult<String> {
         let query = Query {
             property: Some(urls::PARENT.into()),
-            value: Some(atomic_lib::Value::String(resource.get_subject().clone())),
+            value: Some(atomic_lib::Value::String(
+                resource.get_subject().to_string(),
+            )),
+            filters: Vec::new(),
             limit: None,
             start_val: None,
             end_val: None,
@@ -175,6 +178,7 @@ impl<'a> CSVExporter<'a> {
             include_external: false,
             include_nested: true,
             for_agent: self.agent.clone(),
+            drive: None,
         };
 
         let results = self.store.query(&query).await?;
@@ -217,7 +221,7 @@ impl<'a> CSVExporter<'a> {
         for prop in props.iter() {
             let name: String = if let Ok(resource_response) = self
                 .store
-                .get_resource_extended(prop, true, self.agent)
+                .get_resource_extended(&prop.clone().into(), true, self.agent)
                 .await
             {
                 resource_response
@@ -254,7 +258,7 @@ impl<'a> CSVExporter<'a> {
                 for v in values {
                     match v {
                         SubResource::Subject(subject) => {
-                            names.push(self.get_name_from_subject(subject).await)
+                            names.push(self.get_name_from_subject(subject.as_str()).await)
                         }
                         SubResource::Nested(nested) => {
                             names.push(self.get_name_from_propvals(nested, "".to_string()))
@@ -263,7 +267,7 @@ impl<'a> CSVExporter<'a> {
                 }
                 names.join(", ")
             }
-            Value::AtomicUrl(subject) => self.get_name_from_subject(subject).await,
+            Value::AtomicUrl(subject) => self.get_name_from_subject(subject.as_str()).await,
             _ => value.to_string(),
         }
     }
@@ -271,7 +275,7 @@ impl<'a> CSVExporter<'a> {
     async fn get_name_from_subject(&self, subject: &str) -> String {
         let Ok(resource_response) = self
             .store
-            .get_resource_extended(subject, true, self.agent)
+            .get_resource_extended(&subject.into(), true, self.agent)
             .await
         else {
             return subject.to_string();
@@ -279,7 +283,7 @@ impl<'a> CSVExporter<'a> {
 
         let resource = resource_response.to_single();
 
-        self.get_name_from_propvals(resource.get_propvals(), resource.get_subject().clone())
+        self.get_name_from_propvals(resource.get_propvals(), resource.get_subject().to_string())
     }
 
     fn get_name_from_propvals(&self, propvals: &HashMap<String, Value>, subject: String) -> String {

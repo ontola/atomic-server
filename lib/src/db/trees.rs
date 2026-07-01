@@ -2,7 +2,7 @@ use crate::atoms::IndexAtom;
 
 use super::{prop_val_sub_index::propvalsub_key, val_prop_sub_index::valpropsub_key};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tree {
     /// Full resources, Key: Subject, Value: [Propvals](crate::resources::PropVals)
     Resources,
@@ -18,14 +18,34 @@ pub enum Tree {
     ValPropSub,
     /// Stores metadata about installed plugins.
     PluginMeta,
+    /// Maps Drive Hints (short IDs) to full Drive DIDs.
+    DriveMapping,
+    /// Maps DID pure IDs to their best known routing hint (e.g. drive DID).
+    DidMapping,
+    /// Stores Loro CRDT snapshots as raw bytes, keyed by resource subject.
+    /// Kept separate from Resources because binary data doesn't round-trip through JSON-AD.
+    LoroSnapshots,
+    /// Content-addressed storage for binary files, keyed by BLAKE3 hash.
+    Blobs,
 }
 
-const RESOURCES: &str = "resources_v2";
+const RESOURCES: &str = "resources_v3";
 const VALPROPSUB: &str = "reference_index_v1";
-const QUERY_MEMBERS: &str = "members_index";
+// v3: QueryFilter key encoding changed to [drive_len][drive_bytes][msgpack rest]
+// so the per-atom matching loop can scan_prefix to just the relevant drive's
+// watched queries instead of decoding every entry.
+// v4: QueryFilter `property`/`value` replaced by `filters: Vec<PropVal>` (AND
+// multi-property filtering), which changes the msgpack `rest` encoding.
+// Old entries are unreadable with the new decoder — leaving them stranded under
+// their old tree name is fine; they're pure caches and rebuild on next query.
+const QUERY_MEMBERS: &str = "members_index_v5";
 const PROPVALSUB: &str = "prop_val_sub_index";
-const QUERIES_WATCHED: &str = "watched_queries";
+const QUERIES_WATCHED: &str = "watched_queries_v5";
 const PLUGIN_META: &str = "plugin_meta";
+const DRIVE_MAPPING: &str = "drive_mapping";
+const DID_MAPPING: &str = "did_mapping";
+const LORO_SNAPSHOTS: &str = "loro_snapshots";
+const BLOBS: &str = "blobs";
 
 impl std::fmt::Display for Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -36,6 +56,10 @@ impl std::fmt::Display for Tree {
             Tree::ValPropSub => f.write_str(VALPROPSUB),
             Tree::QueryMembers => f.write_str(QUERY_MEMBERS),
             Tree::PluginMeta => f.write_str(PLUGIN_META),
+            Tree::DriveMapping => f.write_str(DRIVE_MAPPING),
+            Tree::DidMapping => f.write_str(DID_MAPPING),
+            Tree::LoroSnapshots => f.write_str(LORO_SNAPSHOTS),
+            Tree::Blobs => f.write_str(BLOBS),
         }
     }
 }
@@ -50,6 +74,10 @@ impl AsRef<[u8]> for Tree {
             Tree::ValPropSub => VALPROPSUB.as_bytes(),
             Tree::QueryMembers => QUERY_MEMBERS.as_bytes(),
             Tree::PluginMeta => PLUGIN_META.as_bytes(),
+            Tree::DriveMapping => DRIVE_MAPPING.as_bytes(),
+            Tree::DidMapping => DID_MAPPING.as_bytes(),
+            Tree::LoroSnapshots => LORO_SNAPSHOTS.as_bytes(),
+            Tree::Blobs => BLOBS.as_bytes(),
         }
     }
 }
@@ -92,6 +120,18 @@ impl Operation {
             tree: Tree::Resources,
             method: Method::Delete,
             key: subject.as_bytes().to_vec(),
+            val: None,
+        }
+    }
+
+    /// Remove a resource's Loro snapshot. `pure_id` must be the
+    /// [`crate::Subject::pure_id`] form — that is the key snapshots are
+    /// written under (see `apply_commit` / `add_resource_opts`).
+    pub fn remove_loro_snapshot(pure_id: &str) -> Self {
+        Operation {
+            tree: Tree::LoroSnapshots,
+            method: Method::Delete,
+            key: pure_id.as_bytes().to_vec(),
             val: None,
         }
     }

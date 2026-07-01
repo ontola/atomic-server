@@ -7,11 +7,11 @@ import {
   core,
   server,
 } from '@tomic/react';
+import { generateInviteToken } from '@tomic/lib';
 import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ErrorLook } from './ErrorLook';
 import { Button } from './Button';
-import { Card } from './Card';
 import { CodeBlock } from './CodeBlock';
 import ResourceField from './forms/ResourceField';
 
@@ -33,31 +33,44 @@ export function InviteForm({ target }: InviteFormProps) {
   const [err, setErr] = useState<Error | undefined>(undefined);
   const [agent] = useCurrentAgent();
   const [saved, setSaved] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | undefined>(undefined);
 
-  /** Stores the Invite, sends it to the server, shows the Subject to the User */
+  /** Generates the signed token and constructs the invite URL */
   const createInvite = useCallback(async () => {
-    await invite.set(core.properties.isA, [server.classes.invite]);
-    await invite.set(core.properties.read, [urls.instances.publicAgent]);
-    await invite.set(server.properties.target, target.subject);
-
     try {
       if (!agent) {
         throw new Error('No agent found');
       }
 
-      await invite.set(core.properties.parent, agent.subject);
-      await invite.save();
+      const write = (await invite.get(server.properties.write)) as boolean;
+      const expiresAt = (await invite.get(
+        urls.properties.invite.expiresAt,
+      )) as number;
+
+      const tokenBase64 = await generateInviteToken(
+        target.subject,
+        agent,
+        !!write,
+        expiresAt,
+      );
+
+      const baseUrl = store.getServerUrl();
+      const finalUrl = `${baseUrl}/app/invite?token=${encodeURIComponent(
+        tokenBase64,
+      )}`;
+
+      setInviteUrl(finalUrl);
       setSaved(true);
-      navigator.clipboard.writeText(invite.subject);
+      navigator.clipboard.writeText(finalUrl);
       toast.success('Copied to clipboard');
     } catch (e) {
       setErr(e);
     }
-  }, [invite, agent, target]);
+  }, [invite, agent, target, store]);
 
   if (!saved) {
     return (
-      <Card>
+      <>
         <ResourceField
           label={'Allow edits'}
           propertyURL={server.properties.write}
@@ -79,13 +92,13 @@ export function InviteForm({ target }: InviteFormProps) {
             <ErrorLook>{err.message}</ErrorLook>
           </p>
         )}
-      </Card>
+      </>
     );
   } else
     return (
-      <Card>
+      <>
         <p>Invite created and copied to clipboard! 🚀</p>
-        <CodeBlock content={invite.subject} data-test='invite-code' />
-      </Card>
+        <CodeBlock content={inviteUrl!} data-test='invite-code' />
+      </>
     );
 }

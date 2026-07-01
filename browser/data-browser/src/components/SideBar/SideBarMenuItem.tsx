@@ -3,6 +3,29 @@ import { AtomicLink, AtomicLinkProps } from '../AtomicLink';
 import { SideBarItem } from './SideBarItem';
 import { useLocation } from '@tanstack/react-router';
 
+/** Full-width row; matches resource links in the tree (clean AtomicLink is inline by default). */
+export const SideBarMenuItemLink = styled(AtomicLink)`
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+`;
+
+/** Full-width menu / shared-with-me row (hover fills sidebar). */
+export const SideBarMenuRow = styled(SideBarItem)`
+  width: 100%;
+  min-width: 0;
+`;
+
+export const SideBarMenuRowLabel = styled.span`
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+`;
+
 export interface SideBarMenuItemProps extends AtomicLinkProps {
   label: string;
   helper?: string;
@@ -26,22 +49,30 @@ export function SideBarMenuItem({
   const current: boolean = pathname === targetPath;
 
   return (
-    <AtomicLink href={href} subject={subject} path={path} clean>
-      <SideBarItem
+    <SideBarMenuItemLink href={href} subject={subject} path={path} clean>
+      <SideBarMenuRow
         key={label}
         title={helper}
         onClick={onClick}
         current={current}
       >
-        {icon && <SideBarIcon>{icon}</SideBarIcon>}
-        {label}
-      </SideBarItem>
-    </AtomicLink>
+        {icon && <SideBarMenuRowIcon>{icon}</SideBarMenuRowIcon>}
+        <SideBarMenuRowLabel>{label}</SideBarMenuRowLabel>
+      </SideBarMenuRow>
+    </SideBarMenuItemLink>
   );
 }
 
-const SideBarIcon = styled.span`
-  display: flex;
-  margin-right: 0.5rem;
-  font-size: 1.5rem;
+/** Icon column for APP menu rows and Shared with me (matches tree LeadingSlot). */
+export const SideBarMenuRowIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.5rem;
+  margin-right: 0.4rem;
+
+  svg {
+    font-size: 0.8rem;
+  }
 `;

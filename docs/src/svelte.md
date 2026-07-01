@@ -9,7 +9,7 @@ Fetched resources are cached and reactive, they will update when the data change
 [See open source template: `atomic-sveltekit-demo` (outdated).](https://github.com/atomicdata-dev/atomic-sveltekit-demo)
 
 > [!NOTE]
-> As of version 0.41.0, @tomic/svelte requires Svelte 5 or later. Svelte 4 is not supported on versions above 0.40.0.
+> As of version 0.41.0-beta.0, @tomic/svelte requires Svelte 5 or later. Svelte 4 is not supported on versions above 0.40.0.
 
 ## Quick Examples
 

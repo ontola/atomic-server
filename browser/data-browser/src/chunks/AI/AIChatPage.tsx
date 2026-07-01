@@ -16,10 +16,11 @@ import { EditableTitle } from '@components/EditableTitle';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 import { useGenerativeData } from './useGenerativeData';
 import {
-  uiMessageToResource,
+  addMessageToChatResource,
   messageResourcesToDisplayMessages,
+  removeFollowingMessagesFromChatResource,
+  removeMessageFromChatResource,
 } from './chatConversionUtils';
-import { TagBar } from '@components/Tag/TagBar';
 import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { styled } from 'styled-components';
@@ -29,14 +30,11 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const { shouldGenerateTitles } = useAISettings();
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
-  const [contextItems, setContextItems] = useState<AIMessageContext[]>([]);
-  const [messageSubjects, setMessageSubjects] = useArray(
-    resource,
-    ai.properties.messages,
-    {
-      commit: true,
-    },
+  const [compactedMessages, setCompactedMessages] = useState<AtomicUIMessage[]>(
+    [],
   );
+  const [contextItems, setContextItems] = useState<AIMessageContext[]>([]);
+  const [messageSubjects] = useArray(resource, ai.properties.messages);
   const [messageToResourceMap, setMessageToResourceMap] = useState(
     new Map<AtomicUIMessage, Resource>(),
   );
@@ -48,21 +46,33 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const addNewMessage = async (message: AtomicUIMessage) => {
     setMessages(prev => [...prev, message]);
 
+    const newMessages = [...messages, message];
+
+    // When there are only two messages and the title is still the default name, generate a title from the conversation.
+    if (
+      newMessages.length === 2 &&
+      title === DEFAULT_AICHAT_NAME &&
+      shouldGenerateTitles
+    ) {
+      generateTitleFromConversation(newMessages).then(generatedTitle => {
+        if (generatedTitle) {
+          setTitle(generatedTitle);
+        }
+      });
+    }
+
     try {
-      const messageResource = await uiMessageToResource(
+      const messageResource = await addMessageToChatResource(
         message,
         resource,
         store,
       );
 
-      resource.push(ai.properties.messages, [messageResource.subject]);
-
-      await resource.save();
-
       setMessageToResourceMap(prev => {
-        prev.set(message, messageResource);
+        const next = new Map(prev);
+        next.set(message, messageResource);
 
-        return prev;
+        return next;
       });
     } catch (error) {
       console.error(error);
@@ -70,66 +80,92 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     }
   };
 
-  const handleDeleteMessage = (message: AtomicUIMessage) => {
+  const handleSummaryDeleted = (restored: AtomicUIMessage[]) => {
+    setCompactedMessages([]);
+    setMessages(restored);
+  };
+
+  const handleDeleteMessage = async (message: AtomicUIMessage) => {
     const messageResource = messageToResourceMap.get(message);
 
     if (messageResource) {
-      setMessageSubjects(
-        messageSubjects.filter(s => s !== messageResource.subject),
-      );
-      messageResource.destroy();
-    }
-
-    setMessages(prev => prev.filter(m => m !== message));
-
-    setMessageToResourceMap(prev => {
-      prev.delete(message);
-
-      return prev;
-    });
-  };
-
-  const removeFollowingMessages = async (message: AtomicUIMessage) => {
-    const nextMessages = messages.slice(
-      messages.findIndex(x => x.id === message.id) + 1,
-    );
-
-    // We need to destroy the resources server side as well as in the internal state.
-    // We also need to update the `messages` prop in the chat resource.
-    const destroySubjects: string[] = [];
-
-    for (const m of nextMessages) {
-      const r = messageToResourceMap.get(m);
-
-      if (r) {
-        destroySubjects.push(r.subject);
-
-        try {
-          await r.destroy();
-        } catch (error) {
-          console.error('Error removing message:', error);
-        }
-      } else {
-        throw new Error(`Resource not found for message: ${m.id}`);
+      try {
+        await removeMessageFromChatResource(messageResource, resource);
+      } catch (error) {
+        console.error('Error removing message:', error);
+        toast.error('Failed to remove message resource');
       }
     }
 
-    try {
-      // Set chat resource on server with new message array
-      await resource.set(
-        ai.properties.messages,
-        resource.props.messages?.filter(x => !destroySubjects.includes(x)),
-      );
-      await resource.save();
-      // Set internal message state
-      setMessages(prev => {
-        const newMessages = prev.slice(
-          0,
-          prev.findIndex(x => x.id === message.id) + 1,
-        );
+    setMessageToResourceMap(prev => {
+      const next = new Map(prev);
+      next.delete(message);
 
-        return newMessages;
+      return next;
+    });
+
+    if (message.metadata?.isSummary) {
+      return;
+    }
+
+    setMessages(prev => prev.filter(m => m !== message));
+  };
+
+  const handleCompacted = async (
+    priorMessages: AtomicUIMessage[],
+    summaryMessage: AtomicUIMessage,
+  ) => {
+    setCompactedMessages(prev => [...prev, ...priorMessages]);
+    setMessages([summaryMessage]);
+
+    try {
+      const messageResource = await addMessageToChatResource(
+        summaryMessage,
+        resource,
+        store,
+      );
+
+      setMessageToResourceMap(prev => {
+        const next = new Map(prev);
+        next.set(summaryMessage, messageResource);
+
+        return next;
       });
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to save summary message');
+    }
+  };
+
+  const removeFollowingMessages = async (message: AtomicUIMessage) => {
+    const isHistorical = compactedMessages.some(m => m.id === message.id);
+    const allMessages = isHistorical
+      ? [...compactedMessages, ...messages]
+      : messages;
+
+    try {
+      const newMessages = await removeFollowingMessagesFromChatResource(
+        message,
+        allMessages,
+        messageToResourceMap,
+        resource,
+      );
+
+      setMessageToResourceMap(prev => {
+        const next = new Map(prev);
+
+        for (const m of allMessages.slice(newMessages.length)) {
+          next.delete(m);
+        }
+
+        return next;
+      });
+
+      if (isHistorical) {
+        setCompactedMessages([]);
+      }
+
+      setMessages(newMessages);
     } catch (error) {
       console.error('Error removing messages:', error);
     }
@@ -138,22 +174,22 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   // On load create AIChatDisplayMessages from the resource's messages.
   useEffect(() => {
     messageResourcesToDisplayMessages(messageSubjects, store).then(map => {
-      setMessages(Array.from(map.keys()));
+      const allMessages = Array.from(map.keys());
+      const lastSummaryIndex = allMessages.findLastIndex(
+        m => m.metadata?.isSummary,
+      );
+
+      if (lastSummaryIndex > 0) {
+        setCompactedMessages(allMessages.slice(0, lastSummaryIndex));
+        setMessages(allMessages.slice(lastSummaryIndex));
+      } else {
+        setMessages(allMessages);
+      }
+
       setMessageToResourceMap(map);
       setLoading(false);
     });
   }, []);
-
-  // When there are only two messages and the title is still the default name, generate a title from the conversation.
-  useEffect(() => {
-    if (
-      messages.length === 2 &&
-      title === DEFAULT_AICHAT_NAME &&
-      shouldGenerateTitles
-    ) {
-      generateTitleFromConversation(messages).then(setTitle);
-    }
-  }, [messages, title]);
 
   if (loading) {
     return <div>Loading...</div>;
@@ -163,11 +199,14 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     <RealAIChat
       fullView
       initialMessages={messages}
+      historicalMessages={compactedMessages}
       readonly={!canWrite}
       externalContextItems={contextItems}
       setExternalContextItems={setContextItems}
       chatSubject={resource.subject}
       onNewMessage={addNewMessage}
+      onCompacted={handleCompacted}
+      onSummaryDeleted={handleSummaryDeleted}
       onDeleteMessage={handleDeleteMessage}
       onRegenerateMessage={removeFollowingMessages}
     >
@@ -175,7 +214,6 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
         <Row>
           <SmallTitle resource={resource} />
         </Row>
-        <TagBar resource={resource} />
       </Column>
     </RealAIChat>
   );

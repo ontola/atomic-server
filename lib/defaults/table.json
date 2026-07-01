@@ -199,11 +199,26 @@
       "https://atomicdata.dev/classes/Class"
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/tableColumnWidths",
+      "https://atomicdata.dev/properties/table-views",
+      "https://atomicdata.dev/properties/table-default-view"
+    ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/classtype",
       "https://atomicdata.dev/properties/name"
     ],
     "https://atomicdata.dev/properties/shortname": "table"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/tableColumnWidths",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The widths (in pixels) of the columns of a Table, stored as a JSON array of numbers — one per column, in column order.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "table-column-widths"
   },
   {
     "@id": "https://atomicdata.dev/properties/emoji",
@@ -254,5 +269,98 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes/NumberFormat",
     "https://atomicdata.dev/properties/shortname": "number"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/View",
+    "https://atomicdata.dev/properties/description": "A saved view configuration for displaying a collection of resources (e.g. the rows of a Table): which filters are applied, how the data is sorted, and which kind of view (table, kanban, …) renders it.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/view-filters",
+      "https://atomicdata.dev/properties/view-sort-by",
+      "https://atomicdata.dev/properties/view-sort-desc",
+      "https://atomicdata.dev/properties/view-columns"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/view-kind"
+    ],
+    "https://atomicdata.dev/properties/shortname": "view"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-kind",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The kind of view that renders the data, e.g. 'table' or 'kanban'.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-kind"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-filters",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The active filters of a view, stored as a JSON array of { property, operator, value } constraints combined with AND.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-filters"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-sort-by",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The property that the view sorts its results by.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-sort-by"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-sort-desc",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "Whether the view sorts in descending order.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-sort-desc"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-columns",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The properties shown as columns in this view, in display order. Properties of the class that are omitted from this list are hidden.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-columns"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/table-views",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/View",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The saved Views of a Table, in display order.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "table-views"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/table-default-view",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/View",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The View that is shown by default when opening a Table.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "table-default-view"
   }
 ]

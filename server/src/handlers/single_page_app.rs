@@ -9,16 +9,19 @@ use actix_web::HttpResponse;
 pub async fn single_page(
     appstate: actix_web::web::Data<AppState>,
     path: actix_web::web::Path<String>,
+    req: actix_web::HttpRequest,
+    context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
+    let origin = context.origin.clone();
+    let store = appstate.store.clone_with_url(origin.clone());
     let template = include_str!("../../assets_tmp/index.html");
     let csp_nonce = generate_nonce().map_err(|_e| "Failed to generate nonce")?;
-    let subject = format!("{}/{}", appstate.store.get_server_url()?, path);
-    let meta_tags: MetaTags = if let Ok(resource_response) = appstate
-        .store
-        .get_resource_extended(&subject, true, &ForAgent::Public)
+    let subject = format!("{}/{}", origin, path);
+    let meta_tags: MetaTags = if let Ok(resource_response) = store
+        .get_resource_extended(&subject.clone().into(), true, &ForAgent::Public)
         .await
     {
-        resource_response.into()
+        MetaTags::from_resource_response(resource_response, &origin)
     } else {
         MetaTags::default()
     };
@@ -43,7 +46,10 @@ pub async fn single_page(
         ))
         .insert_header((
             "Content-Security-Policy",
-            format!("script-src 'nonce-{}'; worker-src 'self'", csp_nonce),
+            format!(
+                "script-src 'nonce-{}' 'wasm-unsafe-eval'; worker-src 'self'",
+                csp_nonce
+            ),
         ))
         .body(body);
 
@@ -64,30 +70,33 @@ struct MetaTags {
     json: Option<String>,
 }
 
-impl From<ResourceResponse> for MetaTags {
-    fn from(rr: ResourceResponse) -> Self {
+impl MetaTags {
+    pub fn from_resource_response(rr: ResourceResponse, origin: &str) -> Self {
         match rr {
-            ResourceResponse::Resource(r) => r.into(),
+            ResourceResponse::Resource(r) => Self::from_resource(r, origin),
             ResourceResponse::ResourceWithReferenced(ref resource, _) => {
-                let mut tags: MetaTags = resource.clone().into();
+                let mut tags: MetaTags = Self::from_resource(resource.clone(), origin);
 
-                let json = if let Ok(serialized) = rr.to_json_ad() {
-                    // TODO: also fetch the parents for extra fast first renders.
-                    Some(serialized)
-                } else {
-                    None
-                };
+                // Turns the resource into JSON-AD and base64 encodes it.
+                // TODO: also fetch the parents for extra fast first renders!
+                let json = rr.to_json_ad(Some(origin)).ok();
 
                 tags.json = json;
 
                 tags
             }
+            ResourceResponse::Redirect(target) => MetaTags {
+                description: format!("Redirecting to {}", target),
+                title: "Redirecting...".into(),
+                image: "".into(),
+                json: None,
+            },
         }
     }
 }
 
-impl From<Resource> for MetaTags {
-    fn from(r: Resource) -> Self {
+impl MetaTags {
+    pub fn from_resource(r: Resource, origin: &str) -> Self {
         let description = if let Ok(d) = r.get(urls::DESCRIPTION) {
             d.to_string()
         } else {
@@ -104,12 +113,8 @@ impl From<Resource> for MetaTags {
         } else {
             "/default_social_preview.jpg".to_string()
         };
-        let json = if let Ok(serialized) = r.to_json_ad() {
-            // TODO: also fetch the parents for extra fast first renders.
-            Some(serialized)
-        } else {
-            None
-        };
+        // TODO: also fetch the parents for extra fast first renders!
+        let json = r.to_json_ad(Some(origin)).ok();
         Self {
             description,
             title,

@@ -53,7 +53,7 @@ function useSortedPropVals(resource: Resource, exept: string[]) {
     ...(classResource.props.recommends ?? []),
   ];
 
-  const propvals = [...resource.getPropVals()];
+  const propvals = resource.getEntries();
   propvals.sort((a, b) => {
     const pA = classProps.indexOf(a[0]);
     const pB = classProps.indexOf(b[0]);

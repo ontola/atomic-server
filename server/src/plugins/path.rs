@@ -34,19 +34,21 @@ fn handle_path_request<'a>(
             };
         }
         if path.is_none() {
-            return path_endpoint().to_resource_response(store).await;
+            return path_endpoint()
+                .to_resource_response(store, subject.as_str())
+                .await;
         }
         let result = store.get_path(&path.unwrap(), None, for_agent).await?;
         match result {
             PathReturn::Subject(subject) => {
                 store
-                    .get_resource_extended(&subject, false, for_agent)
+                    .get_resource_extended(&subject.into(), false, for_agent)
                     .await
             }
             PathReturn::Atom(atom) => {
                 let mut resource = Resource::new(subject.to_string());
                 resource
-                    .set_string(urls::ATOM_SUBJECT.into(), &atom.subject, store)
+                    .set_string(urls::ATOM_SUBJECT.into(), atom.subject.as_str(), store)
                     .await?;
                 resource
                     .set_string(urls::ATOM_PROPERTY.into(), &atom.property, store)

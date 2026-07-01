@@ -5,4 +5,5 @@ export interface ViewProps {
   onNewClick: () => void;
   showNewButton: boolean;
   basic?: boolean;
+  parent: string;
 }

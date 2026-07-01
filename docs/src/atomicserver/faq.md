@@ -36,7 +36,7 @@ See the [Hierarchy chapter](https://docs.atomicdata.dev/hierarchy.html) in the d
 ## Items are missing in my Collections / Search results
 
 You might have a problem with your indexes.
-Try rebuilding the indexes using `atomic-server --rebuild-index`.
+Try rebuilding the indexes using `atomic-server --rebuild-indexes all`.
 Also, if you can, recreate and describe the indexing issue in the issue tracker, so we can fix it.
 
 ## I get a `failed to retrieve` error when opening
@@ -46,7 +46,7 @@ Try re-initializing atomic server `atomic-server --initialize`.
 ## Can I embed AtomicServer in another application?
 
 Yes. This is what I'm doing with the Tauri desktop distribution of AtomicServer.
-Check out the [`desktop`](https://github.com/atomicdata-dev/atomic-server/tree/master/desktop) code for an example!
+Check out the [`desktop`](https://github.com/ontola/atomic-server/tree/master/desktop) code for an example!
 
 ## I want to use my own authorization. How do I do that?
 
@@ -57,4 +57,4 @@ Make sure AtomicServer is not publicly accessible, because this will allow anyon
 
 It depends on your operating system, because some data is _temporary_, others are _configuration files_, and so forth. Run `atomic-server show-config` to see the used paths. You can overwrite these if you want, see `--help`.
 
-https://user-images.githubusercontent.com/2183313/139728539-d69b899f-6f9b-44cb-a1b7-bbab68beac0c.mp4
+<https://user-images.githubusercontent.com/2183313/139728539-d69b899f-6f9b-44cb-a1b7-bbab68beac0c.mp4>

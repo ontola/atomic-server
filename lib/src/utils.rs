@@ -21,10 +21,20 @@ pub fn server_url(url: &str) -> AtomicResult<String> {
 
 /// Throws an error if the URL is not a valid URL
 pub fn check_valid_url(url: &str) -> AtomicResult<()> {
-    if !url.starts_with("http") && !url.starts_with("local:") {
-        return Err(format!("Url does not start with http: {}", url).into());
+    if url.starts_with("http") || url.starts_with("did:") || url.starts_with('/') {
+        return Ok(());
     }
-    Ok(())
+    if url.starts_with("internal:") {
+        // internal:/ is always valid
+        if url == "internal:/" {
+            return Ok(());
+        }
+        // internal:/path is also valid
+        if url.starts_with("internal:/") {
+            return Ok(());
+        }
+    }
+    Err(format!("Url does not start with http, did: or internal:/: {}", url).into())
 }
 
 pub fn check_valid_uri(uri: &str) -> AtomicResult<()> {
@@ -40,11 +50,18 @@ pub fn check_valid_json(json: &str) -> AtomicResult<()> {
 }
 
 /// Returns the current timestamp in milliseconds since UNIX epoch
+#[cfg(not(target_arch = "wasm32"))]
 pub fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("You're a time traveler")
         .as_millis() as i64
+}
+
+/// Returns the current timestamp in milliseconds since UNIX epoch (WASM version)
+#[cfg(target_arch = "wasm32")]
+pub fn now() -> i64 {
+    js_sys::Date::now() as i64
 }
 
 /// Generates a relatively short random string of n length
@@ -67,7 +84,7 @@ pub fn check_timestamp_in_past(timestamp: i64, difference: i64) -> AtomicResult<
             )
             .into());
     }
-    return Ok(());
+    Ok(())
 }
 
 pub fn truncate_string(s: &str, max_len: usize) -> String {

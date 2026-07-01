@@ -19,6 +19,7 @@ pub fn query_endpoint() -> Endpoint {
             urls::COLLECTION_INCLUDE_NESTED.to_string(),
             urls::COLLECTION_SORT_BY.to_string(),
             urls::COLLECTION_SORT_DESC.to_string(),
+            "drive".to_string(),
         ]
         .into(),
         description: "Query the server for resources matching the query filter.".to_string(),
@@ -40,7 +41,9 @@ fn handle_query_request<'a>(
         } = context;
 
         if subject.query_pairs().into_iter().next().is_none() {
-            return query_endpoint().to_resource_response(store).await;
+            return query_endpoint()
+                .to_resource_response(store, subject.as_str())
+                .await;
         }
 
         let mut resource = Resource::new(subject.to_string());

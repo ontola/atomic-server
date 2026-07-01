@@ -37,6 +37,24 @@
     "https://atomicdata.dev/properties/shortname": "parent"
   },
   {
+    "@id": "https://atomicdata.dev/properties/drive",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The drive (top-level resource) this Resource belongs to. Stamped at genesis from the resource's genesis certificate so authorization can resolve the drive's grant directly, without walking a parent chain that may not be materialized yet. Immutable: a resource does not move between drives.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "drive"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/genesis",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The self-verifying genesis certificate: base64 of a compact binary cert (signer public key, createdAt, nonce, original parent, drive). The resource's DID is the creating agent's Ed25519 signature over this certificate, so authorship and identity are verifiable offline without fetching a commit. Server-managed and immutable.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "genesis"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/datatype",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Datatype",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
@@ -78,17 +96,23 @@
   },
   {
     "@id": "https://atomicdata.dev/classes/Property",
-    "https://atomicdata.dev/properties/description": "A Resource that should redirect the browser to a new location. It can also set a `redirectAgent`, which is used in Invites to create an Agent Resource on the Server from a Public Key that the user posesses. See the [Invite docs](https://docs.atomicdata.dev/invitations.html).",
+    "https://atomicdata.dev/properties/description": "A Property is a single field in a Class. It's the thing that a property field in an Atom points to. An example is `birthdate`. An instance of Property requires various Properties, most notably a `datatype` (e.g. `string` or `integer`), a human readable `description` (such as the thing you're reading), and a `shortname`.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Class"
     ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
     "https://atomicdata.dev/properties/requires": [
-      "https://atomicdata.dev/properties/destination"
+      "https://atomicdata.dev/properties/shortname",
+      "https://atomicdata.dev/properties/datatype",
+      "https://atomicdata.dev/properties/description"
     ],
     "https://atomicdata.dev/properties/recommends": [
-      "https://atomicdata.dev/properties/invite/redirectAgent"
+      "https://atomicdata.dev/properties/classtype",
+      "https://atomicdata.dev/properties/isDynamic",
+      "https://atomicdata.dev/properties/isLocked",
+      "https://atomicdata.dev/properties/allowsOnly"
     ],
-    "https://atomicdata.dev/properties/shortname": "redirect"
+    "https://atomicdata.dev/properties/shortname": "property"
   },
   {
     "@id": "https://atomicdata.dev/classes/Class",
@@ -120,15 +144,13 @@
   },
   {
     "@id": "https://atomicdata.dev/classes/Agent",
-    "https://atomicdata.dev/properties/description": "An Agent is a user that can create or modify data. It has two keys: a private and a public one. The private key should be kept secret. The public key is used to verify signatures (on [Commits](https://atomicdata.dev/classes/Commit)) set by the of the Agent.",
+    "https://atomicdata.dev/properties/description": "An Agent is a user that can create or modify data. For DID-based agents (did:ad:agent:{publicKey}), the public key is derived from the subject.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Class"
     ],
     "https://atomicdata.dev/properties/recommends": [
       "https://atomicdata.dev/properties/name",
-      "https://atomicdata.dev/properties/description"
-    ],
-    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/description",
       "https://atomicdata.dev/properties/publicKey"
     ],
     "https://atomicdata.dev/properties/shortname": "agent"

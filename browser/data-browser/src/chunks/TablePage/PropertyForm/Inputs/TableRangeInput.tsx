@@ -2,7 +2,7 @@ import { Resource, useNumber } from '@tomic/react';
 import { useCallback, type JSX } from 'react';
 import { ErrorChip } from '@components/forms/ErrorChip';
 import { useValidation } from '@components/forms/formValidation/useValidation';
-import { RangeInput, validateRange } from '@components/forms/RangeInput';
+import { MinMaxInput, validateRange } from '@components/forms/MinMaxInput';
 
 interface TableRangeInputProps {
   resource: Resource;
@@ -45,7 +45,7 @@ export function TableRangeInput({
 
   return (
     <div>
-      <RangeInput
+      <MinMaxInput
         round
         maxValue={maxLength}
         minValue={minLength}

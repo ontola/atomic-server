@@ -40,7 +40,7 @@ export const getExtension = () => {
 
       throw error;
     } else {
-      throw new Error(error);
+      throw new Error(String(error));
     }
   }
 };

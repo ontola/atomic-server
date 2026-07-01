@@ -2,9 +2,32 @@
 .envrc
 .env
 trace-*.json
+dev-drive-trace-*.json
 **/.temp
 .DS_Store
-.cargo
 artifact
 server/assets_tmp
+server/js-build.log
 .netlify
+scratchpad
+.claude
+.antigravitycli
+
+# Release binaries and one-off rustc scratch files at repo root
+/build/
+/test_opts
+/test_parse
+/test_opts.rs
+/test_parse.rs
+/test_url.rs
+
+# Merge-tool backup files (*.orig, *.rej)
+*.orig
+*.rej
+
+# Ignore .cargo but not the config.
+.cargo/*
+!.cargo/config.toml
+
+.bin/
+.fastembed_cache

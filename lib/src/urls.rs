@@ -26,6 +26,8 @@ pub const ENDPOINT_RESPONSE: &str =
 pub const TABLE: &str = "https://atomicdata.dev/classes/Table";
 pub const PLUGIN: &str = "https://atomicdata.dev/classes/Plugin";
 pub const TAG: &str = "https://atomicdata.dev/classes/Tag";
+pub const PEER: &str = "https://atomicdata.dev/classes/Peer";
+pub const PLAIN_TEXT: &str = "https://atomicdata.dev/classes/PlainText";
 
 // Properties
 pub const SHORTNAME: &str = "https://atomicdata.dev/properties/shortname";
@@ -50,16 +52,38 @@ pub const SET: &str = "https://atomicdata.dev/properties/set";
 pub const PUSH: &str = "https://atomicdata.dev/properties/push";
 pub const REMOVE: &str = "https://atomicdata.dev/properties/remove";
 pub const DESTROY: &str = "https://atomicdata.dev/properties/destroy";
-pub const Y_UPDATE: &str = "https://atomicdata.dev/properties/yUpdate";
+pub const LORO_UPDATE: &str = "https://atomicdata.dev/properties/loroUpdate";
 pub const SIGNER: &str = "https://atomicdata.dev/properties/signer";
 pub const CREATED_AT: &str = "https://atomicdata.dev/properties/createdAt";
+pub const CREATED_BY: &str = "https://atomicdata.dev/properties/createdBy";
 pub const SIGNATURE: &str = "https://atomicdata.dev/properties/signature";
 pub const PREVIOUS_COMMIT: &str = "https://atomicdata.dev/properties/previousCommit";
 pub const LAST_COMMIT: &str = "https://atomicdata.dev/properties/lastCommit";
+pub const IS_GENESIS: &str = "https://atomicdata.dev/properties/isGenesis";
+/// Inline, immutable self-verifying genesis certificate (binary; base64 in
+/// JSON-AD). Carries signer/createdAt/nonce/parent/drive; the DID is
+/// `did:ad:<sign(cert)>`. Decoded for race-free, drive-first rights checks.
+/// See `lib/src/genesis.rs` + `planning/genesis-self-verifying.md`.
+pub const GENESIS: &str = "https://atomicdata.dev/properties/genesis";
+/// The drive a resource belongs to, stamped at genesis (from the cert's
+/// `drive`). Lets `check_rights` consult the stable drive grant directly
+/// instead of walking a possibly-not-yet-materialized parent chain — the fix
+/// for the parent-before-child 401 race. (`DRIVE` above is the Drive *class*.)
+pub const DRIVE_PROP: &str = "https://atomicdata.dev/properties/drive";
 // ... for Agents
 pub const PUBLIC_KEY: &str = "https://atomicdata.dev/properties/publicKey";
 pub const NAME: &str = "https://atomicdata.dev/properties/name";
 pub const DRIVES: &str = "https://atomicdata.dev/properties/drives";
+/// The agent's single private home drive on a server (shared-with-me, personal data, etc.).
+pub const PERSONAL_DRIVE: &str = "https://atomicdata.dev/properties/personalDrive";
+/// Resources shared with this agent (e.g. accepted invites); clients show as "Shared with me".
+pub const SHARED_WITH_ME: &str = "https://atomicdata.dev/properties/sharedWithMe";
+pub const AVAILABLE_DOMAINS: &str = "https://atomicdata.dev/properties/availableDomains";
+// ... for Peers
+pub const PEER_NODE_ID: &str = "https://atomicdata.dev/properties/peer/nodeId";
+pub const PEER_DEVICE_NAME: &str = "https://atomicdata.dev/properties/peer/deviceName";
+pub const PEER_AGENT: &str = "https://atomicdata.dev/properties/peer/agent";
+pub const PEER_LAST_SEEN: &str = "https://atomicdata.dev/properties/peer/lastSeen";
 // ... for Collections
 pub const COLLECTION_PROPERTY: &str = "https://atomicdata.dev/properties/collection/property";
 pub const COLLECTION_VALUE: &str = "https://atomicdata.dev/properties/collection/value";
@@ -79,10 +103,13 @@ pub const COLLECTION_SORT_DESC: &str = "https://atomicdata.dev/properties/collec
 // ... for Endpoints
 pub const ENDPOINT_PARAMETERS: &str = "https://atomicdata.dev/properties/endpoint/parameters";
 pub const ENDPOINT_RESULTS: &str = "https://atomicdata.dev/properties/endpoint/results";
+pub const ENDPOINT_IS_POST: &str = "https://atomicdata.dev/properties/endpoint/isPost";
 pub const PATH: &str = "https://atomicdata.dev/properties/path";
 pub const SEARCH_QUERY: &str = "https://atomicdata.dev/properties/search/query";
 pub const SEARCH_LIMIT: &str = "https://atomicdata.dev/properties/search/limit";
 pub const SEARCH_PROPERTY: &str = "https://atomicdata.dev/properties/search/property";
+pub const SETUP_RESET: &str = "https://atomicdata.dev/properties/setup/reset";
+pub const SEARCH_CHUNKS: &str = "https://atomicdata.dev/properties/search/chunks";
 pub const URL: &str = "https://atomicdata.dev/property/url";
 pub const PREVIEW: &str = "https://atomicdata.dev/property/preview";
 // ... for Bookmarks
@@ -94,6 +121,8 @@ pub const WRITE: &str = "https://atomicdata.dev/properties/write";
 pub const APPEND: &str = "https://atomicdata.dev/properties/append";
 pub const CHILDREN: &str = "https://atomicdata.dev/properties/children";
 pub const SUBRESOURCES: &str = "https://atomicdata.dev/properties/subresources";
+pub const SUBDOMAIN: &str = "https://atomicdata.dev/properties/subdomain";
+pub const INITIAL_DRIVE: &str = "https://atomicdata.dev/properties/initialDrive";
 // ... for Inivtations
 pub const DESTINATION: &str = "https://atomicdata.dev/properties/destination";
 pub const TARGET: &str = "https://atomicdata.dev/properties/invite/target";
@@ -110,6 +139,7 @@ pub const ATOM_PROPERTY: &str = "https://atomicdata.dev/properties/atom/property
 pub const ATOM_VALUE: &str = "https://atomicdata.dev/properties/atom/value";
 // ... for Files
 pub const CHECKSUM: &str = "https://atomicdata.dev/properties/checksum";
+pub const BLOB: &str = "https://atomicdata.dev/properties/blob";
 pub const FILENAME: &str = "https://atomicdata.dev/properties/filename";
 pub const FILESIZE: &str = "https://atomicdata.dev/properties/filesize";
 pub const MIMETYPE: &str = "https://atomicdata.dev/properties/mimetype";
@@ -147,6 +177,10 @@ pub const JSON_SCHEMA: &str = "https://atomicdata.dev/properties/jsonSchema";
 pub const PLUGIN_AUTHOR: &str = "https://atomicdata.dev/properties/pluginAuthor";
 pub const PLUGIN_AGENT: &str = "https://atomicdata.dev/properties/pluginAgent";
 pub const PLUGIN_PERMISSIONS: &str = "https://atomicdata.dev/properties/pluginPermissions";
+// AI
+pub const TEXT_PART: &str = "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/text-part";
+pub const REASONING_PART: &str =
+    "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/reasoning-part";
 // Datatypes
 pub const STRING: &str = "https://atomicdata.dev/datatypes/string";
 pub const MARKDOWN: &str = "https://atomicdata.dev/datatypes/markdown";
@@ -160,7 +194,7 @@ pub const DATE: &str = "https://atomicdata.dev/datatypes/date";
 pub const TIMESTAMP: &str = "https://atomicdata.dev/datatypes/timestamp";
 pub const URI: &str = "https://atomicdata.dev/datatypes/uri";
 pub const JSON: &str = "https://atomicdata.dev/datatypes/json";
-pub const YDOC: &str = "https://atomicdata.dev/datatypes/ydoc";
+pub const LORO_DOC: &str = "https://atomicdata.dev/datatypes/lorodoc";
 
 // Methods
 pub const INSERT: &str = "https://atomicdata.dev/methods/insert";
@@ -181,3 +215,4 @@ pub const PATH_IMPORT: &str = "/import";
 pub const PATH_FETCH_BOOKMARK: &str = "/fetch-bookmark";
 pub const PATH_QUERY: &str = "/query";
 pub const PATH_PRUNE_TESTS: &str = "/prunetests";
+pub const PATH_INVITE: &str = "/invites";

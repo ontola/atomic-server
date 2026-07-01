@@ -29,7 +29,7 @@ type SearchRouteQueryParams = {
 
 export const SearchRoute = createRoute({
   path: pathNames.search,
-  component: () => <Search />,
+  component: () => null,
   getParentRoute: () => appRoute,
   validateSearch: {
     parse: (search: Record<string, unknown>): SearchRouteQueryParams => {
@@ -81,7 +81,7 @@ export function Search(): JSX.Element {
         navigate(openURL);
       }
     },
-    { enableOnTags: ['INPUT'], enableOnContentEditable: true },
+    { enableOnFormTags: ['INPUT'], enableOnContentEditable: true },
     // Explicitly include results and selectedIndex in the dependency array
     [results, selectedIndex, navigate],
   );
@@ -92,7 +92,7 @@ export function Search(): JSX.Element {
       e.preventDefault();
       setSelected(prev => (prev > 0 ? prev - 1 : 0));
     },
-    { enableOnTags: ['INPUT'], enableOnContentEditable: true },
+    { enableOnFormTags: ['INPUT'], enableOnContentEditable: true },
     [selectedIndex],
   );
 
@@ -104,7 +104,7 @@ export function Search(): JSX.Element {
         prev === results.length - 1 ? results.length - 1 : prev + 1,
       );
     },
-    { enableOnTags: ['INPUT'], enableOnContentEditable: true },
+    { enableOnFormTags: ['INPUT'], enableOnContentEditable: true },
     [selectedIndex],
   );
 
@@ -116,10 +116,6 @@ export function Search(): JSX.Element {
 
   if (loading) {
     heading = 'Loading results...';
-  }
-
-  if (results.length > 0) {
-    heading = undefined;
   }
 
   const showHelperMessage = !query && filterIsEmpty;
@@ -141,6 +137,10 @@ export function Search(): JSX.Element {
                 <span>
                   {heading ? (
                     heading
+                  ) : loading ? (
+                    <>
+                      Searching for <QueryText>{query}</QueryText>...
+                    </>
                   ) : (
                     <>
                       {results.length}{' '}
@@ -166,7 +166,11 @@ export function Search(): JSX.Element {
                 </HelperMessage>
               )}
               <ErrorBoundary>
-                <Column ref={resultsDiv} gap='1rem'>
+                <Column
+                  ref={resultsDiv}
+                  gap='1rem'
+                  // style={{ opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}
+                >
                   {results.map((subject, index) => (
                     <SelectableResult
                       key={subject}

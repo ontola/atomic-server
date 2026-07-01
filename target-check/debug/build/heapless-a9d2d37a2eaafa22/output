@@ -1,0 +1,2 @@
+cargo:rustc-cfg=has_cas
+cargo:rustc-cfg=has_atomics

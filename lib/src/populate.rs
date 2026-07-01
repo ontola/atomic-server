@@ -1,18 +1,14 @@
 //! Populating a Store means adding resources to it.
 //! Some of these are the core Atomic Data resources, such as the Property class.
 //! These base models are required for having a functioning store.
-//! Other populate methods help to set up an Atomic Server, by creating a basic file hierarcy and creating default collections.
 
 use crate::{
     datatype::DataType,
     errors::AtomicResult,
     parse::ParseOpts,
     schema::{Class, Property},
-    storelike::Query,
     urls, Storelike, Value,
 };
-
-const DEFAULT_ONTOLOGY_PATH: &str = "defaultOntology";
 
 /// Populates a store with some of the most fundamental Properties and Classes needed to bootstrap the whole.
 /// This is necessary to prevent a loop where Property X (like the `shortname` Property)
@@ -91,14 +87,80 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
         },
         Property {
             class_type: None,
+            data_type: DataType::AtomicUrl,
+            shortname: "drive".into(),
+            description: "The drive (top-level resource) this Resource belongs to. Stamped at genesis from the resource's genesis certificate so authorization can resolve the drive's grant directly, without walking a parent chain that may not be materialized yet under concurrent creation. Immutable: a resource does not move between drives.".into(),
+            subject: urls::DRIVE_PROP.into(),
+            allows_only: None,
+        },
+        Property {
+            class_type: None,
             data_type: DataType::ResourceArray,
             shortname: "allows-only".into(),
             description: "Restricts this Property to only the values inside this one. This essentially turns the Property into an `enum`.".into(),
             subject: urls::ALLOWS_ONLY.into(),
             allows_only: None,
-        }
+        },
+        Property {
+            class_type: None,
+            data_type: DataType::Boolean,
+            shortname: "is-dynamic".into(),
+            description: "If this is true, a Property is calculated server side and should therefore not appear in forms.".into(),
+            subject: urls::IS_DYNAMIC.into(),
+            allows_only: None,
+        },
+        Property {
+            class_type: None,
+            data_type: DataType::Boolean,
+            shortname: "is-locked".into(),
+            description: "If this is true, the Property should probably not be edited, because doing so could lead to serious errors.".into(),
+            subject: urls::IS_LOCKED.into(),
+            allows_only: None,
+        },
+        Property {
+            class_type: None,
+            data_type: DataType::Slug,
+            shortname: "subdomain".into(),
+            description: "The subdomain that identifies a Drive on a server. For example, in `joep.atomicdata.dev`, the subdomain is `joep`.".into(),
+            subject: urls::SUBDOMAIN.into(),
+            allows_only: None,
+        },
+        Property {
+            class_type: Some(urls::DRIVE.into()),
+            data_type: DataType::AtomicUrl,
+            shortname: "initial-drive".into(),
+            description: "The DID of the drive that should be mapped to the current host.".into(),
+            subject: urls::INITIAL_DRIVE.into(),
+            allows_only: None,
+        },
+        Property {
+            class_type: Some(urls::DRIVE.into()),
+            data_type: DataType::AtomicUrl,
+            shortname: "personal-drive".into(),
+            description: "The agent's personal (private) drive on this server. Clients use this as home and for agent-scoped data such as shared-with-me. At most one per agent.".into(),
+            subject: urls::PERSONAL_DRIVE.into(),
+            allows_only: None,
+        },
+        Property {
+            class_type: None,
+            data_type: DataType::ResourceArray,
+            shortname: "shared-with-me".into(),
+            description: "Resources this agent can access via invites or other shares. Clients often show these in a Shared with me list.".into(),
+            subject: urls::SHARED_WITH_ME.into(),
+            allows_only: None,
+        },
+        // The `genesis` property is read/written while parsing DID resources
+        // (the self-verifying genesis certificate). Bootstrap it locally so a
+        // base-models-only store doesn't fetch it from `atomicdata.dev`.
+        Property {
+            class_type: None,
+            data_type: DataType::String,
+            shortname: "genesis".into(),
+            description: "The self-verifying genesis certificate: base64 of a compact binary cert (signer public key, createdAt, nonce, original parent, drive). The resource's DID is the creating agent's Ed25519 signature over this certificate, so authorship and identity are verifiable offline without fetching a commit. Server-managed and immutable.".into(),
+            subject: urls::GENESIS.into(),
+            allows_only: None,
+        },
     ];
-
     let classes = vec![
         Class {
             requires: vec![urls::SHORTNAME.into(), urls::DATATYPE_PROP.into(), urls::DESCRIPTION.into()],
@@ -123,141 +185,70 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
             subject: urls::DATATYPE_CLASS.into(),
         },
         Class {
-            requires: vec![urls::PUBLIC_KEY.into()],
-            recommends: vec![urls::NAME.into(), urls::DESCRIPTION.into(), urls::DRIVES.into()],
+            requires: vec![],
+            recommends: vec![
+                urls::PUBLIC_KEY.into(),
+                urls::NAME.into(),
+                urls::DESCRIPTION.into(),
+                urls::PERSONAL_DRIVE.into(),
+                urls::SHARED_WITH_ME.into(),
+                urls::DRIVES.into(),
+            ],
             shortname: "agent".into(),
             description:
-                "An Agent is a user that can create or modify data. It has two keys: a private and a public one. The private key should be kept secret. The public key is used to verify signatures (on [Commits](https://atomicdata.dev/classes/Commit)) set by the of the Agent.".into(),
+                "An Agent is a user that can create or modify data. For DID-based agents (did:ad:agent:{publicKey}), the public key is derived from the subject.".into(),
             subject: urls::AGENT.into(),
-        }
+        },
+        // The Commit class is fundamental: commit serialization
+        // (`CommitBuilder::into_resource` → `Resource::new_instance(COMMIT)`)
+        // resolves this class, so it must be available locally. Without it a
+        // base-models-only store (`Store::init`) would fetch it from
+        // `atomicdata.dev` over the network — which strands offline and made
+        // the commit-serialization tests depend on the public domain.
+        Class {
+            requires: vec![
+                urls::CREATED_AT.into(),
+                urls::SIGNATURE.into(),
+                urls::SIGNER.into(),
+                urls::SUBJECT.into(),
+            ],
+            recommends: vec![
+                urls::DESTROY.into(),
+                urls::IS_GENESIS.into(),
+                urls::PREVIOUS_COMMIT.into(),
+                urls::REMOVE.into(),
+                urls::SET.into(),
+                urls::PUSH.into(),
+                urls::LORO_UPDATE.into(),
+            ],
+            shortname: "commit".into(),
+            description: "A Commit is a signed Resource that describes how a Resource must be updated. Used for auditing, versioning and synchronization.".into(),
+            subject: urls::COMMIT.into(),
+        },
     ];
 
     for p in properties {
-        let mut resource = p.to_resource();
+        let mut resource = p.to_resource()?;
         resource.set_unsafe(
             urls::PARENT.into(),
             Value::AtomicUrl("https://atomicdata.dev/properties".into()),
-        );
+        )?;
         store
             .add_resource_opts(&resource, false, true, true)
             .await?;
     }
 
     for c in classes {
-        let mut resource = c.to_resource();
+        let mut resource = c.to_resource()?;
         resource.set_unsafe(
             urls::PARENT.into(),
             Value::AtomicUrl("https://atomicdata.dev/classes".into()),
-        );
+        )?;
         store
             .add_resource_opts(&resource, false, true, true)
             .await?;
     }
 
-    Ok(())
-}
-
-/// Creates a Drive resource at the base URL. Does not set rights. Use set_drive_rights for that.
-pub async fn create_drive(store: &impl Storelike) -> AtomicResult<()> {
-    let self_url = store
-        .get_self_url()
-        .ok_or("No self_url set, cannot populate store with Drive")?;
-    let mut drive = store.get_resource_new(&self_url).await;
-    drive.set_class(urls::DRIVE);
-    let server_url = url::Url::parse(&store.get_server_url()?)?;
-    drive
-        .set_string(
-            urls::NAME.into(),
-            server_url.host_str().ok_or("Can't use current base URL")?,
-            store,
-        )
-        .await?;
-    drive.save_locally(store).await?;
-
-    Ok(())
-}
-
-pub async fn create_default_ontology(store: &impl Storelike) -> AtomicResult<()> {
-    let server_url = store.get_server_url()?;
-    let mut drive = store.get_resource(&server_url).await.unwrap();
-
-    let ontology_subject = format!("{}/{}", drive.get_subject(), DEFAULT_ONTOLOGY_PATH);
-
-    // If the ontology already exists, don't change it.
-    if store.get_resource(&ontology_subject).await.is_ok() {
-        return Ok(());
-    }
-
-    let mut ontology = store.get_resource_new(&ontology_subject).await;
-
-    ontology.set_class(urls::ONTOLOGY);
-    ontology
-        .set_string(urls::SHORTNAME.into(), "ontology", store)
-        .await?;
-    ontology
-        .set_string(
-            urls::DESCRIPTION.into(),
-            "Default ontology for this drive",
-            store,
-        )
-        .await?;
-    ontology
-        .set_string(urls::PARENT.into(), drive.get_subject(), store)
-        .await?;
-    ontology
-        .set(urls::CLASSES.into(), Value::ResourceArray(vec![]), store)
-        .await?;
-    ontology
-        .set(urls::PROPERTIES.into(), Value::ResourceArray(vec![]), store)
-        .await?;
-    ontology
-        .set(urls::INSTANCES.into(), Value::ResourceArray(vec![]), store)
-        .await?;
-    ontology.save_locally(store).await?;
-
-    drive
-        .set_string(urls::DEFAULT_ONTOLOGY.into(), ontology.get_subject(), store)
-        .await?;
-    drive.push(
-        urls::SUBRESOURCES,
-        crate::values::SubResource::Subject(ontology.get_subject().into()),
-        false,
-    )?;
-    drive.save_locally(store).await?;
-    Ok(())
-}
-
-/// Adds rights to the default agent to the Drive resource (at the base URL). Optionally give Public Read rights.
-pub async fn set_drive_rights(store: &impl Storelike, public_read: bool) -> AtomicResult<()> {
-    // Now let's add the agent as the Root user and provide write access
-    let mut drive = store.get_resource(&store.get_server_url()?).await?;
-    let write_agent = store.get_default_agent()?.subject;
-    let read_agent = write_agent.clone();
-
-    drive.push(urls::WRITE, write_agent.into(), true)?;
-    drive.push(urls::READ, read_agent.into(), true)?;
-    if public_read {
-        drive.push(urls::READ, urls::PUBLIC_AGENT.into(), true)?;
-    }
-
-    if let Err(_no_description) = drive.get(urls::DESCRIPTION) {
-        drive.set_string(urls::DESCRIPTION.into(), &format!(r#"## Welcome to your Atomic-Server!
-### Getting started
-Start by registering your Agent by visiting [`/setup`]({}/setup).
-
-Note that, by default, all resources are `public`. You can edit this by opening the context menu (the three dots in the navigation bar), and going to `share`.
-
-Once you've setup an agent you should start editing your schema using ontologies.
-We've created a [default ontology]({}) for you but you can create more if you want.
-
-Next create some resources by clicking on the plus button in the sidebar.
-You can create folders to organise your resources.
-
-To use the data in your web apps checkout our client libraries: [@tomic/lib](https://docs.atomicdata.dev/js), [@tomic/react](https://docs.atomicdata.dev/usecases/react) and [@tomic/svelte](https://docs.atomicdata.dev/svelte)
-Use [@tomic/cli](https://docs.atomicdata.dev/js-cli) to generate typed ontologies inside your code.
-"#, store.get_server_url()?, &format!("{}/{}", drive.get_subject(), DEFAULT_ONTOLOGY_PATH)), store).await?;
-    }
-    drive.save_locally(store).await?;
     Ok(())
 }
 
@@ -305,109 +296,22 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
     Ok(())
 }
 
-/// Generates collections for classes, such as `/agent` and `/collection`.
-/// Requires a `self_url` to be set in the store.
-pub async fn populate_collections(store: &impl Storelike) -> AtomicResult<()> {
-    let mut query = Query::new_class(urls::CLASS);
-    query.include_external = true;
-    let result = store.query(&query).await?;
-
-    for subject in result.subjects {
-        let mut collection =
-            crate::collections::create_collection_resource_for_class(store, &subject).await?;
-        collection.save_locally(store).await?;
+/// Bootstraps the store with core models and default ontologies.
+/// Uses `begin_batch`/`commit_batch` to fold all writes into a single DB transaction.
+pub async fn bootstrap(store: &impl Storelike) -> AtomicResult<()> {
+    // Skip on already-seeded stores. This must be a local storage check,
+    // not `get_resource`: `get_resource` may fetch external Atomic URLs
+    // and can make a fresh store look seeded after fetching only the
+    // sentinel resource.
+    if store.has_stored_resource(&crate::urls::SHORTNAME.into()) {
+        tracing::debug!("populate::bootstrap: store already seeded, skipping");
+        return Ok(());
     }
 
-    Ok(())
-}
-
-#[cfg(feature = "db")]
-/// Adds default Endpoints (versioning) to the Db.
-/// Makes sure they are fetchable
-pub async fn populate_endpoints(store: &crate::Db) -> AtomicResult<()> {
-    let endpoints = store.get_endpoints();
-    let endpoints_collection = format!("{}/endpoints", store.get_server_url()?);
-    for endpoint in endpoints {
-        let mut resource = endpoint.to_resource(store).await?;
-        resource
-            .set(
-                urls::PARENT.into(),
-                Value::AtomicUrl(endpoints_collection.clone()),
-                store,
-            )
-            .await?;
-        resource.save_locally(store).await?;
-    }
-    Ok(())
-}
-
-#[cfg(feature = "db")]
-/// Adds default Endpoints (versioning) to the Db.
-/// Makes sure they are fetchable
-pub async fn populate_importer(store: &crate::Db) -> AtomicResult<()> {
-    let base = store
-        .get_self_url()
-        .ok_or("No self URL in this Store - required for populating importer")?;
-    let mut importer = crate::Resource::new(urls::construct_path_import(&base));
-    importer.set_class(urls::IMPORTER);
-    importer
-        .set(urls::PARENT.into(), Value::AtomicUrl(base), store)
-        .await?;
-    importer
-        .set(urls::NAME.into(), Value::String("Import".into()), store)
-        .await?;
-    importer.save_locally(store).await?;
-    Ok(())
-}
-
-#[cfg(feature = "db")]
-/// Adds items to the SideBar as subresources.
-/// Useful for helping a new user get started.
-pub async fn populate_sidebar_items(store: &crate::Db) -> AtomicResult<()> {
-    let base = store.get_self_url().ok_or("No self_url")?;
-    let mut drive = store.get_resource(&base).await?;
-    let arr = vec![
-        format!("{}/setup", base),
-        format!("{}/import", base),
-        format!("{}/collections", base),
-    ];
-    for item in arr {
-        drive.push(urls::SUBRESOURCES, item.into(), true)?;
-    }
-    drive.save_locally(store).await?;
-    Ok(())
-}
-
-/// Runs all populate commands. Optionally runs index (blocking), which can be slow!
-#[cfg(feature = "db")]
-pub async fn populate_all(store: &crate::Db) -> AtomicResult<()> {
-    populate_base_models(store)
-        .await
-        .map_err(|e| format!("Failed to populate default store. {}", e))?;
-    populate_default_store(store)
-        .await
-        .map_err(|e| format!("Failed to populate default store. {}", e))?;
-
-    // Use try_join! to run the rest concurrently
-    create_drive(store)
-        .await
-        .map_err(|e| format!("Failed to create drive. {}", e))?;
-    create_default_ontology(store)
-        .await
-        .map_err(|e| format!("Failed to create default ontology. {}", e))?;
-    set_drive_rights(store, true).await?;
-    populate_collections(store)
-        .await
-        .map_err(|e| format!("Failed to populate collections. {}", e))?;
-    populate_endpoints(store)
-        .await
-        .map_err(|e| format!("Failed to populate endpoints. {}", e))?;
-    populate_importer(store)
-        .await
-        .map_err(|e| format!("Failed to populate importer. {}", e))?;
-    populate_sidebar_items(store)
-        .await
-        .map_err(|e| format!("Failed to populate sidebar items. {}", e))?;
-
+    tracing::info!("populate::bootstrap: seeding base models and ontologies");
+    store.begin_batch();
+    populate_base_models(store).await?;
+    populate_default_store(store).await?;
+    store.commit_batch()?;
     Ok(())
 }

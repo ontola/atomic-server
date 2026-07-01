@@ -34,14 +34,14 @@ pub async fn validate_store(
 
         if fetch_items {
             match crate::client::fetch_resource(
-                subject,
+                subject.as_str(),
                 store,
                 store.get_default_agent().ok().as_ref(),
             )
             .await
             {
                 Ok(_) => {}
-                Err(e) => unfetchable.push((subject.clone(), e.to_string())),
+                Err(e) => unfetchable.push((subject.to_string(), e.to_string())),
             }
         }
 
@@ -71,7 +71,7 @@ pub async fn validate_store(
         let classes = match store.get_classes_for_subject(subject).await {
             Ok(classes) => classes,
             Err(e) => {
-                unfetchable_classes.push((subject.clone(), e.to_string()));
+                unfetchable_classes.push((subject.to_string(), e.to_string()));
                 break;
             }
         };
@@ -84,7 +84,7 @@ pub async fn validate_store(
                         println!("Required: {:?}", required_prop.shortname);
                         if !found_props.contains(&required_prop.subject) {
                             missing_props.push((
-                                subject.clone(),
+                                subject.to_string(),
                                 required_prop.subject.clone(),
                                 class.subject.clone(),
                             ));

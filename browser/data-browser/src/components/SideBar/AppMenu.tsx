@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
-import {
-  FaGear,
-  FaInfo,
-  FaKeyboard,
-  FaCirclePlus,
-  FaUser,
-} from 'react-icons/fa6';
+import { styled } from 'styled-components';
+import { FaGear, FaInfo, FaCirclePlus, FaUser, FaCode } from 'react-icons/fa6';
+import { isDev } from '../../config';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { SideBarMenuItem } from './SideBarMenuItem';
@@ -16,6 +12,7 @@ import {
   useCurrentAgent,
   useResource,
 } from '@tomic/react';
+import { SyncMenuItem } from './SyncMenuItem';
 
 // Non standard event type so we have to type it ourselfs for now.
 type BeforeInstallPromptEvent = {
@@ -33,7 +30,6 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
   const [showInstallButton, setShowInstallButton] = useState(false);
   const [agent] = useCurrentAgent();
   const agentResource = useResource(agent?.subject ?? unknownSubject);
-
   const install = useCallback(() => {
     if (!event.current) {
       return;
@@ -59,13 +55,13 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
   }, []);
 
   return (
-    <section aria-label='App menu'>
+    <AppMenuSection aria-label='App menu'>
       <SideBarMenuItem
         icon={<FaUser />}
         label={
           agent
             ? (agentResource.get(core.properties.name) ?? 'User Settings')
-            : 'Login'
+            : 'Login / New User'
         }
         helper='See and edit the current Agent / User (u)'
         path={paths.agentSettings}
@@ -78,13 +74,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         path={paths.appSettings}
         onClick={onItemClick}
       />
-      <SideBarMenuItem
-        icon={<FaKeyboard />}
-        label='Keyboard Shortcuts'
-        helper='View the keyboard shortcuts (?)'
-        path={paths.shortcuts}
-        onClick={onItemClick}
-      />
+      <SyncMenuItem onClick={onItemClick} />
       <SideBarMenuItem
         icon={<FaInfo />}
         label='About'
@@ -92,6 +82,15 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         path={paths.about}
         onClick={onItemClick}
       />
+      {isDev() && (
+        <SideBarMenuItem
+          icon={<FaCode />}
+          label='Dev Drive'
+          helper='Create a fresh agent + drive on localhost:9883'
+          path={paths.devDrive}
+          onClick={onItemClick}
+        />
+      )}
       {showInstallButton && (
         <SideBarMenuItem
           icon={<FaCirclePlus />}
@@ -101,6 +100,12 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
           onClick={install}
         />
       )}
-    </section>
+    </AppMenuSection>
   );
 }
+
+const AppMenuSection = styled.section`
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+`;

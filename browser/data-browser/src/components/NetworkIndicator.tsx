@@ -1,63 +1,76 @@
-import { useEffect } from 'react';
-import { styled, keyframes } from 'styled-components';
-import { MdSignalWifiOff } from 'react-icons/md';
+import { useEffect, useRef } from 'react';
 import { useOnline } from '../hooks/useOnline';
-import { lighten } from 'polished';
 import toast from 'react-hot-toast';
+import { StoreEvents, useStore } from '@tomic/react';
+import { MdSignalWifiOff } from 'react-icons/md';
 
+const OFFLINE_ICON = <MdSignalWifiOff />;
+
+/**
+ * No longer renders a visible element. Just shows friendly toasts
+ * when connection state changes. The sync page handles detailed status.
+ */
 export function NetworkIndicator() {
   const isOnline = useOnline();
+  const store = useStore();
+  const wasEverConnected = useRef(false);
+  const shownOfflineHint = useRef(false);
+
+  // Show a one-time hint if the user manually disconnected
+  useEffect(() => {
+    if (shownOfflineHint.current) return;
+
+    if (localStorage.getItem('ws-disconnected') === '1') {
+      shownOfflineHint.current = true;
+      toast('Running in offline mode. Reconnect in the sync menu.', {
+        icon: OFFLINE_ICON,
+        duration: 5000,
+        id: 'offline-hint',
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const userDisconnected = localStorage.getItem('ws-disconnected') === '1';
+
+    const unsub = store.on(
+      StoreEvents.ConnectionChanged,
+      (connected: boolean) => {
+        if (connected) {
+          wasEverConnected.current = true;
+          const host = (() => {
+            try {
+              return new URL(store.getServerUrl()).hostname;
+            } catch {
+              return 'server';
+            }
+          })();
+          toast.success(`Connected to ${host}`, {
+            duration: 2000,
+            id: 'connection-status',
+          });
+        } else if (wasEverConnected.current && !userDisconnected) {
+          toast('Working offline — your changes are saved locally', {
+            icon: OFFLINE_ICON,
+            duration: 4000,
+            id: 'connection-status',
+          });
+        }
+      },
+    );
+
+    return unsub;
+  }, [store]);
 
   useEffect(() => {
     if (!isOnline) {
-      toast.error('You are offline, changes might not be persisted.');
+      toast('No internet — your changes are saved locally', {
+        icon: OFFLINE_ICON,
+        duration: 4000,
+        id: 'connection-status',
+      });
     }
   }, [isOnline]);
 
-  return (
-    <Wrapper shown={!isOnline} aria-hidden={isOnline}>
-      <MdSignalWifiOff title='No Internet Connection.' />
-    </Wrapper>
-  );
+  return null;
 }
-
-interface WrapperProps {
-  shown: boolean;
-}
-
-const pulse = keyframes`
-  0% {
-    opacity: 1;
-    filter: drop-shadow(0 0 5px var(--shadow-color));
-  }
-  100% {
-    opacity: 0.8;
-    filter: drop-shadow(0 0 0 var(--shadow-color));
-  }
-`;
-
-const Wrapper = styled.div<WrapperProps>`
-  --shadow-color: ${p => lighten(0.15, p.theme.colors.alert)};
-  position: fixed;
-  bottom: 1.2rem;
-  right: 2rem;
-  z-index: ${({ theme }) => theme.zIndex.networkIndicator};
-  font-size: 1.5rem;
-  color: ${p => p.theme.colors.alert};
-  pointer-events: ${p => (p.shown ? 'auto' : 'none')};
-  transition: opacity 0.1s ease-in-out;
-  opacity: ${p => (p.shown ? 1 : 0)};
-
-  background-color: ${p => p.theme.colors.bg};
-  border: 1px solid ${p => p.theme.colors.alert};
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  box-shadow: ${p => p.theme.boxShadowSoft};
-  padding: 0.5rem;
-
-  svg {
-    animation: ${pulse} 1.5s alternate ease-in-out infinite;
-    animation-play-state: ${p => (p.shown ? 'running' : 'paused')};
-  }
-`;

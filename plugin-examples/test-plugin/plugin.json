@@ -12,6 +12,10 @@
     {
       "permission": "custom-view",
       "reason": "Custom UI where the user can edit the name of a resource."
+    },
+    {
+      "permission": "full-drive-access",
+      "reason": "Needed so the plugin's Agent can sign commits that prefix folder names."
     }
   ],
   "defaultConfig": {

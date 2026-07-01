@@ -11,6 +11,7 @@ import {
 import {
   getToolName,
   isToolUIPart,
+  type DynamicToolUIPart,
   type FileUIPart,
   type ReasoningUIPart,
   type SourceUrlUIPart,
@@ -34,34 +35,75 @@ const TAG_TO_ROLE_MAPPING = {
   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/system': 'system',
   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/tool': 'tool',
   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/error': 'error',
+  'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/summary': 'summary',
 } as const;
 
 const roleToTagMapping = Object.fromEntries(
   Object.entries(TAG_TO_ROLE_MAPPING).map(([tag, role]) => [role, tag]),
 );
 
+/** Push a locally-built message (and its parts) to the server. */
+export const persistMessageResourceToServer = async (
+  messageResource: Resource<Ai.AiMessage>,
+  store: Store,
+): Promise<void> => {
+  const partSubjects = messageResource.props.parts ?? [];
+
+  for (const subject of partSubjects) {
+    const partResource = await store.getResource(subject);
+    // Always call save(): draft parts from `persistToServer: false` may have a
+    // stashed genesis with no dirty flag — skipping save leaves them local-only.
+    await partResource.save();
+  }
+
+  await messageResource.save();
+};
+
 export const uiMessageToResource = async (
   message: AtomicUIMessage,
   parent: Resource<Ai.AiChat>,
   store: Store,
+  { persistToServer = true }: { persistToServer?: boolean } = {},
 ): Promise<Resource<Ai.AiMessage>> => {
+  // Summary messages are stored with role 'summary' regardless of their UI role.
+  const persistedRole = message.metadata?.isSummary ? 'summary' : message.role;
+
+  // `content` (parts) is required on ai-message. For a DID drive the subject is
+  // derived from the genesis SIGNATURE, while parts are children whose `parent`
+  // is that very subject — so real parts can't exist before the genesis is
+  // signed. The genesis therefore MUST seed an empty list and push the part
+  // subjects in a follow-up commit. An empty `content` is valid: the server
+  // materializes an empty list as `ResourceArray([])` (loro.rs) and the required
+  // check only tests presence (resources.rs), so the constraint is satisfied.
+  // NOTE: if a server ever drops empty arrays, this genesis is rejected on every
+  // attempt — that was the ai-message ingest loop. The outbox now classifies
+  // "missing. Is required in class" as terminal (local-outbox.ts) so a malformed
+  // commit is dropped instead of retried forever.
   const messageResource = await store.newResource<Ai.AiMessage>({
-    subject: message.id,
     isA: ai.classes.aiMessage,
     parent: parent.subject,
     propVals: {
-      [ai.properties.role]: roleToTag(message.role),
+      [ai.properties.role]: roleToTag(persistedRole),
+      [ai.properties.parts]: [],
     },
   });
 
-  const context = message.metadata?.context;
+  const context = message.metadata?.userContext;
 
   if (context && context.length > 0) {
+    // Skill context is ephemeral (already inlined into the outgoing message)
+    // and has no persisted resource counterpart, so skip it here.
+    const persistableContext = context.filter(c => c.type !== 'skill');
     const subjects = await Promise.all(
-      context.map(c => contextToResource(c, messageResource, store)),
+      persistableContext.map(c => contextToResource(c, messageResource, store)),
     );
 
     messageResource.props.providedContext = subjects;
+  }
+
+  if (message.metadata?.serverContext) {
+    messageResource.props.serverProvidedContext =
+      message.metadata.serverContext;
   }
 
   const builder = partsToResourceBuilder(messageResource, store);
@@ -86,13 +128,110 @@ export const uiMessageToResource = async (
   );
 
   for (const partResource of partResources) {
+    if (!persistToServer) {
+      messageResource.push(ai.properties.parts, [partResource.subject]);
+      continue;
+    }
+
     await partResource.save();
     messageResource.push(ai.properties.parts, [partResource.subject]);
+  }
+
+  if (!persistToServer) {
+    return messageResource;
   }
 
   await messageResource.save();
 
   return messageResource;
+};
+
+export const addMessageToChatResource = async (
+  message: AtomicUIMessage,
+  chatResource: Resource<Ai.AiChat>,
+  store: Store,
+  {
+    saveChat = true,
+    persistToServer = true,
+  }: { saveChat?: boolean; persistToServer?: boolean } = {},
+): Promise<Resource<Ai.AiMessage>> => {
+  const messageResource = await uiMessageToResource(
+    message,
+    chatResource,
+    store,
+    { persistToServer },
+  );
+
+  chatResource.push(ai.properties.messages, [messageResource.subject]);
+
+  if (saveChat) {
+    await chatResource.save();
+  }
+
+  return messageResource;
+};
+
+export const removeMessageFromChatResource = async (
+  messageResource: Resource,
+  chatResource: Resource<Ai.AiChat>,
+  { saveChat = true }: { saveChat?: boolean } = {},
+): Promise<void> => {
+  await chatResource.set(
+    ai.properties.messages,
+    chatResource.props.messages?.filter(
+      subject => subject !== messageResource.subject,
+    ),
+  );
+
+  if (saveChat) {
+    await chatResource.save();
+  }
+
+  await messageResource.destroy();
+};
+
+export const removeFollowingMessagesFromChatResource = async (
+  message: AtomicUIMessage,
+  messages: AtomicUIMessage[],
+  messageToResourceMap: Map<AtomicUIMessage, Resource>,
+  chatResource: Resource<Ai.AiChat>,
+  { saveChat = true }: { saveChat?: boolean } = {},
+): Promise<AtomicUIMessage[]> => {
+  const messageIndex = messages.findIndex(x => x.id === message.id);
+
+  if (messageIndex === -1) {
+    throw new Error(`Message not found: ${message.id}`);
+  }
+
+  const nextMessages = messages.slice(messageIndex + 1);
+  const destroySubjects: string[] = [];
+
+  for (const m of nextMessages) {
+    const r = messageToResourceMap.get(m);
+
+    if (r) {
+      destroySubjects.push(r.subject);
+
+      try {
+        await r.destroy();
+      } catch (error) {
+        console.error('Error removing message:', error);
+      }
+    } else {
+      throw new Error(`Resource not found for message: ${m.id}`);
+    }
+  }
+
+  await chatResource.set(
+    ai.properties.messages,
+    chatResource.props.messages?.filter(x => !destroySubjects.includes(x)),
+  );
+
+  if (saveChat) {
+    await chatResource.save();
+  }
+
+  return messages.slice(0, messageIndex + 1);
 };
 
 const contextToResource = async (
@@ -102,6 +241,10 @@ const contextToResource = async (
 ): Promise<string> => {
   if (isAtomicResourceContext(context)) {
     return context.subject;
+  }
+
+  if (context.type !== 'mcp-resource') {
+    throw new Error(`Cannot persist context of type: ${context.type}`);
   }
 
   const contextResource = await store.newResource<Ai.AiMessage>({
@@ -188,7 +331,15 @@ export const messageResourcesToDisplayMessages = async (
           .map(c => c.value);
 
         message.metadata = {
-          context,
+          ...(message.metadata ?? {}),
+          userContext: context,
+        };
+      }
+
+      if (resource.props.serverProvidedContext) {
+        message.metadata = {
+          ...(message.metadata ?? {}),
+          serverContext: resource.props.serverProvidedContext,
         };
       }
     }
@@ -238,6 +389,23 @@ export const messageResourcesToDisplayMessages = async (
         id: resource.subject,
         role,
         parts: [toTextPart(contentResource)],
+      };
+    }
+
+    if (role === 'summary') {
+      const contentResource = partResources[0];
+
+      if (!resourceIsTextPart(contentResource)) {
+        throw new Error(
+          `Part with class ${contentResource.getClasses()} not supported on role: summary`,
+        );
+      }
+
+      message = {
+        id: resource.subject,
+        role: 'user',
+        parts: [toTextPart(contentResource)],
+        metadata: { isSummary: true },
       };
     }
 
@@ -386,7 +554,7 @@ const partsToResourceBuilder = (
     });
   },
 
-  async toolCallPartToResource(part: ToolUIPart) {
+  async toolCallPartToResource(part: ToolUIPart | DynamicToolUIPart) {
     return await store.newResource<Ai.ToolCallPart>({
       isA: ai.classes.toolCallPart,
       parent: parent.subject,

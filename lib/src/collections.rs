@@ -1,13 +1,17 @@
 //! Collections are dynamic resources that refer to multiple resources.
 //! They are constructed using a [Query]
+#[cfg(feature = "db")]
 use crate::class_extender::{ClassExtender, GetExtenderContext};
+#[cfg(feature = "db")]
+use crate::db::drive_prefix_from_subject;
 use crate::{
     agents::ForAgent,
     errors::AtomicResult,
     storelike::{Query, ResourceCollection, ResourceResponse},
-    urls, Resource, Storelike, Value,
+    urls, Resource, Storelike, Subject, Value,
 };
 
+#[cfg(feature = "db")]
 pub fn get_collection_class_extender() -> ClassExtender {
     ClassExtender::builder()
         .id("collection".to_string())
@@ -39,6 +43,9 @@ pub struct CollectionBuilder {
     pub property: Option<String>,
     /// The value which the results are to be filtered by
     pub value: Option<String>,
+    /// Extra constraints, ANDed with `property`/`value`. Lets a collection
+    /// filter on multiple properties, each with its own operator.
+    pub filters: Vec<crate::storelike::PropVal>,
     /// URL of the value to sort by
     pub sort_by: Option<String>,
     /// Sorts ascending by default
@@ -53,6 +60,9 @@ pub struct CollectionBuilder {
     pub include_nested: bool,
     /// Whether to include resources from other servers
     pub include_external: bool,
+    /// Scope results to a specific drive. When set, the query index is drive-scoped so watched
+    /// queries only trigger for resources in this drive.
+    pub drive: Option<Subject>,
 }
 
 impl CollectionBuilder {
@@ -60,8 +70,8 @@ impl CollectionBuilder {
     /// Note that this does not calculate any members, and it does not generate any pages.
     /// If that is what you need, use `.into_resource`
     pub async fn to_resource(&self, store: &impl Storelike) -> AtomicResult<crate::Resource> {
-        let mut resource = store.get_resource_new(&self.subject).await;
-        resource.set_class(urls::COLLECTION);
+        let mut resource = store.get_resource_new(&self.subject.as_str().into()).await;
+        resource.set_class(urls::COLLECTION)?;
         if let Some(val) = &self.property {
             resource
                 .set_string(crate::urls::COLLECTION_PROPERTY.into(), val, store)
@@ -123,12 +133,13 @@ impl CollectionBuilder {
     pub fn class_collection(
         class_url: &str,
         path: &str,
-        store: &impl Storelike,
+        _store: &impl Storelike,
     ) -> AtomicResult<CollectionBuilder> {
         Ok(CollectionBuilder {
-            subject: format!("{}/{}", store.get_server_url()?, path),
+            subject: format!("/{}", path),
             property: Some(urls::IS_A.into()),
             value: Some(class_url.into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -136,6 +147,7 @@ impl CollectionBuilder {
             name: Some(format!("{} collection", path)),
             include_nested: true,
             include_external: false,
+            drive: None,
         })
     }
 
@@ -185,7 +197,7 @@ pub struct Collection {
 }
 
 /// Sorts a vector or resources by some property.
-#[tracing::instrument]
+#[tracing::instrument(skip_all)]
 pub fn sort_resources(
     mut resources: ResourceCollection,
     sort_by: &str,
@@ -216,7 +228,7 @@ impl Collection {
     /// Constructs a Collection, which is a paginated list of items with some sorting applied.
     /// Gets the required data from the store.
     /// Applies sorting settings.
-    #[tracing::instrument(skip(store))]
+    #[tracing::instrument(skip_all)]
     pub async fn collect_members(
         store: &impl Storelike,
         collection_builder: crate::collections::CollectionBuilder,
@@ -237,6 +249,7 @@ impl Collection {
         let q = Query {
             property: collection_builder.property.clone(),
             value: value_filter,
+            filters: collection_builder.filters.clone(),
             limit: Some(collection_builder.page_size),
             start_val: None,
             end_val: None,
@@ -246,10 +259,15 @@ impl Collection {
             include_external: collection_builder.include_external,
             include_nested: collection_builder.include_nested,
             for_agent: for_agent.clone(),
+            drive: collection_builder.drive.clone(),
         };
 
         let query_result = store.query(&q).await?;
-        let members = query_result.subjects;
+        let members: Vec<String> = query_result
+            .subjects
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let referenced_resources = if collection_builder.include_nested {
             Some(query_result.resources)
         } else {
@@ -366,12 +384,10 @@ impl Collection {
             .await?;
 
         match &self.referenced_resources {
-            Some(referenced_resources) => {
-                return Ok(ResourceResponse::ResourceWithReferenced(
-                    resource.clone(),
-                    referenced_resources.clone(),
-                ));
-            }
+            Some(referenced_resources) => Ok(ResourceResponse::ResourceWithReferenced(
+                resource.clone(),
+                referenced_resources.clone(),
+            )),
             None => Ok(ResourceResponse::Resource(resource.clone())),
         }
     }
@@ -380,7 +396,8 @@ impl Collection {
 /// Builds a collection from query params and the passed Collection resource.
 /// The query params are used to override the stored Collection resource properties.
 /// This also sets defaults for Collection properties when fields are missing
-#[tracing::instrument(skip(store, query_params))]
+#[cfg(feature = "db")]
+#[tracing::instrument(skip_all)]
 pub async fn construct_collection_from_params(
     store: &impl Storelike,
     query_params: url::form_urlencoded::Parse<'_>,
@@ -393,9 +410,11 @@ pub async fn construct_collection_from_params(
     let mut page_size = DEFAULT_PAGE_SIZE;
     let mut value = None;
     let mut property = None;
+    let mut filters: Vec<crate::storelike::PropVal> = Vec::new();
     let mut name = None;
     let mut include_nested = false;
     let mut include_external = false;
+    let mut drive: Option<Subject> = None;
 
     if let Ok(val) = resource.get(urls::COLLECTION_PROPERTY) {
         property = Some(val.to_string());
@@ -419,21 +438,46 @@ pub async fn construct_collection_from_params(
         match k.as_ref() {
             "property" => property = Some(v.to_string()),
             "value" => value = Some(v.to_string()),
+            // Extra AND constraints as a JSON array, each with an optional
+            // operator: `[{"property":"…","value":"…","operator":"gt"}]`.
+            "filters" => {
+                #[derive(serde::Deserialize)]
+                struct FilterParam {
+                    property: String,
+                    value: String,
+                    operator: Option<String>,
+                }
+                let parsed: Vec<FilterParam> = serde_json::from_str(v.as_ref()).map_err(|e| {
+                    format!(
+                        "Invalid `filters` param (expected JSON array of {{property, value, operator?}}): {e}"
+                    )
+                })?;
+                filters = parsed
+                    .into_iter()
+                    .map(|f| crate::storelike::PropVal {
+                        property: Some(f.property),
+                        value: Some(Value::String(f.value)),
+                        operator: crate::storelike::filter_operator_from_str(f.operator.as_deref()),
+                    })
+                    .collect();
+            }
             "sort_by" => sort_by = Some(v.to_string()),
             "sort_desc" => sort_desc = v.parse::<bool>()?,
             "current_page" => current_page = v.parse::<usize>()?,
             "page_size" => page_size = v.parse::<usize>()?,
             "include_nested" => include_nested = v.parse::<bool>()?,
             "include_external" => include_external = v.parse::<bool>()?,
+            "drive" => drive = Some(Subject::from(v.as_ref())),
             e => {
                 return Err(format!("Invalid query param: {}", e).into());
             }
         };
     }
     let collection_builder = crate::collections::CollectionBuilder {
-        subject: resource.get_subject().into(),
+        subject: resource.get_subject().to_string(),
         property,
         value,
+        filters,
         sort_by,
         sort_desc,
         current_page,
@@ -441,6 +485,7 @@ pub async fn construct_collection_from_params(
         name,
         include_nested,
         include_external,
+        drive: Some(drive.unwrap_or_else(|| drive_prefix_from_subject(resource.get_subject()))),
     };
     let collection = Collection::collect_members(store, collection_builder, for_agent).await?;
     collection.add_to_resource(resource, store).await
@@ -475,15 +520,21 @@ pub async fn create_collection_resource_for_class(
         _other => false,
     };
 
+    // Agents use DID subjects which are external, so we need to include external resources
+    collection.include_external = match class_subject {
+        urls::AGENT => true,
+        _other => false,
+    };
+
     let mut collection_resource = collection.to_resource(store).await?;
 
-    let drive = store
-        .get_self_url()
-        .ok_or("No self_url present in store, can't populate collections")?;
+    let drive = "/";
 
     // Let the Collections collection be the top level item
     let parent = if class.subject == urls::COLLECTION {
-        drive
+        drive.to_string()
+    } else if drive == "/" {
+        "/collections".to_string()
     } else {
         format!("{}/collections", drive)
     };
@@ -501,6 +552,7 @@ pub async fn create_collection_resource_for_class(
 }
 
 #[cfg(test)]
+#[cfg(feature = "db")]
 mod test {
     use super::*;
     use crate::urls;
@@ -515,6 +567,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::IS_A.into()),
             value: Some(urls::CLASS.into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -522,6 +575,7 @@ mod test {
             name: Some("Test collection".into()),
             include_nested: false,
             include_external: false,
+            drive: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -537,6 +591,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::IS_A.into()),
             value: Some(urls::CLASS.into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -544,6 +599,7 @@ mod test {
             name: None,
             include_nested: false,
             include_external: false,
+            drive: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -557,10 +613,74 @@ mod test {
     }
 
     #[tokio::test]
+    async fn collection_multi_property_and_filter() {
+        let store = crate::db::Db::init_temp("collection_multi_property_and_filter")
+            .await
+            .unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
+        store.populate().await.unwrap();
+
+        // Two tags share `isA = Tag` but differ on `shortname`.
+        let mut tag_a = Resource::new_instance(urls::TAG, &store).await.unwrap();
+        tag_a
+            .set(urls::SHORTNAME.into(), Value::Slug("tag-a".into()), &store)
+            .await
+            .unwrap();
+        tag_a.save(&store).await.unwrap();
+
+        let mut tag_b = Resource::new_instance(urls::TAG, &store).await.unwrap();
+        tag_b
+            .set(urls::SHORTNAME.into(), Value::Slug("tag-b".into()), &store)
+            .await
+            .unwrap();
+        tag_b.save(&store).await.unwrap();
+
+        // AND filter: isA = Tag AND shortname = tag-a → only tag_a.
+        let drive = crate::db::drive_prefix_from_subject(tag_a.get_subject());
+        let collection_builder = CollectionBuilder {
+            subject: "test_subject".into(),
+            property: Some(urls::IS_A.into()),
+            value: Some(urls::TAG.into()),
+            filters: vec![crate::storelike::PropVal {
+                property: Some(urls::SHORTNAME.to_string()),
+                value: Some(Value::String("tag-a".to_string())),
+                ..Default::default()
+            }],
+            sort_by: None,
+            sort_desc: false,
+            page_size: DEFAULT_PAGE_SIZE,
+            current_page: 0,
+            name: None,
+            include_nested: false,
+            include_external: false,
+            drive: Some(drive),
+        };
+        let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
+            .await
+            .unwrap();
+
+        assert!(
+            collection
+                .members
+                .contains(&tag_a.get_subject().to_string()),
+            "tag_a matches both constraints and should be a member: {:?}",
+            collection.members
+        );
+        assert!(
+            !collection
+                .members
+                .contains(&tag_b.get_subject().to_string()),
+            "tag_b only matches isA, not shortname, so should be excluded: {:?}",
+            collection.members
+        );
+    }
+
+    #[tokio::test]
     async fn query_on_resource_arrays() {
         let store = crate::db::Db::init_temp("query_on_resource_arrays")
             .await
             .unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
 
         store.populate().await.unwrap();
         let mut resource1 = Resource::new_instance(urls::TAG, &store).await.unwrap();
@@ -570,7 +690,7 @@ mod test {
             .unwrap();
         resource1
             .push(
-                urls::ENDPOINT_RESULTS.into(),
+                urls::ENDPOINT_RESULTS,
                 SubResource::Subject("https://example.com/resource1".into()),
                 false,
             )
@@ -582,6 +702,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::ENDPOINT_RESULTS.into()),
             value: Some("https://example.com/resource1".into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -589,12 +710,15 @@ mod test {
             name: None,
             include_nested: false,
             include_external: false,
+            drive: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
             .unwrap();
 
-        assert!(collection.members.contains(resource1.get_subject()));
+        assert!(collection
+            .members
+            .contains(&resource1.get_subject().to_string()));
 
         resource1
             .set(
@@ -613,6 +737,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::ENDPOINT_RESULTS.into()),
             value: Some("https://example.com/resource1".into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -620,17 +745,20 @@ mod test {
             name: None,
             include_nested: false,
             include_external: false,
+            drive: None,
         };
 
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
             .unwrap();
 
-        assert_eq!(collection.members.contains(resource1.get_subject()), false);
+        assert!(!collection
+            .members
+            .contains(&resource1.get_subject().to_string()));
 
         resource1
             .push(
-                urls::ENDPOINT_RESULTS.into(),
+                urls::ENDPOINT_RESULTS,
                 SubResource::Subject("https://example.com/resource2".into()),
                 false,
             )
@@ -642,6 +770,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::ENDPOINT_RESULTS.into()),
             value: Some("https://example.com/resource2".into()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -649,13 +778,16 @@ mod test {
             name: None,
             include_nested: false,
             include_external: false,
+            drive: None,
         };
 
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
             .unwrap();
 
-        assert!(collection.members.contains(resource1.get_subject()));
+        assert!(collection
+            .members
+            .contains(&resource1.get_subject().to_string()));
     }
 
     /// Tests that multiple consecutive push operations work correctly with collections.
@@ -666,6 +798,7 @@ mod test {
         let store = crate::db::Db::init_temp("query_on_resource_arrays_multiple_pushes")
             .await
             .unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
 
         store.populate().await.unwrap();
         let mut resource1 = Resource::new_instance(urls::TAG, &store).await.unwrap();
@@ -677,7 +810,7 @@ mod test {
         // Push first item
         resource1
             .push(
-                urls::ENDPOINT_RESULTS.into(),
+                urls::ENDPOINT_RESULTS,
                 SubResource::Subject("https://example.com/item1".into()),
                 false,
             )
@@ -691,6 +824,7 @@ mod test {
                 subject: "test_subject".into(),
                 property: Some(urls::ENDPOINT_RESULTS.into()),
                 value: Some("https://example.com/item1".into()),
+                filters: Vec::new(),
                 sort_by: None,
                 sort_desc: false,
                 page_size: DEFAULT_PAGE_SIZE,
@@ -698,20 +832,23 @@ mod test {
                 name: None,
                 include_nested: false,
                 include_external: false,
+                drive: None,
             },
             &ForAgent::Sudo,
         )
         .await
         .unwrap();
         assert!(
-            collection.members.contains(resource1.get_subject()),
+            collection
+                .members
+                .contains(&resource1.get_subject().to_string()),
             "Should find resource after first push"
         );
 
         // Push second item (array length changes from 1 to 2)
         resource1
             .push(
-                urls::ENDPOINT_RESULTS.into(),
+                urls::ENDPOINT_RESULTS,
                 SubResource::Subject("https://example.com/item2".into()),
                 false,
             )
@@ -725,6 +862,7 @@ mod test {
                 subject: "test_subject".into(),
                 property: Some(urls::ENDPOINT_RESULTS.into()),
                 value: Some("https://example.com/item1".into()),
+                filters: Vec::new(),
                 sort_by: None,
                 sort_desc: false,
                 page_size: DEFAULT_PAGE_SIZE,
@@ -732,13 +870,16 @@ mod test {
                 name: None,
                 include_nested: false,
                 include_external: false,
+                drive: None,
             },
             &ForAgent::Sudo,
         )
         .await
         .unwrap();
         assert!(
-            collection.members.contains(resource1.get_subject()),
+            collection
+                .members
+                .contains(&resource1.get_subject().to_string()),
             "Should still find resource for item1 after second push"
         );
 
@@ -749,6 +890,7 @@ mod test {
                 subject: "test_subject".into(),
                 property: Some(urls::ENDPOINT_RESULTS.into()),
                 value: Some("https://example.com/item2".into()),
+                filters: Vec::new(),
                 sort_by: None,
                 sort_desc: false,
                 page_size: DEFAULT_PAGE_SIZE,
@@ -756,20 +898,23 @@ mod test {
                 name: None,
                 include_nested: false,
                 include_external: false,
+                drive: None,
             },
             &ForAgent::Sudo,
         )
         .await
         .unwrap();
         assert!(
-            collection.members.contains(resource1.get_subject()),
+            collection
+                .members
+                .contains(&resource1.get_subject().to_string()),
             "Should find resource for item2 after second push"
         );
 
         // Push third item (array length changes from 2 to 3)
         resource1
             .push(
-                urls::ENDPOINT_RESULTS.into(),
+                urls::ENDPOINT_RESULTS,
                 SubResource::Subject("https://example.com/item3".into()),
                 false,
             )
@@ -784,6 +929,7 @@ mod test {
                     subject: "test_subject".into(),
                     property: Some(urls::ENDPOINT_RESULTS.into()),
                     value: Some(format!("https://example.com/{}", item)),
+                    filters: Vec::new(),
                     sort_by: None,
                     sort_desc: false,
                     page_size: DEFAULT_PAGE_SIZE,
@@ -791,13 +937,16 @@ mod test {
                     name: None,
                     include_nested: false,
                     include_external: false,
+                    drive: None,
                 },
                 &ForAgent::Sudo,
             )
             .await
             .unwrap();
             assert!(
-                collection.members.contains(resource1.get_subject()),
+                collection
+                    .members
+                    .contains(&resource1.get_subject().to_string()),
                 "Should find resource for {} after third push",
                 item
             );
@@ -824,6 +973,7 @@ mod test {
                     subject: "test_subject".into(),
                     property: Some(urls::ENDPOINT_RESULTS.into()),
                     value: Some(format!("https://example.com/{}", item)),
+                    filters: Vec::new(),
                     sort_by: None,
                     sort_desc: false,
                     page_size: DEFAULT_PAGE_SIZE,
@@ -831,13 +981,16 @@ mod test {
                     name: None,
                     include_nested: false,
                     include_external: false,
+                    drive: None,
                 },
                 &ForAgent::Sudo,
             )
             .await
             .unwrap();
             assert!(
-                !collection.members.contains(resource1.get_subject()),
+                !collection
+                    .members
+                    .contains(&resource1.get_subject().to_string()),
                 "Should NOT find resource for {} after set replacement",
                 item
             );
@@ -850,6 +1003,7 @@ mod test {
                 subject: "test_subject".into(),
                 property: Some(urls::ENDPOINT_RESULTS.into()),
                 value: Some("https://example.com/newitem".into()),
+                filters: Vec::new(),
                 sort_by: None,
                 sort_desc: false,
                 page_size: DEFAULT_PAGE_SIZE,
@@ -857,13 +1011,16 @@ mod test {
                 name: None,
                 include_nested: false,
                 include_external: false,
+                drive: None,
             },
             &ForAgent::Sudo,
         )
         .await
         .unwrap();
         assert!(
-            collection.members.contains(resource1.get_subject()),
+            collection
+                .members
+                .contains(&resource1.get_subject().to_string()),
             "Should find resource for newitem after set"
         );
     }
@@ -876,6 +1033,7 @@ mod test {
             subject: "test_subject".into(),
             property: Some(urls::IS_A.into()),
             value: Some(urls::CLASS.into()),
+            filters: Vec::new(),
             sort_by: Some(urls::SHORTNAME.into()),
             sort_desc: false,
             page_size: DEFAULT_PAGE_SIZE,
@@ -884,12 +1042,13 @@ mod test {
             // The important bit here
             include_nested: true,
             include_external: false,
+            drive: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
             .unwrap();
         let first_resource = &collection.referenced_resources.clone().unwrap()[0];
-        assert!(first_resource.get_subject().contains("Agent"));
+        assert!(first_resource.get_subject().as_str().contains("Agent"));
 
         let resource_collection = &collection.to_resource(&store).await.unwrap().to_single();
         let val = resource_collection
@@ -909,11 +1068,7 @@ mod test {
             .unwrap()
             .clone();
         let collections_collection = store
-            .get_resource_extended(
-                &format!("{}/collections", store.get_server_url().unwrap()),
-                false,
-                &ForAgent::Public,
-            )
+            .get_resource_extended(&"internal:/collections".into(), false, &ForAgent::Public)
             .await
             .unwrap()
             .to_single();
@@ -943,7 +1098,7 @@ mod test {
 
         let collection_page_size = store
             .get_resource_extended(
-                "https://atomicdata.dev/classes?page_size=1",
+                &"https://atomicdata.dev/classes?page_size=1".into(),
                 false,
                 &ForAgent::Public,
             )
@@ -959,7 +1114,7 @@ mod test {
         );
         let collection_page_nr = store
             .get_resource_extended(
-                "https://atomicdata.dev/classes?current_page=2&page_size=1",
+                &"https://atomicdata.dev/classes?current_page=2&page_size=1".into(),
                 false,
                 &ForAgent::Public,
             )
@@ -991,9 +1146,11 @@ mod test {
     fn sorting_resources() {
         let prop = urls::DESCRIPTION.to_string();
         let mut a = Resource::new("first".into());
-        a.set_unsafe(prop.clone(), Value::Markdown("1".into()));
+        a.set_unsafe(prop.clone(), Value::Markdown("1".into()))
+            .unwrap();
         let mut b = Resource::new("second".into());
-        b.set_unsafe(prop.clone(), Value::Markdown("2".into()));
+        b.set_unsafe(prop.clone(), Value::Markdown("2".into()))
+            .unwrap();
         let c = Resource::new("third_missing_property".into());
 
         let asc = vec![a.clone(), b.clone(), c.clone()];
@@ -1009,6 +1166,92 @@ mod test {
             c.get_subject(),
             sorted_desc[2].get_subject(),
             "c is missing the sorted property - it should _alway_ be last"
+        );
+    }
+
+    /// Verifies that resources with DID subjects (`did:ad:...`) are correctly indexed and
+    /// returned by sorted queries. This simulates the chatroom refresh scenario where messages
+    /// have DID subjects but must appear when the chatroom queries by parent + sort by createdAt.
+    #[tokio::test]
+    async fn did_subject_resource_appears_in_sorted_query() {
+        let store = crate::db::Db::init_temp("did_subject_resource_appears_in_sorted_query")
+            .await
+            .unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
+        store.populate().await.unwrap();
+
+        // Create a chatroom-like resource (normal internal subject)
+        let mut chatroom = Resource::new_instance(urls::CHATROOM, &store)
+            .await
+            .unwrap();
+        chatroom
+            .set(
+                urls::NAME.into(),
+                crate::Value::String("Test Chat".into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        store
+            .add_resource_opts(&chatroom, false, true, true)
+            .await
+            .unwrap();
+        let chatroom_subject = chatroom.get_subject().clone();
+
+        // First query to register the query as watched (empty chatroom)
+        let q = crate::storelike::Query {
+            property: Some(urls::PARENT.into()),
+            value: Some(crate::Value::AtomicUrl(chatroom_subject.clone())),
+            filters: Vec::new(),
+            sort_by: Some(urls::CREATED_AT.into()),
+            sort_desc: true,
+            limit: Some(10),
+            include_nested: false,
+            include_external: false,
+            drive: Some(crate::Subject::from("internal:/")),
+            ..Default::default()
+        };
+        let result = store.query(&q).await.unwrap();
+        assert_eq!(result.subjects.len(), 0, "Chatroom should start empty");
+
+        // Create a message with a DID subject (simulating genesis commit result)
+        let did_subject = crate::Subject::from("did:ad:TestSignatureHere123");
+        let mut message = Resource::new(did_subject.to_string());
+        message
+            .set_unsafe(
+                urls::PARENT.into(),
+                crate::Value::AtomicUrl(chatroom_subject.clone()),
+            )
+            .unwrap();
+        message
+            .set_unsafe(urls::CREATED_AT.into(), crate::Value::Timestamp(1000000))
+            .unwrap();
+        message
+            .set_unsafe(
+                urls::IS_A.into(),
+                crate::Value::ResourceArray(vec![crate::values::SubResource::Subject(
+                    urls::MESSAGE.into(),
+                )]),
+            )
+            .unwrap();
+
+        // Add the DID message to the store with index update (simulating apply_commit)
+        store
+            .add_resource_opts(&message, false, true, true)
+            .await
+            .unwrap();
+
+        // Query again - should now find the DID message
+        let result = store.query(&q).await.unwrap();
+        assert_eq!(
+            result.subjects.len(),
+            1,
+            "DID message should appear in chatroom query after being added"
+        );
+        assert_eq!(
+            result.subjects[0].as_str(),
+            "did:ad:TestSignatureHere123",
+            "The DID subject should be returned"
         );
     }
 }

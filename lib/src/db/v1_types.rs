@@ -32,6 +32,7 @@ pub enum SubResourceV1 {
 pub type PropValsV1 = HashMap<String, ValueV1>;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct QueryFilterV1 {
     pub property: Option<String>,
     pub value: Option<ValueV1>,
@@ -89,27 +90,30 @@ impl From<SubResourceV1> for crate::values::SubResource {
                     "Named SubResource found, converting to Subject {}",
                     resource.subject
                 );
-                return Self::Subject(resource.subject);
+                Self::Subject(resource.subject.into())
             }
             SubResourceV1::Nested(propvals) => Self::Nested(propvals_v1_to_v2(propvals)),
-            SubResourceV1::Subject(subject) => Self::Subject(subject),
+            SubResourceV1::Subject(subject) => Self::Subject(subject.into()),
         }
     }
 }
 
 impl From<ResourceV1> for crate::resources::Resource {
     fn from(resource: ResourceV1) -> Self {
-        Self::from_propvals(propvals_v1_to_v2(resource.propvals), resource.subject)
+        Self::from_propvals(
+            propvals_v1_to_v2(resource.propvals),
+            resource.subject.into(),
+        )
     }
 }
 
 impl From<ValueV1> for crate::values::Value {
     fn from(value: ValueV1) -> Self {
         match value {
-            crate::db::v1_types::ValueV1::AtomicUrl(v) => Self::AtomicUrl(v.clone()),
+            crate::db::v1_types::ValueV1::AtomicUrl(v) => Self::AtomicUrl(v.clone().into()),
             crate::db::v1_types::ValueV1::Date(v) => Self::Date(v.clone()),
-            crate::db::v1_types::ValueV1::Integer(v) => Self::Integer(v.clone()),
-            crate::db::v1_types::ValueV1::Float(v) => Self::Float(v.clone()),
+            crate::db::v1_types::ValueV1::Integer(v) => Self::Integer(v),
+            crate::db::v1_types::ValueV1::Float(v) => Self::Float(v),
             crate::db::v1_types::ValueV1::Markdown(v) => Self::Markdown(v.clone()),
             crate::db::v1_types::ValueV1::ResourceArray(sub_resource_v1s) => {
                 let sub_resources = sub_resource_v1s.into_iter().map(|v| v.into()).collect();
@@ -117,7 +121,7 @@ impl From<ValueV1> for crate::values::Value {
             }
             crate::db::v1_types::ValueV1::Slug(v) => Self::Slug(v.clone()),
             crate::db::v1_types::ValueV1::String(v) => Self::String(v.clone()),
-            crate::db::v1_types::ValueV1::Timestamp(v) => Self::Timestamp(v.clone()),
+            crate::db::v1_types::ValueV1::Timestamp(v) => Self::Timestamp(v),
             crate::db::v1_types::ValueV1::NestedResource(sub_resource_v1) => {
                 Self::NestedResource(sub_resource_v1.into())
             }
@@ -126,7 +130,7 @@ impl From<ValueV1> for crate::values::Value {
                     "Named SubResource found, converting to Subject {}",
                     resource_v1.subject
                 );
-                return Self::AtomicUrl(resource_v1.subject);
+                Self::AtomicUrl(resource_v1.subject.into())
             }
             crate::db::v1_types::ValueV1::Boolean(v) => Self::Boolean(v),
             crate::db::v1_types::ValueV1::Unsupported(unsupported_value) => {

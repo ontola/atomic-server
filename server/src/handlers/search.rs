@@ -1,9 +1,10 @@
 //! Full-text search is achieved with the Tantivy crate.
-//! The index is built whenever --rebuild-index is passed,
+//! The index is built whenever --rebuild-indexes is passed,
 //! or after a commit is processed by the CommitMonitor.
 
 use crate::{
     appstate::AppState,
+    context::RequestContext,
     errors::{AtomicServerError, AtomicServerResult},
     search::{resource_to_facet, Fields},
 };
@@ -56,7 +57,6 @@ pub async fn search_query(
     req: actix_web::HttpRequest,
 ) -> AtomicServerResult<HttpResponse> {
     let mut timer = Timer::new();
-    let store = &appstate.store;
     let searcher = appstate.search_state.reader.searcher();
     let fields = appstate.search_state.get_schema_fields()?;
     let limit = if let Some(l) = params.limit {
@@ -69,38 +69,68 @@ pub async fn search_query(
         DEFAULT_RETURN_LIMIT
     };
 
+    let origin = RequestContext::new(&req, &appstate).origin;
+    let store = &appstate.store;
+
     let query = query_from_params(&params, &fields, &appstate).await?;
     timer.add("build_query");
     let top_docs = searcher
         .search(
             &query,
-            &TopDocs::with_limit(limit * UNAUTHORIZED_RESULTS_FACTOR),
+            &TopDocs::with_limit(limit * UNAUTHORIZED_RESULTS_FACTOR).order_by_score(),
         )
         .map_err(|e| format!("Error with creating search results: {} ", e))?;
 
     timer.add("execute_query");
+    crate::metrics::search_performed();
+    tracing::debug!(
+        "search_query: tantivy returned {} docs for params={:?}",
+        top_docs.len(),
+        params
+    );
     let subjects = docs_to_subjects(top_docs, &fields, &searcher)?;
-
-    // Create a valid atomic data resource.
-    // You'd think there would be a simpler way of getting the requested URL...
-    let subject = format!(
-        "{}{}",
-        store.get_self_url().ok_or("No base URL set")?,
-        req.uri().path_and_query().ok_or("Add a query param")?
+    tracing::debug!(
+        "search_query: docs_to_subjects -> {} subjects: {:?}",
+        subjects.len(),
+        subjects
     );
 
+    let path_and_query = req
+        .uri()
+        .path_and_query()
+        .ok_or("Add a query param")?
+        .to_string();
+    let subject =
+        atomic_lib::Subject::from_raw(&path_and_query, store.get_base_domain().as_deref());
+
     let mut results_resource = crate::plugins::search::search_endpoint()
-        .to_resource(store)
+        .to_resource(store, &subject.to_string())
         .await?;
-    results_resource.set_subject(subject.clone());
+    results_resource.set_subject(subject.to_string());
 
     timer.add("get_resources");
     // Get all resources returned by the search, this also performs authorization checks!
-    let resources = get_resources(req, &appstate, &subject, subjects.clone(), limit).await?;
+    let resources = get_resources(
+        req,
+        &appstate,
+        &format!("{}{}", origin, path_and_query),
+        subjects.clone(),
+        limit,
+    )
+    .await?;
+    tracing::info!(
+        "search_query: after auth filter -> {} resources (was {} subjects)",
+        resources.len(),
+        subjects.len()
+    );
 
     // Convert the list of resources back into subjects.
-    let filtered_subjects: Vec<String> =
-        resources.iter().map(|r| r.get_subject().clone()).collect();
+    // We must resolve Internal subjects (e.g. "internal:/files/xxx") to full
+    // HTTP URLs using the origin so clients receive usable URLs.
+    let filtered_subjects: Vec<String> = resources
+        .iter()
+        .map(|r| r.get_subject().resolve(&origin))
+        .collect();
 
     results_resource
         .set(
@@ -117,16 +147,18 @@ pub async fn search_query(
     };
 
     result_vec.push(results_resource);
+    let _body = Resource::vec_to_json_ad(&result_vec, Some(&origin))?.into_bytes();
 
     let mut builder = HttpResponse::Ok();
     builder.append_header(("Server-Timing", timer.header_value()));
+    builder.content_type("application/ad+json");
 
     // TODO: support other serialization options
-    Ok(builder.body(Resource::vec_to_json_ad(&result_vec)?))
+    Ok(builder.body(Resource::vec_to_json_ad(&result_vec, Some(&origin))?))
 }
 
 #[instrument(skip(appstate, req))]
-async fn get_resources(
+pub async fn get_resources(
     req: actix_web::HttpRequest,
     appstate: &web::Data<AppState>,
     subject: &str,
@@ -140,12 +172,11 @@ async fn get_resources(
     // But we could probably do some things to speed this up: make it async / parallel, check admin rights.
     // https://github.com/atomicdata-dev/atomic-server/issues/279
     // https://github.com/atomicdata-dev/atomic-server/issues/280/
-    let for_agent =
-        crate::helpers::get_client_agent(req.headers(), appstate, subject.into()).await?;
+    let for_agent = crate::helpers::get_client_agent(req.headers(), appstate, subject).await?;
     for s in subjects {
         match appstate
             .store
-            .get_resource_extended(&s, true, &for_agent)
+            .get_resource_extended(&s.clone().into(), true, &for_agent)
             .await
         {
             Ok(r) => {
@@ -265,7 +296,7 @@ async fn build_parent_query(
     fields: &Fields,
     store: &Db,
 ) -> AtomicServerResult<TermQuery> {
-    let resource = store.get_resource(subject).await?;
+    let resource = store.get_resource(&subject.into()).await?;
     let facet = resource_to_facet(&resource, store).await?;
     let term = Term::from_facet(fields.hierarchy, &facet);
 
@@ -301,9 +332,10 @@ fn docs_to_subjects(
     // convert found documents to resources
     for (_score, doc_address) in docs {
         let retrieved_doc: tantivy::TantivyDocument = searcher.doc(doc_address)?;
-        let subject_val = retrieved_doc.get_first(fields.subject).ok_or("No 'subject' in search doc found. This is required when indexing. Run with --rebuild-index")?;
+        let subject_val = retrieved_doc.get_first(fields.subject).ok_or("No 'subject' in search doc found. This is required when indexing. Run with --rebuild-indexes search")?;
 
-        let subject = unpack_value(subject_val, &retrieved_doc, "Subject".to_string())?;
+        let subject_val = tantivy::schema::OwnedValue::from(subject_val);
+        let subject = unpack_value(&subject_val, &retrieved_doc, "Subject".to_string())?;
         if !subjects.contains(&subject) {
             subjects.push(subject.clone());
         }

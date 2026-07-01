@@ -47,34 +47,34 @@ impl Property {
             shortname,
             description,
             allows_only,
-            subject: resource.get_subject().into(),
+            subject: resource.get_subject().to_string(),
         })
     }
 
     /// Convert to resource.
-    pub fn to_resource(&self) -> Resource {
+    pub fn to_resource(&self) -> AtomicResult<Resource> {
         let mut resource = Resource::new(self.subject.clone());
         resource.set_unsafe(
             urls::IS_A.into(),
             Value::ResourceArray(vec![urls::PROPERTY.into()]),
-        );
-        resource.set_unsafe(urls::SHORTNAME.into(), Value::Slug(self.shortname.clone()));
+        )?;
+        resource.set_unsafe(urls::SHORTNAME.into(), Value::Slug(self.shortname.clone()))?;
         resource.set_unsafe(
             urls::DESCRIPTION.into(),
             Value::String(self.description.clone()),
-        );
+        )?;
         resource.set_unsafe(
             urls::DATATYPE_PROP.into(),
-            Value::AtomicUrl(self.data_type.to_string()),
-        );
+            Value::AtomicUrl(self.data_type.to_string().into()),
+        )?;
         if let Some(classtype) = &self.class_type {
             resource.set_unsafe(
                 urls::CLASSTYPE_PROP.into(),
-                Value::AtomicUrl(classtype.clone()),
-            );
+                Value::AtomicUrl(classtype.clone().into()),
+            )?;
         }
 
-        resource
+        Ok(resource)
     }
 }
 
@@ -112,32 +112,32 @@ impl Class {
             requires,
             recommends,
             shortname,
-            subject: resource.get_subject().into(),
+            subject: resource.get_subject().to_string(),
             description,
         })
     }
 
     /// Converts Class to a Resource
-    pub fn to_resource(&self) -> Resource {
+    pub fn to_resource(&self) -> AtomicResult<Resource> {
         let mut resource = Resource::new(self.subject.clone());
         resource.set_unsafe(
             urls::IS_A.into(),
             Value::ResourceArray(vec![urls::CLASS.into()]),
-        );
-        resource.set_unsafe(urls::SHORTNAME.into(), Value::Slug(self.shortname.clone()));
+        )?;
+        resource.set_unsafe(urls::SHORTNAME.into(), Value::Slug(self.shortname.clone()))?;
         resource.set_unsafe(
             urls::DESCRIPTION.into(),
             Value::String(self.description.clone()),
-        );
+        )?;
         if !self.requires.is_empty() {
-            resource.set_unsafe(urls::REQUIRES.into(), Value::from(self.requires.clone()));
+            resource.set_unsafe(urls::REQUIRES.into(), Value::from(self.requires.clone()))?;
         }
-        if !self.requires.is_empty() {
+        if !self.recommends.is_empty() {
             resource.set_unsafe(
                 urls::RECOMMENDS.into(),
                 Value::from(self.recommends.clone()),
-            );
+            )?;
         }
-        resource
+        Ok(resource)
     }
 }

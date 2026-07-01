@@ -1,27 +1,26 @@
 import {
   memo,
+  useCallback,
   useEffect,
   useEffectEvent,
   useRef,
-  useState,
   type JSX,
 } from 'react';
 import {
   Collection,
+  core,
   DataBrowser,
   Property,
   Resource,
-  core,
   unknownSubject,
   useMemberFromCollection,
   useResource,
 } from '@tomic/react';
 import { TableCell } from './TableCell';
-import { randomSubject } from '../../helpers/randomString';
 import { styled, keyframes } from 'styled-components';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 import { FaTriangleExclamation } from 'react-icons/fa6';
-import { useTableInvalidation } from './useTableInvalidation';
+import { useMaterializeWhenDeselected } from './useMaterializeWhenDeselected';
 
 interface TableRowProps {
   collection: Collection;
@@ -108,7 +107,14 @@ export function TableRow({
 
 type TableNewRowProps = Omit<TableRowProps, 'collection'> & {
   parent: Resource<DataBrowser.Table>;
-  invalidateTable: () => void;
+  /** Stable `_new:` subject owned by the parent (also this row's react-window
+   * key). Passed in — NOT minted here — so a remount reuses the same virtual
+   * resource instead of orphaning typed data on a discarded subject. */
+  subject: string;
+  /** True for the bottom-most new row — the only one that spawns a fresh
+   * trailing placeholder when it first gains content. */
+  isLast: boolean;
+  addNewRow: () => void;
 };
 
 const resourceOpts = {
@@ -119,52 +125,61 @@ export function TableNewRow({
   index,
   columns,
   parent,
-  invalidateTable,
+  subject,
+  isLast,
+  addNewRow,
 }: TableNewRowProps): JSX.Element {
-  const [subject] = useState<string>(() =>
-    randomSubject(parent.subject, 'row'),
-  );
-
-  const [loading, setLoading] = useState(true);
-
+  // A synchronous, *virtual* new-row resource: a stable local `_new:`
+  // placeholder, editable on first paint. The old code awaited
+  // `store.newResource()` (genesis sign) on mount — a loading spinner per
+  // row plus a signed commit for every empty placeholder — then persisted
+  // each keystroke, so rapid entry churned saves → re-fetches → remounts that
+  // stole focus from the cell. This row instead stays purely local (the Loro
+  // dirty subscriber skips `_new:` subjects, so it never auto-drains) and is
+  // materialized when the user moves off it (`useMaterializeWhenDeselected`).
+  // Cells are keyed by the *stable* `_new:` subject — after materialization
+  // the store aliases it to the real `did:ad:` subject, so the cell resolves
+  // the same resource without remounting.
   const resource = useResource(subject, resourceOpts);
-  const resourceRef = useRef(resource);
-  const onEditNextRow = useTableInvalidation(resource, invalidateTable);
 
   useMarkings(resource, index);
+  useMaterializeWhenDeselected(resource, index);
 
-  useEffect(() => {
-    if (resource.subject === unknownSubject || resource.commitError) {
+  // Spawn a fresh trailing placeholder the first time *this* (bottom-most) row
+  // gains real content, so there is always exactly one empty row at the bottom
+  // to type into — without persisting anything. This is the SOLE spawn trigger:
+  // because it keeps a trailing empty row present once content exists, Enter and
+  // Tab navigation just move into the row that's already there (no spawning on
+  // navigation). The old code got this for free because the first keystroke
+  // saved the row (→ collection invalidate → a new `TableNewRow` rendered
+  // below). Guarded by a ref so it fires once per row, and gated on `isLast`
+  // (read fresh via a ref so the callback stays stable) so only the bottom row
+  // spawns. After it fires, this row is no longer last.
+  const spawnedRef = useRef(false);
+  const isLastRef = useRef(isLast);
+  isLastRef.current = isLast;
+  const handleFirstContent = useCallback(() => {
+    if (spawnedRef.current || !isLastRef.current) {
       return;
     }
 
-    resourceRef.current
-      .set(core.properties.parent, parent.subject)
-      .then(() =>
-        resourceRef.current.set(core.properties.isA, [parent.props.classtype]),
-      )
-      .then(() => {
-        setLoading(false);
-      });
+    spawnedRef.current = true;
+    addNewRow();
+  }, [addNewRow]);
 
-    // We can't add resource to the list because we modify the resource in the effect so it would cause a loop.
-    // We put resource in a ref so we don't need to add it to the list.
-  }, [
-    resource.subject,
-    parent.subject,
-    parent.props.classtype,
-    resource.commitError,
-  ]);
+  // Seed class + parent locally (validate:false → no fetch, no commit) so the
+  // genesis sign at materialization builds a valid row of the table's class.
+  // Runs once, keyed on the stable `_new:` subject.
+  useEffect(() => {
+    const classtype = parent.props.classtype;
 
-  if (loading) {
-    return (
-      <>
-        {columns.map((column, i) => (
-          <Loader key={column.subject} delay={i * 100} />
-        ))}
-      </>
-    );
-  }
+    if (classtype) {
+      void resource.set(core.properties.isA, [classtype], false);
+    }
+
+    void resource.set(core.properties.parent, parent.subject, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject]);
 
   return (
     <>
@@ -173,9 +188,9 @@ export function TableNewRow({
           key={column.subject}
           rowIndex={index}
           columnIndex={cIndex + 1}
-          subject={resource.subject}
+          subject={subject}
           property={column}
-          onEditNextRow={onEditNextRow}
+          onFirstContent={handleFirstContent}
         />
       ))}
     </>

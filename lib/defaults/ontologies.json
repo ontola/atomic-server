@@ -9,7 +9,8 @@
     "https://atomicdata.dev/properties/recommends": [
       "https://atomicdata.dev/properties/classes",
       "https://atomicdata.dev/properties/properties",
-      "https://atomicdata.dev/properties/instances"
+      "https://atomicdata.dev/properties/instances",
+      "https://atomicdata.dev/properties/custom-node-positioning"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/description",
@@ -59,5 +60,15 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "default-ontology"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/custom-node-positioning",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Custom positions of the nodes in an ontology's graph view, stored as a JSON object mapping each subject to its `[x, y]` coordinate pair.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "custom-node-positioning"
   }
 ]

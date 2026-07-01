@@ -6,6 +6,7 @@ export interface MCPServer {
   url: string;
   id: string;
   transport: 'http' | 'sse';
+  headers?: Record<string, string>;
 }
 
 export interface AIAgent {
@@ -14,10 +15,14 @@ export interface AIAgent {
   description: string;
   systemPrompt: string;
   availableTools: string[];
-  model: AIModelIdentifier;
+  model?: AIModelIdentifier;
   canReadAtomicData: boolean;
   canWriteAtomicData: boolean;
+  ragEnabled: boolean;
+  skillsEnabled: boolean;
   temperature?: number;
+  /** 0 disables auto-compact; otherwise compact when input tokens exceed this % of model context. */
+  autoCompactThresholdPercent?: number;
 }
 
 export enum AIState {
@@ -42,15 +47,24 @@ export type AIMCPResourceMessageContext = {
   serverId: string;
 };
 
+export type AISkillMessageContext = {
+  type: 'skill';
+  id: string;
+  name: string;
+};
+
 export type AIMessageContext =
   | AIAtomicResourceMessageContext
-  | AIMCPResourceMessageContext;
+  | AIMCPResourceMessageContext
+  | AISkillMessageContext;
 
 export type MessageMetadata = {
-  context?: AIMessageContext[];
+  userContext?: AIMessageContext[];
+  serverContext?: string;
   inputTokensUsed?: number;
   outputTokensUsed?: number;
   error?: string;
+  isSummary?: boolean;
 };
 
 export type AtomicUIMessage = UIMessage<MessageMetadata>;
@@ -65,6 +79,12 @@ export function isAtomicResourceContext(
   context: AIMessageContext,
 ): context is AIAtomicResourceMessageContext {
   return context.type === 'atomic-resource';
+}
+
+export function isSkillContext(
+  context: AIMessageContext,
+): context is AISkillMessageContext {
+  return context.type === 'skill';
 }
 
 export type AIModelIdentifier = {

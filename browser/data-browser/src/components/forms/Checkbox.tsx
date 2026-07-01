@@ -1,13 +1,12 @@
 import { styled } from 'styled-components';
 
-import type { JSX } from 'react';
+import type { FC, JSX, LabelHTMLAttributes } from 'react';
 import { transition } from '../../helpers/transition';
 
-interface CheckboxProps
-  extends Omit<
-    React.InputHTMLAttributes<HTMLInputElement>,
-    'type' | 'onChange'
-  > {
+interface CheckboxProps extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'type' | 'onChange'
+> {
   checked?: boolean;
   selected?: boolean;
   onChange: (value: boolean) => void;
@@ -46,6 +45,7 @@ const InputCheckBox = styled.input`
   cursor: pointer;
   position: relative;
   appearance: none;
+  flex-shrink: 0;
 
   &::before {
     position: absolute;
@@ -95,11 +95,14 @@ const InputCheckBox = styled.input`
   }
 `;
 
-export const CheckboxLabel = styled.label`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  justify-content: flex-start;
-  user-select: none;
-`;
+export const CheckboxLabel: FC<LabelHTMLAttributes<HTMLLabelElement>> =
+  styled.label`
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    justify-content: flex-start;
+    user-select: none;
+  `;
+
+Checkbox.Label = CheckboxLabel;

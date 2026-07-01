@@ -64,15 +64,19 @@ fn handle_bookmark_request<'a>(
 
         let (name, path) = match (name, path) {
             (Some(name), Some(path)) => (name, path),
-            _ => return bookmark_endpoint().to_resource_response(store).await,
+            _ => {
+                return bookmark_endpoint()
+                    .to_resource_response(store, subject.as_ref())
+                    .await
+            }
         };
 
         let mut resource = Resource::new(subject.to_string());
-        resource.set_class(urls::BOOKMARK);
+        resource.set_class(urls::BOOKMARK)?;
         resource.set_string(urls::URL.into(), &path, store).await?;
 
         // Fetch the data and create a parser from it.
-        let content = fetch_data(&path)?;
+        let content = fetch_data(&path).await?;
         let mut parser = Parser::from_html(&path, &content)?;
 
         // Extract the title, description and preview image from the HTML
@@ -113,8 +117,10 @@ fn handle_bookmark_request<'a>(
     })
 }
 
-fn fetch_data(url: &str) -> AtomicResult<String> {
-    fetch_body(url, "text/html", None).map_err(|e| format!("Fetching failed: {}", e).into())
+async fn fetch_data(url: &str) -> AtomicResult<String> {
+    fetch_body(url, "text/html", None)
+        .await
+        .map_err(|e| format!("Fetching failed: {}", e).into())
 }
 
 struct Parser {
@@ -430,7 +436,7 @@ impl Parser {
                     .unwrap_or_else(|| "link".to_string());
 
                 if let Some(handlers) = el.end_tag_handlers() {
-                    handlers.push(Box::new(move |end| {
+                    let handler: lol_html::EndTagHandler<'_> = Box::new(move |end| {
                         let s = buffer.lock().unwrap();
                         let mut text = s.as_str().trim();
 
@@ -441,7 +447,8 @@ impl Parser {
                         end.before(text, lol_html::html_content::ContentType::Text);
 
                         Ok(())
-                    }));
+                    });
+                    handlers.push(handler);
                 }
 
                 Ok(())

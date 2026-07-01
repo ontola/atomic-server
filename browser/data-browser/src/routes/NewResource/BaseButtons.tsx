@@ -1,4 +1,4 @@
-import { ai, core, dataBrowser } from '@tomic/react';
+import { ai, canvas, core, dataBrowser } from '@tomic/react';
 import { OutlinedSection } from '../../components/OutlinedSection';
 import { ClassButton } from './ClassButton';
 
@@ -15,6 +15,7 @@ const buttons = [
   dataBrowser.classes.documentV2,
   dataBrowser.classes.chatroom,
   dataBrowser.classes.bookmark,
+  canvas.classes.canvas,
   core.classes.ontology,
 ];
 

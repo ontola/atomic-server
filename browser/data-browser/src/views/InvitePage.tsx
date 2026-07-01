@@ -3,6 +3,7 @@ import {
   useNumber,
   useResource,
   useTitle,
+  useString,
   Agent,
   generateKeyPair,
   server,
@@ -10,22 +11,30 @@ import {
   useStore,
   type Server,
   SubtleCryptoProvider,
+  JSCryptoProvider,
   type KeyPair,
+  Resource,
 } from '@tomic/react';
 
-import { ContainerNarrow } from '../components/Containers';
-import { ValueForm } from '../components/forms/ValueForm';
 import { Button } from '../components/Button';
 import { constructOpenURL } from '../helpers/navigation';
 import { useSettings } from '../helpers/AppSettings';
 import { ResourcePageProps } from './ResourcePage';
 import { paths } from '../routes/paths';
-import { Row } from '../components/Row';
+import { Column } from '../components/Row';
+import { useWelcomeLayoutEffect } from '../hooks/useWelcomeLayoutEffect';
+import {
+  Shell,
+  Card,
+  CardTitle,
+  CtaButton,
+} from './getting-started/GettingStartedFlow';
+import atomicServerLogoUrl from '../../../../logo.svg?url';
 
 import { useId, useState, type JSX } from 'react';
-import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
-import { useNavState } from '../components/NavState';
+import { useNavigate } from '@tanstack/react-router';
 import { getResourcesDrive } from '@helpers/getResourcesDrive';
+import { fetchPersonalDriveSubject } from '@helpers/personalDrive';
 import { saveAgentToIDB } from '@helpers/agentStorage';
 import { Dialog, useDialog } from '@components/Dialog';
 import { CodeBlock } from '@components/CodeBlock';
@@ -39,8 +48,15 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   const store = useStore();
   const [usagesLeft] = useNumber(resource, server.properties.usagesLeft);
   const [write] = useBoolean(resource, server.properties.write);
-  const navigate = useNavigateWithTransition();
-  const navigationType = useNavState();
+  const [description] = useString(resource, core.properties.description);
+  // Use plain `useNavigate` rather than `useNavigateWithTransition`. The
+  // transition wrapper chains navigations through
+  // `document.startViewTransition` whose `finished` promise never resolves
+  // in headless test contexts (no compositor), wedging the next
+  // post-invite navigate. The invite redirect runs once on accept; not
+  // animating it is fine.
+  const baseNavigate = useNavigate();
+  const navigate = (to: string) => baseNavigate({ to });
   const { agent, setAgent, setDrive } = useSettings();
   const agentResource = useResource(agent?.subject);
   const [agentTitle] = useTitle(agentResource, 15);
@@ -48,54 +64,220 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   const [agentSecret, setAgentSecret] = useState<string | undefined>();
   const [agentName, setAgentName] = useState<string | undefined>(undefined);
   const [hasCopiedSecret, setHasCopiedSecret] = useState(false);
+  const [isNewAgent, setIsNewAgent] = useState(false);
 
-  const goToRedirect = () => {
-    if (!redirectURL) return;
-    // React needs a cycle to update the agent so we defer the next bit of code to after the render cycle so the store has the updated agent.
-    // If we don't do this the store would refetch the resource with the old agent that does not have access to the resource.
-    requestAnimationFrame(() => {
-      // Refetch the resource now that we have read access.
-      store
-        .fetchResourceFromServer(redirectURL)
-        .then(target => {
-          // Try to set the current drive to the drive containing the target resource.
-          // Then navigate to the target resource.
-          getResourcesDrive(target, store)
-            .then(setDrive)
-            .finally(() => {
-              navigate(constructOpenURL(redirectURL));
-            });
-        })
-        .catch(err => {
-          console.error(err);
+  const getRedirectDestination = async (
+    redirect: Resource<Server.Redirect>,
+  ): Promise<string | undefined> => {
+    const destinationValue = (await redirect.get(
+      server.properties.destination,
+    )) as unknown;
+    const redirectProps = redirect.props as Record<string, unknown>;
+
+    return (
+      (typeof destinationValue === 'string' ? destinationValue : undefined) ??
+      (redirectProps[server.properties.destination] as string | undefined) ??
+      (redirectProps.destination as string | undefined)
+    );
+  };
+
+  const goToRedirect = (destination?: string) => {
+    const url = destination ?? redirectURL;
+    if (!url) return;
+    queueMicrotask(() => {
+      navigate(constructOpenURL(url));
+      void store.fetchResourceFromServer(url).finally(() => {
+        const signedIn = store.getAgent();
+
+        if (!signedIn?.subject) {
+          return;
+        }
+
+        void fetchPersonalDriveSubject(store, signedIn).then(home => {
+          if (home) {
+            setDrive(home);
+          }
         });
+      });
     });
+  };
+
+  /**
+   * Persist everything needed after accepting an invite.
+   *
+   * The Agent keeps only IDENTITY: name, isA, and the `personalDrive` pointer.
+   * The per-user index lists (`sharedWithMe`, `drives`) live on the PRIVATE
+   * DRIVE — the home index — not on the Agent. So this writes two resources:
+   *  1. the Agent (identity + pointer), then
+   *  2. the personal drive (the lists).
+   * Order matters: the Agent's `personalDrive` must be saved before the drive's
+   * lists, so the sidebar can resolve agent → personalDrive → lists.
+   */
+  const persistAgentAfterInvite = async (
+    subject: string,
+    destination: string | undefined,
+    name?: string,
+  ): Promise<string | undefined> => {
+    const agentToSave = store.getResourceLoading(subject);
+    let personalDriveSubject: string | undefined;
+    let createdDrive = false;
+
+    try {
+      // --- 1. Agent identity: name, isA, personalDrive pointer ---
+      if (name?.trim()) {
+        await agentResource.set(core.properties.name, name.trim());
+      }
+
+      const currentIsA =
+        (await agentResource.get(core.properties.isA)) ?? ([] as string[]);
+
+      if (!currentIsA.includes(core.classes.agent)) {
+        await agentResource.set(core.properties.isA, [
+          ...currentIsA,
+          core.classes.agent,
+        ]);
+      }
+
+      const existingPersonal = agentResource.get(
+        core.properties.personalDrive,
+      ) as string | undefined;
+
+      if (existingPersonal) {
+        personalDriveSubject = existingPersonal;
+      } else {
+        const driveLabel = name?.trim() ? `${name.trim()}'s Drive` : 'Personal';
+        const pd = await store.newResource({
+          isA: server.classes.drive,
+          noParent: true,
+          propVals: {
+            [core.properties.name]: driveLabel,
+            [core.properties.description]:
+              'Your private space on this server. Only you can read and write here.',
+            [core.properties.write]: [subject],
+            [core.properties.read]: [subject],
+          },
+        });
+
+        await pd.save();
+        await agentResource.set(core.properties.personalDrive, pd.subject);
+        personalDriveSubject = pd.subject;
+        createdDrive = true;
+      }
+
+      await agentResource.save();
+
+      // --- 2. Home-index lists, stored on the PRIVATE DRIVE ---
+      if (personalDriveSubject) {
+        const driveResource = store.getResourceLoading(personalDriveSubject);
+
+        // The personal drive itself belongs in the switcher.
+        if (createdDrive) {
+          driveResource.push(
+            server.properties.drives,
+            [personalDriveSubject],
+            true,
+          );
+        }
+
+        if (destination) {
+          // sharedWithMe is what the sidebar's "Shared with me" panel reads.
+          // Set it first so a failure in the drive-bookmark code below doesn't
+          // bubble to the outer catch and skip the drive `save()`.
+          driveResource.push(core.properties.sharedWithMe, [destination], true);
+
+          // Drive bookmark (so the destination's drive shows in the switcher)
+          // is best-effort — walking the ancestry can fail transiently right
+          // after invite acceptance while the server propagates the rights
+          // grant. Log so we notice if it stops working entirely.
+          try {
+            await store.fetchResourceFromServer(destination);
+            const target = store.getResourceLoading(destination);
+            const hostDrive = await getResourcesDrive(target, store);
+
+            if (hostDrive && hostDrive !== personalDriveSubject) {
+              driveResource.push(server.properties.drives, [hostDrive], true);
+            }
+          } catch (e) {
+            console.warn(
+              '[invite] could not bookmark host drive (sharedWithMe still set):',
+              e,
+            );
+          }
+        }
+
+        await driveResource.save();
+      }
+    } catch (e) {
+      store.notifyError(
+        e instanceof Error
+          ? e
+          : new Error('Failed to persist agent after accepting invite'),
+      );
+    }
+
+    return personalDriveSubject;
   };
 
   const [dialogProps, show, hide] = useDialog({
     onSuccess: async () => {
       setAgentSecret(undefined);
+      const agentSubject = agent?.subject;
 
-      if (agentName) {
-        await agentResource.set(core.properties.name, agentName);
-        await agentResource.save();
+      if (!agentSubject) {
+        goToRedirect();
+
+        return;
+      }
+
+      const personalDrive = await persistAgentAfterInvite(
+        agentSubject,
+        redirectURL,
+        agentName,
+      );
+
+      // Point the sidebar at the new personal drive. Without this, the
+      // default `drive` in AppSettings is still `baseURL` (or whatever was
+      // active pre-invite) and the sidebar shows that instead.
+      if (personalDrive) {
+        setDrive(personalDrive);
       }
 
       goToRedirect();
     },
   });
 
-  // When the Invite is accepted, a new Agent might be created.
-  // When this happens, a new keypair is made, but the subject of the Agent is not yet known.
-  // It will be created by the server, and will be accessible in the Redirect response.
+  // When the Invite is accepted, a new Agent might be created client-side.
   async function handleNew() {
     try {
       const keypair = await generateKeyPair();
-      const cryptoKeyPair =
-        await SubtleCryptoProvider.createKeysFromKeyPair(keypair);
 
-      const provider = new SubtleCryptoProvider(cryptoKeyPair);
-      const newAgent = new Agent(provider);
+      let cryptoKeyPair: CryptoKeyPair | undefined;
+
+      try {
+        cryptoKeyPair =
+          await SubtleCryptoProvider.createKeysFromKeyPair(keypair);
+      } catch {
+        // SubtleCrypto doesn't support Ed25519 in this environment.
+        // We'll use JSCryptoProvider as a fallback below.
+      }
+
+      const provider = cryptoKeyPair
+        ? new SubtleCryptoProvider(cryptoKeyPair)
+        : new JSCryptoProvider(keypair.privateKey);
+
+      const subject = `did:ad:agent:${keypair.publicKey}`;
+      const newAgent = new Agent(provider, subject);
+
+      store.setAgent(newAgent);
+
+      // Create the initial Agent resource using the Store instance,
+      // otherwise it won't have a store bound (and `.save()` will fail).
+      const newAgentResource = store.getResourceLoading(subject, {
+        newResource: true,
+      });
+      await newAgentResource.set(core.properties.publicKey, keypair.publicKey);
+      await newAgentResource.set(core.properties.isA, [core.classes.agent]);
+      await newAgentResource.save();
 
       setAgent(newAgent);
       handleAccept({ crypto: cryptoKeyPair, real: keypair });
@@ -105,94 +287,124 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   }
 
   const handleAccept = async (keys?: {
-    crypto: CryptoKeyPair;
+    crypto?: CryptoKeyPair;
     real: KeyPair;
   }) => {
     const inviteURL = new URL(resource.subject);
+    const redirect = await store.postToServer<Server.Redirect>(inviteURL.href);
 
-    if (keys) {
-      inviteURL.searchParams.set('public-key', keys.real.publicKey);
-    } else {
-      inviteURL.searchParams.set('agent', agentSubject!);
+    if (redirect.error) {
+      store.notifyError(redirect.error);
+
+      return;
     }
 
-    const redirect = await store.getResource<Server.Redirect>(inviteURL.href);
-    const redirectAgent = redirect.props.redirectAgent;
+    const destination = await getRedirectDestination(redirect);
 
-    if (keys && redirectAgent) {
-      if (redirect.error) {
-        store.notifyError(redirect.error);
-
-        return;
-      }
-
-      const secret = Agent.buildSecret(keys.real.privateKey, redirectAgent);
-
-      const newAgent = new Agent(
-        new SubtleCryptoProvider(keys.crypto),
-        redirect.props.redirectAgent,
+    if (!destination) {
+      store.notifyError(
+        new Error('Invite accepted, but no destination was returned.'),
       );
 
-      saveAgentToIDB(keys.crypto, redirectAgent);
-      setAgentSecret(secret);
-      setAgent(newAgent);
+      return;
     }
 
-    // Go to the destination, unless the user just hit the back button
-    if (redirect.props.destination) {
-      setRedirectURL(redirect.props.destination);
-      show();
+    if (keys) {
+      const newAgentSubject = `did:ad:agent:${keys.real.publicKey}`;
+      const secret = Agent.buildSecret(
+        keys.real.privateKey,
+        newAgentSubject,
+        destination,
+      );
+
+      const provider = keys.crypto
+        ? new SubtleCryptoProvider(keys.crypto)
+        : new JSCryptoProvider(keys.real.privateKey);
+      const newAgent = new Agent(provider, newAgentSubject, destination);
+
+      if (keys.crypto) {
+        saveAgentToIDB(keys.crypto, newAgentSubject);
+      }
+
+      setAgentSecret(secret);
+      setAgent(newAgent);
+      setIsNewAgent(true);
+    } else {
+      setIsNewAgent(false);
+      setRedirectURL(destination);
+
+      void (async () => {
+        const personalDrive = await persistAgentAfterInvite(
+          agentSubject!,
+          destination,
+          undefined,
+        );
+
+        if (personalDrive) {
+          setDrive(personalDrive);
+        }
+
+        goToRedirect(destination);
+      })();
+
+      return;
     }
+
+    // New agent: show dialog (secret, name) then on Continue we persist and redirect
+    setRedirectURL(destination);
+    show();
   };
 
   const agentSubject = agent?.subject;
 
-  if (agentSubject && usagesLeft && usagesLeft > 0) {
-    // Accept the invite if an agent subject is present, but not if the user just pressed the back button
-    if (navigationType !== 'POP') {
-      handleAccept();
-    }
-  }
+  useWelcomeLayoutEffect();
+
+  // Extract the resource name from the server-generated description
+  // Format: "Stateless invite to edit/view the resource: ResourceName"
+  const resourceName = description?.split(': ').pop();
 
   return (
     <>
-      <ContainerNarrow>
-        <h1>Invite to {write ? 'edit' : 'view'}</h1>
-        <ValueForm
-          resource={resource}
-          propertyURL={core.properties.description}
-        />
-        {usagesLeft === 0 ? (
-          <em>Sorry, this Invite has no usages left. Ask for a new one.</em>
-        ) : (
-          <Row>
-            {agentSubject ? (
-              <>
-                <Button
+      <Shell>
+        <Card>
+          <LogoWrap>
+            <img src={atomicServerLogoUrl} alt='AtomicServer' width={180} />
+          </LogoWrap>
+          <CardTitle>
+            You've been invited to {write ? 'edit' : 'view'}
+            {resourceName ? ` "${resourceName}"` : ''}
+          </CardTitle>
+          {usagesLeft === 0 ? (
+            <DescriptionWrap>
+              Sorry, this invite has no usages left. Ask for a new one.
+            </DescriptionWrap>
+          ) : (
+            <Column gap='0.75rem'>
+              {agentSubject ? (
+                <CtaButton
                   data-test='accept-existing'
                   onClick={() => handleAccept()}
                 >
                   Accept as {agentTitle}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button data-test='accept-new' onClick={handleNew}>
-                  Accept as new user
-                </Button>
-                <Button
-                  data-test='accept-sign-in'
-                  onClick={() => navigate(paths.agentSettings)}
-                  subtle
-                >
-                  Sign in
-                </Button>
-              </>
-            )}
-            {usagesLeft !== undefined && <p>({usagesLeft} usages left)</p>}
-          </Row>
-        )}
-      </ContainerNarrow>
+                </CtaButton>
+              ) : (
+                <>
+                  <CtaButton data-test='accept-new' onClick={handleNew}>
+                    Create account and accept
+                  </CtaButton>
+                  <CtaButton
+                    data-test='accept-sign-in'
+                    onClick={() => navigate(paths.agentSettings)}
+                    subtle
+                  >
+                    I already have an account
+                  </CtaButton>
+                </>
+              )}
+            </Column>
+          )}
+        </Card>
+      </Shell>
       <Dialog {...dialogProps} disableLightDismiss>
         <Dialog.Title>
           <h1>Agent created!</h1>
@@ -210,22 +422,31 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
               />
             </InputWrapper>
           </Field>
-          <Field label='Agent Secret'>
-            <p>
-              IMPORTANT! Below is your agent secret, you use this to login. Save
-              it somewhere safe, the secret will not be show again and if you
-              lose it you will not be able to access this user again.
-            </p>
-            <StyledCodeBlock
-              wordWrap
-              content={agentSecret}
-              onCopy={() => setHasCopiedSecret(true)}
-            />
-          </Field>
+          {isNewAgent && agentSecret && (
+            <Field label='Agent Secret'>
+              <p>
+                IMPORTANT! Below is your agent secret, you use this to login.
+                Save it somewhere safe, the secret will not be show again and if
+                you lose it you will not be able to access this user again.
+              </p>
+              <StyledCodeBlock
+                wordWrap
+                content={agentSecret}
+                onCopy={() => setHasCopiedSecret(true)}
+              />
+            </Field>
+          )}
         </Dialog.Content>
         <Dialog.Actions>
-          <Button onClick={() => hide(true)} disabled={!hasCopiedSecret}>
-            {hasCopiedSecret ? 'Continue' : 'Copy secret to continue'}
+          <Button
+            onClick={() => hide(true)}
+            disabled={isNewAgent && !hasCopiedSecret}
+          >
+            {isNewAgent
+              ? hasCopiedSecret
+                ? 'Continue'
+                : 'Copy secret to continue'
+              : 'Continue'}
           </Button>
         </Dialog.Actions>
       </Dialog>
@@ -234,6 +455,17 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
 }
 
 export default InvitePage;
+
+const LogoWrap = styled.div`
+  text-align: center;
+  margin-bottom: ${p => p.theme.size(4)};
+`;
+
+const DescriptionWrap = styled.div`
+  color: ${p => p.theme.colors.textLight};
+  text-align: center;
+  margin-bottom: ${p => p.theme.size(5)};
+`;
 
 const StyledCodeBlock = styled(CodeBlock)`
   word-break: break-word;

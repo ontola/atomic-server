@@ -5,7 +5,7 @@ use crate::{
     errors::AtomicResult,
     resources::PropVals,
     utils::{check_valid_uri, check_valid_url},
-    Resource,
+    Resource, Subject,
 };
 use base64::{engine::general_purpose, Engine};
 use regex::Regex;
@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 /// Use `Value::SomeDataType()` for explicit creation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Value {
-    AtomicUrl(String),
+    AtomicUrl(Subject),
     Date(String),
     Integer(i64),
     Float(f64),
@@ -29,19 +29,20 @@ pub enum Value {
     NestedResource(SubResource),
     Boolean(bool),
     Uri(String),
-    JSON(serde_json::Value),
-    YDoc(Vec<u8>),
+    Json(serde_json::Value),
+    /// Loro CRDT document binary (snapshot or update)
+    LoroDoc(Vec<u8>),
     Unsupported(UnsupportedValue),
 }
 
-/// A resource in a JSON-AD body can be any of these
+/// A resource in a Json-AD body can be any of these
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SubResource {
     // I was considering using Resources for these, but that would involve
     // storing the paths in both the NestedResource as well as its parent
     // context, which could produce inconsistencies.
     Nested(PropVals),
-    Subject(String),
+    Subject(Subject),
 }
 
 /// When the Datatype of a Value is not handled by this library
@@ -57,7 +58,40 @@ pub const SLUG_REGEX: &str = r"^[a-z0-9]+(?:-[a-z0-9]+)*$";
 /// YYYY-MM-DD
 pub const DATE_REGEX: &str = r"^\d{4}\-(0[1-9]|1[012])\-(0[1-9]|[12][0-9]|3[01])$";
 
+use crate::storelike::Storelike;
+
+impl SubResource {
+    pub fn normalize(&mut self, store: &impl Storelike) {
+        match self {
+            SubResource::Subject(sub) => {
+                *sub = store.normalize_subject(sub);
+            }
+            SubResource::Nested(propvals) => {
+                for (_, val) in propvals.iter_mut() {
+                    val.normalize(store);
+                }
+            }
+        }
+    }
+}
+
 impl Value {
+    pub fn normalize(&mut self, store: &impl Storelike) {
+        match self {
+            Value::AtomicUrl(sub) => {
+                *sub = store.normalize_subject(sub);
+            }
+            Value::ResourceArray(sub_arr) => {
+                for sub in sub_arr.iter_mut() {
+                    sub.normalize(store);
+                }
+            }
+            Value::NestedResource(sub) => {
+                sub.normalize(store);
+            }
+            _ => {}
+        }
+    }
     /// Check if the value `q_val` is present in `val`
     pub fn contains_value(&self, q_val: &Value) -> bool {
         let query_value = q_val.to_string();
@@ -86,8 +120,8 @@ impl Value {
             Value::NestedResource(_) => DataType::AtomicUrl,
             Value::Boolean(_) => DataType::Boolean,
             Value::Uri(_) => DataType::Uri,
-            Value::JSON(_) => DataType::JSON,
-            Value::YDoc(_) => DataType::YDoc,
+            Value::Json(_) => DataType::Json,
+            Value::LoroDoc(_) => DataType::LoroDoc,
             Value::Unsupported(s) => DataType::Unsupported(s.datatype.clone()),
         }
     }
@@ -125,17 +159,17 @@ impl Value {
                 check_valid_uri(value)?;
                 Ok(Value::Uri(value.into()))
             }
-            DataType::JSON => {
+            DataType::Json => {
                 let json: serde_json::Value = serde_json::from_str(value)?;
-                Ok(Value::JSON(json))
+                Ok(Value::Json(json))
             }
             DataType::ResourceArray => {
                 let vector: Vec<String> = crate::parse::parse_json_array(value).map_err(|e| {
-                    format!("Could not deserialize ResourceArray: {}. Should be a JSON array of strings. {}", &value, e)
+                    format!("Could not deserialize ResourceArray: {}. Should be a Json array of strings. {}", &value, e)
                 })?;
                 let mut new_vec = Vec::new();
                 for i in vector {
-                    new_vec.push(SubResource::Subject(i));
+                    new_vec.push(SubResource::Subject(i.into()));
                 }
                 Ok(Value::ResourceArray(new_vec))
             }
@@ -170,11 +204,11 @@ impl Value {
                 };
                 Ok(Value::Boolean(bool))
             }
-            DataType::YDoc => {
+            DataType::LoroDoc => {
                 let bin = general_purpose::STANDARD
                     .decode(value)
                     .map_err(|e| format!("Not a valid Base64 string: {}. {}", value, e))?;
-                Ok(Value::YDoc(bin))
+                Ok(Value::LoroDoc(bin))
             }
         }
     }
@@ -202,12 +236,12 @@ impl Value {
                             };
                             vec.push(format!("{} {}", path_base, i))
                         }
-                        SubResource::Subject(s) => vec.push(s),
+                        SubResource::Subject(s) => vec.push(s.to_string()),
                     });
                 Ok(vec)
             }
             Value::AtomicUrl(s) => {
-                vec.push(s.into());
+                vec.push(s.to_string());
                 Ok(vec)
             }
             Value::NestedResource(_nr) => {
@@ -257,7 +291,7 @@ impl Value {
         let vals = match self {
             // TODO: This results in wrong indexing, as some subjects will be numbers.
             Value::ResourceArray(_v) => self.to_subjects(None).unwrap_or_else(|_| vec![]),
-            Value::AtomicUrl(v) => vec![v.into()],
+            Value::AtomicUrl(v) => vec![v.to_string()],
             // TODO We don't index nested resources for now
             Value::NestedResource(_r) => return None,
             // This might result in unnecessarily long strings, sometimes. We may want to shorten them later.
@@ -306,7 +340,17 @@ impl From<Vec<String>> for Value {
     fn from(val: Vec<String>) -> Self {
         let mut vec = Vec::new();
         for i in val {
-            vec.push(SubResource::Subject(i));
+            vec.push(SubResource::Subject(i.into()));
+        }
+        Value::ResourceArray(vec)
+    }
+}
+
+impl From<Vec<Subject>> for Value {
+    fn from(val: Vec<Subject>) -> Self {
+        let mut vec = Vec::new();
+        for subject in val {
+            vec.push(SubResource::Subject(subject));
         }
         Value::ResourceArray(vec)
     }
@@ -368,8 +412,8 @@ impl fmt::Display for Value {
             Value::NestedResource(n) => write!(f, "{:?}", n),
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Uri(s) => write!(f, "{}", s),
-            Value::JSON(s) => write!(f, "{}", s),
-            Value::YDoc(s) => write!(f, "{}", general_purpose::STANDARD.encode(s)),
+            Value::Json(s) => write!(f, "{}", s),
+            Value::LoroDoc(s) => write!(f, "{}", general_purpose::STANDARD.encode(s)),
             Value::Unsupported(u) => write!(f, "{}", u.value),
         }
     }
@@ -381,13 +425,17 @@ impl fmt::Display for SubResource {
 
         match self {
             SubResource::Nested(pv) => {
-                let serialized = crate::serialize::propvals_to_json_ad_map(pv, None)
-                    .unwrap_or_else(|_e| {
-                        serde_json::Value::String(format!("Could not serialize {:?} : {}", pv, _e))
-                    });
+                let serialized =
+                    crate::serialize::propvals_to_json_ad_map(pv, None, "http://localhost/", true)
+                        .unwrap_or_else(|_e| {
+                            serde_json::Value::String(format!(
+                                "Could not serialize {:?} : {}",
+                                pv, _e
+                            ))
+                        });
                 s.push_str(&serialized.to_string());
             }
-            SubResource::Subject(sub) => s.push_str(sub),
+            SubResource::Subject(sub) => s.push_str(sub.as_str()),
         }
         write!(f, "{}", s)
     }
@@ -395,13 +443,13 @@ impl fmt::Display for SubResource {
 
 impl From<&str> for SubResource {
     fn from(val: &str) -> Self {
-        SubResource::Subject(val.to_owned())
+        SubResource::Subject(val.into())
     }
 }
 
 impl From<String> for SubResource {
     fn from(val: String) -> Self {
-        SubResource::Subject(val)
+        SubResource::Subject(val.into())
     }
 }
 
@@ -413,7 +461,13 @@ impl From<PropVals> for SubResource {
 
 impl From<Resource> for SubResource {
     fn from(val: Resource) -> Self {
-        SubResource::Subject(val.get_subject().into())
+        SubResource::Subject(val.get_subject().clone())
+    }
+}
+
+impl From<crate::Subject> for SubResource {
+    fn from(val: crate::Subject) -> Self {
+        SubResource::Subject(val)
     }
 }
 
@@ -434,8 +488,8 @@ mod test {
         let uri = Value::new("ldap://[2001:db8::7]/c=GB?objectClass?one", &DataType::Uri).unwrap();
         assert!(uri.to_string() == "ldap://[2001:db8::7]/c=GB?objectClass?one");
 
-        let json = Value::new("{\"foo\": \"bar\", \"baz\": 123}", &DataType::JSON).unwrap();
-        // Note: JSON serialization switches the order of the keys.
+        let json = Value::new("{\"foo\": \"bar\", \"baz\": 123}", &DataType::Json).unwrap();
+        // Note: Json serialization switches the order of the keys.
         assert!(
             json.to_string() == "{\"baz\":123,\"foo\":\"bar\"}"
                 || json.to_string() == "{\"foo\":\"bar\",\"baz\":123}"
@@ -456,7 +510,7 @@ mod test {
         Value::new("blabliebla", &DataType::Uri).unwrap_err();
         Value::new(
             "{\"foo\": \"bar\", \"trailing comma\": 123,}",
-            &DataType::JSON,
+            &DataType::Json,
         )
         .unwrap_err();
     }
@@ -508,7 +562,7 @@ mod test {
             atom.values_to_subjects().unwrap(),
             vec![
                 "https://example.com/subject_string".to_string(),
-                full_resource.get_subject().into(),
+                full_resource.get_subject().to_string(),
                 "https://example.com/parent_resource https://atomicdata.dev/properties/parent 2"
                     .into(),
             ]

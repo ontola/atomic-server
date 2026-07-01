@@ -10,40 +10,66 @@ use crate::{
 };
 
 /// Serializes a vector or Resources to a JSON-AD string
-pub fn resources_to_json_ad(resources: &[Resource]) -> AtomicResult<String> {
-    let mut vec: Vec<serde_json::Value> = Vec::new();
+pub fn resources_to_json_ad(
+    resources: &[Resource],
+    origin: &str,
+    resolve_subjects: bool,
+) -> AtomicResult<String> {
+    let mut strings = Vec::new();
     for r in resources {
-        vec.push(crate::serialize::propvals_to_json_ad_map(
-            r.get_propvals(),
-            Some(r.get_subject().clone()),
-        )?)
+        let subject = if resolve_subjects {
+            r.get_subject().resolve(origin)
+        } else {
+            r.get_subject().to_string()
+        };
+        let res =
+            propvals_to_json_ad_map(r.get_propvals(), Some(subject), origin, resolve_subjects)?;
+        strings.push(serde_json::to_string(&res)?);
     }
-    let serde_array = serde_json::Value::from(vec);
-    serde_json::to_string_pretty(&serde_array).map_err(|_| "Could not serialize to JSON-AD".into())
+    let str = strings.join(",");
+
+    Ok(format!("[{}]", str))
 }
 
 /// Converts an Atomic Value to a Serde Value.
-// TODO: Accept JSON-LD / JSON as options
-// https://github.com/atomicdata-dev/atomic-server/issues/315
-fn val_to_serde(value: Value) -> AtomicResult<SerdeValue> {
+pub fn val_to_serde(
+    value: Value,
+    origin: &str,
+    resolve_subjects: bool,
+) -> AtomicResult<SerdeValue> {
     let json_val: SerdeValue = match value {
-        Value::AtomicUrl(val) => SerdeValue::String(val),
+        Value::AtomicUrl(val) => {
+            if resolve_subjects {
+                SerdeValue::String(val.resolve(origin))
+            } else {
+                SerdeValue::String(val.to_string())
+            }
+        }
         Value::Date(val) => SerdeValue::String(val),
         // TODO: Handle big numbers
         Value::Integer(val) => serde_json::from_str(&val.to_string()).unwrap_or_default(),
         Value::Float(val) => serde_json::from_str(&val.to_string()).unwrap_or_default(),
         Value::Markdown(val) => SerdeValue::String(val),
         Value::Uri(val) => SerdeValue::String(val),
-        Value::JSON(val) => val,
+        Value::Json(val) => val,
         Value::ResourceArray(val) => {
             let mut vec: Vec<SerdeValue> = Vec::new();
             for resource in val {
                 match resource {
                     crate::values::SubResource::Nested(pv) => {
-                        vec.push(crate::serialize::propvals_to_json_ad_map(&pv, None)?);
+                        vec.push(crate::serialize::propvals_to_json_ad_map(
+                            &pv,
+                            None,
+                            origin,
+                            resolve_subjects,
+                        )?);
                     }
                     crate::values::SubResource::Subject(s) => {
-                        vec.push(SerdeValue::String(s.clone()))
+                        if resolve_subjects {
+                            vec.push(SerdeValue::String(s.resolve(origin)))
+                        } else {
+                            vec.push(SerdeValue::String(s.to_string()))
+                        }
                     }
                 }
             }
@@ -57,19 +83,17 @@ fn val_to_serde(value: Value) -> AtomicResult<SerdeValue> {
         // TODO: fix this for nested resources in json and json-ld serialization, because this will cause them to fall back to json-ad
         Value::NestedResource(res) => match res {
             crate::values::SubResource::Nested(propvals) => {
-                propvals_to_json_ad_map(&propvals, None)?
+                propvals_to_json_ad_map(&propvals, None, origin, resolve_subjects)?
             }
-            crate::values::SubResource::Subject(s) => SerdeValue::String(s),
+            crate::values::SubResource::Subject(s) => {
+                if resolve_subjects {
+                    SerdeValue::String(s.resolve(origin))
+                } else {
+                    SerdeValue::String(s.to_string())
+                }
+            }
         },
-        Value::YDoc(val) => {
-            let mut obj = Map::new();
-            obj.insert("type".to_string(), "ydoc".into());
-            obj.insert(
-                "data".to_string(),
-                general_purpose::STANDARD.encode(val).into(),
-            );
-            obj.into()
-        }
+        Value::LoroDoc(val) => SerdeValue::String(general_purpose::STANDARD.encode(val)),
     };
     Ok(json_val)
 }
@@ -80,10 +104,15 @@ fn val_to_serde(value: Value) -> AtomicResult<SerdeValue> {
 pub fn propvals_to_json_ad_map(
     propvals: &PropVals,
     subject: Option<String>,
+    origin: &str,
+    resolve_subjects: bool,
 ) -> AtomicResult<serde_json::Value> {
     let mut root = Map::new();
     for (prop_url, value) in propvals.iter() {
-        root.insert(prop_url.clone(), val_to_serde(value.clone())?);
+        root.insert(
+            prop_url.clone(),
+            val_to_serde(value.clone(), origin, resolve_subjects)?,
+        );
     }
     if let Some(sub) = subject {
         root.insert("@id".into(), SerdeValue::String(sub));
@@ -101,7 +130,9 @@ pub async fn propvals_to_json_ld(
     subject: Option<String>,
     store: &impl Storelike,
     json_ld: bool,
+    origin: Option<&str>,
 ) -> AtomicResult<serde_json::Value> {
+    let origin = origin.unwrap_or("http://localhost");
     // Initiate JSON object
     let mut root = Map::new();
     // For JSON-LD serialization
@@ -152,8 +183,7 @@ pub async fn propvals_to_json_ld(
             context.insert(property.shortname.as_str().into(), ctx_value);
         }
         let key = property.shortname;
-
-        root.insert(key, val_to_serde(value.clone())?);
+        root.insert(key, val_to_serde(value.clone(), origin, true)?);
     }
 
     if let Some(sub) = subject {
@@ -185,7 +215,10 @@ pub async fn atoms_to_ntriples(
 
     let mut formatter = NTriplesFormatter::new(Vec::default());
     for atom in atoms {
-        let subject = NamedNode { iri: &atom.subject }.into();
+        let subject = NamedNode {
+            iri: atom.subject.as_str(),
+        }
+        .into();
         let predicate = NamedNode {
             iri: &atom.property,
         };
@@ -227,7 +260,10 @@ pub async fn atoms_to_turtle(
     let mut formatter = TurtleFormatter::new(Vec::default());
 
     for atom in atoms {
-        let subject = NamedNode { iri: &atom.subject }.into();
+        let subject = NamedNode {
+            iri: atom.subject.as_str(),
+        }
+        .into();
         let predicate = NamedNode {
             iri: &atom.property,
         };
@@ -270,49 +306,63 @@ mod test {
     use super::*;
     use crate::Storelike;
 
+    /// Drops the `loroUpdate` snapshot from a serialized object so golden
+    /// fixtures stay stable. Every materialized resource
+    /// carries a live Loro doc, and `to_json_ad` / `to_json` / `to_json_ld`
+    /// emit its snapshot — whose bytes embed a random peer id and so cannot
+    /// be pinned in a literal fixture. The snapshot riding the wire is
+    /// intentional (the browser seeds its LoroDoc from it); these tests just
+    /// assert the *materialized* shape, so they strip it before comparing.
+    fn strip_loro_update(value: &mut serde_json::Value) {
+        if let Some(obj) = value.as_object_mut() {
+            obj.remove(crate::urls::LORO_UPDATE);
+            obj.remove("loro-update");
+            if let Some(ctx) = obj.get_mut("@context").and_then(|c| c.as_object_mut()) {
+                ctx.remove("loro-update");
+            }
+        }
+    }
+
     #[tokio::test]
     async fn serialize_json_ad() {
         let store = crate::Store::init().await.unwrap();
         store.populate().await.unwrap();
         let json = store
-            .get_resource(crate::urls::AGENT)
+            .get_resource(&crate::urls::AGENT.into())
             .await
             .unwrap()
-            .to_json_ad()
+            .to_json_ad(None)
             .unwrap();
         println!("json-ad: {}", json);
         let correct_json = r#"{
   "@id": "https://atomicdata.dev/classes/Agent",
-  "https://atomicdata.dev/properties/description": "An Agent is a user that can create or modify data. It has two keys: a private and a public one. The private key should be kept secret. The public key is used to verify signatures (on [Commits](https://atomicdata.dev/classes/Commit)) set by the of the Agent.",
+  "https://atomicdata.dev/properties/description": "An Agent is a user that can create or modify data. For DID-based agents (did:ad:agent:{publicKey}), the public key is derived from the subject.",
   "https://atomicdata.dev/properties/isA": [
      "https://atomicdata.dev/classes/Class"
   ],
   "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
   "https://atomicdata.dev/properties/recommends": [
+    "https://atomicdata.dev/properties/publicKey",
     "https://atomicdata.dev/properties/name",
     "https://atomicdata.dev/properties/description",
+    "https://atomicdata.dev/properties/personalDrive",
+    "https://atomicdata.dev/properties/sharedWithMe",
     "https://atomicdata.dev/properties/drives"
-  ],
-    "https://atomicdata.dev/properties/requires": [
-    "https://atomicdata.dev/properties/publicKey"
   ],
   "https://atomicdata.dev/properties/shortname": "agent"
 }"#;
         let correct_value: serde_json::Value = serde_json::from_str(correct_json).unwrap();
-        let our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let mut our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        strip_loro_update(&mut our_value);
 
         assert_eq!(our_value, correct_value)
     }
 
     #[test]
     fn serialize_json_ad_multiple() {
-        let vec = vec![Resource::new("subjet".into())];
-        let serialized = resources_to_json_ad(&vec).unwrap();
-        let correct_json = r#"[
-  {
-    "@id": "subjet"
-  }
-]"#;
+        let vec = vec![Resource::new("subject".into())];
+        let serialized = resources_to_json_ad(&vec, "http://localhost/", true).unwrap();
+        let correct_json = r#"[{"@id":"http://localhost/subject"}]"#;
         assert_eq!(serialized, correct_json);
     }
 
@@ -321,32 +371,33 @@ mod test {
         let store = crate::Store::init().await.unwrap();
         store.populate().await.unwrap();
         let json = store
-            .get_resource(crate::urls::AGENT)
+            .get_resource(&crate::urls::AGENT.into())
             .await
             .unwrap()
-            .to_json(&store)
+            .to_json(&store, None)
             .await
             .unwrap();
         println!("json: {}", json);
         let correct_json = r#"{
             "@id": "https://atomicdata.dev/classes/Agent",
-            "description": "An Agent is a user that can create or modify data. It has two keys: a private and a public one. The private key should be kept secret. The public key is used to verify signatures (on [Commits](https://atomicdata.dev/classes/Commit)) set by the of the Agent.",
+            "description": "An Agent is a user that can create or modify data. For DID-based agents (did:ad:agent:{publicKey}), the public key is derived from the subject.",
             "is-a": [
               "https://atomicdata.dev/classes/Class"
             ],
             "parent": "https://atomicdata.dev/classes",
             "recommends": [
+              "https://atomicdata.dev/properties/publicKey",
               "https://atomicdata.dev/properties/name",
               "https://atomicdata.dev/properties/description",
+              "https://atomicdata.dev/properties/personalDrive",
+              "https://atomicdata.dev/properties/sharedWithMe",
               "https://atomicdata.dev/properties/drives"
-            ],
-            "requires": [
-              "https://atomicdata.dev/properties/publicKey"
             ],
             "shortname": "agent"
           }"#;
         let correct_value: serde_json::Value = serde_json::from_str(correct_json).unwrap();
-        let our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let mut our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        strip_loro_update(&mut our_value);
 
         assert_eq!(our_value, correct_value)
     }
@@ -356,10 +407,10 @@ mod test {
         let store = crate::Store::init().await.unwrap();
         store.populate().await.unwrap();
         let json = store
-            .get_resource(crate::urls::AGENT)
+            .get_resource(&crate::urls::AGENT.into())
             .await
             .unwrap()
-            .to_json_ld(&store)
+            .to_json_ld(&store, None)
             .await
             .unwrap();
         println!("json: {}", json);
@@ -378,30 +429,27 @@ mod test {
                 "@container": "@list",
                 "@id": "https://atomicdata.dev/properties/recommends"
               },
-              "requires": {
-                "@container": "@list",
-                "@id": "https://atomicdata.dev/properties/requires"
-              },
               "shortname": "https://atomicdata.dev/properties/shortname"
             },
             "@id": "https://atomicdata.dev/classes/Agent",
-            "description": "An Agent is a user that can create or modify data. It has two keys: a private and a public one. The private key should be kept secret. The public key is used to verify signatures (on [Commits](https://atomicdata.dev/classes/Commit)) set by the of the Agent.",
+            "description": "An Agent is a user that can create or modify data. For DID-based agents (did:ad:agent:{publicKey}), the public key is derived from the subject.",
             "is-a": [
               "https://atomicdata.dev/classes/Class"
             ],
             "parent": "https://atomicdata.dev/classes",
             "recommends": [
+              "https://atomicdata.dev/properties/publicKey",
               "https://atomicdata.dev/properties/name",
               "https://atomicdata.dev/properties/description",
+              "https://atomicdata.dev/properties/personalDrive",
+              "https://atomicdata.dev/properties/sharedWithMe",
               "https://atomicdata.dev/properties/drives"
-            ],
-            "requires": [
-              "https://atomicdata.dev/properties/publicKey"
             ],
             "shortname": "agent"
           }"#;
         let correct_value: serde_json::Value = serde_json::from_str(correct_json).unwrap();
-        let our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let mut our_value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        strip_loro_update(&mut our_value);
 
         assert_eq!(our_value, correct_value)
     }
@@ -413,7 +461,7 @@ mod test {
         let store = crate::Store::init().await.unwrap();
         store.populate().await.unwrap();
         let subject = crate::urls::DESCRIPTION;
-        let resource = store.get_resource(subject).await.unwrap();
+        let resource = store.get_resource(&subject.into()).await.unwrap();
         let atoms = resource.to_atoms();
         let serialized = atoms_to_ntriples(atoms, &store).await.unwrap();
         let _out = r#"

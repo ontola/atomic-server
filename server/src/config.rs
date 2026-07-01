@@ -18,10 +18,14 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_INITIALIZE")]
     pub initialize: bool,
 
+    /// Re-imports built-in ontologies and default server resources (`populate_all`) without rebuilding indexes or re-running full initialization.
+    #[clap(long, env = "ATOMIC_REPOPULATE_DEFAULTS")]
+    pub repopulate_defaults: bool,
+
     /// Re-builds the indexes. Parses all the resources.
     /// Do this when updating requires it, or if you have issues with Collections / Queries / Search.
-    #[clap(long, env = "ATOMIC_REBUILD_INDEX")]
-    pub rebuild_indexes: bool,
+    #[clap(value_enum, long, env = "ATOMIC_REBUILD_INDEX")]
+    pub rebuild_indexes: Option<RebuildIndexMode>,
 
     /// Use staging environments for services like LetsEncrypt
     #[clap(long, env = "ATOMIC_DEVELOPMENT")]
@@ -62,6 +66,37 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_EMAIL")]
     pub email: Option<String>,
 
+    /// User-facing dashboard / portal URL. When set, this node reports as
+    /// "managed" via `GET /node-info`, and the data-browser routes account
+    /// creation to the portal (e.g. for email verification). Leave unset for
+    /// self-hosted / FOSS nodes.
+    #[clap(long, env = "ATOMIC_DASHBOARD_URL")]
+    pub dashboard_url: Option<String>,
+
+    /// Control-plane API base URL (e.g. https://saas.example.com). When set,
+    /// this server runs as a "managed node": it heartbeats to the control
+    /// plane, polls it for which drives to host, and reports per-drive usage.
+    /// Leave unset for self-hosted / FOSS servers.
+    #[clap(long, env = "ATOMIC_CONTROL_PLANE_URL")]
+    pub control_plane_url: Option<String>,
+
+    /// Explicit node id reported to the control plane. Defaults to the Iroh
+    /// node id, then the server origin.
+    #[clap(long, env = "ATOMIC_CONTROL_PLANE_NODE_ID")]
+    pub control_plane_node_id: Option<String>,
+
+    /// Region label reported to the control plane (purely informational).
+    #[clap(long, default_value = "", env = "ATOMIC_CONTROL_PLANE_REGION")]
+    pub control_plane_region: String,
+
+    /// Seconds between control-plane heartbeats / policy polls (min 5).
+    #[clap(
+        long,
+        default_value = "30",
+        env = "ATOMIC_CONTROL_PLANE_HEARTBEAT_INTERVAL"
+    )]
+    pub control_plane_heartbeat_interval: u64,
+
     /// Custom JS script to include in the body of the HTML template
     #[clap(long, default_value = "", env = "ATOMIC_SCRIPT")]
     pub script: String,
@@ -82,10 +117,6 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_PUBLIC_MODE")]
     pub public_mode: bool,
 
-    /// The full URL of the server. It should resolve to the home page. Set this if you use an external server or tunnel, instead of directly exposing atomic-server. If you leave this out, it will be generated from `domain`, `port` and `http` / `https`.
-    #[clap(long, env = "ATOMIC_SERVER_URL")]
-    pub server_url: Option<String>,
-
     /// How much logs you want. Also influences what is sent to your trace service, if you've set one (e.g. OpenTelemetry)
     #[clap(value_enum, long, default_value = "info", env = "RUST_LOG")]
     pub log_level: LogLevel,
@@ -101,6 +132,36 @@ pub struct Opts {
     /// Removes all remote resources from the store.
     #[clap(long, env = "ATOMIC_CLEAR_REMOTE_CACHE")]
     pub clear_remote_cache: bool,
+
+    /// The base domain for multi-tenant hosting.
+    /// If set, the server will allow serving subdomains of this domain (e.g. *.atomicserver.eu).
+    #[clap(long, env = "ATOMIC_BASE_DOMAIN")]
+    pub base_domain: Option<String>,
+
+    /// Friendly display name exchanged with other Atomic nodes on peer sync
+    /// (`HELLO` frame). Pure display — never used for authorization. Defaults
+    /// to the OS hostname if unset, then to "Unknown" if that fails.
+    #[clap(long, env = "ATOMIC_DEVICE_NAME")]
+    pub device_name: Option<String>,
+    /// Use the GPU (if available) for processing vector search embeddings.
+    #[clap(long, env = "ATOMIC_GPU_INDEXING")]
+    pub gpu_indexing: bool,
+
+    /// OpenRouter API key for remote embeddings instead of local fastembed.
+    #[clap(long, env = "OPENROUTER_API_KEY")]
+    pub openrouter_api_key: Option<String>,
+
+    /// OpenRouter embedding model id (required when `OPENROUTER_API_KEY` is set).
+    #[clap(long, env = "OPENROUTER_EMBEDDING_MODEL")]
+    pub openrouter_embedding_model: Option<String>,
+
+    /// Optional embedding vector dimensions for OpenRouter (JSON `dimensions` field; not all models honor it). Empty string is treated as unset.
+    #[clap(long, env = "OPENROUTER_EMBEDDING_DIMENSIONS")]
+    pub openrouter_embedding_dimensions: Option<String>,
+
+    /// Skip vector embedding models and Lance index builds (faster startup for tests).
+    #[clap(long, env = "ATOMIC_SKIP_VECTOR_INDEX")]
+    pub skip_vector_index: bool,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -121,6 +182,14 @@ pub enum LogLevel {
     Trace,
 }
 
+#[derive(clap::ValueEnum, Clone, Debug, PartialEq)]
+pub enum RebuildIndexMode {
+    All,
+    Atoms,
+    Vector,
+    Search,
+}
+
 #[derive(Parser, Clone, Debug)]
 pub enum Command {
     /// Create and save a JSON-AD backup of the store.
@@ -138,6 +207,13 @@ pub enum Command {
     /// Danger! Removes all data from the store.
     #[clap(name = "reset")]
     Reset,
+    /// Compact the on-disk redb file (rebuilds page layout, truncates
+    /// dead-page tail). Slow — typically minutes on a multi-GB store —
+    /// but makes future boots dramatically faster because the open-time
+    /// `fsync` cost scales with file size. Server MUST be stopped:
+    /// redb takes an exclusive file lock and will fail otherwise.
+    #[clap(name = "compact")]
+    Compact,
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -174,8 +250,6 @@ pub struct ServerOpts {}
 /// These are constructed from [Opts], which in turn are constructed from CLI arguments and ENV variables.
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// Full domain + schema, e.g. `https://example.com`. Is either generated from `domain` and `schema`, or is the `custom_server_url`.
-    pub server_url: String,
     /// CLI + ENV options
     pub opts: Opts,
     // ===  PATHS  ===
@@ -198,15 +272,66 @@ pub struct Config {
     pub uploads_path: PathBuf,
     /// Path to where the search index for tantivy full text search is located
     pub search_index_path: PathBuf,
+    /// Path to where the vector search index for polarisdb is located
+    pub vector_search_index_path: PathBuf,
     pub plugin_cache_path: PathBuf,
     /// If true, the initialization scripts will be ran (create first Drive, Agent, indexing, etc)
     pub initialize: bool,
+    /// The base domain for multi-tenant hosting.
+    pub base_domain: Option<String>,
+    /// If true, runs `populate_all` on startup without full initialize (no index rebuild).
+    pub repopulate_defaults: bool,
+    /// Use the GPU (if available) for processing vector search embeddings.
+    pub gpu_indexing: bool,
+
+    /// OpenRouter API key for remote embeddings (empty strings are treated as unset).
+    pub openrouter_api_key: Option<String>,
+    /// OpenRouter embedding model id (required when `openrouter_api_key` is set).
+    pub openrouter_embedding_model: Option<String>,
+    /// Optional embedding dimensions for OpenRouter.
+    pub openrouter_embedding_dimensions: Option<u32>,
+    /// When true, vector models are not loaded and indexing is a no-op.
+    pub skip_vector_index: bool,
+}
+
+impl Config {
+    /// Returns the origin URL (scheme + domain + port) based on the configuration.
+    pub fn get_origin(&self) -> String {
+        let proto = if self.opts.https { "https" } else { "http" };
+        let host = &self.opts.domain;
+        let port = if self.opts.https {
+            if self.opts.port_https == 443 {
+                "".into()
+            } else {
+                format!(":{}", self.opts.port_https)
+            }
+        } else if self.opts.port == 80 {
+            "".into()
+        } else {
+            format!(":{}", self.opts.port)
+        };
+        format!("{}://{}{}", proto, host, port)
+    }
+
+    /// Returns the base domain of the server (e.g. "atomicdata.dev").
+    pub fn get_base_domain(&self) -> Option<String> {
+        self.base_domain.clone()
+    }
+}
+
+/// True when the store path is under a throwaway test directory (e.g. `./.temp/...`).
+fn store_path_looks_like_test_harness(store_path: &std::path::Path) -> bool {
+    store_path.components().any(|c| c.as_os_str() == ".temp")
 }
 
 /// Parse .env and CLI options
 pub fn read_opts() -> Opts {
     // Parse .env file (do this before parsing the CLI opts)
-    dotenv().ok();
+
+    match dotenv() {
+        Ok(_) => println!(".env file found and parsed"),
+        Err(_e) => (),
+    }
 
     // Parse CLI options, .env values, set defaults
     Opts::parse()
@@ -230,14 +355,16 @@ pub fn build_temp_config(random_id: &str) -> AtomicServerResult<Config> {
 /// Creates the server config, reads .env values and sets defaults
 pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
     // Directories & file system
-    let project_dirs = directories::ProjectDirs::from("", "", "atomic-data")
-        .expect("Could not find Project directories on your OS");
+    // Only resolve platform-specific dirs when not explicitly set (avoids panic on Android)
+    let get_project_dirs = || directories::ProjectDirs::from("", "", "atomic-data");
 
     // Persistent user data
-    let data_dir = opts
-        .data_dir
-        .clone()
-        .unwrap_or_else(|| project_dirs.data_dir().to_owned());
+    let data_dir = match opts.data_dir.clone() {
+        Some(dir) => dir,
+        None => get_project_dirs()
+            .map(|d| d.data_dir().to_owned())
+            .unwrap_or_else(|| PathBuf::from("atomic-data/data")),
+    };
     let mut store_path = data_dir.clone();
     store_path.push("store");
 
@@ -269,18 +396,34 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
 
     // Cache data
 
-    let cache_dir = opts
-        .cache_dir
-        .clone()
-        .unwrap_or_else(|| project_dirs.cache_dir().to_owned());
+    let cache_dir = match opts.cache_dir.clone() {
+        Some(dir) => dir,
+        None => get_project_dirs()
+            .map(|d| d.cache_dir().to_owned())
+            .unwrap_or_else(|| PathBuf::from("atomic-data/cache")),
+    };
 
     let mut search_index_path = cache_dir.clone();
     search_index_path.push("search_index");
 
+    let mut vector_search_index_path = cache_dir.clone();
+    vector_search_index_path.push("vector_search_index");
+
     let mut plugin_cache_path = cache_dir.clone();
     plugin_cache_path.push("plugin_cache");
 
+    // Keep search/vector indexes beside throwaway test stores so parallel `cargo test`
+    // runs do not share the production cache dir (Tantivy lock contention, Lance dim mismatch).
+    if opts.cache_dir.is_none() && store_path_looks_like_test_harness(&store_path) {
+        let test_root = store_path
+            .parent()
+            .expect("test store path should have a parent directory");
+        search_index_path = test_root.join("search_index");
+        vector_search_index_path = test_root.join("vector_search_index");
+    }
+
     let initialize = !std::path::Path::exists(&store_path) || opts.initialize;
+    let repopulate_defaults = opts.repopulate_defaults;
 
     if opts.https & opts.email.is_none() {
         return Err(
@@ -289,31 +432,53 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         );
     }
 
-    let schema = if opts.https { "https" } else { "http" };
+    let base_domain = opts.base_domain.clone();
 
-    // This logic could be a bit too complicated, but I'm not sure on how to make this simpler.
-    let server_url = if let Some(addr) = opts.server_url.clone() {
-        addr
-    } else if opts.https && opts.port_https == 443 || !opts.https && opts.port == 80 {
-        format!("{}://{}", schema, opts.domain)
-    } else {
-        format!("{}://{}:{}", schema, opts.domain, opts.port)
+    let gpu_indexing = opts.gpu_indexing;
+
+    let openrouter_api_key = opts.openrouter_api_key.clone().filter(|s| !s.is_empty());
+    let openrouter_embedding_model = opts
+        .openrouter_embedding_model
+        .clone()
+        .filter(|s| !s.is_empty());
+    let openrouter_embedding_dimensions = match opts.openrouter_embedding_dimensions.as_deref() {
+        None | Some("") => None,
+        Some(s) => {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.parse().map_err(|_| {
+                    "OPENROUTER_EMBEDDING_DIMENSIONS must be a non-negative integer if set"
+                })?)
+            }
+        }
     };
+
+    let skip_vector_index =
+        opts.skip_vector_index || cfg!(test) || store_path_looks_like_test_harness(&store_path);
 
     Ok(Config {
         initialize,
+        repopulate_defaults,
+        gpu_indexing,
+        openrouter_api_key,
+        openrouter_embedding_model,
+        openrouter_embedding_dimensions,
+        skip_vector_index,
         opts,
         cert_path,
         config_dir,
         config_file_path,
         https_path,
         key_path,
-        server_url,
         plugin_path,
         static_path,
         store_path,
         search_index_path,
+        vector_search_index_path,
         plugin_cache_path,
         uploads_path,
+        base_domain,
     })
 }

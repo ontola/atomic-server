@@ -17,25 +17,22 @@ pub fn get_https_config(
     config: &crate::config::Config,
 ) -> AtomicServerResult<rustls::ServerConfig> {
     use rustls_pemfile::{certs, pkcs8_private_keys};
-    let https_config = rustls::ServerConfig::builder()
-        .with_safe_defaults()
-        .with_no_client_auth();
+    let https_config = rustls::ServerConfig::builder().with_no_client_auth();
     let cert_file =
         &mut BufReader::new(File::open(config.cert_path.clone()).expect("No HTTPS TLS key found."));
     let key_file =
         &mut BufReader::new(File::open(&config.key_path).expect("Could not open config key path"));
     let mut cert_chain = Vec::new();
 
-    for bytes in certs(cert_file)? {
-        let certificate = rustls::Certificate(bytes);
-        cert_chain.push(certificate);
+    for cert in certs(cert_file) {
+        cert_chain.push(cert?);
     }
-    let mut keys = pkcs8_private_keys(key_file)?;
+    let mut keys = pkcs8_private_keys(key_file).collect::<Result<Vec<_>, _>>()?;
     if keys.is_empty() {
         panic!("No key found. Consider deleting the `.https` directory and restart to create new keys.")
     }
     Ok(https_config
-        .with_single_cert(cert_chain, rustls::PrivateKey(keys.remove(0)))
+        .with_single_cert(cert_chain, keys.remove(0).into())
         .expect("Unable to create HTTPS config from certificates"))
 }
 
@@ -152,9 +149,10 @@ async fn cert_init_server(
     std::thread::sleep(std::time::Duration::from_secs(2));
     info!("Testing availability of {}", &well_known_url);
 
-    let agent = ureq::builder()
-        .timeout(std::time::Duration::from_secs(2))
-        .build();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(2)))
+        .build()
+        .into();
     let resp = agent.get(&well_known_url).call().map_err(|e| {
         format!(
             "Unable to test local server. Is it available at the right address? {}",
@@ -201,17 +199,20 @@ pub async fn request_cert(config: &crate::config::Config) -> AtomicServerResult<
 
     info!("Creating LetsEncrypt account with email {}", email);
 
-    let (account, _creds) = instant_acme::Account::create(
-        &instant_acme::NewAccount {
-            contact: &[&format!("mailto:{}", email)],
-            terms_of_service_agreed: true,
-            only_return_existing: false,
-        },
-        lets_encrypt_url,
-        None,
-    )
-    .await
-    .map_err(|e| format!("Failed to create account: {}", e))?;
+    let contact = format!("mailto:{}", email);
+    let (account, _creds) = instant_acme::Account::builder()
+        .map_err(|e| format!("Failed to create account builder: {}", e))?
+        .create(
+            &instant_acme::NewAccount {
+                contact: &[&contact],
+                terms_of_service_agreed: true,
+                only_return_existing: false,
+            },
+            lets_encrypt_url.to_owned(),
+            None,
+        )
+        .await
+        .map_err(|e| format!("Failed to create account: {}", e))?;
 
     // Create the ACME order based on the given domain names.
     // Note that this only needs an `&Account`, so the library will let you
@@ -222,11 +223,9 @@ pub async fn request_cert(config: &crate::config::Config) -> AtomicServerResult<
         // Set a wildcard subdomain. Not possible with Http-01 challenge, only Dns-01.
         domain = format!("*.{}", domain);
     }
-    let identifier = instant_acme::Identifier::Dns(domain);
+    let identifiers = vec![instant_acme::Identifier::Dns(domain)];
     let mut order = account
-        .new_order(&instant_acme::NewOrder {
-            identifiers: &[identifier],
-        })
+        .new_order(&instant_acme::NewOrder::new(&identifiers))
         .await
         .unwrap();
 
@@ -237,120 +236,66 @@ pub async fn request_cert(config: &crate::config::Config) -> AtomicServerResult<
 
     // Pick the desired challenge type and prepare the response.
 
-    let authorizations = order.authorizations().await.unwrap();
-    let mut challenges = Vec::with_capacity(authorizations.len());
-
     // if we have H11p01 challenges, we need to start a server to handle them, and eventually turn that off again
     let mut handle: Option<ServerHandle> = None;
 
-    for authz in &authorizations {
-        match authz.status {
-            instant_acme::AuthorizationStatus::Pending => {}
-            instant_acme::AuthorizationStatus::Valid => continue,
-            _ => todo!(),
-        }
-
-        let challenge = authz
-            .challenges
-            .iter()
-            .find(|c| c.r#type == challenge_type)
-            .ok_or(format!("no {:?} challenge found", challenge_type))?;
-
-        let instant_acme::Identifier::Dns(identifier) = &authz.identifier;
-
-        let key_auth = order.key_authorization(challenge);
-        match challenge_type {
-            instant_acme::ChallengeType::Http01 => {
-                handle = Some(cert_init_server(config, challenge, &key_auth).await?);
+    {
+        let mut authorizations = order.authorizations();
+        while let Some(result) = authorizations.next().await {
+            let mut authz = result.map_err(|e| format!("Failed to fetch authorization: {}", e))?;
+            match authz.status {
+                instant_acme::AuthorizationStatus::Pending => {}
+                instant_acme::AuthorizationStatus::Valid => continue,
+                _ => todo!(),
             }
-            instant_acme::ChallengeType::Dns01 => {
-                println!("Please set the following DNS record then press any key:");
-                println!(
-                    "_acme-challenge.{} IN TXT {}",
-                    identifier,
-                    key_auth.dns_value()
-                );
-                std::io::stdin().read_line(&mut String::new()).unwrap();
+
+            let mut challenge = authz
+                .challenge(challenge_type.clone())
+                .ok_or(format!("no {:?} challenge found", challenge_type))?;
+            let key_auth = challenge.key_authorization();
+            match challenge_type {
+                instant_acme::ChallengeType::Http01 => {
+                    handle = Some(cert_init_server(config, &challenge, &key_auth).await?);
+                }
+                instant_acme::ChallengeType::Dns01 => {
+                    println!("Please set the following DNS record then press any key:");
+                    println!(
+                        "_acme-challenge.{} IN TXT {}",
+                        challenge.identifier(),
+                        key_auth.dns_value()
+                    );
+                    std::io::stdin().read_line(&mut String::new()).unwrap();
+                }
+                instant_acme::ChallengeType::TlsAlpn01 => todo!("TLS-ALPN-01 is not supported"),
+                _ => todo!("Unsupported ACME challenge type"),
             }
-            instant_acme::ChallengeType::TlsAlpn01 => todo!("TLS-ALPN-01 is not supported"),
+
+            info!(
+                "Setting challenge ready for {} at {}",
+                challenge.identifier(),
+                challenge.url
+            );
+            challenge.set_ready().await.unwrap();
         }
-
-        challenges.push((identifier, &challenge.url));
-    }
-
-    // Let the server know we're ready to accept the challenges.
-    for (a, url) in &challenges {
-        info!("Setting challenge ready for {} at {}", a, url);
-        order.set_challenge_ready(url).await.unwrap();
     }
 
     // Exponentially back off until the order becomes ready or invalid.
-    let mut tries = 1u8;
-    let mut delay = std::time::Duration::from_millis(250);
-    let url = authorizations.get(0).expect("Authorizations is empty");
-    let state = loop {
-        let state = order.state();
-        info!("Order state: {:#?}", state);
-        if let OrderStatus::Ready | OrderStatus::Invalid | OrderStatus::Valid = state.status {
-            break state;
-        }
-        order.refresh().await.unwrap();
-
-        delay *= 2;
-        tries += 1;
-        match tries < 10 {
-            true => info!("order is not ready, waiting {delay:?}"),
-            false => {
-                return Err(format!(
-                    "Giving up: order is not ready. For details, see the url: {url:?}"
-                )
-                .into());
-            }
-        }
-        actix::clock::sleep(delay).await;
-    };
-
-    if state.status == OrderStatus::Invalid {
-        return Err(format!("order is invalid, check {url:?}").into());
+    let status = order
+        .poll_ready(&instant_acme::RetryPolicy::default())
+        .await
+        .map_err(|e| format!("Failed while waiting for ACME order: {}", e))?;
+    if status != OrderStatus::Ready {
+        return Err(format!("unexpected ACME order status: {status:?}").into());
     }
 
-    let mut names = Vec::with_capacity(challenges.len());
-    for (identifier, _) in challenges {
-        names.push(identifier.to_owned());
-    }
+    let private_key_pem = order.finalize().await.map_err(|e| e.to_string())?;
+    let cert_chain_pem = order
+        .poll_certificate(&instant_acme::RetryPolicy::default())
+        .await
+        .map_err(|e| format!("Error getting certificate {}", e))?;
+    info!("Certificate ready!");
 
-    // If the order is ready, we can provision the certificate.
-    // Use the rcgen library to create a Certificate Signing Request.
-    let mut params = rcgen::CertificateParams::new(names);
-    params.distinguished_name = rcgen::DistinguishedName::new();
-    let cert = rcgen::Certificate::from_params(params).map_err(|e| e.to_string())?;
-    let csr = cert.serialize_request_der().map_err(|e| e.to_string())?;
-
-    // Finalize the order and print certificate chain, private key and account credentials.
-    order.finalize(&csr).await.map_err(|e| e.to_string())?;
-
-    let mut tries = 1u8;
-
-    let cert_chain_pem = loop {
-        match order.certificate().await {
-            Ok(Some(cert_chain_pem)) => {
-                info!("Certificate ready!");
-                break cert_chain_pem;
-            }
-            Ok(None) => {
-                if tries > 10 {
-                    return Err("Giving up: certificate is still not ready".into());
-                }
-                tries += 1;
-                info!("Certificate not ready yet...");
-                std::thread::sleep(std::time::Duration::from_secs(1));
-                continue;
-            }
-            Err(e) => return Err(format!("Error getting certificate {}", e).into()),
-        }
-    };
-
-    write_certs(config, cert_chain_pem, cert)?;
+    write_certs(config, cert_chain_pem, private_key_pem)?;
 
     if let Some(hnd) = handle {
         warn!("HTTPS TLS Cert init successful! Stopping temporary HTTP server, starting HTTPS...");
@@ -363,12 +308,12 @@ pub async fn request_cert(config: &crate::config::Config) -> AtomicServerResult<
 fn write_certs(
     config: &crate::config::Config,
     cert_chain_pem: String,
-    cert: rcgen::Certificate,
+    private_key_pem: String,
 ) -> AtomicServerResult<()> {
     info!("Writing TLS certificates to {:?}", config.https_path);
     fs::create_dir_all(PathBuf::from(&config.https_path))?;
     fs::write(&config.cert_path, cert_chain_pem)?;
-    fs::write(&config.key_path, cert.serialize_private_key_pem())?;
+    fs::write(&config.key_path, private_key_pem)?;
     set_certs_created_at_file(config);
 
     Ok(())

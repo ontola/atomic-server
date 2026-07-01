@@ -1,11 +1,19 @@
 import { useState, type JSX } from 'react';
-import { useResource, signRequest, HeadersObject } from '@tomic/react';
+import {
+  useResource,
+  useCreatedAt,
+  useCreatedBy,
+  signRequest,
+  HeadersObject,
+  useStore,
+} from '@tomic/react';
 
 import AllProps from '../components/AllProps';
 import { ContainerNarrow } from '../components/Containers';
 import { AtomicLink } from '../components/AtomicLink';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { PropValRow, PropertyLabel } from '../components/PropVal';
+import { CommitDetail } from '../components/CommitDetail';
 import { Button } from '../components/Button';
 import { ErrMessage } from '../components/forms/InputStyles';
 import { useSettings } from '../helpers/AppSettings';
@@ -33,6 +41,10 @@ export const DataRoute = createRoute({
 function Data(): JSX.Element {
   const [subject] = useCurrentSubject();
   const resource = useResource(subject);
+  // Creation metadata derived from the signed genesis commit (the resource
+  // identity), materialized into propvals — not a refetched commit.
+  const createdAt = useCreatedAt(resource);
+  const createdBy = useCreatedBy(resource);
   const [textResponse, setTextResponse] = useState<string | undefined>(
     undefined,
   );
@@ -40,6 +52,7 @@ function Data(): JSX.Element {
   const [err, setErr] = useState<Error | undefined>(undefined);
   const { agent } = useSettings();
   const navigate = useNavigateWithTransition();
+  const store = useStore();
 
   if (!subject) {
     <ContainerNarrow>No subject passed</ContainerNarrow>;
@@ -58,17 +71,25 @@ function Data(): JSX.Element {
   }
 
   async function fetchAs(contentType: string) {
+    if (!subject) return;
+
     let headers: HeadersObject = {};
     headers['Accept'] = contentType;
 
+    let url = subject;
+
+    if (subject.startsWith('did:')) {
+      url = `${store.getServerUrl()}/did?subject=${encodeURIComponent(subject)}`;
+    }
+
     if (agent) {
-      headers = await signRequest(subject!, agent, headers);
+      headers = await signRequest(url, agent, headers);
     }
 
     setTextResponseLoading(true);
 
     try {
-      const resp = await window.fetch(subject!, { headers: headers });
+      const resp = await window.fetch(url, { headers: headers });
       const body = await resp.text();
       setTextResponseLoading(false);
       setTextResponse(body);
@@ -103,6 +124,14 @@ function Data(): JSX.Element {
             </PropertyLabel>
             <AtomicLink subject={subject}>{subject}</AtomicLink>
           </PropValRow>
+          {(createdBy || createdAt) && (
+            <PropValRow columns>
+              <PropertyLabel title='Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature.'>
+                genesis:
+              </PropertyLabel>
+              <CommitDetail createdAt={createdAt} createdBy={createdBy} />
+            </PropValRow>
+          )}
           <AllProps resource={resource} editable columns />
           {resource.hasUnsavedChanges() ? (
             <>

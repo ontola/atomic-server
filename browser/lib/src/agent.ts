@@ -1,5 +1,6 @@
 import { Client } from './client.js';
 import {
+  generateKeyPair,
   JSCryptoProvider,
   SubtleCryptoProvider,
   type CryptoProvider,
@@ -19,10 +20,15 @@ export interface StoredAgent {
 export class Agent implements AgentInterface {
   public client: Client;
   private _subject?: string;
+  public initialDrive?: string;
 
   #cryptoProvider: CryptoProvider;
 
-  public constructor(provider: CryptoProvider, subject?: string) {
+  public constructor(
+    provider: CryptoProvider,
+    subject?: string,
+    initialDrive?: string,
+  ) {
     if (subject) {
       Client.tryValidSubject(subject);
     }
@@ -30,6 +36,7 @@ export class Agent implements AgentInterface {
     this.client = new Client();
     this._subject = subject;
     this.#cryptoProvider = provider;
+    this.initialDrive = initialDrive;
   }
 
   public get subject(): string | undefined {
@@ -47,39 +54,66 @@ export class Agent implements AgentInterface {
     type: 'js' | 'subtle' = 'subtle',
   ): Agent | Promise<Agent> {
     if (type === 'js') {
-      const [provider, subject] = JSCryptoProvider.fromSecret(secretB64);
+      const [provider, subject, initialDrive] =
+        JSCryptoProvider.fromSecret(secretB64);
 
-      return new Agent(provider, subject);
+      return new Agent(provider, subject, initialDrive);
     }
 
     return new Promise((resolve, reject) => {
       SubtleCryptoProvider.createKeysFromSecret(secretB64)
-        .then(([keys, subject]) => {
+        .then(([keys, subject, initialDrive]) => {
           const provider = new SubtleCryptoProvider(keys);
-          const agent = new Agent(provider, subject);
+          const agent = new Agent(provider, subject, initialDrive);
 
           resolve(agent);
         })
-        .catch(reject);
+        .catch(() => {
+          // Fallback to JS crypto if SubtleCrypto doesn't support Ed25519
+          // (e.g. in some headless browser environments)
+          try {
+            const [provider, subject, initialDrive] =
+              JSCryptoProvider.fromSecret(secretB64);
+            resolve(new Agent(provider, subject, initialDrive));
+          } catch (e) {
+            reject(e);
+          }
+        });
     });
   }
 
   public static fromCryptoKeyPair(
     keyPair: CryptoKeyPair,
     subject?: string,
+    initialDrive?: string,
   ): Agent {
     const provider = new SubtleCryptoProvider(keyPair);
 
-    return new Agent(provider, subject);
+    return new Agent(provider, subject, initialDrive);
+  }
+
+  /**
+   * Generates a new Ed25519 keypair.
+   */
+  public static async generateKeyPair(): Promise<{
+    publicKey: string;
+    privateKey: string;
+  }> {
+    return generateKeyPair();
   }
 
   /**
    * Builds a secret from a private key and a subject. Give this to a user to store safely or store it in a database.
    */
-  public static buildSecret(privateKey: string, subject: string): string {
+  public static buildSecret(
+    privateKey: string,
+    subject: string,
+    initialDrive?: string,
+  ): string {
     const objJsonStr = JSON.stringify({
       privateKey: privateKey,
       subject: subject,
+      initialDrive: initialDrive,
     });
 
     return btoa(objJsonStr);
@@ -140,4 +174,6 @@ export interface AgentInterface {
   publicKey?: string;
   /** URL of the Agent */
   subject?: string;
+  /** The DID of the drive that should be opened by default for this agent. */
+  initialDrive?: string;
 }

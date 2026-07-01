@@ -1,20 +1,20 @@
 //! App state, which is accessible from handlers
+use std::sync::Arc;
+
 use crate::{
     commit_monitor::CommitMonitor,
     config::Config,
     errors::AtomicServerResult,
+    handlers::web_sockets::IndexStatusBroadcast,
+    loro_sync_broadcaster::{self, LoroSyncBroadcaster},
     plugins,
     search::SearchState,
-    y_sync_broadcaster::{self, YSyncBroadcaster},
 };
-use atomic_lib::{
-    agents::Agent,
-    commit::CommitResponse,
-    config::{ClientConfig, SharedConfig},
-    Storelike,
-};
+use atomic_lib::{agents::Agent, commit::CommitResponse, config::SharedConfig, Storelike};
 
+#[cfg(feature = "wasm-plugins")]
 use crate::plugins::wasm;
+
 /// The AppState contains all the relevant Context for the server.
 /// This data object is available to all handlers and actors.
 /// Contains the store, configuration and addresses for Actix Actors, such as for the [CommitMonitor].
@@ -29,8 +29,19 @@ pub struct AppState {
     pub config: Config,
     /// The Actix Address of the CommitMonitor, which should receive updates when a commit is applied
     pub commit_monitor: actix::Addr<CommitMonitor>,
-    pub y_sync_broadcaster: actix::Addr<YSyncBroadcaster>,
+    pub loro_sync_broadcaster: actix::Addr<LoroSyncBroadcaster>,
     pub search_state: SearchState,
+    pub vector_search_state: crate::vector_search::VectorSearchState,
+    pub index_status_broadcast: Arc<IndexStatusBroadcast>,
+    /// Whether this node is managed (reports to a control plane). Set at runtime
+    /// by an embedder hook (see `serve_with_hook`); surfaced via the managed
+    /// manifest endpoint. Always false on self-hosted nodes.
+    pub managed: Arc<std::sync::atomic::AtomicBool>,
+    /// User-facing portal URL for a managed node, populated at runtime by the
+    /// embedder's policy poll (empty on self-hosted nodes). Read by the managed
+    /// manifest endpoint so the welcome screen can route account creation to the
+    /// dashboard.
+    pub managed_dashboard_url: Arc<std::sync::RwLock<Option<String>>>,
 }
 
 impl AppState {
@@ -48,12 +59,29 @@ impl AppState {
             tracing::warn!("Development mode is enabled. This will use staging environments for services like LetsEncrypt.");
         }
 
-        let mut store = atomic_lib::Db::init(&config.store_path, config.server_url.clone()).await?;
+        let mut store = atomic_lib::Db::init_redb_file(
+            &config.store_path,
+            Some(config.get_origin()),
+            &config.uploads_path,
+        )
+        .await?;
+
+        // Drop the persisted watched-query registry on startup. Every
+        // entry was registered by a now-dead WS connection; live
+        // subscribers re-register on reconnect. Without this, e2e
+        // suites leak a unique filter per test (drives are unique)
+        // and `check_if_atom_matches_watched_query_filters` walks a
+        // growing pile of dead filters per commit, eventually pushing
+        // rapid-save tests past their timeout. See
+        // `Db::clear_watched_queries` for the full rationale.
+        if let Err(e) = store.clear_watched_queries() {
+            tracing::warn!("clear_watched_queries on startup failed: {e}");
+        }
 
         // Register all built-in class extenders
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
         store.add_class_extender(plugins::chatroom::build_message_extender())?;
-        store.add_class_extender(plugins::invite::build_invite_extender())?;
+        store.add_endpoint(plugins::invite::invite_endpoint())?;
         store.add_class_extender(plugins::plugin::build_plugin_extender(
             config.plugin_path.clone(),
             config.plugin_cache_path.clone(),
@@ -66,6 +94,8 @@ impl AppState {
         // Register all built-in endpoints
         store.add_endpoint(plugins::versioning::version_endpoint())?;
         store.add_endpoint(plugins::versioning::all_versions_endpoint())?;
+        store.add_endpoint(plugins::did::did_endpoint())?;
+        store.add_endpoint(plugins::setup::setup_endpoint())?;
         store.add_endpoint(plugins::bookmark::bookmark_endpoint())?;
         store.add_endpoint(plugins::files::upload_endpoint())?;
         store.add_endpoint(plugins::files::download_endpoint())?;
@@ -76,41 +106,79 @@ impl AppState {
         store.add_endpoint(plugins::prunetests::prune_tests_endpoint())?;
         store.add_endpoint(plugins::query::query_endpoint())?;
         store.add_endpoint(plugins::search::search_endpoint())?;
+        #[cfg(feature = "vector-search")]
+        store.add_endpoint(plugins::vector_search::vector_search_endpoint())?;
 
         // Get and register Wasm class extender plugins
-        let extenders =
-            wasm::load_wasm_class_extenders(&config.plugin_path, &config.plugin_cache_path, &store)
-                .await?;
+        #[cfg(feature = "wasm-plugins")]
+        {
+            let extenders = wasm::load_wasm_class_extenders(
+                &config.plugin_path,
+                &config.plugin_cache_path,
+                &store,
+            )
+            .await?;
 
-        for extender in extenders {
-            store.add_class_extender(extender)?;
-        }
-
-        let no_server_resource = store.get_resource(&config.server_url).await.is_err();
-        if no_server_resource {
-            tracing::warn!("Server URL resource not found. This is likely because the server URL has changed. Initializing a new database...");
-        }
-        let should_init = !&config.store_path.exists() || config.initialize || no_server_resource;
-        if should_init {
-            tracing::info!("Initialize: creating and populating new Database...");
-            atomic_lib::populate::populate_default_store(&store)
-                .await
-                .map_err(|e| format!("Failed to populate default store. {}", e))?;
+            for extender in extenders {
+                store.add_class_extender(extender)?;
+            }
         }
 
         set_default_agent(&config, &store).await?;
+
+        let should_init = !&config.store_path.exists() || config.initialize;
+        // If the store is empty, populate the core models (classes, properties, etc.).
+        // We don't create a Drive here anymore; that's handled in the data-browser (new identity flow).
+        if should_init {
+            tracing::info!("Initialize: bootstrapping core models...");
+            atomic_lib::populate::bootstrap(&store)
+                .await
+                .map_err(|e| format!("Failed to bootstrap store. {}", e))?;
+        } else if config.repopulate_defaults {
+            // Re-import the built-in ontologies + default resources into an
+            // already-seeded store (without an index rebuild). `import` upserts,
+            // so this only adds new/changed default resources (e.g. a freshly
+            // added Class) and leaves user data untouched. Triggered by
+            // `ATOMIC_REPOPULATE_DEFAULTS=true`.
+            tracing::info!("Repopulating built-in ontologies and default resources...");
+            atomic_lib::populate::populate_default_store(&store)
+                .await
+                .map_err(|e| format!("Failed to repopulate defaults. {}", e))?;
+        }
 
         // Initialize search constructs
         let search_state = SearchState::new(&config)
             .map_err(|e| format!("Failed to start search service: {}", e))?;
 
+        if should_init {
+            tracing::info!("Adding all resources to search index");
+            search_state.add_all_resources(&store).await?;
+        }
+
+        let index_status_broadcast = Arc::new(IndexStatusBroadcast::new());
+        let index_notifier: Arc<dyn Fn(&str, bool) + Send + Sync> = {
+            let b = index_status_broadcast.clone();
+            Arc::new(move |drive: &str, indexing: bool| {
+                b.notify(drive, indexing);
+            })
+        };
+
+        let vector_search_state =
+            crate::vector_search::VectorSearchState::new(&config, Some(index_notifier))
+                .await
+                .map_err(|e| format!("Failed to start vector search service: {}", e))?;
+
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
-        let commit_monitor =
-            crate::commit_monitor::create_commit_monitor(store.clone(), search_state.clone());
+        let commit_monitor = crate::commit_monitor::create_commit_monitor(
+            store.clone(),
+            search_state.clone(),
+            vector_search_state.clone(),
+        );
 
         let commit_monitor_clone = commit_monitor.clone();
 
-        let y_sync_broadcaster = y_sync_broadcaster::create_y_sync_broadcaster(store.clone());
+        let loro_sync_broadcaster =
+            loro_sync_broadcaster::create_loro_sync_broadcaster(store.clone());
 
         // This closure is called every time a Commit is created
         let send_commit = move |commit_response: &CommitResponse| {
@@ -120,37 +188,22 @@ impl AppState {
         };
         store.set_handle_commit(Box::new(send_commit));
 
-        // If the user changes their server_url, the drive will not exist.
-        // In this situation, we should re-build a new drive from scratch.
-        if should_init {
-            atomic_lib::populate::populate_all(&store).await?;
-            // Building the index here is needed to perform Queries on imported resources
-            let store_clone = store.clone();
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(async {
-                    let res = store_clone.build_index(true);
-                    if let Err(e) = res {
-                        tracing::error!("Failed to build index: {}", e);
-                    }
-                });
-            });
-
-            set_up_initial_invite(&store)
-                .await
-                .map_err(|e| format!("Error while setting up initial invite: {}", e))?;
-            // This means that editing the .env does _not_ grant you the rights to edit the Drive.
-
-            tracing::info!("Adding all resources to search index");
-            search_state.add_all_resources(&store).await?;
+        if should_init && vector_search_state.is_enabled() {
+            tracing::info!("Adding all resources to vector search index");
+            if let Err(e) = vector_search_state.add_all_resources(&store).await {
+                tracing::error!("Failed to add all resources to vector search index: {}", e);
+            }
         }
-
         Ok(AppState {
             store,
             config,
             commit_monitor,
-            y_sync_broadcaster,
+            loro_sync_broadcaster,
             search_state,
+            vector_search_state,
+            index_status_broadcast,
+            managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            managed_dashboard_url: Arc::new(std::sync::RwLock::new(None)),
         })
     }
 
@@ -158,7 +211,28 @@ impl AppState {
     /// Cleanup code, writing buffers, committing changes, etc.
     fn exit(&self) -> AtomicServerResult<()> {
         self.search_state.writer.write()?.commit()?;
-        Ok(())
+
+        // `flush_pending` is async; sync teardown (`exit`) runs outside/normal teardown contexts where we cannot safely call `Handle::block_on()`
+        // — nesting Tokio block-on triggers panic ("cannot block_on runtime inside runtime").
+        let vs = self.vector_search_state.clone();
+        match std::thread::spawn(move || -> AtomicServerResult<()> {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| {
+                    format!(
+                        "failed to build shutdown tokio runtime for vector flush: {}",
+                        e
+                    )
+                })?;
+            rt.block_on(vs.flush_pending())
+        })
+        .join()
+        {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(_panic) => Err("vector index flush thread panicked on shutdown".into()),
+        }
     }
 }
 
@@ -176,11 +250,53 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
 
     let agent = match atomic_lib::config::read_config(Some(&config.config_file_path)) {
         Ok(agent_config) => {
-            let agent = Agent::from_secret(&agent_config.shared.agent_secret)?;
-            match store.get_resource(&agent.subject).await {
+            let mut agent = Agent::from_secret(&agent_config.shared.agent_secret)?;
+
+            // Migrate old-format agent subjects (e.g. "https://atomicdata.dev/agents/...")
+            // to the new "did:ad:" format. Old configs stored the agent subject as an
+            // HTTP URL on atomicdata.dev, but the agent's keys are local. During invite token
+            // verification the old URL would resolve to an external resource with a different
+            // public key, causing "Invalid signature" errors.
+            let needs_migration = agent
+                .subject
+                .as_str()
+                .starts_with("https://atomicdata.dev/agents/")
+                || agent
+                    .subject
+                    .as_str()
+                    .starts_with("http://atomicdata.dev/agents/");
+            if needs_migration {
+                let private_key = agent
+                    .private_key
+                    .clone()
+                    .ok_or("No private key found on agent to migrate")?;
+                let migrated = Agent::new_from_private_key(Some("server"), &private_key)?;
+                tracing::info!(
+                    "Migrating agent subject from old format '{}' to new format '{}'",
+                    agent.subject,
+                    migrated.subject
+                );
+                agent = migrated;
+
+                // Update the config file so the migration only happens once
+                let cfg = atomic_lib::config::Config {
+                    shared: SharedConfig {
+                        agent_secret: agent.build_secret()?,
+                        initial_drive: agent.initial_drive.clone().map(|s| s.to_string()),
+                    },
+                    client: agent_config.client,
+                };
+                cfg.save(&config.config_file_path)?;
+                tracing::info!(
+                    "Config file updated with migrated agent at {:?}",
+                    config.config_file_path
+                );
+            }
+
+            match store.get_resource(&agent.subject.clone()).await {
                 Ok(_) => agent,
                 Err(e) => {
-                    if agent.subject.contains(&config.server_url) {
+                    if agent.subject.is_local() {
                         // If there is an agent in the config, but not in the store,
                         // That probably means that the DB has been erased and only the config file exists.
                         // This means that the Agent from the Config file should be recreated, using its private key.
@@ -188,7 +304,6 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
 
                         let recreated_agent = Agent::new_from_private_key(
                             "server".into(),
-                            store,
                             &agent.private_key.ok_or("No private key found")?,
                         )?;
                         store.add_resource(&recreated_agent.to_resource()?).await?;
@@ -208,10 +323,9 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
             let cfg = atomic_lib::config::Config {
                 shared: SharedConfig {
                     agent_secret: agent.build_secret()?,
+                    initial_drive: agent.initial_drive.clone().map(|s| s.to_string()),
                 },
-                client: Some(ClientConfig {
-                    server_url: config.server_url.clone(),
-                }),
+                client: None,
             };
 
             cfg.save(&config.config_file_path)?;
@@ -225,59 +339,5 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
 
     tracing::info!("Default Agent is set: {}", &agent.subject);
     store.set_default_agent(agent);
-    Ok(())
-}
-
-/// Creates the first Invitation that is opened by the user on the Home page.
-async fn set_up_initial_invite(store: &impl Storelike) -> AtomicServerResult<()> {
-    let subject = format!("{}/setup", store.get_server_url()?);
-    tracing::info!("Creating initial Invite at {}", subject);
-    let mut invite = store.get_resource_new(&subject).await;
-    invite.set_class(atomic_lib::urls::INVITE);
-    invite.set_subject(subject);
-    // This invite can be used only once
-    invite
-        .set(
-            atomic_lib::urls::USAGES_LEFT.into(),
-            atomic_lib::Value::Integer(1),
-            store,
-        )
-        .await?;
-    invite
-        .set(
-            atomic_lib::urls::WRITE_BOOL.into(),
-            atomic_lib::Value::Boolean(true),
-            store,
-        )
-        .await?;
-    invite
-        .set(
-            atomic_lib::urls::TARGET.into(),
-            atomic_lib::Value::AtomicUrl(store.get_server_url()?.into()),
-            store,
-        )
-        .await?;
-    invite
-        .set(
-            atomic_lib::urls::PARENT.into(),
-            atomic_lib::Value::AtomicUrl(store.get_server_url()?.into()),
-            store,
-        )
-        .await?;
-    invite
-        .set(
-            atomic_lib::urls::NAME.into(),
-            atomic_lib::Value::String("Setup".into()),
-            store,
-        )
-        .await?;
-    invite
-        .set_string(
-            atomic_lib::urls::DESCRIPTION.into(),
-            "Use this Invite to create an Agent, or use an existing one. Accepting will grant your Agent the necessary rights to edit the data in your Atomic Server. This can only be used once. If you, for whatever reason, need a new `/setup` invite, you can pass the `--initialize` flag to `atomic-server`.",
-            store,
-        )
-        .await?;
-    invite.save_locally(store).await?;
     Ok(())
 }

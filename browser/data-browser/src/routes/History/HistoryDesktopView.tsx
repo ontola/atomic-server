@@ -1,19 +1,28 @@
-import { HistoryViewProps } from './HistoryViewProps';
+import { useMemo } from 'react';
+import type { HistoryViewProps } from './HistoryViewProps';
 import { styled } from 'styled-components';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Column, Row } from '../../components/Row';
 import { Title } from '../../components/Title';
-import { ResourceCardDefault } from '../../views/Card/ResourceCard';
 import { VersionTitle } from './VersionTitle';
 import { VersionScroller } from './VersionScroller';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../helpers/navigation';
+import {
+  ResourceDiff,
+  useResourceDiff,
+} from '@components/ResourceDiff/ResourceDiff';
+import { Tabs } from '@components/Tabs';
+import { plural } from '@helpers/plural';
+import { ResourceCardDefault } from '@views/Card/ResourceCard';
+import { useStore, Resource, type AtomicValue } from '@tomic/react';
 
 export function HistoryDesktopView({
   resource,
   groupedVersions,
   selectedVersion,
+  olderVersion,
   isCurrentVersion,
   onNextVersion,
   onPreviousVersion,
@@ -21,58 +30,101 @@ export function HistoryDesktopView({
   onVersionAccept,
 }: HistoryViewProps) {
   const navigate = useNavigateWithTransition();
+  const store = useStore();
+
+  const selectedVersionResource = useMemo(() => {
+    const res = new Resource(resource.subject);
+    res.setStore(store);
+    res.applyHydratedValues(
+      selectedVersion.propvals.entries() as Iterable<[string, AtomicValue]>,
+    );
+
+    return res;
+  }, [store, resource.subject, selectedVersion]);
+
+  const olderVersionResource = useMemo(() => {
+    if (!olderVersion) return undefined;
+    const res = new Resource(resource.subject);
+    res.setStore(store);
+    res.applyHydratedValues(
+      olderVersion.propvals.entries() as Iterable<[string, AtomicValue]>,
+    );
+
+    return res;
+  }, [store, resource.subject, olderVersion]);
+
+  const diff = useResourceDiff(olderVersionResource, selectedVersionResource);
+  const changesCountText = plural(diff.changedProps.length, [
+    '1 Change',
+    '# Changes',
+  ]);
+
+  const tabs = [
+    { label: changesCountText, value: 'changes' },
+    { label: 'Resource', value: 'resource' },
+  ];
+
+  const lastCommit = selectedVersion.propvals.get(
+    'https://atomicdata.dev/properties/lastCommit',
+  ) as string | undefined;
 
   return (
     <>
       <CurrentItem>
         <Column fullHeight>
           <Title resource={resource} prefix='History of' link />
-          {selectedVersion && selectedVersion?.resource && (
-            <>
-              <VersionTitle version={selectedVersion} />
-              <StyledCard>
-                <ResourceCardDefault resource={selectedVersion.resource} />
-              </StyledCard>
-              <Row>
-                <Button onClick={onVersionAccept} disabled={isCurrentVersion}>
-                  Make current version
-                </Button>
-                <Button
-                  onClick={() =>
-                    navigate(constructOpenURL(selectedVersion.commit.id!))
+          <>
+            <VersionTitle version={selectedVersion} />
+            <StyledCard>
+              <Tabs tabs={tabs} label='History'>
+                <Card.Content>
+                  <Tabs.Panel value='changes'>
+                    <ResourceDiff diff={diff} />
+                  </Tabs.Panel>
+                  <Tabs.Panel value='resource'>
+                    <ResourceCardDefault resource={selectedVersionResource} />
+                  </Tabs.Panel>
+                </Card.Content>
+              </Tabs>
+            </StyledCard>
+            <Row>
+              <Button onClick={onVersionAccept} disabled={isCurrentVersion}>
+                Restore this version
+              </Button>
+              <Button
+                disabled={!lastCommit}
+                onClick={() => {
+                  if (lastCommit) {
+                    navigate(constructOpenURL(lastCommit));
                   }
-                >
-                  Show Commit
-                </Button>
-              </Row>
-            </>
-          )}
+                }}
+              >
+                Show Commit
+              </Button>
+            </Row>
+          </>
         </Column>
       </CurrentItem>
       <VersionScroller
         persistSelection
-        subject={resource.getSubject()}
+        title={`History of ${resource.title}`}
+        subject={resource.subject}
         groupedVersions={groupedVersions}
-        onNextItem={onPreviousVersion}
-        onPreviousItem={onNextVersion}
         selectedVersion={selectedVersion}
         onSelectVersion={onSelectVersion}
-        title='Versions'
+        onNextItem={onNextVersion}
+        onPreviousItem={onPreviousVersion}
       />
     </>
   );
 }
 
-const StyledCard = styled(Card)`
-  flex: 1;
-  overflow: auto;
-  width: 100%;
-`;
-
 const CurrentItem = styled.div`
   flex: 1;
+  overflow-y: auto;
+`;
 
-  & h1 {
-    margin-bottom: 0;
-  }
+const StyledCard = styled(Card)`
+  flex: 1;
+  overflow-y: auto;
 `;

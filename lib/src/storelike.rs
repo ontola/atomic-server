@@ -10,7 +10,7 @@ use crate::{
     values::SubResource,
 };
 use crate::{errors::AtomicResult, parse::parse_json_ad_string};
-use crate::{mapping::Mapping, values::Value, Atom, Resource};
+use crate::{mapping::Mapping, values::Value, Atom, Resource, Subject};
 use async_trait::async_trait;
 use futures::future;
 
@@ -23,46 +23,80 @@ pub enum PathReturn {
 pub enum ResourceResponse {
     Resource(Resource),
     ResourceWithReferenced(Resource, Vec<Resource>),
+    /// A redirect to another subject. Used for resolving DIDs to their
+    /// location-specific HTTP aliases (e.g. `did:ad:blob:` to `/download/files/`).
+    Redirect(String),
 }
 
 impl ResourceResponse {
     /// Only take the main resource, discard any referenced resources.
+    /// Panics if this is a Redirect.
     pub fn to_single(&self) -> Resource {
         match self {
             ResourceResponse::Resource(resource) => resource.clone(),
             ResourceResponse::ResourceWithReferenced(resource, _) => resource.clone(),
-        }
-    }
-
-    pub fn to_json_ad(&self) -> AtomicResult<String> {
-        match self {
-            ResourceResponse::Resource(resource) => Ok(resource.to_json_ad()?),
-            ResourceResponse::ResourceWithReferenced(resource, references) => {
-                let mut list = references.clone();
-                list.push(resource.clone());
-                Ok(Resource::vec_to_json_ad(&list)?)
+            ResourceResponse::Redirect(s) => {
+                panic!("Cannot convert Redirect ({}) to Resource", s)
             }
         }
     }
 
-    pub async fn to_json(&self, store: &impl Storelike) -> AtomicResult<String> {
+    /// Get the subject of the main resource.
+    /// Returns None for Redirects.
+    pub fn get_subject(&self) -> Option<&Subject> {
         match self {
-            ResourceResponse::Resource(resource) => Ok(resource.to_json(store).await?),
+            ResourceResponse::Resource(resource) => Some(resource.get_subject()),
+            ResourceResponse::ResourceWithReferenced(resource, _) => Some(resource.get_subject()),
+            ResourceResponse::Redirect(_) => None,
+        }
+    }
+
+    pub fn to_json_ad(&self, origin: Option<&str>) -> AtomicResult<String> {
+        match self {
+            ResourceResponse::Resource(resource) => Ok(resource.to_json_ad(origin)?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
                 let mut list = references.clone();
                 list.push(resource.clone());
-                Ok(Resource::vec_to_json(&list, store).await?)
+                Ok(Resource::vec_to_json_ad(&list, origin)?)
+            }
+            ResourceResponse::Redirect(s) => {
+                Err(format!("Cannot convert Redirect ({}) to JSON-AD", s).into())
             }
         }
     }
 
-    pub async fn to_json_ld(&self, store: &impl Storelike) -> AtomicResult<String> {
+    pub async fn to_json(
+        &self,
+        store: &impl Storelike,
+        origin: Option<&str>,
+    ) -> AtomicResult<String> {
         match self {
-            ResourceResponse::Resource(resource) => Ok(resource.to_json_ld(store).await?),
+            ResourceResponse::Resource(resource) => Ok(resource.to_json(store, origin).await?),
             ResourceResponse::ResourceWithReferenced(resource, references) => {
                 let mut list = references.clone();
                 list.push(resource.clone());
-                Ok(Resource::vec_to_json_ld(&list, store).await?)
+                Ok(Resource::vec_to_json(&list, store, origin).await?)
+            }
+            ResourceResponse::Redirect(s) => {
+                Err(format!("Cannot convert Redirect ({}) to JSON", s).into())
+            }
+        }
+    }
+
+    pub async fn to_json_ld(
+        &self,
+        store: &impl Storelike,
+        origin: Option<&str>,
+    ) -> AtomicResult<String> {
+        match self {
+            ResourceResponse::Resource(resource) => Ok(resource.to_json_ld(store, origin).await?),
+            ResourceResponse::ResourceWithReferenced(resource, references) => {
+                let mut list = references.clone();
+                list.push(resource.clone());
+                Ok(Resource::vec_to_json_ld(&list, store, origin).await?)
+            }
+            ResourceResponse::Redirect(s) => {
+                Err(format!("Cannot convert Redirect ({}) to JSON-LD", s).into())
             }
         }
     }
@@ -75,6 +109,7 @@ impl ResourceResponse {
                 list.push(resource.clone());
                 Resource::vec_to_atoms(&list)
             }
+            ResourceResponse::Redirect(_) => Vec::new(),
         }
     }
 
@@ -87,13 +122,16 @@ impl ResourceResponse {
                 list.push(resource.clone());
                 Ok(Resource::vec_to_n_triples(&list, store).await?)
             }
+            ResourceResponse::Redirect(s) => {
+                Err(format!("Cannot convert Redirect ({}) to N-Triples", s).into())
+            }
         }
     }
 
     /// Takes a vector of resources and returns a ResourceResponse::ResourceWithReferenced
     /// If the main subject is not found it will Error
     pub fn from_vec(main_subject: &str, vec: Vec<Resource>) -> AtomicResult<Self> {
-        if vec.len() == 0 {
+        if vec.is_empty() {
             return Err("No resources found".into());
         }
         if vec.len() == 1 {
@@ -104,7 +142,7 @@ impl ResourceResponse {
         let mut referenced = Vec::new();
 
         for r in vec {
-            if r.get_subject() == main_subject {
+            if r.get_subject().as_str() == main_subject {
                 resource = Some(r);
             } else {
                 referenced.push(r);
@@ -130,7 +168,8 @@ pub type ResourceCollection = Vec<Resource>;
 /// It serves as a basic store Trait, agnostic of how it functions under the hood.
 /// This is useful, because we can create methods for Storelike that will work with either in-memory
 /// stores, as well as with persistent on-disk stores.
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait Storelike: Sized + Send + Sync {
     /// Adds Atoms to the store.
     /// Will replace existing Atoms that share Subject / Property combination.
@@ -140,6 +179,44 @@ pub trait Storelike: Sized + Send + Sync {
         note = "The atoms abstraction has been deprecated in favor of Resources"
     )]
     async fn add_atoms(&self, atoms: Vec<Atom>) -> AtomicResult<()>;
+
+    /// Maps a host (domain/subdomain) to a Drive DID.
+    fn add_drive_mapping(&self, host: &str, drive_did: &Value) -> AtomicResult<()>;
+
+    /// Removes the drive mapping for a given host.
+    fn remove_drive_mapping(&self, host: &str) -> AtomicResult<()>;
+
+    /// Returns the base domain of the store, e.g. "https://atomicdata.dev".
+    fn get_base_domain(&self) -> Option<String> {
+        None
+    }
+
+    /// Sets the base URL of the store.
+    fn set_base_url(&self, _url: &str) {}
+
+    /// Returns the full server URL, e.g. "http://localhost:9883" or "https://atomicdata.dev".
+    /// Used by client helpers to route DID resolution requests through the server's \`/did\` endpoint.
+    fn get_server_url(&self) -> String {
+        self.get_base_domain()
+            .unwrap_or_else(|| "http://localhost".to_string())
+    }
+
+    /// Get the active drive subject, if one is set.
+    fn get_active_drive(&self) -> Option<String> {
+        None
+    }
+
+    /// Set the active drive subject.
+    fn set_active_drive(&self, _drive: &str) -> AtomicResult<()> {
+        Err("set_active_drive not implemented for this store".into())
+    }
+
+    /// Clear the default agent.
+    fn clear_default_agent(&self) {}
+
+    fn normalize_subject(&self, subject: &Subject) -> Subject {
+        Subject::from_raw(subject.as_str(), self.get_base_domain().as_deref())
+    }
 
     /// Adds a Resource to the store.
     /// Replaces existing resource with the contents.
@@ -179,17 +256,23 @@ pub trait Storelike: Sized + Send + Sync {
 
         match (&applied.resource_old, &applied.resource_new) {
             (None, None) => {
-                return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into())
-            },
+                if !applied.commit.destroy.unwrap_or(false) {
+                    return Err(
+                        "Neither an old nor a new resource is returned from the commit - something went wrong."
+                            .into(),
+                    );
+                }
+            }
             (None, Some(new)) => {
                 self.add_resource(new).await?;
-            },
+            }
             (Some(_old), Some(new)) => {
                 self.add_resource(new).await?;
-            },
+            }
             (Some(_old), None) => {
-                assert_eq!(_old.get_subject(), &applied.commit.subject);
-                self.remove_resource(&applied.commit.subject).await?;
+                assert_eq!(_old.get_subject().as_str(), applied.commit.subject);
+                self.remove_resource(&applied.commit.subject.clone())
+                    .await?;
             }
         }
 
@@ -198,24 +281,9 @@ pub trait Storelike: Sized + Send + Sync {
 
     /// Returns a single [Value] from a [Resource]
     async fn get_value(&self, subject: &str, property: &str) -> AtomicResult<Value> {
-        self.get_resource(subject)
+        self.get_resource(&subject.into())
             .await
             .and_then(|r| r.get(property).cloned())
-    }
-
-    /// Returns the base URL where the default store is.
-    /// E.g. `https://example.com`
-    /// This is where deltas should be sent to.
-    /// Also useful for Subject URL generation.
-    fn get_server_url(&self) -> AtomicResult<String> {
-        Err("No server URL found. Set it using `set_server_url`.".into())
-    }
-
-    /// Returns the root URL of where this instance of the store is hosted.
-    /// E.g. `https://example.com`
-    /// Should return `None` if this store is a client and not a server.
-    fn get_self_url(&self) -> Option<String> {
-        None
     }
 
     /// Returns the default Agent for applying commits.
@@ -229,7 +297,7 @@ pub trait Storelike: Sized + Send + Sync {
     /// Make sure to store the private_key somewhere safe!
     /// Does not create a Commit - the recommended way is to use `agent.to_resource().save_locally()`.
     async fn create_agent(&self, name: Option<&str>) -> AtomicResult<crate::agents::Agent> {
-        let agent = Agent::new(name, self)?;
+        let agent = Agent::new(name)?;
         self.add_resource(&agent.to_resource()?).await?;
         Ok(agent)
     }
@@ -250,7 +318,7 @@ pub trait Storelike: Sized + Send + Sync {
             other_resources.push(r);
         }
         properties.append(&mut other_resources);
-        crate::serialize::resources_to_json_ad(&properties)
+        crate::serialize::resources_to_json_ad(&properties, "internal:", true)
     }
 
     /// Fetches a resource, makes sure its subject matches.
@@ -277,6 +345,10 @@ pub trait Storelike: Sized + Send + Sync {
 
                 Ok(resource)
             }
+            ResourceResponse::Redirect(target) => Err(AtomicError::not_found(format!(
+                "Resource {} redirected to {}",
+                subject, target
+            ))),
         }
     }
 
@@ -287,8 +359,10 @@ pub trait Storelike: Sized + Send + Sync {
         query: &str,
         opts: crate::client::search::SearchOpts,
     ) -> AtomicResult<Vec<Resource>> {
-        let server_url = self.get_server_url()?;
-        let subject = crate::client::search::build_search_subject(&server_url, query, opts);
+        let search_base = self
+            .get_base_domain()
+            .unwrap_or_else(|| "internal:".to_string());
+        let subject = crate::client::search::build_search_subject(&search_base, query, opts);
 
         let resource = self
             .fetch_resource(&subject, self.get_default_agent().ok().as_ref())
@@ -304,9 +378,11 @@ pub trait Storelike: Sized + Send + Sync {
             .filter_map(|s| {
                 if let SubResource::Subject(result_subject) = s {
                     Some(async move {
-                        match self.get_resource(&result_subject).await {
+                        match self.get_resource(&result_subject.as_str().into()).await {
                             Ok(r) => r,
-                            Err(err) => err.into_resource(result_subject.clone()),
+                            Err(err) => err
+                                .into_resource(result_subject.to_string())
+                                .unwrap_or_else(|_| Resource::new(result_subject.to_string())),
                         }
                     })
                 } else {
@@ -323,20 +399,33 @@ pub trait Storelike: Sized + Send + Sync {
     /// Returns a full Resource with native Values.
     /// Note that this does _not_ construct dynamic Resources, such as collections.
     /// If you're not sure what to use, use `get_resource_extended`.
-    async fn get_resource(&self, subject: &str) -> AtomicResult<Resource>;
+    /// Returns a full Resource with native Values.
+    /// Note that this does _not_ construct dynamic Resources, such as collections.
+    /// If you're not sure what to use, use `get_resource_extended`.
+    async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource>;
+
+    /// Returns true when the resource is present in the local backing store.
+    ///
+    /// This must not fetch, synthesize dynamic resources, call endpoints, or
+    /// otherwise mutate the store. It exists for bootstrap guards where
+    /// `get_resource` is too broad: `get_resource` may fetch external Atomic
+    /// URLs and make an empty store look seeded.
+    fn has_stored_resource(&self, _subject: &Subject) -> bool {
+        false
+    }
 
     /// Returns an existing resource, or creates a new one with the given Subject
-    async fn get_resource_new(&self, subject: &str) -> Resource {
+    async fn get_resource_new(&self, subject: &Subject) -> Resource {
         match self.get_resource(subject).await {
             Ok(r) => r,
-            Err(_) => Resource::new(subject.into()),
+            Err(_) => Resource::new(subject.to_string()),
         }
     }
 
     /// Retrieves a Class from the store by subject URL and converts it into a Class useful for forms
     async fn get_class(&self, subject: &str) -> AtomicResult<Class> {
         let resource = self
-            .get_resource(subject)
+            .get_resource(&subject.into())
             .await
             .map_err(|e| format!("Failed getting class {}. {}", subject, e))?;
         Class::from_resource(resource)
@@ -344,16 +433,16 @@ pub trait Storelike: Sized + Send + Sync {
 
     /// Finds all classes (isA) for any subject.
     /// Returns an empty vector if there are none.
-    async fn get_classes_for_subject(&self, subject: &str) -> AtomicResult<Vec<Class>> {
+    async fn get_classes_for_subject(&self, subject: &Subject) -> AtomicResult<Vec<Class>> {
         let classes = self.get_resource(subject).await?.get_classes(self).await?;
         Ok(classes)
     }
 
     /// Fetches a property by URL, returns a Property instance
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     async fn get_property(&self, subject: &str) -> AtomicResult<Property> {
         let prop = self
-            .get_resource(subject)
+            .get_resource(&subject.into())
             .await
             .map_err(|e| format!("Failed getting property {}. {}", subject, e))?;
         Property::from_resource(prop)
@@ -366,7 +455,7 @@ pub trait Storelike: Sized + Send + Sync {
     /// - *skip_dynamic* Does not calculte dynamic properties. Adds an `incomplete=true` property if the resource should have been dynamic.
     async fn get_resource_extended(
         &self,
-        subject: &str,
+        subject: &Subject,
         skip_dynamic: bool,
         for_agent: &ForAgent,
     ) -> AtomicResult<ResourceResponse> {
@@ -386,13 +475,12 @@ pub trait Storelike: Sized + Send + Sync {
         _error: AtomicError,
         for_agent: Option<&Agent>,
     ) -> AtomicResult<Resource> {
-        if let Some(self_url) = self.get_self_url() {
-            if subject.starts_with(&self_url) {
-                return Err(AtomicError::not_found(format!(
-                    "Failed to retrieve locally: '{}'",
-                    subject
-                )));
-            }
+        let subject_obj = Subject::from_raw(subject, self.get_base_domain().as_deref());
+        if subject_obj.is_local() {
+            return Err(AtomicError::not_found(format!(
+                "Failed to retrieve locally: '{}'",
+                subject
+            )));
         }
         self.fetch_resource(subject, for_agent).await
     }
@@ -409,7 +497,7 @@ pub trait Storelike: Sized + Send + Sync {
     }
 
     /// Removes a resource and its children from the store. Errors if not present.
-    async fn remove_resource(&self, subject: &str) -> AtomicResult<()>;
+    async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()>;
 
     /// Accepts an Atomic Path string, returns the result value (resource or property value)
     /// E.g. `https://example.com description` or `thing isa 0`
@@ -441,7 +529,7 @@ pub trait Storelike: Sized + Send + Sync {
         let mut subject = id_url;
         // Set the currently selectred resource parent, which starts as the root of the search
         let mut resource = self
-            .get_resource_extended(&subject, false, for_agent)
+            .get_resource_extended(&subject.clone().into(), false, for_agent)
             .await?
             .to_single();
         // During each of the iterations of the loop, the scope changes.
@@ -478,7 +566,7 @@ pub trait Storelike: Sized + Send + Sync {
                             .to_string();
                         subject = url;
                         resource = self
-                            .get_resource_extended(&subject, false, for_agent)
+                            .get_resource_extended(&subject.clone().into(), false, for_agent)
                             .await?
                             .to_single();
                         current = PathReturn::Subject(subject.clone());
@@ -501,7 +589,7 @@ pub trait Storelike: Sized + Send + Sync {
             let value = resource.get_shortname(item, self).await?.clone();
             let property = resource.resolve_shortname_to_property(item, self).await?;
             current = PathReturn::Atom(Box::new(Atom::new(
-                subject.clone(),
+                subject.clone().into(),
                 property.subject,
                 value,
             )))
@@ -536,6 +624,68 @@ pub trait Storelike: Sized + Send + Sync {
     async fn validate(&self) -> crate::validate::ValidationReport {
         crate::validate::validate_store(self, false).await
     }
+
+    /// Start buffering writes for a single batched transaction.
+    fn begin_batch(&self) {}
+
+    /// Commit all buffered writes. No-op if not batching.
+    fn commit_batch(&self) -> AtomicResult<()> {
+        Ok(())
+    }
+}
+
+/// How a [PropVal] constraint compares the resource's value to the filter
+/// value. `Equal` keeps the historical behaviour (`contains_value`: scalar
+/// equality or array membership); the rest are value-comparison predicates
+/// applied during post-filtering. Index-accelerated range scans are a separate,
+/// later optimisation — see `planning/table-view-filters.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum FilterOperator {
+    /// Scalar equality or array membership (`contains_value`). The default.
+    #[default]
+    Equal,
+    /// Numeric/lexical greater-than.
+    GreaterThan,
+    /// Numeric/lexical greater-than-or-equal.
+    GreaterThanOrEqual,
+    /// Numeric/lexical less-than.
+    LessThan,
+    /// Numeric/lexical less-than-or-equal.
+    LessThanOrEqual,
+    /// String prefix match.
+    StartsWith,
+    /// String substring match.
+    Contains,
+}
+
+/// Parses a wire operator string (from a `/query` param or the WASM bridge)
+/// into a [FilterOperator]. Unknown/missing → `Equal` (back-compat). Accepts
+/// both short and symbolic spellings.
+pub fn filter_operator_from_str(op: Option<&str>) -> FilterOperator {
+    match op {
+        Some("gt") | Some(">") => FilterOperator::GreaterThan,
+        Some("gte") | Some(">=") => FilterOperator::GreaterThanOrEqual,
+        Some("lt") | Some("<") => FilterOperator::LessThan,
+        Some("lte") | Some("<=") => FilterOperator::LessThanOrEqual,
+        Some("starts_with") => FilterOperator::StartsWith,
+        Some("contains") => FilterOperator::Contains,
+        _ => FilterOperator::Equal,
+    }
+}
+
+/// A single `(property, value)` constraint used by [Query] and the query index.
+/// Both are optional: property+value (the property must contain the value),
+/// property-only (must have the property), or value-only (any property contains
+/// the value). `operator` selects how value is compared (default `Equal`).
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct PropVal {
+    /// Filtering by property URL
+    pub property: Option<String>,
+    /// Filtering by value
+    pub value: Option<Value>,
+    /// How `value` is compared. Defaults to `Equal` for back-compat.
+    #[serde(default)]
+    pub operator: FilterOperator,
 }
 
 /// Use this to construct a list of Resources
@@ -545,6 +695,10 @@ pub struct Query {
     pub property: Option<String>,
     /// Filter by Value
     pub value: Option<Value>,
+    /// Additional `(property, value)` constraints, combined with `property`/`value`
+    /// and each other using **AND**. Lets a query filter on multiple properties
+    /// (e.g. `isA = Commit` AND `signer = <agent>`).
+    pub filters: Vec<PropVal>,
     /// Maximum of items to return, if none returns all items.
     pub limit: Option<usize>,
     /// Value at which to begin lexicographically sorting things.
@@ -563,6 +717,10 @@ pub struct Query {
     pub include_nested: bool,
     /// For which Agent the query is executed. Pass `None` if you want to skip permission checks.
     pub for_agent: ForAgent,
+    /// Scope the query to a specific drive. When set, only resources whose subjects
+    /// start with the drive's prefix are included. Also scopes the query index so watched queries
+    /// are drive-specific, preventing spurious cross-tenant index updates.
+    pub drive: Option<Subject>,
 }
 
 impl Query {
@@ -570,6 +728,7 @@ impl Query {
         Query {
             property: None,
             value: None,
+            filters: Vec::new(),
             limit: None,
             start_val: None,
             end_val: None,
@@ -579,6 +738,7 @@ impl Query {
             include_external: false,
             include_nested: true,
             for_agent: ForAgent::Sudo,
+            drive: None,
         }
     }
 
@@ -594,8 +754,26 @@ impl Query {
     pub fn new_class(class: &str) -> Self {
         let mut q = Self::new();
         q.property = Some(urls::IS_A.into());
-        q.value = Some(Value::AtomicUrl(class.to_string()));
+        q.value = Some(Value::AtomicUrl(class.to_string().into()));
         q
+    }
+
+    /// Add an extra `(property, value)` constraint, ANDed with the existing
+    /// filters. Chainable: `Query::new_class(COMMIT).filter(SIGNER, agent_val)`.
+    pub fn filter(mut self, property: &str, value: Value) -> Self {
+        self.filters.push(PropVal {
+            property: Some(property.to_string()),
+            value: Some(value),
+            operator: FilterOperator::Equal,
+        });
+        self
+    }
+
+    /// Add a class (`isA = class`) constraint, ANDed with the existing filters.
+    /// Use this on top of another filter, e.g. to scope "subject = X" down to
+    /// only Commits: `Query::new_prop_val(SUBJECT, x).class_filter(COMMIT)`.
+    pub fn class_filter(self, class: &str) -> Self {
+        self.filter(urls::IS_A, Value::AtomicUrl(class.to_string().into()))
     }
 }
 
@@ -606,7 +784,7 @@ impl Default for Query {
 }
 
 pub struct QueryResult {
-    pub subjects: Vec<String>,
+    pub subjects: Vec<Subject>,
     pub resources: Vec<Resource>,
     /// The amount of hits that were found, including the ones that were out of bounds or not authorized.
     pub count: usize,

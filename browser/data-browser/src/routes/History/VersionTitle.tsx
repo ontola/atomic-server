@@ -1,6 +1,4 @@
-import { Version, useResource, useTitle } from '@tomic/react';
-
-import { AtomicLink } from '../../components/AtomicLink';
+import type { Version } from '@tomic/react';
 
 import type { JSX } from 'react';
 
@@ -17,16 +15,14 @@ export interface VersionTitleProps {
   version: Version;
 }
 export function VersionTitle({ version }: VersionTitleProps): JSX.Element {
-  const signer = useResource(version.commit.signer);
-  const [signerName] = useTitle(signer);
-
-  const date = new Date(version.commit.createdAt);
+  const date = new Date(version.timestamp);
   const formattedDate = formatter.format(date);
 
   return (
     <span>
-      Editted <time dateTime={date.toISOString()}>{formattedDate}</time> by{' '}
-      <AtomicLink subject={version.commit.signer}>{signerName}</AtomicLink>
+      Edited <time dateTime={date.toISOString()}>{formattedDate}</time>
+      {version.peer && <> by peer {version.peer.slice(0, 8)}...</>}
+      {version.message && <> — {version.message}</>}
     </span>
   );
 }

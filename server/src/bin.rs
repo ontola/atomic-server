@@ -1,4 +1,4 @@
-use atomic_lib::{agents::ForAgent, urls, Storelike};
+use atomic_lib::{agents::ForAgent, Storelike};
 use atomic_server_lib::config::Opts;
 use std::{fs::File, io::Write};
 
@@ -7,17 +7,23 @@ mod appstate;
 mod commit_monitor;
 pub mod config;
 mod content_types;
+mod context;
 mod errors;
 mod handlers;
 mod helpers;
 #[cfg(feature = "https")]
 mod https;
+mod invite_token;
 mod jsonerrors;
+mod loro_sync_broadcaster;
+mod metrics;
+pub mod node;
 pub mod plugins;
 mod routes;
 pub mod serve;
-mod y_sync_broadcaster;
+pub mod vector_search;
 // #[cfg(feature = "search")]
+mod iroh_transport;
 mod search;
 #[cfg(test)]
 mod tests;
@@ -68,9 +74,9 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
 
             let appstate = appstate::AppState::init(config.clone()).await?;
             let importer_subject = if let Some(i) = &import_opts.parent {
-                i.into()
+                atomic_lib::Subject::from_raw(i, None)
             } else {
-                urls::construct_path_import(&appstate.store.get_self_url().expect("No self url"))
+                atomic_lib::Subject::from_raw("internal:/import", None)
             };
             let parse_opts = atomic_lib::parse::ParseOpts {
                 importer: Some(importer_subject),
@@ -82,6 +88,7 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                     atomic_lib::parse::SaveOpts::Commit
                 },
                 signer: Some(appstate.store.get_default_agent()?),
+                ..Default::default()
             };
             println!("Importing...");
             appstate.store.import(&readstring, &parse_opts).await?;
@@ -90,11 +97,47 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
                 .add_all_resources(&appstate.store)
                 .await?;
             println!("Successfully imported {:?} to store.", import_opts.file);
-            println!("WARNING: Your search index is not yet updated with these imported items. Run `--rebuild-index` to fix that.");
+            println!("WARNING: Your search index is not yet updated with these imported items. Run `--rebuild-indexes search` to fix that.");
             Ok(())
         }
         Some(config::Command::ShowConfig) => {
             println!("{:#?}", config);
+            Ok(())
+        }
+        Some(config::Command::Compact) => {
+            let redb_path = config.store_path.join("atomic.redb");
+            if !redb_path.exists() {
+                return Err(format!(
+                    "No redb file found at {}. Has the server ever run with this --data-dir?",
+                    redb_path.display()
+                )
+                .into());
+            }
+            println!("Compacting {}...", redb_path.display());
+            println!("(This holds an exclusive lock — make sure no atomic-server is running.)");
+            let t = std::time::Instant::now();
+            let (size_before, size_after, did_compact) =
+                atomic_lib::db::redb_store::compact_file(&redb_path)?;
+            let elapsed = t.elapsed();
+            let mib = |b: u64| b as f64 / (1024.0 * 1024.0);
+            let saved = size_before.saturating_sub(size_after);
+            println!(
+                "{} in {:.1?}: {:.1} MiB → {:.1} MiB (saved {:.1} MiB, {:.1}%)",
+                if did_compact {
+                    "Compacted"
+                } else {
+                    "No compaction needed"
+                },
+                elapsed,
+                mib(size_before),
+                mib(size_after),
+                mib(saved),
+                if size_before > 0 {
+                    100.0 * saved as f64 / size_before as f64
+                } else {
+                    0.0
+                },
+            );
             Ok(())
         }
         Some(config::Command::Reset) => {

@@ -28,7 +28,7 @@ pub fn valpropsub_key(atom: &IndexAtom) -> Vec<u8> {
         &[SEPARATION_BIT],
         atom.sort_value.as_bytes(),
         &[SEPARATION_BIT],
-        atom.subject.as_bytes(),
+        atom.subject.as_str().as_bytes(),
     ]
     .concat()
 }
@@ -50,7 +50,7 @@ pub fn find_in_val_prop_sub_index(store: &Db, val: &Value, prop: Option<&str>) -
         prefix.extend(prop.as_bytes());
         prefix.extend([SEPARATION_BIT]);
     }
-    Box::new(store.reference_index.scan_prefix(prefix).map(|kv| {
+    Box::new(store.kv.scan_prefix(Tree::ValPropSub, &prefix).map(|kv| {
         let (key, _value) = kv?;
         key_to_index_atom(&key)
     }))

@@ -65,9 +65,11 @@ export function About() {
 }
 
 const AboutWrapper = styled.div`
-  --inner-padding: 0.5rem;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-left: calc(1rem - var(--inner-padding));
+  width: 100%;
+  /* Match {@link SideBarItem} padding-inline so icons line up with App menu rows */
+  padding-inline-start: 0.2rem;
 `;

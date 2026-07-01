@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Client, core, useCanWrite, useResource } from '@tomic/react';
 import {
   editURL,
@@ -26,7 +26,10 @@ import {
   FaPlus,
   FaArrowUpRightFromSquare,
   FaMessage,
+  FaStar,
+  FaRegStar,
 } from 'react-icons/fa6';
+import { useFavorites } from '../../hooks/useFavorites';
 import { useQueryScopeHandler } from '../../hooks/useQueryScope';
 import {
   ConfirmationDialog,
@@ -64,6 +67,7 @@ export const ContextMenuOptions = {
   Export: 'export',
   Open: 'open',
   AddToChat: 'addToChat',
+  Favorite: 'favorite',
 } as const;
 
 export type ContextMenuOptionsUnion =
@@ -101,12 +105,16 @@ export function ResourceContextMenu({
   const resource = useResource(subject);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showCodeUsageDialog, setShowCodeUsageDialog] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [shiftHeld, setShiftHeld] = useState(false);
   const handleAddClick = useNewRoute(subject);
   const [currentSubject] = useCurrentSubject();
   const canWrite = useCanWrite(resource);
   const { enableScope } = useQueryScopeHandler(subject);
   const { setContextItems, isOpen, setIsOpen } = useAISidebar();
   const { items: customItems } = useCustomContextItemsContext();
+  const [favorites, addFavorite, removeFavorite] = useFavorites();
+  const isFavorite = favorites.includes(subject);
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
 
   const addToChat = () => {
@@ -141,6 +149,39 @@ export function ResourceContextMenu({
     }
   }, [resource, navigate, currentSubject, subject, onAfterDelete]);
 
+  const handleBindActive = useCallback(
+    (active: boolean) => {
+      setMenuOpen(active);
+
+      if (!active) {
+        setShiftHeld(false);
+      }
+
+      bindActive?.(active);
+    },
+    [bindActive],
+  );
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    const updateShiftFromEvent = (e: KeyboardEvent | MouseEvent) => {
+      setShiftHeld(e.shiftKey);
+    };
+
+    document.addEventListener('keydown', updateShiftFromEvent);
+    document.addEventListener('keyup', updateShiftFromEvent);
+    document.addEventListener('mousemove', updateShiftFromEvent);
+
+    return () => {
+      document.removeEventListener('keydown', updateShiftFromEvent);
+      document.removeEventListener('keyup', updateShiftFromEvent);
+      document.removeEventListener('mousemove', updateShiftFromEvent);
+    };
+  }, [menuOpen]);
+
   if (subject === undefined) {
     return null;
   }
@@ -169,6 +210,14 @@ export function ResourceContextMenu({
       },
       DIVIDER,
     ),
+    {
+      id: ContextMenuOptions.Favorite,
+      label: isFavorite ? 'Remove from favorites' : 'Add to favorites',
+      helper: 'Toggle whether this resource appears in your Favorites.',
+      icon: isFavorite ? <FaStar /> : <FaRegStar />,
+      onClick: () =>
+        isFavorite ? removeFavorite(subject) : addFavorite(subject),
+    },
     ...addIf(!!external, {
       id: ContextMenuOptions.Open,
       label: 'Open',
@@ -244,9 +293,15 @@ export function ResourceContextMenu({
         disabled: !canWrite,
         id: ContextMenuOptions.Delete,
         icon: <FaTrash />,
-        label: 'Delete',
+        label: shiftHeld ? 'Confirm Delete' : 'Delete',
         helper: 'Delete this resource.',
-        onClick: () => setShowDeleteDialog(true),
+        onClick: () => {
+          if (shiftHeld) {
+            handleDestroy();
+          } else {
+            setShowDeleteDialog(true);
+          }
+        },
       },
     ),
   ];
@@ -278,7 +333,7 @@ export function ResourceContextMenu({
         items={filteredItems}
         Trigger={triggerComp}
         isMainMenu={isMainMenu}
-        bindActive={bindActive}
+        bindActive={handleBindActive}
       />
       <ConfirmationDialog
         title={`Delete resource`}

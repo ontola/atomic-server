@@ -1,16 +1,10 @@
 import stringify from 'fast-json-stable-stringify';
 // https://github.com/paulmillr/noble-ed25519/issues/38
 
-import { YLoader } from './yjs.js';
 import { Client } from './client.js';
 import { Resource } from './resource.js';
 import type { Store } from './store.js';
-import {
-  type JSONValue,
-  type JSONArray,
-  isSerializedYUpdate,
-  isJSONObject,
-} from './value.js';
+import { type JSONValue, type JSONArray } from './value.js';
 import { decodeB64, encodeB64 } from './base64.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
@@ -27,7 +21,8 @@ export interface CommitBuilderI {
    * be appended. https://atomicdata.dev/properties/push
    */
   push?: Record<string, JSONArray>;
-  yUpdate?: Record<string, Uint8Array>;
+  /** Loro CRDT binary update for the entire resource */
+  loroUpdate?: Uint8Array;
   /** The properties that need to be removed. https://atomicdata.dev/properties/remove */
   remove?: string[];
   /** If true, the resource must be deleted. https://atomicdata.dev/properties/destroy */
@@ -37,20 +32,32 @@ export interface CommitBuilderI {
    * having the same current version.
    */
   previousCommit?: string;
+  /** Whether this is the first commit for a Resource. */
+  isGenesis?: boolean;
 }
 
 interface CommitBuilderBase {
   set?: Map<string, JSONValue>;
   push?: Map<string, Set<JSONValue>>;
-  yUpdate?: Map<string, Uint8Array>;
+  loroUpdate?: Uint8Array;
   remove?: Set<string>;
   destroy?: boolean;
   previousCommit?: string;
+  isGenesis?: boolean;
 }
 
 type JSONADObject = Record<string, JSONValue>;
 
 /** Return the current time as Atomic Data timestamp. Milliseconds since unix epoch. */
+/** Resolve the commitId (the `did:ad:commit:<sig>` URL or
+ *  whatever the server stored) for a freshly-acked Commit. */
+export function commitIdOf(commit: Commit): string | undefined {
+  return (
+    (commit.id as string | undefined) ??
+    (commit.signature ? `did:ad:commit:${commit.signature}` : undefined)
+  );
+}
+
 export function getTimestampNow(): number {
   return Math.round(new Date().getTime());
 }
@@ -62,20 +69,22 @@ export class CommitBuilder {
   private _subject: string;
   private _set: Map<string, JSONValue>;
   private _push: Map<string, Set<JSONValue>>;
-  private _yUpdate: Map<string, Uint8Array>;
+  private _loroUpdate?: Uint8Array;
   private _remove: Set<string>;
   private _destroy?: boolean;
   private _previousCommit?: string;
+  private _isGenesis?: boolean;
 
   /** Removes any query parameters from the Subject */
   public constructor(subject: string, base: CommitBuilderBase = {}) {
     this._subject = Client.removeQueryParamsFromURL(subject);
     this._set = base.set ?? new Map();
     this._push = base.push ?? new Map();
-    this._yUpdate = base.yUpdate ?? new Map();
+    this._loroUpdate = base.loroUpdate;
     this._remove = base.remove ?? new Set();
     this._destroy = base.destroy;
     this._previousCommit = base.previousCommit;
+    this._isGenesis = base.isGenesis;
   }
 
   public get subject(): string {
@@ -90,8 +99,8 @@ export class CommitBuilder {
     return this._push;
   }
 
-  public get yUpdate() {
-    return this._yUpdate;
+  public get loroUpdate() {
+    return this._loroUpdate;
   }
 
   public get remove() {
@@ -106,52 +115,13 @@ export class CommitBuilder {
     return this._previousCommit;
   }
 
-  public addSetAction(property: string, value: JSONValue): CommitBuilder {
-    this.removeRemoveAction(property);
-    this._set.set(property, value);
-
-    return this;
+  public get isGenesis() {
+    return this._isGenesis;
   }
 
-  public addPushAction(property: string, ...values: JSONArray): CommitBuilder {
-    const pushSet = this._push.get(property) ?? new Set();
-
-    for (const value of values) {
-      pushSet.add(value);
-    }
-
-    this._push.set(property, pushSet);
-
-    return this;
-  }
-
-  public addRemoveAction(property: string): CommitBuilder {
-    this._set.delete(property);
-    this._push.delete(property);
-    this._yUpdate.delete(property);
-    this._remove.add(property);
-
-    return this;
-  }
-
-  public addYUpdateAction(property: string, update: Uint8Array): CommitBuilder {
-    YLoader.loadCheck();
-    const Y = YLoader.Y;
-
-    this.removeRemoveAction(property);
-    const existingUpdate = this._yUpdate.get(property);
-
-    if (existingUpdate) {
-      this._yUpdate.set(property, Y.mergeUpdatesV2([existingUpdate, update]));
-    } else {
-      this._yUpdate.set(property, update);
-    }
-
-    return this;
-  }
-
-  public removeRemoveAction(property: string): CommitBuilder {
-    this._remove.delete(property);
+  /** Set a Loro CRDT binary update for this commit. */
+  public setLoroUpdate(update: Uint8Array): CommitBuilder {
+    this._loroUpdate = update;
 
     return this;
   }
@@ -172,6 +142,12 @@ export class CommitBuilder {
     return this;
   }
 
+  public setIsGenesis(isGenesis: boolean): CommitBuilder {
+    this._isGenesis = isGenesis;
+
+    return this;
+  }
+
   public setSubject(subject: string): CommitBuilder {
     this._subject = subject;
 
@@ -182,10 +158,8 @@ export class CommitBuilder {
    * Signs the commit using the privateKey of the Agent, and returns a full
    * Commit which is ready to be sent to an Atomic-Server `/commit` endpoint.
    */
-  public async sign(agent: Agent): Promise<Commit> {
-    const commit = await this.signAt(agent, getTimestampNow());
-
-    return commit;
+  public sign(agent: Agent): Promise<Commit> {
+    return this.signAt(agent, getTimestampNow());
   }
 
   /** Returns true if the CommitBuilder has non-empty changes (set, remove, destroy) */
@@ -195,7 +169,7 @@ export class CommitBuilder {
       this.push.size > 0 ||
       this.destroy ||
       this.remove.size > 0 ||
-      this.yUpdate.size > 0
+      this.loroUpdate !== undefined
     );
   }
 
@@ -209,10 +183,11 @@ export class CommitBuilder {
     const base = {
       set: this.set,
       push: this.push,
-      yUpdate: this.yUpdate,
+      loroUpdate: this.loroUpdate,
       remove: this.remove,
       destroy: this.destroy,
       previousCommit: this.previousCommit,
+      isGenesis: this.isGenesis,
     };
 
     return new CommitBuilder(this.subject, structuredClone(base));
@@ -228,7 +203,8 @@ export class CommitBuilder {
       remove: Array.from(this.remove),
       destroy: this.destroy,
       previousCommit: this.previousCommit,
-      yUpdate: Object.fromEntries(this.yUpdate.entries()),
+      isGenesis: this.isGenesis,
+      loroUpdate: this.loroUpdate,
     };
   }
 
@@ -252,10 +228,41 @@ export class CommitBuilder {
       createdAt,
       signer: agent.subject,
     };
+
+    // Genesis must be set explicitly via CommitBuilder.setIsGenesis(true).
+    // We never infer genesis from the subject pattern — that was the source of
+    // accidental genesis commits when a stale `_new:` subject ended up on an
+    // edit commit.
+    const isExplicitGenesis = this._isGenesis === true;
+
+    if (isExplicitGenesis) {
+      commitPreSigned.isGenesis = true;
+    }
+
     const serializedCommit = serializeDeterministically({ ...commitPreSigned });
     const signature = await agent.sign(serializedCommit);
+
+    let subject = commitPreSigned.subject;
+
+    // DID-genesis substitution: only needed for placeholder subjects where
+    // the real DID isn't known until after signing. Two accepted forms:
+    //   - `_new:…`         — the client's random placeholder (store.newResource)
+    //   - `did:ad:genesis` — the server's and legacy-client convention
+    // Any OTHER `did:ad:…` subject (agent, or a pre-derived drive/resource
+    // DID) already has its canonical identity — substituting it would rename
+    // the resource mid-flight and break downstream references (signer,
+    // personalDrive, invite target, …).
+    const subjectIsPlaceholder =
+      commitPreSigned.subject.startsWith('_new:') ||
+      commitPreSigned.subject === 'did:ad:genesis';
+
+    if (isExplicitGenesis && subjectIsPlaceholder) {
+      subject = `did:ad:${signature}`;
+    }
+
     const commitPostSigned: Commit = {
       ...commitPreSigned,
+      subject,
       signature,
     };
 
@@ -293,15 +300,19 @@ const serializeMap = {
   remove: commits.properties.remove,
   destroy: commits.properties.destroy,
   previousCommit: commits.properties.previousCommit,
+  isGenesis: commits.properties.isGenesis,
   createdAt: commits.properties.createdAt,
   signer: commits.properties.signer,
   signature: commits.properties.signature,
-  yUpdate: commits.properties.yUpdate,
+  loroUpdate: commits.properties.loroUpdate,
   id: 'id',
 };
 
 /** Replaces the keys of a Commit object with their respective json-ad key */
-function commitToJsonADObject(commit: UnsignedCommit | Commit): JSONADObject {
+export function commitToJsonADObject(
+  commit: UnsignedCommit | Commit,
+  origin?: string,
+): JSONADObject {
   const jsonAdObj: JSONADObject = {
     [core.properties.isA]: [commits.classes.commit],
   };
@@ -309,7 +320,14 @@ function commitToJsonADObject(commit: UnsignedCommit | Commit): JSONADObject {
   for (const kv of Object.entries(commit)) {
     const [key, value] = kv as [keyof Commit, Commit[keyof Commit]];
     const serializedKey = serializeMap[key];
-    jsonAdObj[serializedKey] = serializeCommitValue(key, value);
+
+    if (serializedKey) {
+      jsonAdObj[serializedKey] = serializeCommitValue(key, value);
+    }
+  }
+
+  if (origin && commit.subject) {
+    jsonAdObj['@id'] = commit.subject;
   }
 
   return jsonAdObj;
@@ -319,17 +337,12 @@ function serializeCommitValue<K extends keyof Commit>(
   key: K,
   value: Commit[K],
 ): JSONValue {
-  // The value for yUpdate needs to be encoded to base64 before it is valid JSON-AD
-  if (key === 'yUpdate') {
-    const castValue = value as Commit['yUpdate'];
+  // loroUpdate is a binary blob, serialized as a plain base64 string
+  if (key === 'loroUpdate') {
+    const castValue = value as Commit['loroUpdate'];
 
     if (castValue !== undefined) {
-      return Object.fromEntries(
-        Object.entries(castValue).map(([k, v]) => [
-          k,
-          { type: 'ydoc', data: encodeB64(v) },
-        ]),
-      );
+      return encodeB64(castValue);
     }
 
     return undefined;
@@ -343,6 +356,11 @@ function serializeCommitValue<K extends keyof Commit>(
  * Takes a commit and serializes it deterministically (canonicilaization). Is
  * used both for signing Commits as well as serializing them.
  * https://docs.atomicdata.dev/core/json-ad.html#canonicalized-json-ad
+ *
+ * For DID genesis commits the `subject` field is excluded from the signed
+ * bytes because the subject is derived from the signature itself (circular
+ * dependency). `isGenesis` is kept in the bytes so both sides sign/verify the
+ * same content.
  */
 export function serializeDeterministically(
   commit: UnsignedCommit | Commit,
@@ -364,37 +382,23 @@ export function serializeDeterministically(
     delete commit.destroy;
   }
 
-  if (commit.yUpdate && Object.keys(commit.yUpdate).length === 0) {
-    delete commit.yUpdate;
+  if (commit.loroUpdate === undefined) {
+    delete commit.loroUpdate;
   }
 
   const jsonadCommit = commitToJsonADObject(commit);
 
+  // For DID genesis commits only the subject is excluded — it is derived from
+  // the signature so it cannot be part of the signed bytes (circular dep).
+  // isGenesis stays in the bytes so the server can read and verify it.
+  if (commit.isGenesis === true) {
+    delete jsonadCommit[commits.properties.subject];
+  }
+
+  // Canonical serialization should never include @id for commits
+  delete jsonadCommit['@id'];
+
   return stringify(jsonadCommit);
-}
-
-// /** Checks whether the commit signature is correct */
-// function verifyCommit(commit: Commit, publicKey: string): boolean {
-//   delete commit.signature;
-//   const serializedCommit = serializeDeterministically(commit);
-//   verify();
-// }
-
-export function parseCommitResource(resource: Resource): Commit {
-  const commit: Commit = {
-    id: resource.subject,
-    subject: resource.get(commits.properties.subject),
-    set: resource.get(commits.properties.set),
-    push: resource.get(commits.properties.push),
-    yUpdate: parseYUpdateValue(resource.get(commits.properties.yUpdate)),
-    signer: resource.get(commits.properties.signer),
-    createdAt: resource.get(commits.properties.createdAt),
-    remove: resource.get(commits.properties.remove),
-    destroy: resource.get(commits.properties.destroy),
-    signature: resource.get(commits.properties.signature),
-  };
-
-  return commit;
 }
 
 export function parseCommitJSON(str: string): Commit {
@@ -409,7 +413,9 @@ export function parseCommitJSON(str: string): Commit {
     const subject = jsonAdObj[commits.properties.subject];
     const set = jsonAdObj[commits.properties.set];
     const push = jsonAdObj[commits.properties.push];
-    const yUpdate = parseYUpdateValue(jsonAdObj[commits.properties.yUpdate]);
+    const loroUpdate = parseLoroUpdateValue(
+      jsonAdObj[commits.properties.loroUpdate],
+    );
     const signer = jsonAdObj[commits.properties.signer];
     const createdAt = jsonAdObj[commits.properties.createdAt];
     const remove: string[] | undefined = jsonAdObj[commits.properties.remove];
@@ -418,6 +424,8 @@ export function parseCommitJSON(str: string): Commit {
     const id: undefined | string = jsonAdObj['@id'];
     const previousCommit: undefined | string =
       jsonAdObj[commits.properties.previousCommit];
+    const isGenesis: undefined | boolean =
+      jsonAdObj[commits.properties.isGenesis];
 
     if (!signature) {
       throw new Error(`Commit has no signature`);
@@ -427,7 +435,7 @@ export function parseCommitJSON(str: string): Commit {
       subject,
       set,
       push,
-      yUpdate,
+      loroUpdate,
       signer,
       createdAt,
       remove,
@@ -435,6 +443,7 @@ export function parseCommitJSON(str: string): Commit {
       signature,
       id,
       previousCommit,
+      isGenesis,
     };
   } catch (e) {
     throw new Error(`Could not parse commit: ${e}, Commit: ${str}`);
@@ -446,28 +455,14 @@ export function applyCommitToResource(
   resource: Resource,
   commit: Commit,
 ): Resource {
-  const { set, remove, push, destroy, yUpdate } = commit;
+  const { destroy, loroUpdate } = commit;
 
-  if (set) {
-    execSetCommit(set, resource);
-  }
-
-  if (remove) {
-    execRemoveCommit(remove, resource);
-  }
-
-  if (push) {
-    execPushCommit(push, resource);
-  }
-
-  if (yUpdate) {
-    execYUpdateCommit(yUpdate, resource);
+  if (loroUpdate) {
+    execLoroUpdateCommit(loroUpdate, resource);
   }
 
   if (destroy) {
-    for (const [key] of resource.getPropVals()) {
-      resource.setUnsafe(key, undefined);
-    }
+    resource.clearUnsafe();
   }
 
   return resource;
@@ -494,7 +489,7 @@ export function parseAndApplyCommit(jsonAdObjStr: string, store: Store) {
 
   if (id) {
     // This is something that the server does, too.
-    resource.setUnsafe(commits.properties.lastCommit, id);
+    resource.setLastCommitValue(id);
   }
 
   if (destroy) {
@@ -504,94 +499,32 @@ export function parseAndApplyCommit(jsonAdObjStr: string, store: Store) {
   } else {
     resource.appliedCommitSignatures.add(signature);
 
-    store.addResources(resource, { skipCommitCompare: true });
+    store.applyIncoming({
+      subject: resource.subject,
+      resource,
+      source: 'ws-sub-push',
+    });
   }
 }
 
-function parseYUpdateValue(
-  value: JSONValue,
-): Record<string, Uint8Array> | undefined {
+function parseLoroUpdateValue(value: JSONValue): Uint8Array | undefined {
   if (value === undefined) {
     return undefined;
   }
 
-  if (!isJSONObject(value)) {
-    throw new Error(`YUpdate value is not an object: ${value}`);
+  if (typeof value === 'string') {
+    return decodeB64(value);
   }
 
-  return Object.fromEntries(
-    Object.entries(value).map(([k, v]) => {
-      if (isSerializedYUpdate(v)) {
-        return [k, decodeB64(v.data)];
-      } else {
-        throw new Error(`YUpdate contains invalid update: ${k}`);
-      }
-    }),
+  throw new Error(
+    `Invalid loroUpdate value, expected base64 string: ${JSON.stringify(value)}`,
   );
 }
 
-function execSetCommit(set: Record<string, JSONValue>, resource: Resource) {
-  for (const [key, value] of Object.entries(set)) {
-    resource.setUnsafe(key, value);
-  }
-}
-
-function execRemoveCommit(remove: string[], resource: Resource) {
-  for (const prop of remove) {
-    resource.removePropValLocally(prop);
-  }
-}
-
-function execPushCommit(push: Record<string, JSONArray>, resource: Resource) {
-  for (const [key, value] of Object.entries(push)) {
-    const current = (resource.get(key) as JSONArray) || [];
-    const newArr = value as JSONArray;
-    // Merge both the old and new items
-    const new_arr = [...current, ...newArr];
-    // Save it!
-    resource.setUnsafe(key, new_arr);
-  }
-}
-
-function execYUpdateCommit(
-  yUpdate: Record<string, Uint8Array>,
-  resource: Resource,
-) {
-  if (!YLoader.isLoaded()) {
-    console.warn(
-      'Commit contains yUpdate but Yjs is not loaded. Skipping applying yjs updates',
-    );
-
-    return;
-  }
-
-  const Y = YLoader.Y;
-
-  for (const [key, value] of Object.entries(yUpdate)) {
-    const doc = resource.get(key);
-
-    if (!doc) {
-      try {
-        const newDoc = new Y.Doc();
-        Y.applyUpdateV2(newDoc, value);
-        resource.setUnsafe(key, newDoc);
-      } catch (e) {
-        console.error(e);
-        throw new Error(`Error applying yUpdate to new document: ${key}: ${e}`);
-      }
-    } else {
-      if (!(doc instanceof Y.Doc)) {
-        throw new Error(`Property ${key} is not a YDoc`);
-      }
-
-      try {
-        Y.applyUpdateV2(doc, value);
-      } catch (e) {
-        console.error(e);
-        throw new Error(
-          `Error applying yUpdate to existing document: ${key}: ${e}`,
-        );
-      }
-    }
-  }
+/**
+ * Imports a Loro CRDT update into the resource's LoroDoc and materializes
+ * the changed properties into the resource's propvals so the UI updates.
+ */
+function execLoroUpdateCommit(loroUpdate: Uint8Array, resource: Resource) {
+  resource.importLoroUpdate(loroUpdate);
 }

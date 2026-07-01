@@ -8,14 +8,23 @@ import {
   signRequest,
 } from './authentication.js';
 import { AtomicError, ErrorType } from './error.js';
+// Import directly from the modules to avoid a circular dep through `./index.js`
+// — under some bundlers the re-exported binding lands as `undefined` at runtime
+// (TypeError: serializeDeterministically is not a function), which surfaces in
+// the upload-roundtrip integration test.
+import type { Agent } from './agent.js';
 import {
-  type Agent,
   type Commit,
   serializeDeterministically,
   parseCommitJSON,
-} from './index.js';
+} from './commit.js';
 import { JSONADParser } from './parse.js';
 import { Resource } from './resource.js';
+import {
+  recordServerVersionFromResponse,
+  shouldSkipDidAuthForLegacyServer,
+  warnDidAuthCompatibility,
+} from './serverCapabilities.js';
 
 /**
  * One key-value pair per HTTP Header. Since we need to support both browsers
@@ -49,6 +58,11 @@ interface FetchResourceOptions extends ParseOpts {
   method?: 'GET' | 'POST';
   /** The body is only used combined with the `POST` method */
   body?: ArrayBuffer | string;
+  /**
+   * The backend server URL, used for resolving DID subjects when no signInfo
+   * is available (e.g. before the agent has been loaded from IndexedDB).
+   */
+  serverURL?: string;
 }
 
 export interface ParseOpts {
@@ -74,10 +88,35 @@ export class Client {
 
   /** Throws an error if the subject is not valid */
   public static tryValidSubject(subject: string | undefined): void {
-    try {
-      new URL(subject as string);
-    } catch (e) {
-      throw new Error(`Not a valid URL: ${subject}. ${e}`);
+    if (typeof subject !== 'string') {
+      throw new Error(`Subject is not a string: ${subject}`);
+    }
+
+    if (
+      subject.startsWith('http') ||
+      subject.startsWith('did:ad:') ||
+      subject.startsWith('internal:')
+    ) {
+      if (subject.startsWith('http') || subject.startsWith('internal:')) {
+        try {
+          new URL(subject);
+
+          return;
+        } catch (e) {
+          throw new Error(`Not a valid URL: ${subject}. ${e}`);
+        }
+      }
+
+      return;
+    }
+
+    // Relative path validation
+    // Allow empty string for root. Allow ?, =, &, % for collections/search.
+    // Must start with '/' to distinguish from arbitrary text (e.g. search queries).
+    if (subject !== '' && !subject.match(/^\/[a-zA-Z0-9/._\-:?=&%]*$/)) {
+      throw new Error(
+        `Not a valid Relative Subject: ${subject}. This should be a slug-like string without spaces.`,
+      );
     }
   }
 
@@ -88,7 +127,7 @@ export class Client {
     try {
       Client.tryValidSubject(subject);
 
-      return subject.startsWith('http');
+      return true;
     } catch (e) {
       return false;
     }
@@ -116,7 +155,7 @@ export class Client {
     subject: string,
     opts: FetchResourceOptions = {},
   ): Promise<HTTPResourceResult> {
-    const { signInfo, from, body: bodyReq, method } = opts;
+    const { signInfo, from, body: bodyReq, method, serverURL } = opts;
     let createdResources: Resource[] = [];
     const parser = new JSONADParser();
     let resource = new Resource(subject);
@@ -127,23 +166,50 @@ export class Client {
         Accept: JSON_AD_MIME,
       };
 
-      if (signInfo) {
-        // Cookies only work in browsers for same-origin requests right now
-        // https://github.com/atomicdata-dev/atomic-data-browser/issues/253
-        if (hasBrowserAPI() && subject.startsWith(window.location.origin)) {
-          if (!checkAuthenticationCookie()) {
-            setCookieAuthentication(signInfo.serverURL, signInfo.agent);
-          }
-        } else {
-          requestHeaders = await signRequest(
-            subject,
-            signInfo.agent,
-            requestHeaders,
-          );
-        }
+      if (method === 'POST' && !bodyReq) {
+        requestHeaders['Content-Length'] = '0';
       }
 
       let url = subject;
+
+      if (subject.startsWith('did:')) {
+        // We can't fetch DIDs directly, so we use the server's /did endpoint.
+        const baseUrl =
+          signInfo?.serverURL ||
+          serverURL ||
+          (window as unknown as Record<'atomicServerUrl', string>)
+            .atomicServerUrl ||
+          window.location.origin;
+        url = `${baseUrl}/did?subject=${encodeURIComponent(subject)}`;
+      }
+
+      // Sign the request with the actual URL being fetched (not the raw DID
+      // subject) since the server verifies against the full HTTP URL.
+      if (signInfo) {
+        if (shouldSkipDidAuthForLegacyServer(url, signInfo.agent.subject)) {
+          warnDidAuthCompatibility(url);
+        } else if (!subject.startsWith('https://atomicdata.dev')) {
+          // Cookies only work in browsers for same-origin requests right now
+          // https://github.com/atomicdata-dev/atomic-data-browser/issues/253
+          if (hasBrowserAPI() && subject.startsWith(window.location.origin)) {
+            if (!checkAuthenticationCookie()) {
+              // Await: the request that follows depends on this cookie.
+              // Without the await, the first call after `setAgent`
+              // race-conditions a 401 because the cookie hasn't been
+              // installed yet (the next request reads
+              // `checkAuthenticationCookie()` and re-installs anyway,
+              // but the first response is already a stale 401).
+              await setCookieAuthentication(signInfo.serverURL, signInfo.agent);
+            }
+          } else {
+            requestHeaders = await signRequest(
+              url,
+              signInfo.agent,
+              requestHeaders,
+            );
+          }
+        }
+      }
 
       if (from !== undefined) {
         const newURL = new URL(`${from}/path`);
@@ -156,6 +222,7 @@ export class Client {
         method: method ?? 'GET',
         body: bodyReq,
       });
+      recordServerVersionFromResponse(url, response);
       const body = await response.text();
 
       if (response.status === 200) {
@@ -173,7 +240,11 @@ export class Client {
               );
             }
 
-            resource = resources.at(-1) as Resource;
+            // For array responses, find the resource matching the requested subject.
+            // Falls back to the last item (the convention for non-array responses).
+            resource =
+              resources.find(r => r.subject === subject) ??
+              (resources.at(-1) as Resource);
             createdResources.push(...resources);
           }
         } catch (e) {
@@ -226,6 +297,8 @@ export class Client {
     const body = await response.text();
 
     if (response.status !== 200) {
+      console.error('[postCommit] Server error body:', body);
+      console.error('[postCommit] Commit sent:', serialized);
       throw new AtomicError(body, ErrorType.Server);
     }
 

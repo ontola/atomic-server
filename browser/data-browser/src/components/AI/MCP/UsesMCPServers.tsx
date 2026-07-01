@@ -1,18 +1,29 @@
 import { useContext, useEffect } from 'react';
+import { LazyAIChangesContext } from '@components/AI/AIChanges/LazyAIChangesProvider';
 import { LazyMCPContext } from './LazyMCPProvider';
 
-/**
- * A component that makes sure the MCPServersProvider is loaded before rendering the children.
- * Do not use this component in any main bundle component.
- */
+/** Loads MCP + AI review runtimes before rendering children. Not for the main bundle entry. */
 export default function UsesMCPServers({ children }: React.PropsWithChildren) {
-  const { load, isLoaded } = useContext(LazyMCPContext);
+  const {
+    load: loadMcp,
+    isLoaded: mcpLoaded,
+    isRuntimeReady: mcpReady,
+  } = useContext(LazyMCPContext);
+  const {
+    load: loadAiChanges,
+    isLoaded: aiLoaded,
+    isRuntimeReady: aiReady,
+  } = useContext(LazyAIChangesContext);
 
   useEffect(() => {
-    if (!isLoaded) {
-      load();
+    if (!mcpLoaded) {
+      loadMcp();
     }
-  }, [isLoaded, load]);
 
-  return isLoaded ? children : null;
+    if (!aiLoaded) {
+      loadAiChanges();
+    }
+  }, [mcpLoaded, loadMcp, aiLoaded, loadAiChanges]);
+
+  return mcpLoaded && mcpReady && aiLoaded && aiReady ? children : null;
 }

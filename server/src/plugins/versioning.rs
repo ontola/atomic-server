@@ -42,7 +42,9 @@ fn handle_version_request<'a>(
             };
         }
         if commit_url.is_none() {
-            return version_endpoint().to_resource_response(context.store).await;
+            return version_endpoint()
+                .to_resource_response(context.store, context.subject.as_str())
+                .await;
         }
         let mut resource =
             construct_version(&commit_url.unwrap(), context.store, context.for_agent).await?;
@@ -68,13 +70,16 @@ fn handle_all_versions_request<'a>(
             };
         }
         if target_subject.is_none() {
-            return all_versions_endpoint().to_resource_response(store).await;
+            return all_versions_endpoint()
+                .to_resource_response(store, subject.as_str())
+                .await;
         }
         let target = target_subject.unwrap();
         let collection_builder = CollectionBuilder {
             subject: subject.to_string(),
             property: Some(urls::SUBJECT.into()),
             value: Some(target.clone()),
+            filters: Vec::new(),
             sort_by: None,
             sort_desc: false,
             current_page: 0,
@@ -82,6 +87,7 @@ fn handle_all_versions_request<'a>(
             name: Some(format!("Versions of {}", target)),
             include_nested: false,
             include_external: false,
+            drive: None,
         };
         let mut collection = collection_builder.into_collection(store, for_agent).await?;
         let mut new_members = Vec::new();
@@ -136,16 +142,16 @@ pub async fn construct_version(
     store: &impl Storelike,
     for_agent: &ForAgent,
 ) -> AtomicResult<Resource> {
-    let commit = store.get_resource(commit_url).await?;
+    let commit = store.get_resource(&commit_url.into()).await?;
     // Get all the commits for the subject of that Commit
     let subject = &commit.get(urls::SUBJECT)?.to_string();
-    let current_resource = store.get_resource(subject).await?;
+    let current_resource = store.get_resource(&subject.clone().into()).await?;
     atomic_lib::hierarchy::check_read(store, &current_resource, for_agent).await?;
     let commits = get_commits_for_resource(subject, store).await?;
     let mut version = Resource::new(subject.into());
     for commit in commits {
         if let Some(current_commit) = commit.url.clone() {
-            let applied = commit.apply_changes(version, store).await?;
+            let applied = commit.apply_changes(version).await?;
             version = applied.resource_new;
             // Stop iterating when the target commit has been applied.
             if current_commit == commit_url {
@@ -163,7 +169,7 @@ fn construct_version_endpoint_url(
 ) -> AtomicResult<String> {
     Ok(format!(
         "{}/versioning?commit={}",
-        store.get_server_url()?,
+        store.get_base_domain().ok_or("No base domain set")?,
         urlencoding::encode(commit_url)
     ))
 }
@@ -176,7 +182,7 @@ pub async fn get_version(
     for_agent: &ForAgent,
 ) -> AtomicResult<Resource> {
     let version_url = construct_version_endpoint_url(store, commit_url)?;
-    match store.get_resource(&version_url).await {
+    match store.get_resource(&version_url.into()).await {
         Ok(cached) => Ok(cached),
         Err(_not_cached) => {
             let version = construct_version(commit_url, store, for_agent).await?;

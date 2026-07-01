@@ -4,15 +4,24 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useEffect,
   type JSX,
 } from 'react';
 import { DarkModeOption, useDarkMode } from './useDarkMode';
-import { useCurrentAgent, useServerURL, Agent } from '@tomic/react';
+import {
+  useCurrentAgent,
+  useServerURL,
+  Agent,
+  useStore,
+  StoreEvents,
+} from '@tomic/react';
 import toast from 'react-hot-toast';
 import { SIDEBAR_TOGGLE_WIDTH } from '../components/SideBar';
 import { serverURLStorage } from './serverURLStorage';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { errorHandler } from '../handlers/errorHandler';
+import { isDev } from '../config';
+import { getLocalServerOrigin } from './tauri';
 
 interface ProviderProps {
   children: ReactNode;
@@ -30,19 +39,29 @@ export const AppSettingsContextProvider = (
   // == APPEARANCE ==
   const [darkMode, setDarkMode, darkModeSetting] = useDarkMode();
   const [mainColor, setMainColor] = useLocalStorage('mainColor', '#1b50d8');
-  const [navbarTop, setNavbarTop] = useLocalStorage('navbarTop', false);
   const [hideTemplates, setHideTemplates] = useLocalStorage(
     'hideTemplates',
     false,
-  );
-  const [navbarFloating, setNavbarFloating] = useLocalStorage(
-    'navbarFloating',
-    true,
   );
   const [sideBarLocked, setSideBarLocked] = useLocalStorage(
     'sideBarOpen',
     window.innerWidth > SIDEBAR_TOGGLE_WIDTH,
   );
+  const [navbarTop, setNavbarTop] = useLocalStorage('navbarTop', true);
+
+  const store = useStore();
+
+  useEffect(() => {
+    return store.on(StoreEvents.DriveChanged, newDrive => {
+      if (newDrive !== drive) {
+        innerSetDrive(newDrive);
+      }
+    });
+  }, [drive, store, innerSetDrive]);
+
+  useEffect(() => {
+    store.setDrive(drive);
+  }, [drive, store]);
 
   // == ACCESSIBILITY ==
   const [viewTransitionsDisabled, setViewTransitionsDisabled] = useLocalStorage(
@@ -52,12 +71,34 @@ export const AppSettingsContextProvider = (
   const [sidebarKeyboardDndEnabled, setSidebarKeyboardDndEnabled] =
     useLocalStorage('sidebarKeyboardDndEnabled', false);
 
+  useEffect(() => {
+    const currentOrigin = isDev()
+      ? 'http://localhost:9883'
+      : getLocalServerOrigin();
+
+    serverURLStorage.addKnownServer(currentOrigin);
+  }, []);
+
+  const setServer = useCallback(
+    (newServer: string) => {
+      if (newServer.startsWith('http://') || newServer.startsWith('https://')) {
+        const url = new URL(newServer);
+        setBaseURL(url.origin);
+        serverURLStorage.set(url.origin);
+      }
+    },
+    [setBaseURL],
+  );
+
   const setDrive = useCallback(
     (newDrive: string) => {
-      const url = new URL(newDrive);
       innerSetDrive(newDrive);
-      setBaseURL(url.origin);
-      serverURLStorage.set(url.origin);
+
+      if (newDrive.startsWith('http://') || newDrive.startsWith('https://')) {
+        const url = new URL(newDrive);
+        setBaseURL(url.origin);
+        serverURLStorage.set(url.origin);
+      }
     },
     [innerSetDrive, setBaseURL],
   );
@@ -90,10 +131,6 @@ export const AppSettingsContextProvider = (
       setDarkMode,
       mainColor,
       setMainColor,
-      navbarTop,
-      setNavbarTop,
-      navbarFloating,
-      setNavbarFloating,
       sideBarLocked,
       setSideBarLocked,
       agent,
@@ -104,6 +141,11 @@ export const AppSettingsContextProvider = (
       setSidebarKeyboardDndEnabled,
       hideTemplates,
       setHideTemplates,
+      baseURL,
+      setBaseURL,
+      setServer,
+      navbarTop,
+      setNavbarTop,
     }),
     [
       drive,
@@ -113,10 +155,6 @@ export const AppSettingsContextProvider = (
       setDarkMode,
       mainColor,
       setMainColor,
-      navbarTop,
-      setNavbarTop,
-      navbarFloating,
-      setNavbarFloating,
       sideBarLocked,
       setSideBarLocked,
       agent,
@@ -127,6 +165,11 @@ export const AppSettingsContextProvider = (
       setSidebarKeyboardDndEnabled,
       hideTemplates,
       setHideTemplates,
+      baseURL,
+      setBaseURL,
+      setServer,
+      navbarTop,
+      setNavbarTop,
     ],
   );
 
@@ -152,12 +195,6 @@ export interface AppSettings {
   drive: string;
   /** Sets the current Drive (and therefore, server!) */
   setDrive: (s: string) => void;
-  /** If the navbar should be at the top of the page */
-  navbarTop: boolean;
-  setNavbarTop: (s: boolean) => void;
-  /** If the navbar should be floating instead of being fixed at the top or bottom */
-  navbarFloating: boolean;
-  setNavbarFloating: (s: boolean) => void;
   /** If the Sidebar should be locked to the side */
   sideBarLocked: boolean;
   setSideBarLocked: (s: boolean) => void;
@@ -171,6 +208,15 @@ export interface AppSettings {
   setSidebarKeyboardDndEnabled: (b: boolean) => void;
   hideTemplates: boolean;
   setHideTemplates: (b: boolean) => void;
+  /** The URL of the currently active server / peer used for resolution. */
+  baseURL: string;
+  /** Sets the active server / peer. */
+  setBaseURL: (s: string) => void;
+  /** Robustly sets the server and adds it to the known list. */
+  setServer: (s: string) => void;
+  /** Whether the navbar should be at the top or bottom */
+  navbarTop: boolean;
+  setNavbarTop: (b: boolean) => void;
 }
 
 const initialState: AppSettings = {
@@ -181,10 +227,6 @@ const initialState: AppSettings = {
   setMainColor: () => undefined,
   drive: '',
   setDrive: () => undefined,
-  navbarTop: false,
-  setNavbarTop: () => undefined,
-  navbarFloating: false,
-  setNavbarFloating: () => undefined,
   sideBarLocked: false,
   setSideBarLocked: () => undefined,
   agent: undefined,
@@ -195,6 +237,11 @@ const initialState: AppSettings = {
   setSidebarKeyboardDndEnabled: () => undefined,
   hideTemplates: false,
   setHideTemplates: () => undefined,
+  baseURL: '',
+  setBaseURL: () => undefined,
+  setServer: () => undefined,
+  navbarTop: true,
+  setNavbarTop: () => undefined,
 };
 
 /** Hook for using App Settings, such as theme and darkmode */

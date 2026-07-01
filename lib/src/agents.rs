@@ -4,22 +4,23 @@
 
 use base64::{engine::general_purpose, Engine};
 use serde::{Deserialize, Serialize};
-use serde_json::from_slice;
 
-use crate::{errors::AtomicResult, urls, Resource, Storelike, Value};
+use crate::{errors::AtomicResult, urls, Resource, Value};
 
 #[derive(Serialize, Deserialize)]
 struct DecodedSecret {
     #[serde(rename = "privateKey")]
     private_key: String,
-    subject: String,
+    subject: crate::Subject,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    initial_drive: Option<crate::Subject>,
 }
 
 /// None represents no right checks will be performed, effectively SUDO mode.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ForAgent {
-    /// The Subject URL agent that is performing the action.
-    AgentSubject(String),
+    /// The Subject URL/DID agent that is performing the action.
+    AgentSubject(crate::Subject),
     /// Allows all checks to pass.
     /// See [urls::SUDO_AGENT]
     Sudo,
@@ -38,16 +39,15 @@ impl std::fmt::Display for ForAgent {
     }
 }
 
-// From all string-likes
 impl<T: Into<String>> From<T> for ForAgent {
     fn from(subject: T) -> Self {
-        let subject = subject.into();
-        if subject == urls::SUDO_AGENT {
+        let subject_str = subject.into();
+        if subject_str == urls::SUDO_AGENT {
             ForAgent::Sudo
-        } else if subject == urls::PUBLIC_AGENT {
+        } else if subject_str == urls::PUBLIC_AGENT {
             ForAgent::Public
         } else {
-            ForAgent::AgentSubject(subject)
+            ForAgent::AgentSubject(crate::Subject::from_raw(&subject_str, None))
         }
     }
 }
@@ -60,85 +60,102 @@ pub struct Agent {
     pub private_key: Option<String>,
     /// Used for validating commit signatures and for the username.
     pub public_key: String,
-    /// URL of the Agent
-    pub subject: String,
+    /// URL / DID of the Agent
+    pub subject: crate::Subject,
     pub created_at: i64,
     pub name: Option<String>,
+    /// The DID of the drive that should be opened by default for this agent.
+    pub initial_drive: Option<crate::Subject>,
 }
 
 impl Agent {
     /// Converts Agent to Resource.
     /// Does not include private key, only public.
     pub fn to_resource(&self) -> AtomicResult<Resource> {
-        let mut resource = Resource::new(self.subject.clone());
-        resource.set_class(urls::AGENT);
-        resource.set_subject(self.subject.clone());
+        let mut resource = Resource::new(self.subject.to_string());
+        resource.set_class(urls::AGENT)?;
+        resource.set_subject(self.subject.to_string());
         if let Some(name) = &self.name {
-            resource.set_unsafe(crate::urls::NAME.into(), Value::String(name.into()));
+            resource.set_unsafe(crate::urls::NAME.into(), Value::String(name.into()))?;
         }
         resource.set_unsafe(
             crate::urls::PUBLIC_KEY.into(),
             Value::String(self.public_key.clone()),
-        );
+        )?;
         // Agents must be read by anyone when validating their keys
         resource.push(crate::urls::READ, urls::PUBLIC_AGENT.into(), true)?;
         resource.set_unsafe(
             crate::urls::CREATED_AT.into(),
             Value::Timestamp(self.created_at),
-        );
+        )?;
+        if let Some(initial_drive) = &self.initial_drive {
+            resource.set_unsafe(
+                urls::DRIVES.into(),
+                Value::ResourceArray(vec![crate::values::SubResource::Subject(
+                    initial_drive.clone(),
+                )]),
+            )?;
+            resource.set_unsafe(
+                urls::PERSONAL_DRIVE.into(),
+                Value::AtomicUrl(initial_drive.to_string().into()),
+            )?;
+        }
         Ok(resource)
     }
 
     /// Creates a new Agent, generates a new Keypair.
-    pub fn new(name: Option<&str>, store: &impl Storelike) -> AtomicResult<Agent> {
+    pub fn new(name: Option<&str>) -> AtomicResult<Agent> {
         let keypair = generate_keypair()?;
 
-        Agent::new_from_private_key(name, store, &keypair.private)
+        Agent::new_from_private_key(name, &keypair.private)
     }
 
-    /// Creates a new Agent on this server, using the server's Server URL.
-    /// Derives the public key.
-    pub fn new_from_private_key(
-        name: Option<&str>,
-        store: &impl Storelike,
-        private_key: &str,
-    ) -> AtomicResult<Agent> {
+    /// Creates a new Agent with a DID identifier.
+    /// Derives the public key from the private key.
+    pub fn new_from_private_key(name: Option<&str>, private_key: &str) -> AtomicResult<Agent> {
         let keypair = generate_public_key(private_key);
+        let did_string = format!("did:ad:agent:{}", keypair.public);
+        let subject = crate::Subject::from_raw(&did_string, None);
 
         Ok(Agent {
             private_key: Some(keypair.private),
             public_key: keypair.public.clone(),
-            subject: format!("{}/agents/{}", store.get_server_url()?, keypair.public),
+            subject,
             name: name.map(|x| x.to_owned()),
             created_at: crate::utils::now(),
+            initial_drive: None,
         })
     }
 
-    /// Creates a new Agent on this server, using the server's Server URL.
+    /// Creates a new Agent with a DID identifier from a public key.
     /// This will not be able to write, because there is no private key.
-    pub fn new_from_public_key(store: &impl Storelike, public_key: &str) -> AtomicResult<Agent> {
+    pub fn new_from_public_key(public_key: &str) -> AtomicResult<Agent> {
         verify_public_key(public_key)?;
+        let did_string = format!("did:ad:agent:{}", public_key);
+        let subject = crate::Subject::from_raw(&did_string, None);
 
         Ok(Agent {
             private_key: None,
             public_key: public_key.into(),
-            subject: format!("{}/agents/{}", store.get_server_url()?, public_key),
+            subject,
             name: None,
             created_at: crate::utils::now(),
+            initial_drive: None,
         })
     }
 
     pub fn from_secret(secret_b64: &str) -> AtomicResult<Agent> {
         let agent_bytes = decode_base64(secret_b64)?;
-        let parsed: serde_json::Value = from_slice(&agent_bytes)?;
-        let private_key = parsed["privateKey"].as_str().ok_or("Invalid private key")?;
-        let subject = parsed["subject"].as_str().ok_or("Invalid subject")?;
+        let decoded: DecodedSecret = serde_json::from_slice(&agent_bytes)?;
+        // Migrate legacy HTTP agent subjects (https://server/agents/{pubkey}) to did:ad:agent:{pubkey}
+        let subject = migrate_http_agent_subject(decoded.subject.as_str());
         let agent = Agent {
-            private_key: Some(private_key.into()),
-            public_key: generate_public_key(private_key).public,
-            subject: subject.into(),
+            private_key: Some(decoded.private_key.clone()),
+            public_key: generate_public_key(&decoded.private_key).public,
+            subject: crate::Subject::from_raw(&subject, None),
             name: None,
             created_at: crate::utils::now(),
+            initial_drive: decoded.initial_drive,
         };
         Ok(agent)
     }
@@ -152,6 +169,7 @@ impl Agent {
             subject: subject.into(),
             name: None,
             created_at: crate::utils::now(),
+            initial_drive: None,
         })
     }
 
@@ -159,6 +177,7 @@ impl Agent {
         let decoded_secret = DecodedSecret {
             private_key: self.private_key.clone().ok_or("No private key on agent")?,
             subject: self.subject.clone(),
+            initial_drive: self.initial_drive.clone(),
         };
 
         let vec = serde_json::to_vec(&decoded_secret)?;
@@ -175,43 +194,82 @@ pub struct Pair {
 
 /// Returns a new random keypair.
 fn generate_keypair() -> AtomicResult<Pair> {
-    use ring::signature::KeyPair;
-    let rng = ring::rand::SystemRandom::new();
-    const SEED_LEN: usize = 32;
-    let seed: [u8; SEED_LEN] = ring::rand::generate(&rng)
-        .map_err(|e| format!("Error generating random seed: {}", e))?
-        .expose();
-    let key_pair = ring::signature::Ed25519KeyPair::from_seed_unchecked(&seed)
-        .map_err(|e| format!("Error generating keypair: {}", e))
-        .unwrap();
+    use ed25519_dalek::SigningKey;
+    use rand::rngs::OsRng;
+
+    let signing_key = SigningKey::generate(&mut OsRng);
+    let public_key = signing_key.verifying_key();
     Ok(Pair {
-        private: encode_base64(&seed),
-        public: encode_base64(key_pair.public_key().as_ref()),
+        private: encode_base64(signing_key.as_bytes()),
+        public: encode_base64(public_key.as_bytes()),
     })
 }
 
 /// Returns a Key Pair (including public key) from a private key, base64 encoded.
 pub fn generate_public_key(private_key: &str) -> Pair {
-    use ring::signature::KeyPair;
+    use ed25519_dalek::SigningKey;
+
     let private_key_bytes = decode_base64(private_key).unwrap();
-    let key_pair = ring::signature::Ed25519KeyPair::from_seed_unchecked(private_key_bytes.as_ref())
-        .map_err(|e| format!("Error generating keypair: {e}"))
-        .unwrap();
+    let seed: [u8; 32] = private_key_bytes
+        .try_into()
+        .expect("Ed25519 private key must be 32 bytes");
+    let signing_key = SigningKey::from_bytes(&seed);
+    let public_key = signing_key.verifying_key();
     Pair {
-        private: encode_base64(&private_key_bytes),
-        public: encode_base64(key_pair.public_key().as_ref()),
+        private: encode_base64(signing_key.as_bytes()),
+        public: encode_base64(public_key.as_bytes()),
     }
 }
 
+/// Decodes base64 used throughout Atomic Data for keys, signatures and the
+/// identifiers derived from them (`did:ad:…`).
+///
+/// Accepts BOTH the URL-safe alphabet (`-` `_`, the canonical encoding, see
+/// [`encode_base64`]) and the legacy standard alphabet (`+` `/`), with or
+/// without `=` padding. The leniency means data written before the switch to
+/// URL-safe still decodes, so a mixed store doesn't hard-fail.
 pub fn decode_base64(string: &str) -> AtomicResult<Vec<u8>> {
+    // Normalise the URL-safe alphabet back to the standard one, then re-pad to
+    // a multiple of 4 so a single `STANDARD` decoder handles every variant.
+    let standard_alphabet: String = string
+        .chars()
+        .map(|c| match c {
+            '-' => '+',
+            '_' => '/',
+            other => other,
+        })
+        .collect();
+    let trimmed = standard_alphabet.trim_end_matches('=');
+    let pad = (4 - trimmed.len() % 4) % 4;
+    let padded = format!("{}{}", trimmed, "=".repeat(pad));
+
     let vec = general_purpose::STANDARD
-        .decode(string)
+        .decode(padded)
         .map_err(|e| format!("Invalid key. Not valid Base64. {}", e))?;
     Ok(vec)
 }
 
+/// Encodes bytes as **URL-safe, unpadded** base64 (RFC 4648 §5 — alphabet
+/// `A–Z a–z 0–9 - _`, no `=`). This is what makes `did:ad:…` identifiers safe to
+/// drop into URLs verbatim: the standard alphabet's `+` (which form-decoders
+/// turn into a space) and `/` would otherwise corrupt a subject on round-trip
+/// through a query string. Used for keys, signatures and every derived
+/// identifier; [`decode_base64`] still accepts the old standard encoding.
 pub fn encode_base64(bytes: &[u8]) -> String {
-    general_purpose::STANDARD.encode(bytes)
+    general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+}
+
+/// Signs a message using the private key.
+pub fn sign_message(message: &[u8], private_key: &str) -> AtomicResult<String> {
+    use ed25519_dalek::{Signer, SigningKey};
+
+    let private_key_bytes = decode_base64(private_key)?;
+    let seed: [u8; 32] = private_key_bytes
+        .try_into()
+        .map_err(|_| "Ed25519 private key must be 32 bytes")?;
+    let signing_key = SigningKey::from_bytes(&seed);
+    let signature = signing_key.sign(message);
+    Ok(encode_base64(&signature.to_bytes()))
 }
 
 /// Checks if the public key is a valid ED25519 base64 key.
@@ -230,16 +288,29 @@ pub fn verify_public_key(public_key: &str) -> AtomicResult<()> {
     Ok(())
 }
 
+/// Migrates a legacy HTTP agent subject (`https://server/agents/{pubkey}`) to `did:ad:agent:{pubkey}`.
+/// Returns the input unchanged if it doesn't match the legacy pattern.
+pub fn migrate_http_agent_subject(subject: &str) -> String {
+    if let Some(pubkey) = subject
+        .strip_prefix("http://")
+        .or_else(|| subject.strip_prefix("https://"))
+        .and_then(|s| s.split_once('/'))
+        .and_then(|(_, path)| path.strip_prefix("agents/"))
+    {
+        return format!("did:ad:agent:{}", pubkey);
+    }
+    subject.to_string()
+}
+
 impl From<Agent> for ForAgent {
     fn from(agent: Agent) -> Self {
-        agent.subject.into()
+        ForAgent::AgentSubject(agent.subject)
     }
 }
 
 impl<'a> From<&'a Agent> for ForAgent {
     fn from(agent: &'a Agent) -> Self {
-        let subject: String = agent.subject.clone();
-        subject.into()
+        ForAgent::AgentSubject(agent.subject.clone())
     }
 }
 
@@ -258,7 +329,9 @@ mod test {
     #[test]
     fn generate_from_private_key() {
         let private_key = "CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=";
-        let public_key = "7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=";
+        // base64url (URL_SAFE_NO_PAD): DID subjects must be URL-safe, so
+        // `encode_base64` emits this form (was standard base64 before the switch).
+        let public_key = "7LsjMW5gOfDdJzK_atgjQ1t20J_rw8MjVg6xwqm-h8U";
         let regenerated_pair = generate_public_key(private_key);
         assert_eq!(public_key, regenerated_pair.public);
     }
@@ -281,9 +354,10 @@ mod test {
             agent.private_key.unwrap(),
             "SMyxRgF7QhiC7C506qXSUKfE+SKAtCdNFu5XeTjzadA="
         );
+        // Legacy HTTP subject is automatically migrated to did:ad:agent:
         assert_eq!(
             agent.subject,
-            "http://localhost:9883/agents/RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
+            "did:ad:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
         );
     }
 
@@ -291,9 +365,31 @@ mod test {
     fn can_build_secret() {
         let og_secret = "eyJwcml2YXRlS2V5IjoiU015eFJnRjdRaGlDN0M1MDZxWFNVS2ZFK1NLQXRDZE5GdTVYZVRqemFkQT0iLCJzdWJqZWN0IjoiaHR0cDovL2xvY2FsaG9zdDo5ODgzL2FnZW50cy9ScVB3cGdIditQSzdQbnovZFZhYjhobUhqWW52VEwxWXJsVmE2TDlHOVpnPSJ9";
         let agent = Agent::from_secret(og_secret).unwrap();
+        // Legacy HTTP subject should be migrated to did:ad:agent:
+        assert_eq!(
+            agent.subject.to_string(),
+            "did:ad:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
+        );
         let secret = agent.build_secret().unwrap();
+        let agent2 = Agent::from_secret(&secret).unwrap();
+        assert_eq!(agent2.subject, agent.subject);
+    }
 
-        let agent2 = Agent::from_secret(&secret);
-        assert_eq!(agent2.unwrap().subject, agent.subject);
+    #[test]
+    fn migrate_http_agent_subject_works() {
+        assert_eq!(
+            migrate_http_agent_subject(
+                "http://localhost:9883/agents/RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
+            ),
+            "did:ad:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
+        );
+        assert_eq!(
+            migrate_http_agent_subject("did:ad:agent:somepubkey"),
+            "did:ad:agent:somepubkey"
+        );
+        assert_eq!(
+            migrate_http_agent_subject("https://example.com/agents/pubkey123"),
+            "did:ad:agent:pubkey123"
+        );
     }
 }

@@ -6,7 +6,12 @@ use core::fmt;
 
 use crate::{agents::ForAgent, errors::AtomicResult, urls, Resource, Storelike};
 
-#[derive(Debug)]
+#[cfg(target_arch = "wasm32")]
+type AsyncResult<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + 'a>>;
+#[cfg(not(target_arch = "wasm32"))]
+type AsyncResult<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+
+#[derive(Debug, Clone, Copy)]
 pub enum Right {
     /// Full read access to the resource and its children.
     /// [urls::READ]
@@ -33,10 +38,10 @@ impl fmt::Display for Right {
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
 pub fn check_write<'a>(
-    store: &'a (impl Storelike + Sync),
+    store: &'a impl Storelike,
     resource: &'a Resource,
     for_agent: &'a ForAgent,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = AtomicResult<String>> + Send + 'a>> {
+) -> AsyncResult<'a, AtomicResult<String>> {
     Box::pin(check_rights(store, resource, for_agent, Right::Write))
 }
 
@@ -44,10 +49,10 @@ pub fn check_write<'a>(
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
 pub fn check_read<'a>(
-    store: &'a (impl Storelike + Sync),
+    store: &'a impl Storelike,
     resource: &'a Resource,
     for_agent: &'a ForAgent,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = AtomicResult<String>> + Send + 'a>> {
+) -> AsyncResult<'a, AtomicResult<String>> {
     Box::pin(check_rights(store, resource, for_agent, Right::Read))
 }
 
@@ -55,9 +60,9 @@ pub fn check_read<'a>(
 /// This checks the `append` rights, and if that fails, checks the `write` right.
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
-#[tracing::instrument(skip(store), level = "debug")]
+#[tracing::instrument(skip_all)]
 pub async fn check_append(
-    store: &(impl Storelike + Sync),
+    store: &impl Storelike,
     resource: &Resource,
     for_agent: &ForAgent,
 ) -> AtomicResult<String> {
@@ -74,11 +79,11 @@ pub async fn check_append(
                 .get_classes(store)
                 .await?
                 .iter()
-                .map(|c| c.subject.clone())
-                .collect::<String>()
-                .contains(urls::DRIVE)
+                .any(|c| c.subject == urls::DRIVE)
+                || resource.get_subject().to_string().starts_with("did:")
             {
-                Ok(String::from("Drive without a parent can be created"))
+                // This string is not returned, it's just a check
+                Ok(String::from("Drive or DID without a parent can be created"))
             } else {
                 Err(e)
             }
@@ -89,23 +94,26 @@ pub async fn check_append(
 /// Recursively checks a Resource and its Parents for rights.
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
-#[tracing::instrument(skip(store, resource))]
+#[tracing::instrument(skip_all, fields(subject = %resource.get_subject(), agent = %for_agent_enum, right = ?right))]
 pub fn check_rights<'a>(
-    store: &'a (impl Storelike + Sync),
+    store: &'a impl Storelike,
     resource: &'a Resource,
     for_agent_enum: &'a ForAgent,
     right: Right,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = AtomicResult<String>> + Send + 'a>> {
+) -> AsyncResult<'a, AtomicResult<String>> {
     Box::pin(async move {
         if for_agent_enum == &ForAgent::Sudo {
             return Ok("Sudo has root access, and can edit anything.".into());
         }
         let for_agent = for_agent_enum.to_string();
-        if resource.get_subject() == &for_agent {
+        let normalized_for_agent = store.normalize_subject(&for_agent.clone().into());
+        if resource.get_subject() == &normalized_for_agent {
             return Ok("Agents can always edit themselves or their children.".into());
         }
+
         if let Ok(server_agent) = store.get_default_agent() {
-            if server_agent.subject == for_agent {
+            let normalized_server_agent = store.normalize_subject(&server_agent.subject);
+            if normalized_server_agent == normalized_for_agent {
                 return Ok("Server agent has root access, and can edit anything.".into());
             }
         }
@@ -115,7 +123,9 @@ pub fn check_rights<'a>(
             return match right {
                 Right::Read => {
                     // Commits can be read when their subject / target is readable.
-                    let target = store.get_resource(&commit_subject.to_string()).await?;
+                    let target = store
+                        .get_resource(&commit_subject.to_string().as_str().into())
+                        .await?;
                     check_rights(store, &target, for_agent_enum, right).await
                 }
                 Right::Write => Err("Commits cannot be edited.".into()),
@@ -126,31 +136,80 @@ pub fn check_rights<'a>(
         }
 
         // Check if the resource's rights explicitly refers to the agent or the public agent
-        if let Ok(arr_val) = resource.get(&right.to_string()) {
-            for s in arr_val.to_subjects(None)? {
-                match s.as_str() {
-                    urls::PUBLIC_AGENT => {
-                        return Ok(format!(
-                            "PublicAgent has been granted rights in {}",
-                            resource.get_subject()
-                        ))
-                    }
-                    agent => {
-                        if agent == for_agent {
+        let mut properties_to_check = vec![right.to_string()];
+        if matches!(right, Right::Read | Right::Append) {
+            properties_to_check.push(urls::WRITE.to_string());
+        }
+
+        for prop in properties_to_check {
+            if let Ok(arr_val) = resource.get(&prop) {
+                for s in arr_val.to_subjects(None)? {
+                    match s.as_str() {
+                        urls::PUBLIC_AGENT => {
                             return Ok(format!(
-                                "Right has been explicitly set in {}",
+                                "PublicAgent has been granted rights in {}",
                                 resource.get_subject()
-                            ));
+                            ))
                         }
+                        agent => {
+                            let normalized_agent = store.normalize_subject(&agent.into());
+                            if normalized_agent == normalized_for_agent {
+                                return Ok(format!(
+                                    "Right has been explicitly set in {}",
+                                    resource.get_subject()
+                                ));
+                            }
+                        }
+                    };
+                }
+            }
+        }
+
+        // Drive-first (race-free fast path): if this resource carries a `drive`
+        // stamp (set at genesis from its cert), check the grant on the drive
+        // directly. The drive is a stable, long-lived resource whose grants are
+        // always materialized, so this avoids the recursive parent walk that
+        // races a not-yet-materialized parent under concurrent creation (the
+        // parent-before-child 401 cascade). A deny at the drive falls through to
+        // the recursive walk below, which still honors explicit grants on
+        // intermediate parents.
+        if let Ok(drive_val) = resource.get(urls::DRIVE_PROP) {
+            let drive_subject = crate::Subject::from(drive_val.to_string());
+            if &drive_subject != resource.get_subject() {
+                if let Ok(drive_res) = store.get_resource(&drive_subject).await {
+                    if let Ok(reason) = check_rights(store, &drive_res, for_agent_enum, right).await
+                    {
+                        return Ok(reason);
                     }
-                };
+                }
             }
         }
 
         // Try the parents recursively
-        if let Ok(parent) = resource.get_parent(store).await {
-            check_rights(store, &parent, for_agent_enum, right).await
-        } else {
+        tracing::debug!(
+            subject = %resource.get_subject(),
+            "rights walk: no explicit grant here, ascending to parent"
+        );
+        match resource.get_parent(store).await {
+            Ok(parent) => {
+                tracing::debug!(
+                    subject = %resource.get_subject(),
+                    parent = %parent.get_subject(),
+                    "rights walk: ascending"
+                );
+                return check_rights(store, &parent, for_agent_enum, right).await;
+            }
+            Err(parent_err) => {
+                tracing::warn!(
+                    subject = %resource.get_subject(),
+                    agent = %for_agent,
+                    ?right,
+                    parent_err = %parent_err,
+                    "rights walk TERMINATED: get_parent failed (this is where the 401 originates)"
+                );
+            }
+        }
+        {
             if for_agent_enum == &ForAgent::Public {
                 // resource has no parent and agent is not in rights array - check fails
                 let action = match right {
@@ -209,5 +268,38 @@ mod test {
         assert_eq!(read.to_string(), super::urls::READ);
         let write = super::Right::Write;
         assert_eq!(write.to_string(), super::urls::WRITE);
+    }
+
+    #[tokio::test]
+    async fn create_did_agent() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
+        let agent = store.create_agent(Some("test_actor")).await.unwrap();
+        store.set_default_agent(agent.clone());
+
+        // Create a drive first so we have a valid parent with write rights
+        let drive_did = crate::test_utils::create_test_drive(&store).await.unwrap();
+
+        let subject = "https://localhost/test-did-agent";
+        let mut commitbuilder = crate::commit::CommitBuilder::new(subject.into());
+        commitbuilder.set(
+            crate::urls::DESCRIPTION.into(),
+            Value::new("Some value", &DataType::Markdown).unwrap(),
+        );
+        commitbuilder.set(crate::urls::PARENT.into(), Value::AtomicUrl(drive_did));
+        let resource = crate::Resource::new(subject.into());
+        let commit = commitbuilder.sign(&agent, &store, &resource).await.unwrap();
+        let opts = crate::commit::CommitOpts {
+            validate_schema: false,
+            validate_signature: false,
+            validate_timestamp: true,
+            validate_rights: true,
+            validate_previous_commit: false,
+            validate_loro_causality: false,
+            update_index: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            source_id: None,
+        };
+        store.apply_commit(commit, &opts).await.unwrap();
     }
 }

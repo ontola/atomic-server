@@ -16,6 +16,9 @@ pub struct Config {
 pub struct SharedConfig {
     /// Sudo agent on the server, also used as agent in the CLI. Usually lives on the server, but not necessarily so.
     pub agent_secret: String,
+    /// The DID of the initial drive created for the base domain
+    #[serde(rename = "initialDrive")]
+    pub initial_drive: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -30,7 +33,8 @@ pub fn default_config_dir_path() -> AtomicResult<PathBuf> {
         let atomic_config_dir = dirs.home_dir().join(".config/atomic");
         return Ok(atomic_config_dir);
     }
-    Err("No default config dir can be found, as no Home directory can be found on this operating system".into())
+    // Fallback for systems like Android where UserDirs might be None
+    Ok(PathBuf::from(".config/atomic"))
 }
 
 /// Returns the default path for the config file: `~/.config/atomic/config.toml`
@@ -72,7 +76,7 @@ fn write_config(path: &Path, config: Config) -> AtomicResult<String> {
 
 impl Config {
     pub fn save(&self, path: &Path) -> AtomicResult<()> {
-        write_config(&path, self.clone())?;
+        write_config(path, self.clone())?;
         Ok(())
     }
 
@@ -101,7 +105,7 @@ fn parse_and_migrate_if_needed(config_str: &str) -> AtomicResult<Config> {
         return config_v0_to_v1(&config);
     }
 
-    return Err("Could not parse config".into());
+    Err("Could not parse config".into())
 }
 
 fn config_v0_to_v1(config_v0: &ConfigV0) -> AtomicResult<Config> {
@@ -116,6 +120,7 @@ fn config_v0_to_v1(config_v0: &ConfigV0) -> AtomicResult<Config> {
     let config = Config {
         shared: SharedConfig {
             agent_secret: new_agent.build_secret()?,
+            initial_drive: None,
         },
         client: Some(ClientConfig {
             server_url: server.clone(),

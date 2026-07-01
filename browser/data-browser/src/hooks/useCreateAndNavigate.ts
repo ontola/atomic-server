@@ -1,4 +1,4 @@
-import { Core, JSONValue, Resource, useStore } from '@tomic/react';
+import { JSONValue, Resource, useStore } from '@tomic/react';
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { constructOpenURL } from '../helpers/navigation';
@@ -17,6 +17,8 @@ export type CreateAndNavigate = (
     subject?: string;
     /** If true, skip navigation after resource creation */
     skipNavigation?: boolean;
+    /** If true, skip notifying the store after resource creation */
+    skipNotify?: boolean;
   },
 ) => Promise<Resource>;
 
@@ -36,7 +38,10 @@ export function useCreateAndNavigate(): CreateAndNavigate {
       propVals,
       { parent, extraParams, onCreated, subject, noParent, skipNavigation },
     ): Promise<Resource> => {
-      const classResource = await store.getResource<Core.Class>(isA);
+      const classTitle =
+        store
+          .getResourceLoading(isA)
+          ?.title?.replace(/^https?:\/\/[^/]+\/classes\//, '') ?? 'Resource';
 
       const resource = await store.newResource({
         subject,
@@ -50,8 +55,18 @@ export function useCreateAndNavigate(): CreateAndNavigate {
         await resource.save();
 
         if (onCreated) {
-          onCreated(resource);
+          await onCreated(resource);
         }
+
+        // Notify subscribers (collections, sidebars, message lists) BEFORE
+        // navigation so the optimistic-add path runs synchronously
+        // against the still-active DOM. If we navigate first, the route
+        // change can suspend or re-render before
+        // `applyResourceChange` has a chance to settle into the
+        // collection, and downstream `expect(...).toBeVisible()` checks
+        // poll the new page mid-mount instead of seeing the new
+        // resource immediately.
+        store.notifyResourceManuallyCreated(resource);
 
         if (!skipNavigation) {
           await navigate({
@@ -59,8 +74,7 @@ export function useCreateAndNavigate(): CreateAndNavigate {
           });
         }
 
-        toast.success(`${classResource.title} created`);
-        store.notifyResourceManuallyCreated(resource);
+        toast.success(`${classTitle} created`);
       } catch (e) {
         store.notifyError(e);
         toast.error('Failed to save new resource');

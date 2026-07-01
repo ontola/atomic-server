@@ -6,7 +6,10 @@ use crate::{
     agents::ForAgent, errors::AtomicResult, storelike::ResourceResponse, urls, Commit, Db, Resource,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+#[cfg(target_arch = "wasm32")]
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
 pub struct GetExtenderContext<'a> {
     pub store: &'a Db,
@@ -20,6 +23,8 @@ pub struct CommitExtenderContext<'a> {
     pub commit: &'a Commit,
     pub resource: &'a Resource,
     pub is_new: bool,
+    /// The property URLs changed by this commit's Loro update.
+    pub changed_props: &'a std::collections::HashSet<String>,
 }
 
 pub type ResourceGetHandler = Arc<
@@ -210,7 +215,7 @@ impl ClassExtender {
                 // If the resource is the scope itself we can just return true.
                 let subject = resource.get_subject().clone();
                 if subject == scope.clone() {
-                    return Ok((true, Some(subject)));
+                    return Ok((true, Some(subject.to_string())));
                 }
 
                 // Find the root parent of the resource or use the cached root.
@@ -222,18 +227,16 @@ impl ClassExtender {
                         return Ok((false, None));
                     };
 
-                    root.get_subject().clone()
+                    root.get_subject().to_string()
                 };
 
                 if rs != *scope {
                     return Ok((false, Some(rs)));
                 }
 
-                return Ok((true, Some(rs)));
+                Ok((true, Some(rs)))
             }
-            ClassExtenderScope::Global => {
-                return Ok((true, cached_root));
-            }
+            ClassExtenderScope::Global => Ok((true, cached_root)),
         }
     }
 

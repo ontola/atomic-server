@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { isUnauthorized, useStore } from '@tomic/react';
+import { useLocation, useNavigate } from '@tanstack/react-router';
 import { ContainerWide } from '../components/Containers';
 import { ErrorBlock } from '../components/ErrorLook';
 import { Button } from '../components/Button';
@@ -8,7 +9,11 @@ import { useSettings } from '../helpers/AppSettings';
 import { ResourcePageProps } from './ResourcePage';
 import { Column, Row } from '../components/Row';
 import CrashPage from './CrashPage';
-import { clearAllLocalData } from '../helpers/clearData';
+import { AtomicLink } from '../components/AtomicLink';
+import { paths } from '../routes/paths';
+import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceError';
+import { isDriveSignInError } from '../helpers/isDriveSignInError';
+import { RootWelcomeGate } from './RootWelcomeGate';
 
 import type { JSX } from 'react';
 
@@ -17,10 +22,50 @@ import type { JSX } from 'react';
  * for App wide errors.
  */
 function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
-  const { agent } = useSettings();
+  const { agent, baseURL } = useSettings();
   const store = useStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const isHomeWelcome = isRootWelcomeResourceError(resource, agent, baseURL);
+  // Not signed in + can't read this (non-home) resource → send to the welcome
+  // panel's sign-in step, carrying the resource as `next` so we return the user
+  // here once they sign in. (Already signed in? No redirect — that agent just
+  // lacks access, handled below.)
+  const isDriveSignIn = isDriveSignInError(resource, agent, baseURL);
+  const shouldGoToWelcome = (!agent && isHomeWelcome) || isDriveSignIn;
+
+  React.useEffect(() => {
+    if (!shouldGoToWelcome) return;
+    if (location.pathname === paths.welcome) return;
+
+    navigate({
+      to: paths.welcome,
+      search: {
+        next: isDriveSignIn ? resource.subject : undefined,
+        from_cloud: undefined,
+      },
+      replace: true,
+    });
+  }, [
+    location.pathname,
+    navigate,
+    shouldGoToWelcome,
+    isDriveSignIn,
+    resource.subject,
+  ]);
+
+  if (isRootWelcomeResourceError(resource, agent, baseURL)) {
+    // Redirect effect above will handle the URL; render something safe meanwhile.
+    return <RootWelcomeGate subject={baseURL || resource.subject} />;
+  }
 
   if (isUnauthorized(resource.error)) {
+    if (!agent) {
+      // Redirect effect above will handle the URL.
+      return <RootWelcomeGate subject={baseURL || resource.subject} />;
+    }
+
     return (
       <ContainerWide>
         <Column>
@@ -54,6 +99,12 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
       <Column>
         <h1>Could not open {resource.subject}</h1>
         <ErrorBlock error={resource.error!} />
+        {resource.subject === baseURL && (
+          <p>
+            If you have not set up an identity on this server yet,{' '}
+            <AtomicLink path={paths.onboarding}>create one here</AtomicLink>.
+          </p>
+        )}
         <Row>
           <Button
             onClick={() =>
@@ -64,12 +115,12 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
           >
             Retry
           </Button>
-          <Button
+          {/* <Button
             title='Clear all local data & refresh page'
             onClick={clearAllLocalData}
           >
             Hard reset
-          </Button>
+          </Button> */}
           <Button
             onClick={() =>
               store.fetchResourceFromServer(resource.subject, {

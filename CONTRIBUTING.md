@@ -26,7 +26,7 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
 - [Testing](#testing)
 - [Performance monitoring / benchmarks](#performance-monitoring--benchmarks)
   - [Tracing](#tracing)
-    - [Tracing with OpenTelemetry (and Jaeger)](#tracing-with-opentelemetry-and-jaeger)
+    - [Tracing with OpenTelemetry (and SigNoz)](#tracing-with-opentelemetry-and-signoz)
     - [Tracing with Chrome](#tracing-with-chrome)
   - [Criterion benchmarks](#criterion-benchmarks)
   - [Drill](#drill)
@@ -118,6 +118,10 @@ Create new branches off `develop`. When an issue is ready for PR, open PR agains
 
 ## Testing
 
+- We try to test at every level, unit tests, integration tests, e2e tests (playwright).
+- When tests fail, first make sure the unit tests are green, then do integration tests, then to e2e.
+- If e2e tests fail, try walking through the steps 1 by 1 either with the playwright debugger, or by simply reproducing the steps in your browser of choice.
+
 ```sh
 # Make sure nextest is installed
 cargo install cargo-nextest
@@ -135,20 +139,6 @@ cd browser && pnpm i && pnpm test-e2e
 pnpm run test-query {testname}
 ```
 
-<!--
-NOTE: NOT WORKING SINCE EARHTLY
-
-## Code coverage
-
-- Visible at https://app.codecov.io/gh/atomicdata-dev/atomic-server/
-- Checked in CI
-
-```sh
-# install cargo-llvm-cov, see https://github.com/taiki-e/cargo-llvm-cov
-# Run the tests with a coverage report
-cargo llvm-cov --all-features --show-missing-lines
-``` -->
-
 ## Performance monitoring / benchmarks
 
 We want to make Atomic Server as fast as possible.
@@ -158,32 +148,36 @@ For doing this, we have at least three tools: tracing, criterion and drill.
 
 There are two ways you can use `tracing` to get insights into performance.
 
-#### Tracing with OpenTelemetry (and Jaeger)
+#### Tracing with OpenTelemetry (and SigNoz)
 
 - Run the server with `--trace opentelemetry` and add `--log-level trace` to inspect more events
-- Run an OpenTelemetry compatible service, such as Jaeger. See `docker run` command below or use the vscode task.
-- Visit jaeger: `http://localhost:16686`
+- Sign up for [SigNoz Cloud](https://signoz.io/) (free trial available) or run SigNoz locally with Docker
+- Add the following to your `.env`:
 
 ```sh
-docker run -d --platform linux/amd64 --name jaeger \
-  -e COLLECTOR_ZIPKIN_HTTP_PORT=9411 \
-  -p 5775:5775/udp \
-  -p 6831:6831/udp \
-  -p 6832:6832/udp \
-  -p 5778:5778 \
-  -p 4317:4317 \
-  -p 16686:16686 \
-  -p 14268:14268 \
-  -p 9411:9411 \
-  jaegertracing/all-in-one:latest
+ATOMIC_TRACING=opentelemetry
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_EXPORTER_OTLP_ENDPOINT=https://ingest.<region>.signoz.cloud:443
+OTEL_EXPORTER_OTLP_HEADERS=signoz-ingestion-key=<your-key>
 ```
+
+- Visit SigNoz to inspect traces and logs: `https://app.signoz.io/`
+
+For local development without a cloud account, you can run SigNoz locally:
+
+```sh
+git clone https://github.com/SigNoz/signoz.git
+cd signoz/deploy && docker compose up
+```
+
+Then set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317` (no TLS needed locally).
 
 #### Tracing with Chrome
 
 - Use the `tracing::instrument` macro to make functions traceable. Check out the [tracing](https://docs.rs/tracing/latest/tracing/) docs for more info.
 - Run the server with the `--trace chrome` flag.
 - Close the server. A `trace-{unix-timestamp}.json` file will be generated in the current directory.
-- Open this file with https://ui.perfetto.dev/ or `chrome://tracing`. This will show you a flamegraph that you can zoom into.
+- Open this file with <https://ui.perfetto.dev/> or `chrome://tracing`. This will show you a flamegraph that you can zoom into.
 
 ### Criterion benchmarks
 
@@ -214,16 +208,20 @@ drill -b benchmark.yml --stats
 
 If you encounter serious security risks, please refrain from posting these publicly in the issue tracker.
 We could minimize the impact by first patching the issue, publishing the patch, and then (after 30 days) disclose the bug.
-So please first send an e-mail to joep@ontola.io describing the issue, and then we will work on fixing it as soon as possible.
+So please first send an e-mail to <joep@ontola.io> describing the issue, and then we will work on fixing it as soon as possible.
 
 ## Releases, Versioning and Tagging
 
 1. Commit changes
 1. Make sure all tests run properly
-1. Test, build and update the `/browser` versions (`package.json` files, see `./browser/contributing.md`)
-1. Use `cargo workspaces version patch --no-git-commit` (and maybe replace `patch` with the `minor`) to update all `cargo.toml` files in one command. You'll need to `cargo install cargo-workspaces` if this command is not possible.
+1. Pick one version for the release, including pre-release suffixes when needed (for example `0.41.0-beta.0`).
+1. Test, build and update the `/browser` versions (`package.json` files, see `./browser/CONTRIBUTING.md`). Keep the `@tomic/*` package versions aligned with the Rust release version.
+1. Update the Rust package versions in `lib`, `cli`, `server`, and desktop to the same version. Also update internal `atomic_lib` dependency constraints. `cargo workspaces version <patch|minor|major> --no-git-commit` can help for regular semver bumps, but pre-releases may need manual edits.
+1. Regenerate lockfiles after version changes:
+   - `cargo metadata --format-version 1 --no-deps`
+   - `cd browser && pnpm install --lockfile-only`
 1. Publish to cargo: `cargo publish`. First `lib`, then `cli` and `server`.
-1. Publish to `npm` (see `browser/contribute.md`)
+1. Publish to `npm` (see `browser/CONTRIBUTING.md`)
 1. Update the `CHANGELOG.md` files (browser and root)
 
 The following should be triggered automatically:
@@ -236,10 +234,11 @@ Note:
 - We use [semver](https://semver.org/), and are still quite far from 1.0.0.
 - The version for `atomic-lib` is the most important, and dictates the versions of `cli` and `server`. When `lib` changes minor version, `cli` and `server` should follow.
 
-### CI situation
+### CI/CD pipeline
 
 - Github Action for `push`: builds + tests + docker (using `dagger`, see `.dagger` and the `.github` folders)
 - Github Action for `tag`: create release + publish binaries
+- Docker tags should include immutable release tags such as `0.41.0-beta.0`. `latest` is useful as a convenience tag, but downstream consumers such as Home Assistant add-ons need a changing version tag to reliably detect updates.
 
 ### Publishing manually - doing the CI's work
 
@@ -261,15 +260,12 @@ OR
 
 #### Publishing server to Docker
 
-DockerHub has been setup to track the `master` branch, but it does not tag builds other than `latest`.
+Docker publishing is handled by the Dagger pipeline. Prefer publishing immutable version tags and, when appropriate, `latest`.
 
-1. build: `docker build . -t joepmeneer/atomic-server:v0.20.4 -t joepmeneer/atomic-server:latest`
-1. run, make sure it works: `docker run joepmeneer/atomic-server:latest`
-1. publish: `docker push -a joepmeneer/atomic-server`
+1. build and publish: `dagger call create-docker-images --tags 0.41.0-beta.0 --tags latest`
+1. run, make sure it works: `docker run -p 9883:80 joepmeneer/atomic-server:0.41.0-beta.0`
 
-or:
-
-1. build and publish various builds (warning: building to ARM takes long!): `docker buildx build --platform linux/amd64,linux/arm64 . -t joepmeneer/atomic-server:v0.20.4 -t joepmeneer/atomic-server:latest --push`. Note that including the armv7 platform `linux/arm/v7` currently fails.
+For a single local ARM64 image, use `dagger call create-docker-image --target aarch64-unknown-linux-musl export --path /tmp/atomic-server.tar`, then load and tag it with Docker.
 
 #### Deploying to atomicdata.dev
 

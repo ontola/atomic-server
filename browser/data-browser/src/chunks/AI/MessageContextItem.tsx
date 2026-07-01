@@ -9,20 +9,25 @@ interface ChatContextItemProps {
   onRemove?: (item: AIMessageContext) => void;
 }
 
+const renderContent = (contextItem: AIMessageContext) => {
+  if (contextItem.type === 'atomic-resource') {
+    return <ResourceContextItem subject={contextItem.subject} />;
+  }
+
+  if (contextItem.type === 'skill') {
+    return <span>/{contextItem.name}</span>;
+  }
+
+  return <span>{contextItem.name}</span>;
+};
+
 export const MessageContextItem = ({
   contextItem,
   onRemove,
 }: ChatContextItemProps) => {
-  const content =
-    contextItem.type === 'atomic-resource' ? (
-      <ResourceContextItem subject={contextItem.subject} />
-    ) : (
-      <span>{contextItem.name}</span>
-    );
-
   return (
     <Badge>
-      {content}
+      {renderContent(contextItem)}
       {onRemove && (
         <IconButton title='Remove' onClick={() => onRemove(contextItem)}>
           <FaXmark />

@@ -43,6 +43,9 @@ export const classes = {
   ontology: 'https://atomicdata.dev/class/ontology',
 };
 
+export const BLOB = 'https://atomicdata.dev/properties/blob';
+export const INTERNAL_ID = 'https://atomicdata.dev/properties/internalId';
+
 /**
  *  @deprecated These have been move to their respective onotlogies e.g. core, server, collections, etc.
  */
@@ -56,6 +59,7 @@ export const properties = {
   datatype: 'https://atomicdata.dev/properties/datatype',
   description: 'https://atomicdata.dev/properties/description',
   drives: 'https://atomicdata.dev/properties/drives',
+  favorites: 'https://atomicdata.dev/properties/favorites',
   incomplete: 'https://atomicdata.dev/properties/incomplete',
   isA: 'https://atomicdata.dev/properties/isA',
   isDynamic: 'https://atomicdata.dev/properties/isDynamic',
@@ -117,6 +121,7 @@ export const properties = {
     usagesLeft: 'https://atomicdata.dev/properties/invite/usagesLeft',
     users: 'https://atomicdata.dev/properties/invite/users',
     write: 'https://atomicdata.dev/properties/invite/write',
+    expiresAt: 'https://atomicdata.dev/properties/invite/expiresAt',
   },
   file: {
     filename: 'https://atomicdata.dev/properties/filename',
@@ -124,6 +129,7 @@ export const properties = {
     downloadUrl: 'https://atomicdata.dev/properties/downloadURL',
     mimetype: 'https://atomicdata.dev/properties/mimetype',
     attachments: 'https://atomicdata.dev/properties/attachments',
+    blob: 'https://atomicdata.dev/properties/blob',
   },
   chatRoom: {
     messages: 'https://atomicdata.dev/properties/messages',
@@ -173,7 +179,6 @@ export const datatypes = {
 
 export const instances = {
   publicAgent: 'https://atomicdata.dev/agents/publicAgent',
-  displayStyleGrid: 'https://atomicdata.dev/agents/publicAgent',
   numberFormats: {
     number: 'https://atomicdata.dev/classes/NumberFormat/number',
     percentage: 'https://atomicdata.dev/classes/NumberFormat/Percentage',

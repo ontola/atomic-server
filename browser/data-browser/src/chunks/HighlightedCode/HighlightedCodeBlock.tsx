@@ -11,6 +11,7 @@ import { FaCheck, FaCopy } from 'react-icons/fa6';
 export interface HiglightedCodeBlockProps {
   code: string;
   className?: string;
+  language?: string;
 }
 
 /** Codeblock with sytax hightlighting for typescript code.
@@ -19,6 +20,7 @@ export interface HiglightedCodeBlockProps {
 export default function AsyncHighlightedCodeBlock({
   code,
   className,
+  language = 'typescript',
 }: React.PropsWithChildren<HiglightedCodeBlockProps>): React.JSX.Element {
   const [copied, setIsCopied] = useState(false);
 
@@ -32,7 +34,7 @@ export default function AsyncHighlightedCodeBlock({
   useEffect(() => {
     if (!ref.current) return;
     setTimeout(() => Prism.highlightElement(ref.current!), 0);
-  }, [code]);
+  }, [code, language]);
 
   useEffect(() => {
     if (copied) {
@@ -46,7 +48,7 @@ export default function AsyncHighlightedCodeBlock({
     <Wrapper>
       <StyledScrollArea type='hover' className={className}>
         <StyledPre>
-          <code ref={ref} className='language-typescript'>
+          <code ref={ref} className={`language-${language}`}>
             {code}
           </code>
         </StyledPre>
@@ -84,7 +86,15 @@ const StyledPre = styled.pre`
       text-shadow: none;
     }
     & .operator {
-      background-color: ${p => p.theme.colors.bg1};
+      background-color: transparent;
+    }
+    & .deleted {
+      background-color: #ff9f9f;
+      color: #4d0000;
+    }
+    & .inserted {
+      background-color: #d4ffd4;
+      color: #004d00;
     }
   }
 `;

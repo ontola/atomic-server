@@ -11,7 +11,7 @@ import { IconButton } from './IconButton/IconButton';
 import { FaChevronDown } from 'react-icons/fa6';
 import { useCombobox } from 'downshift';
 import { Column } from './Row';
-import styled from 'styled-components';
+import styled, { css } from 'styled-components';
 import { QuickScore } from 'quick-score';
 
 const supportsAnchorPositioning =
@@ -28,12 +28,14 @@ type ComboBoxProps = {
   options: ComboBoxOption[];
   selectedItem: string | undefined;
   onSelect: (value: string | undefined) => void;
+  subtle?: boolean;
 };
 
 export const ComboBox: React.FC<ComboBoxProps> = ({
   options,
   selectedItem,
   onSelect,
+  subtle = false,
 }) => {
   // Use Combobox does not work with the compiler.
   'use no memo';
@@ -42,12 +44,18 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
   const menuRef = useRef<HTMLUListElement>(null);
   const inputWrapperRef = useRef<HTMLDivElement>(null);
   const [menuAboveInput, setMenuAboveInput] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   const [items, setItems] = useState(options);
 
   const quickScore = useMemo(() => {
     return new QuickScore(options, ['label']);
   }, [options]);
+
+  const selectedOption = useMemo(
+    () => options.find(option => option.value === selectedItem) ?? null,
+    [options, selectedItem],
+  );
 
   const {
     isOpen,
@@ -57,21 +65,28 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
     getItemProps,
     highlightedIndex,
     setHighlightedIndex,
+    selectedItem: downshiftSelectedItem,
+    setInputValue,
+    openMenu,
   } = useCombobox({
     items,
+    selectedItem: selectedOption,
     onInputValueChange: ({ inputValue }) => {
       setHighlightedIndex(0);
 
       if (inputValue === '') {
         setItems(options);
+
+        return;
       }
 
       setItems(quickScore.search(inputValue).map(r => r.item));
     },
     itemToString: item => item?.label ?? '',
-    initialSelectedItem: options.find(option => option.value === selectedItem),
     onSelectedItemChange: ({ selectedItem: item }) => {
-      onSelect(item?.value);
+      if (item?.value !== selectedItem) {
+        onSelect(item?.value);
+      }
     },
   });
 
@@ -88,12 +103,11 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
   }, []);
 
   const checkMenuPosition = useCallback(() => {
-    if (!inputWrapperRef.current || !menuRef.current) return;
-    // NOTE: For some reason firefox does not measure the position correctly, could be due to the polyfill, not fixing this now.
+    if (!inputWrapperRef.current) return;
     const inputWrapperPosition =
       inputWrapperRef.current.getBoundingClientRect();
-    const menuPosition = menuRef.current.getBoundingClientRect();
-    setMenuAboveInput(menuPosition.top < inputWrapperPosition.top);
+    const isNearBottom = inputWrapperPosition.bottom > window.innerHeight - 320;
+    setMenuAboveInput(isNearBottom);
   }, []);
 
   useEffect(() => {
@@ -128,17 +142,55 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
     }
   }, [menuRef, inputWrapperRef]);
 
+  const isActive = isFocused || isOpen;
+  const showSubtle = subtle && !isActive;
+
   return (
     <Wrapper>
       <StyledInputWrapper
         anchorName={anchorName}
         ref={inputWrapperRef}
         className={menuAboveInput ? 'menu-above-input' : ''}
+        $subtle={showSubtle}
       >
-        <InputStyled {...getInputProps()} />
-        <IconButton {...getToggleButtonProps()}>
-          <FaChevronDown />
-        </IconButton>
+        <InputStyled
+          {...getInputProps({
+            onFocus: () => {
+              setIsFocused(true);
+
+              if (subtle) {
+                setTimeout(() => {
+                  setInputValue('');
+                  openMenu();
+                }, 0);
+              }
+            },
+            onBlur: () => {
+              setIsFocused(false);
+
+              if (subtle) {
+                setInputValue(downshiftSelectedItem?.label ?? '');
+              }
+            },
+            onClick: e => {
+              if (subtle) {
+                // @ts-expect-error - Downshift custom event property
+                e.preventDownshiftDefault = true;
+              }
+            },
+            onMouseDown: e => {
+              if (subtle) {
+                // @ts-expect-error - Downshift custom event property
+                e.preventDownshiftDefault = true;
+              }
+            },
+          })}
+        />
+        {!showSubtle && (
+          <IconButton {...getToggleButtonProps()}>
+            <FaChevronDown />
+          </IconButton>
+        )}
       </StyledInputWrapper>
       <List
         $open={isOpen}
@@ -220,11 +272,9 @@ const List = styled.ul<{ $open: boolean; anchorName: string }>`
   position-anchor: ${p => p.anchorName};
   top: anchor(bottom);
   left: anchor(left);
-  right: anchor(right);
   bottom: unset;
-  width: stretch;
-  width: -webkit-fill-available;
-  width: -moz-available;
+  min-width: max(100%, 25rem);
+  max-width: 95vw;
   background-color: ${p => p.theme.colors.bg};
   scrollbar-color: ${p => p.theme.colors.bg2} transparent;
   border: solid 1px ${p => p.theme.colors.main};
@@ -232,6 +282,8 @@ const List = styled.ul<{ $open: boolean; anchorName: string }>`
   position-try: flip-block;
 
   &.menu-above-input {
+    top: unset;
+    bottom: anchor(top);
     border-radius: ${p => p.theme.radius} ${p => p.theme.radius} 0 0;
     border-bottom: none;
     border-top: solid 1px ${p => p.theme.colors.main};
@@ -239,6 +291,31 @@ const List = styled.ul<{ $open: boolean; anchorName: string }>`
   }
 `;
 
-const StyledInputWrapper = styled(InputWrapper)<{ anchorName: string }>`
+const StyledInputWrapper = styled(InputWrapper)<{
+  anchorName: string;
+  $subtle?: boolean;
+}>`
   anchor-name: ${p => p.anchorName};
+
+  ${p =>
+    p.$subtle &&
+    css`
+      border-color: transparent;
+      background-color: transparent;
+
+      input {
+        background-color: transparent;
+        border-color: transparent;
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      &:hover:has(input:not(:disabled)),
+      &:hover {
+        background-color: ${p.theme.colors.bg1};
+        border-color: transparent;
+      }
+    `}
 `;

@@ -9,7 +9,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Resource, core, dataBrowser, useStore } from '@tomic/react';
+import { commits, core, dataBrowser, Resource, useStore } from '@tomic/react';
 import { useCallback, useState } from 'react';
 import {
   SIDEBAR_TRANSITION_TAG,
@@ -17,62 +17,78 @@ import {
 } from '../../helpers/transitionName';
 import { useSettings } from '../../helpers/AppSettings';
 
+/**
+ * Data attached to a sidebar drop target.
+ *
+ * `parent` — the resource the dragged item should become (or stay) a child
+ * of. For a "drop onto folder row" target this is that row's subject; for
+ * a `DropEdge` it's the parent that owns the two surrounding siblings.
+ *
+ * `prevSubject` / `nextSubject` — the subjects immediately above and below
+ * this drop point. The drag handler uses their `sortOrder` (or
+ * `createdAt` as fallback) to compute a fractional sort key for the
+ * dragged item, so only one resource needs to be re-saved per reorder.
+ * `undefined` on either side means "drop at the start / end of the
+ * parent's children". A "drop onto row" target has `prevSubject` set to
+ * that row's last child (if any) and `nextSubject` undefined — i.e.
+ * "append at end".
+ */
 export type SideBarDropData = {
   parent: string;
-  position: number;
+  prevSubject?: string;
+  nextSubject?: string;
 };
 
 export type SideBarDragData = {
   renderedUnder: string;
 };
 
-async function moveItemInSameParent(
-  parent: Resource,
-  subject: string,
-  toPosition: number,
-) {
-  const subResources = parent.get(dataBrowser.properties.subResources) ?? [];
+/**
+ * Resolve a resource's sort key: its explicit `sortOrder` if set, else
+ * `createdAt` (which is what the server query returns siblings sorted
+ * by, and what `useChildren` uses as the implicit fallback). Returns
+ * `undefined` if neither is available — the caller picks a default.
+ */
+function readSortKey(resource: Resource | undefined): number | undefined {
+  if (!resource) return undefined;
+  const explicit = resource.get(dataBrowser.properties.sortOrder);
+  if (typeof explicit === 'number') return explicit;
+  const createdAt = resource.get(commits.properties.createdAt);
+  if (typeof createdAt === 'number') return createdAt;
 
-  const fromPosition = subResources.indexOf(subject);
-  const newArray = [...subResources];
-  const [removed] = newArray.splice(fromPosition, 1);
-  newArray.splice(
-    toPosition > fromPosition ? toPosition - 1 : toPosition,
-    0,
-    removed,
-  );
-
-  await parent.set(dataBrowser.properties.subResources, newArray);
-
-  await parent.save();
+  return undefined;
 }
 
-async function moveItemBetweenParents(
-  oldParent: Resource,
-  newParent: Resource,
-  resource: Resource,
-  position: number,
-) {
-  const oldSubResources =
-    oldParent.get(dataBrowser.properties.subResources) ?? [];
-  await oldParent.set(
-    dataBrowser.properties.subResources,
-    oldSubResources.filter(subject => subject !== resource.subject),
-  );
+/**
+ * Compute the fractional `sortOrder` to assign to a dragged resource
+ * given its new neighbors. Mirrors the classic fractional-index pattern
+ * — midpoint when both neighbors exist; offset by 1 when only one does.
+ *
+ * The `±1` step at the ends is arbitrary but big enough that subsequent
+ * drops on the same side still get sub-second resolution (next midpoint
+ * is `±0.5`, then `±0.25`, …).
+ */
+function computeSortOrder(
+  prevKey: number | undefined,
+  nextKey: number | undefined,
+): number {
+  if (prevKey !== undefined && nextKey !== undefined) {
+    return (prevKey + nextKey) / 2;
+  }
 
-  const newSubResources =
-    newParent.get(dataBrowser.properties.subResources) ?? [];
+  if (prevKey !== undefined) {
+    // Drop at end — must come after `prev`.
+    return prevKey + 1;
+  }
 
-  await newParent.set(
-    dataBrowser.properties.subResources,
-    newSubResources.toSpliced(position, 0, resource.subject),
-  );
+  if (nextKey !== undefined) {
+    // Drop at start — must come before `next`.
+    return nextKey - 1;
+  }
 
-  await resource.set(core.properties.parent, newParent.subject);
-
-  await oldParent.save();
-  await newParent.save();
-  await resource.save();
+  // Empty folder — any value works; align with the implicit createdAt
+  // axis so future drops sit naturally.
+  return Date.now();
 }
 
 export const useSidebarDnd = (
@@ -173,11 +189,12 @@ export const useSidebarDnd = (
     const subject = event.active.id as string;
     const { renderedUnder } = event.active.data
       .current as unknown as SideBarDragData;
-    const { position, parent: dropParent } = event.over.data
-      .current as unknown as SideBarDropData;
+    const {
+      parent: dropParent,
+      prevSubject,
+      nextSubject,
+    } = event.over.data.current as unknown as SideBarDropData;
 
-    const newParent = store.getResourceLoading(dropParent);
-    const oldParent = store.getResourceLoading(renderedUnder);
     const resource = store.getResourceLoading(subject);
 
     // The user should not be able to nest a folder inside itself.
@@ -189,18 +206,42 @@ export const useSidebarDnd = (
       return;
     }
 
-    let promise: Promise<void>;
+    // Dragged neighbor cases: if the drop point is immediately above or
+    // below the dragged item itself within the same parent, that's a
+    // no-op move — bail out so we don't write a redundant sortOrder.
+    if (
+      renderedUnder === dropParent &&
+      (prevSubject === subject || nextSubject === subject)
+    ) {
+      setDraggingResource(undefined);
+      onIsRearangingChange(false);
+      setWaitForSavePromise(Promise.resolve());
 
-    if (renderedUnder === dropParent) {
-      promise = moveItemInSameParent(newParent, subject, position);
-    } else {
-      promise = moveItemBetweenParents(
-        oldParent,
-        newParent,
-        resource,
-        position,
-      );
+      return;
     }
+
+    const prevResource = prevSubject
+      ? store.getResourceLoading(prevSubject)
+      : undefined;
+    const nextResource = nextSubject
+      ? store.getResourceLoading(nextSubject)
+      : undefined;
+
+    const newSortOrder = computeSortOrder(
+      readSortKey(prevResource),
+      readSortKey(nextResource),
+    );
+
+    const promise = (async () => {
+      // Re-parent if necessary. The live `useChildren` query on the new
+      // parent picks up the change automatically.
+      if (renderedUnder !== dropParent) {
+        await resource.set(core.properties.parent, dropParent);
+      }
+
+      await resource.set(dataBrowser.properties.sortOrder, newSortOrder);
+      await resource.save();
+    })();
 
     setWaitForSavePromise(promise);
     await promise;
@@ -225,13 +266,8 @@ export const useSidebarDnd = (
 
       const dragResource = store.getResourceLoading(active.id as string);
       const dropResource = store.getResourceLoading(over.data.current.parent);
-      const pos = over.data.current.position as number;
 
-      return `Draggable item ${
-        dragResource.title
-      } was moved over droppable area in ${dropResource.title} at position ${
-        pos + 1
-      }`;
+      return `Draggable item ${dragResource.title} was moved over droppable area in ${dropResource.title}`;
     },
     onDragEnd: ({ active, over }) => {
       if (!over || !over.data.current) {
@@ -240,11 +276,8 @@ export const useSidebarDnd = (
 
       const dragResource = store.getResourceLoading(active.id as string);
       const dropResource = store.getResourceLoading(over.data.current.parent);
-      const pos = over.data.current.position as number;
 
-      return `${dragResource.title} was moved to ${
-        dropResource.title
-      } at position ${pos + 1}`;
+      return `${dragResource.title} was moved to ${dropResource.title}`;
     },
     onDragCancel: () => {
       return `Dragging canceled`;

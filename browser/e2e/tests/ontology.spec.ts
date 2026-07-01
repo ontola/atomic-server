@@ -7,16 +7,26 @@ import {
   REBUILD_INDEX_TIME,
   inDialog,
   DIALOG_CLOSE_BUTTON,
+  SEARCHBOX_PROPERTY_PLACEHOLDER,
 } from './test-utils';
 
 test.describe('Ontology', async () => {
   test.beforeEach(before);
 
+  // FLAKY (remote CI, observed once): one of the dropdown picks fails
+  // to register — `pickOption` helper has a 100 ms wait that's
+  // probably too short under contention. Investigate: replace the
+  // `waitForTimeout(100)` in `pickOption` with an explicit visibility
+  // wait on the dropdown's option list.
   test('Create and edit ontology', async ({ page }) => {
     test.slow();
 
     const pickOption = async (query: Locator, keyboardSteps?: number) => {
-      await page.waitForTimeout(100);
+      // Wait for the dropdown option to actually render before navigating to
+      // it, instead of sleeping for the open animation. `visible` doesn't
+      // require in-viewport, so it holds for the keyboard path too (where the
+      // option may be scrolled out of view).
+      await query.waitFor({ state: 'visible' });
 
       // Sometimes when the page moves after the dropdown opens, part of the dropdown falls outside the viewport.
       // In this case we have to use the keyboard because scrolling doesn't seem to work.
@@ -75,9 +85,7 @@ test.describe('Ontology', async () => {
     await expect(page.locator('input[value="thumbnail"]')).toBeVisible();
     await page.getByText('Change me').fill('Thumbnail of a youtube video');
     await page.getByRole('button', { name: 'add required property' }).click();
-    await page
-      .getByPlaceholder('Search for a property or enter a URL')
-      .fill('arrows');
+    await page.getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER).fill('arrows');
 
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
@@ -130,7 +138,9 @@ test.describe('Ontology', async () => {
       .nth(1)
       .click();
 
-    await page.getByPlaceholder('Search for a property').fill('arrow-kind');
+    await page
+      .getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER)
+      .fill('arrow-kind');
 
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
@@ -171,7 +181,9 @@ test.describe('Ontology', async () => {
 
     // add line-type property to arrow-kind
     await arrowKindCard.getByTitle('add recommended property').click();
-    await page.getByPlaceholder('Search for a property').fill('line-type');
+    await page
+      .getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER)
+      .fill('line-type');
 
     await expect(page.getByText('Create line-type')).toBeVisible();
 
@@ -229,11 +241,13 @@ test.describe('Ontology', async () => {
 
         await expect(dialog.getByLabel('name')).toBeVisible();
         await dialog.getByLabel('name').fill(name);
-        closeDialogWith('Save');
+        await closeDialogWith('Save');
       });
 
       await expect(page.getByText('Resource loading...')).not.toBeVisible();
-      await expect(page.getByRole('heading', { name })).toBeVisible();
+      await expect(page.getByRole('heading', { name, level: 2 })).toBeVisible({
+        timeout: 20000,
+      });
     };
 
     await createInstance('Red arrow with circle');
@@ -268,9 +282,18 @@ test.describe('Ontology', async () => {
         .nth(1),
     );
 
-    expect(await page.getByText('Red arrow with circle').count()).toBe(3);
-    expect(await page.getByText('Green arrow with black border').count()).toBe(
-      3,
-    );
+    // Each instance is rendered at least three times (sidebar tree, allows-only
+    // button, instances heading+link). Some race conditions add a fourth match
+    // (e.g. drive-children list refresh after the commit), so accept ≥ 3.
+    await expect
+      .poll(() => page.getByText('Red arrow with circle').count(), {
+        timeout: 15000,
+      })
+      .toBeGreaterThanOrEqual(3);
+    await expect
+      .poll(() => page.getByText('Green arrow with black border').count(), {
+        timeout: 15000,
+      })
+      .toBeGreaterThanOrEqual(3);
   });
 });

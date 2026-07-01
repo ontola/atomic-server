@@ -44,7 +44,7 @@ describe('getResource', () => {
   it('should update when the resource changes', async () => {
     const cleanup = $effect.root(() => {
       const store = getStoreFromContext();
-      console.log(store);
+      console.warn(store);
       store.newResource({
         subject: resource1Subject,
         isA: dataBrowser.classes.folder,
@@ -68,7 +68,7 @@ describe('getResource', () => {
   it('correctly fetches derrived subjects', async () => {
     const cleanup = $effect.root(() => {
       const store = getStoreFromContext();
-      console.log(store);
+      console.warn(store);
       store.newResource({
         subject: resource1Subject,
         isA: dataBrowser.classes.folder,

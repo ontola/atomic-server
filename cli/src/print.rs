@@ -35,11 +35,11 @@ pub async fn print_resource(
     resource: &Resource,
     serialize: &SerializeOptions,
 ) -> AtomicResult<()> {
-    let format: Format = serialize.clone().into();
+    let format: Format = (*serialize).into();
     let out = match format {
-        Format::Json => resource.to_json(&context.store).await?,
-        Format::JsonLd => resource.to_json_ld(&context.store).await?,
-        Format::JsonAd => resource.to_json_ad()?,
+        Format::Json => resource.to_json(&context.store, None).await?,
+        Format::JsonLd => resource.to_json_ld(&context.store, None).await?,
+        Format::JsonAd => resource.to_json_ad(None)?,
         Format::NTriples => {
             serialize::atoms_to_ntriples(resource.to_atoms(), &context.store).await?
         }

@@ -6,8 +6,6 @@ import {
   transitionName,
 } from '../helpers/transitionName';
 import { ViewTransitionProps } from '../helpers/ViewTransitionProps';
-import Parent from './Parent';
-import { useResource } from '@tomic/react';
 import { CalculatedPageHeight } from '../globalCssVars';
 
 /** Main landmark. Every page should have one of these.
@@ -16,32 +14,23 @@ export function Main({
   subject,
   children,
 }: PropsWithChildren<ViewTransitionProps>): JSX.Element {
-  const resource = useResource(subject);
-
   return (
-    <>
-      {subject && <Parent resource={resource} />}
-      <StyledMain subject={subject} about={subject}>
-        <VisuallyHidden>
-          <a href='#skip-to-content' id='skip-to-content' tabIndex={-1}>
-            Start of main content
-          </a>
-        </VisuallyHidden>
-        {children}
-      </StyledMain>
-    </>
+    <StyledMain subject={subject} about={subject}>
+      <VisuallyHidden>
+        <a href='#skip-to-content' id='skip-to-content' tabIndex={-1}>
+          Start of main content
+        </a>
+      </VisuallyHidden>
+      {children}
+    </StyledMain>
   );
 }
 
 const StyledMain = memo(styled.main<ViewTransitionProps>`
   ${p => transitionName(RESOURCE_PAGE_TRANSITION_TAG, p.subject)};
-  height: calc(
-    ${CalculatedPageHeight.var()} - ${p => p.theme.heights.breadCrumbBar}
-  );
+  height: ${CalculatedPageHeight.var()};
   overflow-y: auto;
-  scroll-padding: calc(
-    ${p => p.theme.heights.breadCrumbBar} + ${p => p.theme.size(2)}
-  );
+  scroll-padding: ${p => p.theme.size(2)};
 
   width: 100cqw;
 

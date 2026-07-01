@@ -1,18 +1,14 @@
 import {
-  core,
-  dataBrowser,
-  useArray,
   useCanWrite,
+  useChildren,
   useResource,
   useStore,
   useTitle,
 } from '@tomic/react';
 import { Fragment, useEffect, useState, type JSX } from 'react';
-import { FaPlus } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
-import { paths } from '../../routes/paths';
 import { Button } from '../Button';
 import { ResourceSideBar } from './ResourceSideBar/ResourceSideBar';
 import { SideBarHeader } from './SideBarHeader';
@@ -22,12 +18,14 @@ import { Row } from '../Row';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { ScrollArea } from '../ScrollArea';
 import { useSidebarDnd } from './useSidebarDnd';
-import { DndContext, DragOverlay } from '@dnd-kit/core';
+import { closestCenter, DndContext, DragOverlay } from '@dnd-kit/core';
 import { SidebarItemTitle } from './ResourceSideBar/SidebarItemTitle';
 import { DropEdge } from './ResourceSideBar/DropEdge';
 import { createPortal } from 'react-dom';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { SkeletonButton } from '../SkeletonButton';
+import { LoaderInline } from '../Loader';
+import { QuickCreateRow } from '../NewInstanceButton';
+
 
 interface SideBarDriveProps {
   onItemClick: () => unknown;
@@ -51,24 +49,20 @@ export function SideBarDrive({
     announcements,
   } = useSidebarDnd(onIsRearangingChange);
   const driveResource = useResource(drive);
-  const [subResources] = useArray(
-    driveResource,
-    dataBrowser.properties.subResources,
-  );
+  const { subjects: subResources, loading: childrenLoading } =
+    useChildren(drive);
   const [title] = useTitle(driveResource);
   const navigate = useNavigateWithTransition();
   const agentCanWrite = useCanWrite(driveResource);
   const [currentSubject] = useCurrentSubject();
-  const currentResource = useResource(currentSubject, {
-    track: [core.properties.parent],
-  });
+  const currentResource = useResource(currentSubject);
   const [ancestry, setAncestry] = useState<string[]>([]);
 
   useEffect(() => {
-    store.getResourceAncestry(currentResource).then(result => {
+    store.getResourceAncestry(currentResource.stable).then(result => {
       setAncestry(result);
     });
-  }, [store, currentResource]);
+  }, [store, currentResource.stable]);
 
   const driveName = driveResource.isUnauthorized()
     ? 'Unauthorized'
@@ -87,9 +81,7 @@ export function SideBarDrive({
             navigate(constructOpenURL(drive));
           }}
         >
-          <DriveTitle data-testid='current-drive-title'>
-            {driveName}{' '}
-          </DriveTitle>
+          <DriveTitle data-testid='current-drive-title'>{driveName}</DriveTitle>
         </TitleButton>
         <HeadingButtonWrapper gap='0'>
           <DriveSwitcher />
@@ -99,6 +91,12 @@ export function SideBarDrive({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         sensors={sensors}
+        // `closestCenter` lets the 3-pixel `DropEdge` strips between
+        // siblings win over the much-taller "drop onto folder row"
+        // targets when the dragged item is over a sibling gap. With the
+        // default `rectIntersection` the bigger row always swallowed
+        // every drop and inter-sibling reordering became unreachable.
+        collisionDetection={closestCenter}
         accessibility={{
           announcements,
           screenReaderInstructions: {
@@ -108,8 +106,20 @@ export function SideBarDrive({
       >
         <StyledScrollArea>
           <ListWrapper>
-            <DropEdge parentHierarchy={[drive]} position={0} />
-            {driveResource.isReady() ? (
+            <DropEdge
+              parentHierarchy={[drive]}
+              index={0}
+              prevSubject={undefined}
+              nextSubject={subResources[0]}
+            />
+            {/* Gate on `subResources` (reactive `useChildren` state), NOT on
+                `driveResource.isReady()`. The latter is a proxy read the React
+                Compiler memoizes on the stable ref, so when the drive flips to
+                ready it doesn't re-render and the sidebar stays empty even
+                though the children are in state (confirmed: `setSubjects([3])`
+                ran but the list rendered nothing). If we HAVE children, show
+                them; otherwise fall back to a loader / error. */}
+            {subResources.length > 0 ? (
               subResources.map((child, index) => {
                 return (
                   <Fragment key={child}>
@@ -119,28 +129,34 @@ export function SideBarDrive({
                       ancestry={ancestry}
                       onClick={onItemClick}
                     />
-                    <DropEdge parentHierarchy={[drive]} position={index + 1} />
+                    <DropEdge
+                      parentHierarchy={[drive]}
+                      index={index + 1}
+                      prevSubject={child}
+                      nextSubject={subResources[index + 1]}
+                    />
                   </Fragment>
                 );
               })
-            ) : driveResource.loading ? null : (
+            ) : childrenLoading ? (
+              <SideBarLoader />
+            ) : driveResource.error ? (
               <SideBarErr>
-                {driveResource.error &&
-                  (driveResource.isUnauthorized()
-                    ? agent
-                      ? 'unauthorized'
-                      : 'This drive is private, sign in to view it'
-                    : driveResource.error.message)}
+                {driveResource.isUnauthorized()
+                  ? agent
+                    ? 'unauthorized'
+                    : 'This drive is private, sign in to view it'
+                  : driveResource.error.message}
               </SideBarErr>
-            )}
+            ) : null}
             {agentCanWrite && (
-              <AddButton
-                title='New resource'
-                data-testid='sidebar-new-resource'
-                onClick={() => navigate(paths.new)}
-              >
-                <FaPlus />
-              </AddButton>
+              <NewResourceRow gap='0' center>
+                <QuickCreateRow
+                  parent={drive}
+                  newResourceButtonTestId='sidebar-new-resource'
+                  onItemClick={onItemClick}
+                />
+              </NewResourceRow>
             )}
           </ListWrapper>
         </StyledScrollArea>
@@ -171,7 +187,7 @@ const DriveTitle = styled.h2`
 const TitleButton = styled(Button)<{ current?: boolean }>`
   text-align: left;
   flex: 1;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem ${props => props.theme.margin}rem;
   border-radius: ${props => props.theme.radius};
 
   ${({ current, theme }) =>
@@ -189,14 +205,13 @@ const TitleButton = styled(Button)<{ current?: boolean }>`
 `;
 
 const SideBarErr = styled(SimpleErrorBlock)`
-  margin-inline-start: ${props => props.theme.size(2)};
   margin-inline-end: ${props => props.theme.size()};
 `;
 
 const ListWrapper = styled.div`
   overflow-x: hidden;
   position: relative;
-  margin-left: 0.5rem;
+  padding-inline: ${p => p.theme.margin}rem;
 `;
 
 const HeadingButtonWrapper = styled(Row)`
@@ -208,10 +223,13 @@ const StyledScrollArea = styled(ScrollArea)`
   overflow: hidden;
 `;
 
-const AddButton = styled(SkeletonButton)`
-  width: calc(100% - 5rem);
-  padding-block: 0.3rem;
-  margin-inline-start: 2rem;
-  margin-block-start: 0.5rem;
-  margin-block-end: 1rem;
+const SideBarLoader = styled(LoaderInline)`
+  display: block;
+  height: 1.5rem;
+  margin-block: 0.3rem;
+`;
+
+const NewResourceRow = styled(Row)`
+  padding-bottom: 1rem;
+  overflow: visible;
 `;

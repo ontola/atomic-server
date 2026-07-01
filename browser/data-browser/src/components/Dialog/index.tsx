@@ -23,6 +23,8 @@ export interface InternalDialogProps {
   show: boolean;
   onClose: (success: boolean) => void;
   onClosed: () => void;
+  /** Skip the exit animation (e.g. after a successful form save). */
+  instantClose?: boolean;
   disableLightDismiss?: boolean;
   width?: CSS.Property.Width;
 }
@@ -47,13 +49,14 @@ type DialogSlotComponent = React.FC<
  * Component to build a dialog. The content of this component are rendered in a
  * portal outside of the main tree. The children are rendered in slots. You can
  * use the following components or provide your own by using the {@link Slot}
- * component: `<Slot slot="title">` or {@link DialogTitle}, `<Slot
- * slot="content">` or {@link DialogContent}, `<Slot slot="actions">` or
- * {@link DialogActions}
+ * component: {@link Dialog.Title}, {@link Dialog.Content}, {@link Dialog.Actions}
  *
  * Example:
  *
  * ```jsx
+ * import { Dialog } from '@components/Dialog';
+ * import { useDialog } from '@components/Dialog/useDialog';
+ * ...
  * const { props, show, close } = useDialog();
  * return (
  * <button onClick={show}>Open</button>
@@ -83,6 +86,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
   children,
   show,
   width,
+  instantClose = false,
   disableLightDismiss = false,
   onClose,
   onClosed,
@@ -164,12 +168,24 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
     },
   );
 
+  const finishClose = useCallback(() => {
+    dialogRef.current?.close();
+    dialogRef.current?.removeAttribute('data-closing');
+    onClosed();
+  }, [onClosed]);
+
   // When closing the `data-closing` attribute must be set before rendering so the animation has started when the regular useEffect is called.
   useLayoutEffect(() => {
     if (!show && dialogRef.current && dialogRef.current.hasAttribute('open')) {
+      if (instantClose) {
+        finishClose();
+
+        return;
+      }
+
       dialogRef.current.setAttribute('data-closing', 'true');
     }
-  }, [show]);
+  }, [show, instantClose, finishClose]);
 
   useEffect(() => {
     if (!dialogRef.current) {
@@ -184,12 +200,10 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
     if (dialogRef.current.hasAttribute('data-closing')) {
       // TODO: Use getAnimations() api to wait for the animations to complete instead of a timeout.
       return timeoutEffect(() => {
-        dialogRef.current?.close();
-        dialogRef.current?.removeAttribute('data-closing');
-        onClosed();
+        finishClose();
       }, ANIM_MS);
     }
-  }, [show, onClosed]);
+  }, [show, finishClose]);
 
   return (
     <StyledDialog
@@ -247,6 +261,7 @@ Dialog.Content = DialogContent;
 Dialog.Actions = DialogActions;
 
 const CloseButtonSlot = styled(Slot)`
+  align-self: center;
   justify-self: end;
 `;
 
@@ -276,11 +291,15 @@ const DialogActionsSlot = styled(Slot)`
 
 const StyledInnerDialog = styled.div`
   display: grid;
-  grid-template-columns: auto 2rem;
-  grid-template-rows: 1fr auto auto;
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) 2.25rem;
+  /* Title row auto height; main grows and scrolls; footer auto */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  column-gap: ${p => p.theme.size()};
+  row-gap: ${p => p.theme.size()};
   grid-template-areas: 'title close' 'content content' 'actions actions';
   max-block-size: calc(100vh - ${p => p.theme.size()} * 2);
+  /* Extra breathing room so the header matches side padding visually */
+  padding-block-start: ${p => p.theme.size(2)};
 `;
 
 const fadeInForground = keyframes`
@@ -378,7 +397,11 @@ const StyledDialog = styled.dialog<{ $width?: CSS.Property.Width }>`
 export { useDialog };
 
 const TitleSlot = styled(Slot)`
+  min-width: 0;
+  align-self: center;
+
   & :is(h1, h2, h3, h4, h5, h6) {
     margin: 0;
+    line-height: 1.25;
   }
 `;

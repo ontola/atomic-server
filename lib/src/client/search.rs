@@ -22,6 +22,11 @@ pub struct SearchOpts {
 
 // Function to build the base URL for search
 fn base_url(server_url: &str) -> Url {
+    if server_url.starts_with("internal:") {
+        let mut url = Url::parse(server_url).expect("Invalid internal search URL");
+        url.set_path("search");
+        return url;
+    }
     let mut url = Url::parse(server_url).expect("Invalid server URL");
     url.set_path("search");
     url

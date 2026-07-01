@@ -13,17 +13,17 @@
   },
   "dependencies": {
     "@tomic/lib": "workspace:*",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "loro-crdt": "^1.12.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.17.0",
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.2",
+    "@arethetypeswrong/cli": "^0.18.2",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
     "@types/react-router-dom": "^5.3.3",
-    "tsup": "^8.3.5",
-    "typescript": "^5.9.3",
-    "yjs": "^13.6.27"
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "react": ">19.2.0",
@@ -58,10 +58,11 @@
   },
   "scripts": {
     "build": "tsup",
-    "lint": "eslint ./src --ext .js,.jsx,.ts,.tsx && pnpm prettier-check ./src",
-    "lint-fix": "eslint ./src --ext .js,.jsx,.ts,.tsx --fix",
+    "format-check": "oxfmt -c ../.oxfmtrc.json --check ./src",
+    "format": "oxfmt -c ../.oxfmtrc.json ./src",
+    "lint": "oxlint -c ../.oxlintrc.json . && pnpm format-check",
+    "lint-fix": "oxlint -c ../.oxlintrc.json --fix . && pnpm format",
     "lint-package": "pnpm attw && pnpm publint",
-    "prettier-check": "prettier --check ./src",
     "prepublishOnly": "pnpm run lint && pnpm run build && pnpm run lint-package",
     "start": "pnpm watch",
     "watch": "tsup --watch",

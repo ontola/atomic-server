@@ -22,7 +22,7 @@ export const ThemeWrapper = ({ children }: ThemeWrapperProps): JSX.Element => {
 
   return (
     <>
-      <ThemeProvider key={mainColor} theme={buildTheme(darkMode, mainColor)}>
+      <ThemeProvider theme={buildTheme(darkMode, mainColor)}>
         {children}
       </ThemeProvider>
     </>
@@ -35,6 +35,7 @@ export const ThemeWrapper = ({ children }: ThemeWrapperProps): JSX.Element => {
  */
 export const zIndex = {
   sidebar: 10,
+  searchOverlay: 9,
   dialog: 100,
   dropdown: 200,
   networkIndicator: 300,
@@ -79,8 +80,10 @@ size.raw = (multiplier: number) => `${multiplier}rem`;
 
 /** Construct a StyledComponents theme object */
 export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
-  const main = darkMode ? lighten(0.2, mainIn) : mainIn;
-  const complementaryIn = complement(mainIn);
+  // Guard against undefined during HMR re-initialization (e.g. useLocalStorage cold start)
+  const safeMain = mainIn || '#1b50d8';
+  const main = darkMode ? lighten(0.2, safeMain) : safeMain;
+  const complementaryIn = complement(safeMain);
   const complementary = darkMode
     ? lighten(0.2, complementaryIn)
     : complementaryIn;
@@ -135,6 +138,12 @@ export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
       alert: '#cf5b5b',
       alertLight: '#e66f6f',
       warning: '#f5a623',
+      diff: {
+        addedBg: '#e4ffe4',
+        addedFg: '#003500',
+        removedBg: '#ffcdcd',
+        removedFg: '#2d0000',
+      },
     },
     animation: {
       duration: `${animationDuration}ms`,
@@ -232,6 +241,12 @@ declare module 'styled-components' {
       alert: string;
       alertLight: string;
       warning: string;
+      diff: {
+        addedBg: string;
+        addedFg: string;
+        removedBg: string;
+        removedFg: string;
+      };
     };
     animation: {
       duration: string;

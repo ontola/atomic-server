@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState, type JSX } from 'react';
-import { useResource, Version } from '@tomic/react';
+import { useMemo, useState, type JSX } from 'react';
+import { useResource, type Version } from '@tomic/react';
 
 import { ContainerNarrow } from '../../components/Containers';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
@@ -13,8 +13,6 @@ import { constructOpenURL } from '../../helpers/navigation';
 import { HistoryDesktopView } from './HistoryDesktopView';
 import { HistoryMobileView } from './HistoryMobileView';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { Column, Row } from '../../components/Row';
-import { ProgressBar } from '../../components/ProgressBar';
 import { Main } from '../../components/Main';
 import { pathNames } from '../paths';
 import { appRoute } from '../RootRoutes';
@@ -27,14 +25,24 @@ export const HistoryRoute = createRoute({
   getParentRoute: () => appRoute,
 });
 
-/** Shows an activity log of previous versions */
+/** Shows an activity log of previous versions using Loro's OpLog */
 function History(): JSX.Element {
   const navigate = useNavigateWithTransition();
   const isSmallScreen = useMediaQuery('(max-width: 500px)');
   const [subject] = useCurrentSubject();
   const resource = useResource(subject);
-  const { versions, loading, error, progress } = useVersions(resource);
+  const { versions, loading, error } = useVersions(resource);
   const [selectedVersion, setSelectedVersion] = useState<Version | undefined>();
+
+  const resolvedVersion =
+    versions.length > 0
+      ? (selectedVersion ?? versions[versions.length - 1])
+      : undefined;
+
+  const findCurrentIndex = () =>
+    resolvedVersion === undefined
+      ? -1
+      : versions.findIndex(v => v === resolvedVersion);
 
   const groupedVersions: {
     [key: string]: Version[];
@@ -47,49 +55,51 @@ function History(): JSX.Element {
   }, [versions]);
 
   const setResourceToCurrentVersion = async () => {
-    if (selectedVersion && subject) {
-      await resource.setVersion(selectedVersion);
+    if (!selectedVersion || !subject) return;
 
+    try {
+      await resource.setVersion(selectedVersion);
       toast.success('Resource version updated');
       navigate(constructOpenURL(subject));
+    } catch (e) {
+      toast.error(
+        `Could not restore version: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   };
 
-  const nextVersion = useCallback(() => {
-    const currentIndex = versions.findIndex(v => v === selectedVersion);
+  const nextVersion = () => {
+    const currentIndex = findCurrentIndex();
 
     if (currentIndex === -1 || currentIndex === versions.length - 1) {
       return;
     }
 
     setSelectedVersion(versions[currentIndex + 1]);
-  }, [versions, selectedVersion]);
+  };
 
-  const previousVersion = useCallback(() => {
-    const currentIndex = versions.findIndex(v => v === selectedVersion);
+  const previousVersion = () => {
+    const currentIndex = findCurrentIndex();
 
     if (currentIndex === -1 || currentIndex === 0) {
       return;
     }
 
     setSelectedVersion(versions[currentIndex - 1]);
-  }, [versions, selectedVersion]);
+  };
 
   const ViewComp = isSmallScreen ? HistoryMobileView : HistoryDesktopView;
 
-  const isCurrentVersion = selectedVersion === versions[versions.length - 1];
+  const isCurrentVersion = resolvedVersion === versions[versions.length - 1];
+  const currentIndex = findCurrentIndex();
+  const olderVersion =
+    currentIndex > 0 ? versions[currentIndex - 1] : undefined;
 
-  if (loading) {
+  if (loading || resource.loading) {
     return (
       <ContainerNarrow>
         <Centered>
-          <Column fullWidth>
-            <span>Building history of {resource.title}</span>
-            <Row center fullWidth>
-              <ProgressBar value={progress} />
-              <span>{progress}%</span>
-            </Row>
-          </Column>
+          <span>Loading history of {resource.title}...</span>
         </Centered>
       </ContainerNarrow>
     );
@@ -103,13 +113,26 @@ function History(): JSX.Element {
     );
   }
 
+  if (versions.length === 0) {
+    return (
+      <ContainerNarrow>
+        <Centered>
+          <span>No history available for this resource.</span>
+        </Centered>
+      </ContainerNarrow>
+    );
+  }
+
+  const selectedForView = resolvedVersion!;
+
   return (
     <Main subject={subject}>
       <SplitView about={subject}>
         <ViewComp
           resource={resource}
           groupedVersions={groupedVersions}
-          selectedVersion={selectedVersion}
+          selectedVersion={selectedForView}
+          olderVersion={olderVersion}
           isCurrentVersion={isCurrentVersion}
           onNextVersion={nextVersion}
           onPreviousVersion={previousVersion}
@@ -123,14 +146,12 @@ function History(): JSX.Element {
 
 const SplitView = styled.main`
   display: flex;
-  /* Fills entire view on all devices */
   width: 100%;
   height: 100%;
   height: calc(100vh - 6rem);
-  padding: ${p => p.theme.margin}rem;
-  gap: ${p => p.theme.margin}rem;
+  padding: ${p => p.theme.size()};
+  gap: ${p => p.theme.size()};
 
-  /* Fix code blocks not shrinking causing page overflow. */
   & code {
     word-break: break-word;
   }

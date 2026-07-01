@@ -75,6 +75,7 @@
 
 - [Atomic Data Extended](extended.md)
   - [Agents](agents.md)
+  - [Decentralized Identifiers (DIDs)](did.md)
   - [Hierarchy and authorization](hierarchy.md)
   - [Authentication](authentication.md)
   - [Invitations and sharing](invitations.md)

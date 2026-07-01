@@ -3,23 +3,23 @@ import { test, expect, Page } from '@playwright/test';
 import {
   DIALOG_CLOSE_BUTTON,
   FRONTEND_URL,
+  SEARCHBOX_PROPERTY_PLACEHOLDER,
   before,
   fillSearchBox,
   inDialog,
   newDrive,
   newResource,
-  sideBarNewResourceTestId,
+  sidebarNewResourceButton,
   signIn,
   testFilePath,
-  waitForCommit,
   waitForSearchIndex,
 } from './test-utils';
 
 const ONTOLOGY_NAME = 'filepicker-test';
 
 const uploadFile = async (page: Page, fileName: string) => {
-  await page.getByTestId(sideBarNewResourceTestId).click();
-  await expect(page).toHaveURL(`${FRONTEND_URL}/app/new`);
+  await sidebarNewResourceButton(page).click();
+  await expect(page).toHaveURL(/\/app\/new(\?|$)/);
 
   const fileChooserPromise = page.waitForEvent('filechooser');
 
@@ -31,7 +31,11 @@ const uploadFile = async (page: Page, fileName: string) => {
 
   await fileChooser.setFiles(testFilePath(fileName));
 
-  await expect(page.getByText(fileName)).toBeVisible();
+  // After upload, the file's name appears in the breadcrumbs and the sidebar
+  // tree at the same time. Pin to the breadcrumb so the assertion is unique.
+  await expect(
+    page.getByLabel('Breadcrumbs').getByText(fileName),
+  ).toBeVisible();
 };
 
 // Creates an ontology with a class we can use to test the file picker.
@@ -56,7 +60,7 @@ const createModel = async (page: Page) => {
 
   await page.getByRole('button', { name: 'add required property' }).click();
   await page
-    .getByPlaceholder('Search for a property or enter a URL')
+    .getByPlaceholder(SEARCHBOX_PROPERTY_PLACEHOLDER)
     .fill('programming');
 
   await page.keyboard.press('ArrowDown');
@@ -75,12 +79,12 @@ const createModel = async (page: Page) => {
       dialog,
       'Search for a class',
       'https://atomicdata.dev/classes/File',
-      { label: 'Classtype' },
+      {
+        label: 'Classtype',
+      },
     );
 
-    const commitPromise = waitForCommit(page);
     await page.keyboard.press('Enter');
-    await commitPromise;
     await expect(dialog.getByLabel('Classtype')).toHaveText('file');
 
     await closeDialogWith(DIALOG_CLOSE_BUTTON);
@@ -101,7 +105,8 @@ test.describe('File Picker', () => {
 
     await createModel(page);
 
-    // The new resource page relies on the search API to show ontology class buttons. If the prossess of creating the ontology took less than 5 seconds it will not appear on the new resource page.
+    // The new resource page relies on the search API to show ontology class
+    // buttons; wait until the just-created `robot` class is searchable.
     await waitForSearchIndex(page);
 
     {
@@ -180,8 +185,18 @@ test.describe('File Picker', () => {
 
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(page.getByText('New robot')).not.toBeVisible();
-      await expect(page.getByText('testFile3.txt').nth(0)).toBeVisible();
-      await page.getByText('testFile3.txt').nth(0).click();
+      // Read the file resource's subject from the value link in main and
+      // navigate to it directly. Clicking the inline link doesn't reliably
+      // trigger SPA navigation under Playwright (the browser tries to handle
+      // the `did:ad:...` href as a real URL and lands on `about:blank#`).
+      const fileSubject = await page
+        .getByRole('main')
+        .getByRole('link', { name: 'testFile3.txt' })
+        .getAttribute('href');
+      expect(fileSubject).toBeTruthy();
+      await page.goto(
+        `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(fileSubject!)}`,
+      );
 
       // For some reason playwright will only find text with quotes in them when using a regex instead of string.
       await expect(page.getByText(/It's a secret to everybody/)).toBeVisible();

@@ -8,8 +8,8 @@ import {
   type JSX,
 } from 'react';
 import { styled } from 'styled-components';
-import { FixedSizeList, ListOnScrollProps } from 'react-window';
-import Autosizer, { type VerticalSize } from 'react-virtualized-auto-sizer';
+import { List } from 'react-window';
+import { AutoSizer } from 'react-virtualized-auto-sizer';
 import { Cell, IndexCell } from './Cell';
 import { TableRow } from './TableRow';
 import { TableHeader, TableHeadingComponent } from './TableHeader';
@@ -56,6 +56,7 @@ interface FancyTableProps<T> {
   onCellResize?: (sizes: number[]) => void;
   onColumnReorder?: ColumnReorderHandler;
   onRowExpand?: (index: number) => void;
+  itemKey?: (index: number) => string;
   HeadingComponent: TableHeadingComponent<T>;
   NewColumnButtonComponent: React.ComponentType;
   ref?: React.RefObject<HTMLDivElement | null>;
@@ -64,9 +65,12 @@ interface FancyTableProps<T> {
 interface RowProps {
   index: number;
   style: React.CSSProperties;
+  ariaAttributes: React.AriaAttributes & { role: 'listitem' };
 }
 
-type OnScroll = (props: ListOnScrollProps) => unknown;
+type OnScroll = Parameters<
+  React.ComponentProps<typeof ActiveCellIndicator>['setOnScroll']
+>[0];
 
 export function FancyTable<T>({
   rowHeight = 40,
@@ -151,9 +155,21 @@ function FancyTableInner<T>({
   useClearCommands(columns, onClearRow, onClearCells);
 
   const Row = useCallback(
-    ({ index, style }: RowProps) => {
+    ({ index, style, ariaAttributes }: RowProps) => {
+      // react-window v2 hands every virtual item `role="listitem"` plus
+      // `aria-posinset` / `aria-setsize`. Those are wrong for a table — our
+      // rows live inside `role="rowgroup"` and need `role="row"` with
+      // `aria-rowindex`. Drop the listitem role so the TableRow's
+      // `role='row'` is not overridden when the spread reaches it.
+      const { role: _role, ...gridAria } = ariaAttributes;
+
       return (
-        <TableRow style={style} aria-rowindex={index + 2}>
+        <TableRow
+          {...gridAria}
+          style={style}
+          role='row'
+          aria-rowindex={index + 2}
+        >
           <IndexCell rowIndex={index} columnIndex={0} onExpand={onRowExpand}>
             {index + 1}
           </IndexCell>
@@ -165,21 +181,35 @@ function FancyTableInner<T>({
     [children, onRowExpand],
   );
 
-  const List = useCallback(
-    ({ height }: VerticalSize) => (
-      <StyledFixedSizeList
-        height={height}
-        width='100%'
-        itemSize={rowHeight!}
-        itemCount={itemCount}
+  const rowProps = useMemo(() => ({}), []);
+
+  // Render the StyledList (react-window) directly — NOT wrapped in a
+  // `useCallback`'d component. A wrapper component's identity changes whenever
+  // `itemCount`/`Row` change (every time a row is added), and `<Wrapper/>`
+  // with a new function type makes React unmount + remount `StyledList`,
+  // which resets react-window's scrollTop to 0. That's invisible while all
+  // rows fit the viewport, but once the list has scrolled to follow the active
+  // cell, the remount snaps it back to the top — throwing the active cell off
+  // screen, where it's virtualized out and stops receiving keystrokes (so
+  // rapid Enter-entry silently stops adding rows). Rendering the stable
+  // `StyledList` type means only its props update; scroll position is kept.
+  const renderList = useCallback(
+    ({ height }: { height: number | undefined }) => (
+      <StyledList
+        style={{ height: height ?? 0, width: '100%' }}
+        rowHeight={rowHeight!}
+        rowCount={itemCount}
+        rowProps={rowProps}
+        defaultHeight={height ?? 0}
         overscanCount={4}
-        onScroll={onScroll}
-        ref={listRef}
-      >
-        {Row}
-      </StyledFixedSizeList>
+        onScroll={() => {
+          onScroll({ scrollUpdateWasRequested: false });
+        }}
+        listRef={listRef}
+        rowComponent={Row}
+      />
     ),
-    [rowHeight, itemCount, listRef, Row, onScroll],
+    [rowHeight, itemCount, rowProps, listRef, Row, onScroll],
   );
 
   useEffect(() => {
@@ -226,7 +256,7 @@ function FancyTableInner<T>({
               NewColumnButtonComponent={NewColumnButtonComponent}
             />
             <AutoSizeTamer role='rowgroup'>
-              <Autosizer disableWidth>{List}</Autosizer>
+              <AutoSizer renderProp={renderList} />
             </AutoSizeTamer>
             <ActiveCellIndicator
               sizeStr={templateColumns}
@@ -286,7 +316,7 @@ const PercentageInsanityFix = styled.div`
   min-width: 100%;
 `;
 
-const StyledFixedSizeList = styled(FixedSizeList)`
+const StyledList = styled(List)`
   overflow-x: hidden !important;
   overflow-y: auto !important;
 `;

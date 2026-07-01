@@ -2,12 +2,18 @@
 resolver = "2"
 members = [
   "server",
+  "desktop",
   "cli",
   "lib",
+  "wasm",
   "plugin-examples/random-folder-extender",
   "plugin-examples/test-plugin",
   "atomic-plugin",
+  "tools/cargo-bin",
 ]
+exclude = ["flutter/rust"]
+
 # Tauri build is deprecated, see
-# https://github.com/atomicdata-dev/atomic-server/issues/718
-exclude = ["desktop"]
+
+[workspace.metadata.bin]
+wasm-pack = { version = "0.15.0" }

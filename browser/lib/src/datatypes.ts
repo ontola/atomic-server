@@ -1,6 +1,6 @@
 /** Each possible Atomic Datatype. See https://atomicdata.dev/collections/datatype */
 
-import { Client, YLoader } from './index.js';
+import { Client } from './client.js';
 import type { AtomicValue } from './value.js';
 
 // TODO: use strings from `./urls`, requires TS fix: https://github.com/microsoft/TypeScript/issues/40793
@@ -27,7 +27,7 @@ export enum Datatype {
   JSON = 'https://atomicdata.dev/datatypes/json',
   /** URI */
   URI = 'https://atomicdata.dev/datatypes/uri',
-  YDOC = 'https://atomicdata.dev/datatypes/ydoc',
+  LORODOC = 'https://atomicdata.dev/datatypes/lorodoc',
   UNKNOWN = 'unknown-datatype',
 }
 
@@ -40,6 +40,50 @@ export const datatypeFromUrl = (url: string): Datatype => {
   }
 
   return Datatype.UNKNOWN;
+};
+
+/**
+ * The sibling `datatypes` Loro-map tag for a property, mirroring the Rust
+ * `datatype_tag` (`lib/src/loro.rs`). Lets the server materialize a value to
+ * the exact `Value` variant instead of guessing from the primitive.
+ *
+ * Tagged: the load-bearing reference / array distinctions (which the server
+ * cannot recover from the bare primitive) plus the cosmetic string-likes
+ * (markdown/slug/date/uri) and timestamp — at least vector/search text
+ * extraction branches on `Value::Markdown`, so we preserve the variant rather
+ * than let the server guess. Plain string and scalars stay untagged (the
+ * default). A nested resource (an object stored as a JSON string under an
+ * `atomicURL` property) is left untagged for the server's heuristic — see
+ * `planning/loro-source-of-truth.md`.
+ *
+ * `loroValue` is the value as stored in the Loro `properties` map.
+ */
+export const datatypeTag = (
+  datatype: string,
+  loroValue: unknown,
+): string | undefined => {
+  switch (datatype) {
+    case Datatype.ATOMIC_URL:
+      return typeof loroValue === 'string' && !loroValue.startsWith('{')
+        ? 'atomicUrl'
+        : undefined;
+    case Datatype.RESOURCEARRAY:
+      return 'resourceArray';
+    case Datatype.JSON:
+      return 'json';
+    case Datatype.MARKDOWN:
+      return 'markdown';
+    case Datatype.SLUG:
+      return 'slug';
+    case Datatype.URI:
+      return 'uri';
+    case Datatype.DATE:
+      return 'date';
+    case Datatype.TIMESTAMP:
+      return 'timestamp';
+    default:
+      return undefined;
+  }
 };
 
 const slug_regex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -114,7 +158,10 @@ export const validateDatatype = (
         try {
           Client.tryValidSubject(item as string);
         } catch (e) {
-          const arrError: ArrayError = new Error(`Invalid URL`);
+          const cause = e instanceof Error ? e.message : String(e);
+          const arrError: ArrayError = new Error(
+            `Invalid URL at [${index}] (${JSON.stringify(item)}): ${cause}`,
+          );
           arrError.index = index;
           throw arrError;
         }
@@ -195,18 +242,9 @@ export const validateDatatype = (
       break;
     }
 
-    case Datatype.YDOC: {
-      if (!YLoader.isLoaded()) {
-        console.warn(
-          'Cannot validate YDoc because Yjs is not loaded. passing as valid',
-        );
-        break;
-      }
-
-      const Y = YLoader.Y;
-
-      if (!(value instanceof Y.Doc)) {
-        err = 'Not a Yjs Doc';
+    case Datatype.LORODOC: {
+      if (!(value instanceof Uint8Array)) {
+        err = 'Not a Loro document (expected Uint8Array)';
         break;
       }
 
@@ -244,6 +282,6 @@ export const reverseDatatypeMapping = {
   [Datatype.TIMESTAMP]: 'Timestamp',
   [Datatype.ATOMIC_URL]: 'Resource',
   [Datatype.RESOURCEARRAY]: 'ResourceArray',
-  [Datatype.YDOC]: 'YDoc',
+  [Datatype.LORODOC]: 'LoroDoc',
   [Datatype.UNKNOWN]: 'Unknown',
 };

@@ -1,5 +1,6 @@
 import { describe, it, vi, afterEach } from 'vitest';
 import { Resource, Store, core, Core, Datatype } from './index.js';
+import { bootstrapCoreVocab } from './test-vocab.js';
 
 describe('Store', () => {
   afterEach(() => {
@@ -11,8 +12,8 @@ describe('Store', () => {
     const subject = 'https://atomicdata.dev/test';
     const testval = 'Hi world';
     const newResource = new Resource(subject);
-    newResource.setUnsafe(core.properties.description, testval);
-    store.addResources(newResource);
+    await newResource.set(core.properties.description, testval, false);
+    store.addResource(newResource);
     const gotResource = store.getResourceLoading(subject);
     const atomString = gotResource!
       .get(core.properties.description)!
@@ -22,6 +23,25 @@ describe('Store', () => {
 
   it('fetches a resource', async ({ expect }) => {
     const store = new Store({ serverUrl: 'https://atomicdata.dev' });
+    // Hermetic: serve the resource from a mock instead of the live domain, so
+    // the test exercises the fetch+parse path without depending on the network.
+    store.injectFetch(
+      async () =>
+        new Response(
+          JSON.stringify({
+            '@id': 'https://atomicdata.dev/properties/createdAt',
+            'https://atomicdata.dev/properties/shortname': 'created-at',
+            'https://atomicdata.dev/properties/description':
+              'When the resource was created.',
+            'https://atomicdata.dev/properties/datatype':
+              'https://atomicdata.dev/datatypes/timestamp',
+            'https://atomicdata.dev/properties/isA': [
+              'https://atomicdata.dev/classes/Property',
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/ad+json' } },
+        ),
+    );
     const resource = await store.getResource(
       'https://atomicdata.dev/properties/createdAt',
     );
@@ -62,6 +82,9 @@ describe('Store', () => {
 
   it('creates new resources using store.newResource()', async ({ expect }) => {
     const store = new Store({ serverUrl: 'https://myserver.dev' });
+    // Seed core vocab so property validation resolves from cache instead of
+    // fetching atomicdata.dev (keeps the test hermetic + fast).
+    await bootstrapCoreVocab(store);
 
     const resource1 = await store.newResource<Core.Property>({
       subject: 'https://myserver.dev/testthing',
@@ -78,9 +101,140 @@ describe('Store', () => {
     expect(resource1.props.shortname).toBe('testthing');
     expect(resource1.hasClasses(core.classes.property)).toBe(true);
 
-    const resource2 = await store.newResource();
+    const resource2 = await store.newResource({ did: false });
 
-    expect(resource2.props.parent).toBe(store.getServerUrl());
+    expect(resource2.props.parent).toBe('https://myserver.dev/');
     expect(resource2.get(core.properties.isA)).toBe(undefined);
+  });
+
+  it('normalizes the default root parent when creating resources', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://myserver.dev' });
+
+    const resource = await store.newResource({ did: false });
+
+    expect(resource.props.parent).toBe('https://myserver.dev/');
+  });
+
+  it('resolves aliases correctly', async ({ expect }) => {
+    const store = new Store();
+    const alias = 'https://atomicdata.dev/alias';
+    const did = 'did:ad:123';
+
+    const resource = new Resource(did);
+    await resource.set(core.properties.description, 'Identity verified', false);
+
+    // Explicitly add with alias
+    store.addResource(resource, { alias });
+
+    // Both subjects should return the same resource
+    const gotByAlias = store.getResourceLoading(alias);
+    const gotByDID = store.getResourceLoading(did);
+
+    expect(gotByAlias.subject).toBe(did);
+    expect(gotByDID.subject).toBe(did);
+    expect(gotByAlias).toBe(gotByDID);
+  });
+
+  it('normalizes relative subjects to full URLs', async ({ expect }) => {
+    const store = new Store({ serverUrl: 'https://myserver.dev' });
+
+    // Relative path should become full URL
+    const normalizedRelative = store.normalizeSubject('classes');
+    expect(normalizedRelative).toBe('https://myserver.dev/classes');
+
+    // Full URL should remain unchanged
+    const normalizedFull = store.normalizeSubject(
+      'https://myserver.dev/classes?page_size=10',
+    );
+    expect(normalizedFull).toBe('https://myserver.dev/classes?page_size=10');
+
+    // DID should remain unchanged
+    const normalizedDID = store.normalizeSubject('did:ad:123');
+    expect(normalizedDID).toBe('did:ad:123');
+  });
+
+  it('rehydrates local search from the ClientDb so offline search survives a reload', async ({
+    expect,
+  }) => {
+    // `LocalSearch` is in-memory and starts empty on every page load.
+    // `setClientDb` must rebuild it from the persistent ClientDb so a
+    // reloaded, offline session can still search its whole local dataset.
+    const store = new Store({ serverUrl: 'https://atomicdata.dev' });
+    const driveSubject = 'https://atomicdata.dev/test-drive';
+    const subject = 'https://atomicdata.dev/offline-search-target';
+    const name = 'ZephyrQuokkaOfflineTarget';
+    const exported = JSON.stringify([
+      {
+        '@id': subject,
+        [core.properties.name]: name,
+        [core.properties.parent]: driveSubject,
+      },
+    ]);
+
+    const fakeClientDb = {
+      isReady: true,
+      isInitialized: true,
+      initError: undefined,
+      waitForReady: async () => true,
+      exportAllResources: async () => exported,
+    };
+
+    store.setClientDb(
+      fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
+    );
+
+    // Rehydration runs in the background — poll until the resource is
+    // searchable from the local index (no server is reachable here).
+    let results: string[] = [];
+
+    for (let i = 0; i < 100 && results.length === 0; i++) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      results = await store.search(name, { parents: driveSubject });
+    }
+
+    expect(results).toContain(subject);
+  });
+
+  it('only rehydrates local search once when ensureDriveIndexed is called', async ({
+    expect,
+  }) => {
+    // We now index lazily on first search, not eagerly on setClientDb.
+    // ensureDriveIndexed deduplicates concurrent or sequential builds.
+    const store = new Store({ serverUrl: 'https://atomicdata.dev' });
+    let exportCallCount = 0;
+    const fakeClientDb = {
+      isReady: true,
+      isInitialized: true,
+      initError: undefined,
+      waitForReady: async () => true,
+      exportAllResources: async () => {
+        exportCallCount++;
+
+        return JSON.stringify([]);
+      },
+    };
+
+    store.setClientDb(
+      fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
+    );
+    store.setClientDb(
+      fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
+    );
+
+    // Verify eager rehydration did not occur
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(exportCallCount).toBe(0);
+
+    // Trigger drive indexing concurrently
+    const drive = 'https://atomicdata.dev/test-drive';
+    await Promise.all([
+      store.ensureDriveIndexed(drive),
+      store.ensureDriveIndexed(drive),
+      store.ensureDriveIndexed(drive),
+    ]);
+
+    expect(exportCallCount).toBe(1);
   });
 });

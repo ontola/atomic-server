@@ -14,7 +14,7 @@ use std::{
 use atomic_lib::{
     agents::{Agent, ForAgent},
     class_extender::ClassExtender,
-    commit::{CommitBuilder, CommitBuilderJSON, CommitOpts},
+    commit::{CommitBuilder, CommitOpts},
     db::plugin_meta::{PermissionType, PluginManifest, PluginMeta},
     errors::{AtomicError, AtomicResult},
     parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
@@ -32,8 +32,11 @@ use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, Trap,
 };
-use wasmtime_wasi::{p2, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi::{p2, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi_http::{
+    p2::{add_only_http_to_linker_async, WasiHttpCtxView, WasiHttpView},
+    WasiHttpCtx,
+};
 
 use atomic_lib::db::plugin_meta::PluginMetaKey;
 
@@ -242,7 +245,6 @@ pub async fn load_wasm_class_extenders(
 fn build_engine() -> AtomicResult<Engine> {
     let mut config = Config::new();
     config.wasm_component_model(true);
-    config.async_support(true);
     config.consume_fuel(true);
 
     Engine::new(&config).map_err(to_atomic_error)
@@ -267,6 +269,7 @@ struct WasmPluginInner {
 }
 
 impl WasmPlugin {
+    #[allow(clippy::too_many_arguments)]
     async fn load(
         engine: Arc<Engine>,
         wasm_bytes: &[u8],
@@ -487,7 +490,7 @@ impl WasmPlugin {
             self.inner.manifest.as_ref(),
             PermissionType::Network,
         ) {
-            wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)
+            add_only_http_to_linker_async(&mut linker)
                 .map_err(|err| AtomicError::from(err.to_string()))?;
         }
 
@@ -521,12 +524,23 @@ impl WasmPlugin {
         &self,
         context: &'a class_extender::CommitExtenderContext<'a>,
     ) -> AtomicResult<WasmCommitContext> {
+        // Plugins parse `commit_json` into `atomic_plugin::Commit`, which
+        // requires the `subject` field. The deterministic serializer
+        // strips `subject` for genesis commits (because the signature
+        // derivation can't include it — circular dep), so using it here
+        // makes every genesis commit fail with "missing field subject"
+        // inside the plugin's WASM before user logic runs. The plugin
+        // doesn't care about signing-deterministic output; it just needs
+        // to inspect the commit. Use a regular `to_json_ad` of the commit
+        // resource — that always includes `subject`.
+        let commit_resource = context.commit.into_resource(context.store).await?;
+        let origin = context
+            .store
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".to_string());
         Ok(WasmCommitContext {
             subject: context.resource.get_subject().to_string(),
-            commit_json: context
-                .commit
-                .serialize_deterministically_json_ad(context.store)
-                .await?,
+            commit_json: commit_resource.to_json_ad(Some(&origin))?,
             snapshot: self.encode_resource(context.resource)?,
             is_new: context.is_new,
         })
@@ -535,7 +549,7 @@ impl WasmPlugin {
     fn encode_resource(&self, resource: &Resource) -> AtomicResult<WasmResourceJson> {
         Ok(WasmResourceJson {
             subject: resource.get_subject().to_string(),
-            json_ad: resource.to_json_ad()?,
+            json_ad: resource.to_json_ad(None)?,
         })
     }
 
@@ -545,9 +559,11 @@ impl WasmPlugin {
         store: &'a atomic_lib::Db,
     ) -> Pin<Box<dyn Future<Output = AtomicResult<ResourceResponse>> + Send + 'a>> {
         Box::pin(async move {
-            let mut parse_opts = ParseOpts::default();
-            parse_opts.save = SaveOpts::DontSave;
-            parse_opts.for_agent = ForAgent::Sudo;
+            let parse_opts = ParseOpts {
+                save: SaveOpts::DontSave,
+                for_agent: ForAgent::Sudo,
+                ..Default::default()
+            };
 
             let mut base =
                 parse_json_ad_resource(&payload.primary.json_ad, store, &parse_opts).await?;
@@ -671,8 +687,8 @@ impl ResourceLimiter for PluginHostState {
 }
 
 impl WasiView for PluginHostState {
-    fn ctx(&mut self) -> WasiCtxView<'_> {
-        WasiCtxView {
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+        wasmtime_wasi::WasiCtxView {
             ctx: &mut self.ctx,
             table: &mut self.table,
         }
@@ -680,12 +696,12 @@ impl WasiView for PluginHostState {
 }
 
 impl WasiHttpView for PluginHostState {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.http
-    }
-
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
+    fn http(&mut self) -> WasiHttpCtxView<'_> {
+        WasiHttpCtxView {
+            ctx: &mut self.http,
+            table: &mut self.table,
+            hooks: Default::default(),
+        }
     }
 }
 
@@ -701,7 +717,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             .map(ForAgent::from)
             .unwrap_or(ForAgent::Public);
 
-        if !subject.starts_with(&self.db.get_server_url().map_err(|e| e.to_string())?) {
+        if !subject.starts_with(&self.db.get_server_url()) {
             // If the plugin does not have network permissions we block the request since the plugin could send data to remote servers via these requests.
             if !PluginManifest::option_has_permission(
                 self.manifest.as_ref(),
@@ -718,20 +734,20 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
 
             return Ok(WasmResourceJson {
                 subject: resource.get_subject().to_string(),
-                json_ad: resource.to_json_ad().map_err(|e| e.to_string())?,
+                json_ad: resource.to_json_ad(None).map_err(|e| e.to_string())?,
             });
         }
 
         let resource = self
             .db
-            .get_resource_extended(&subject, false, &for_agent)
+            .get_resource_extended(&subject.into(), false, &for_agent)
             .await
             .map_err(|e| e.to_string())?
             .to_single();
 
         Ok(WasmResourceJson {
             subject: resource.get_subject().to_string(),
-            json_ad: resource.to_json_ad().map_err(|e| e.to_string())?,
+            json_ad: resource.to_json_ad(None).map_err(|e| e.to_string())?,
         })
     }
 
@@ -757,7 +773,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         for resource in result.resources {
             resources.push(WasmResourceJson {
                 subject: resource.get_subject().to_string(),
-                json_ad: resource.to_json_ad().map_err(|e| e.to_string())?,
+                json_ad: resource.to_json_ad(None).map_err(|e| e.to_string())?,
             });
         }
 
@@ -769,13 +785,46 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             return Err("Plugin does not have an agent".to_string());
         };
 
-        let commit_builder_json: CommitBuilderJSON =
-            serde_json::from_str(&commit).map_err(|e| e.to_string())?;
+        // The plugin SDK's `CommitBuilder` serializes with full set / remove
+        // payloads (HashMap<String, JsonValue> / HashSet<String>). The
+        // canonical `CommitBuilderJSON` only carries `loro_update`, so plugins
+        // that build a commit by accumulating `set` calls would otherwise
+        // arrive with no Loro update and get rejected. Parse the wire shape
+        // directly here and convert each JsonValue → typed `Value` via the
+        // property's datatype, then `sign_at` materializes the Loro update.
+        #[derive(serde::Deserialize)]
+        struct PluginCommitWire {
+            subject: String,
+            #[serde(default)]
+            set: std::collections::HashMap<String, serde_json::Value>,
+            #[serde(default)]
+            remove: HashSet<String>,
+            #[serde(default)]
+            destroy: bool,
+            #[serde(default)]
+            previous_commit: Option<String>,
+        }
 
-        let commit_builder =
-            CommitBuilder::from_commit_builder_json(commit_builder_json, &*self.db)
-                .await
-                .map_err(|e| format!("Failed to deserialize commit: {}", e))?;
+        let wire: PluginCommitWire =
+            serde_json::from_str(&commit).map_err(|e| format!("Invalid commit JSON: {e}"))?;
+
+        let mut commit_builder = CommitBuilder::new(wire.subject.into());
+        commit_builder.destroy(wire.destroy);
+        // `previous_commit` is intentionally ignored: `sign()` overrides it
+        // from the resource's `lastCommit` propval, so any value the plugin
+        // supplies would be discarded anyway.
+        let _ = wire.previous_commit;
+        for prop in wire.remove {
+            commit_builder.remove(prop);
+        }
+        let parse_opts = ParseOpts::default();
+        for (prop, json_val) in wire.set {
+            let (key, value) =
+                atomic_lib::parse::parse_propval(&prop, &json_val, None, &*self.db, &parse_opts)
+                    .await
+                    .map_err(|e| format!("Failed to convert plugin set value for {prop}: {e}"))?;
+            commit_builder.set(key.to_string(), value);
+        }
 
         let resource = self
             .db
@@ -800,8 +849,10 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             validate_timestamp: false,
             validate_rights: true,
             validate_previous_commit: false,
+            validate_loro_causality: false,
             update_index: true,
             validate_for_agent: None,
+            source_id: None,
         };
 
         self.db
@@ -817,7 +868,11 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             return "{}".to_string();
         };
 
-        let Ok(plugin_resource) = self.db.get_resource(subject).await else {
+        let Ok(plugin_resource) = self
+            .db
+            .get_resource(&atomic_lib::Subject::from_raw(subject, None))
+            .await
+        else {
             return "{}".to_string();
         };
 
@@ -825,8 +880,30 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
             return "{}".to_string();
         };
 
+        // Loro stores Value::Json as a JSON string, and the loader heuristic
+        // in `loro_value_to_atomic_value` reinflates `{...}` strings as
+        // `Value::NestedResource`. So accept any shape that can be coerced
+        // back to a JSON object.
         match val {
-            atomic_lib::Value::JSON(json_val) => json_val.to_string(),
+            atomic_lib::Value::Json(json_val) => json_val.to_string(),
+            atomic_lib::Value::String(s) => match serde_json::from_str::<serde_json::Value>(s) {
+                Ok(parsed) if parsed.is_object() => s.clone(),
+                _ => "{}".to_string(),
+            },
+            atomic_lib::Value::NestedResource(atomic_lib::values::SubResource::Nested(
+                propvals,
+            )) => {
+                let map: serde_json::Map<String, serde_json::Value> = propvals
+                    .iter()
+                    .map(|(k, v)| {
+                        let s = v.to_string();
+                        let parsed = serde_json::from_str::<serde_json::Value>(&s)
+                            .unwrap_or(serde_json::Value::String(s));
+                        (k.clone(), parsed)
+                    })
+                    .collect();
+                serde_json::Value::Object(map).to_string()
+            }
             _ => "{}".to_string(),
         }
     }
@@ -994,9 +1071,7 @@ fn setup_plugin_data_dir(wasm_file_path: &Path, plugin_dir: &Path) -> Option<Pat
     // If there is no second extension (e.g. just my-plugin.wasm), we don't grant access to a folder.
     // This is to prevent plugins from accessing arbitrary folders.
     // Only namespaced plugins (e.g. google.calendar.wasm or my-plugin.plugin.wasm) get a folder.
-    if stem_path.extension().is_none() {
-        return None;
-    }
+    stem_path.extension()?;
 
     // Remove the second extension (e.g. .plugin in my_script.plugin.wasm), if present.
     // This allows for any suffix without dots.
@@ -1289,6 +1364,7 @@ pub async fn install_or_update_plugin(
 
 /// Rolls back a failed plugin installation by restoring file backups and metadata
 /// (for updates) or removing newly created files and metadata (for fresh installs).
+#[allow(clippy::too_many_arguments)]
 async fn rollback_plugin_install(
     store: &Db,
     drive_subject: &str,
@@ -1363,14 +1439,14 @@ async fn create_plugin_meta(
     let namespace = &manifest.namespace;
     let name = &manifest.name;
 
-    let key = PluginMetaKey::new(&drive_subject, &namespace, &name);
+    let key = PluginMetaKey::new(drive_subject, namespace, name);
     let plugin_meta = store.get_plugin_meta(&key)?;
 
     let agent: Agent = if let Some(plugin_meta) = plugin_meta {
         Agent::from_secret(&plugin_meta.agent_secret)?
     } else {
         // If the plugin meta does not exist yet we create a new agent.
-        let new_agent = Agent::new(Some(&name), store)?;
+        let new_agent = Agent::new(Some(name))?;
 
         let mut agent_resource = new_agent.to_resource()?;
         let full_name = format!("{}/{}", namespace, name);
@@ -1387,9 +1463,17 @@ async fn create_plugin_meta(
     };
 
     if manifest.has_permission(PermissionType::FullDriveAccess) {
-        let mut drive = store.get_resource(&drive_subject).await?;
-        drive.push(urls::WRITE, agent.subject.clone().into(), true)?;
-        drive.push(urls::READ, agent.subject.clone().into(), true)?;
+        let mut drive = store.get_resource(&drive_subject.into()).await?;
+        drive.push(
+            urls::WRITE,
+            atomic_lib::values::SubResource::Subject(agent.subject.clone()),
+            true,
+        )?;
+        drive.push(
+            urls::READ,
+            atomic_lib::values::SubResource::Subject(agent.subject.clone()),
+            true,
+        )?;
         drive.save(store).await?;
     }
 
@@ -1411,7 +1495,7 @@ async fn delete_plugin_meta(
     namespace: &str,
     name: &str,
 ) -> AtomicResult<()> {
-    let key = PluginMetaKey::new(&drive_subject, &namespace, &name);
+    let key = PluginMetaKey::new(drive_subject, namespace, name);
 
     let Some(plugin_meta) = store.get_plugin_meta(&key)? else {
         // The plugin does not have any metadata so we don't have to delete anything.
@@ -1420,7 +1504,7 @@ async fn delete_plugin_meta(
 
     // Delete the agent resource
     let agent = Agent::from_secret(&plugin_meta.agent_secret)?;
-    let mut agent_resource = store.get_resource(&agent.subject).await?;
+    let mut agent_resource = store.get_resource(&agent.subject.clone()).await?;
     agent_resource.destroy(store).await?;
 
     // Delete the plugin metadata
@@ -1559,17 +1643,17 @@ fn cleanup_cache(cache_dir: &Path, used_files: &HashSet<PathBuf>) {
     if let Ok(entries) = std::fs::read_dir(cache_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension() == Some(OsStr::new("cwasm")) {
-                if !used_files.contains(&path) {
-                    if let Err(e) = std::fs::remove_file(&path) {
-                        warn!(
-                            "Failed to delete unused cwasm file {}: {}",
-                            path.display(),
-                            e
-                        );
-                    } else {
-                        info!("Deleted unused cwasm file: {}", path.display());
-                    }
+            if path.extension() == Some(std::ffi::OsStr::new("cwasm"))
+                && !used_files.contains(&path)
+            {
+                if let Err(e) = std::fs::remove_file(&path) {
+                    warn!(
+                        "Failed to delete unused cwasm file {}: {}",
+                        path.display(),
+                        e
+                    );
+                } else {
+                    info!("Deleted unused cwasm file: {}", path.display());
                 }
             }
         }
@@ -1597,25 +1681,13 @@ fn check_if_commit_changes_plugin(commit: &Commit, resource: &Resource) -> Atomi
         }
     }
 
-    // Check if it tries to change the resource to a plugin.
-    if let Some(set) = &commit.set {
-        for (prop, val) in set {
-            if prop == urls::IS_A {
-                let resource_classes = val.to_subjects(None)?;
-                if resource_classes.contains(&urls::PLUGIN.to_string()) {
-                    return Ok(true);
-                }
-            }
-        }
-    }
-
-    if let Some(push) = &commit.push {
-        for (prop, val) in push {
-            if prop == urls::IS_A {
-                let resource_classes = val.to_subjects(None)?;
-                if resource_classes.contains(&urls::PLUGIN.to_string()) {
-                    return Ok(true);
-                }
+    // Check if the Loro update sets isA to include Plugin.
+    if let Some(loro_bytes) = &commit.loro_update {
+        let doc = atomic_lib::loro::AtomicLoroDoc::new();
+        let _ = doc.import_update(loro_bytes);
+        if let Some(is_a_str) = doc.get_string_property(urls::IS_A) {
+            if is_a_str.contains(urls::PLUGIN) {
+                return Ok(true);
             }
         }
     }
@@ -1628,7 +1700,7 @@ async fn compare_manifest_to_resource(
     subject: &str,
     db: &Db,
 ) -> AtomicResult<bool> {
-    let resource = db.get_resource(subject).await?;
+    let resource = db.get_resource(&subject.into()).await?;
     let name = resource.get(urls::NAME)?;
     let namespace = resource.get(urls::NAMESPACE)?;
 

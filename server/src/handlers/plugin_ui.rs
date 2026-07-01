@@ -59,18 +59,94 @@ pub fn get_plugin_file_path(
     Ok(file_path)
 }
 
+/// Generates a random CSP nonce for the plugin iframe document.
+fn plugin_nonce() -> String {
+    use ring::rand::{SecureRandom, SystemRandom};
+    let mut bytes = [0u8; 32];
+    // Falls back to a fixed (still-functional) value only if the RNG fails,
+    // which in practice never happens.
+    if SystemRandom::new().fill(&mut bytes).is_err() {
+        return "atomic-plugin-nonce".to_string();
+    }
+    general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+}
+
+/// Builds the HTML document that hosts a plugin's custom view. Served as a real
+/// network response (not a client-side `srcdoc`) so it gets its OWN
+/// Content-Security-Policy instead of inheriting the parent SPA's nonce-locked
+/// CSP — otherwise the plugin's `<script>` is blocked on any CSP-enforced
+/// server. The plugin script is locked to a fresh per-response nonce; the host
+/// SPA hands over theme CSS via `postMessage` (see PluginView.tsx).
+fn render_plugin_ui_html(query_string: &str, css_exists: bool, nonce: &str) -> String {
+    let js_url = format!(
+        "/plugin-ui?{}",
+        query_string.replace("format=html", "format=js")
+    );
+    let css_link = if css_exists {
+        let css_url = format!(
+            "/plugin-ui?{}",
+            query_string.replace("format=html", "format=css")
+        );
+        format!(r#"<link rel="stylesheet" href="{css_url}" />"#)
+    } else {
+        String::new()
+    };
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Plugin</title>
+{css_link}
+<style id="__atomic_theme"></style>
+<script type="module" src="{js_url}" nonce="{nonce}"></script>
+<script nonce="{nonce}">
+window.addEventListener('message', function (e) {{
+  if (e.data && e.data.type === '__atomic_style') {{
+    var s = document.getElementById('__atomic_theme');
+    if (s) s.textContent = e.data.css;
+  }}
+}});
+if (window.parent) window.parent.postMessage({{ type: '__atomic_plugin_ready' }}, '*');
+</script>
+</head>
+<body><div id="root"></div></body>
+</html>"#
+    )
+}
+
 /// Retrieves the UI js script for the plugin.
 /// It exepcts two query parameters: drive and plugin (namespace.name)
-#[tracing::instrument(skip(appstate, _req))]
+#[tracing::instrument(skip(appstate, req))]
 pub async fn handle_plugin_ui(
     _path: Option<web::Path<String>>,
     appstate: web::Data<AppState>,
     query: web::Query<PluginUiQuery>,
-    _req: actix_web::HttpRequest,
+    req: actix_web::HttpRequest,
 ) -> AtomicServerResult<HttpResponse> {
     let drive_subject = &query.drive;
     let plugin_name = &query.plugin;
     let format = &query.format;
+
+    // `html` is generated (not a file on disk): serve the iframe host document
+    // with its own CSP so the plugin script isn't blocked by the parent CSP.
+    if format == "html" {
+        let css_exists =
+            get_plugin_file_path(&appstate, drive_subject, plugin_name, "css")?.exists();
+        let nonce = plugin_nonce();
+        let body = render_plugin_ui_html(req.query_string(), css_exists, &nonce);
+        let csp = format!(
+            "default-src 'none'; script-src 'nonce-{nonce}'; style-src 'unsafe-inline' 'self'; \
+             img-src * data:; connect-src *; font-src *; base-uri 'none'; object-src 'none';"
+        );
+
+        return Ok(HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .insert_header(("Content-Security-Policy", csp))
+            .body(body));
+    }
 
     let file_path = get_plugin_file_path(&appstate, drive_subject, plugin_name, format)?;
 
@@ -112,7 +188,7 @@ pub async fn handle_plugin_list(
         };
 
         let resource = store
-            .get_resource_extended(&subject, true, &ForAgent::Sudo)
+            .get_resource_extended(&subject.into(), true, &ForAgent::Sudo)
             .await?
             .to_single();
 
@@ -129,7 +205,7 @@ pub async fn handle_plugin_list(
         let css_file_path = get_plugin_file_path(&appstate, drive_subject, &plugin_name, "css")?;
 
         let Some(meta) =
-            store.get_plugin_meta(&PluginMetaKey::new(drive_subject, &namespace, &name))?
+            store.get_plugin_meta(&PluginMetaKey::new(drive_subject, namespace, name))?
         else {
             tracing::warn!("Plugin {} has no metadata", plugin_name);
             continue;

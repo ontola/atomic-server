@@ -42,9 +42,16 @@ export function ApplyTemplateDialog({
 
   const subjects = useMemo(
     () =>
-      template?.rootResourceLocalIDs.map(localID =>
-        new URL(localID, drive + '/').toString(),
-      ) ?? stableArray,
+      template?.rootResourceLocalIDs.map(localID => {
+        // `new URL(localID, drive + '/')` only works when `drive` is an HTTP
+        // URL. After the DID migration drives are `did:ad:...` subjects which
+        // can't act as URL bases, so we fall back to string join.
+        if (drive.startsWith('did:')) {
+          return `${drive}/${localID}`;
+        }
+
+        return new URL(localID, drive + '/').toString();
+      }) ?? stableArray,
     [template, drive],
   );
 

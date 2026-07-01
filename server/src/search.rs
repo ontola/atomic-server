@@ -6,7 +6,6 @@ use crate::errors::AtomicServerResult;
 use atomic_lib::Db;
 use atomic_lib::Resource;
 use atomic_lib::Storelike;
-use regex::Regex;
 use tantivy::schema::Facet;
 use tantivy::schema::Field;
 use tantivy::schema::STORED;
@@ -15,11 +14,6 @@ use tantivy::Index;
 use tantivy::IndexWriter;
 use tantivy::ReloadPolicy;
 
-use yrs::updates::decoder::Decode;
-use yrs::GetString;
-use yrs::WriteTxn;
-use yrs::XmlFragment;
-use yrs::{Transact, Update};
 /// The actual Schema used for search.
 /// It mimics a single Atom (or Triple).
 #[derive(Debug)]
@@ -83,11 +77,15 @@ impl SearchState {
     /// Indexes all resources from the store to search.
     /// At this moment does not remove existing index.
     pub async fn add_all_resources(&self, store: &Db) -> AtomicServerResult<()> {
-        tracing::info!("Building search index...");
+        tracing::info!("Building search index");
 
-        let resources = store
-            .all_resources(true)
-            .filter(|resource| !resource.get_subject().contains("/commits/"));
+        let resources = store.all_resources(true).filter(|resource| {
+            !resource.get_subject().as_str().contains("/commits/")
+                && !resource
+                    .get_subject()
+                    .as_str()
+                    .starts_with("did:ad:commit:")
+        });
 
         for resource in resources {
             self.add_resource(&resource, store).await.map_err(|e| {
@@ -107,16 +105,38 @@ impl SearchState {
     /// Adds a single resource to the search index, but does _not_ commit!
     /// Does not index outgoing links, or resourcesArrays
     /// `appstate.search_index_writer.write()?.commit()?;`
-    #[tracing::instrument(skip(self, store))]
+    #[tracing::instrument(
+        skip(self, store, resource),
+        fields(subject = %resource.get_subject())
+    )]
     pub async fn add_resource(&self, resource: &Resource, store: &Db) -> AtomicServerResult<()> {
         let fields = self.get_schema_fields()?;
-        let subject = resource.get_subject().to_string();
-        let writer = self.writer.read()?;
-
+        // Store the canonical subject (e.g. "internal:/files/xxx") as the index key.
+        // Resolution to full URLs (e.g. "http://localhost:9883/files/xxx") happens at the
+        // output layer (search handler), not here. This keeps add/remove symmetric — both
+        // just use subject.as_str().
+        let subject = resource.get_subject().as_str();
+        let title = get_resource_title(resource);
+        let has_name = resource.get(atomic_lib::urls::NAME).is_ok();
+        let title_is_subject = title == subject;
+        tracing::info!(
+            "INDEXING title={:?} has_name={} title_is_fallback={}",
+            if title_is_subject {
+                "<subject>"
+            } else {
+                &title
+            },
+            has_name,
+            title_is_subject
+        );
+        let origin = store
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".to_string());
+        tracing::debug!("search::add_resource subject={}", subject);
         let mut doc = tantivy::TantivyDocument::default();
         doc.add_object(
             fields.propvals,
-            serde_json::from_str(&resource.to_json_ad()?).map_err(|e| {
+            serde_json::from_str(&resource.to_json_ad(Some(&origin))?).map_err(|e| {
                 format!(
                 "Failed to convert resource to json for search indexing. Subject: {}. Error: {}",
                 subject, e
@@ -126,39 +146,45 @@ impl SearchState {
 
         doc.add_text(fields.subject, subject);
         doc.add_text(fields.title, get_resource_title(resource));
-
         if let Ok(atomic_lib::Value::Markdown(description)) =
             resource.get(atomic_lib::urls::DESCRIPTION)
         {
             doc.add_text(fields.description, description);
         };
 
-        // If the resource has a document-content property, we extract the plain text and use that as the description instead.
-        // This way, documents can be indexed by search.
-        if let Ok(atomic_lib::Value::YDoc(state)) = resource.get(atomic_lib::urls::DOCUMENT_CONTENT)
-        {
-            let ydoc = yrs::Doc::new();
-            let mut txn = ydoc.transact_mut();
-            txn.apply_update(
-                Update::decode_v2(state)
-                    .map_err(|e| format!("Failed to decode YDoc update: {}", e))?,
-            )
-            .map_err(|e| format!("Failed to apply YDoc update: {}", e))?;
-
-            let xml_content = txn.get_or_insert_xml_fragment("content");
-            let content = extract_plain_text(&xml_content, &txn);
-            doc.add_text(fields.description, content);
+        // If the resource has Loro document content, extract the text for search indexing.
+        if let Some(snapshot) = resource.materialized_state() {
+            if let Ok(loro_doc) = atomic_lib::loro::AtomicLoroDoc::from_snapshot(&snapshot) {
+                let text = loro_doc.extract_document_plain_text();
+                if !text.is_empty() {
+                    doc.add_text(fields.description, text);
+                }
+            }
         }
 
-        let hierarchy = resource_to_facet(resource, store).await?;
+        let hierarchy = resource_to_facet(resource, store).await.map_err(|e| {
+            tracing::warn!(
+                "search::add_resource resource_to_facet FAILED for subject={}: {}",
+                subject,
+                e
+            );
+            e
+        })?;
+        tracing::debug!(
+            "search::add_resource facet={:?} for subject={}",
+            hierarchy,
+            subject
+        );
         doc.add_facet(fields.hierarchy, hierarchy);
 
+        let writer = self.writer.read()?;
         writer.add_document(doc)?;
 
         Ok(())
     }
 
     /// Removes a single resource from the search index, but does _not_ commit!
+    /// Pass `subject.as_str()` — the same canonical form that `add_resource` stores.
     /// Does not index outgoing links, or resourcesArrays
     /// `appstate.search_index_writer.write()?.commit()?;`
     #[tracing::instrument(skip(self))]
@@ -200,14 +226,10 @@ pub fn build_schema() -> AtomicServerResult<tantivy::schema::Schema> {
 pub fn get_index(config: &Config) -> AtomicServerResult<(IndexWriter, tantivy::Index)> {
     let schema = build_schema()?;
     std::fs::create_dir_all(&config.search_index_path)?;
-    if config.opts.rebuild_indexes {
-        std::fs::remove_dir_all(&config.search_index_path)?;
-        std::fs::create_dir_all(&config.search_index_path)?;
-    }
     let mmap_directory = tantivy::directory::MmapDirectory::open(&config.search_index_path)?;
     let index = Index::open_or_create(mmap_directory, schema).map_err(|e| {
         format!(
-            "Failed to create or open search index. Try starting again with --rebuild-index. Error: {}",
+            "Failed to create or open search index. Try starting again with --rebuild-indexes search. Error: {}",
             e
         )
     })?;
@@ -265,7 +287,7 @@ pub async fn resource_to_facet(resource: &Resource, store: &Db) -> AtomicServerR
     Ok(result)
 }
 
-fn get_resource_title(resource: &Resource) -> String {
+pub fn get_resource_title(resource: &Resource) -> String {
     let title = if let Ok(name) = resource.get(atomic_lib::urls::NAME) {
         name.clone()
     } else if let Ok(shortname) = resource.get(atomic_lib::urls::SHORTNAME) {
@@ -281,30 +303,6 @@ fn get_resource_title(resource: &Resource) -> String {
         atomic_lib::Value::Slug(s) => s,
         _ => resource.get_subject().to_string(),
     }
-}
-
-/// Recursively traverses the Yjs XmlFragment structure using a TreeWalker
-/// and extracts all nested plain text content.
-///
-/// This function requires a Transaction to read the text data correctly.
-fn extract_plain_text(fragment: &yrs::XmlFragmentRef, txn: &yrs::TransactionMut) -> String {
-    let mut text_content = String::new();
-
-    for node in fragment.successors(txn) {
-        match node {
-            yrs::types::xml::XmlOut::Text(text) => {
-                text_content.push_str(&text.get_string(txn));
-            }
-            _ => {}
-        }
-    }
-
-    // Remove XML tags using regex
-    let xml_tag_regex = Regex::new(r"<[^>]*>").unwrap();
-    let clean_text = xml_tag_regex.replace_all(&text_content, " ");
-
-    // Clean up leading/trailing whitespace and return
-    clean_text.trim().to_string()
 }
 
 #[cfg(test)]
@@ -347,6 +345,82 @@ mod tests {
         assert!(query_facet_root.is_prefix_of(&index_facet));
     }
 
+    /// Regression test for the DID search-index bug: resources with `did:ad:...`
+    /// subjects were not findable via /search?q=... after being added to the
+    /// tantivy index. Repro: create a drive (DID), create a folder under it
+    /// (DID), index the folder, commit, query for its name. Expected: found.
+    #[actix_rt::test]
+    async fn did_subject_is_indexed_and_searchable() {
+        let unique = atomic_lib::utils::random_string(10);
+        let config = crate::config::build_temp_config(&unique).unwrap();
+        let store = atomic_lib::Db::init_temp(&unique).await.unwrap();
+        atomic_lib::test_utils::setup_test_env(&store)
+            .await
+            .unwrap();
+
+        let search_state = SearchState::new(&config).unwrap();
+        let fields = search_state.get_schema_fields().unwrap();
+
+        // A drive with a DID subject — matches how dev-drive / user flows work.
+        let drive_subject = "did:ad:test-drive-subject";
+        let mut drive = Resource::new(drive_subject.to_string());
+        drive
+            .set_string(urls::NAME.into(), "Drive", &store)
+            .await
+            .unwrap();
+        store.add_resource(&drive).await.unwrap();
+
+        // A folder under that drive, also DID-subject.
+        let folder_subject = "did:ad:test-folder-subject";
+        let mut folder = Resource::new(folder_subject.to_string());
+        folder
+            .set_string(urls::NAME.into(), "MyUniqueFolder", &store)
+            .await
+            .unwrap();
+        folder
+            .set_string(urls::PARENT.into(), drive_subject, &store)
+            .await
+            .unwrap();
+        // Avoid class-membership — Folder requires display-style, etc. We
+        // just want to test the search-index path for DID subjects.
+        store.add_resource(&folder).await.unwrap();
+
+        // Index it the way CommitMonitor does.
+        search_state.add_resource(&folder, &store).await.unwrap();
+        search_state.writer.write().unwrap().commit().unwrap();
+        search_state.reader.reload().unwrap();
+
+        let searcher = search_state.reader.searcher();
+        let parser =
+            tantivy::query::QueryParser::for_index(&search_state.index, vec![fields.title]);
+        let query = parser.parse_query("MyUniqueFolder").unwrap();
+        let top_docs = searcher
+            .search(
+                &query,
+                &tantivy::collector::TopDocs::with_limit(10).order_by_score(),
+            )
+            .unwrap();
+
+        assert!(
+            !top_docs.is_empty(),
+            "DID-subject folder should be findable by name",
+        );
+    }
+
+    // FLAKY (local + dagger CI + remote CI): tantivy's `IndexReader`
+    // uses `OnCommitWithDelay` reload policy; under heavy parallel test
+    // load (many actix HTTP servers spinning up alongside) the
+    // post-commit segment delete doesn't propagate to the searcher
+    // before the in-test poll deadline. Local repro: ~1-in-5 first-
+    // attempts fail; passes on retry with fresh setup. The poll loop
+    // has a 30s deadline and `.config/nextest.toml` configures
+    // `retries = 5` for this test specifically — but the override
+    // doesn't take effect in the dagger nextest invocation (unclear
+    // why). Investigate: verify the binary-name filter matches in CI
+    // (`cargo nextest list` from inside the dagger container), or
+    // switch the reader to `ReloadPolicy::Manual` and call `reload`
+    // explicitly so the test isn't at the mercy of the background
+    // merge thread.
     #[actix_rt::test]
     async fn test_update_resource() {
         let unique_string = atomic_lib::utils::random_string(10);
@@ -356,55 +430,83 @@ mod tests {
             .expect("failed init config");
 
         let store = atomic_lib::Db::init_temp(&unique_string).await.unwrap();
+        atomic_lib::test_utils::setup_test_env(&store)
+            .await
+            .unwrap();
 
         let search_state = SearchState::new(&config).unwrap();
         let fields = search_state.get_schema_fields().unwrap();
+        let initial_title = format!("initial{unique_string}");
+        let updated_title = format!("updated{unique_string}");
 
         // Create initial resource
         let mut resource = Resource::new_generate_subject(&store).unwrap();
         resource
-            .set_string(urls::NAME.into(), "Initial Title", &store)
+            .set_string(urls::NAME.into(), &initial_title, &store)
             .await
             .unwrap();
         store.add_resource(&resource).await.unwrap();
 
         // Add to search index
+        let indexed_subject = resource.get_subject().to_string();
         search_state.add_resource(&resource, &store).await.unwrap();
         search_state.writer.write().unwrap().commit().unwrap();
 
         // Update the resource
         resource
-            .set_string(urls::NAME.into(), "Updated Title", &store)
+            .set_string(urls::NAME.into(), &updated_title, &store)
             .await
             .unwrap();
-        resource.save(&store).await.unwrap();
+        store.add_resource(&resource).await.unwrap();
 
-        // Update in search index
-        search_state
-            .remove_resource(resource.get_subject())
-            .unwrap();
+        // Remove the exact subject that was indexed above before re-adding the
+        // updated resource.
+        search_state.remove_resource(&indexed_subject).unwrap();
         search_state.add_resource(&resource, &store).await.unwrap();
         search_state.writer.write().unwrap().commit().unwrap();
 
-        // Make sure changes are visible to searcher
-        search_state.reader.reload().unwrap();
-
-        let searcher = search_state.reader.searcher();
-
-        // Search for the old title - should return no results
+        // Make sure changes are visible to searcher.
+        // `IndexReader::reload()` returns sync but the visible Searcher
+        // generation can lag the underlying segment merge under heavy
+        // parallel test load (the reader uses `OnCommitWithDelay`).
+        // Poll instead of asserting once: the new generation settles
+        // within a few hundred milliseconds in normal conditions, but
+        // under CI parallelism it can take several seconds before
+        // tantivy's background merge thread gets CPU time. 30s is a
+        // safety net — a real bug would never converge inside it.
         let query_parser =
             tantivy::query::QueryParser::for_index(&search_state.index, vec![fields.title]);
-        let query = query_parser.parse_query("Initial").unwrap();
-        let top_docs = searcher
-            .search(&query, &tantivy::collector::TopDocs::with_limit(1))
-            .unwrap();
-        assert_eq!(top_docs.len(), 0, "Old title should not be found in index");
-
-        // Search for the new title - should return one result
-        let query = query_parser.parse_query("Updated").unwrap();
-        let top_docs = searcher
-            .search(&query, &tantivy::collector::TopDocs::with_limit(1))
-            .unwrap();
-        assert_eq!(top_docs.len(), 1, "New title should be found in index");
+        let initial_query = query_parser.parse_query(&initial_title).unwrap();
+        let updated_query = query_parser.parse_query(&updated_title).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let (last_initial, last_updated) = loop {
+            search_state.reader.reload().unwrap();
+            let searcher = search_state.reader.searcher();
+            let last_initial = searcher
+                .search(
+                    &initial_query,
+                    &tantivy::collector::TopDocs::with_limit(1).order_by_score(),
+                )
+                .unwrap()
+                .len();
+            let last_updated = searcher
+                .search(
+                    &updated_query,
+                    &tantivy::collector::TopDocs::with_limit(1).order_by_score(),
+                )
+                .unwrap()
+                .len();
+            if last_initial == 0 && last_updated == 1 {
+                break (last_initial, last_updated);
+            }
+            if std::time::Instant::now() >= deadline {
+                break (last_initial, last_updated);
+            }
+            // Yield + delay, giving tantivy's background segment-merge
+            // thread CPU time before we check again.
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        };
+        assert_eq!(last_initial, 0, "Old title should not be found in index");
+        assert_eq!(last_updated, 1, "New title should be found in index");
     }
 }

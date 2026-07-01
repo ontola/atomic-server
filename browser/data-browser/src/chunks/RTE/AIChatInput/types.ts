@@ -1,9 +1,14 @@
 export type SearchSuggestion =
   | AtomicResourceSuggestion
   | CategorySuggestion
-  | MCPResourceSuggestion;
+  | MCPResourceSuggestion
+  | SkillSuggestion
+  | CommandSuggestion;
 
-export type MentionItem = AtomicResourceSuggestion | MCPResourceSuggestion;
+export type MentionItem =
+  | AtomicResourceSuggestion
+  | MCPResourceSuggestion
+  | SkillSuggestion;
 
 export type AtomicResourceSuggestion = {
   type: 'atomic-resource';
@@ -23,4 +28,18 @@ export type MCPResourceSuggestion = {
   label: string;
   id: string;
   mimeType?: string;
+};
+
+export type SkillSuggestion = {
+  type: 'skill';
+  id: string;
+  label: string;
+  description: string;
+};
+
+export type CommandSuggestion = {
+  type: 'slash-command';
+  id: 'compact' | 'skill' | 'model' | 'agent';
+  label: string;
+  description: string;
 };

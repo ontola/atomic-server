@@ -7,6 +7,7 @@ import { DragAreaBase, useResizable } from '../../hooks/useResizable';
 import { useCombineRefs } from '../../hooks/useCombineRefs';
 import { OverlapSpacer } from './OverlapSpacer';
 import { AppMenu } from './AppMenu';
+import { SideBarHomePanels } from './SideBarHomePanels';
 import { About } from './About';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { Column } from '../Row';
@@ -16,6 +17,7 @@ import { Panel, usePanelList } from './usePanelList';
 import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
 import { CalculatedPageHeight } from '../../globalCssVars';
+import { AIChatsPanel } from './AIPanel';
 
 /** Amount of pixels where the sidebar automatically shows */
 export const SIDEBAR_TOGGLE_WIDTH = 600;
@@ -75,14 +77,20 @@ export function SideBar(): JSX.Element {
           onIsRearangingChange={setIsRearanging}
         />
         <MenuWrapper>
-          <Column gap='0.5rem'>
+          <Column gap='0.5rem' align='stretch'>
+            <SideBarHomePanels onItemClick={closeSideBar} />
+            {enabledPanels.has(Panel.AIChats) && (
+              <SideBarPanel title='AI Chats' key={drive}>
+                <AIChatsPanel />
+              </SideBarPanel>
+            )}
             {enabledPanels.has(Panel.Ontologies) && (
               <SideBarPanel title='Ontologies' key={drive}>
                 <OntologiesPanel />
               </SideBarPanel>
             )}
             <SideBarPanel title='App'>
-              <Column>
+              <Column gap='0.5rem' align='stretch'>
                 <AppMenu onItemClick={closeSideBar} />
                 <About />
               </Column>
@@ -118,7 +126,7 @@ interface SideBarOverlayProps {
 
 const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
   style: {
-    [SIDEBAR_WIDTH_PROP]: p.size,
+    [SIDEBAR_WIDTH_PROP.raw]: p.size,
   } as Record<string, string>,
 }))`
   z-index: ${p => p.theme.zIndex.sidebar};
@@ -128,11 +136,11 @@ const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
     opacity 0.3s,
     left 0.3s;
   left: ${p =>
-    p.exposed ? '0' : `calc(var(${SIDEBAR_WIDTH_PROP}) * -1 + 0.5rem)`};
+    p.exposed ? '0' : `calc(${SIDEBAR_WIDTH_PROP.var()} * -1 + 0.5rem)`};
   /* When the user is hovering, show half opacity */
   opacity: ${p => (p.exposed ? 1 : 0)};
   height: ${CalculatedPageHeight.var()};
-  width: var(${SIDEBAR_WIDTH_PROP});
+  width: ${SIDEBAR_WIDTH_PROP.var()};
   position: ${p => (p.locked ? 'relative' : 'absolute')};
   border-right: ${p => `1px solid ${p.theme.colors.bg2}`};
   box-shadow: ${p => (p.locked ? 'none' : p.theme.boxShadowSoft)};
@@ -153,6 +161,11 @@ const MenuWrapper = styled.div`
   justify-items: flex-end;
   display: flex;
   justify-content: end;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  /* Same horizontal inset as drive {@link SideBarDrive} ListWrapper */
+  padding-inline: ${p => p.theme.margin}rem;
 `;
 
 /** Just needed for positioning the overlay */

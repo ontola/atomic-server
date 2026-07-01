@@ -102,11 +102,11 @@ impl AtomicError {
     }
 
     /// Converts the Error into a Resource. This helps clients to handle errors, such as show error messages in the right Form input fields.
-    pub fn into_resource(self, subject: String) -> Resource {
+    pub fn into_resource(self, subject: String) -> AtomicResult<Resource> {
         let mut r = Resource::new(subject);
-        r.set_class(urls::ERROR);
-        r.set_unsafe(urls::DESCRIPTION.into(), Value::String(self.message));
-        r
+        r.set_class(urls::ERROR)?;
+        r.set_unsafe(urls::DESCRIPTION.into(), Value::String(self.message))?;
+        Ok(r)
     }
 
     pub fn set_subject(mut self, subject: &str) -> Self {
@@ -253,7 +253,7 @@ impl From<Infallible> for AtomicError {
     }
 }
 
-#[cfg(feature = "db")]
+#[cfg(feature = "db-sled")]
 impl From<sled::Error> for AtomicError {
     fn from(error: sled::Error) -> Self {
         AtomicError {

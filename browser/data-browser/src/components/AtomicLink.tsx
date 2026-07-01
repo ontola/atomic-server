@@ -9,8 +9,7 @@ import clsx from 'clsx';
 import { useIsInRTE } from '@hooks/useIsInRTE';
 import { useCombineRefs } from '@hooks/useCombineRefs';
 
-export interface AtomicLinkProps
-  extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+export interface AtomicLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
   children?: ReactNode;
   /** An http URL to an Atomic Data resource, opened in this app and fetched as JSON-AD */
   subject?: string;

@@ -150,7 +150,7 @@ function SelectCellEdit({
           <Content onKeyDown={handleKeyDown}>
             <SearchInputWrapper>
               <InputStyled
-                placeholder='Filter tags...'
+                placeholder='filter tags'
                 onChange={handleSearch}
                 ref={inputRef}
               />

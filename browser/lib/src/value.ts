@@ -1,19 +1,13 @@
 import { JSONADParser } from './parse.js';
 import type { Resource } from './resource.js';
-import type * as Y from 'yjs';
-import { YLoader } from './yjs.js';
 
 export type JSONPrimitive = string | number | boolean;
 export type JSONValue = JSONPrimitive | JSONObject | JSONArray | undefined;
 export type JSONObject = { [key: string]: JSONValue };
 export type JSONArray = Array<JSONValue>;
 
-export type AtomicValue = JSONValue | Y.Doc;
-
-export type SerializedYUpdate = {
-  type: 'ydoc';
-  data: string;
-};
+/** Either a valid JSON-AD value or a raw Loro value (Uint8Array) */
+export type AtomicValue = JSONValue | Uint8Array;
 
 /**
  * Tries to convert the value as an array of resources, which can be both URLs
@@ -103,22 +97,29 @@ export function valToResource(val: AtomicValue): string | Resource {
   throw new Error(`Not a resource: ${val}, is a ${typeof val}`);
 }
 
-export function isYDoc(val: AtomicValue): val is Y.Doc {
-  if (!YLoader.isLoaded()) {
-    return false;
+export const isJSONObject = (value: AtomicValue): value is JSONObject =>
+  isJSONValue(value) &&
+  typeof value === 'object' &&
+  value !== null &&
+  !Array.isArray(value);
+
+export const isJSONValue = (value: AtomicValue): value is JSONValue =>
+  !(value instanceof Uint8Array);
+
+/** Converts a hex string to a Uint8Array */
+export function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
   }
 
-  const Y = YLoader.Y;
-
-  return val instanceof Y.Doc;
+  return bytes;
 }
 
-export const isJSONObject = (value: JSONValue): value is JSONObject =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-export const isSerializedYUpdate = (
-  value: JSONValue,
-): value is SerializedYUpdate =>
-  isJSONObject(value) &&
-  value.type === 'ydoc' &&
-  typeof value.data === 'string';
+/** Converts a Uint8Array to a hex string */
+export function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}

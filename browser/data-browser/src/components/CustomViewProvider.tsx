@@ -67,7 +67,12 @@ const fetchPluginList = async (
   serverUrl: string,
   drive: string,
 ): Promise<PluginListResult> => {
-  const response = await fetch(`${serverUrl}/plugin-list?drive=${drive}`);
+  // Drive subjects (DIDs) often contain `+`. Without explicit encoding the
+  // server's form-urlencoded query parser would decode `+` as space, so the
+  // ClassExtenderScope::Drive comparison fails and plugin-list returns [].
+  const response = await fetch(
+    `${serverUrl}/plugin-list?drive=${encodeURIComponent(drive)}`,
+  );
   const data = await response.json();
 
   return parsePluginList(data);
@@ -101,11 +106,17 @@ export function CustomViewProvider({ children }: PropsWithChildren) {
   };
 
   useEffect(() => {
-    fetchPluginList(serverUrl, drive).then(([views, manifests]) => {
-      setCustomViews(views);
-      setUIPluginDataMap(manifests);
-      setLoading(false);
-    });
+    fetchPluginList(serverUrl, drive)
+      .then(([views, manifests]) => {
+        setCustomViews(views);
+        setUIPluginDataMap(manifests);
+      })
+      .catch(() => {
+        // Server unreachable — continue without plugins
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [serverUrl, drive]);
 
   return (

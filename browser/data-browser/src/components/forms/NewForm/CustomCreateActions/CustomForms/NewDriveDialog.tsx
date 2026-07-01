@@ -16,6 +16,8 @@ import { CustomResourceDialogProps } from '../../useNewResourceUI';
 import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate';
 import { useSettings } from '../../../../../helpers/AppSettings';
 
+const SUBDOMAIN = 'https://atomicdata.dev/properties/subdomain';
+
 export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
   onClose,
   onCreated,
@@ -23,8 +25,17 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
 }) => {
   const store = useStore();
   const nameFieldId = useId();
+  const subdomainFieldId = useId();
   const { setDrive } = useSettings();
   const [name, setName] = useState('');
+  const [subdomain, setSubdomain] = useState('');
+  const [subdomainEdited, setSubdomainEdited] = useState(false);
+
+  useEffect(() => {
+    if (!subdomainEdited) {
+      setSubdomain(stringToSlug(name));
+    }
+  }, [name, subdomainEdited]);
 
   const createAndNavigate = useCreateAndNavigate();
 
@@ -45,20 +56,34 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
         [core.properties.name]: name,
         [core.properties.write]: [agent.subject],
         [core.properties.read]: [agent.subject],
+        [SUBDOMAIN]: subdomain.trim(),
       },
       {
         noParent: true,
         skipNavigation,
         onCreated: async resource => {
-          // Add drive to the agents drive list.
-          const agentResource = await store.getResource(agent.subject!);
-          agentResource.push(server.properties.drives, [resource.subject]);
-          await agentResource.save();
+          // Add the new drive to the user's saved-drives list. That list lives
+          // on their PRIVATE DRIVE (the per-user home index), not on the Agent.
+          // Best-effort: a user may not have provisioned a personal drive yet.
+          try {
+            const agentResource = await store.getResource(agent.subject!);
+            const personalDrive = agentResource.get(
+              core.properties.personalDrive,
+            ) as string | undefined;
+
+            if (personalDrive) {
+              const driveResource = await store.getResource(personalDrive);
+              driveResource.push(server.properties.drives, [resource.subject]);
+              await driveResource.save();
+            }
+          } catch (_e) {
+            // Ignore (e.g. no personal drive yet, or DID agent without a
+            // writable local resource).
+          }
 
           // Create a default ontology.
           const ontologyName = stringToSlug(name.trim());
           const ontology = await store.newResource({
-            subject: `${resource.subject}/defaultOntology`,
             isA: core.classes.ontology,
             parent: resource.subject,
             propVals: {
@@ -93,6 +118,7 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
     onClose();
   }, [
     name,
+    subdomain,
     createAndNavigate,
     onClose,
     setDrive,
@@ -127,6 +153,19 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
                 value={name}
                 autoFocus={true}
                 onChange={e => setName(e.target.value)}
+              />
+            </InputWrapper>
+          </Field>
+          <Field label='Subdomain' fieldId={subdomainFieldId}>
+            <InputWrapper>
+              <InputStyled
+                id={subdomainFieldId}
+                placeholder='my-drive'
+                value={subdomain}
+                onChange={e => {
+                  setSubdomain(e.target.value);
+                  setSubdomainEdited(true);
+                }}
               />
             </InputWrapper>
           </Field>

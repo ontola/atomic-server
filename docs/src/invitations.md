@@ -10,19 +10,17 @@ In order to make this process of inviting others as simple as possible, we've co
 
 - **Edit without registration**. Be able to edit or view things without being required to complete a registration process.
 - **Share with a single URL**. A single URL should contain all the information needed.
-- **(Un)limited URL usage**. A URL might be re-usable, or maybe not.
+- **Stateless**. Invitations are self-contained signed tokens. The server does not need to store invite state.
 
 ## Flow
 
-1. The Owner or a resource creates an [Invite](https://atomicdata.dev/classes/Invite). This Invite points to a `target` Resource, provides `read` rights by default but can additionally add `write` rights, contains a bunch of `usagesLeft`.
-1. The Guest opens the Invite URL. This returns the Invite resource, which provides the client with the information needed to do the next request which adds the actual rights.
-1. The browser client app might generate a set of keys, or use an existing one. It sends the Agent URL to the Invite in a query param.
-1. The server will respond with a Redirect resource, which links to the newly granted `target` resource.
+1. The Owner of a resource creates an invite token. This token is signed with the owner's private key and contains the `target` resource, optional `write` rights, and an expiration timestamp.
+1. The token is encoded into a URL: `/invites?token={token}&public-key={publicKey}`.
+1. The Guest opens the invite URL. If the guest provides a `public-key` query parameter, the server derives a DID-based Agent (`did:ad:{publicKey}`) from that key.
+1. The server verifies the token signature, grants the requested rights to the guest's Agent, and responds with a Redirect to the `target` resource.
 1. The Guest will now be able to access the Resource.
-
-Try it on [https://atomicdata.dev/invites/1](https://atomicdata.dev/invites/1)
 
 ## Limitations and gotcha's
 
-- The one creating the Invite has to take security in consideration. Some URLs can be easily guessed! When implementing Invitations, make sure to use a good amount of randomness when creating the Subject.
-- Make sure that the invite is not publicly discoverable (e.g. through a Collection), this can happen if you set the `parent` of the invite to a public resource.
+- Invite tokens are signed by the issuer. If the issuer loses write access to the target resource, previously issued tokens will fail when redeemed.
+- Tokens have an expiration timestamp. Expired tokens are rejected.

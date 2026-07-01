@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": true,
+  "printWidth": 80,
+  "tabWidth": 2,
+  "singleQuote": true,
+  "bracketSpacing": true,
+  "useTabs": false,
+  "arrowParens": "avoid",
+  "jsxSingleQuote": true,
+  "trailingComma": "all",
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "**/node_modules",
+    "**/dist",
+    "**/lib-out",
+    "**/build",
+    "**/.svelte-kit",
+    "**/.netlify",
+    "**/playwright-report/**",
+    "**/test-results/**",
+    "**/trace-*.json",
+    "**/dev-drive-trace-*.json",
+    "browser/data-browser/src/locales/**",
+    "**/*.min.js",
+    "**/*.min.css"
+  ]
+}

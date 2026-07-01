@@ -1,25 +1,22 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { styled } from 'styled-components';
-import { Row, Column } from '@components/Row';
+import { Column } from '@components/Row';
 import { FaPlus } from 'react-icons/fa6';
 import { ModelSelect } from './ModelSelect/ModelSelect';
-import { AIProvider } from '@components/AI/aiContstants';
 import { type AIAgent, type AIModelIdentifier } from './types';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  useDialog,
-} from '@components/Dialog';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { Button } from '@components/Button';
 import { SkeletonButton } from '@components/SkeletonButton';
+import { MarkdownInput } from '@components/forms/MarkdownInput';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
-import { InputWrapper, InputStyled } from '@components/forms/InputStyles';
+import { Input } from '@components/forms/InputStyles';
+import { SliderInput } from '@components/forms/SliderInput';
 import { useAISettings } from '@components/AI/AISettingsContext';
-import { CheckboxDescriptor } from '@components/forms/CheckboxDescriptor';
 import { AgentConfigItem } from './AgentConfigItem';
+import atomicAgentPrompt from './system-prompts/atomic-agent.md?raw';
+import Field from '@components/forms/Field';
+import Markdown from '@components/datatypes/Markdown';
 
 // Add this formatter at the top of the file, after imports
 const temperatureFormatter = new Intl.NumberFormat(undefined, {
@@ -27,16 +24,18 @@ const temperatureFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 });
 
+const DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT = 80;
+
 // Helper function to generate a unique ID
 const generateId = () => {
   return `custom-user-agent.${Math.random().toString(36).substring(2, 11)}`;
 };
 
-interface AgentConfigProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+interface AgentConfigTabProps {
   selectedAgent: AIAgent;
   onSelectAgent: (agent: AIAgent) => void;
+  actionPortalElement: HTMLElement | null;
+  onActionsVisibleChange: (visible: boolean) => void;
 }
 
 const defaultNewAgent: Omit<AIAgent, 'id'> = {
@@ -44,13 +43,12 @@ const defaultNewAgent: Omit<AIAgent, 'id'> = {
   description: '',
   systemPrompt: '',
   availableTools: [],
-  model: {
-    id: 'openai/gpt-4o-mini',
-    provider: AIProvider.OpenRouter,
-  },
   canReadAtomicData: false,
   canWriteAtomicData: false,
+  ragEnabled: false,
+  skillsEnabled: true,
   temperature: 0.1,
+  autoCompactThresholdPercent: DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT,
 };
 
 const defaultAgents: AIAgent[] = [
@@ -59,50 +57,54 @@ const defaultAgents: AIAgent[] = [
     id: 'dev.atomicdata.atomic-agent',
     description:
       "An agent that is specialized in helping you use AtomicServer. It takes context from what you're doing.",
-    systemPrompt: /* wc-ignore */ `You are an AI assistant in the Atomic Data Browser. Users will ask questions about their data and you will answer by looking at the data or using your own knowledge about the world.
-Atomic Data uses JSON-AD, Every resource including the properties themselves have a subject (the '@id' property in the JSON-AD), this is a URL that points to the resource.
-Resources are always referenced by subject so make sure you have all the subjects you need before editing or creating resources.
-
-Keep the following things in mind:
-- If the user mentions a resource by its name and you don't know the subject, use the search-resource tool to find its subject.
-- If you need details on resources referenced by another resource, use the get-atomic-resource tool.
-- When talking about a resource, always wrap the title in a link using markdown.
-- If you don't know the answer to the users question, try to figure it out by using the tools provided to you.
-`,
-    availableTools: [],
-    model: {
-      id: 'openai/gpt-4o-mini',
-      provider: AIProvider.OpenRouter,
-    },
+    systemPrompt: atomicAgentPrompt,
+    availableTools: ['dev.atomicdata.mcp.exa'],
     canReadAtomicData: true,
     canWriteAtomicData: true,
+    ragEnabled: false,
+    skillsEnabled: true,
     temperature: 0.1,
+    autoCompactThresholdPercent: DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT,
   },
   {
     name: 'General Agent',
     id: 'dev.atomicdata.general-agent',
     description: "A basic agent that doesn't have any special purpose.",
-    systemPrompt: ``,
-    availableTools: [],
-    model: {
-      id: 'openai/gpt-4.1-mini',
-      provider: AIProvider.OpenRouter,
-    },
+    systemPrompt: `The current date is {{timestamp}}`,
+    availableTools: ['dev.atomicdata.mcp.exa'],
     canReadAtomicData: false,
     canWriteAtomicData: false,
+    ragEnabled: false,
+    skillsEnabled: true,
     temperature: 0.1,
+    autoCompactThresholdPercent: DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT,
   },
 ];
 
+const getDefaultAgent = (agentId: string) =>
+  defaultAgents.find(agent => agent.id === agentId);
+
+const mergeDefaultAgentFields = (agent: AIAgent): AIAgent => {
+  const defaultAgent = getDefaultAgent(agent.id);
+
+  if (!defaultAgent) {
+    return agent;
+  }
+
+  return {
+    ...agent,
+    name: defaultAgent.name,
+    description: defaultAgent.description,
+    systemPrompt: defaultAgent.systemPrompt,
+  };
+};
+
 export const useAIAgentConfig = () => {
-  const [agents, setAgents] = useLocalStorage<AIAgent[]>(
+  const [storedAgents, setAgents] = useLocalStorage<AIAgent[]>(
     'atomic.ai.agents',
     defaultAgents,
   );
-  const [autoAgentSelectEnabled, setAutoAgentSelectEnabled] = useLocalStorage(
-    'atomic.ai.autoAgentSelect',
-    true,
-  );
+  const agents = storedAgents.map(mergeDefaultAgentFields);
   const [defaultAgentId, setDefaultAgentId] = useLocalStorage<string>(
     'atomic.ai.defaultAgentId',
     agents[0]?.id || '',
@@ -122,7 +124,7 @@ export const useAIAgentConfig = () => {
 
   // Save agents to settings
   const saveAgents = (newAgents: AIAgent[]) => {
-    setAgents(newAgents);
+    setAgents(newAgents.map(mergeDefaultAgentFields));
   };
 
   const getInitialAgent = (sideBar: boolean, chatSubject?: string) => {
@@ -143,8 +145,6 @@ export const useAIAgentConfig = () => {
 
   return {
     agents,
-    autoAgentSelectEnabled,
-    setAutoAgentSelectEnabled,
     saveAgents,
     defaultAgentId,
     setDefaultAgentId,
@@ -154,48 +154,47 @@ export const useAIAgentConfig = () => {
   };
 };
 
-export const AgentConfig = ({
-  open,
-  onOpenChange,
+export const AgentConfigTab = ({
   selectedAgent,
   onSelectAgent,
-}: AgentConfigProps) => {
-  const {
-    agents,
-    autoAgentSelectEnabled,
-    setAutoAgentSelectEnabled,
-    saveAgents,
-  } = useAIAgentConfig();
+  actionPortalElement,
+  onActionsVisibleChange,
+}: AgentConfigTabProps) => {
+  const { agents, saveAgents } = useAIAgentConfig();
+  const { defaultChatModel } = useAISettings();
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [dialogProps, show, _close, isOpen] = useDialog({
-    bindShow: onOpenChange,
-  });
+
+  useEffect(() => {
+    return () => onActionsVisibleChange(false);
+  }, [onActionsVisibleChange]);
 
   const handleSaveAgent = () => {
     if (!editingAgent) return;
 
+    const savedAgent = mergeDefaultAgentFields(editingAgent);
     const newAgents = isCreating
-      ? [...agents, editingAgent]
+      ? [...agents, savedAgent]
       : agents.map((agent: AIAgent) =>
           // Use ID to identify which agent we're editing
-          agent.id === editingAgent.id ? editingAgent : agent,
+          agent.id === savedAgent.id ? savedAgent : agent,
         );
 
     saveAgents(newAgents);
 
     // If we're editing the currently selected agent or creating a new one, update selection
-    if (selectedAgent.id === editingAgent.id || isCreating) {
-      onSelectAgent(editingAgent);
+    if (selectedAgent.id === savedAgent.id || isCreating) {
+      onSelectAgent(savedAgent);
     }
 
     setEditingAgent(null);
     setIsCreating(false);
+    onActionsVisibleChange(false);
   };
 
   const handleDeleteAgent = (agentToDelete: AIAgent) => {
-    if (agents.length <= 1) {
-      // Prevent deleting the last agent
+    if (agents.length <= 1 || getDefaultAgent(agentToDelete.id)) {
+      // Prevent deleting the last agent or built-in defaults.
       return;
     }
 
@@ -210,107 +209,102 @@ export const AgentConfig = ({
     }
   };
 
+  const handleDuplicateAgent = (agentToDuplicate: AIAgent) => {
+    const duplicatedAgent: AIAgent = {
+      ...agentToDuplicate,
+      id: generateId(),
+      name: `${agentToDuplicate.name} - Copy`,
+      availableTools: [...agentToDuplicate.availableTools],
+      model: agentToDuplicate.model ? { ...agentToDuplicate.model } : undefined,
+    };
+
+    saveAgents([...agents, duplicatedAgent]);
+    onSelectAgent(duplicatedAgent);
+  };
+
   const handleCreateNewAgent = () => {
     setEditingAgent({
       ...defaultNewAgent,
       id: generateId(),
+      model: defaultChatModel,
     });
     setIsCreating(true);
+    onActionsVisibleChange(true);
   };
 
   const handleEditAgent = (agent: AIAgent) => {
     setEditingAgent({ ...agent });
     setIsCreating(false);
+    onActionsVisibleChange(true);
   };
 
   const handleCancel = () => {
     setEditingAgent(null);
     setIsCreating(false);
+    onActionsVisibleChange(false);
   };
 
-  useEffect(() => {
-    if (open) {
-      show();
-    }
-  }, [open]);
-
   return (
-    <Dialog {...dialogProps} width='600px'>
-      {isOpen && (
-        <>
-          <DialogTitle>
-            <h1>Select AI Agents</h1>
-          </DialogTitle>
-          <DialogContent>
-            {editingAgent ? (
-              <AgentForm agent={editingAgent} onChange={setEditingAgent} />
-            ) : (
-              <Column>
-                <div>
-                  <CheckboxDescriptor
-                    label='Automatic Agent Selection'
-                    description='Pick best agent for the job based on name, description and
-                    available tools'
-                  >
-                    {id => (
-                      <Checkbox
-                        id={id}
-                        checked={autoAgentSelectEnabled}
-                        onChange={setAutoAgentSelectEnabled}
-                      />
-                    )}
-                  </CheckboxDescriptor>
-                </div>
-                <AgentsList role='radiogroup' aria-label='AI Agents'>
-                  {agents.map((agent: AIAgent) => (
-                    <AgentConfigItem
-                      key={agent.id}
-                      agent={agent}
-                      selected={selectedAgent.id === agent.id}
-                      onSelect={onSelectAgent}
-                      onEdit={handleEditAgent}
-                      onDelete={handleDeleteAgent}
-                    />
-                  ))}
-                </AgentsList>
+    <>
+      {editingAgent ? (
+        <Column>
+          <AgentForm
+            agent={editingAgent}
+            isDefaultAgent={!!getDefaultAgent(editingAgent.id)}
+            onChange={setEditingAgent}
+          />
+        </Column>
+      ) : (
+        <Column>
+          <AgentsList role='radiogroup' aria-label='AI Agents'>
+            {agents.map((agent: AIAgent) => (
+              <AgentConfigItem
+                key={agent.id}
+                agent={agent}
+                selected={selectedAgent.id === agent.id}
+                onSelect={onSelectAgent}
+                onEdit={handleEditAgent}
+                onDelete={handleDeleteAgent}
+                onDuplicate={handleDuplicateAgent}
+                canDelete={!getDefaultAgent(agent.id)}
+              />
+            ))}
+          </AgentsList>
 
-                <CreateButton onClick={handleCreateNewAgent}>
-                  <FaPlus title='' /> Create New Agent
-                </CreateButton>
-              </Column>
-            )}
-          </DialogContent>
-          {editingAgent && (
-            <DialogActions>
-              <Button subtle onClick={handleCancel}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  handleSaveAgent();
-                }}
-              >
-                {isCreating ? 'Create Agent' : 'Save Changes'}
-              </Button>
-            </DialogActions>
-          )}
-        </>
+          <CreateButton onClick={handleCreateNewAgent}>
+            <FaPlus title='' /> Create New Agent
+          </CreateButton>
+        </Column>
       )}
-    </Dialog>
+      {editingAgent &&
+        actionPortalElement &&
+        createPortal(
+          <>
+            <Button subtle onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveAgent}>
+              {isCreating ? 'Create Agent' : 'Save Changes'}
+            </Button>
+          </>,
+          actionPortalElement,
+        )}
+    </>
   );
 };
 
 interface AgentFormProps {
   agent: AIAgent;
+  isDefaultAgent: boolean;
   onChange: (agent: AIAgent) => void;
 }
 
-const AgentForm = ({ agent, onChange }: AgentFormProps) => {
-  const { mcpServers } = useAISettings();
+const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
+  const { mcpServers, defaultChatModel } = useAISettings();
 
   const handleChange = (
     field: keyof AIAgent,
-    value: string | boolean | number | AIModelIdentifier,
+    value: string | boolean | number | AIModelIdentifier | undefined,
   ) => {
     onChange({
       ...agent,
@@ -340,7 +334,7 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
         availableTools: tools,
       });
     }
-  }, [mcpServers]);
+  }, [agent, mcpServers, onChange]);
 
   const enforceToolSupport =
     agent.availableTools.length > 0 ||
@@ -349,41 +343,49 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
 
   return (
     <FormContainer>
-      <FormGroup>
-        <Label htmlFor='agent-name'>Name</Label>
+      <StyledField label='Name' fieldId='agent-name'>
         <Input
           id='agent-name'
           required
           max={50}
+          readOnly={isDefaultAgent}
           value={agent.name}
           onChange={e => handleChange('name', e.target.value)}
           placeholder='Agent name'
         />
-      </FormGroup>
+      </StyledField>
 
-      <FormGroup>
-        <Label htmlFor='agent-description'>Description</Label>
+      <StyledField label='Description' fieldId='agent-description'>
         <Input
           id='agent-description'
+          readOnly={isDefaultAgent}
           value={agent.description}
           onChange={e => handleChange('description', e.target.value)}
           placeholder='Agent description'
         />
-      </FormGroup>
+      </StyledField>
 
-      <FormGroup>
-        <Label htmlFor='agent-system-prompt'>System Prompt</Label>
-        <Textarea
-          id='agent-system-prompt'
-          value={agent.systemPrompt}
-          onChange={e => handleChange('systemPrompt', e.target.value)}
-          placeholder='System prompt that defines how the agent behaves'
-          rows={8}
-        />
-      </FormGroup>
+      <StyledField
+        label='System Prompt'
+        fieldId='agent-system-prompt'
+        helper='The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive.'
+      >
+        {isDefaultAgent ? (
+          <SystemPromptPreview id='agent-system-prompt'>
+            <Markdown text={agent.systemPrompt} maxLength={Infinity} />
+          </SystemPromptPreview>
+        ) : (
+          <MarkdownInput
+            key={agent.id}
+            id='agent-system-prompt'
+            initialContent={agent.systemPrompt}
+            onChange={content => handleChange('systemPrompt', content)}
+            placeholder='System prompt that defines how the agent behaves'
+          />
+        )}
+      </StyledField>
 
-      <FormGroup>
-        <Label>Atomic Data Access</Label>
+      <StyledField label='Atomic Data Access' multiInput>
         <CheckboxLabel>
           <Checkbox
             checked={agent.canReadAtomicData}
@@ -398,9 +400,16 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
           />
           Write
         </CheckboxLabel>
-      </FormGroup>
-      <FormGroup>
-        <Label>Tools</Label>
+        <CheckboxLabel>
+          <Checkbox
+            checked={agent.ragEnabled}
+            onChange={checked => handleChange('ragEnabled', checked)}
+          />
+          RAG, Automatically provide context from your knowledge base based on
+          your prompt.
+        </CheckboxLabel>
+      </StyledField>
+      <StyledField label='Tools' multiInput>
         <ToolList>
           {mcpServers.map(server => (
             <li key={server.id}>
@@ -419,46 +428,98 @@ const AgentForm = ({ agent, onChange }: AgentFormProps) => {
             </li>
           )}
         </ToolList>
-      </FormGroup>
-
-      <FormGroup>
-        <Label>Model</Label>
-        <ModelSelect
-          defaultModel={agent.model}
-          onSelect={model => handleChange('model', model)}
-          enforceToolSupport={enforceToolSupport}
-        />
-      </FormGroup>
-
-      <FormGroup>
-        <Label htmlFor='agent-temperature'>Temperature</Label>
-        <Row center fullWidth>
-          <RangeInput
-            id='agent-temperature'
-            type='range'
-            min={0}
-            max={2}
-            step={0.01}
-            value={agent.temperature ?? 0}
-            onChange={e =>
-              handleChange('temperature', parseFloat(e.target.value))
-            }
+      </StyledField>
+      <StyledField
+        label='Skills'
+        multiInput
+        helper='Give the agent access to skills that provide domain-specific knowledge and guidance. A list of skills will be added to the end of the system prompt.'
+      >
+        <CheckboxLabel>
+          <Checkbox
+            checked={agent.skillsEnabled ?? true}
+            onChange={checked => handleChange('skillsEnabled', checked)}
           />
-          <InputWrapper>
-            <InputStyled
-              type='number'
-              min={0}
-              max={2}
-              step={0.01}
-              value={temperatureFormatter.format(agent.temperature ?? 0)}
-              onChange={e =>
-                handleChange('temperature', parseFloat(e.target.value))
-              }
-              aria-label='Temperature value'
-            />
-          </InputWrapper>
-        </Row>
-      </FormGroup>
+          Enable skills
+        </CheckboxLabel>
+      </StyledField>
+
+      <StyledField label='Model' multiInput>
+        <CheckboxLabel style={{ marginBottom: '0.5rem' }}>
+          <Checkbox
+            checked={!agent.model}
+            onChange={checked => {
+              handleChange('model', checked ? undefined : defaultChatModel);
+            }}
+          />
+          Use Default Model
+        </CheckboxLabel>
+        {agent.model && (
+          <ModelSelect
+            defaultModel={agent.model}
+            onSelect={model => handleChange('model', model)}
+            enforceToolSupport={enforceToolSupport}
+          />
+        )}
+      </StyledField>
+
+      <StyledField
+        label='Temperature'
+        fieldId='agent-temperature'
+        helper='Trade accuracy for creativity'
+      >
+        <SliderInput
+          id='agent-temperature'
+          min={0}
+          max={2}
+          step={0.01}
+          value={agent.temperature ?? 0}
+          onChange={value => handleChange('temperature', value)}
+          formatValue={temperatureFormatter.format}
+          numberAriaLabel='Temperature value'
+        />
+      </StyledField>
+
+      <StyledField
+        label='Auto-compact threshold'
+        labelPrefix={
+          <Checkbox
+            checked={
+              (agent.autoCompactThresholdPercent ??
+                DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT) > 0
+            }
+            onChange={checked =>
+              handleChange(
+                'autoCompactThresholdPercent',
+                checked ? DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT : 0,
+              )
+            }
+            aria-label='Enable auto-compact'
+          />
+        }
+        fieldId='agent-auto-compact-threshold'
+        helper='Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled.'
+      >
+        {(agent.autoCompactThresholdPercent ??
+          DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT) === 0 ? (
+          <SubtleText>Don&apos;t auto compact conversation</SubtleText>
+        ) : (
+          <SliderInput
+            id='agent-auto-compact-threshold'
+            min={1}
+            max={100}
+            step={1}
+            suffix='%'
+            value={
+              agent.autoCompactThresholdPercent ??
+              DEFAULT_AUTO_COMPACT_THRESHOLD_PERCENT
+            }
+            onChange={value =>
+              handleChange('autoCompactThresholdPercent', value)
+            }
+            numberAriaLabel='Auto-compact threshold percent'
+          />
+        )}
+      </StyledField>
     </FormContainer>
   );
 };
@@ -486,45 +547,19 @@ const FormContainer = styled.div`
   gap: ${p => p.theme.size(3)};
 `;
 
-const FormGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${p => p.theme.size(1)};
-`;
-
-const Label = styled.label`
-  font-size: 0.875rem;
-  font-weight: 600;
-`;
-
-const Input = styled.input`
-  padding: ${p => p.theme.size(2)};
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  background-color: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
-  font-size: 1rem;
-
-  &:focus {
-    outline: none;
-    border-color: ${p => p.theme.colors.main};
+const StyledField = styled(Field)`
+  & ${Field.Label} {
+    font-size: 0.875rem;
   }
 `;
 
-const Textarea = styled.textarea`
-  padding: ${p => p.theme.size(2)};
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.bg2};
+const SystemPromptPreview = styled.div`
   background-color: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
-  font-size: 1rem;
-  resize: vertical;
-  min-height: 100px;
-
-  &:focus {
-    outline: none;
-    border-color: ${p => p.theme.colors.main};
-  }
+  border-radius: ${p => p.theme.radius};
+  box-shadow: 0 0 0 1px ${p => p.theme.colors.bg2};
+  max-height: 30rem;
+  overflow: auto;
+  padding: ${p => p.theme.size()};
 `;
 
 const ToolList = styled.ul`
@@ -537,11 +572,6 @@ const ToolList = styled.ul`
     margin: 0;
     padding: 0;
   }
-`;
-
-const RangeInput = styled.input`
-  flex: 1;
-  flex-basis: 75%;
 `;
 
 const SubtleText = styled.p`

@@ -1,5 +1,5 @@
 import { useResource, core } from '@tomic/react';
-import { useCallback, type JSX } from 'react';
+import { Fragment, useCallback, type JSX } from 'react';
 
 import { constructOpenURL } from '../../helpers/navigation';
 import {
@@ -87,6 +87,15 @@ function NewResourceSelector() {
     (files: string[]) => {
       toast.success(`Uploaded ${files.length} files.`);
 
+      // Single file → open it directly so the user can verify the preview
+      // and download work. Multi-upload → fall back to the parent listing
+      // since opening N tabs would be hostile.
+      if (files.length === 1) {
+        navigate(constructOpenURL(files[0]));
+
+        return;
+      }
+
       if (calculatedParent) {
         navigate(constructOpenURL(calculatedParent));
       }
@@ -123,13 +132,13 @@ function NewResourceSelector() {
             />
           </Column>
           {showTemplates && (
-            <>
+            <Fragment key='templates'>
               <Devider />
               <Column>
                 <h2>Templates</h2>
                 <TemplateList />
               </Column>
-            </>
+            </Fragment>
           )}
         </SideBySide>
       </Column>

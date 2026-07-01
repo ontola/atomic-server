@@ -6,6 +6,7 @@ import {
   useContext,
   createContext,
   useRef,
+  useSyncExternalStore,
 } from 'react';
 import {
   Property,
@@ -24,80 +25,44 @@ import {
   unknownSubject,
   JSONArray,
   OptionalClass,
-  proxyResource,
   type Core,
   ResourceEvents,
+  LoroLoader,
   core,
   server,
 } from '@tomic/lib';
-import type * as Y from 'yjs';
+import type { LoroDoc } from 'loro-crdt';
 import { useOnValueChange } from './helpers/useOnValueChange.js';
 
-export type UseResourceOptions = FetchOpts & {
-  /**
-   * If provided, the hook will only update the resource when the properties in this array change value.
-   * Useful for avoiding large rerenders in performance critical components.
-   */
-  track?: string[];
-};
+const asError = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(String(error));
+
+export type UseResourceOptions = FetchOpts;
 
 /**
- * Hook for getting a Resource in a React component. Will try to fetch the
- * subject and add its parsed values to the store.
+ * Hook for getting a Resource in a React component. Wraps the
+ * Store's per-subject snapshot via `useSyncExternalStore`: each
+ * notify replaces the snapshot tuple, the Resource itself is
+ * mutated in place, and reads like `resource.props.x` see the
+ * latest values without us having to invalidate them.
  */
 export function useResource<C extends OptionalClass = never>(
   subject: string = unknownSubject,
   opts: UseResourceOptions = {},
 ): Resource<C> {
-  const { track, ...fetchOpts } = opts;
   const store = useStore();
-  const [prevSubject, setPrevSubject] = useState(subject);
-  const [resource, setResource] = useState<Resource<C>>(() =>
-    store.getResourceLoading(subject, fetchOpts),
+  const memoizedOpts = useMemoizedOpts(opts);
+
+  const subscribe = useCallback(
+    (cb: () => void) => store.subscribe(subject, () => cb()),
+    [store, subject],
   );
-  const unsubLoadingChangeRef = useRef(
-    resource.on(ResourceEvents.LoadingChange, () => {
-      setResource(proxyResource(resource.stable));
-    }),
+  const getSnapshot = useCallback(
+    () => store.getResourceSnapshot(subject, memoizedOpts),
+    [store, subject, memoizedOpts],
   );
 
-  const memoizedOpts = useMemoizedOpts(fetchOpts);
-
-  // Update the resource when the subject changes
-  if (subject !== prevSubject) {
-    setPrevSubject(subject);
-    setResource(proxyResource(store.getResourceLoading(subject, memoizedOpts)));
-  }
-
-  // When a component mounts or the subject changes, it needs to let the store know that it will subscribe to changes to that resource.
-  useEffect(() => {
-    return store.subscribe(subject, (updated: Resource<C>) => {
-      setResource(proxyResource(updated));
-    });
-
-    // Adding opts to the array causes infinite loops, probably because it is not memoized anywhere in data-browser.
-  }, [store, subject, memoizedOpts]);
-
-  useEffect(() => {
-    return resource.stable.on(ResourceEvents.LocalChange, prop => {
-      if (track === undefined || track.includes(prop)) {
-        setResource(proxyResource(resource.stable));
-      }
-    });
-  }, [resource.stable, track]);
-
-  // Update the proxy when the resource is done loading.
-  useEffect(() => {
-    if (unsubLoadingChangeRef.current) {
-      unsubLoadingChangeRef.current();
-    }
-
-    return resource.stable.on(ResourceEvents.LoadingChange, () => {
-      setResource(proxyResource(resource.stable));
-    });
-  }, [resource.stable]);
-
-  return resource;
+  return useSyncExternalStore(subscribe, getSnapshot).resource as Resource<C>;
 }
 
 const stableEmptyArray: string[] = [];
@@ -110,113 +75,98 @@ export function useResources(
   subjects: string[] | undefined = stableEmptyArray,
   opts: FetchOpts = {},
 ): Map<string, Resource> {
-  const [resources, setResources] = useState(new Map<string, Resource>());
-  const [prevSubjects, setPrevSubjects] = useState<string[]>([]);
   const store = useStore();
-
   const memoizedOpts = useMemoizedOpts(opts);
 
-  if (subjects !== prevSubjects) {
-    setPrevSubjects(subjects);
-    setResources(prev => {
-      const newResources = new Map<string, Resource>();
+  // One subscription per subject — cb() wakes useSyncExternalStore
+  // which re-runs getSnapshot below. Same model as useResource.
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      const unsubs = subjects.map(s => store.subscribe(s, () => cb()));
 
-      for (const subject of subjects) {
-        const resource = store.getResourceLoading(subject, memoizedOpts);
+      return () => unsubs.forEach(u => u());
+    },
+    [store, subjects],
+  );
 
-        if (!prev.has(subject)) {
-          newResources.set(subject, proxyResource(resource));
-        } else {
-          newResources.set(subject, prev.get(subject)!);
-        }
-      }
+  // Cache the returned Map by "all snapshot identities". Build a
+  // fresh Map only when at least one subject's snapshot changed,
+  // so `useSyncExternalStore`'s `Object.is` reports stable when
+  // nothing moved.
+  const cacheRef = useRef<{
+    map: Map<string, Resource>;
+    snapshots: Array<{ resource: Resource }>;
+  } | null>(null);
 
-      return newResources;
-    });
-  }
+  const getSnapshot = useCallback((): Map<string, Resource> => {
+    const snaps = subjects.map(s => store.getResourceSnapshot(s, memoizedOpts));
+    const cached = cacheRef.current;
 
-  useEffect(() => {
-    // When a change happens, set the new Resource.
-    function handleNotify(updated: Resource) {
-      setResources(prev => {
-        prev.set(updated.subject, proxyResource(updated));
-
-        // We need to create new Maps for react hooks to update - React only checks references, not content
-        return new Map(prev);
-      });
+    if (
+      cached &&
+      cached.snapshots.length === snaps.length &&
+      cached.snapshots.every((s, i) => s === snaps[i])
+    ) {
+      return cached.map;
     }
 
-    const unsubLoadingFuncs: (() => void)[] = [];
+    const map = new Map<string, Resource>();
+    subjects.forEach((s, i) => map.set(s, snaps[i].resource));
+    cacheRef.current = { map, snapshots: snaps };
 
-    for (const resource of resources.values()) {
-      store.subscribe(resource.subject, handleNotify);
-      unsubLoadingFuncs.push(
-        resource.on(ResourceEvents.LoadingChange, () => {
-          setResources(prev => {
-            prev.set(resource.subject, proxyResource(resource));
+    return map;
+  }, [store, subjects, memoizedOpts]);
 
-            // We need to create new Maps for react hooks to update - React only checks references, not content
-            return new Map(prev);
-          });
-        }),
-      );
-    }
-
-    return () => {
-      // When the component is unmounted, unsubscribe from the store.
-      for (const resource of resources.values()) {
-        store.unsubscribe(resource.subject, handleNotify);
-      }
-
-      for (const unsubLoadingFunc of unsubLoadingFuncs) {
-        unsubLoadingFunc();
-      }
-    };
-  }, [resources, store, memoizedOpts]);
-
-  return resources;
+  return useSyncExternalStore(subscribe, getSnapshot);
 }
 
 /**
  * Hook for using a Property. Will return `undefined` if the Property is not yet
  * loaded, and add Error strings to shortname and description if something goes wrong.
+ *
+ * Intentionally NOT `useMemo`'d: the underlying `Resource` mutates in
+ * place when its fetch completes (loading → false, propvals populate),
+ * which `useSyncExternalStore` reflects via a new snapshot tuple — but
+ * the Resource *reference* stays the same across renders. A `useMemo`
+ * keyed on `[resource, subject]` would therefore freeze on the initial
+ * `loading` state and never reflect the populated shortname/datatype,
+ * so any form rendered with `<ResourceField property=...>` would show
+ * the "loading" label forever. Recomputing the small property object
+ * each render is cheap; downstream `useMemo`s on individual fields
+ * (`label`, `datatype`) stay valid because those fields are primitives.
  */
 export function useProperty(subject: string): Property {
   const resource = useResource<Core.Property>(subject);
 
-  const property: Property = useMemo(() => {
-    if (resource.loading) {
-      return {
-        subject,
-        datatype: Datatype.UNKNOWN,
-        shortname: 'loading',
-        description: `Loading property ${subject}`,
-        loading: true,
-      };
-    }
-
-    if (resource.error) {
-      return {
-        subject,
-        datatype: Datatype.UNKNOWN,
-        shortname: 'error',
-        description: 'Error getting Property. ' + resource.error.message,
-        error: resource.error,
-      };
-    }
-
+  if (resource.loading) {
     return {
       subject,
-      datatype: datatypeFromUrl(resource.props.datatype),
-      shortname: resource.props.shortname,
-      description: resource.props.description,
-      classType: resource.props.classtype,
-      isDynamic: !!resource.props.isDynamic,
-      allowsOnly: resource.props.allowsOnly,
+      datatype: Datatype.UNKNOWN,
+      shortname: 'loading',
+      description: `Loading property ${subject}`,
+      loading: true,
     };
-  }, [resource, subject]);
+  }
 
-  return property;
+  if (resource.error) {
+    return {
+      subject,
+      datatype: Datatype.UNKNOWN,
+      shortname: 'error',
+      description: 'Error getting Property. ' + resource.error.message,
+      error: resource.error,
+    };
+  }
+
+  return {
+    subject,
+    datatype: datatypeFromUrl(resource.props.datatype),
+    shortname: resource.props.shortname,
+    description: resource.props.description,
+    classType: resource.props.classtype,
+    isDynamic: !!resource.props.isDynamic,
+    allowsOnly: resource.props.allowsOnly,
+  };
 }
 
 export type SetValue<T extends JSONValue = JSONValue> = (
@@ -290,10 +240,28 @@ export function useValue(
     handleValidationError,
   } = opts;
 
-  const [val, set] = useState<JSONValue>(resource.get(propertyURL));
-  const [prevResourceReference, setPrevResourceReference] = useState(resource);
-
   const store = useStore();
+
+  // Subscribe to per-property `LocalChange` (from `set()`) AND
+  // store-level notify (from remote WS UPDATEs that don't fire
+  // LocalChange). Either signal re-runs `resource.get(propertyURL)`.
+  const stable = resource.stable;
+  const subject = resource.subject;
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      const u1 = store.subscribe(subject, () => cb());
+      const u2 = stable.on(ResourceEvents.LocalChange, p => {
+        if (p === '' || p === propertyURL) cb();
+      });
+
+      return () => {
+        u1();
+        u2();
+      };
+    },
+    [store, subject, stable, propertyURL],
+  );
+  const val = useSyncExternalStore(subscribe, () => resource.get(propertyURL));
 
   const saveResource = useCallback(() => {
     if (!commit) {
@@ -308,7 +276,7 @@ export function useValue(
       try {
         await resource.__internalObject.save();
       } catch (e) {
-        store.notifyError(e);
+        store.notifyError(asError(e));
       }
     }, commitDebounce);
   }, [resource.__internalObject, store, commitDebounce, commit]);
@@ -320,28 +288,19 @@ export function useValue(
   const validateAndSet = useCallback(
     async (newVal: JSONValue): Promise<void> => {
       if (newVal === undefined) {
-        // remove the value
         resource.__internalObject.remove(propertyURL);
-        set(undefined);
         saveResource();
 
         return;
       }
 
-      set(newVal);
-
-      // Validates and sets a property / value combination. Will invoke the
-      // callback if the value is not valid.
       try {
         await resource.__internalObject.set(propertyURL, newVal, validate);
         saveResource();
         handleValidationError?.(undefined);
       } catch (e) {
-        if (handleValidationError) {
-          handleValidationError(e);
-        } else {
-          store.notifyError(e);
-        }
+        if (handleValidationError) handleValidationError(asError(e));
+        else store.notifyError(asError(e));
       }
     },
 
@@ -356,24 +315,10 @@ export function useValue(
     ],
   );
 
-  // Update value when resource changes.
-  if (resource !== prevResourceReference) {
-    let localVal: JSONValue | undefined;
-
-    try {
-      localVal = resource.get(propertyURL);
-      set(localVal);
-    } catch (e) {
-      store.notifyError(e);
-    }
-
-    setPrevResourceReference(resource);
-
-    // We changed the value but we don't want to wait a whole react cycle to return the new value so we return the value here directly.
-    return [localVal, validateAndSet];
-  }
-
-  return [val, validateAndSet];
+  // `resource.get(prop)` is typed AtomicValue (JSONValue | Uint8Array).
+  // useValue's contract is JSONValue-only (binary props live in auxValues
+  // and are not surfaced through this hook), so narrow at the boundary.
+  return [val as JSONValue | undefined, validateAndSet];
 }
 
 /**
@@ -583,34 +528,120 @@ export function useDate(
   try {
     return valToDate(value);
   } catch (e) {
-    store.notifyError(e);
+    store.notifyError(asError(e));
 
     return;
   }
 }
 
 /**
- * Gets or creates a Yjs document for the given property. returns undefined if the resource is still loading.
+ * Reactive creation timestamp (a `Date`) derived from the resource's genesis
+ * Loro change — no commit fetch, and it survives a refresh. Returns undefined
+ * until the doc has history, or for an offline-authored genesis with no
+ * recorded time. See {@link Resource.getCreatedAt}.
  */
-export function useYDoc(
-  resource: Resource,
-  propertyURL: string,
-): Y.Doc | undefined {
-  const [doc, setDoc] = useState<Y.Doc | undefined>(() =>
-    resource.loading ? undefined : resource.getYDoc(propertyURL),
+export function useCreatedAt(resource: Resource): Date | undefined {
+  const stable = resource.stable;
+  const subject = resource.subject;
+  const store = useStore();
+  // Subscribe to resource updates AND Loro WASM readiness — the oplog only
+  // becomes readable once the lazy `loro-crdt` module lands (mirrors
+  // `useLoroDoc`).
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      const unsubResource = store.subscribe(subject, () => cb());
+      const unsubLoro = LoroLoader.onReady(cb);
+
+      return () => {
+        unsubResource();
+        unsubLoro();
+      };
+    },
+    [store, subject],
   );
 
-  useEffect(() => {
-    return resource.stable.on(ResourceEvents.LoadingChange, () => {
-      setDoc(
-        resource.stable.loading
-          ? undefined
-          : resource.stable.getYDoc(propertyURL),
-      );
-    });
-  }, [resource.stable, propertyURL]);
+  // getSnapshot returns a stable primitive (ms number) — the genesis change is
+  // immutable, so successive calls are referentially equal and don't loop.
+  const ms = useSyncExternalStore(subscribe, () => stable.getCreatedAt());
 
-  return doc;
+  return useMemo(() => (ms === undefined ? undefined : new Date(ms)), [ms]);
+}
+
+/**
+ * Reactive creator — the signing agent's subject — derived from the
+ * resource's genesis Loro change. No commit fetch. Returns undefined for
+ * resources created before this metadata was embedded. See
+ * {@link Resource.getCreatedBy}.
+ */
+export function useCreatedBy(resource: Resource): string | undefined {
+  const stable = resource.stable;
+  const subject = resource.subject;
+  const store = useStore();
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      const unsubResource = store.subscribe(subject, () => cb());
+      const unsubLoro = LoroLoader.onReady(cb);
+
+      return () => {
+        unsubResource();
+        unsubLoro();
+      };
+    },
+    [store, subject],
+  );
+
+  return useSyncExternalStore(subscribe, () => stable.getCreatedBy());
+}
+
+/**
+ * Gets or creates a Loro document for the resource. Returns undefined
+ * if the resource is still loading.
+ */
+export function useLoroDoc(resource: Resource): LoroDoc | undefined {
+  const stable = resource.stable;
+  const subject = resource.subject;
+  const store = useStore();
+  // Subscribe to BOTH resource updates AND Loro WASM readiness. The
+  // resource may finish loading before the lazy `loro-crdt` import does;
+  // when WASM finally lands, `getLoroDoc()` flips from `undefined` to a
+  // real doc — but nothing in the resource update channel fires for that
+  // transition. Without the `LoroLoader.onReady` subscription, the
+  // `useSyncExternalStore` cache holds onto `undefined` and the editor
+  // stays on "Loading…" forever (cold-tab repro: open a doc in a fresh
+  // tab while WASM is still streaming in).
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      const unsubResource = store.subscribe(subject, () => cb());
+      const unsubLoro = LoroLoader.onReady(cb);
+
+      return () => {
+        unsubResource();
+        unsubLoro();
+      };
+    },
+    [store, subject],
+  );
+
+  return useSyncExternalStore(subscribe, () =>
+    stable.loading ? undefined : stable.getLoroDoc(),
+  );
+}
+
+/**
+ * Reactively tracks whether the Loro CRDT WASM module has finished
+ * loading. Re-renders when it becomes ready.
+ *
+ * Use this to distinguish "the editor engine is still streaming in"
+ * (transient — keep showing a spinner) from "the engine failed to
+ * load" (terminal — show an error). Without it, a tab where the
+ * `loro-crdt` WASM import failed leaves every `useLoroDoc` consumer
+ * stuck on `undefined` forever with no signal as to why.
+ */
+export function useLoroReady(): boolean {
+  return useSyncExternalStore(
+    cb => LoroLoader.onReady(cb),
+    () => LoroLoader.isLoaded(),
+  );
 }
 
 /** Preferred way of using the store in a Component or Hook */
@@ -631,29 +662,77 @@ export function useStore(): Store {
  */
 export function useCanWrite(resource: Resource): boolean {
   const store = useStore();
-  const [canWrite, setCanWrite] = useState<boolean>(false);
   const agent = store.getAgent();
+  // Initialize optimistically for brand-new local resources — they have no
+  // parent on the server yet, so `resource.canWrite()` would be skipped by
+  // the effect below. Without this, the ResourceForm shows "Agent does not
+  // have edit rights" on every new-resource page until the async permission
+  // check runs (which never runs for `.new` resources).
+  const [canWrite, setCanWrite] = useState<boolean>(
+    () => !!agent?.subject && !!resource.new,
+  );
 
-  useOnValueChange(() => {
-    if (agent?.subject === undefined) {
-      setCanWrite(false);
+  useOnValueChange(
+    () => {
+      if (agent?.subject === undefined) {
+        setCanWrite(false);
 
-      return;
-    }
+        return;
+      }
 
-    if (resource.new) {
-      setCanWrite(true);
-    }
-  }, [resource, agent?.subject]);
+      if (resource.new) {
+        setCanWrite(true);
+      }
+    },
+    [resource, agent?.subject],
+    true,
+  );
 
-  // If the subject changes, make sure to change the resource!
+  // Re-check write permissions when the subject or agent changes.
+  // Using resource.subject instead of the full proxy to avoid re-running
+  // on every property change.
   useEffect(() => {
-    if (agent && !resource.new) {
-      resource.canWrite(agent.subject).then(([result]) => {
-        setCanWrite(result);
+    if (!agent || resource.new) return;
+    // Cancellation guard: `canWrite` recurses across parents and can take
+    // a few hundred ms; without it, a fast subject swap leaves an
+    // in-flight check that writes a stale result after the effect re-ran
+    // for the new subject.
+    let cancelled = false;
+    resource
+      .canWrite(agent.subject)
+      .then(([result]) => {
+        if (cancelled) return;
+
+        if (result) {
+          setCanWrite(true);
+        } else if (
+          resource.subject?.startsWith('did:ad:') &&
+          agent.subject?.startsWith('did:ad:')
+        ) {
+          // DID resources are self-sovereign — the owning agent always has write access.
+          // The normal canWrite check fails because DID drives don't have explicit write rights.
+          setCanWrite(true);
+        } else {
+          setCanWrite(false);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+
+        // Offline fallback: assume write access for DID resources
+        if (
+          resource.subject?.startsWith('did:ad:') &&
+          agent.subject?.startsWith('did:ad:')
+        ) {
+          setCanWrite(true);
+        }
       });
-    }
-  }, [resource, agent]);
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resource.subject, agent?.subject]);
 
   return canWrite;
 }

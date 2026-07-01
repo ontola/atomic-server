@@ -35,9 +35,12 @@ export * from './ontologies/commits.js';
 export * from './ontologies/dataBrowser.js';
 export * from './ontologies/server.js';
 export * from './ontologies/ai.js';
+export * from './ontologies/canvas.js';
+export * from './canvas-strokes.js';
 export * from './agent.js';
 export * from './authentication.js';
 export * from './client.js';
+export * from './genesis.js';
 export * from './commit.js';
 export * from './error.js';
 export * from './datatypes.js';
@@ -45,11 +48,30 @@ export * from './parse.js';
 export * from './search.js';
 export * from './resource.js';
 export * from './store.js';
+export * from './subject.js';
 export * from './value.js';
 export * from './urls.js';
 export * from './truncate.js';
 export * from './collection.js';
 export * from './collectionBuilder.js';
 export * from './ontology.js';
-export * from './yjs.js';
+export * from './invites.js';
+export * from './loro-loader.js';
 export * from './CryptoProvider.js';
+export { ClientDbWorker } from './client-db.js';
+export type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
+export { LocalSearch } from './local-search.js';
+export {
+  LocalOutbox,
+  isTerminalCommitErrorMessage,
+  type OutboxEntry,
+  type OutboxDrainContext,
+} from './local-outbox.js';
+export {
+  perfMark,
+  perfSpan,
+  perfSnapshot,
+  perfReset,
+  type PerfEvent,
+  type PerfSnapshot,
+} from './perf-trace.js';

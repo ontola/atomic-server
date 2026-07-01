@@ -1,102 +1,396 @@
 import { styled } from 'styled-components';
-import React, { useEffect, useReducer, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import { newContextItem, useAISidebar } from '@components/AI/AISidebarContext';
 import { AIAtomicResourceMessageContext, type AtomicUIMessage } from './types';
 import { useCurrentSubject } from '@helpers/useCurrentSubject';
-import { FaArrowRotateLeft, FaFloppyDisk, FaXmark } from 'react-icons/fa6';
+import { FaPlus, FaXmark } from 'react-icons/fa6';
 import { IconButton } from '@components/IconButton/IconButton';
 import { Row } from '@components/Row';
-import { ParentPickerDialog } from '@components/ParentPicker/ParentPickerDialog';
-import { ai, core, useStore, type Ai } from '@tomic/react';
+import {
+  ai,
+  core,
+  useStore,
+  type Ai,
+  type Resource,
+  type Store,
+} from '@tomic/react';
 import { useGenerativeData } from './useGenerativeData';
-import { uiMessageToResource } from './chatConversionUtils';
-import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { constructOpenURL } from '@helpers/navigation';
+import {
+  addMessageToChatResource,
+  persistMessageResourceToServer,
+  removeFollowingMessagesFromChatResource,
+  removeMessageFromChatResource,
+} from './chatConversionUtils';
 import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
+import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
+import { usePersonalDrive } from '@hooks/usePersonalDrive';
+import toast from 'react-hot-toast';
+
+type DraftChatResource = Resource<Ai.AiChat>;
+type TitlePromise = Promise<string | undefined>;
+
+type PersistSidebarMessageArgs = {
+  message: AtomicUIMessage;
+  newMessages: AtomicUIMessage[];
+  store: Store;
+  getOrCreateDraftChatResource: () => Promise<DraftChatResource | undefined>;
+  isChatSavedRef: React.MutableRefObject<boolean>;
+  titlePromiseRef: React.MutableRefObject<TitlePromise | undefined>;
+  setMessageToResourceMap: React.Dispatch<
+    React.SetStateAction<Map<AtomicUIMessage, Resource>>
+  >;
+  messageToResourceMapRef: React.MutableRefObject<
+    Map<AtomicUIMessage, Resource>
+  >;
+  setIsChatSaved: React.Dispatch<React.SetStateAction<boolean>>;
+};
+
+const shouldFinalizeDraftChat = (
+  newMessages: AtomicUIMessage[],
+  message: AtomicUIMessage,
+) => newMessages.length >= 2 && message.role === 'assistant';
+
+// This logic was extracted from the component because the logic inside
+const persistSidebarMessage = async ({
+  message,
+  newMessages,
+  store,
+  getOrCreateDraftChatResource,
+  isChatSavedRef,
+  titlePromiseRef,
+  setMessageToResourceMap,
+  messageToResourceMapRef,
+  setIsChatSaved,
+}: PersistSidebarMessageArgs) => {
+  const resource = await getOrCreateDraftChatResource();
+
+  if (!resource) {
+    return;
+  }
+
+  const messageResource = await addMessageToChatResource(
+    message,
+    resource,
+    store,
+    {
+      saveChat: isChatSavedRef.current,
+      persistToServer: isChatSavedRef.current,
+    },
+  );
+
+  setMessageToResourceMap(prev => {
+    const next = new Map(prev);
+    next.set(message, messageResource);
+    messageToResourceMapRef.current = next;
+
+    return next;
+  });
+
+  // The sidebar chat stays as an unsaved draft until there is a real
+  // user/assistant exchange, avoiding empty chat resources.
+  if (shouldFinalizeDraftChat(newMessages, message)) {
+    if (titlePromiseRef.current) {
+      const name = await titlePromiseRef.current;
+
+      if (name) {
+        await resource.set(core.properties.name, name);
+      }
+
+      titlePromiseRef.current = undefined;
+    }
+
+    if (!isChatSavedRef.current) {
+      // Persist child messages (and their parts) before the chat resource
+      // references them on the server — matches AIChatPage / addMessageToChatResource.
+      for (const pendingMessageResource of messageToResourceMapRef.current.values()) {
+        await persistMessageResourceToServer(
+          pendingMessageResource as Resource<Ai.AiMessage>,
+          store,
+        );
+      }
+
+      await resource.save();
+
+      isChatSavedRef.current = true;
+      setIsChatSaved(true);
+    }
+  }
+};
+
+const handleSidebarMessageSaveError = (error: unknown) => {
+  console.error(error);
+  toast.error('Failed to save AI chat message');
+};
 
 const AISidebar: React.FC = () => {
   const store = useStore();
   const [rerenderKey, updateRenderKey] = useReducer(prev => prev + 1, 0);
   const { shouldGenerateTitles } = useAISettings();
   const { isOpen, contextItems, setContextItems, setIsOpen } = useAISidebar();
+  const { personalDrive } = usePersonalDrive();
+
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
-  const [currentSubject] = useCurrentSubject();
-  const [showParentPicker, setShowParentPicker] = useState(false);
-  const titlePromiseRef = useRef<Promise<string | undefined> | undefined>(
-    undefined,
+  const [compactedMessages, setCompactedMessages] = useState<AtomicUIMessage[]>(
+    [],
   );
+  // The chat callbacks can fire before React has committed the latest state, so
+  // keep mutable mirrors for values that async persistence logic must read.
+  const messagesRef = useRef<AtomicUIMessage[]>([]);
+  const [chatResource, setChatResource] = useState<Resource<Ai.AiChat>>();
+  const chatResourceRef = useRef<Resource<Ai.AiChat> | undefined>(undefined);
+  const [isChatSaved, setIsChatSaved] = useState(false);
+  const isChatSavedRef = useRef(false);
+  // Draft creation starts on the first message; store the in-flight promise so
+  // concurrent persistence calls share the same resource.
+  const draftChatPromiseRef = useRef<Promise<Resource<Ai.AiChat>> | null>(null);
+  const messageToResourceMapRef = useRef(new Map<AtomicUIMessage, Resource>());
+  // Incremented when starting a new chat to ignore stale async resource
+  // creation from the previous conversation.
+  const chatGenerationRef = useRef(0);
+  const [messageToResourceMap, setMessageToResourceMap] = useState(
+    new Map<AtomicUIMessage, Resource>(),
+  );
+  const [currentSubject] = useCurrentSubject();
+  const titlePromiseRef = useRef<TitlePromise | undefined>(undefined);
+  const autoContextSubjectRef = useRef<string | undefined>(undefined);
   const { generateTitleFromConversation } = useGenerativeData();
-  const navigate = useNavigateWithTransition();
+
+  const getOrCreateDraftChatResource = useCallback(async () => {
+    if (chatResourceRef.current) {
+      return chatResourceRef.current;
+    }
+
+    if (!personalDrive) {
+      return undefined;
+    }
+
+    const generation = chatGenerationRef.current;
+
+    if (!draftChatPromiseRef.current) {
+      draftChatPromiseRef.current = store.newResource<Ai.AiChat>({
+        parent: personalDrive,
+        isA: ai.classes.aiChat,
+        propVals: {
+          [core.properties.name]: DEFAULT_AICHAT_NAME,
+        },
+      });
+    }
+
+    const draftChatPromise = draftChatPromiseRef.current;
+    const newChatResource = await draftChatPromise;
+
+    if (draftChatPromiseRef.current === draftChatPromise) {
+      draftChatPromiseRef.current = null;
+    }
+
+    if (generation !== chatGenerationRef.current) {
+      return undefined;
+    }
+
+    chatResourceRef.current = newChatResource;
+    setChatResource(newChatResource);
+
+    return newChatResource;
+  }, [personalDrive, store]);
+
+  const handleCompacted = (
+    priorMessages: AtomicUIMessage[],
+    summaryMessage: AtomicUIMessage,
+  ) => {
+    setCompactedMessages(prev => [...prev, ...priorMessages]);
+    messagesRef.current = [summaryMessage];
+    setMessages([summaryMessage]);
+
+    persistSidebarMessage({
+      message: summaryMessage,
+      newMessages: [summaryMessage],
+      store,
+      getOrCreateDraftChatResource,
+      isChatSavedRef,
+      titlePromiseRef,
+      setMessageToResourceMap,
+      messageToResourceMapRef,
+      setIsChatSaved,
+    }).catch(handleSidebarMessageSaveError);
+  };
 
   const addNewMessage = (message: AtomicUIMessage) => {
-    setMessages(prev => [...prev, message]);
+    const newMessages = [...messagesRef.current, message];
+
+    messagesRef.current = newMessages;
+    setMessages(newMessages);
+
+    // Start title generation as soon as the first assistant response completes,
+    // but save the resource even when title generation is disabled or fails.
+    if (
+      !isChatSavedRef.current &&
+      !titlePromiseRef.current &&
+      newMessages.length >= 2 &&
+      message.role === 'assistant'
+    ) {
+      titlePromiseRef.current = shouldGenerateTitles
+        ? generateTitleFromConversation(newMessages)
+        : Promise.resolve(undefined);
+    }
+
+    persistSidebarMessage({
+      message,
+      newMessages,
+      store,
+      getOrCreateDraftChatResource,
+      isChatSavedRef,
+      titlePromiseRef,
+      setMessageToResourceMap,
+      messageToResourceMapRef,
+      setIsChatSaved,
+    }).catch(handleSidebarMessageSaveError);
   };
 
-  const handleParentSelect = async (parent: string) => {
-    const chatResource = await store.newResource<Ai.AiChat>({
-      parent,
-      isA: ai.classes.aiChat,
-      propVals: {
-        [core.properties.name]: 'New Chat',
-      },
+  const handleSummaryDeleted = (restored: AtomicUIMessage[]) => {
+    setCompactedMessages([]);
+    messagesRef.current = restored;
+    setMessages(restored);
+  };
+
+  const handleMessageDelete = async (message: AtomicUIMessage) => {
+    const messageResource = messageToResourceMap.get(message);
+
+    if (chatResource && messageResource) {
+      try {
+        await removeMessageFromChatResource(messageResource, chatResource, {
+          saveChat: isChatSavedRef.current,
+        });
+      } catch (error) {
+        console.error('Error removing message:', error);
+        toast.error('Failed to remove AI chat message');
+      }
+    }
+
+    setMessageToResourceMap(prev => {
+      const next = new Map(prev);
+      next.delete(message);
+
+      return next;
     });
 
-    for (const message of messages) {
-      const messageResource = await uiMessageToResource(
-        message,
-        chatResource,
-        store,
-      );
-
-      chatResource.push(ai.properties.messages, [messageResource.subject]);
-      messageResource.save();
+    if (message.metadata?.isSummary) {
+      return;
     }
 
-    if (titlePromiseRef.current) {
-      const name = await titlePromiseRef.current;
-
-      if (name) {
-        await chatResource.set(core.properties.name, name);
-      }
-
-      titlePromiseRef.current = undefined;
-    }
-
-    await chatResource.save();
-
-    store.notifyResourceManuallyCreated(chatResource);
-
-    setMessages([]);
-    navigate(constructOpenURL(chatResource.subject));
+    const nextMessages = messagesRef.current.filter(m => m !== message);
+    messagesRef.current = nextMessages;
+    setMessages(nextMessages);
   };
 
-  const handleMessageDelete = (message: AtomicUIMessage) => {
-    setMessages(prev => prev.filter(m => m !== message));
-  };
-
-  const resetChat = () => {
+  const startNewChat = () => {
+    chatGenerationRef.current += 1;
+    draftChatPromiseRef.current = null;
+    chatResourceRef.current = undefined;
+    setChatResource(undefined);
+    isChatSavedRef.current = false;
+    setIsChatSaved(false);
     setMessages([]);
+    setCompactedMessages([]);
+    messagesRef.current = [];
+    messageToResourceMapRef.current = new Map();
+    setMessageToResourceMap(new Map());
+    titlePromiseRef.current = undefined;
+    autoContextSubjectRef.current = undefined;
+    setContextItems([]);
     updateRenderKey();
   };
 
-  const onRegenerateMessage = (message: AtomicUIMessage) => {
-    // Remove all messages after the one that was regenerated
-    setMessages(prev => {
-      const index = prev.findIndex(m => m.id === message.id);
+  const onRegenerateMessage = async (message: AtomicUIMessage) => {
+    const isHistorical = compactedMessages.some(m => m.id === message.id);
+    const allMessages = isHistorical
+      ? [...compactedMessages, ...messages]
+      : messages;
 
-      return prev.slice(0, index + 1);
-    });
+    if (chatResource) {
+      try {
+        const trimmedMessages = await removeFollowingMessagesFromChatResource(
+          message,
+          allMessages,
+          messageToResourceMap,
+          chatResource,
+          { saveChat: isChatSavedRef.current },
+        );
+
+        setMessageToResourceMap(prev => {
+          const next = new Map(prev);
+
+          for (const m of allMessages.slice(trimmedMessages.length)) {
+            next.delete(m);
+          }
+
+          return next;
+        });
+
+        if (isHistorical) {
+          setCompactedMessages([]);
+        }
+
+        messagesRef.current = trimmedMessages;
+        setMessages(trimmedMessages);
+        titlePromiseRef.current = undefined;
+      } catch (error) {
+        console.error('Error removing messages:', error);
+        toast.error('Failed to regenerate AI chat message');
+      }
+
+      return;
+    }
+
+    // Remove all messages after the one that was regenerated
+    const trimmedMessages = allMessages.slice(
+      0,
+      allMessages.findIndex(x => x.id === message.id) + 1,
+    );
+
+    if (isHistorical) {
+      setCompactedMessages([]);
+    }
+
+    messagesRef.current = trimmedMessages;
+    setMessages(trimmedMessages);
+    titlePromiseRef.current = undefined;
   };
 
   useEffect(() => {
+    if (sessionStorage.getItem('atomic.ai.openSetup') === 'true') {
+      setIsOpen(true);
+    }
+  }, [setIsOpen]);
+
+  // When the personal home drive changes, cached resource refs belong to the old
+  // drive. Clear them so the next call to getOrCreateDraftChatResource creates
+  // a fresh resource on the correct drive. Incrementing chatGenerationRef also
+  // causes any still-resolving promises from the previous drive to be ignored.
+  useEffect(() => {
+    chatGenerationRef.current += 1;
+    draftChatPromiseRef.current = null;
+    chatResourceRef.current = undefined;
+  }, [personalDrive]);
+
+  useEffect(() => {
+    // Avoid re-adding the same subject after the user removes or changes the
+    // auto-inserted context item.
     // When the user opens the AI sidebar and the chat is completely empty, we add the current subject to the context.
     if (
       isOpen &&
       currentSubject &&
       messages.length === 0 &&
-      contextItems.length < 2
+      contextItems.length < 2 &&
+      autoContextSubjectRef.current !== currentSubject
     ) {
+      autoContextSubjectRef.current = currentSubject;
       setContextItems([
         newContextItem<AIAtomicResourceMessageContext>({
           type: 'atomic-resource',
@@ -104,19 +398,16 @@ const AISidebar: React.FC = () => {
         }),
       ]);
     }
-  }, [isOpen, currentSubject]);
+  }, [
+    isOpen,
+    currentSubject,
+    messages.length,
+    contextItems.length,
+    setContextItems,
+  ]);
 
   useEffect(() => {
-    if (messages.length > 2 && !titlePromiseRef.current) {
-      if (!shouldGenerateTitles) {
-        // Don't generate a title, just resolve the promise.
-        titlePromiseRef.current = Promise.resolve(undefined);
-
-        return;
-      }
-
-      titlePromiseRef.current = generateTitleFromConversation(messages);
-    }
+    messagesRef.current = messages;
   }, [messages]);
 
   return (
@@ -124,34 +415,29 @@ const AISidebar: React.FC = () => {
       {/* When resetting the chat it is better to refresh the whole component because the useChat hook keeps internal state that is not easy to reset. */}
       <RealAIChat
         initialMessages={messages}
+        historicalMessages={compactedMessages}
         onNewMessage={addNewMessage}
+        onCompacted={handleCompacted}
+        onSummaryDeleted={handleSummaryDeleted}
         externalContextItems={contextItems}
         setExternalContextItems={setContextItems}
+        chatSubject={isChatSaved ? chatResource?.subject : undefined}
         onDeleteMessage={handleMessageDelete}
         onRegenerateMessage={onRegenerateMessage}
       >
         <Row center justify='space-between' fullWidth>
           <Row center gap='0.5ch'>
             <IconButton
-              title='Reset'
-              onClick={resetChat}
+              title='New Chat'
+              onClick={startNewChat}
               color='textLight'
               style={{ alignSelf: 'flex-end' }}
             >
-              <FaArrowRotateLeft />
+              <FaPlus />
             </IconButton>
             <Heading>Atomic Assistant</Heading>
           </Row>
           <Row center gap='0.5ch'>
-            <IconButton
-              title='Save Chat'
-              onClick={() => setShowParentPicker(true)}
-              disabled={messages.length < 2}
-              color='textLight'
-              style={{ alignSelf: 'flex-end' }}
-            >
-              <FaFloppyDisk />
-            </IconButton>
             <IconButton
               title='Close AI Sidebar'
               color='textLight'
@@ -165,11 +451,6 @@ const AISidebar: React.FC = () => {
           </Row>
         </Row>
       </RealAIChat>
-      <ParentPickerDialog
-        open={showParentPicker}
-        onOpenChange={setShowParentPicker}
-        onSelect={handleParentSelect}
-      />
     </React.Fragment>
   );
 };

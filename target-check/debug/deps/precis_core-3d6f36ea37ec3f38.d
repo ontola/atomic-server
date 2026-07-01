@@ -1,0 +1,15 @@
+/Users/joep/dev/atomic-server/target-check/debug/deps/precis_core-3d6f36ea37ec3f38.d: /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/lib.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/common.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/context.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/error.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/profile.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/stringclasses.rs /Users/joep/dev/atomic-server/target-check/debug/build/precis-core-08fc8b396d078dc6/out/public.rs /Users/joep/dev/atomic-server/target-check/debug/build/precis-core-08fc8b396d078dc6/out/precis_tables.rs /Users/joep/dev/atomic-server/target-check/debug/build/precis-core-08fc8b396d078dc6/out/context_tables.rs
+
+/Users/joep/dev/atomic-server/target-check/debug/deps/libprecis_core-3d6f36ea37ec3f38.rmeta: /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/lib.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/common.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/context.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/error.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/profile.rs /Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/stringclasses.rs /Users/joep/dev/atomic-server/target-check/debug/build/precis-core-08fc8b396d078dc6/out/public.rs /Users/joep/dev/atomic-server/target-check/debug/build/precis-core-08fc8b396d078dc6/out/precis_tables.rs /Users/joep/dev/atomic-server/target-check/debug/build/precis-core-08fc8b396d078dc6/out/context_tables.rs
+
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/lib.rs:
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/common.rs:
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/context.rs:
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/error.rs:
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/profile.rs:
+/Users/joep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/precis-core-0.1.11/src/stringclasses.rs:
+/Users/joep/dev/atomic-server/target-check/debug/build/precis-core-08fc8b396d078dc6/out/public.rs:
+/Users/joep/dev/atomic-server/target-check/debug/build/precis-core-08fc8b396d078dc6/out/precis_tables.rs:
+/Users/joep/dev/atomic-server/target-check/debug/build/precis-core-08fc8b396d078dc6/out/context_tables.rs:
+
+# env-dep:OUT_DIR=/Users/joep/dev/atomic-server/target-check/debug/build/precis-core-08fc8b396d078dc6/out

@@ -372,42 +372,24 @@ resource.on(ResourceEvents.LoadingChange, (loading) => {
 
 The `resource.on` method returns a function that can be used to unsubscribe from the event.
 
-## Yjs Documents
+## Loro CRDT documents
 
-AtomicServer supports Yjs documents as a datatype.
-Using these you can build powerful collaborative editors.
-Yjs documents are synced via atomic commits when you call `resource.save()`, just like regular properties.
-This means that you don't have to use any provider server to sync the documents.
+Each resource is backed by a [Loro](https://loro.dev) CRDT document.
+Property changes are written to the Loro doc and synced via `loroUpdate` commits when you call `resource.save()`.
 
-To use any Yjs related feature you first need to install the `yjs` package using your package manager of choice.
-You also need to tell @tomic/lib that Yjs is available by calling the following function somewhere early on in your application.
+To access the Loro document for a resource, use `.getLoroDoc()`.
+The method returns `undefined` while the Loro WASM module is still loading.
 
 ```typescript
-import { enableYjs } from '@tomic/lib';
+import { LoroLoader } from '@tomic/lib';
 
-await enableYjs();
-```
+await LoroLoader.load();
 
-This will load the Yjs module and make it available to @tomic/lib.
-
-### Using Yjs documents
-
-To get a Yjs document from a resource, use the `.getYDoc` method and pass the property containing the document.
-If the value is still empty, a new document will be created and returned.
-You can then use the Yjs doc like you would normally with Yjs.
-Any change made to the document will be merged into the current commit.
-When you call `resource.save()`, the changes will be synced to the server and with other clients.
-
-```typescript
-const doc = resource.getYDoc('https://my-atomicserver.com/properties/yjs-document');
-
-const text = doc.getText('content');
-const cursors = doc.getMap('cursors');
-
-doc.transact(() => {
-  text.insert(0, 'Hello, world!');
-  cursors.set(someClientId, 13);
-});
+const doc = resource.getLoroDoc();
+doc?.getMap('properties').set('https://atomicdata.dev/properties/name', 'Hello');
 
 await resource.save();
 ```
+
+Collaborative rich-text documents store their ProseMirror tree under the `doc` root container.
+Use `loro-prosemirror` on the client for live editing and WebSocket sync.

@@ -6,6 +6,7 @@ import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { Client } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { paths } from '../routes/paths';
+import { openSearchOverlay, openShortcutsOverlay } from './OverlayContainer';
 
 import type { JSX } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -30,8 +31,8 @@ export const shortcuts = {
   themeSettings: osCtrl('t'),
   /** Open keyboard shortcuts page */
   keyboardShortcuts: 'shift+/',
-  /** Focus search bar */
-  search: '/',
+  /** Open command palette / search */
+  search: osCtrl('k'),
   /** Open resource menu */
   menu: osCtrl('m'),
   /** Locks the sidebar menu */
@@ -45,7 +46,11 @@ export const shortcuts = {
 };
 
 function osCtrl(key: string): string {
-  return navigator.platform.includes('Mac') ? `cmd+${key}` : `ctrl+${key}`;
+  // react-hotkeys-hook v5 dropped the `cmd` modifier alias that v4 accepted —
+  // it only recognizes `meta`/`mod`/`ctrl`/`control`. Emitting `cmd+…` meant
+  // EVERY Cmd shortcut silently stopped matching on macOS (search, edit, new,
+  // menu, …). Use `meta` for the Mac Cmd key.
+  return navigator.platform.includes('Mac') ? `meta+${key}` : `ctrl+${key}`;
 }
 
 function osAlt(key: string): string {
@@ -55,7 +60,7 @@ function osAlt(key: string): string {
 export function displayShortcut(shortcut: string): string {
   if (navigator.platform.includes('Mac')) {
     return shortcut
-      .replace('cmd+', '⌘')
+      .replace('meta+', '⌘')
       .replace('option+', '⌥')
       .replace('shift+', '⇧')
       .replace('backspace', '⌫');
@@ -110,9 +115,13 @@ function HotKeysWrapper({ children }: Props): JSX.Element {
     e.preventDefault();
     navigate(paths.appSettings);
   });
+  useHotkeys(shortcuts.search, e => {
+    e.preventDefault();
+    openSearchOverlay();
+  });
   useHotkeys(shortcuts.keyboardShortcuts, e => {
     e.preventDefault();
-    navigate(paths.shortcuts);
+    openShortcutsOverlay();
   });
   useHotkeys(
     shortcuts.sidebarToggle,

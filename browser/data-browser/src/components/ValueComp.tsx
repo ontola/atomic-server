@@ -8,7 +8,6 @@ import {
   type AtomicValue,
   type JSONValue,
 } from '@tomic/react';
-import * as Y from 'yjs';
 import { ResourceInline } from '../views/ResourceInline';
 import { DateTime } from './datatypes/DateTime';
 import Markdown from './datatypes/Markdown';
@@ -18,7 +17,7 @@ import { ErrMessage } from './forms/InputStyles';
 
 import { JSONRenderer } from './datatypes/JSON';
 import { AtomicLink } from './AtomicLink';
-import { YDocValue } from './YDocValue';
+import { LoroDocValue } from './LoroDocValue';
 
 type Props = {
   value: AtomicValue;
@@ -47,8 +46,8 @@ function ValueComp({ value, datatype }: Props): JSX.Element {
         return <ResourceArray subjects={valToArray(value)} />;
       case Datatype.JSON:
         return <JSONRenderer value={value as JSONValue} />;
-      case Datatype.YDOC:
-        return <YDocValue value={value as Y.Doc} />;
+      case Datatype.LORODOC:
+        return <LoroDocValue value={value as Uint8Array} />;
       case Datatype.URI:
         return (
           <AtomicLink href={value as string}>{value as string}</AtomicLink>

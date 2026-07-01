@@ -27,10 +27,11 @@ msgid "No classes"
 msgstr "Aucune classe"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/AI/MCPConfigTab.tsx
+#: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
-#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
@@ -59,6 +60,7 @@ msgid "No results"
 msgstr "Aucun résultat"
 
 #: src/components/EditableTitle.tsx
+#: src/components/NavBar.tsx
 msgid "Untitled"
 msgstr "Sans titre"
 
@@ -117,8 +119,8 @@ msgstr "Invitation créée et copiée dans le presse-papier ! 🚀"
 #: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/File/FilePreview.tsx
 #: src/views/File/FilePreviewThumbnail.tsx
-#: src/views/ResourceLine.tsx
 #: src/views/ResourcePage.tsx
+#: src/views/ResourceRow.tsx
 msgid "Loading..."
 msgstr "Chargement..."
 
@@ -136,38 +138,31 @@ msgid "Start of main content"
 msgstr "Début du contenu principal"
 
 #. placeholder {0}: shortcuts.sidebarToggle
-#: src/components/Navigation.tsx
+#: src/components/NavBar.tsx
 msgid "Show / hide sidebar ({0})"
 msgstr "Afficher / masquer la barre latérale ({0})"
 
-#: src/components/Navigation.tsx
+#: src/components/NavBar.tsx
 msgid "Go back"
 msgstr "Retour"
 
-#: src/components/Navigation.tsx
+#: src/components/NavBar.tsx
 msgid "Go forward"
 msgstr "Avancer"
 
-#: src/components/Parent.tsx
-msgid "Toggle AI panel"
-msgstr "Basculer le panneau d'IA"
-
-#: src/components/Parent.tsx
+#: src/components/NavBar.tsx
 msgid "Breadcrumbs"
 msgstr "Fil d'Ariane"
 
-#: src/components/Parent.tsx
+#: src/components/NavBar.tsx
 msgid "Set Drive"
 msgstr "Définir le Drive"
 
 #. placeholder {0}: title
-#: src/components/Parent.tsx
+#. placeholder {0}: title
+#: src/components/NavBar.tsx
 msgid "Set {0} as current drive"
 msgstr "Définir {0} comme lecteur actuel"
-
-#: src/components/Parent.tsx
-msgid "Set as drive"
-msgstr "Définir comme lecteur"
 
 #: src/components/ImageViewer.tsx
 msgid "Click to enlarge"
@@ -177,14 +172,6 @@ msgstr "Cliquez pour agrandir"
 #: src/components/PropVal.tsx
 msgid "Loading {0}"
 msgstr "Chargement {0}"
-
-#: src/components/NetworkIndicator.tsx
-msgid "You are offline, changes might not be persisted."
-msgstr "Vous êtes hors ligne, les modifications pourraient ne pas être conservées."
-
-#: src/components/NetworkIndicator.tsx
-msgid "No Internet Connection."
-msgstr "Aucune connexion Internet."
 
 #: src/components/SkipNav.tsx
 msgid "Skip Navigation?"
@@ -209,11 +196,14 @@ msgid "Clear"
 msgstr "Effacer"
 
 #: src/components/Toaster.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Copy"
 msgstr "Copier"
 
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/components/SignInButton.tsx
-#: src/views/InvitePage.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in"
 msgstr "Se connecter"
 
@@ -227,36 +217,12 @@ msgid "Settings"
 msgstr "Paramètres"
 
 #: src/routes/AppSettings.tsx
-msgid "<0/> Language"
-msgstr "<0/> Langue"
-
-#: src/routes/AppSettings.tsx
 msgid "Theme"
 msgstr "Thème"
 
 #: src/routes/AppSettings.tsx
-msgid "🌓 Auto"
-msgstr "🌓 Auto"
-
-#: src/routes/AppSettings.tsx
 msgid "Use the browser's / OS dark mode settings"
 msgstr "Utiliser les paramètres du mode sombre du navigateur / système d'exploitation"
-
-#: src/routes/AppSettings.tsx
-msgid "🌑 Dark"
-msgstr "🌑 Sombre"
-
-#: src/routes/AppSettings.tsx
-msgid "🌕 Light"
-msgstr "🌕 Clair"
-
-#: src/routes/AppSettings.tsx
-msgid "Navigation bar position"
-msgstr "Position de la barre de navigation"
-
-#: src/routes/AppSettings.tsx
-msgid "Floating"
-msgstr "Flottante"
 
 #: src/routes/AppSettings.tsx
 msgid "Bottom"
@@ -270,19 +236,9 @@ msgstr "Haut"
 msgid "Main color"
 msgstr "Couleur principale"
 
-#: src/routes/AppSettings.tsx
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Templates"
 msgstr "Modèles"
-
-#. placeholder {0}: ' '
-#: src/routes/AppSettings.tsx
-msgid "<0/>{0} Hide templates on new resource page."
-msgstr "<0/>{0} Masquer les modèles sur la page de nouveau resource."
-
-#: src/routes/AppSettings.tsx
-msgid "Panels"
-msgstr "Panneaux"
 
 #. placeholder {0}: ' '
 #: src/routes/AppSettings.tsx
@@ -303,97 +259,6 @@ msgstr "<0/>{0} Désactiver les animations de transition de page"
 msgid "<0/>{0} Enable keyboard drag & drop in sidebar"
 msgstr "<0/>{0} Activer le glisser-déposer au clavier dans la barre latérale"
 
-#: src/routes/AboutRoute.tsx
-msgid ""
-"The easiest way to <0>create</0>, <1>share</1> and <2>model</2> linked\n"
-"data."
-msgstr ""
-"La façon la plus simple de <0>créer</0>, de <1>partager</1> et de <2>modéliser</2>\n"
-"des données liées."
-
-#: src/routes/AboutRoute.tsx
-msgid ""
-"Atomic Data is a modular specification for sharing, modifying and\n"
-"modeling graph data. It combines the ease of use of JSON, the\n"
-"connectivity of RDF (linked data) and the reliability of type-safety."
-msgstr ""
-"Atomic Data est une spécification modulaire pour le partage, la modification et\n"
-"la modélisation de données graphiques. Il combine la facilité d'utilisation de JSON, la\n"
-"connectivité de RDF (données liées) et la fiabilité de la sécurité de type."
-
-#: src/routes/AboutRoute.tsx
-msgid "About this app"
-msgstr "À propos de cette application"
-
-#. placeholder {0}: ' '
-#: src/routes/AboutRoute.tsx
-msgid ""
-"You're looking at{0} <0>atomic-data-browser</0> , an open-source client for viewing and editing data. Please add an\n"
-"issue if you encouter problems or have a feature request. Expect bugs\n"
-"and issues, because this stuff is pretty beta."
-msgstr ""
-"Vous regardez{0} <0>atomic-data-browser</0>, un client open source pour afficher et modifier des données. Veuillez ajouter un\n"
-"problème si vous rencontrez des problèmes ou si vous avez une demande de fonctionnalité. Attendez-vous à des bugs\n"
-"et des problèmes, car ce truc est assez bêta."
-
-#. placeholder {0}: ' '
-#: src/routes/AboutRoute.tsx
-msgid "The back-end of this app is{0} <0>atomic-server</0> , which you can think of as an open source, web-native database."
-msgstr "Le back-end de cette application est{0} <0>atomic-server</0>, que vous pouvez considérer comme une base de données open source native du Web."
-
-#: src/routes/AboutRoute.tsx
-msgid "Things to visit"
-msgstr "Choses à visiter"
-
-#: src/routes/AboutRoute.tsx
-msgid "List of lists"
-msgstr "Liste de listes"
-
-#: src/routes/AboutRoute.tsx
-msgid "List of Classes"
-msgstr "Liste des classes"
-
-#: src/routes/AboutRoute.tsx
-msgid "List of Properties"
-msgstr "Liste des propriétés"
-
-#: src/routes/AboutRoute.tsx
-msgid "Run your own server"
-msgstr "Exécutez votre propre serveur"
-
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
-#: src/routes/AboutRoute.tsx
-msgid "The easiest way to run an{0} <0>atomic-server</0>{1} is by using Docker:"
-msgstr "La façon la plus simple d'exécuter un{0} <0>atomic-server</0>{1} est d'utiliser Docker:"
-
-#. placeholder {0}: ' '
-#: src/routes/AboutRoute.tsx
-msgid "...and visit{0} <0>localhost</0>."
-msgstr "...et visitez{0} <0>localhost</0>."
-
-#: src/routes/AboutRoute.tsx
-msgid "Join the community"
-msgstr "Rejoignez la communauté"
-
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
-#. placeholder {2}: ' '
-#. placeholder {3}: "'"
-#: src/routes/AboutRoute.tsx
-msgid ""
-"Atomic Data is open and fully powered by volunteers. We're looking\n"
-"for people who want to help discuss various design challenges and work\n"
-"on implmenentations. If you have any questions, or want to help out,\n"
-"feel free to join our{0} <0>Discord</0>! Sign\n"
-"up to{1} <1>our newsletter</1>{2} if you{3}d like to get updated! ."
-msgstr ""
-"Atomic Data est ouvert et entièrement alimenté par des bénévoles. Nous recherchons\n"
-"des personnes qui souhaitent aider à discuter de divers défis de conception et à travailler\n"
-"sur les implémentations. Si vous avez des questions ou si vous souhaitez aider,\n"
-"n'hésitez pas à rejoindre notre{0} <0>Discord</0> ! Inscrivez-vous\n"
-"à{1} <1>notre newsletter</1>{2} si vous souhaitez être mis à jour ! ."
-
 #: src/routes/DataRoute.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/ResourceInline/ResourceInline.tsx
@@ -405,7 +270,6 @@ msgstr "Aucun sujet n'a été transmis"
 msgid "Loading {0}..."
 msgstr "Chargement de {0}..."
 
-#: src/chunks/AI/RealAIChat.tsx
 #: src/routes/DataRoute.tsx
 msgid "Accept"
 msgstr "Accepter"
@@ -482,12 +346,6 @@ msgid "Prune Test Data"
 msgstr "Élaguer les données de test"
 
 #: src/routes/PruneTestsRoute.tsx
-msgid ""
-"Pruning test data will delete all drives on the server that have\n"
-"’testdrive’ in their name."
-msgstr "L'élagage des données de test supprimera tous les lecteurs sur le serveur qui ont 'testdrive' dans leur nom."
-
-#: src/routes/PruneTestsRoute.tsx
 msgid "Prune"
 msgstr "Élaguer"
 
@@ -501,6 +359,8 @@ msgstr "Aucun vérificateur de code trouvé"
 
 #: src/components/forms/SearchBox/SearchBox.tsx
 #: src/routes/LinkOpenRouter.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Error"
 msgstr "Erreur"
 
@@ -516,6 +376,7 @@ msgstr "Veuillez patienter pendant que nous lions votre compte OpenRouter..."
 msgid "Not found!"
 msgstr "Pas trouvé !"
 
+#: src/components/OverlayContainer.tsx
 #: src/routes/Router.tsx
 msgid "Go home"
 msgstr "Aller à l'accueil"
@@ -524,6 +385,7 @@ msgstr "Aller à l'accueil"
 msgid "404 Not found"
 msgstr "404 Non trouvé"
 
+#: src/components/OverlayContainer.tsx
 #: src/routes/ShortcutsRoute.tsx
 msgid "Keyboard shortcuts"
 msgstr "Raccourcis clavier"
@@ -556,21 +418,10 @@ msgstr "<0/> Afficher la page d'<1>a</1>ccueil"
 msgid "<0/> Open <1>m</1>enu"
 msgstr "<0/> Ouvrir le <1>m</1>enu"
 
-#: src/routes/ShortcutsRoute.tsx
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Document"
 msgstr "Document"
-
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Move line / section up"
-msgstr "<0/> Déplacer la ligne / section vers le haut"
-
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Move line / section down"
-msgstr "<0/> Déplacer la ligne / section vers le bas"
-
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Delete line"
-msgstr "<0/> Supprimer la ligne"
 
 #: src/components/SideBar/AppMenu.tsx
 #: src/routes/SettingsAgent.tsx
@@ -594,18 +445,13 @@ msgstr "<0/> Vous êtes connecté en tant que"
 msgid "Edit profile"
 msgstr "Modifier le profil"
 
-#: src/routes/SettingsAgent.tsx
 #: src/views/InvitePage.tsx
 msgid "Agent Secret"
 msgstr "Secret de l'Agent"
 
-#: src/routes/SettingsAgent.tsx
+#: src/components/NewIdentitySection.tsx
 msgid "Enter your Agent Secret"
 msgstr "Entrez votre secret d'Agent"
-
-#: src/routes/SettingsAgent.tsx
-msgid "The Agent Secret is a long string of characters that encodes both the Subject and the Private Key. You can think of it as a combined username + password. Store it safely, and don't share it with others."
-msgstr "Le secret de l'Agent est une longue chaîne de caractères qui encode à la fois le Sujet et la clé privée. Vous pouvez le considérer comme un nom d'utilisateur + mot de passe combinés. Stockez-le en toute sécurité et ne le partagez pas avec d'autres."
 
 #: src/routes/SettingsAgent.tsx
 msgid "Sign out with current Agent and reset this form"
@@ -681,7 +527,6 @@ msgstr "Copier le texte du message"
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 #: src/views/BookmarkPage/BookmarkPreview.tsx
 #: src/views/ChatRoomPage.tsx
-#: src/views/ChatRoomPage.tsx
 msgid "loading..."
 msgstr "chargement..."
 
@@ -697,49 +542,24 @@ msgstr "Définir comme lecteur actuel"
 msgid "Default Ontology"
 msgstr "Ontologie par défaut"
 
-#: src/views/Drive/DrivePage.tsx
-msgid ""
-"You are running Atomic-Server on `localhost`, which means that it\n"
-"will not be available from any other machine than your current local\n"
-"device. If you want your Atomic-Server to be available from the web,\n"
-"you should set this up at a Domain on a server."
-msgstr ""
-"Vous utilisez Atomic-Server sur `localhost`, ce qui signifie qu'il ne sera\n"
-"pas disponible depuis une autre machine que votre appareil local actuel. Si\n"
-"vous voulez que votre Atomic-Server soit disponible sur le web, vous devez le\n"
-"configurer sur un domaine sur un serveur."
-
 #. placeholder {0}: JSON.stringify(error)
 #. placeholder {0}: searchError.message
+#. placeholder {0}: data.error
+#. placeholder {0}: e
+#. placeholder {0}: resource.error.message
 #. placeholder {0}: resource.error.message
 #: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
-#: src/views/ResourceLine.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/views/ResourceRow.tsx
 msgid "Error: {0}"
 msgstr "Erreur : {0}"
-
-#. placeholder {0}: write ? 'edit' : 'view'
-#: src/views/InvitePage.tsx
-msgid "Invite to {0}"
-msgstr "Inviter à {0}"
-
-#: src/views/InvitePage.tsx
-msgid "Sorry, this Invite has no usages left. Ask for a new one."
-msgstr "Désolé, cette invitation n'a plus d'utilisations disponibles. Veuillez en demander une nouvelle."
 
 #. placeholder {0}: agentTitle
 #: src/views/InvitePage.tsx
 msgid "Accept as {0}"
 msgstr "Accepter en tant que {0}"
-
-#: src/views/InvitePage.tsx
-msgid "Accept as new user"
-msgstr "Accepter en tant que nouvel utilisateur"
-
-#. placeholder {0}: usagesLeft
-#: src/views/InvitePage.tsx
-msgid "({0} usages left)"
-msgstr "({0} utilisations restantes)"
 
 #: src/chunks/CodeEditor/AsyncJSONEditor.tsx
 msgid "Enter valid JSON..."
@@ -750,48 +570,24 @@ msgstr "Entrez un JSON valide..."
 msgid "{0} endpoint"
 msgstr "Point de terminaison {0}"
 
-#: src/views/EndpointPage.tsx
-msgid "Go"
-msgstr "Go"
-
+#: src/routes/Search/SearchOverlay.tsx
 #: src/routes/Search/SearchRoute.tsx
 #: src/views/EndpointPage.tsx
 msgid "No hits"
 msgstr "Aucun résultat"
 
 #: src/chunks/AI/AISidebar.tsx
+#: src/components/OverlayContainer.tsx
 msgid "New Chat"
 msgstr "Nouvelle discussion"
-
-#: src/chunks/AI/AISidebar.tsx
-msgid "Reset"
-msgstr "Réinitialiser"
 
 #: src/chunks/AI/AISidebar.tsx
 msgid "Atomic Assistant"
 msgstr "Assistant Atomique"
 
 #: src/chunks/AI/AISidebar.tsx
-msgid "Save Chat"
-msgstr "Enregistrer la discussion"
-
-#: src/chunks/AI/AISidebar.tsx
 msgid "Close AI Sidebar"
 msgstr "Fermer la barre latérale de l'IA"
-
-#: src/chunks/AI/AgentConfig.tsx
-msgid "Select AI Agents"
-msgstr "Sélectionner les agents IA"
-
-#: src/chunks/AI/AgentConfig.tsx
-msgid "Automatic Agent Selection"
-msgstr "Sélection automatique de l'agent"
-
-#: src/chunks/AI/AgentConfig.tsx
-msgid ""
-"Pick best agent for the job based on name, description and\n"
-"available tools"
-msgstr "Choisissez le meilleur agent pour la tâche en fonction du nom, de la description et des outils disponibles"
 
 #: src/chunks/AI/AgentConfig.tsx
 msgid "AI Agents"
@@ -806,10 +602,14 @@ msgid "Create Agent"
 msgstr "Créer un agent"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/AI/MCPConfigTab.tsx
+#: src/chunks/AI/SkillsConfigTab.tsx
 msgid "Save Changes"
 msgstr "Enregistrer les modifications"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/AI/MCPConfigTab.tsx
+#: src/chunks/AI/SkillsConfigTab.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Name"
@@ -820,6 +620,7 @@ msgid "Agent name"
 msgstr "Nom de l'agent"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/AI/SkillsConfigTab.tsx
 #: src/views/OntologyPage/OntologyDescription.tsx
 msgid "Description"
 msgstr "Description"
@@ -902,14 +703,6 @@ msgid "Could not open {0}"
 msgstr "Impossible d'ouvrir {0}"
 
 #: src/views/ErrorPage.tsx
-msgid "Hard reset"
-msgstr "Réinitialisation forcée"
-
-#: src/views/ErrorPage.tsx
-msgid "Clear all local data & refresh page"
-msgstr "Effacer toutes les données locales et rafraîchir la page"
-
-#: src/views/ErrorPage.tsx
 msgid "Use proxy"
 msgstr "Utiliser un proxy"
 
@@ -917,19 +710,6 @@ msgstr "Utiliser un proxy"
 #: src/views/ErrorPage.tsx
 msgid "Fetches the URL from your current Atomic-Server ({0}), instead of from the actual URL itself. Can be useful if the URL is down, but the resource is cached in your server."
 msgstr "Récupère l'URL de votre Atomic-Server actuel ({0}), au lieu de l'URL réelle. Peut être utile si l'URL est hors service, mais que la ressource est mise en cache dans votre serveur."
-
-#: src/chunks/AI/NoKeyOverlay.tsx
-msgid "No AI providers enabled."
-msgstr "Aucun fournisseur d'IA activé."
-
-#: src/chunks/AI/NoKeyOverlay.tsx
-#: src/chunks/AI/NoKeyOverlay.tsx
-msgid "<0/> Settings"
-msgstr "<0/> Paramètres"
-
-#: src/chunks/AI/NoKeyOverlay.tsx
-msgid "No AI provider configured."
-msgstr "Aucun fournisseur d'IA configuré."
 
 #: src/chunks/AI/MessageContextItem.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
@@ -953,42 +733,16 @@ msgid "Stop generating"
 msgstr "Arrêter la génération"
 
 #: src/chunks/AI/RealAIChat.tsx
-msgid "Unsaved changes"
-msgstr "Modifications non enregistrées"
-
-#: src/chunks/AI/RealAIChat.tsx
 msgid "Remove file"
 msgstr "Supprimer le fichier"
-
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Automatic"
-msgstr "Automatique"
-
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Toggle web search"
-msgstr "Activer/désactiver la recherche web"
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Attach file"
 msgstr "Joindre un fichier"
 
-#. placeholder {0}: usage.input
-#. placeholder {1}: usage.output
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Tokens used: {0} input, {1} output"
-msgstr "Jetons utilisés : {0} en entrée, {1} en sortie"
-
 #: src/views/CodeUsage/PropSelector.tsx
 msgid "None"
 msgstr "Aucun"
-
-#. placeholder {0}: agent.id
-#. placeholder {1}: agent.name
-#. placeholder {2}: agent.description
-#. placeholder {3}: agent.availableTools.map(t => mcpServers.find(s => s.id === t)?.name).join(', ')
-#: src/chunks/AI/useAgentAutoSelect.ts
-msgid "ID: {0} Name: {1} Description: {2} Tools: {3}"
-msgstr "ID : {0} Nom : {1} Description : {2} Outils : {3}"
 
 #: src/chunks/AI/AIChatMessage.tsx
 msgid "Unknown message type"
@@ -1049,7 +803,6 @@ msgstr "Copier le code"
 
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
-#: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Start typing..."
 msgstr "Commencez à taper..."
 
@@ -1075,10 +828,10 @@ msgstr "Texte alternatif"
 
 #: src/chunks/RTE/ImagePicker.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
-#: src/routes/SettingsServer/index.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -1152,6 +905,7 @@ msgid "Toggle inline code"
 msgstr "Activer/désactiver le code en ligne"
 
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/routes/SettingsServer/index.tsx
 msgid "Set"
 msgstr "Définir"
 
@@ -1164,14 +918,6 @@ msgstr "<0/> Activer les fonctionnalités de l’IA"
 #: src/components/AI/AISettings.tsx
 msgid "<0/> Show token usage in chats"
 msgstr "<0/> Afficher l’utilisation des jetons dans les discussions"
-
-#: src/components/AI/AISettings.tsx
-msgid "AI Providers"
-msgstr "Fournisseurs d’IA"
-
-#: src/components/AI/AISettings.tsx
-msgid "<0/> Enable OpenRouter"
-msgstr "<0/> Activer OpenRouter"
 
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter API Key"
@@ -1192,21 +938,11 @@ msgstr "Entrez votre clé API OpenRouter"
 msgid "Credits used: {0} /{1} {2}"
 msgstr "Crédits utilisés : {0} / {1} {2}"
 
-#: src/components/AI/AISettings.tsx
-msgid ""
-"OpenRouter provides a unified API that gives you access to\n"
-"hundreds of AI models from all major vendors, while\n"
-"automatically handling fallbacks and selecting the most\n"
-"cost-effective options."
-msgstr "OpenRouter fournit une API unifiée qui vous donne accès à des centaines de modèles d’IA de tous les principaux fournisseurs, tout en gérant automatiquement les solutions de repli et en sélectionnant les options les plus rentables."
-
+#: src/chunks/AI/AISetupPanel.tsx
+#: src/chunks/AI/RealAIChat.tsx
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter"
 msgstr "OpenRouter"
-
-#: src/components/AI/AISettings.tsx
-msgid "Enable Ollama"
-msgstr "Activer Ollama"
 
 #. placeholder {0}: ' '
 #: src/components/AI/AISettings.tsx
@@ -1225,13 +961,10 @@ msgstr "Le serveur ne répond pas"
 msgid "Ollama API Url"
 msgstr "URL de l’API Ollama"
 
+#: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
 msgid "Ollama"
 msgstr "Ollama"
-
-#: src/components/AI/AISettings.tsx
-msgid "Generative Features"
-msgstr "Fonctionnalités génératives"
 
 #: src/components/AI/AISettings.tsx
 msgid "<0/> Generate AI Chat titles"
@@ -1252,10 +985,6 @@ msgstr "(Conseil) Choisissez un modèle bon marché et rapide"
 #: src/components/AI/AISettings.tsx
 msgid "Change what model is used for generative features"
 msgstr "Modifier le modèle utilisé pour les fonctionnalités génératives"
-
-#: src/components/AI/AISettings.tsx
-msgid "MCP Servers"
-msgstr "Serveurs MCP"
 
 #: src/components/AI/ChatLoadingIndicator.tsx
 msgid "Loading AI"
@@ -1351,6 +1080,9 @@ msgid "Edit permissions and create invites."
 msgstr "Modifier les permissions et créer des invitations."
 
 #: src/components/ResourceContextMenu/index.tsx
+#: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
+#: src/routes/SettingsServer/index.tsx
 msgid "History"
 msgstr "Historique"
 
@@ -1385,13 +1117,11 @@ msgid "Delete resource"
 msgstr "Supprimer la ressource"
 
 #. placeholder {0}: shortcuts.menu
+#. placeholder {0}: shortcuts.menu
 #: src/components/ResourceContextMenu/MenuBarDropdownTrigger.tsx
+#: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
 msgid "Open menu ({0})"
 msgstr "Ouvrir le menu ({0})"
-
-#: src/components/Searchbar/Searchbar.tsx
-msgid "Start searching"
-msgstr "Commencer la recherche"
 
 #. placeholder {0}: title
 #: src/components/Searchbar/Searchbar.tsx
@@ -1464,7 +1194,8 @@ msgstr "Page précédente"
 msgid "Next page"
 msgstr "Page suivante"
 
-#: src/components/SideBar/SideBarDrive.tsx
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+#: src/components/OverlayContainer.tsx
 msgid "New resource"
 msgstr "Nouvelle ressource"
 
@@ -1474,10 +1205,6 @@ msgstr "Nouvelle ressource"
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Switch to {0}"
 msgstr "Basculer vers {0}"
-
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Configure Drives"
-msgstr "Configurer les lecteurs"
 
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Load drives not displayed in this list."
@@ -1529,13 +1256,6 @@ msgstr "La prise en charge du clavier pour le glisser-déposer est désactivée.
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "Picked up {0}"
 msgstr "Pris {0}"
-
-#. placeholder {0}: dragResource.title
-#. placeholder {1}: dropResource.title
-#. placeholder {2}: pos + 1
-#: src/components/SideBar/useSidebarDnd.ts
-msgid "Draggable item {0} was moved over droppable area in {1} at position {2}"
-msgstr "L'élément déplaçable {0} a été déplacé sur la zone de dépôt dans {1} à la position {2}"
 
 #: src/components/SideBar/useSidebarDnd.ts
 #: src/components/SideBar/useSidebarDnd.ts
@@ -1594,18 +1314,9 @@ msgstr "<0/> Supprimer"
 msgid "There are no tags yet."
 msgstr "Il n'y a pas encore d'étiquettes."
 
-#: src/components/Tag/TagBar.tsx
-msgid "Add tags"
-msgstr "Ajouter des étiquettes"
-
 #: src/routes/History/HistoryRoute.tsx
 msgid "Resource version updated"
 msgstr "Version de la ressource mise à jour"
-
-#. placeholder {0}: resource.title
-#: src/routes/History/HistoryRoute.tsx
-msgid "Building history of {0}"
-msgstr "Construction de l'historique de {0}"
 
 #: src/routes/History/VersionScroller.tsx
 msgid "Previous item"
@@ -1619,24 +1330,17 @@ msgstr "Élément suivant"
 msgid "All versions <0/>"
 msgstr "Toutes les versions <0/>"
 
-#. placeholder {0}: ' '
-#: src/routes/History/VersionTitle.tsx
-msgid "Editted <0/> by{0} <1/>"
-msgstr "Modifié <0/> par{0} <1/>"
-
 #. placeholder {0}: resource.title
+#. placeholder {0}: resource.title
+#: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
 msgid "History of {0}"
 msgstr "Historique de {0}"
 
+#: src/routes/AboutRoute.tsx
 #: src/routes/History/HistoryMobileView.tsx
 msgid "Version"
 msgstr "Version"
-
-#: src/routes/History/HistoryDesktopView.tsx
-#: src/routes/History/HistoryMobileView.tsx
-msgid "Make current version"
-msgstr "Définir comme version actuelle"
 
 #: src/routes/Search/SearchRoute.tsx
 msgid "Enter a search query"
@@ -1662,6 +1366,8 @@ msgstr "Résultat"
 msgid "{0}{1} {2} for{3} <0/>"
 msgstr "{0}{1} {2} pour{3} <0/>"
 
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
 #: src/routes/Search/SearchRoute.tsx
 msgid "With Tags:"
 msgstr "Avec les étiquettes :"
@@ -1693,14 +1399,6 @@ msgstr "Modifier {0}"
 #: src/routes/History/HistoryDesktopView.tsx
 msgid "History of"
 msgstr "Historique de"
-
-#: src/routes/History/HistoryDesktopView.tsx
-msgid "Show Commit"
-msgstr "Afficher le commit"
-
-#: src/routes/History/HistoryDesktopView.tsx
-msgid "Versions"
-msgstr "Versions"
 
 #: src/components/forms/Field.tsx
 msgid "Required field"
@@ -1769,12 +1467,12 @@ msgstr "Déplacer l'élément"
 msgid "Enter a number..."
 msgstr "Entrez un nombre..."
 
-#: src/components/forms/RangeInput.tsx
-#: src/components/forms/RangeInput.tsx
+#: src/components/forms/MinMaxInput.tsx
+#: src/components/forms/MinMaxInput.tsx
 msgid "Value should be a round number."
 msgstr "La valeur doit être un nombre entier."
 
-#: src/components/forms/RangeInput.tsx
+#: src/components/forms/MinMaxInput.tsx
 msgid "Min must be a less than max"
 msgstr "La valeur minimale doit être inférieure à la valeur maximale"
 
@@ -1876,10 +1574,12 @@ msgstr "Pas d'accès en écriture. Basculez pour donner l'accès en écriture."
 msgid "Permissions for"
 msgstr "Permissions pour"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "<0/> Create Invite"
 msgstr "<0/> Créer une invitation"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Permissions set here:"
 msgstr "Permissions définies ici :"
@@ -1893,11 +1593,13 @@ msgstr "Permissions héritées :"
 msgid "Read more about permissions in the{0} <0>Atomic Data Docs</0>"
 msgstr "Pour en savoir plus sur les permissions, consultez la{0} <0>documentation Atomic Data</0>"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Read"
 msgstr "Lire"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Write"
@@ -1910,18 +1612,6 @@ msgstr "Rien à afficher"
 #: src/routes/SettingsServer/index.tsx
 msgid "Drive Configuration"
 msgstr "Configuration du lecteur"
-
-#: src/routes/SettingsServer/index.tsx
-msgid "Current Drive"
-msgstr "Lecteur actuel"
-
-#: src/routes/SettingsServer/index.tsx
-msgid "Saved"
-msgstr "Enregistré"
-
-#: src/routes/SettingsServer/index.tsx
-msgid "Other"
-msgstr "Autre"
 
 #: src/views/Article/ArticleDescription.tsx
 msgid "<0/> Add Content"
@@ -1947,10 +1637,12 @@ msgstr "Impossible de charger l'aperçu 😞"
 msgid "Children"
 msgstr "Enfants"
 
+#: src/components/ResourceContextMenu/index.tsx
 #: src/routes/SettingsServer/FavoriteButton.tsx
 msgid "Remove from favorites"
 msgstr "Supprimer des favoris"
 
+#: src/components/ResourceContextMenu/index.tsx
 #: src/routes/SettingsServer/FavoriteButton.tsx
 msgid "Add to favorites"
 msgstr "Ajouter aux favoris"
@@ -1991,6 +1683,7 @@ msgstr "Lisez la{0} <0>documentation de @tomic/svelte</0>{1} pour plus d'informa
 msgid "Read more about generating schema's using{0} <0>@tomic/cli</0> ."
 msgstr "En savoir plus sur la génération de schémas en utilisant{0} <0>@tomic/cli</0>."
 
+#: src/components/ResourceUsage/UsageCard.tsx
 #: src/views/Card/CollectionCard.tsx
 msgid "No resources"
 msgstr "Aucune ressource"
@@ -2075,6 +1768,7 @@ msgstr "Créer une nouvelle ressource"
 msgid "New Resource"
 msgstr "Nouvelle ressource"
 
+#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 #: src/components/forms/FilePicker/FilePickerItem.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
@@ -2099,10 +1793,6 @@ msgstr "Classe"
 #: src/views/FolderPage/ListView.tsx
 msgid "Last Modified"
 msgstr "Dernière modification"
-
-#: src/views/FolderPage/ListView.tsx
-msgid "<0/> New Resource"
-msgstr "<0/> Nouvelle ressource"
 
 #: src/views/OntologyPage/CreateInstanceButton.tsx
 msgid "<0/> New Instance"
@@ -2198,6 +1888,7 @@ msgid "Drag column"
 msgstr "Faire glisser la colonne"
 
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "View"
 msgstr "Afficher"
 
@@ -2231,17 +1922,6 @@ msgstr "<0/>{0} Référencer les ressources par sujet au lieu du nom."
 msgid "Edit tag"
 msgstr "Modifier l'étiquette"
 
-#. placeholder {0}: ' '
-#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
-msgid "Fetching{0} <0/>"
-msgstr "Récupération{0} <0/>"
-
-#. placeholder {0}: propertyResource.title
-#. placeholder {1}: resource.title
-#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
-msgid "Editing {0} on {1}"
-msgstr "Modification de {0} sur {1}"
-
 #: src/chunks/TablePage/TablePage.tsx
 msgid "Export to CSV"
 msgstr "Exporter au format CSV"
@@ -2250,14 +1930,11 @@ msgstr "Exporter au format CSV"
 msgid "Attached File"
 msgstr "Fichier joint"
 
-#: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
-msgid "You"
-msgstr "Vous"
-
 #: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
 msgid "Thinking..."
 msgstr "Réflexion..."
 
+#: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
 #: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
 msgid "Thinking"
 msgstr "Réflexion"
@@ -2275,10 +1952,6 @@ msgstr "L'URL Ollama n'est pas configurée. Accédez aux{0} <0>Paramètres</0>."
 #: src/chunks/AI/ModelSelect/ModelSelect.tsx
 msgid "Provider"
 msgstr "Fournisseur"
-
-#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
-msgid "OpenRouter is not enabled"
-msgstr "OpenRouter n'est pas activé"
 
 #. placeholder {0}: models.length
 #. placeholder {0}: modelList.length
@@ -2320,10 +1993,6 @@ msgid "Unable to connect to Ollama server. Check if the server is running and yo
 msgstr "Impossible de se connecter au serveur Ollama. Vérifiez si le serveur est en cours d'exécution et si vous avez configuré l'URL correcte dans les paramètres."
 
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
-msgid "Ollama is not enabled"
-msgstr "Ollama n'est pas activé"
-
-#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 msgid "Format:"
 msgstr "Format :"
 
@@ -2339,81 +2008,24 @@ msgstr "Famille :"
 msgid "Parameter Size:"
 msgstr "Taille des paramètres :"
 
-#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
-msgid "Ask me anything..."
-msgstr "Demandez-moi n'importe quoi..."
-
 #: src/chunks/RTE/AIChatInput/MentionList.tsx
 msgid "No result"
 msgstr "Aucun résultat"
 
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "No MCP servers configured"
-msgstr "Aucun serveur MCP configuré"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Add Server"
-msgstr "Ajouter un serveur"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Server Name"
-msgstr "Nom du serveur"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Enter server name"
-msgstr "Entrer le nom du serveur"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Server URL"
-msgstr "URL du serveur"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Enter server URL"
-msgstr "Entrer l'URL du serveur"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Type"
-msgstr "Type"
-
-#: src/components/AI/MCP/MCPServersManager.tsx
-#: src/components/AI/MCP/ServerItem.tsx
+#: src/chunks/AI/MCPConfigTab.tsx
 msgid "Select transport type"
 msgstr "Sélectionner le type de transport"
 
-#: src/components/AI/MCP/MCPServersManager.tsx
-msgid "Add server"
-msgstr "Ajouter un serveur"
-
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Server name"
-msgstr "Nom du serveur"
-
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Save changes"
-msgstr "Enregistrer les modifications"
-
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Cancel edit"
-msgstr "Annuler la modification"
-
 #. placeholder {0}: server.transport
-#: src/components/AI/MCP/ServerItem.tsx
+#: src/chunks/AI/MCPConfigTab.tsx
 msgid "Transport: {0}"
 msgstr "Transport : {0}"
-
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Edit server"
-msgstr "Modifier le serveur"
-
-#: src/components/AI/MCP/ServerItem.tsx
-msgid "Remove server"
-msgstr "Supprimer le serveur"
 
 #: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
 msgid "<0/> Resource with error"
 msgstr "<0/> Ressource avec erreur"
 
+#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 msgid "Invalid Resource"
 msgstr "Ressource invalide"
@@ -2456,6 +2068,7 @@ msgstr "L'aperçu du fichier n'est pas disponible pour le moment"
 msgid "Will be uploaded when resource is saved"
 msgstr "Sera téléversé lorsque la ressource sera enregistrée"
 
+#: src/components/OverlayContainer.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 msgid "Edit resource"
 msgstr "Modifier la ressource"
@@ -2470,6 +2083,9 @@ msgstr "Initialisation de la ressource"
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/forms/NewForm/NewFormTitle.tsx
+#: src/hooks/useCreateAndNavigate.ts
+#: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
 #: src/views/Plugin/AssignRights.tsx
 msgid "Resource"
 msgstr "Ressource"
@@ -2555,6 +2171,7 @@ msgstr "Nouvelle instance de {0}"
 msgid "Single instance"
 msgstr "Instance unique"
 
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
 msgid "Table"
 msgstr "Tableau"
@@ -2631,10 +2248,6 @@ msgstr "Ajouter une ressource"
 msgid "Open edit dialog"
 msgstr "Ouvrir la boîte de dialogue d'édition"
 
-#: src/chunks/TablePage/EditorCells/SelectCell.tsx
-msgid "Filter tags..."
-msgstr "Filtrer les étiquettes..."
-
 #: src/chunks/TablePage/PropertyForm/DatePropertyForm.tsx
 msgid "<0/> Include Time"
 msgstr "<0/> Inclure l'heure"
@@ -2648,16 +2261,9 @@ msgid "Add external property"
 msgstr "Ajouter une propriété externe"
 
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Add"
 msgstr "Ajouter"
-
-#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
-msgid "A column in a table"
-msgstr "Une colonne dans un tableau"
-
-#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
-msgid "New <0/> Column"
-msgstr "Nouvelle <0/> Colonne"
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
@@ -2706,19 +2312,6 @@ msgstr "<0/> Autoriser plusieurs valeurs"
 #: src/chunks/TablePage/PropertyForm/categories.tsx
 msgid "No Type selected"
 msgstr "Aucun type sélectionné"
-
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled Folder"
-msgstr "Dossier sans titre"
-
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled ChatRoom"
-msgstr "Salon de discussion sans titre"
-
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-msgid "Untitled Document"
-msgstr "Document sans titre"
 
 #: src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Numeric"
@@ -2798,6 +2391,7 @@ msgstr "Mon lecteur"
 msgid "Represents a row in the {0} table"
 msgstr "Représente une ligne dans la table {0}"
 
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "New Table"
@@ -2824,24 +2418,12 @@ msgid "Shortname"
 msgstr "Shortname"
 
 #: src/components/SideBar/AppMenu.tsx
-msgid "Login"
-msgstr "Connexion"
-
-#: src/components/SideBar/AppMenu.tsx
 msgid "See and edit the current Agent / User (u)"
 msgstr "Voir et modifier l'agent / l'utilisateur actuel (u)"
 
 #: src/components/SideBar/AppMenu.tsx
 msgid "Change client settings (t)"
 msgstr "Modifier les paramètres du client (t)"
-
-#: src/components/SideBar/AppMenu.tsx
-msgid "Keyboard Shortcuts"
-msgstr "Raccourcis clavier"
-
-#: src/components/SideBar/AppMenu.tsx
-msgid "View the keyboard shortcuts (?)"
-msgstr "Afficher les raccourcis clavier (?)"
 
 #: src/components/SideBar/AppMenu.tsx
 msgid "About"
@@ -2867,7 +2449,7 @@ msgstr "Menu de l'application"
 msgid "under <0/>"
 msgstr "sous <0/>"
 
-#. placeholder {0}: resource.title
+#. placeholder {0}: title
 #: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
 msgid "Rearange {0}"
 msgstr "Réorganiser {0}"
@@ -2889,32 +2471,18 @@ msgstr "La ligne est incomplète ou contient des données invalides"
 msgid "Add another property..."
 msgstr "Ajouter une autre propriété..."
 
-#: src/components/YDocValue.tsx
+#: src/components/LoroDocValue.tsx
 msgid "Empty"
 msgstr "Vide"
-
-#: src/components/YDocValue.tsx
-msgid "Show encoded state"
-msgstr "Afficher l'état encodé"
-
-#: src/components/YDocValue.tsx
-msgid "Hide encoded state"
-msgstr "Masquer l'état encodé"
 
 #: src/components/forms/InputYDoc.tsx
 msgid "Editing YDoc directly is not supported"
 msgstr "La modification directe de YDoc n'est pas prise en charge"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Left"
 msgstr "Gauche"
 
-#: src/chunks/RTE/FullBubbleMenu.tsx
-msgid "Center"
-msgstr "Centrer"
-
-#: src/chunks/RTE/FullBubbleMenu.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Right"
 msgstr "Droite"
@@ -3004,23 +2572,7 @@ msgstr ""
 "De plus, vous pouvez rechercher des ressources avec des balises spécifiques\n"
 "en ajoutant <0/> à votre recherche."
 
-#. placeholder {0}: ' '
-#. placeholder {1}: ' '
-#: src/routes/AboutRoute.tsx
-msgid ""
-"Atomic Data is especially suitable for knowledge graphs, distributed\n"
-"datasets, semantic data, p2p applications, decentralized apps, and data\n"
-"that is meant to be shared. It is designed to be highly extensible, easy\n"
-"to use, and to make the process of domain specific standardization as\n"
-"simple as possible. Check out{0} <0>the docs</0>{1} for more information about Atomic Data."
-msgstr ""
-"Atomic Data est particulièrement adapté aux graphes de connaissances, aux\n"
-"ensembles de données distribués, aux données sémantiques, aux applications\n"
-"p2p, aux applications décentralisées et aux données destinées à être\n"
-"partagées. Il est conçu pour être hautement extensible, facile à utiliser et\n"
-"pour simplifier au maximum le processus de normalisation spécifique à un\n"
-"domaine. Consultez{0} <0>la documentation</0>{1} pour plus d'informations sur Atomic Data."
-
+#: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Untitled Agent"
 msgstr "Agent sans titre"
@@ -3090,7 +2642,7 @@ msgstr "En ligne"
 msgid "Nothing to copy."
 msgstr "Rien à copier."
 
-#: src/views/Drive/PluginList.tsx
+#: src/views/Drive/DrivePage.tsx
 msgid "Plugins"
 msgstr "Plugins"
 
@@ -3104,9 +2656,10 @@ msgid "<0/> Upload Plugin"
 msgstr "<0/> Téléverser le plugin"
 
 #. placeholder {0}: metadata.version
-#. placeholder {0}: resource.props.version
+#. placeholder {0}: __APP_VERSION__
 #. placeholder {0}: resource.props.version
 #: src/chunks/Plugins/NewPluginButton.tsx
+#: src/routes/AboutRoute.tsx
 #: src/views/Plugin/PluginPage.tsx
 msgid "v{0}"
 msgstr "v{0}"
@@ -3119,13 +2672,13 @@ msgstr "v{0}"
 msgid "by {0}"
 msgstr "par {0}"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Share settings saved"
 msgstr "Paramètres de partage enregistrés"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Invalid secret."
-msgstr "Secret invalide."
+#~ msgid "Invalid secret."
+#~ msgstr "Secret invalide."
 
 #: src/helpers/AppSettings.tsx
 msgid "Signed in!"
@@ -3264,11 +2817,7 @@ msgstr "Installer"
 msgid "Failed to create message resource"
 msgstr "Échec de la création de la ressource de message"
 
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Changes Saved!"
-msgstr "Modifications enregistrées !"
-
-#: src/chunks/AI/RealAIChat.tsx
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
 msgid "Failed to save changes"
 msgstr "Échec de l'enregistrement des modifications"
 
@@ -3300,32 +2849,21 @@ msgstr "Aucun plugin installé"
 msgid "Sign Out"
 msgstr "Se déconnecter"
 
-#. placeholder {0}: ' '
-#. placeholder {1}: "'s"
-#: src/routes/SettingsAgent.tsx
-msgid ""
-"You can create your own Agent by hosting an{0} <0>atomic-server</0> . Alternatively, you can use an Invite to get a guest Agent on\n"
-"someone else{1} Atomic Server."
-msgstr "Vous pouvez créer votre propre agent en hébergeant un <0>atomic-server</0>. Vous pouvez également utiliser une invitation pour obtenir un agent invité sur le serveur atomique de quelqu'un d'autre."
-
 #: src/views/InvitePage.tsx
 msgid "Agent created!"
 msgstr "Agent créé !"
 
+#: src/chunks/AI/AISetupPanel.tsx
+#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/InvitePage.tsx
+#: src/views/InvitePage.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Continue"
 msgstr "Continuer"
 
 #: src/views/InvitePage.tsx
 msgid "Copy secret to continue"
 msgstr "Copier le secret pour continuer"
-
-#: src/views/InvitePage.tsx
-msgid ""
-"IMPORTANT! Below is your agent secret, you use this to login. Save\n"
-"it somewhere safe, the secret will not be show again and if you\n"
-"lose it you will not be able to access this user again."
-msgstr "IMPORTANT ! Ci-dessous se trouve votre secret d'agent, vous l'utilisez pour vous connecter. Sauvegardez-le dans un endroit sûr, le secret ne sera plus affiché et si vous le perdez, vous ne pourrez plus accéder à cet utilisateur."
 
 #: src/views/InvitePage.tsx
 msgid "Enter a name"
@@ -3338,12 +2876,6 @@ msgstr "Nom de l'agent"
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "This drive is private, sign in to view it"
 msgstr "Ce lecteur est privé, connectez-vous pour le consulter"
-
-#: src/routes/SettingsAgent.tsx
-msgid ""
-"An Agent is a user, consisting of a Subject (its URL) and Private Key.\n"
-"Together, these can be used to edit data and sign Commits."
-msgstr "Un agent est un utilisateur, composé d'un sujet (son URL) et d'une clé privée. Ensemble, ceux-ci peuvent être utilisés pour modifier des données et signer des Commits."
 
 #: src/views/Plugin/AssignRights.tsx
 msgid "Pick a resource"
@@ -3424,3 +2956,2011 @@ msgid ""
 "<0/> wants to modify a resource that is not\n"
 "contained in the current scope."
 msgstr "<0/> veut modifier une ressource qui n'est pas contenue dans la portée actuelle."
+
+#: src/routes/Search/SearchRoute.tsx
+msgid "Searching for <0/>..."
+msgstr "Recherche de <0/>..."
+
+#: src/views/InvitePage.tsx
+msgid "Failed to persist agent after accepting invite"
+msgstr "Échec de la persistance de l'agent après avoir accepté l'invitation"
+
+#: src/views/InvitePage.tsx
+msgid "Invite accepted, but no destination was returned."
+msgstr "Invitation acceptée, mais aucune destination n'a été renvoyée."
+
+#: src/components/forms/NewForm/SubjectField.tsx
+msgid "The identifier of the resource. DID subjects are determined by the genesis commit signature."
+msgstr "L'identifiant de la ressource. Les sujets DID sont déterminés par la signature de validation de la genèse."
+
+#: src/views/InvitePage.tsx
+msgid ""
+"IMPORTANT! Below is your agent secret, you use this to login.\n"
+"Save it somewhere safe, the secret will not be show again and if\n"
+"you lose it you will not be able to access this user again."
+msgstr ""
+"IMPORTANT ! Ci-dessous se trouve votre secret d'agent, vous l'utilisez pour vous connecter.\n"
+"Gardez-le en lieu sûr, le secret ne sera plus affiché et si\n"
+"vous le perdez, vous ne pourrez plus accéder à cet utilisateur."
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+msgid "Subdomain"
+msgstr "Sous-domaine"
+
+#: src/chunks/AI/AISetupPanel.tsx
+#: src/components/LoggedOutAgentPanel.tsx
+msgid "Back"
+msgstr "Retour"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Generating..."
+msgstr "Génération en cours..."
+
+#: src/routes/SettingsServer/ServersCard.tsx
+msgid "No known servers"
+msgstr "Aucun serveur connu"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Saved Drives"
+msgstr "Lecteurs enregistrés"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Custom Drive URL"
+msgstr "URL de lecteur personnalisée"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Enter a Drive DID or URL"
+msgstr "Saisissez un DID ou une URL de lecteur"
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "Configure"
+msgstr "Configurer"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Create new identity"
+msgstr "Créer une nouvelle identité"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Yes, I've stored it safely"
+msgstr "Oui, je l'ai stocké en toute sécurité"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Login / New User"
+msgstr "Connexion / Nouvel utilisateur"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Dev Drive"
+msgstr "Dev Drive"
+
+#: src/routes/DevDriveRoute.tsx
+msgid "Setting up dev drive..."
+msgstr "Configuration du lecteur de développement..."
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Create a fresh agent + drive on localhost:9883"
+msgstr "Créer un nouvel agent + drive sur localhost:9883"
+
+#: src/components/Searchbar/Searchbar.tsx
+msgid "Search (Cmd+K)"
+msgstr "Rechercher (Cmd+K)"
+
+#: src/routes/Search/SearchOverlay.tsx
+msgid "Searching..."
+msgstr "Recherche..."
+
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "Search for resources..."
+msgstr "Rechercher des ressources..."
+
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "esc"
+msgstr "échap"
+
+#: src/routes/Search/SearchOverlay.tsx
+msgid ""
+"Search matches on the names and descriptions of resources.\n"
+"Additionally you can filter by tag using <0/>"
+msgstr ""
+"La recherche correspond aux noms et descriptions des ressources.\n"
+"De plus, vous pouvez filtrer par tag en utilisant <0/>"
+
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "<0/> <1/> navigate"
+msgstr "<0/> <1/> naviguer"
+
+#: src/routes/Search/SearchOverlay.tsx
+msgid "<0/> open"
+msgstr "<0/> ouvrir"
+
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "<0>esc</0> close"
+msgstr "<0>échap</0> fermer"
+
+#. placeholder {0}: results.length
+#. placeholder {1}: results.length !== 1 ? 's' : ''
+#. placeholder {0}: results.length
+#. placeholder {1}: results.length !== 1 ? 's' : ''
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "{0} result{1}"
+msgstr "{0} résultat{1}"
+
+#: src/components/OverlayContainer.tsx
+msgid "Open search"
+msgstr "Ouvrir la recherche"
+
+#: src/components/OverlayContainer.tsx
+msgid "Show data view"
+msgstr "Afficher la vue des données"
+
+#: src/components/OverlayContainer.tsx
+msgid "Open menu"
+msgstr "Ouvrir le menu"
+
+#: src/components/OverlayContainer.tsx
+msgid "User settings"
+msgstr "Paramètres utilisateur"
+
+#: src/components/OverlayContainer.tsx
+msgid "Theme settings"
+msgstr "Paramètres du thème"
+
+#: src/components/OverlayContainer.tsx
+msgid "This page"
+msgstr "Cette page"
+
+#: src/components/OverlayContainer.tsx
+msgid "Press esc to close..."
+msgstr "Appuyez sur échap pour fermer..."
+
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+msgid "Mac"
+msgstr "Mac"
+
+#: src/components/OverlayContainer.tsx
+msgid "Ctrl+K"
+msgstr "Ctrl+K"
+
+#: src/components/OverlayContainer.tsx
+msgid "Ctrl+E"
+msgstr "Ctrl+E"
+
+#: src/components/OverlayContainer.tsx
+msgid "Ctrl+D"
+msgstr "Ctrl+D"
+
+#: src/components/OverlayContainer.tsx
+msgid "Ctrl+H"
+msgstr "Ctrl+H"
+
+#: src/components/OverlayContainer.tsx
+msgid "Ctrl+N"
+msgstr "Ctrl+N"
+
+#: src/components/OverlayContainer.tsx
+msgid "Ctrl+M"
+msgstr "Ctrl+M"
+
+#: src/components/OverlayContainer.tsx
+msgid "Ctrl+U"
+msgstr "Ctrl+U"
+
+#: src/components/OverlayContainer.tsx
+msgid "Ctrl+T"
+msgstr "Ctrl+T"
+
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+msgid "Shift+/"
+msgstr "Maj+/"
+
+#: src/components/OverlayContainer.tsx
+msgid "Show keyboard shortcuts"
+msgstr "Afficher les raccourcis clavier"
+
+#. placeholder {0}: ' '
+#. placeholder {1}: selectedCategory ? selectedCategory[0].toUpperCase() + selectedCategory.slice(1) : ''
+#. placeholder {2}: ' '
+#: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
+msgid "New{0} {1}{2} Column"
+msgstr "Nouvelle{0} colonne {1}{2}"
+
+#. placeholder {0}: query
+#: src/components/OverlayContainer.tsx
+msgid "Start AI Chat with \"{0}\""
+msgstr "Lancer une discussion IA avec « {0} »"
+
+#: src/components/OverlayContainer.tsx
+msgid "<0/> open / chat"
+msgstr "<0/> ouvrir / discuter"
+
+#: src/components/OverlayContainer.tsx
+msgid "<0/> chat"
+msgstr "<0/> discuter"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Drives"
+msgstr "Lecteurs"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Verify your secret"
+msgstr "Vérifiez votre secret"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Paste your secret here"
+msgstr "Collez votre secret ici"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Enter your name"
+msgstr "Entrez votre nom"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Profile Name"
+msgstr "Nom du profil"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Generating your identity..."
+msgstr "Génération de votre identité..."
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"Are you sure you've stored this secret somewhere safe? You\n"
+"cannot recover it if you lose it."
+msgstr ""
+"Êtes-vous sûr d'avoir stocké ce secret en lieu sûr ? Vous\n"
+"ne pourrez pas le récupérer si vous le perdez."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Yes, I've stored it — sign me out to verify"
+msgstr "Oui, je l'ai stocké — déconnectez-moi pour vérifier"
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "Folder"
+msgstr "Dossier"
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "ChatRoom"
+msgstr "Salon de discussion"
+
+#: src/components/NavBar.tsx
+#: src/components/Share/ShareDialog.tsx
+msgid "Share"
+msgstr "Partager"
+
+#: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
+#: src/views/Drive/DrivePage.tsx
+msgid "Tags"
+msgstr "Tags"
+
+#: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
+msgid "More"
+msgstr "Plus"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Remove tag"
+msgstr "Supprimer le tag"
+
+#: src/components/Tag/TagSelectPopover.tsx
+msgid "Open tag page"
+msgstr "Ouvrir la page des tags"
+
+#: src/views/ChatRoomPage.tsx
+msgid "No messages yet"
+msgstr "Aucun message pour le moment"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Be the first to say something"
+msgstr "Soyez le premier à dire quelque chose"
+
+#. placeholder {0}: shortcuts.search
+#: src/components/NavBar.tsx
+msgid "Search ({0})"
+msgstr "Rechercher ({0})"
+
+#: src/routes/AppSettings.tsx
+msgid "NavBar position"
+msgstr "Position de la barre de navigation"
+
+#: src/routes/AppSettings.tsx
+msgid "Language"
+msgstr "Langue"
+
+#: src/routes/AppSettings.tsx
+msgid "Auto"
+msgstr "Auto"
+
+#: src/routes/AppSettings.tsx
+msgid "Dark"
+msgstr "Sombre"
+
+#: src/routes/AppSettings.tsx
+msgid "Light"
+msgstr "Clair"
+
+#: src/routes/AppSettings.tsx
+msgid "Appearance"
+msgstr "Apparence"
+
+#. placeholder {0}: ' '
+#: src/routes/AppSettings.tsx
+msgid "<0/>{0} Hide templates on new resource page"
+msgstr "<0/>{0} Masquer les modèles sur la nouvelle page de ressources"
+
+#: src/routes/AppSettings.tsx
+msgid "Panels & Templates"
+msgstr "Panneaux et modèles"
+
+#: src/routes/AppSettings.tsx
+msgid "Search settings..."
+msgstr "Rechercher les paramètres..."
+
+#: src/routes/AppSettings.tsx
+msgid "Clear search"
+msgstr "Effacer la recherche"
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New Document"
+msgstr "Nouveau document"
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New Folder"
+msgstr "Nouveau dossier"
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New ChatRoom"
+msgstr "Nouveau salon de discussion"
+
+#. placeholder {0}: ' '
+#: src/views/ErrorPage.tsx
+msgid "If you have not set up an identity on this server yet,{0} <0>create one here</0>."
+msgstr "Si vous n'avez pas encore configuré d'identité sur ce serveur,{0} <0>créez-en une ici</0>."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Could not parse that secret."
+msgstr "Impossible de décoder ce secret."
+
+#: src/components/LoggedOutAgentPanel.tsx
+#: src/components/LoggedOutAgentPanel.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Agent secret"
+msgstr "Secret d'agent"
+
+#: src/components/LoggedOutAgentPanel.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Signing in…"
+msgstr "Connexion en cours…"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Set your profile name!"
+msgstr "Définissez votre nom de profil !"
+
+#: src/components/AI/AISettings.tsx
+msgid ""
+"OpenRouter provides a unified API that gives you\n"
+"access to hundreds of AI models from all major\n"
+"vendors, while automatically handling fallbacks and\n"
+"selecting the most cost-effective options."
+msgstr ""
+"OpenRouter fournit une API unifiée qui vous donne\n"
+"accès à des centaines de modèles d'IA de tous les principaux\n"
+"fournisseurs, tout en gérant automatiquement les solutions de secours et\n"
+"en sélectionnant les options les plus rentables."
+
+#. placeholder {0}: ' '
+#. placeholder {1}: ' '
+#: src/routes/PruneTestsRoute.tsx
+msgid ""
+"This removes drives created for automated tests or local dev: names\n"
+"containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
+msgstr ""
+"Ceci supprime les lecteurs créés pour les tests automatisés ou le développement local : les noms\n"
+"contenant <0/> (E2E), ou les descriptions contenant{0} <1/> (de{1} <2/>)."
+
+#: src/components/NewIdentitySection.tsx
+#: src/views/InvitePage.tsx
+msgid "Personal"
+msgstr "Personnel"
+
+#: src/components/NewIdentitySection.tsx
+#: src/views/InvitePage.tsx
+msgid "Your private space on this server. Only you can read and write here."
+msgstr "Votre espace privé sur ce serveur. Seul vous pouvez y lire et écrire."
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"Create a new Agent on this server. We will set your username and\n"
+"create a private drive as your home."
+msgstr ""
+"Créez un nouvel Agent sur ce serveur. Nous allons définir votre nom d'utilisateur et\n"
+"créer un lecteur privé comme votre domicile."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Creating your personal drive…"
+msgstr "Création de votre lecteur personnel…"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Creating drive…"
+msgstr "Création du lecteur…"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Save & continue"
+msgstr "Enregistrer et continuer"
+
+#: src/components/SideBar/SideBarHomePanels.tsx
+msgid "Shared with me"
+msgstr "Partagé avec moi"
+
+#: src/components/SideBar/SideBarPanel.tsx
+msgid "Collapse"
+msgstr "Réduire"
+
+#: src/components/SideBar/SideBarPanel.tsx
+msgid "Expand"
+msgstr "Développer"
+
+#. placeholder {0}: DEV_DRIVE_PRUNE_MARKER
+#: src/hooks/useDevDrive.ts
+msgid ""
+"Created via `/app/dev-drive` for local development and E2E. You can remove these with Prune test data on `/app/prunetests`.\n"
+"\n"
+"{0}"
+msgstr ""
+"Créé via `/app/dev-drive` pour le développement local et E2E. Vous pouvez les supprimer avec les données de test Prune sur `/app/prunetests`.\n"
+"\n"
+"{0}"
+
+#: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
+msgid "Collapse folder"
+msgstr "Réduire le dossier"
+
+#: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
+msgid "Expand folder"
+msgstr "Développer le dossier"
+
+#. placeholder {0}: title
+#: src/components/SideBar/ResourceSideBar/SidebarItemTitle.tsx
+msgid "Rearrange {0}"
+msgstr "Réorganiser {0}"
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New"
+msgstr "Nouveau"
+
+#: src/components/LoggedOutAgentPanel.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Create account"
+msgstr "Créer un compte"
+
+#: src/views/InvitePage.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "AtomicServer"
+msgstr "AtomicServer"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Get started"
+msgstr "Commencer"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Others can read this. You can change this later."
+msgstr "D'autres peuvent lire ceci. Vous pourrez le modifier plus tard."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Make your knowledge work for you."
+msgstr "Mettez vos connaissances à votre service."
+
+#: src/components/AI/AISettings.tsx
+msgid "Generative features"
+msgstr "Fonctionnalités génératives"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "<0/> Back"
+msgstr "<0/> Retour"
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"You have been signed out to verify that you saved your secret. Enter it\n"
+"below to sign in."
+msgstr ""
+"Vous avez été déconnecté pour vérifier que vous avez bien enregistré votre secret. Saisissez-le\n"
+"ci-dessous pour vous connecter."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Atomic Server — agent secret backup"
+msgstr "Serveur Atomic — sauvegarde du secret de l'agent"
+
+#: src/components/NewIdentitySection.tsx
+msgid "IMPORTANT: Store this file (or the secret line) somewhere only you can access."
+msgstr "IMPORTANT : Stockez ce fichier (ou la ligne secrète) dans un endroit où vous seul pouvez y accéder."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Without it you cannot sign in after clearing the browser or on another device."
+msgstr "Sans cela, vous ne pourrez pas vous connecter après avoir vidé le navigateur ou sur un autre appareil."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Anyone who gets this secret can access your account on this server."
+msgstr "Quiconque obtient ce secret peut accéder à votre compte sur ce serveur."
+
+#. placeholder {0}: when
+#: src/components/NewIdentitySection.tsx
+msgid "Created: {0}"
+msgstr "Créé : {0}"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Backup file downloaded — move it out of Downloads if you share this computer"
+msgstr "Fichier de sauvegarde téléchargé — déplacez-le hors des téléchargements si vous partagez cet ordinateur"
+
+#. placeholder {0}: ' '
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"<0>Ways to keep it:</0> a password manager (best),{0} <1>Save as file</1> below and move it to a private folder, or\n"
+"copy into a <2>locked note</2> (Apple Notes, Google Keep,\n"
+"etc.)—not email or chat."
+msgstr ""
+"<0>Comment le conserver :</0> un gestionnaire de mots de passe (le meilleur),{0} <1>Enregistrer comme fichier</1> ci-dessous et le déplacer dans un dossier privé, ou\n"
+"le copier dans une <2>note verrouillée</2> (Apple Notes, Google Keep,\n"
+"etc.)—pas par e-mail ou chat."
+
+#: src/components/NewIdentitySection.tsx
+msgid "<0/> Save backup file…"
+msgstr "<0/> Enregistrer le fichier de sauvegarde…"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Copy the secret or save the backup file to continue"
+msgstr "Copiez le secret ou enregistrez le fichier de sauvegarde pour continuer"
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"<0>IMPORTANT:</0> You need this secret to sign in again. We do\n"
+"not store a copy you can reset like a normal password."
+msgstr ""
+"<0>IMPORTANT :</0> Vous avez besoin de ce secret pour vous reconnecter. Nous ne\n"
+"stockons pas de copie que vous pouvez réinitialiser comme un mot de passe normal."
+
+#: src/components/NewIdentitySection.tsx
+msgid "The secret is invalid. Make sure you copied it correctly."
+msgstr "Le secret n'est pas valide. Assurez-vous de l'avoir copié correctement."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Safely store your secret"
+msgstr "Stockez votre secret en toute sécurité"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"<0>All-in-one workspace</0>: documents, tables,\n"
+"files, and APIs in one place, designed to stay coherent as it\n"
+"grows."
+msgstr ""
+"<0>Espace de travail tout-en-un</0> : documents, tableaux,\n"
+"fichiers et API au même endroit, conçus pour rester cohérents à mesure qu'il\n"
+"grandit."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"<0>Fast and lightweight</0>: a snappy workspace and\n"
+"API, small download, minimal dependencies, runs anywhere."
+msgstr ""
+"<0>Rapide et léger</0> : un espace de travail et une\n"
+"API réactifs, petit téléchargement, dépendances minimales, fonctionne partout."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"<0>Open source</0>: inspect, fork, and self-host.\n"
+"Keep control of your data and avoid lock-in."
+msgstr ""
+"<0>Open source</0> : inspectez, forkez et hébergez vous-même.\n"
+"Gardez le contrôle de vos données et évitez le verrouillage propriétaire."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"<0>Future of the web</0>: decentralized by design,\n"
+"built for interoperability so your data and tools can work\n"
+"together."
+msgstr ""
+"<0>L'avenir du web</0> : décentralisé par conception,\n"
+"construit pour l'interopérabilité afin que vos données et outils puissent fonctionner\n"
+"ensemble."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"<0>Feature complete by default</0>: rights, history,\n"
+"search, invites, realtime sync, collaboration, and AI chat\n"
+"built in."
+msgstr ""
+"<0>Fonctionnalités complètes par défaut</0> : droits, historique,\n"
+"recherche, invitations, synchronisation en temps réel, collaboration et chat IA\n"
+"intégrés."
+
+#: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
+msgid "Restore this version"
+msgstr "Restaurer cette version"
+
+#. placeholder {0}: resource.title
+#: src/routes/History/HistoryRoute.tsx
+msgid "Loading history of {0}..."
+msgstr "Chargement de l'historique de {0}..."
+
+#: src/routes/History/HistoryRoute.tsx
+msgid "No history available for this resource."
+msgstr "Aucun historique disponible pour cette ressource."
+
+#. placeholder {0}: version.peer.slice(0, 8)
+#: src/routes/History/VersionTitle.tsx
+msgid "by peer {0}..."
+msgstr "par le pair {0}..."
+
+#. placeholder {0}: version.peer && <> by peer {version.peer.slice(0, 8)}...</>
+#. placeholder {1}: version.message && <> — {version.message}</>
+#: src/routes/History/VersionTitle.tsx
+msgid "Edited <0/> {0} {1}"
+msgstr "Modifié <0/> {0} {1}"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Link copied to clipboard"
+msgstr "Lien copié dans le presse-papiers"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "<0/> Copy link"
+msgstr "<0/> Copier le lien"
+
+#: src/views/ChatRoomPage.tsx
+msgid "Loading messages..."
+msgstr "Chargement des messages..."
+
+#: src/components/LoroDocValue.tsx
+msgid "Hide"
+msgstr "Masquer"
+
+#: src/components/LoroDocValue.tsx
+msgid "Inspect"
+msgstr "Inspecter"
+
+#. placeholder {0}: showState ? <FaEyeSlash /> : <FaEye />
+#. placeholder {1}: showState ? 'Hide' : 'Inspect'
+#. placeholder {2}: sizeStr
+#. placeholder {3}: inspection ? `, ${inspection.peers} peer(s)` : ''
+#: src/components/LoroDocValue.tsx
+msgid "{0} {1} Loro snapshot ({2} {3})"
+msgstr "{0} {1} Instantané Loro ({2} {3})"
+
+#: src/components/LoroDocValue.tsx
+msgid "Failed to decode Loro snapshot"
+msgstr "Échec du décodage de l'instantané Loro"
+
+#: src/components/SideBar/SyncMenuItem.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Sync"
+msgstr "Synchroniser"
+
+#: src/routes/SyncRoute.tsx
+msgid "destroy"
+msgstr "Détruire"
+
+#: src/routes/SyncRoute.tsx
+msgid "In sync"
+msgstr "Synchronisé"
+
+#: src/components/SideBar/SyncMenuItem.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Syncing..."
+msgstr "Synchronisation..."
+
+#: src/components/SideBar/SyncMenuItem.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Changes pending"
+msgstr "Modifications en attente"
+
+#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/SyncMenuItem.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Offline"
+msgstr "Hors ligne"
+
+#: src/routes/SyncRoute.tsx
+msgid "Unknown"
+msgstr "Inconnu"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "This device"
+msgstr "Cet appareil"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Server"
+msgstr "Serveur"
+
+#: src/routes/SyncRoute.tsx
+msgid "Details"
+msgstr "Détails"
+
+#~ msgid "Drive"
+#~ msgstr "Lecteur"
+
+#: src/components/AI/ProviderStatus.tsx
+#: src/components/AI/ProviderStatus.tsx
+#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/SyncMenuItem.tsx
+msgid "Connected"
+msgstr "Connecté"
+
+#: src/routes/SyncRoute.tsx
+msgid "Initializing..."
+msgstr "Initialisation..."
+
+#: src/routes/SyncRoute.tsx
+msgid "Last sync"
+msgstr "Dernière synchronisation"
+
+#. placeholder {0}: status.lastDriveSync.count
+#. placeholder {1}: ' '
+#. placeholder {2}: formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ?? 'just now'
+#: src/routes/SyncRoute.tsx
+msgid "{0} resources,{1} {2}"
+msgstr "{0} ressources,{1} {2}"
+
+#: src/routes/SyncRoute.tsx
+msgid "No activity recorded in this session yet."
+msgstr "Aucune activité enregistrée dans cette session pour le moment."
+
+#: src/components/NetworkIndicator.tsx
+msgid "Working offline — your changes are saved locally"
+msgstr "Travail hors ligne — vos modifications sont enregistrées localement"
+
+#: src/components/NetworkIndicator.tsx
+msgid "No internet — your changes are saved locally"
+msgstr "Pas d'internet — vos modifications sont enregistrées localement"
+
+#: src/routes/SyncRoute.tsx
+msgid "Reconnect"
+msgstr "Reconnecter"
+
+#. placeholder {0}: status.pendingDirtyCount
+#: src/routes/SyncRoute.tsx
+msgid "{0} unsynced"
+msgstr "{0} non synchronisé"
+
+#. placeholder {0}: status.pendingDirtyCount > 0 && ( <PendingCount>{status.pendingDirtyCount} unsynced</PendingCount> )
+#: src/routes/SyncRoute.tsx
+msgid "Commit Log {0}"
+msgstr "Journal des commits {0}"
+
+#: src/views/InvitePage.tsx
+msgid "Sorry, this invite has no usages left. Ask for a new one."
+msgstr "Désolé, cette invitation n'a plus d'utilisations restantes. Demandez-en une nouvelle."
+
+#. placeholder {0}: showInherited ? <FaChevronDown /> : <FaChevronRight />
+#: src/components/Share/ShareDialog.tsx
+msgid "{0} Inherited permissions"
+msgstr "{0} Permissions héritées"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "<0><0/> Back</0> Create Invite"
+msgstr "<0><0/> Retour</0> Créer une invitation"
+
+#: src/routes/InviteRoute.tsx
+msgid "No invite token provided."
+msgstr "Aucun jeton d'invitation fourni."
+
+#: src/views/InvitePage.tsx
+msgid "Create account and accept"
+msgstr "Créer un compte et accepter"
+
+#: src/views/InvitePage.tsx
+msgid "I already have an account"
+msgstr "J'ai déjà un compte"
+
+#. placeholder {0}: write ? 'edit' : 'view'
+#. placeholder {1}: resourceName ? ` "${resourceName}"` : ''
+#: src/views/InvitePage.tsx
+msgid "You've been invited to {0} {1}"
+msgstr "Vous avez été invité à {0} {1}"
+
+#: src/routes/SyncRoute.tsx
+msgid "WS debug"
+msgstr "Débogage WS"
+
+#: src/routes/SyncRoute.tsx
+msgid "Logging to console"
+msgstr "Journalisation sur console"
+
+#: src/routes/SyncRoute.tsx
+msgid "Off"
+msgstr "Désactivé"
+
+#: src/routes/SyncRoute.tsx
+msgid "Disconnect"
+msgstr "Déconnecter"
+
+#: src/components/NetworkIndicator.tsx
+msgid "Running in offline mode. Reconnect in the sync menu."
+msgstr "Mode hors ligne activé. Reconnectez-vous dans le menu de synchronisation."
+
+#. placeholder {0}: host
+#: src/components/NetworkIndicator.tsx
+msgid "Connected to {0}"
+msgstr "Connecté à {0}"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "+ Add"
+msgstr "+ Ajouter"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "/app/sync"
+msgstr "/app/sync"
+
+#: src/routes/SyncRoute.tsx
+msgid "How to run your own server"
+msgstr "Comment exécuter votre propre serveur"
+
+#. placeholder {0}: data.count
+#. placeholder {1}: data.count !== 1 ? 's' : ''
+#: src/routes/SyncRoute.tsx
+msgid "Synced {0} resource{1}"
+msgstr "{0} ressource{1} synchronisée"
+
+#: src/routes/SyncRoute.tsx
+msgid "Peers"
+msgstr "Pairs"
+
+#: src/routes/SyncRoute.tsx
+msgid "No peers connected"
+msgstr "Aucun pair connecté"
+
+#: src/routes/SyncRoute.tsx
+msgid "Node DID"
+msgstr "Nœud DID"
+
+#. placeholder {0}: localNodeId.slice(0, 12)
+#: src/routes/SyncRoute.tsx
+msgid "did:ad:node:{0}..."
+msgstr "did:ad:node:{0}..."
+
+#: src/routes/SyncRoute.tsx
+msgid "Paste did:ad:node:..."
+msgstr "Coller did:ad:node:..."
+
+#: src/routes/SyncRoute.tsx
+msgid "Your data lives on this device. Add peers or a remote server to sync."
+msgstr "Vos données se trouvent sur cet appareil. Ajoutez des pairs ou un serveur distant pour synchroniser."
+
+#~ msgid "Your data is stored locally on this device. When connected to a server, changes sync automatically."
+#~ msgstr "Vos données sont stockées localement sur cet appareil. Lorsque vous êtes connecté à un serveur, les modifications sont synchronisées automatiquement."
+
+#: src/routes/SyncRoute.tsx
+msgid "Local storage ready"
+msgstr "Stockage local prêt"
+
+#: src/routes/SyncRoute.tsx
+msgid "Remote server"
+msgstr "Serveur distant"
+
+#: src/routes/SyncRoute.tsx
+msgid "Embedded (local)"
+msgstr "Intégré (local)"
+
+#: src/routes/SyncRoute.tsx
+msgid "Local DB"
+msgstr "Base de données locale"
+
+#: src/routes/SyncRoute.tsx
+msgid "Disabled (server-only)"
+msgstr "Désactivé (serveur uniquement)"
+
+#: src/routes/SyncRoute.tsx
+msgid "Ready — WASM + OPFS"
+msgstr "Prêt — WASM + OPFS"
+
+#: src/routes/SyncRoute.tsx
+msgid "Enable local WASM DB"
+msgstr "Activer la base de données WASM locale"
+
+#: src/views/ResourcePage.tsx
+msgid "Still loading…"
+msgstr "Toujours en chargement…"
+
+#: src/views/ResourcePage.tsx
+msgid ""
+"The resource at <0/> hasn't loaded after 15\n"
+"seconds. It may not exist, or the server may be unreachable."
+msgstr "La ressource à <0/> n'a pas été chargée après 15 secondes. Elle pourrait ne pas exister, ou le serveur pourrait être inaccessible."
+
+#: src/views/ResourcePage.tsx
+msgid "Check the browser console for details, or try navigating back."
+msgstr "Vérifiez la console du navigateur pour les détails, ou essayez de revenir en arrière."
+
+#. placeholder {0}: e instanceof Error ? e.message : String(e)
+#: src/routes/History/HistoryRoute.tsx
+msgid "Could not restore version: {0}"
+msgstr "Impossible de restaurer la version : {0}"
+
+#: src/routes/SettingsServer/index.tsx
+msgid "Server settings have moved to the <0>Sync page</0>."
+msgstr "Les paramètres du serveur ont été déplacés vers la <0>page Synchronisation</0>."
+
+#~ msgid "Open Drive Settings"
+#~ msgstr "Ouvrir les paramètres du disque"
+
+#~ msgid "DriveDetailTrigger"
+#~ msgstr "Déclencheur de détails du disque"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen color"
+msgstr "Couleur du stylo"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Saving…"
+msgstr "Enregistrement…"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Resources"
+msgstr "Ressources"
+
+#: src/routes/History/VersionContent.tsx
+msgid "Document body"
+msgstr "Corps du document"
+
+#: src/routes/History/VersionContent.tsx
+msgid "(empty)"
+msgstr "(vide)"
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Canvas"
+msgstr "Toile"
+
+#: src/views/Canvas/CanvasPage.tsx
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Space"
+msgstr "Espace"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Redo (Ctrl+Shift+Z)"
+msgstr "Rétablir (Ctrl+Maj+Z)"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Undo (Ctrl+Z) — drag horizontally to scrub history"
+msgstr "Annuler (Ctrl+Z) — glisser horizontalement pour parcourir l'historique"
+
+#. placeholder {0}: saveError
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Save failed: {0}"
+msgstr "Échec de l'enregistrement : {0}"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "New canvas"
+msgstr "Nouvelle toile"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Switch to draw"
+msgstr "Passer en mode dessin"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Eraser"
+msgstr "Gomme"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Stroke width"
+msgstr "Largeur du trait"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen color (tap to swap with previous, drag to pick from fan)"
+msgstr "Couleur du stylo (appuyer pour échanger avec la précédente, glisser pour choisir dans le sélecteur)"
+
+#. placeholder {0}: penWidth
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Stroke width: {0} (tap to swap with previous, drag to pick from fan)"
+msgstr "Largeur du trait : {0} (appuyer pour échanger avec la précédente, glisser pour choisir dans le sélecteur)"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom to fit (tap) — drag horizontally to zoom-scrub"
+msgstr "Zoomer pour ajuster (taper) — glisser horizontalement pour zoomer/dézoomer"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Canvas help"
+msgstr "Aide sur la toile"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Show canvas help"
+msgstr "Afficher l'aide sur la toile"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Canvas controls"
+msgstr "Contrôles de la toile"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "<0>Left click</0> & drag — draw a stroke"
+msgstr "<0>Clic gauche</0> & glisser — dessiner un trait"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"<0>Scroll</0> · <1>Space</1>+drag · middle-mouse drag\n"
+"— pan the canvas"
+msgstr ""
+"<0>Faire défiler</0> · <1>Espace</1>+glisser · glisser avec le bouton central de la souris\n"
+"— déplacer la toile"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"<0>Ctrl</0>+<1>scroll</1> · trackpad pinch — zoom\n"
+"toward the cursor"
+msgstr ""
+"<0>Ctrl</0>+<1>faire défiler</1> · pincer avec le pavé tactile — zoomer\n"
+"vers le curseur"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"Tap the colour or width button to swap with the previous\n"
+"choice; press & drag to open the picker fan"
+msgstr ""
+"Appuyez sur le bouton de couleur ou de largeur pour échanger avec le choix précédent ;\n"
+"maintenez et glissez pour ouvrir le sélecteur de couleurs"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"Tap <0>Undo</0> / <1>Redo</1> to step through edits;\n"
+"drag the undo button left/right to scrub the full history"
+msgstr ""
+"Appuyez sur <0>Annuler</0> / <1>Rétablir</1> pour parcourir les modifications ;\n"
+"faites glisser le bouton Annuler vers la gauche/droite pour parcourir l'historique complet"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"Tap the zoom button to fit all strokes; drag left/right to\n"
+"zoom continuously"
+msgstr ""
+"Appuyez sur le bouton de zoom pour ajuster tous les traits ; faites glisser vers la gauche/droite pour\n"
+"zoomer en continu"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "<0>Ctrl</0>+<1/> undo · <2>Ctrl</2>+ <3>Shift</3>+<4/> redo"
+msgstr "<0>Ctrl</0>+<1/> annuler · <2>Ctrl</2>+ <3>Maj</3>+<4/> rétablir"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Tap the eraser button, then drag across strokes to remove them"
+msgstr "Appuyez sur le bouton de la gomme, puis faites glisser sur les traits pour les supprimer"
+
+#: src/components/NavBar.tsx
+msgid "Click to rename"
+msgstr "Cliquer pour renommer"
+
+#. placeholder {0}: dragResource.title
+#. placeholder {1}: dropResource.title
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "Draggable item {0} was moved over droppable area in {1}"
+msgstr "L'élément déplaçable {0} a été déplacé sur la zone de dépôt dans {1}"
+
+#: src/hooks/useDevDrive.ts
+msgid "Dev agent created — secret copied to clipboard"
+msgstr "Agent de développement créé — secret copié dans le presse-papiers"
+
+#: src/hooks/useDevDrive.ts
+msgid "Dev agent created — secret available in localStorage (clipboard write blocked)"
+msgstr "Agent de développement créé — secret disponible dans le stockage local (écriture du presse-papiers bloquée)"
+
+#: src/routes/SyncRoute.tsx
+msgid "Node DID copied to clipboard"
+msgstr "DID de nœud copié dans le presse-papiers"
+
+#. placeholder {0}: NODE_DID_PREFIX
+#: src/routes/SyncRoute.tsx
+msgid "Error: Expected {0}<node-id>"
+msgstr "Erreur : {0}<node-id> attendu"
+
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
+msgid "Review Edits"
+msgstr "Réviser les modifications"
+
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
+msgid "edit"
+msgid_plural "edits"
+msgstr[0] "modification"
+msgstr[1] "modifications"
+
+#. placeholder {0}: editCount
+#. placeholder {1}: plural(editCount, ['edit', 'edits'])
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
+msgid "Review {0} {1}"
+msgstr "Réviser {0} {1}"
+
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
+msgid "Revert Changes"
+msgstr "Annuler les modifications"
+
+#: src/components/AI/AIChanges/AIChangesRuntime.tsx
+msgid "Confirm Changes"
+msgstr "Confirmer les modifications"
+
+#: src/components/VectorIndexingIndicator.tsx
+#: src/components/VectorIndexingIndicator.tsx
+msgid "Indexing vector data for this drive. AI search may be briefly out of date."
+msgstr "Indexation des données vectorielles pour ce lecteur. La recherche IA peut être brièvement obsolète."
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Choose a default model"
+msgstr "Choisir un modèle par défaut"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid ""
+"This pre-selects a model for built-in agents and new custom agents.\n"
+"You can change each agent's model individually later."
+msgstr "Ceci présélectionne un modèle pour les agents intégrés et les nouveaux agents personnalisés. Vous pouvez modifier le modèle de chaque agent individuellement plus tard."
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Also use for chat titles and follow-up prompts"
+msgstr "Utiliser également pour les titres de chat et les invites de suivi"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Start chatting"
+msgstr "Commencer à discuter"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Connect a model to use Atomic Assistant"
+msgstr "Connecter un modèle pour utiliser Atomic Assistant"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid ""
+"Use OpenRouter (cloud models) or Ollama (local models). At least one\n"
+"provider must be connected before you can continue."
+msgstr "Utilisez OpenRouter (modèles cloud) ou Ollama (modèles locaux). Au moins un fournisseur doit être connecté avant de pouvoir continuer."
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "or"
+msgstr "ou"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Paste API key"
+msgstr "Coller la clé API"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "OpenRouter API key"
+msgstr "Clé API OpenRouter"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Ollama URL"
+msgstr "URL d'Ollama"
+
+#. placeholder {0}: ' '
+#: src/routes/AppSettings.tsx
+msgid "<0/>{0} Enable AIChats panel"
+msgstr "<0/>{0} Activer le panneau AIChats"
+
+#: src/components/NavBar.tsx
+msgid "Revert"
+msgstr "Annuler"
+
+#: src/components/NavBar.tsx
+msgid "Accept Changes"
+msgstr "Accepter les modifications"
+
+#: src/chunks/AI/AISettingsDialog.tsx
+msgid "AI Settings"
+msgstr "Paramètres de l'IA"
+
+#: src/chunks/AI/AISettingsDialog.tsx
+msgid "AI Settings Tabs"
+msgstr "Onglets des paramètres de l'IA"
+
+#: src/chunks/AI/AISettingsDialog.tsx
+msgid "Agents"
+msgstr "Agents"
+
+#: src/chunks/AI/AISettingsDialog.tsx
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Skills"
+msgstr "Compétences"
+
+#. placeholder {0}: summaryText && ( <ChevronIcon expanded={expanded}> <FaChevronRight /> </ChevronIcon> )
+#: src/chunks/AI/CompactSeparatorWidget.tsx
+msgid "{0} Context compacted"
+msgstr "{0} Contexte compacté"
+
+#: src/chunks/AI/CompactSeparatorWidget.tsx
+msgid "Show summary"
+msgstr "Afficher le résumé"
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Duplicate"
+msgstr "Dupliquer"
+
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+msgid "unset"
+msgstr "non défini"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Edit Skill"
+msgstr "Modifier la compétence"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Delete Skill"
+msgstr "Supprimer la compétence"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "No custom skills created yet."
+msgstr "Aucune compétence personnalisée n'a encore été créée."
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "AI Skills"
+msgstr "Compétences de l'IA"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "<0/> Create New Skill"
+msgstr "<0/> Créer une nouvelle compétence"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Create Skill"
+msgstr "Créer une compétence"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "The Agent will see this name"
+msgstr "L'Agent verra ce nom"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Use this skill when..."
+msgstr "Utilisez cette compétence quand..."
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Tells the agent when to activate this skill"
+msgstr "Indique à l'agent quand activer cette compétence"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Write the markdown documentation for the skill here..."
+msgstr "Écrivez la documentation markdown de la compétence ici..."
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Content"
+msgstr "Contenu"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Path"
+msgstr "Chemin"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Remove Reference"
+msgstr "Supprimer la référence"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "Markdown content for this reference..."
+msgstr "Contenu Markdown pour cette référence..."
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "<0/> Add Reference"
+msgstr "<0/> Ajouter une référence"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "References"
+msgstr "Références"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid ""
+"Additional context. Reference these in your main content for\n"
+"additional instructions/processes that are not always needed when\n"
+"using this skill."
+msgstr ""
+"Contexte additionnel. Référencez-les dans votre contenu principal pour\n"
+"des instructions/processus supplémentaires qui ne sont pas toujours nécessaires lors\n"
+"de l'utilisation de cette compétence."
+
+#: src/views/Document/DocumentV2FullPage.tsx
+msgid "Couldn't open the document editor"
+msgstr "Impossible d'ouvrir l'éditeur de documents"
+
+#: src/views/Document/DocumentV2FullPage.tsx
+msgid ""
+"The collaborative editing engine (Loro / WebAssembly) failed to\n"
+"initialize in this tab, so the document body can't be shown."
+msgstr "Le moteur d'édition collaborative (Loro / WebAssembly) n'a pas pu s'initialiser dans cet onglet, le corps du document ne peut donc pas être affiché."
+
+#: src/views/Document/DocumentV2FullPage.tsx
+msgid ""
+"Try reloading the page. If it keeps happening, another tab of this\n"
+"app or a browser extension may be blocking WebAssembly, or the tab\n"
+"ran out of memory."
+msgstr ""
+"Essayez de recharger la page. Si le problème persiste, un autre onglet de cette\n"
+"application ou une extension de navigateur peut bloquer WebAssembly, ou l'onglet\n"
+"est à court de mémoire."
+
+#: src/routes/AboutRoute.tsx
+msgid "The easiest way to create, share and model linked data."
+msgstr "Le moyen le plus simple de créer, partager et modéliser des données liées."
+
+#: src/routes/AboutRoute.tsx
+msgid ""
+"Atomic Data combines the ease of use of JSON, the connectivity of\n"
+"linked data and the reliability of type-safety — one open protocol for\n"
+"knowledge graphs, collaborative apps and shareable datasets."
+msgstr ""
+"Atomic Data combine la facilité d'utilisation de JSON, la connectivité des\n"
+"données liées et la fiabilité de la sécurité des types — un protocole ouvert pour\n"
+"les graphes de connaissances, les applications collaboratives et les jeux de données partageables."
+
+#: src/routes/AboutRoute.tsx
+msgid "Features"
+msgstr "Fonctionnalités"
+
+#: src/routes/AboutRoute.tsx
+msgid "Learn more & get involved"
+msgstr "En savoir plus et participer"
+
+#: src/routes/AboutRoute.tsx
+msgid "Atomic Data Browser"
+msgstr "Navigateur de données atomiques"
+
+#: src/routes/AboutRoute.tsx
+msgid "Build commit"
+msgstr "Construire le commit"
+
+#. placeholder {0}: buildDate
+#: src/routes/AboutRoute.tsx
+msgid "built {0}"
+msgstr "construit {0}"
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "Failed to save AI chat message"
+msgstr "Échec de l'enregistrement du message de chat de l'IA"
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "Failed to remove AI chat message"
+msgstr "Échec de la suppression du message de chat de l'IA"
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "Failed to regenerate AI chat message"
+msgstr "Échec de la régénération du message de chat de l'IA"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive."
+msgstr "L'invite système qui définit le comportement de l'agent. Vous pouvez utiliser les espaces réservés suivants : {{timestamp}} - la date et l'heure actuelles, {{drive}} - le sujet du lecteur actuel, {{drive-structure}} - une arborescence des ressources sur le lecteur, {{custom-classes}} - une liste des classes définies sur le lecteur actuel."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid ""
+"<0/> RAG, Automatically provide context from your knowledge base based on\n"
+"your prompt."
+msgstr "<0/> RAG, Fournit automatiquement le contexte de votre base de connaissances en fonction de votre invite."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> Enable skills"
+msgstr "<0/> Activer les compétences"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Give the agent access to skills that provide domain-specific knowledge and guidance. A list of skills will be added to the end of the system prompt."
+msgstr "Donnez à l'agent l'accès à des compétences qui fournissent des connaissances et des conseils spécifiques au domaine. Une liste de compétences sera ajoutée à la fin de l'invite système."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Trade accuracy for creativity"
+msgstr "Privilégier la créativité à la précision"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Don't auto compact conversation"
+msgstr "Ne pas compacter automatiquement la conversation"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Auto-compact threshold percent"
+msgstr "Pourcentage de seuil de compactage automatique"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Auto-compact threshold"
+msgstr "Seuil de compactage automatique"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Enable auto-compact"
+msgstr "Activer le compactage automatique"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled."
+msgstr "Compacte automatiquement la conversation lorsque les jetons d'entrée dépassent ce pourcentage de la fenêtre de contexte du modèle sélectionné. Le compactage manuel /compact fonctionne toujours lorsqu'il est désactivé."
+
+#: src/components/SideBar/index.tsx
+msgid "AI Chats"
+msgstr "Conversations IA"
+
+#: src/chunks/AI/AIChatPage.tsx
+msgid "Failed to remove message resource"
+msgstr "Échec de la suppression de la ressource du message"
+
+#: src/chunks/AI/AIChatPage.tsx
+msgid "Failed to save summary message"
+msgstr "Échec de l'enregistrement du message récapitulatif"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Gathering context"
+msgstr "Collecte de contexte"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Compacting context"
+msgstr "Compactage de contexte"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Indexing"
+msgstr "Indexation"
+
+#. placeholder {0}: nummberFormatter.format(usage.input)
+#. placeholder {1}: ' '
+#. placeholder {2}: nummberFormatter.format(usage.output)
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Tokens used: {0} input,{1} {2} output"
+msgstr "Jetons utilisés : {0} en entrée,{1} {2} en sortie"
+
+#: src/chunks/RTE/comparePlugin.ts
+msgid "No alt text"
+msgstr "Pas de texte alternatif"
+
+#: src/chunks/RTE/applyPatchedJsonToLoroDocCollaborative.ts
+msgid "Editor was destroyed before it finished initializing"
+msgstr "L'éditeur a été détruit avant la fin de son initialisation"
+
+#: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+msgid "Add an OpenRouter API key in settings"
+msgstr "Ajoutez une clé API OpenRouter dans les paramètres"
+
+#~ msgid "Default chat model"
+#~ msgstr "Modèle de discussion par défaut"
+
+#~ msgid ""
+#~ "Pre-selected when creating new agents. Does not override\n"
+#~ "models you have already set per agent."
+#~ msgstr ""
+#~ "Pré-sélectionné lors de la création de nouveaux agents. Ne remplace pas\n"
+#~ "les modèles que vous avez déjà définis par agent."
+
+#~ msgid ""
+#~ "The selected default model's provider is not\n"
+#~ "available. Choose a model from a connected provider below."
+#~ msgstr ""
+#~ "Le fournisseur du modèle par défaut sélectionné n'est pas\n"
+#~ "disponible. Choisissez un modèle parmi les fournisseurs connectés ci-dessous."
+
+#: src/components/AI/AISettings.tsx
+msgid ""
+"The generative features model uses a provider that is\n"
+"not available."
+msgstr ""
+"Le modèle de fonctionnalités génératives utilise un fournisseur qui n'est\n"
+"pas disponible."
+
+#: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
+msgid "Check your Ollama URL and that the server is running"
+msgstr "Vérifiez votre URL Ollama et que le serveur est en cours d'exécution"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Searching online"
+msgstr "Recherche en ligne"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Reading <0/> schema"
+msgstr "Lecture du schéma <0/>"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Reading schema"
+msgstr "Lecture du schéma"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Listing user classes"
+msgstr "Liste des classes d'utilisateurs"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Loading skill: <0/>"
+msgstr "Chargement de la compétence : <0/>"
+
+#. placeholder {0}: ' · '
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Loading skill: <0/> {0} <1/>"
+msgstr "Chargement de la compétence : <0/> {0} <1/>"
+
+#. placeholder {0}: ' '
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Reading{0} <0/>"
+msgstr "Lecture{0} <0/>"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Creating <0/>"
+msgstr "Création de <0/>"
+
+#. placeholder {0}: propertyResource.title
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Editing {0} on <0/>"
+msgstr "Modification de {0} sur <0/>"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Editing <0/>"
+msgstr "Modification de <0/>"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Default server"
+msgstr "Serveur par défaut"
+
+#. placeholder {0}: headerCount
+#. placeholder {1}: headerCount === 1 ? '' : 's'
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "{0} custom header {1}"
+msgstr "{0} en-tête personnalisé {1}"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Edit Server"
+msgstr "Modifier le serveur"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Delete Server"
+msgstr "Supprimer le serveur"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "No MCP servers configured yet."
+msgstr "Aucun serveur MCP n'est encore configuré."
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "MCP Servers"
+msgstr "Serveurs MCP"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "<0/> Add New Server"
+msgstr "<0/> Ajouter un nouveau serveur"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Create Server"
+msgstr "Créer un serveur"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "A friendly name for this MCP server"
+msgstr "Un nom convivial pour ce serveur MCP"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "The URL where the MCP server can be reached"
+msgstr "L'URL où le serveur MCP peut être atteint"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Transport"
+msgstr "Transport"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "The transport protocol used to communicate with the server"
+msgstr "Le protocole de transport utilisé pour communiquer avec le serveur"
+
+#. placeholder {0}: index + 1
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header {0} key"
+msgstr "Clé d'en-tête {0}"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header key"
+msgstr "Clé d'en-tête"
+
+#. placeholder {0}: index + 1
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header {0} value"
+msgstr "Valeur d'en-tête {0}"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Header value"
+msgstr "Valeur de l'en-tête"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Remove header"
+msgstr "Supprimer l'en-tête"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "No custom headers configured."
+msgstr "Aucun en-tête personnalisé configuré."
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "<0/> Add header"
+msgstr "<0/> Ajouter un en-tête"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Headers"
+msgstr "En-têtes"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Optional HTTP headers to send when connecting to this MCP server"
+msgstr "En-têtes HTTP optionnels à envoyer lors de la connexion à ce serveur MCP"
+
+#: src/components/AI/ProviderStatus.tsx
+msgid "Not configured"
+msgstr "Non configuré"
+
+#: src/components/AI/ProviderStatus.tsx
+#: src/components/AI/ProviderStatus.tsx
+msgid "Checking server…"
+msgstr "Vérification du serveur…"
+
+#: src/components/AI/ProviderStatus.tsx
+#: src/components/AI/ProviderStatus.tsx
+msgid "Not responding"
+msgstr "Ne répond pas"
+
+#: src/components/SideBar/AIPanel.tsx
+msgid "Untitled Chat"
+msgstr "Discussion sans titre"
+
+#: src/components/SideBar/AIPanel.tsx
+msgid "<0/> New Chat"
+msgstr "<0/> Nouvelle discussion"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "LLM Instructions"
+msgstr "Instructions LLM"
+
+#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
+msgid "Ask me anything, / for commands, @ for context"
+msgstr "Posez-moi n'importe quelle question, / pour les commandes, @ pour le contexte"
+
+#: src/chunks/AI/ClientOnlyTransport.ts
+msgid "No custom classes found on the current drive."
+msgstr "Aucune classe personnalisée trouvée sur le lecteur actuel."
+
+#: src/chunks/AI/AIChatMessageParts/SearchToolMessageContent.tsx
+msgid "No matching results."
+msgstr "Aucun résultat correspondant."
+
+#: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
+msgid "You"
+msgstr "Vous"
+
+#: src/routes/History/HistoryDesktopView.tsx
+#: src/routes/History/HistoryMobileView.tsx
+msgid "1 Change"
+msgid_plural "# Changes"
+msgstr[0] "1 Modification"
+msgstr[1] "# Modifications"
+
+#: src/routes/History/HistoryDesktopView.tsx
+msgid "Show Commit"
+msgstr "Afficher le Commit"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Add description"
+msgstr "Ajouter une description"
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Add LLM instructions"
+msgstr "Ajouter des instructions LLM"
+
+#: src/views/Drive/DrivePage.tsx
+msgid ""
+"A short description given to the AI Agent, use this to tell it\n"
+"what this drive is about, link important resources etc."
+msgstr "Une courte description donnée à l'Agent IA, utilisez ceci pour lui dire de quoi il s'agit, lier des ressources importantes, etc."
+
+#. placeholder {0}: data.count
+#. placeholder {1}: data.count !== 1 ? 's' : ''
+#. placeholder {2}: peerName
+#: src/routes/SyncRoute.tsx
+msgid "Synced {0} resource{1} with {2}"
+msgstr "Ressource{1} {0} synchronisée avec {2}"
+
+#: src/routes/DataRoute.tsx
+msgid "genesis:"
+msgstr "genèse :"
+
+#: src/routes/DataRoute.tsx
+msgid "Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature."
+msgstr "Créateur et heure de création, dérivés du commit de genèse signé (l'identité de la ressource). Pour les ressources DID, le sujet ci-dessus EST la signature de genèse."
+
+#: src/components/SideBar/SyncMenuItem.tsx
+msgid "Changes could not sync"
+msgstr "Les modifications n'ont pas pu être synchronisées"
+
+#~ msgid "Start typing…"
+#~ msgstr "Commencez à taper…"
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Resource is not a document-v2"
+msgstr "La ressource n'est pas un document v2"
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Loro not loaded"
+msgstr "Loro non chargé"
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Failed to read document content"
+msgstr "Échec de la lecture du contenu du document"
+
+#: src/components/forms/InputLoroDoc.tsx
+msgid "Editing LoroDoc directly is not supported"
+msgstr "La modification directe de LoroDoc n'est pas prise en charge"
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Confirm Delete"
+msgstr "Confirmer la suppression"
+
+#~ msgid "Select Model"
+#~ msgstr "Sélectionner le modèle"
+
+#~ msgid "Loading model selector..."
+#~ msgstr "Chargement du sélecteur de modèle..."
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "<0/> Use Default Model"
+msgstr "<0/> Utiliser le modèle par défaut"
+
+#: src/chunks/AI/AgentConfigItem.tsx
+msgid "Default model"
+msgstr "Modèle par défaut"
+
+#~ msgid "Local"
+#~ msgstr "Local"
+
+#. placeholder {0}: model.details.parameter_size
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Size: {0}"
+msgstr "Taille : {0}"
+
+#. placeholder {0}: model.details.format
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Format: {0}"
+msgstr "Format : {0}"
+
+#: src/chunks/RTE/CollaborativeEditor.tsx
+msgid "Click to focus document…"
+msgstr "Cliquez pour voir le document..."
+
+#: src/chunks/TablePage/TableFilterBar.tsx
+msgid "Table filters"
+msgstr "Filtres du tableau"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Remove filter"
+msgstr "Supprimer le filtre"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Any"
+msgstr "Tout"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "True"
+msgstr "Vrai"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "False"
+msgstr "Faux"
+
+#: src/chunks/TablePage/TableFilterValueInput.tsx
+msgid "Value…"
+msgstr "Valeur…"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Filter"
+msgstr "Filtrer"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Filter operator"
+msgstr "Opérateur de filtre"
+
+#: src/chunks/TablePage/useTableView.ts
+#: src/chunks/TablePage/useTableView.ts
+msgid "Default View"
+msgstr "Vue par défaut"
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Hide in this view"
+msgstr "Masquer dans cette vue"
+
+#: src/chunks/TablePage/TableToolbar.tsx
+msgid "View name"
+msgstr "Nom de l'affichage"
+
+#: src/chunks/TablePage/TableToolbar.tsx
+msgid "Columns"
+msgstr "Colonnes"
+
+#. placeholder {0}: views.length + 1
+#: src/chunks/TablePage/useTableView.ts
+msgid "View {0}"
+msgstr "Vue {0}"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Ajouter une vue"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Untitled view"
+msgstr "Vue sans titre"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Show / hide columns"
+msgstr "Afficher / masquer les colonnes"
+
+#: src/chunks/AI/useGenerativeData.test.ts
+msgid "No object generated: could not parse the response."
+msgstr "Aucun objet généré : impossible d'analyser la réponse."
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "First"
+msgstr "Premier"
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "Reply"
+msgstr "Répondre"
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "Second"
+msgstr "Deuxième"
+
+#: src/chunks/AI/useProcessMessages.test.ts
+msgid "Hello"
+msgstr "Bonjour"
+
+#: src/components/CodeBlock.tsx
+msgid "Clipboard access is blocked. Select the text and copy it."
+msgstr "L'accès au presse-papiers est bloqué. Sélectionnez le texte et copiez-le."
+
+#~ msgid "DEFAULT(bare-subject)"
+#~ msgstr "PAR DÉFAUT(sujet-nu)"
+
+#. placeholder {0}: ollamaUrl ? ` at ${ollamaUrl}` : ''
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Can't reach Ollama{0}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime."
+msgstr "Impossible d'atteindre Ollama{0}. Assurez-vous qu'il est en cours d'exécution, ou passez à un modèle cloud — vous pouvez continuer à taper en attendant."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime."
+msgstr "Aucune clé API OpenRouter n'est définie. Ajoutez-en une ou passez à un modèle Ollama local — vous pouvez continuer à taper en attendant."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "No AI model provider is available. Set one up to send — you can keep typing in the meantime."
+msgstr "Aucun fournisseur de modèle d'IA n'est disponible. Configurez-en un pour envoyer — vous pouvez continuer à taper en attendant."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Set up a model"
+msgstr "Configurer un modèle"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Ollama (local)"
+msgstr "Ollama (local)"
+
+#: src/components/SideBar/SideBarHomePanels.tsx
+msgid "Favorites"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Manage account & plan →"
+msgstr ""
+
+#. placeholder {0}: nodeUsage.driveName
+#: src/routes/SyncRoute.tsx
+msgid "This drive ({0})"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive"
+msgstr ""
+
+#. placeholder {0}: nodeUsage.resourceCount.toLocaleString()
+#. placeholder {1}: ' '
+#. placeholder {2}: formatBytes(nodeUsage.blobBytes + nodeUsage.loroBytes)
+#. placeholder {3}: quotaBytes ? ` of ${formatBytes(quotaBytes)}` : ''
+#: src/routes/SyncRoute.tsx
+msgid "{0} resources ·{1} {2} {3} used"
+msgstr ""
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Toggle whether this resource appears in your Favorites."
+msgstr ""
+
+#: src/hooks/usePersonalDriveList.ts
+msgid "Could not update your list: no personal drive is set up for this account yet."
+msgstr ""
+
+#: src/helpers/cloud/reconcile.ts
+msgid "Disabled"
+msgstr ""
+
+#~ msgid "Invalid agent secret."
+#~ msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Setting up your account…"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Could not back up your secret. You can still save it yourself."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Back up your secret?"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid ""
+"This lets you recover your account if you lose your secret. We won't get\n"
+"access to your data — your secret is encrypted with the recovery\n"
+"password below before it leaves your device."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Choose a recovery password"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Recovery password"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Backing up…"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Back up & continue"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Skip, I'll save it myself"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Could not restore your account."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Forgot your secret?"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Restore account"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Checking your cloud account…"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"To restore your account, sign in to your cloud account\n"
+"first, then come back here."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in to your cloud account"
+msgstr ""
+
+#. placeholder {0}: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid ""
+"No recovery backup was found for {0}. Account\n"
+"recovery only works if you enabled it earlier."
+msgstr ""
+
+#. placeholder {0}: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Enter the recovery password you set for {0}."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Restoring…"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Restore & sign in"
+msgstr ""

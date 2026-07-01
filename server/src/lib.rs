@@ -4,22 +4,29 @@ It is currently used as an embedded server in the Tauri distribution of Atomic S
 See https://github.com/atomicdata-dev/atomic-server/tree/master/src-tauri
 */
 mod actor_messages;
-mod appstate;
+pub mod appstate;
 mod commit_monitor;
 pub mod config;
 mod content_types;
+pub mod context;
 mod errors;
 mod handlers;
 mod helpers;
 #[cfg(feature = "https")]
 mod https;
+pub mod invite_token;
 mod jsonerrors;
+mod loro_sync_broadcaster;
+mod metrics;
+pub mod node;
 pub mod plugins;
-mod routes;
+pub mod routes;
 pub mod serve;
-mod y_sync_broadcaster;
+pub mod vector_search;
 // #[cfg(feature = "search")]
+pub mod iroh_transport;
 mod search;
 #[cfg(test)]
 mod tests;
 mod trace;
+// Force rebuild for blake3

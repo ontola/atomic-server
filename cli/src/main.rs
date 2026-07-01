@@ -129,9 +129,9 @@ pub enum SerializeOptions {
     NTriples,
 }
 
-impl Into<Format> for SerializeOptions {
-    fn into(self) -> Format {
-        match self {
+impl From<SerializeOptions> for Format {
+    fn from(val: SerializeOptions) -> Self {
+        match val {
             SerializeOptions::Pretty => Format::Pretty,
             SerializeOptions::Json => Format::Json,
             SerializeOptions::JsonAd => Format::JsonAd,
@@ -164,7 +164,7 @@ impl Context {
         let agent = Agent::from_secret(&write_ctx.shared.agent_secret).unwrap();
         self.store.set_default_agent(agent);
         self.store
-            .set_server_url(&write_ctx.client.clone().unwrap().server_url);
+            .set_base_url(&write_ctx.client.clone().unwrap().server_url);
 
         write_ctx
     }
@@ -186,7 +186,10 @@ fn set_agent_config() -> CLIResult<Config> {
             let server = promptly::prompt("What's the base url of your Atomic Server?")?;
             let agent_secret = promptly::prompt("Enter your agent secret")?;
             let config = atomic_lib::config::Config {
-                shared: SharedConfig { agent_secret },
+                shared: SharedConfig {
+                    agent_secret,
+                    initial_drive: None,
+                },
                 client: Some(ClientConfig { server_url: server }),
             };
             config.save(&agent_config_path)?;

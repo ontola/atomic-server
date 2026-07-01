@@ -1,54 +1,117 @@
 use actix_cors::Cors;
-use actix_web::{middleware, web, HttpServer};
+use actix_web::{
+    body::MessageBody,
+    dev::{ServiceRequest, ServiceResponse},
+    middleware, web, Error, HttpServer,
+};
 use atomic_lib::Storelike;
+use tracing_actix_web::{DefaultRootSpanBuilder, RootSpanBuilder};
+
+/// Custom span builder: uses "{method} {path}" when no route pattern is matched
+/// (e.g. static files), so spans are legible in SigNoz instead of just "GET".
+struct AtomicRootSpanBuilder;
+
+impl RootSpanBuilder for AtomicRootSpanBuilder {
+    fn on_request_start(request: &ServiceRequest) -> tracing::Span {
+        if request.match_pattern().is_none() {
+            let name = format!("{} {}", request.method(), request.path());
+            return tracing::info_span!("HTTP request", "otel.name" = name, "http.method" = %request.method(), "http.target" = %request.path());
+        }
+        DefaultRootSpanBuilder::on_request_start(request)
+    }
+
+    fn on_request_end<B: MessageBody>(
+        span: tracing::Span,
+        outcome: &Result<ServiceResponse<B>, Error>,
+    ) {
+        DefaultRootSpanBuilder::on_request_end(span, outcome);
+    }
+}
 
 use crate::errors::AtomicServerResult;
 
 /// Clears and rebuilds the Store & Search indexes
-async fn rebuild_indexes(appstate: &crate::appstate::AppState) -> AtomicServerResult<()> {
-    let appstate_clone = appstate.clone();
+async fn rebuild_indexes(
+    appstate: &crate::appstate::AppState,
+    mode: &crate::config::RebuildIndexMode,
+) -> AtomicServerResult<()> {
+    if matches!(
+        mode,
+        crate::config::RebuildIndexMode::All | crate::config::RebuildIndexMode::Atoms
+    ) {
+        let appstate_clone = appstate.clone();
 
-    actix_web::rt::spawn(async move {
-        appstate_clone
-            .store
-            .clear_index()
-            .expect("Failed to clear value index");
-        appstate_clone
-            .store
-            .build_index(true)
-            .expect("Failed to build value index");
-    });
+        actix_web::rt::spawn(async move {
+            appstate_clone
+                .store
+                .clear_index()
+                .expect("Failed to clear value index");
+            appstate_clone
+                .store
+                .build_index(true)
+                .expect("Failed to build value index");
+        });
+    }
 
-    tracing::info!("Removing existing search index...");
-    appstate
-        .search_state
-        .writer
-        .write()
-        .expect("Could not get a lock on search writer")
-        .delete_all_documents()?;
-    appstate
-        .search_state
-        .add_all_resources(&appstate.store)
-        .await?;
+    if matches!(
+        mode,
+        crate::config::RebuildIndexMode::All | crate::config::RebuildIndexMode::Search
+    ) {
+        tracing::info!("Removing existing search index...");
+        appstate
+            .search_state
+            .writer
+            .write()
+            .expect("Could not get a lock on search writer")
+            .delete_all_documents()?;
+        appstate
+            .search_state
+            .add_all_resources(&appstate.store)
+            .await?;
+    }
+
+    if matches!(
+        mode,
+        crate::config::RebuildIndexMode::All | crate::config::RebuildIndexMode::Vector
+    ) {
+        #[cfg(not(feature = "vector-search"))]
+        tracing::warn!(
+            "Vector index rebuild requested but this build was compiled without the vector-search feature"
+        );
+        #[cfg(feature = "vector-search")]
+        if appstate.vector_search_state.is_enabled() {
+            tracing::info!("Removing existing vector search index...");
+            // vector search index was already wiped in VectorSearchState::new if rebuild_indexes was passed
+
+            appstate
+                .vector_search_state
+                .add_all_resources(&appstate.store)
+                .await?;
+        }
+    }
+
     Ok(())
 }
 
 /// Removes all remote resources from the store.
 async fn clear_remote_cache(appstate: &crate::appstate::AppState) -> AtomicServerResult<()> {
-    let self_url = appstate.store.get_self_url().expect("No self url");
     tracing::info!("Removing remote resources...");
     let mut count = 0;
     let mut subjects_to_remove = Vec::new();
     for resource in appstate.store.all_resources(true) {
         let subject = resource.get_subject();
-        if !subject.starts_with(&self_url) {
+        if matches!(subject, atomic_lib::Subject::External(_)) {
             subjects_to_remove.push(subject.clone());
         }
     }
 
     for subject in subjects_to_remove {
         appstate.store.remove_resource(&subject).await?;
-        appstate.search_state.remove_resource(&subject)?;
+        appstate.search_state.remove_resource(subject.as_str())?;
+        let _ = appstate
+            .vector_search_state
+            .remove_resource(subject.as_str())
+            .await;
         count += 1;
     }
 
@@ -58,33 +121,216 @@ async fn clear_remote_cache(appstate: &crate::appstate::AppState) -> AtomicServe
     Ok(())
 }
 
+/// Marker in the description of dev-drives (see
+/// `browser/data-browser/src/hooks/useDevDrive.ts` /
+/// `server/src/plugins/prunetests.rs`). Skipped during Pkarr announcement to
+/// avoid broadcasting throwaway test drives to the DHT.
+const DEV_DRIVE_MARKER: &str = "[atomic-data:dev-drive]";
+
+/// Publish this server's Iroh NodeID to the pkarr DHT, one record per drive
+/// it hosts. Pkarr keys the record by a keypair derived from the drive's DID
+/// (see `atomic_lib::discovery::publish_node_id`), so clients resolving a
+/// `?drive=did:ad:...` hint can find the node(s) hosting that specific drive.
+///
+/// Dev-drives are skipped (they accumulate by the hundreds during
+/// development and publishing each is pure noise).
+async fn announce_drives_pkarr(
+    appstate: &crate::appstate::AppState,
+    node_id: &str,
+) -> Result<(), String> {
+    use atomic_lib::Storelike;
+
+    let mut published = 0;
+    let mut skipped_dev = 0;
+    for resource in appstate.store.all_resources(false) {
+        if let Ok(classes_val) = resource.get(atomic_lib::urls::IS_A) {
+            if let Ok(classes) = classes_val.to_subjects(None) {
+                if !classes.contains(&atomic_lib::urls::DRIVE.to_string()) {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+        } else {
+            continue;
+        }
+
+        let is_dev = match resource.get(atomic_lib::urls::DESCRIPTION) {
+            Ok(v) => v.to_string().contains(DEV_DRIVE_MARKER),
+            Err(_) => false,
+        };
+        if is_dev {
+            skipped_dev += 1;
+            continue;
+        }
+
+        let drive_did = resource.get_subject().as_str();
+        // Drives have did:ad:{genesis} subjects. The publish_node_id derivation
+        // assumes exactly that shape — bail early for any other kind of drive
+        // resource rather than producing a bad pkarr keypair.
+        if !drive_did.starts_with("did:ad:")
+            || drive_did.starts_with("did:ad:agent:")
+            || drive_did.starts_with("did:ad:commit:")
+        {
+            continue;
+        }
+
+        match atomic_lib::discovery::publish_node_id(drive_did, node_id).await {
+            Ok(_) => published += 1,
+            Err(e) => tracing::warn!("Pkarr: failed for drive {drive_did}: {e}"),
+        }
+    }
+    tracing::info!(
+        "Pkarr: announced {} drives ({} dev-drives skipped)",
+        published,
+        skipped_dev
+    );
+    Ok(())
+}
+
 // Increase the maximum payload size (for POSTing a body, for example) to 50MB
 const PAYLOAD_MAX: usize = 50_242_880;
+const SERVER_VERSION_HEADER: &str = "X-Atomic-Server-Version";
+const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Start the server
 pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
-    println!("Atomic-server {} \nUse --help for instructions. Visit https://docs.atomicdata.dev and https://github.com/atomicdata-dev/atomic-server for more info.", env!("CARGO_PKG_VERSION"));
+    serve_with_hook(config, |_appstate| {}).await
+}
+
+/// Like [`serve`], but invokes `on_ready(&AppState)` once the store, indexes and
+/// transports are up but before the HTTP server begins accepting connections.
+/// Embedders (e.g. a managed-node wrapper) use this to install a sync policy and
+/// spawn background tasks without forking the server. Self-hosted use goes
+/// through [`serve`] with a no-op hook.
+pub async fn serve_with_hook<F>(
+    config: crate::config::Config,
+    on_ready: F,
+) -> AtomicServerResult<()>
+where
+    F: FnOnce(&crate::appstate::AppState),
+{
+    println!(
+        "Atomic-server {} \nUse --help for instructions. Visit https://docs.atomicdata.dev and https://github.com/atomicdata-dev/atomic-server for more info.",
+        env!("CARGO_PKG_VERSION")
+    );
     let tracing_chrome_flush_guard = crate::trace::init_tracing(&config);
 
     // Setup the database and more
     let appstate = crate::appstate::AppState::init(config.clone()).await?;
 
     // Start async processes
-    if config.opts.rebuild_indexes {
-        rebuild_indexes(&appstate).await?;
+    if let Some(ref mode) = config.opts.rebuild_indexes {
+        rebuild_indexes(&appstate, mode).await?;
     }
     if config.opts.clear_remote_cache {
         clear_remote_cache(&appstate).await?;
     }
 
+    // Persist a configured device name so peers see something friendly in
+    // their `HELLO` frames. Mirrors what the flutter app sets via its UI —
+    // same DB key, same accessor — but driven from CLI/env so server
+    // operators don't need a separate tool to brand a node.
+    if let Some(name) = config
+        .opts
+        .device_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        atomic_lib::sync::peer::set_device_name(&appstate.store, name);
+    }
+
+    // Durable-flush tick. Per-commit writes use Durability::None (no fsync)
+    // for throughput; this background flush makes them durable on a fixed
+    // cadence (100ms), bounding crash data-loss to the interval while
+    // amortizing a single fsync across every commit in the window. Runs on a
+    // dedicated OS thread because the flush blocks on fsync, which would stall
+    // a tokio worker.
+    {
+        let store = appstate.store.clone();
+        std::thread::Builder::new()
+            .name("durable-flush".into())
+            .spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                if let Err(e) = store.flush() {
+                    tracing::warn!("periodic durable flush failed: {e}");
+                }
+            })
+            .expect("spawn durable-flush thread");
+    }
+
+    // Start Iroh peer-to-peer transport
+    let mut iroh_node_id: Option<String> = None;
+    let _iroh_router = {
+        let store = appstate.store.clone();
+        match crate::iroh_transport::start(store.clone()).await {
+            Ok((node_id, router)) => {
+                iroh_node_id = Some(node_id.to_string());
+                tracing::info!(
+                    "Iroh transport ready as \"{}\". Connect with: did:ad:node:{node_id}",
+                    atomic_lib::sync::peer::effective_device_name(&store)
+                );
+
+                // Announce this server's NodeID via pkarr relay, one record per
+                // drive (see `announce_drives_pkarr`).
+                let appstate_clone = appstate.clone();
+                actix_web::rt::spawn(async move {
+                    if let Err(e) =
+                        announce_drives_pkarr(&appstate_clone, &node_id.to_string()).await
+                    {
+                        tracing::warn!("Pkarr announcement failed: {e}");
+                    }
+                });
+
+                Some(router)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to start Iroh transport: {e}");
+                None
+            }
+        }
+    };
+
+    // Managed-node control-plane integration. When ATOMIC_CONTROL_PLANE_URL is
+    // set, this server heartbeats to the control plane (so it appears online and
+    // its drives gain an http_origin), polls it for the allowlist of drives to
+    // host (installed as the sync admission policy), and reports per-drive usage.
+    // Self-hosted / FOSS servers skip all of this and stay unrestricted.
+    if crate::node::is_managed(&config) {
+        if let Some(hb) = crate::node::heartbeat_config(&config, iroh_node_id.clone()) {
+            let policy = std::sync::Arc::new(atomic_lib::sync::policy::AllowlistPolicy::new());
+            appstate.store.set_sync_policy(policy.clone());
+            crate::node::spawn_heartbeat(hb.clone(), appstate.store.clone(), policy.clone());
+            crate::node::spawn_policy_poll(
+                hb.clone(),
+                policy.clone(),
+                appstate.managed_dashboard_url.clone(),
+            );
+            // Replication runs on its own task so a slow Iroh pull can't starve
+            // the policy poll (which is what freezes the allowlist otherwise).
+            crate::node::spawn_replication_pull(hb, appstate.store.clone(), policy);
+            tracing::info!(
+                "Managed node: reporting to control plane at {}",
+                config
+                    .opts
+                    .control_plane_url
+                    .as_deref()
+                    .unwrap_or_default()
+                    .trim_end_matches('/')
+            );
+        }
+    }
+
     let server = HttpServer::new(move || {
-        let cors = Cors::permissive();
+        let cors = Cors::permissive().expose_headers([SERVER_VERSION_HEADER]);
 
         actix_web::App::new()
             .app_data(web::PayloadConfig::new(PAYLOAD_MAX))
             .app_data(web::Data::new(appstate.clone()))
             .wrap(cors)
-            .wrap(tracing_actix_web::TracingLogger::default())
+            .wrap(middleware::DefaultHeaders::new().add((SERVER_VERSION_HEADER, SERVER_VERSION)))
+            .wrap(tracing_actix_web::TracingLogger::<AtomicRootSpanBuilder>::new())
             .wrap(middleware::Compress::default())
             // Here are the actual handlers / endpoints
             .configure(crate::routes::config_routes)
@@ -99,7 +345,30 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
             )
     });
 
-    let message = format!("{}\n\nVisit {}\n\n", BANNER, config.server_url);
+    let protocol = if config.opts.https { "https" } else { "http" };
+    let port = if config.opts.https {
+        config.opts.port_https
+    } else {
+        config.opts.port
+    };
+    let mut message = format!(
+        "{}\n\nVisit {}://{}:{}\n",
+        BANNER, protocol, config.opts.domain, port
+    );
+
+    if config.opts.ip.is_unspecified() {
+        message.push_str("\nAlso available on your local network at:\n");
+        if let Ok(network_interfaces) = local_ip_address::list_afinet_netifas() {
+            for (name, ip) in network_interfaces.iter() {
+                if ip.is_ipv4() && !ip.is_loopback() {
+                    message.push_str(&format!("- {}://{}:{} ({})\n", protocol, ip, port, name));
+                }
+            }
+        }
+        message.push('\n');
+    } else {
+        message.push('\n');
+    }
 
     if config.opts.https {
         if cfg!(feature = "https") {
@@ -117,7 +386,7 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
                 tracing::info!("Binding HTTPS server to endpoint {}", endpoint);
                 println!("{}", message);
                 server
-                    .bind_rustls(&endpoint, https_config)
+                    .bind_rustls_0_23(&endpoint, https_config)
                     .map_err(|e| format!("Cannot bind to endpoint {}: {}", &endpoint, e))?
                     .shutdown_timeout(TIMEOUT)
                     .run()

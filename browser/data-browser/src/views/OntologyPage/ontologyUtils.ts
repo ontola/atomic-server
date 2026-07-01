@@ -3,6 +3,12 @@ import { sortSubjectList } from './sortSubjectList';
 
 const DEFAULT_DESCRIPTION = 'Change me';
 
+/**
+ * Preview of the subject the new class will get. For HTTP parents this matches
+ * the actual subject; for DID parents the real subject is a fresh
+ * `did:ad:{signature}` minted at save time, so the preview is informational
+ * only. The server rejects `did:ad:{base64}/path` commits.
+ */
 export const subjectForClass = (parent: Resource, shortName: string): string =>
   `${parent.subject}/class/${shortName}`;
 
@@ -11,10 +17,7 @@ export async function newClass(
   parent: Resource<Core.Ontology>,
   store: Store,
 ): Promise<string> {
-  const subject = subjectForClass(parent, shortName);
-
   const resource = await store.newResource({
-    subject,
     parent: parent.subject,
     isA: core.classes.class,
     propVals: {
@@ -24,6 +27,7 @@ export async function newClass(
   });
 
   await resource.save();
+  const subject = resource.subject;
 
   const classes = parent.props.classes ?? [];
 
@@ -42,10 +46,7 @@ export async function newProperty(
   parent: Resource,
   store: Store,
 ) {
-  const subject = `${parent.subject}/property/${shortname}`;
-
   const resource = await store.newResource({
-    subject,
     parent: parent.subject,
     isA: core.classes.property,
     propVals: {
@@ -57,5 +58,5 @@ export async function newProperty(
 
   await resource.save();
 
-  return subject;
+  return resource.subject;
 }

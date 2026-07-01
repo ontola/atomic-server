@@ -35,6 +35,7 @@ They are used for performing custom queries, or calculating dynamic attributes.
 
 pub mod bookmark;
 pub mod chatroom;
+pub mod did;
 pub mod export;
 pub mod files;
 pub mod importer;
@@ -44,5 +45,9 @@ pub mod plugin;
 pub mod prunetests;
 pub mod query;
 pub mod search;
+pub mod setup;
+#[cfg(feature = "vector-search")]
+pub mod vector_search;
 pub mod versioning;
+#[cfg(feature = "wasm-plugins")]
 pub mod wasm;

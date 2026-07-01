@@ -2,16 +2,13 @@ import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import {
   Client,
   core,
-  isYDoc,
   server,
   urls,
   useCurrentAgent,
   useResource,
   useStore,
-  YLoader,
   type JSONArray,
   type JSONValue,
-  type PropVals,
   type Resource,
   type Store,
 } from '@tomic/react';
@@ -515,20 +512,22 @@ function resourceToUIPluginResource(resource: Resource): UIPluginResource {
     subject: resource.subject,
     title: resource.title,
     loading: false,
-    props: propvalsToJSONRecord(resource.getPropVals()),
+    props: entriesToJSONRecord(resource.getEntries()),
   };
 }
 
-function propvalsToJSONRecord(propvals: PropVals): Record<string, JSONValue> {
+function entriesToJSONRecord(
+  entries: [string, unknown][],
+): Record<string, JSONValue> {
   return Object.fromEntries(
-    propvals.entries().map(([key, value]) => {
-      if (isYDoc(value)) {
-        return [key, YLoader.Y.encodeStateAsUpdateV2(value)];
+    entries.map(([key, value]) => {
+      if (value instanceof Uint8Array) {
+        return [key, undefined];
       }
 
-      return [key, value];
+      return [key, value as JSONValue];
     }),
-  );
+  ) as Record<string, JSONValue>;
 }
 
 export function usePluginRPC(

@@ -31,7 +31,11 @@ pub fn import_endpoint() -> Endpoint {
 pub fn handle_get<'a>(
     context: HandleGetContext<'a>,
 ) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
-    Box::pin(async move { import_endpoint().to_resource_response(context.store).await })
+    Box::pin(async move {
+        import_endpoint()
+            .to_resource_response(context.store, context.subject.as_str())
+            .await
+    })
 }
 
 /// When an importer is shown, we list a bunch of Parameters and a list of previously imported items.
@@ -44,7 +48,7 @@ pub fn handle_post<'a>(
             store,
             body,
             for_agent,
-            subject,
+            ref subject,
         } = context;
         let mut url = None;
         let mut json = None;
@@ -73,18 +77,20 @@ pub fn handle_post<'a>(
         if let Some(fetch_url) = url {
             json = Some(
                 client::fetch_body(&fetch_url, parse::JSON_AD_MIME, None)
+                    .await
                     .map_err(|e| format!("Error while fetching {}: {}", fetch_url, e))?,
             );
         }
 
         let parse_opts = parse::ParseOpts {
             for_agent: for_agent.clone(),
-            importer: Some(parent),
+            importer: Some(atomic_lib::Subject::from_raw(&parent, None)),
             overwrite_outside,
             // We sign the importer Commits with the default agent,
             // not the one performing the import, because we don't have their private key.
             signer: Some(store.get_default_agent()?),
             save: parse::SaveOpts::Commit,
+            ..Default::default()
         };
 
         if let Some(json_string) = json {
@@ -100,6 +106,8 @@ pub fn handle_post<'a>(
             );
         }
 
-        import_endpoint().to_resource_response(context.store).await
+        import_endpoint()
+            .to_resource_response(context.store, context.subject.as_str())
+            .await
     })
 }

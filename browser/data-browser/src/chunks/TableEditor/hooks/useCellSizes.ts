@@ -31,22 +31,15 @@ export function useCellSizes<T>(
 
   const resizeCell = useCallback(
     (index: number, size: string) => {
-      setSizes(prevSizes => {
-        if (prevSizes.length !== columns.length) {
-          console.error(
-            'prevSizes.length !== columns.length',
-            columns,
-            prevSizes,
-          );
-        }
+      if (sizes.length !== columns.length) {
+        console.error('sizes.length !== columns.length', columns, sizes);
+      }
 
-        const newSizes = [...prevSizes];
-        newSizes[index] = size;
+      const newSizes = [...sizes];
+      newSizes[index] = size;
 
-        return newSizes;
-      });
-
-      onSizesChange(sizes.map(parseSize));
+      setSizes(newSizes);
+      onSizesChange(newSizes.map(parseSize));
     },
     [columns, sizes, onSizesChange],
   );

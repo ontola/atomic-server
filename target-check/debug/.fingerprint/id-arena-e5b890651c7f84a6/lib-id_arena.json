@@ -1,0 +1,1 @@
+{"rustc":17940977064402226622,"features":"[]","declared_features":"[\"default\", \"rayon\", \"std\"]","target":12044386765291508859,"profile":3033921117576893,"path":13455513348564313609,"deps":[],"local":[{"CheckDepInfo":{"dep_info":"debug/.fingerprint/id-arena-e5b890651c7f84a6/dep-lib-id_arena","checksum":false}}],"rustflags":[],"config":8247474407144887393,"compile_kind":0}

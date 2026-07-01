@@ -13,19 +13,18 @@ export interface FlexProps extends React.HTMLAttributes<HTMLDivElement> {
   wrapItems?: boolean;
   fullWidth?: boolean;
   fullHeight?: boolean;
+  reverse?: boolean;
   as?: keyof JSX.IntrinsicElements;
 }
 
-export type RowProps = Omit<FlexProps, 'direction'> & {
-  reverse?: boolean;
-};
-export type ColumnProps = Omit<FlexProps, 'direction'> & {
-  reverse?: boolean;
-};
-
+/**
+ * A horizontal flex container.
+ * Used to render elements in a row.
+ * Use props to control the look or extend using styled-components if you need more control.
+ */
 export const Row = forwardRef<
   HTMLDivElement,
-  React.PropsWithChildren<RowProps>
+  React.PropsWithChildren<FlexProps>
 >(({ children, reverse, ...props }, ref) => {
   return (
     <Flex {...props} direction={reverse ? 'row-reverse' : 'row'} ref={ref}>
@@ -36,9 +35,14 @@ export const Row = forwardRef<
 
 Row.displayName = 'Row';
 
+/**
+ * A vertical flex container.
+ * Used to render elements in a column.
+ * Use props to control the look or extend using styled-components if you need more control.
+ */
 export const Column = forwardRef<
   HTMLDivElement,
-  React.PropsWithChildren<ColumnProps>
+  React.PropsWithChildren<FlexProps>
 >(({ children, reverse, ...props }, ref) => {
   return (
     <Flex

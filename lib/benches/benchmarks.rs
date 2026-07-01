@@ -9,7 +9,7 @@ use tokio::runtime::Runtime;
 
 fn random_atom_string() -> Atom {
     Atom::new(
-        format!("https://localhost/{}", random_string(10)),
+        format!("https://localhost/{}", random_string(10)).into(),
         urls::DESCRIPTION.into(),
         Value::Markdown(random_string(200)),
     )
@@ -25,15 +25,17 @@ fn random_array(n: usize) -> Vec<String> {
 
 fn random_atom_array() -> Atom {
     Atom::new(
-        format!("https://localhost/{}", random_string(10)),
+        format!("https://localhost/{}", random_string(10)).into(),
         urls::COLLECTION_MEMBERS.into(),
         random_array(200).into(),
     )
 }
 
 fn random_resource(atom: &Atom) -> Resource {
-    let mut resource = Resource::new(atom.subject.clone());
-    resource.set_unsafe(atom.property.clone(), atom.value.clone());
+    let mut resource = Resource::new(atom.subject.to_string());
+    resource
+        .set_unsafe(atom.property.clone(), atom.value.clone())
+        .unwrap();
     resource
 }
 
@@ -120,7 +122,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let big_resource = rt
         .block_on(store.get_resource_extended(
-            "https://localhost/collections",
+            &"https://localhost/collections".into(),
             false,
             &agents::ForAgent::Public,
         ))
@@ -128,19 +130,19 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("resource.to_json_ad()", |b| {
         b.iter(|| {
-            big_resource.to_json_ad().unwrap();
+            big_resource.to_json_ad(None).unwrap();
         })
     });
 
     c.bench_function("resource.to_json_ld()", |b| {
         b.to_async(&rt).iter(|| async {
-            big_resource.to_json_ld(&store).await.unwrap();
+            big_resource.to_json_ld(&store, None).await.unwrap();
         })
     });
 
     c.bench_function("resource.to_json()", |b| {
         b.to_async(&rt).iter(|| async {
-            big_resource.to_json(&store).await.unwrap();
+            big_resource.to_json(&store, None).await.unwrap();
         })
     });
 
@@ -160,10 +162,19 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     all_resources_group.finish();
-    println!("Clearing store");
-    // If this takes a long time, it probably means there is still a lot of data that needs to be flushed.
-    store.clear_all_danger().unwrap();
-    println!("Store cleared");
+    // `clear_all_danger` is only compiled with the `db-sled` feature; under
+    // the default redb backend the temp store is dropped at end-of-scope.
+    // The explicit `drop(store)` would conflict with the move into
+    // `clear_all_danger`, so it's also gated to the redb path.
+    #[cfg(feature = "db-sled")]
+    {
+        println!("Clearing store");
+        // If this takes a long time, it probably means there is still a lot of data that needs to be flushed.
+        store.clear_all_danger().unwrap();
+        println!("Store cleared");
+    }
+    #[cfg(not(feature = "db-sled"))]
+    drop(store);
 }
 
 criterion_group!(benches, criterion_benchmark);
