@@ -111,21 +111,32 @@ pub fn spawn_heartbeat(config: ControlPlaneHeartbeatConfig, store: Db, policy: A
 
 pub fn spawn_policy_poll(
     config: ControlPlaneHeartbeatConfig,
-    store: Db,
     policy: Arc<AllowlistPolicy>,
     dashboard_url: Arc<RwLock<Option<String>>>,
 ) {
     actix_web::rt::spawn(async move {
         let client = reqwest::Client::new();
         loop {
-            match refresh_policy(&client, &config, &policy, &dashboard_url).await {
-                // After learning the allowlist, replicate every hosted drive
-                // whose data we don't have yet by pulling it from a peer — this
-                // is what makes a managed node an always-on replica rather than
-                // a passive recipient of browser pushes.
-                Ok(()) => pull_allowed_drives(&config, &store, &policy).await,
-                Err(e) => tracing::warn!("Atomic ControlPlane policy refresh failed: {e}"),
+            if let Err(e) = refresh_policy(&client, &config, &policy, &dashboard_url).await {
+                tracing::warn!("Atomic ControlPlane policy refresh failed: {e}");
             }
+            actix_web::rt::time::sleep(config.interval).await;
+        }
+    });
+}
+
+/// Replicate hosted drives, on its OWN task/cadence — deliberately NOT inside the
+/// policy-poll loop. A slow or unreachable peer (Iroh connect can take many
+/// seconds to time out) must never starve policy refresh or usage reporting;
+/// keeping this separate means a stuck pull can't freeze the node's allowlist.
+pub fn spawn_replication_pull(
+    config: ControlPlaneHeartbeatConfig,
+    store: Db,
+    policy: Arc<AllowlistPolicy>,
+) {
+    actix_web::rt::spawn(async move {
+        loop {
+            pull_allowed_drives(&config, &store, &policy).await;
             actix_web::rt::time::sleep(config.interval).await;
         }
     });
@@ -154,21 +165,31 @@ async fn pull_allowed_drives(
         if store.has_resource_locally(&drive) {
             continue;
         }
-        match atomic_lib::discovery::resolve_node_id_filtered(&drive, Some(exclude)).await {
-            Ok(peer) => match atomic_lib::sync::peer::sync_drive_with_peer_outcome(
-                &peer, &drive, store,
-            )
-            .await
-            {
-                Ok(outcome) => tracing::info!(
-                    "[managed-node] replicated drive {drive} from peer {peer} ({} resources)",
-                    outcome.count
-                ),
-                Err(e) => tracing::warn!("[managed-node] replication failed for {drive}: {e}"),
-            },
-            Err(e) => {
-                tracing::debug!("[managed-node] no peer announced for drive {drive} yet: {e}")
+        // Bound each drive's discovery+pull so one unreachable peer can't stall
+        // the whole loop for its full Iroh connect-timeout.
+        let attempt = async {
+            match atomic_lib::discovery::resolve_node_id_filtered(&drive, Some(exclude)).await {
+                Ok(peer) => match atomic_lib::sync::peer::sync_drive_with_peer_outcome(
+                    &peer, &drive, store,
+                )
+                .await
+                {
+                    Ok(outcome) => tracing::info!(
+                        "[managed-node] replicated drive {drive} from peer {peer} ({} resources)",
+                        outcome.count
+                    ),
+                    Err(e) => tracing::warn!("[managed-node] replication failed for {drive}: {e}"),
+                },
+                Err(e) => {
+                    tracing::debug!("[managed-node] no peer announced for drive {drive} yet: {e}")
+                }
             }
+        };
+        if actix_web::rt::time::timeout(std::time::Duration::from_secs(8), attempt)
+            .await
+            .is_err()
+        {
+            tracing::debug!("[managed-node] replication attempt for {drive} timed out");
         }
     }
 }

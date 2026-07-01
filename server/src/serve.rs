@@ -303,11 +303,13 @@ where
             appstate.store.set_sync_policy(policy.clone());
             crate::node::spawn_heartbeat(hb.clone(), appstate.store.clone(), policy.clone());
             crate::node::spawn_policy_poll(
-                hb,
-                appstate.store.clone(),
-                policy,
+                hb.clone(),
+                policy.clone(),
                 appstate.managed_dashboard_url.clone(),
             );
+            // Replication runs on its own task so a slow Iroh pull can't starve
+            // the policy poll (which is what freezes the allowlist otherwise).
+            crate::node::spawn_replication_pull(hb, appstate.store.clone(), policy);
             tracing::info!(
                 "Managed node: reporting to control plane at {}",
                 config
