@@ -87,6 +87,11 @@ export function GettingStartedFlow({
   // account email and the new drive auto-enrolled in managed sync after create.
   const fromManaged =
     new URLSearchParams(window.location.search).get('from_portal') === 'true';
+  // The portal hands the account email in the URL (`?from_portal=true&email=…`)
+  // so we can prefill the profile name without an authenticated cross-origin
+  // call back to the control plane (whose session cookie we don't have here).
+  const emailParam =
+    new URLSearchParams(window.location.search).get('email') || undefined;
   // A sign-in guard (clicking a drive you're not signed in for) sends the user
   // here with `next` carrying that drive's subject, so we open straight to the
   // sign-in step and return them to that drive afterwards (not their home).
@@ -102,15 +107,18 @@ export function GettingStartedFlow({
   const [secretValue, setSecretValue] = useState('');
   const lastSubmittedSecret = useRef<string>('');
   const [managedUsername, setManagedUsername] = useState<string | undefined>(
-    undefined,
+    emailParam ? emailParam.split('@')[0] : undefined,
   );
-  // For non-managed flows there's nothing to wait for, so we're "ready" immediately.
-  const [managedReady, setManagedReady] = useState(!fromManaged);
+  // Ready immediately for non-managed flows, or when the portal already handed
+  // us the email in the URL (no fetch needed).
+  const [managedReady, setManagedReady] = useState(!fromManaged || !!emailParam);
 
-  // Fetch the managed account email and derive a default username before showing
-  // the profile step, so the field comes prefilled.
+  // Fallback for older portals that redirect without the `email` param: fetch
+  // the managed account email and derive a default username before showing the
+  // profile step, so the field comes prefilled. (Requires a managed session in
+  // this origin; when absent, we just continue without a prefill.)
   useEffect(() => {
-    if (!fromManaged) return;
+    if (!fromManaged || emailParam) return;
     let cancelled = false;
 
     void (async () => {
@@ -131,7 +139,7 @@ export function GettingStartedFlow({
     return () => {
       cancelled = true;
     };
-  }, [fromManaged]);
+  }, [fromManaged, emailParam]);
 
   // Best-effort: enroll the freshly-created drive in managed sync. The identity
   // and drive already exist by the time this runs, so a failure here never
