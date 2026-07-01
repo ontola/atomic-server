@@ -3,16 +3,16 @@ import type { Agent } from '@tomic/react';
 /**
  * Node info. Every Atomic node exposes `GET /node-info` with read-only
  * metadata; a managed node (one reporting to a control plane) sets `managed`
- * and a `dashboardUrl` so the welcome screen can adapt its copy and route
+ * and a `portalUrl` so the welcome screen can adapt its copy and route
  * account creation to the dashboard.
  */
 export type ManagedInfo = {
   managed: boolean;
-  /** User-facing cloud dashboard URL, when the node is managed. */
-  dashboardUrl: string | null;
+  /** User-facing portal URL, when the node is managed. */
+  portalUrl: string | null;
 };
 
-const DEFAULT: ManagedInfo = { managed: false, dashboardUrl: null };
+const DEFAULT: ManagedInfo = { managed: false, portalUrl: null };
 
 export async function fetchManagedInfo(serverUrl: string): Promise<ManagedInfo> {
   if (!serverUrl) return DEFAULT;
@@ -26,8 +26,8 @@ export async function fetchManagedInfo(serverUrl: string): Promise<ManagedInfo> 
 
     const data = await res.json();
 
-    const rawDashboardUrl =
-      typeof data?.dashboardUrl === 'string' ? data.dashboardUrl : null;
+    const rawPortalUrl =
+      typeof data?.portalUrl === 'string' ? data.portalUrl : null;
 
     // In local dev the user-facing portal runs on localhost, but a managed node
     // reports its public dashboard URL (typically a tunnel that isn't reachable
@@ -39,10 +39,10 @@ export async function fetchManagedInfo(serverUrl: string): Promise<ManagedInfo> 
 
     return {
       managed: Boolean(data?.managed),
-      dashboardUrl:
-        rawDashboardUrl && onLocalhost
+      portalUrl:
+        rawPortalUrl && onLocalhost
           ? 'http://localhost:49237'
-          : rawDashboardUrl,
+          : rawPortalUrl,
     };
   } catch {
     // Older/self-hosted nodes have no such endpoint — treat as non-managed.
@@ -53,21 +53,21 @@ export async function fetchManagedInfo(serverUrl: string): Promise<ManagedInfo> 
 /**
  * Where the welcome screen's "Create account" should go, given a node's
  * {@link ManagedInfo}:
- *  - a managed node with a dashboard URL → the cloud portal (which handles
+ *  - a managed node with a dashboard URL → the managed portal (which handles
  *    sign-up + email verification);
  *  - anything else (self-hosted / FOSS, or managed-but-no-URL) → the local
  *    DID-agent creation flow. This is what keeps the FOSS UX intact.
  *
  * Pure on purpose, so the FOSS-vs-managed branch is unit-tested without a
- * server or the portal. The full cross-system journey is covered in atomic-saas.
+ * server or the portal. The full cross-system journey is covered in the managed service repo.
  */
 export type AccountCreationTarget =
   | { kind: 'portal'; url: string }
   | { kind: 'local' };
 
 export function accountCreationTarget(info: ManagedInfo): AccountCreationTarget {
-  if (info.managed && info.dashboardUrl) {
-    return { kind: 'portal', url: info.dashboardUrl };
+  if (info.managed && info.portalUrl) {
+    return { kind: 'portal', url: info.portalUrl };
   }
 
   return { kind: 'local' };

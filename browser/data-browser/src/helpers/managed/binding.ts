@@ -1,20 +1,20 @@
-// [RECOVERY-RECONSTRUCTED] `helpers/cloud/binding.ts` was never captured in any
+// [RECOVERY-RECONSTRUCTED] `helpers/managed/binding.ts` was never captured in any
 // transcript. Reconstructed from its call sites:
-//   - recovery.ts / enrollment.ts: writeCloudAccountBinding(ownerEmail, agentSubject)
-//   - reconcile.ts: readCloudAccountBinding() -> { owner_email, expected_agent_subject }
-//                   clearCloudAccountBinding()
-// It records, per signed-in Cloud account, which local Atomic agent that
+//   - recovery.ts / enrollment.ts: writeManagedAccountBinding(ownerEmail, agentSubject)
+//   - reconcile.ts: readManagedAccountBinding() -> { owner_email, expected_agent_subject }
+//                   clearManagedAccountBinding()
+// It records, per signed-in Managed account, which local Atomic agent that
 // account expects — so the identity-reconcile gate can detect a device whose
-// local agent drifted from the cloud account's agent. Stored in localStorage.
+// local agent drifted from the managed account's agent. Stored in localStorage.
 
-const BINDING_KEY = 'atomic-cloud-account-binding';
+const BINDING_KEY = 'atomic-managed-account-binding';
 
-export type CloudAccountBinding = {
+export type ManagedAccountBinding = {
   owner_email: string;
   expected_agent_subject: string;
 };
 
-export function writeCloudAccountBinding(
+export function writeManagedAccountBinding(
   ownerEmail: string,
   expectedAgentSubject: string,
 ): void {
@@ -27,14 +27,14 @@ export function writeCloudAccountBinding(
       JSON.stringify({
         owner_email: ownerEmail,
         expected_agent_subject: expectedAgentSubject,
-      } satisfies CloudAccountBinding),
+      } satisfies ManagedAccountBinding),
     );
   } catch {
     // Ignore quota / private-mode failures — the binding is an optimization.
   }
 }
 
-export function readCloudAccountBinding(): CloudAccountBinding | null {
+export function readManagedAccountBinding(): ManagedAccountBinding | null {
   if (typeof localStorage === 'undefined') return null;
 
   try {
@@ -42,7 +42,7 @@ export function readCloudAccountBinding(): CloudAccountBinding | null {
 
     if (!raw) return null;
 
-    const parsed = JSON.parse(raw) as Partial<CloudAccountBinding>;
+    const parsed = JSON.parse(raw) as Partial<ManagedAccountBinding>;
 
     if (
       typeof parsed?.owner_email === 'string' &&
@@ -60,7 +60,7 @@ export function readCloudAccountBinding(): CloudAccountBinding | null {
   }
 }
 
-export function clearCloudAccountBinding(): void {
+export function clearManagedAccountBinding(): void {
   if (typeof localStorage === 'undefined') return;
 
   try {

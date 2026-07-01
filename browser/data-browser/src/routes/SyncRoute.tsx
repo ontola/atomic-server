@@ -29,7 +29,7 @@ import {
   fetchNodeDriveUsage,
   type NodeDriveUsage,
 } from '../helpers/managedServer';
-import { getDriveUsage } from '../helpers/cloudUsage';
+import { getDriveUsage } from '../helpers/managedUsage';
 import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
@@ -185,14 +185,14 @@ function SyncPage() {
   // operator's portal.
   const [managedInfo, setManagedInfo] = useState<ManagedInfo>({
     managed: false,
-    dashboardUrl: null,
+    portalUrl: null,
   });
 
   useEffect(() => {
     const serverUrl = status.serverUrl;
 
     if (!serverUrl) {
-      setManagedInfo({ managed: false, dashboardUrl: null });
+      setManagedInfo({ managed: false, portalUrl: null });
 
       return;
     }
@@ -244,7 +244,7 @@ function SyncPage() {
   useEffect(() => {
     const drive = status.drive;
 
-    if (!managedInfo.dashboardUrl || !drive) {
+    if (!managedInfo.portalUrl || !drive) {
       setQuotaBytes(null);
 
       return;
@@ -262,7 +262,7 @@ function SyncPage() {
     return () => {
       cancelled = true;
     };
-  }, [managedInfo.dashboardUrl, status.drive]);
+  }, [managedInfo.portalUrl, status.drive]);
 
   useEffect(() => {
     fetch('/iroh-node-id')
@@ -453,9 +453,9 @@ function SyncPage() {
                   Reconnect
                 </NodeAction>
               )}
-              {managedInfo.managed && managedInfo.dashboardUrl && (
+              {managedInfo.managed && managedInfo.portalUrl && (
                 <ManagedLink
-                  href={managedInfo.dashboardUrl}
+                  href={managedInfo.portalUrl}
                   target='_blank'
                   rel='noopener noreferrer'
                 >

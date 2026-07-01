@@ -4,8 +4,8 @@ import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useSettings } from '../helpers/AppSettings';
 import {
   evaluateIdentityReconciliation,
-  writeCloudAccountBinding,
-} from '../helpers/cloud';
+  writeManagedAccountBinding,
+} from '../helpers/managed';
 import { paths } from '../routes/paths';
 
 type GateProps = {
@@ -13,19 +13,19 @@ type GateProps = {
 };
 
 /**
- * Keeps the device's Atomic agent aligned with the signed-in Cloud Sync account
+ * Keeps the device's Atomic agent aligned with the signed-in Managed Sync account
  * — **silently**. There is no "resolve mismatch" screen: the agent layer is
- * never surfaced to a user who only thinks in terms of their Cloud Sync account.
+ * never surfaced to a user who only thinks in terms of their Managed Sync account.
  * (See the control-plane contract doc, decision 2026-06-25.)
  *
- * On a Cloud Sync session whose account agent differs from the device agent:
+ * On a Managed Sync session whose account agent differs from the device agent:
  * - **Account has a restorable backup** (`recovery_agent`) → send the user to
  *   the welcome/recover flow ("unlock your data"), which replaces the local
  *   agent. Nothing is dropped here; the local agent stays until recovery lands.
  * - **Otherwise** → adopt this device's agent (bind it to the account) so it
  *   becomes the account's agent. No prompt, no logout.
  *
- * With no Cloud session (self-hosted / local-only), reconciliation is a no-op
+ * With no Managed session (self-hosted / local-only), reconciliation is a no-op
  * and the agent is simply primary.
  */
 export function IdentityReconcileGate({
@@ -64,8 +64,8 @@ export function IdentityReconcileGate({
 
     if (!result.ok && result.issue.localAgentSubject) {
       // Adopt this device's agent as the account's agent — no UI.
-      writeCloudAccountBinding(
-        result.issue.cloudAccountEmail,
+      writeManagedAccountBinding(
+        result.issue.managedAccountEmail,
         result.issue.localAgentSubject,
       );
     }

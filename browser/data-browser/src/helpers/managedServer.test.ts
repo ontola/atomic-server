@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { accountCreationTarget, type ManagedInfo } from './managedServer';
 
 describe('accountCreationTarget', () => {
-  it('managed node with a dashboard URL → the cloud portal', () => {
+  it('managed node with a portal URL → the managed portal', () => {
     const info: ManagedInfo = {
       managed: true,
-      dashboardUrl: 'https://portal.example/',
+      portalUrl: 'https://portal.example/',
     };
 
     expect(accountCreationTarget(info)).toEqual({
@@ -16,21 +16,21 @@ describe('accountCreationTarget', () => {
 
   it('self-hosted / FOSS node → local identity (keeps the FOSS UX)', () => {
     expect(
-      accountCreationTarget({ managed: false, dashboardUrl: null }),
+      accountCreationTarget({ managed: false, portalUrl: null }),
     ).toEqual({ kind: 'local' });
   });
 
-  it('managed but without a dashboard URL → local (no portal to send to)', () => {
+  it('managed but without a portal URL → local (no portal to send to)', () => {
     expect(
-      accountCreationTarget({ managed: true, dashboardUrl: null }),
+      accountCreationTarget({ managed: true, portalUrl: null }),
     ).toEqual({ kind: 'local' });
   });
 
-  it('a dashboard URL present but not managed → local', () => {
+  it('a portal URL present but not managed → local', () => {
     expect(
       accountCreationTarget({
         managed: false,
-        dashboardUrl: 'https://portal.example/',
+        portalUrl: 'https://portal.example/',
       }),
     ).toEqual({ kind: 'local' });
   });

@@ -38,12 +38,12 @@ interface NewIdentitySectionProps {
   verifySecret?: boolean;
   /** Optional portal target for the step dots indicator. */
   stepIndicatorPortal?: Element | null;
-  /** Prefill the profile-name field (e.g. from a cloud account email). */
+  /** Prefill the profile-name field (e.g. from a managed account email). */
   defaultProfileName?: string;
   /**
    * If true, after creating the identity, offer to back up the agent secret
    * (encrypted with a recovery password) so the account can be restored. Only
-   * makes sense when signed in to a cloud account that can store it.
+   * makes sense when signed in to a managed account that can store it.
    */
   offerRecoveryBackup?: boolean;
   /** Encrypt + store the secret. Called with the new secret and the user's

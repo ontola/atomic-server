@@ -1,14 +1,15 @@
-// Cloud account + per-drive usage helpers, talking to the control-plane `/api`
-// base (same endpoint as the other cloud helpers).
-import { getCloudApiBase } from './cloud/api';
+// Managed account + per-drive usage helpers, talking to the control-plane `/api`
+// base (same endpoint as the other managed helpers).
+import { PRODUCT_NAME } from './managed/product';
+import { getManagedApiBase } from './managed/api';
 
-export type CloudUser = {
+export type ManagedUser = {
   email: string;
   created_at: number;
 };
 
-export async function getCloudUser(): Promise<CloudUser | null> {
-  const response = await fetch(`${getCloudApiBase()}/me`, {
+export async function getManagedUser(): Promise<ManagedUser | null> {
+  const response = await fetch(`${getManagedApiBase()}/me`, {
     credentials: 'include',
   });
 
@@ -17,7 +18,7 @@ export async function getCloudUser(): Promise<CloudUser | null> {
   }
 
   if (!response.ok) {
-    throw new Error('Could not check cloud session.');
+    throw new Error(`Could not check ${PRODUCT_NAME} session.`);
   }
 
   return response.json();
@@ -34,14 +35,14 @@ export type DriveUsageInfo = {
 /**
  * Per-drive usage the managed node reports to the control plane (resource count
  * + bytes used), read from the signed-in user's enrollments. Returns null when
- * not signed in to Cloud Sync, or when this drive isn't enrolled.
+ * not signed in to Managed Sync, or when this drive isn't enrolled.
  */
 export async function getDriveUsage(
   driveSubject: string,
 ): Promise<DriveUsageInfo | null> {
   if (!driveSubject) return null;
 
-  const response = await fetch(`${getCloudApiBase()}/sync-enrollments`, {
+  const response = await fetch(`${getManagedApiBase()}/sync-enrollments`, {
     credentials: 'include',
   });
 
@@ -74,17 +75,17 @@ export async function getDriveUsage(
   };
 }
 
-// [RECOVERY-RECONSTRUCTED] Only the signature `createCloudEnrollment({` survived.
-// Reconstructed from the equivalent helpers/cloud/enrollment.ts:createCloudSyncEnrollment
+// [RECOVERY-RECONSTRUCTED] Only the signature `createManagedEnrollment({` survived.
+// Reconstructed from the equivalent helpers/managed/enrollment.ts:createManagedSyncEnrollment
 // (POST /sync-enrollments). No code currently imports this export.
-export async function createCloudEnrollment({
+export async function createManagedEnrollment({
   driveSubject,
   agentSubject,
 }: {
   driveSubject: string;
   agentSubject: string;
 }): Promise<unknown> {
-  const response = await fetch(`${getCloudApiBase()}/sync-enrollments`, {
+  const response = await fetch(`${getManagedApiBase()}/sync-enrollments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -95,7 +96,7 @@ export async function createCloudEnrollment({
   });
 
   if (!response.ok) {
-    throw new Error('Could not enable cloud sync backup.');
+    throw new Error(`Could not enable ${PRODUCT_NAME} backup.`);
   }
 
   return response.json();

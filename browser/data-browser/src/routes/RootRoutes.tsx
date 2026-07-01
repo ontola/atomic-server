@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { pathNames, paths } from './paths';
 // import { TanStackRouterDevtools } from '@tanstack/router-devtools';
 import { Providers } from '../Providers';
+import { IdentityReconcileGate } from '../components/IdentityReconcileGate';
 import ResourcePage from '../views/ResourcePage';
 import { useSettings } from '../helpers/AppSettings';
 import { isDev } from '../config';
@@ -27,7 +28,11 @@ export const appRoute = createRoute({
 export const rootRoute = createRootRoute({
   component: () => (
     <Providers>
-      <Outlet />
+      {/* Silently keep the device's Atomic agent aligned with the signed-in
+          Managed Sync account (no-op when there's no managed session). */}
+      <IdentityReconcileGate>
+        <Outlet />
+      </IdentityReconcileGate>
       {/* Uncomment to get Tanstack Router Devtools */}
       {/* <TanStackRouterDevtools position='bottom-right' /> */}
     </Providers>

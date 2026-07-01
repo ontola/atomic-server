@@ -1,5 +1,6 @@
-import { getCloudApiBase } from './api';
-import { writeCloudAccountBinding } from './binding';
+import { PRODUCT_NAME } from './product';
+import { getManagedApiBase } from './api';
+import { writeManagedAccountBinding } from './binding';
 
 export type RecoverySecretInput = {
   agent_subject: string;
@@ -149,7 +150,7 @@ export async function decryptRecoverySecret(
 }
 
 export async function saveRecoverySecret(input: RecoverySecretInput) {
-  const response = await fetch(`${getCloudApiBase()}/recovery-secret`, {
+  const response = await fetch(`${getManagedApiBase()}/recovery-secret`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -159,13 +160,13 @@ export async function saveRecoverySecret(input: RecoverySecretInput) {
   if (!response.ok) {
     throw new Error(
       response.status === 401
-        ? 'Sign in to Cloud Sync before enabling encrypted recovery.'
+        ? `Sign in to ${PRODUCT_NAME} before enabling encrypted recovery.`
         : 'Could not save encrypted recovery backup.',
     );
   }
 
   const saved = (await response.json()) as RecoverySecret;
-  writeCloudAccountBinding(saved.owner_email, saved.agent_subject);
+  writeManagedAccountBinding(saved.owner_email, saved.agent_subject);
 
   return saved;
 }
@@ -174,7 +175,7 @@ export async function getRecoverySecret(): Promise<RecoverySecret | null> {
   // [RECOVERY-RECONSTRUCTED] body — only this function's signature survived in
   // the transcripts. Reconstructed as the GET counterpart of saveRecoverySecret
   // (PUT) above; 204/401/404 all mean "no recovery secret stored".
-  const response = await fetch(`${getCloudApiBase()}/recovery-secret`, {
+  const response = await fetch(`${getManagedApiBase()}/recovery-secret`, {
     credentials: 'include',
   });
 

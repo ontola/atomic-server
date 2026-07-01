@@ -10,16 +10,16 @@ export const WelcomeRoute = createRoute({
   path: pathNames.welcome,
   getParentRoute: () => appRoute,
   // `next`: a drive subject to return to after a sign-in guard sent the user
-  // here. `from_cloud`: set when arriving from the cloud portal post-verify.
+  // here. `from_portal`: set when arriving from the managed portal post-verify.
   // Both are read in GettingStartedFlow.
   validateSearch: (
     search: Record<string, unknown>,
-  ): { next?: string; from_cloud?: boolean } => ({
+  ): { next?: string; from_portal?: boolean } => ({
     next: typeof search.next === 'string' ? search.next : undefined,
-    // tanstack coerces `?from_cloud=true` to a boolean before we see it, so
+    // tanstack coerces `?from_portal=true` to a boolean before we see it, so
     // accept both. Dropping it here would also strip it from the URL.
-    from_cloud:
-      search.from_cloud === true || search.from_cloud === 'true' || undefined,
+    from_portal:
+      search.from_portal === true || search.from_portal === 'true' || undefined,
   }),
   component: WelcomeRouteComponent,
 });

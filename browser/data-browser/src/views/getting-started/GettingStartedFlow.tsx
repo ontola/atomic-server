@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../../helpers/managed';
 import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { styled, css, keyframes } from 'styled-components';
 import { useStore } from '@tomic/react';
@@ -12,20 +13,20 @@ import { paths } from '../../routes/paths';
 import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
-import { getCloudAccount } from '../../helpers/cloud/session';
+import { getManagedAccount } from '../../helpers/managed/session';
 import {
   fetchManagedInfo,
   accountCreationTarget,
   type AccountCreationTarget,
 } from '../../helpers/managedServer';
-import { createCloudSyncEnrollment } from '../../helpers/cloud/enrollment';
+import { createManagedSyncEnrollment } from '../../helpers/managed/enrollment';
 import {
   buildEncryptedRecoverySecret,
   saveRecoverySecret,
   getRecoverySecret,
   decryptRecoverySecret,
   type RecoverySecret,
-} from '../../helpers/cloud/recovery';
+} from '../../helpers/managed/recovery';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
 import atomicServerLogoUrl from '../../../../../logo.svg?url';
@@ -80,19 +81,19 @@ export function GettingStartedFlow({
       cancelled = true;
     };
   }, [baseURL]);
-  // A user who just verified their email via the cloud portal lands at
-  // /app/welcome?from_cloud=true. Skip the generic Create/Sign-in choice and go
+  // A user who just verified their email via the managed portal lands at
+  // /app/welcome?from_portal=true. Skip the generic Create/Sign-in choice and go
   // straight into identity creation, with the username prefilled from their
-  // account email and the new drive auto-enrolled in cloud sync after create.
-  const fromCloud =
-    new URLSearchParams(window.location.search).get('from_cloud') === 'true';
+  // account email and the new drive auto-enrolled in managed sync after create.
+  const fromManaged =
+    new URLSearchParams(window.location.search).get('from_portal') === 'true';
   // A sign-in guard (clicking a drive you're not signed in for) sends the user
   // here with `next` carrying that drive's subject, so we open straight to the
   // sign-in step and return them to that drive afterwards (not their home).
   const nextDrive =
     new URLSearchParams(window.location.search).get('next') || undefined;
   const [step, setStep] = useState<Step>(
-    fromCloud ? 'create' : nextDrive ? 'signin' : initialStep,
+    fromManaged ? 'create' : nextDrive ? 'signin' : initialStep,
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | undefined>();
@@ -100,60 +101,60 @@ export function GettingStartedFlow({
   const signInFormRef = useRef<HTMLFormElement | null>(null);
   const [secretValue, setSecretValue] = useState('');
   const lastSubmittedSecret = useRef<string>('');
-  const [cloudUsername, setCloudUsername] = useState<string | undefined>(
+  const [managedUsername, setManagedUsername] = useState<string | undefined>(
     undefined,
   );
-  // For non-cloud flows there's nothing to wait for, so we're "ready" immediately.
-  const [cloudReady, setCloudReady] = useState(!fromCloud);
+  // For non-managed flows there's nothing to wait for, so we're "ready" immediately.
+  const [managedReady, setManagedReady] = useState(!fromManaged);
 
-  // Fetch the cloud account email and derive a default username before showing
+  // Fetch the managed account email and derive a default username before showing
   // the profile step, so the field comes prefilled.
   useEffect(() => {
-    if (!fromCloud) return;
+    if (!fromManaged) return;
     let cancelled = false;
 
     void (async () => {
       try {
-        const account = await getCloudAccount();
+        const account = await getManagedAccount();
 
         if (!cancelled && account?.email) {
-          setCloudUsername(account.email.split('@')[0]);
+          setManagedUsername(account.email.split('@')[0]);
         }
       } catch {
-        // Not signed in to the cloud (or unreachable) — continue without a
+        // Not signed in to the managed (or unreachable) — continue without a
         // prefill; the user can still type a name.
       } finally {
-        if (!cancelled) setCloudReady(true);
+        if (!cancelled) setManagedReady(true);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [fromCloud]);
+  }, [fromManaged]);
 
-  // Best-effort: enroll the freshly-created drive in cloud sync. The identity
+  // Best-effort: enroll the freshly-created drive in managed sync. The identity
   // and drive already exist by the time this runs, so a failure here never
-  // blocks onboarding — the user can retry from Cloud Sync settings.
+  // blocks onboarding — the user can retry from Managed Sync settings.
   // The new drive's subject, captured during onAfterCreate so the recovery
   // backup step can reference it.
   const newDriveSubject = useRef<string | undefined>(undefined);
 
-  async function enrollCloudSync(driveSubject: string) {
+  async function enrollManagedSync(driveSubject: string) {
     newDriveSubject.current = driveSubject;
     const agentSubject = store.getAgent()?.subject;
 
     if (!agentSubject) return;
 
     try {
-      await createCloudSyncEnrollment({ driveSubject, agentSubject });
+      await createManagedSyncEnrollment({ driveSubject, agentSubject });
     } catch {
       // swallow — see above.
     }
   }
 
   // Encrypt the agent secret with the user's recovery password and store it on
-  // the cloud account, so they can restore it later ("Forgot your secret?").
+  // the managed account, so they can restore it later ("Forgot your secret?").
   async function backupRecovery(secret: string, password: string) {
     const agentSubject = store.getAgent()?.subject;
 
@@ -174,7 +175,7 @@ export function GettingStartedFlow({
   const [restore, setRestore] = useState<RestoreState>({ phase: 'checking' });
   const [restorePassword, setRestorePassword] = useState('');
 
-  // When the restore step opens, check for a cloud session + a stored backup.
+  // When the restore step opens, check for a managed session + a stored backup.
   useEffect(() => {
     if (step !== 'restore') return;
     let cancelled = false;
@@ -183,7 +184,7 @@ export function GettingStartedFlow({
 
     void (async () => {
       try {
-        const account = await getCloudAccount();
+        const account = await getManagedAccount();
 
         if (!account?.email) {
           if (!cancelled) setRestore({ phase: 'no-session' });
@@ -454,22 +455,21 @@ export function GettingStartedFlow({
               <Column gap='1rem'>
                 <CardTitle>Restore account</CardTitle>
                 {restore.phase === 'checking' ? (
-                  <p>Checking your cloud account…</p>
+                  <p>{`Checking your ${PRODUCT_NAME} account…`}</p>
                 ) : restore.phase === 'no-session' ? (
                   <Column gap='0.75rem'>
                     <p>
-                      To restore your account, sign in to your cloud account
-                      first, then come back here.
+                      {`To restore your account, sign in to your ${PRODUCT_NAME} account first, then come back here.`}
                     </p>
                     <Button
                       type='button'
                       onClick={() => {
                         // Dev portal; in production this comes from the node's
-                        // dashboardUrl (see managedServer.ts).
+                        // portalUrl (see managedServer.ts).
                         window.location.assign('http://localhost:49237');
                       }}
                     >
-                      Sign in to your cloud account
+                      {`Sign in to your ${PRODUCT_NAME} account`}
                     </Button>
                   </Column>
                 ) : restore.phase === 'no-backup' ? (
@@ -533,17 +533,17 @@ export function GettingStartedFlow({
           <OnboardingWrap>
             <OnboardingCard>
               <Column gap='1.5rem'>
-                {fromCloud && !cloudReady ? (
+                {fromManaged && !managedReady ? (
                   <p>Setting up your account…</p>
                 ) : (
                   <NewIdentitySection
                     autoStart
                     verifySecret
                     stepIndicatorPortal={stepDotsSlotRef.current}
-                    defaultProfileName={cloudUsername}
-                    offerRecoveryBackup={fromCloud}
-                    onBackupRecovery={fromCloud ? backupRecovery : undefined}
-                    onAfterCreate={fromCloud ? enrollCloudSync : undefined}
+                    defaultProfileName={managedUsername}
+                    offerRecoveryBackup={fromManaged}
+                    onBackupRecovery={fromManaged ? backupRecovery : undefined}
+                    onAfterCreate={fromManaged ? enrollManagedSync : undefined}
                     onDone={() => {
                       // After verify, NewIdentitySection navigates to personalDrive / home
                     }}

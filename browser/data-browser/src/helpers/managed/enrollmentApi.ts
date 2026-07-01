@@ -1,19 +1,19 @@
-// [RECOVERY-RECONSTRUCTED] `helpers/cloud/enrollmentApi.ts` was never captured in
+// [RECOVERY-RECONSTRUCTED] `helpers/managed/enrollmentApi.ts` was never captured in
 // any transcript. Reconstructed from its call sites:
-//   - reconcile.ts: getCloudEnrollments() -> CloudEnrollmentSummary[]
+//   - reconcile.ts: getManagedEnrollments() -> ManagedEnrollmentSummary[]
 //        reads `.status` (compared to 'Disabled') and `.agent_subject`
-//   - getDriveUsage() in cloudUsage.ts reads the same shape (drive_subject,
+//   - getDriveUsage() in managedUsage.ts reads the same shape (drive_subject,
 //        drive_name, resource_count, blob_bytes, loro_bytes, quota_bytes)
 // against the control-plane `GET /api/sync-enrollments` route.
 
-import { getCloudApiBase } from './api';
+import { getManagedApiBase } from './api';
 
-export type CloudEnrollmentStatus = 'Active' | 'Disabled' | string;
+export type ManagedEnrollmentStatus = 'Active' | 'Disabled' | string;
 
-export type CloudEnrollmentSummary = {
+export type ManagedEnrollmentSummary = {
   drive_subject: string;
   agent_subject: string | null;
-  status: CloudEnrollmentStatus;
+  status: ManagedEnrollmentStatus;
   drive_name?: string | null;
   resource_count?: number;
   blob_bytes?: number;
@@ -22,12 +22,12 @@ export type CloudEnrollmentSummary = {
 };
 
 /**
- * Sync enrollments for the signed-in Cloud account. Returns an empty list when
+ * Sync enrollments for the signed-in Managed account. Returns an empty list when
  * there is no session or the control plane is unreachable (callers treat "no
  * enrollments" as "nothing to reconcile").
  */
-export async function getCloudEnrollments(): Promise<CloudEnrollmentSummary[]> {
-  const response = await fetch(`${getCloudApiBase()}/sync-enrollments`, {
+export async function getManagedEnrollments(): Promise<ManagedEnrollmentSummary[]> {
+  const response = await fetch(`${getManagedApiBase()}/sync-enrollments`, {
     credentials: 'include',
   });
 
@@ -39,5 +39,5 @@ export async function getCloudEnrollments(): Promise<CloudEnrollmentSummary[]> {
     ? body
     : ((body as { enrollments?: unknown[] })?.enrollments ?? []);
 
-  return list as CloudEnrollmentSummary[];
+  return list as ManagedEnrollmentSummary[];
 }

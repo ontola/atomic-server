@@ -43,7 +43,7 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
       to: paths.welcome,
       search: {
         next: isDriveSignIn ? resource.subject : undefined,
-        from_cloud: undefined,
+        from_portal: undefined,
       },
       replace: true,
     });

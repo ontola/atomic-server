@@ -200,7 +200,6 @@ msgstr "Borrar"
 msgid "Copy"
 msgstr "Copiar"
 
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/components/SignInButton.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -2473,10 +2472,6 @@ msgstr "Añadir otra propiedad..."
 msgid "Empty"
 msgstr "Vacío"
 
-#: src/components/forms/InputYDoc.tsx
-msgid "Editing YDoc directly is not supported"
-msgstr "La edición directa de YDoc no es compatible"
-
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Left"
 msgstr "Izquierda"
@@ -2666,9 +2661,6 @@ msgstr "v{0}"
 msgid "by {0}"
 msgstr "por {0}"
 
-#~ msgid "Invalid secret."
-#~ msgstr "Secreto no válido."
-
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Share settings saved"
@@ -2848,7 +2840,6 @@ msgid "Agent created!"
 msgstr "¡Agente creado!"
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -2986,7 +2977,6 @@ msgid "Subdomain"
 msgstr "Subdominio"
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/components/LoggedOutAgentPanel.tsx
 msgid "Back"
 msgstr "Atrás"
 
@@ -3330,14 +3320,11 @@ msgstr "Si aún no has configurado una identidad en este servidor,{0} <0>crea un
 msgid "Could not parse that secret."
 msgstr "No se pudo analizar ese secreto."
 
-#: src/components/LoggedOutAgentPanel.tsx
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Agent secret"
 msgstr "Secreto del agente"
 
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
 msgstr "Iniciando sesión..."
@@ -3438,7 +3425,6 @@ msgstr "Reorganizar {0}"
 msgid "New"
 msgstr "Nuevo"
 
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
 msgstr "Crear cuenta"
@@ -3691,9 +3677,6 @@ msgstr "Servidor"
 msgid "Details"
 msgstr "Detalles"
 
-#~ msgid "Drive"
-#~ msgstr "Unidad"
-
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
@@ -3842,9 +3825,6 @@ msgstr "Pegar did:ad:node:..."
 msgid "Your data lives on this device. Add peers or a remote server to sync."
 msgstr "Tus datos residen en este dispositivo. Agrega pares o un servidor remoto para sincronizar."
 
-#~ msgid "Your data is stored locally on this device. When connected to a server, changes sync automatically."
-#~ msgstr "Tus datos se almacenan localmente en este dispositivo. Cuando se conecta a un servidor, los cambios se sincronizan automáticamente."
-
 #: src/routes/SyncRoute.tsx
 msgid "Local storage ready"
 msgstr "Almacenamiento local listo"
@@ -3897,12 +3877,6 @@ msgstr "No se pudo restaurar la versión: {0}"
 #: src/routes/SettingsServer/index.tsx
 msgid "Server settings have moved to the <0>Sync page</0>."
 msgstr "La configuración del servidor se ha movido a la <0>página de Sincronización</0>."
-
-#~ msgid "Open Drive Settings"
-#~ msgstr "Abrir la configuración de Drive"
-
-#~ msgid "DriveDetailTrigger"
-#~ msgstr "Activador de detalles de Drive"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Pen color"
@@ -4436,23 +4410,6 @@ msgstr "Sin texto alternativo"
 msgid "Editor was destroyed before it finished initializing"
 msgstr "El editor fue destruido antes de que terminara de inicializarse"
 
-#~ msgid "Default chat model"
-#~ msgstr "Modelo de chat predeterminado"
-
-#~ msgid ""
-#~ "Pre-selected when creating new agents. Does not override\n"
-#~ "models you have already set per agent."
-#~ msgstr ""
-#~ "Preseleccionado al crear nuevos agentes. No anula los\n"
-#~ "modelos que ya haya configurado por agente."
-
-#~ msgid ""
-#~ "The selected default model's provider is not\n"
-#~ "available. Choose a model from a connected provider below."
-#~ msgstr ""
-#~ "El proveedor del modelo predeterminado seleccionado no está\n"
-#~ "disponible. Elija un modelo de un proveedor conectado a continuación."
-
 #: src/components/AI/AISettings.tsx
 msgid ""
 "The generative features model uses a provider that is\n"
@@ -4669,9 +4626,6 @@ msgstr "Creador y tiempo de creación, derivados del commit génesis firmado (la
 msgid "Changes could not sync"
 msgstr "No se pudieron sincronizar los cambios"
 
-#~ msgid "Start typing…"
-#~ msgstr "Empieza a escribir…"
-
 #: src/chunks/RTE/readDocumentV2TiptapJson.ts
 msgid "Resource is not a document-v2"
 msgstr "El recurso no es un documento-v2"
@@ -4692,12 +4646,6 @@ msgstr "La edición directa de LoroDoc no es compatible"
 msgid "Confirm Delete"
 msgstr "Confirmar eliminación"
 
-#~ msgid "Select Model"
-#~ msgstr "Seleccionar modelo"
-
-#~ msgid "Loading model selector..."
-#~ msgstr "Cargando selector de modelo..."
-
 #: src/chunks/AI/AgentConfig.tsx
 msgid "<0/> Use Default Model"
 msgstr "<0/> Usar modelo predeterminado"
@@ -4705,9 +4653,6 @@ msgstr "<0/> Usar modelo predeterminado"
 #: src/chunks/AI/AgentConfigItem.tsx
 msgid "Default model"
 msgstr "Modelo predeterminado"
-
-#~ msgid "Local"
-#~ msgstr "Local"
 
 #. placeholder {0}: model.details.parameter_size
 #: src/chunks/AI/RealAIChat.tsx
@@ -4765,14 +4710,6 @@ msgstr "Vista predeterminada"
 msgid "Hide in this view"
 msgstr "Ocultar en esta vista"
 
-#: src/chunks/TablePage/TableToolbar.tsx
-msgid "View name"
-msgstr "Nombre de la vista"
-
-#: src/chunks/TablePage/TableToolbar.tsx
-msgid "Columns"
-msgstr "Columnas"
-
 #. placeholder {0}: views.length + 1
 #: src/chunks/TablePage/useTableView.ts
 msgid "View {0}"
@@ -4813,9 +4750,6 @@ msgstr "Hola"
 #: src/components/CodeBlock.tsx
 msgid "Clipboard access is blocked. Select the text and copy it."
 msgstr "El acceso al portapapeles está bloqueado. Selecciona el texto y cópialo."
-
-#~ msgid "DEFAULT(bare-subject)"
-#~ msgstr "PREDETERMINADO"
 
 #. placeholder {0}: ollamaUrl ? ` at ${ollamaUrl}` : ''
 #: src/chunks/AI/RealAIChat.tsx
@@ -4875,10 +4809,7 @@ msgstr ""
 msgid "Could not update your list: no personal drive is set up for this account yet."
 msgstr ""
 
-#~ msgid "Invalid agent secret."
-#~ msgstr ""
-
-#: src/helpers/cloud/reconcile.ts
+#: src/helpers/managed/reconcile.ts
 msgid "Disabled"
 msgstr ""
 
@@ -4935,20 +4866,6 @@ msgstr ""
 msgid "Restore account"
 msgstr ""
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Checking your cloud account…"
-msgstr ""
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid ""
-"To restore your account, sign in to your cloud account\n"
-"first, then come back here."
-msgstr ""
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in to your cloud account"
-msgstr ""
-
 #. placeholder {0}: restore.email
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid ""
@@ -4967,4 +4884,27 @@ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restore & sign in"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in to access this drive"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Enter your agent secret to unlock this drive on this device."
+msgstr ""
+
+#. placeholder {0}: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Checking your {0} account…"
+msgstr ""
+
+#. placeholder {0}: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "To restore your account, sign in to your {0} account first, then come back here."
+msgstr ""
+
+#. placeholder {0}: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in to your {0} account"
 msgstr ""

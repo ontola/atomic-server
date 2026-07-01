@@ -1,8 +1,9 @@
-import { getCloudApiBase } from './api';
-import { writeCloudAccountBinding } from './binding';
-import { getCloudAccount } from './session';
+import { PRODUCT_NAME } from './product';
+import { getManagedApiBase } from './api';
+import { writeManagedAccountBinding } from './binding';
+import { getManagedAccount } from './session';
 
-export async function createCloudSyncEnrollment({
+export async function createManagedSyncEnrollment({
   driveSubject,
   agentSubject,
 }: {
@@ -13,7 +14,7 @@ export async function createCloudSyncEnrollment({
   // by the time we enroll, the active agent is the account's agent. Enrolling
   // also (re)binds it below, so the account adopts the agent in use here — we
   // never block enrollment with a mismatch error.
-  const response = await fetch(`${getCloudApiBase()}/sync-enrollments`, {
+  const response = await fetch(`${getManagedApiBase()}/sync-enrollments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -24,13 +25,13 @@ export async function createCloudSyncEnrollment({
   });
 
   if (!response.ok) {
-    throw new Error('Could not enable cloud sync backup.');
+    throw new Error(`Could not enable ${PRODUCT_NAME} backup.`);
   }
 
-  const cloudAccount = await getCloudAccount().catch(() => null);
+  const managedAccount = await getManagedAccount().catch(() => null);
 
-  if (cloudAccount) {
-    writeCloudAccountBinding(cloudAccount.email, agentSubject);
+  if (managedAccount) {
+    writeManagedAccountBinding(managedAccount.email, agentSubject);
   }
 
   return response.json();

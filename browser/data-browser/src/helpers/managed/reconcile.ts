@@ -1,10 +1,11 @@
+import { PRODUCT_NAME } from './product';
 import {
-  clearCloudAccountBinding,
-  readCloudAccountBinding,
+  clearManagedAccountBinding,
+  readManagedAccountBinding,
 } from './binding';
-import { getCloudEnrollments, type CloudEnrollmentSummary } from './enrollmentApi';
+import { getManagedEnrollments, type ManagedEnrollmentSummary } from './enrollmentApi';
 import { getRecoverySecret } from './recovery';
-import { getCloudAccount, type CloudAccount } from './session';
+import { getManagedAccount, type ManagedAccount } from './session';
 
 export type IdentityMismatchReason =
   | 'recovery_agent'
@@ -13,18 +14,18 @@ export type IdentityMismatchReason =
   | 'stale_local_agent';
 
 export type IdentityReconcileIssue = {
-  cloudAccountEmail: string;
+  managedAccountEmail: string;
   localAgentSubject: string | null;
   expectedAgentSubject: string | null;
   reason: IdentityMismatchReason;
 };
 
 export type IdentityReconcileResult =
-  | { ok: true; cloudAccount: CloudAccount | null }
+  | { ok: true; managedAccount: ManagedAccount | null }
   | { ok: false; issue: IdentityReconcileIssue };
 
 function activeEnrollmentAgents(
-  enrollments: CloudEnrollmentSummary[],
+  enrollments: ManagedEnrollmentSummary[],
 ): string[] {
   const agents = new Set<string>();
 
@@ -55,31 +56,31 @@ function pickExpectedAgent({
 }
 
 /**
- * Returns whether the local Atomic agent aligns with the signed-in Cloud Sync
- * account. When there is no Cloud session, always ok (self-hosted / local-only).
+ * Returns whether the local Atomic agent aligns with the signed-in Managed Sync
+ * account. When there is no Managed session, always ok (self-hosted / local-only).
  */
 export async function evaluateIdentityReconciliation(
   localAgentSubject: string | undefined,
 ): Promise<IdentityReconcileResult> {
-  const cloudAccount = await getCloudAccount().catch(() => null);
+  const managedAccount = await getManagedAccount().catch(() => null);
 
-  if (!cloudAccount) {
-    return { ok: true, cloudAccount: null };
+  if (!managedAccount) {
+    return { ok: true, managedAccount: null };
   }
 
   const [recovery, enrollments] = await Promise.all([
     getRecoverySecret().catch(() => null),
-    getCloudEnrollments().catch(() => [] as CloudEnrollmentSummary[]),
+    getManagedEnrollments().catch(() => [] as ManagedEnrollmentSummary[]),
   ]);
 
-  const binding = readCloudAccountBinding();
+  const binding = readManagedAccountBinding();
   const bindingAgent =
-    binding?.owner_email === cloudAccount.email
+    binding?.owner_email === managedAccount.email
       ? binding.expected_agent_subject
       : null;
 
-  if (binding && binding.owner_email !== cloudAccount.email) {
-    clearCloudAccountBinding();
+  if (binding && binding.owner_email !== managedAccount.email) {
+    clearManagedAccountBinding();
   }
 
   const enrollmentAgents = activeEnrollmentAgents(enrollments);
@@ -91,14 +92,14 @@ export async function evaluateIdentityReconciliation(
   });
 
   if (!localAgentSubject) {
-    return { ok: true, cloudAccount };
+    return { ok: true, managedAccount };
   }
 
   if (recoveryAgent && recoveryAgent !== localAgentSubject) {
     return {
       ok: false,
       issue: {
-        cloudAccountEmail: cloudAccount.email,
+        managedAccountEmail: managedAccount.email,
         localAgentSubject,
         expectedAgentSubject: recoveryAgent,
         reason: 'recovery_agent',
@@ -113,7 +114,7 @@ export async function evaluateIdentityReconciliation(
     return {
       ok: false,
       issue: {
-        cloudAccountEmail: cloudAccount.email,
+        managedAccountEmail: managedAccount.email,
         localAgentSubject,
         expectedAgentSubject: enrollmentAgents[0] ?? null,
         reason: 'enrollment_agent',
@@ -125,7 +126,7 @@ export async function evaluateIdentityReconciliation(
     return {
       ok: false,
       issue: {
-        cloudAccountEmail: cloudAccount.email,
+        managedAccountEmail: managedAccount.email,
         localAgentSubject,
         expectedAgentSubject: bindingAgent,
         reason: 'binding_agent',
@@ -142,7 +143,7 @@ export async function evaluateIdentityReconciliation(
     return {
       ok: false,
       issue: {
-        cloudAccountEmail: cloudAccount.email,
+        managedAccountEmail: managedAccount.email,
         localAgentSubject,
         expectedAgentSubject: null,
         reason: 'stale_local_agent',
@@ -150,10 +151,10 @@ export async function evaluateIdentityReconciliation(
     };
   }
 
-  return { ok: true, cloudAccount };
+  return { ok: true, managedAccount };
 }
 
-export async function assertAgentMatchesCloudAccount(
+export async function assertAgentMatchesManagedAccount(
   agentSubject: string,
 ): Promise<void> {
   const result = await evaluateIdentityReconciliation(agentSubject);
@@ -161,7 +162,7 @@ export async function assertAgentMatchesCloudAccount(
   if (result.ok) return;
 
   throw new Error(
-    'This device is signed in to a different Atomic agent than your Cloud Sync account. Resolve the identity mismatch before continuing.',
+    `This device is signed in to a different Atomic agent than your ${PRODUCT_NAME} account. Resolve the identity mismatch before continuing.`,
   );
 }
 

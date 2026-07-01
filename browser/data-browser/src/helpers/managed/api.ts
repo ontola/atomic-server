@@ -1,16 +1,16 @@
-// [RECOVERY-RECONSTRUCTED] The original `helpers/cloud/api.ts` was never captured
+// [RECOVERY-RECONSTRUCTED] The original `helpers/managed/api.ts` was never captured
 // in any Claude transcript (it predates the recovery window and isn't on the
-// pushed `did` branch). Reconstructed from its call sites: every cloud helper
-// fetches `${getCloudApiBase()}/<endpoint>` against the control plane
+// pushed `did` branch). Reconstructed from its call sites: every managed helper
+// fetches `${getManagedApiBase()}/<endpoint>` against the control plane
 // (routes are `/api/me`, `/api/logout`, `/api/sync-enrollments`,
 // `/api/recovery-secret`). The dev portal URL mirrors `managedServer.ts`.
 // VERIFY the production base against your real deployment.
 
 /** Base URL of the control-plane API (includes the `/api` prefix). */
-export function getCloudApiBase(): string {
+export function getManagedApiBase(): string {
   const fromEnv =
     typeof import.meta !== 'undefined'
-      ? (import.meta.env?.VITE_CLOUD_API_BASE as string | undefined)
+      ? (import.meta.env?.VITE_MANAGED_API_BASE as string | undefined)
       : undefined;
 
   if (fromEnv) return fromEnv.replace(/\/+$/, '');

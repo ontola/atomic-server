@@ -1,7 +1,7 @@
-// [RECOVERY-RECONSTRUCTED] Barrel for the cloud-sync / identity helpers. The
+// [RECOVERY-RECONSTRUCTED] Barrel for the managed-sync / identity helpers. The
 // original index.ts was not captured; re-exports the modules consumers use
 // (e.g. IdentityReconcileGate imports { evaluateIdentityReconciliation,
-// writeCloudAccountBinding } from '../helpers/cloud').
+// writeManagedAccountBinding } from '../helpers/managed').
 export * from './api';
 export * from './binding';
 export * from './session';
@@ -9,3 +9,4 @@ export * from './enrollmentApi';
 export * from './enrollment';
 export * from './recovery';
 export * from './reconcile';
+export * from './product';

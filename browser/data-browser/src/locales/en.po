@@ -312,7 +312,6 @@ msgid "Also use for chat titles and follow-up prompts"
 msgstr "Also use for chat titles and follow-up prompts"
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/components/LoggedOutAgentPanel.tsx
 msgid "Back"
 msgstr "Back"
 
@@ -354,7 +353,6 @@ msgid "Ollama"
 msgstr "Ollama"
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -2021,7 +2019,6 @@ msgstr "Turtle / N-triples / N3"
 msgid "Usage"
 msgstr "Usage"
 
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
 msgstr "Create account"
@@ -2737,7 +2734,6 @@ msgstr "Edit value"
 msgid "Create {0}:{1} <0/>"
 msgstr "Create {0}:{1} <0/>"
 
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/components/SignInButton.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -2810,14 +2806,11 @@ msgstr ""
 msgid "Get started"
 msgstr "Get started"
 
-#: src/components/LoggedOutAgentPanel.tsx
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Agent secret"
 msgstr "Agent secret"
 
-#: src/components/LoggedOutAgentPanel.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
 msgstr "Signing in…"
@@ -4222,9 +4215,6 @@ msgstr "Prune"
 msgid "Pruning, this might take a while..."
 msgstr "Pruning, this might take a while..."
 
-#~ msgid "Invalid agent secret."
-#~ msgstr "Invalid agent secret."
-
 #: src/chunks/AI/AIChatPage.tsx
 msgid "Failed to create message resource"
 msgstr "Failed to create message resource"
@@ -4629,7 +4619,7 @@ msgstr "Enter an Atomic URL or search  (press \"/\")"
 msgid "Search"
 msgstr "Search"
 
-#: src/helpers/cloud/reconcile.ts
+#: src/helpers/managed/reconcile.ts
 msgid "Disabled"
 msgstr "Disabled"
 
@@ -4890,22 +4880,6 @@ msgstr "Forgot your secret?"
 msgid "Restore account"
 msgstr "Restore account"
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Checking your cloud account…"
-msgstr "Checking your cloud account…"
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid ""
-"To restore your account, sign in to your cloud account\n"
-"first, then come back here."
-msgstr ""
-"To restore your account, sign in to your cloud account\n"
-"first, then come back here."
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in to your cloud account"
-msgstr "Sign in to your cloud account"
-
 #. placeholder {0}: restore.email
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid ""
@@ -4927,3 +4901,26 @@ msgstr "Restoring…"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restore & sign in"
 msgstr "Restore & sign in"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in to access this drive"
+msgstr "Sign in to access this drive"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Enter your agent secret to unlock this drive on this device."
+msgstr "Enter your agent secret to unlock this drive on this device."
+
+#. placeholder {0}: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Checking your {0} account…"
+msgstr "Checking your {0} account…"
+
+#. placeholder {0}: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "To restore your account, sign in to your {0} account first, then come back here."
+msgstr "To restore your account, sign in to your {0} account first, then come back here."
+
+#. placeholder {0}: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in to your {0} account"
+msgstr "Sign in to your {0} account"

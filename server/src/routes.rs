@@ -93,13 +93,13 @@ async fn iroh_node_id_handler() -> actix_web::HttpResponse {
 
 /// Read-only node metadata the data-browser fetches to adapt its onboarding:
 /// a `managed` node (one configured to report to a control plane) sets
-/// `managed: true` and a `dashboardUrl` (the user-facing portal, learned from
+/// `managed: true` and a `portalUrl` (the user-facing portal, learned from
 /// the control plane). Self-hosted / FOSS nodes report `managed: false`.
 #[derive(serde::Serialize)]
 struct NodeInfo {
     managed: bool,
-    #[serde(rename = "dashboardUrl")]
-    dashboard_url: Option<String>,
+    #[serde(rename = "portalUrl")]
+    portal_url: Option<String>,
 }
 
 async fn node_info_handler(
@@ -109,7 +109,7 @@ async fn node_info_handler(
     // managed-node wrapper, via `serve_with_hook`) flips `managed` and sets the
     // dashboard URL it learned from its control plane. The open server itself
     // has no control-plane knowledge.
-    let dashboard_url = appstate
+    let portal_url = appstate
         .managed_dashboard_url
         .read()
         .ok()
@@ -119,7 +119,7 @@ async fn node_info_handler(
         managed: appstate
             .managed
             .load(std::sync::atomic::Ordering::Relaxed),
-        dashboard_url,
+        portal_url,
     })
 }
 
