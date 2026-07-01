@@ -522,6 +522,18 @@ pub async fn import_sync_push(
     }
     // If drive doesn't exist yet, allow import (bootstrap case — new drive arriving)
 
+    // Managed admission gate. No-op under the default OpenPolicy (self-hosted /
+    // FOSS), so this only bites on a managed node: it admits writes to enrolled
+    // drives (within quota), plus a bootstrap grace for a drive whose enrollment
+    // is still propagating to the allowlist.
+    if !store.sync_policy().admit_drive_write(&push.drive) {
+        tracing::warn!(
+            "import_sync_push: drive {} not admitted by sync policy",
+            push.drive
+        );
+        return (0, vec![]);
+    }
+
     let mut count = 0;
     let mut blob_requests = Vec::new();
 

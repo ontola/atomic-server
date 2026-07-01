@@ -13,9 +13,11 @@
 
 use std::collections::HashMap;
 use std::sync::RwLock;
+use std::time::{Duration, Instant};
 
 /// Admission + quota decisions for incoming drive sync. A [`crate::Db`] consults
-/// its installed policy before importing a `SYNC_PUSH`.
+/// its installed policy before admitting a write to a drive (SYNC_PUSH, commit,
+/// blob, or realtime update).
 pub trait SyncPolicy: Send + Sync {
     /// Whether this process may import data for `drive_subject` at all.
     fn drive_is_allowed(&self, drive_subject: &str) -> bool;
@@ -23,6 +25,17 @@ pub trait SyncPolicy: Send + Sync {
     /// Whether `drive_subject` is under its storage quota. Only meaningful when
     /// the drive is allowed.
     fn drive_within_quota(&self, drive_subject: &str) -> bool;
+
+    /// Whether a write to `drive_subject` should be admitted right now. The
+    /// default is a pure allowlist+quota check; a policy may additionally grant a
+    /// bootstrap grace so a freshly-created drive can sync while its enrollment
+    /// is still propagating (see [`AllowlistPolicy`]).
+    ///
+    /// Callers must only pass **drive** subjects — never agent (`did:ad:agent:…`)
+    /// or other non-drive subjects, which are outside the enrollment model.
+    fn admit_drive_write(&self, drive_subject: &str) -> bool {
+        self.drive_is_allowed(drive_subject) && self.drive_within_quota(drive_subject)
+    }
 }
 
 /// The default policy: every drive is allowed and there are no quotas. This is
@@ -60,10 +73,28 @@ pub struct AllowlistPolicy {
     inner: RwLock<AllowlistState>,
 }
 
-#[derive(Default)]
+/// Default bootstrap grace: how long a not-yet-allowlisted drive may keep syncing
+/// after its first write on this node, so onboarding / first-backup can complete
+/// while the enrollment propagates to the allowlist.
+const DEFAULT_GRACE: Duration = Duration::from_secs(600);
+
 struct AllowlistState {
     allowed: HashMap<String, DrivePolicy>,
     usage: HashMap<String, u64>,
+    /// First time a *non-allowlisted* drive attempted a write on this node.
+    first_seen: HashMap<String, Instant>,
+    grace: Duration,
+}
+
+impl Default for AllowlistState {
+    fn default() -> Self {
+        Self {
+            allowed: HashMap::new(),
+            usage: HashMap::new(),
+            first_seen: HashMap::new(),
+            grace: DEFAULT_GRACE,
+        }
+    }
 }
 
 impl AllowlistPolicy {
@@ -108,6 +139,35 @@ impl AllowlistPolicy {
             }
         }
     }
+
+    /// Set the bootstrap grace window (how long a not-yet-allowlisted drive may
+    /// keep syncing after its first write here). `Duration::ZERO` disables grace.
+    pub fn set_grace(&self, grace: Duration) {
+        if let Ok(mut guard) = self.inner.write() {
+            guard.grace = grace;
+        }
+    }
+
+    /// Admission decision at a given instant (testable core of
+    /// [`SyncPolicy::admit_drive_write`]). Allowlisted drives are admitted iff
+    /// within quota; a non-allowlisted drive is admitted only while inside its
+    /// bootstrap grace, measured from its first write here.
+    fn admit_at(&self, drive_subject: &str, now: Instant) -> bool {
+        if self.drive_is_allowed(drive_subject) {
+            return self.drive_within_quota(drive_subject);
+        }
+
+        let Ok(mut guard) = self.inner.write() else {
+            return false;
+        };
+        let grace = guard.grace;
+        let first = *guard
+            .first_seen
+            .entry(drive_subject.to_string())
+            .or_insert(now);
+
+        now.saturating_duration_since(first) < grace
+    }
 }
 
 impl SyncPolicy for AllowlistPolicy {
@@ -129,6 +189,10 @@ impl SyncPolicy for AllowlistPolicy {
             Some(quota) => guard.usage.get(drive_subject).copied().unwrap_or(0) < quota,
             None => true,
         }
+    }
+
+    fn admit_drive_write(&self, drive_subject: &str) -> bool {
+        self.admit_at(drive_subject, Instant::now())
     }
 }
 
@@ -166,5 +230,53 @@ mod tests {
         assert!(!p.drive_within_quota("did:ad:a"));
         // No quota -> always within.
         assert!(p.drive_within_quota("did:ad:b"));
+    }
+
+    #[test]
+    fn open_policy_admits_every_write() {
+        assert!(OpenPolicy.admit_drive_write("did:ad:anything"));
+    }
+
+    #[test]
+    fn admits_allowlisted_drive_and_rejects_over_quota() {
+        let p = AllowlistPolicy::new();
+        p.set_drive_policies([("did:ad:a".to_string(), Some(100u64))]);
+        assert!(p.admit_drive_write("did:ad:a"));
+
+        p.record_drive_usage([("did:ad:a".to_string(), 100u64)]);
+        assert!(!p.admit_drive_write("did:ad:a")); // over quota
+    }
+
+    #[test]
+    fn grace_admits_new_drive_then_rejects_after_window() {
+        let p = AllowlistPolicy::new();
+        p.set_grace(Duration::from_secs(600));
+
+        let t0 = Instant::now();
+        // First write to an un-enrolled drive: admitted (records first-seen).
+        assert!(p.admit_at("did:ad:new", t0));
+        // Still within grace 5 min later.
+        assert!(p.admit_at("did:ad:new", t0 + Duration::from_secs(300)));
+        // Past the grace window: rejected.
+        assert!(!p.admit_at("did:ad:new", t0 + Duration::from_secs(601)));
+    }
+
+    #[test]
+    fn zero_grace_rejects_unenrolled_immediately() {
+        let p = AllowlistPolicy::new();
+        p.set_grace(Duration::ZERO);
+        assert!(!p.admit_at("did:ad:new", Instant::now()));
+    }
+
+    #[test]
+    fn enrolling_during_grace_makes_admission_permanent() {
+        let p = AllowlistPolicy::new();
+        p.set_grace(Duration::from_secs(600));
+        let t0 = Instant::now();
+
+        assert!(p.admit_at("did:ad:d", t0)); // grace
+        p.set_drive_policies([("did:ad:d".to_string(), None)]); // enrollment lands
+        // Long after grace would have expired, still admitted because allowlisted.
+        assert!(p.admit_at("did:ad:d", t0 + Duration::from_secs(10_000)));
     }
 }
