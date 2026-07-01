@@ -1851,6 +1851,16 @@ impl Storelike for Db {
         Subject::from_raw(subject.as_str(), self.get_base_domain().as_deref())
     }
 
+    fn sync_policy(&self) -> Arc<dyn crate::sync::policy::SyncPolicy> {
+        // The installed policy (managed) or the permissive default. Reads the
+        // field directly to avoid resolving against the inherent method of the
+        // same name.
+        self.sync_policy
+            .read()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|_| Arc::new(crate::sync::policy::OpenPolicy))
+    }
+
     fn get_active_drive(&self) -> Option<String> {
         self.get_active_drive()
     }

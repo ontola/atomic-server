@@ -776,6 +776,38 @@ impl Commit {
                 // This should use the _old_ resource, not the new one, as the new one might maliciously give itself write rights.
                 crate::hierarchy::check_write(store, &resource_old, &validate_for.into()).await?;
             }
+
+            // Managed admission gate. No-op under the default OpenPolicy, so
+            // self-hosted / FOSS is unaffected. On a managed node, the drive this
+            // commit belongs to must be enrolled (allowlist + quota), with a
+            // bootstrap grace so a freshly-created drive can sync while its
+            // enrollment propagates. Agents (`did:ad:agent:…`) and other non-drive
+            // subjects are exempt — they are outside the enrollment model, which
+            // is exactly what a naïve drive check got wrong before.
+            {
+                let res = &applied.resource_new;
+                let is_agent = res
+                    .get(urls::IS_A)
+                    .ok()
+                    .and_then(|v| v.to_subjects(None).ok())
+                    .unwrap_or_default()
+                    .iter()
+                    .any(|c| c == urls::AGENT);
+                if !is_agent {
+                    // The drive this resource belongs to: its `drive` stamp, or
+                    // (a drive root / top-level resource) its own subject.
+                    let drive_subject = res
+                        .get(urls::DRIVE_PROP)
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|_| res.get_subject().to_string());
+                    if !store.sync_policy().admit_drive_write(&drive_subject) {
+                        return Err(format!(
+                            "Drive {drive_subject} is not enrolled for sync on this node."
+                        )
+                        .into());
+                    }
+                }
+            }
         };
         // Check if all required props are there
         if opts.validate_schema {

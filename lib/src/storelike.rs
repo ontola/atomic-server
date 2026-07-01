@@ -201,6 +201,15 @@ pub trait Storelike: Sized + Send + Sync {
             .unwrap_or_else(|| "http://localhost".to_string())
     }
 
+    /// The sync admission/quota policy for this store. The default is the
+    /// permissive [`crate::sync::policy::OpenPolicy`] (self-hosted / local-first,
+    /// and every non-`Db` store). A managed node's `Db` returns the policy
+    /// installed via `Db::set_sync_policy`, which the commit / sync paths consult
+    /// to gate writes to un-enrolled drives.
+    fn sync_policy(&self) -> std::sync::Arc<dyn crate::sync::policy::SyncPolicy> {
+        std::sync::Arc::new(crate::sync::policy::OpenPolicy)
+    }
+
     /// Get the active drive subject, if one is set.
     fn get_active_drive(&self) -> Option<String> {
         None
