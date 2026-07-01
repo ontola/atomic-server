@@ -781,18 +781,18 @@ impl Commit {
             // self-hosted / FOSS is unaffected. On a managed node, the drive this
             // commit belongs to must be enrolled (allowlist + quota), with a
             // bootstrap grace so a freshly-created drive can sync while its
-            // enrollment propagates. Agents (`did:ad:agent:…`) and other non-drive
-            // subjects are exempt — they are outside the enrollment model, which
-            // is exactly what a naïve drive check got wrong before.
+            // enrollment propagates. Agents (`did:ad:agent:…`) are exempt — they
+            // are outside the enrollment model, which is exactly what a naïve
+            // drive check got wrong before.
+            //
+            // The exemption MUST be keyed on the commit's own subject structure
+            // (`is_agent_did`), never on a claimed `IS_A` value: `IS_A` is an
+            // ordinary, fully client-controlled property with no required-props
+            // gate on the `Agent` class, so checking it here would let any client
+            // skip the gate for arbitrary data by tagging it `IS_A: [Agent]`.
             {
                 let res = &applied.resource_new;
-                let is_agent = res
-                    .get(urls::IS_A)
-                    .ok()
-                    .and_then(|v| v.to_subjects(None).ok())
-                    .unwrap_or_default()
-                    .iter()
-                    .any(|c| c == urls::AGENT);
+                let is_agent = commit.subject.is_agent_did();
                 if !is_agent {
                     // The drive this resource belongs to: its `drive` stamp, or
                     // (a drive root / top-level resource) its own subject.
@@ -1994,6 +1994,104 @@ mod test {
             updated.get(crate::urls::DESCRIPTION).unwrap().to_string(),
             "Second version"
         );
+    }
+
+    /// Regression test for a real vulnerability: the admission-gate's agent
+    /// exemption must key off the commit's actual subject structure
+    /// (`is_agent_did`), never off a claimed `IS_A` propval. `IS_A` is an
+    /// ordinary, fully client-controlled property (the `Agent` class has no
+    /// required props gating it), so a version of the gate that trusted `IS_A`
+    /// let any client skip drive-enrollment/quota checks entirely by tagging
+    /// arbitrary data `IS_A: [Agent]`.
+    #[tokio::test]
+    async fn admission_gate_rejects_spoofed_agent_tag_on_unenrolled_drive() {
+        use crate::sync::policy::AllowlistPolicy;
+        use std::sync::Arc;
+        use std::time::Duration;
+
+        let db = crate::Db::init_temp("gate_spoof_test").await.unwrap();
+        let (agent, drive_subject) = db.setup("Alice").await.unwrap();
+
+        // Managed node with an empty allowlist and no bootstrap grace: nothing
+        // is enrolled, so any non-agent drive write must be rejected outright.
+        let policy = Arc::new(AllowlistPolicy::new());
+        policy.set_grace(Duration::ZERO);
+        db.set_sync_policy(policy);
+
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::PARENT.into(),
+            Value::AtomicUrl(drive_subject.clone().into()),
+        );
+        // The spoof: claim to be an Agent so a naive check would exempt this
+        // commit from the gate, even though the subject is an ordinary
+        // resource under `drive_subject`, not an agent DID.
+        builder.set(
+            crate::urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::urls::AGENT.to_string().into()]),
+        );
+        let commit = Commit::create_did(builder, &agent, &db).await.unwrap();
+
+        let opts_with_rights = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: true,
+            validate_rights: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            update_index: true,
+            ..CommitOpts::no_validations_no_index()
+        };
+
+        let result = db.apply_commit(commit, &opts_with_rights).await;
+        assert!(
+            result.is_err(),
+            "a spoofed IS_A: [Agent] tag must not bypass the drive-enrollment gate"
+        );
+    }
+
+    /// Companion to the spoof-rejection test above: a genuine agent DID commit
+    /// (the commit's own subject is `did:ad:agent:…`) must still be admitted
+    /// even when its "drive" isn't enrolled — agents are legitimately outside
+    /// the enrollment model.
+    #[tokio::test]
+    async fn admission_gate_admits_real_agent_did_on_unenrolled_node() {
+        use crate::sync::policy::AllowlistPolicy;
+        use std::sync::Arc;
+        use std::time::Duration;
+
+        let db = crate::Db::init_temp("gate_real_agent_test").await.unwrap();
+        let (agent, _drive_subject) = db.setup("Alice").await.unwrap();
+
+        let policy = Arc::new(AllowlistPolicy::new());
+        policy.set_grace(Duration::ZERO);
+        db.set_sync_policy(policy);
+
+        // The agent updates its own DID resource — a legitimate agent write,
+        // unrelated to any enrolled drive.
+        let mut agent_resource = db.get_resource(&agent.subject).await.unwrap();
+        agent_resource
+            .set_unsafe(crate::urls::NAME.into(), Value::String("Alice R.".into()))
+            .unwrap();
+        let commit = agent_resource
+            .get_commit_builder()
+            .clone()
+            .sign(&agent, &db, &agent_resource)
+            .await
+            .unwrap();
+
+        let opts_with_rights = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: true,
+            validate_rights: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            update_index: true,
+            ..CommitOpts::no_validations_no_index()
+        };
+
+        db.apply_commit(commit, &opts_with_rights)
+            .await
+            .expect("a real agent DID commit must be exempt from the drive-enrollment gate");
     }
 
     /// Tampering with the signature of an otherwise valid commit must be
