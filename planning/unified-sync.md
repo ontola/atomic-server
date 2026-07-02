@@ -76,9 +76,9 @@ server, closing the browser side of the unsigned-write race without a wire chang
 `BLOB_RESPONSE` (the sync-protocol write path) now gated on admission via a
 pending-request map keyed off the `BLOB_REQUEST`s the server itself issued (unsolicited
 or un-admitted responses rejected); quota accounting turned out to already be correct
-(`per_drive_usage` recomputes from stored blobs rather than counting writes) — but the
-browser's *primary* blob-write path, HTTP `PUT /blob/{hash}`, has no admission check at
-all and remains open (tracked as a follow-up, not fixed here); F5 — `ERROR` frame and
+(`per_drive_usage` recomputes from stored blobs rather than counting writes); the
+browser's *primary* blob-write path, HTTP `PUT /blob/{hash}`, was originally left open
+as a follow-up and is now also gated (2026-07-02, F4 follow-up section below); F5 — `ERROR` frame and
 HTTP `/commit` body now carry a structured `code`, outbox switches on it with
 message-string matching as the fallback for unrecognized codes (including a garbled
 code misread from a pre-F5 server's frame under the new byte layout — the fallback path
@@ -167,7 +167,7 @@ late-arriving `AUTH` frame (allowed by the protocol at any point, not just durin
 handshake) now actually strengthens the session's identity for the rest of the
 connection, rather than being silently discarded by this path.
 
-### F4 — Blob frames bypass both gates ⚠️ Sync-protocol write path fixed 2026-07-02; HTTP write path still open
+### F4 — Blob frames bypass both gates ✅ Sync-protocol write path fixed 2026-07-02; HTTP write path fixed 2026-07-02
 
 `BLOB_REQUEST` serves any blob by 32-byte hash with no `check_read`
 (hash-as-capability — **documented as an accepted decision**: a hash is
@@ -188,17 +188,56 @@ Two regression tests (`blob_response_without_matching_request_is_rejected`,
 `engine.rs`; the existing `sync_blobs_via_engine` and `iroh_blob_roundtrip`
 tests confirm the legitimate round trip is unaffected.
 
-**Still open — the browser's primary blob-write path is untouched:**
-`PUT /blob/{hash}` (`server/src/handlers/blob.rs::put_blob`, wired in
-`routes.rs` with no auth guard at all) is how the browser actually uploads
-file bytes — the WS `BLOB_REQUEST`/`BLOB_RESPONSE` pair this fix gates is the
-peer-to-peer/sync-catchup path, not the primary one. `put_blob` verifies only
-that the body's BLAKE3 hash matches the URL (content-addressing integrity),
-then stores it with **zero admission, quota, or auth check**. The
-disk-consumption gap F4 describes remains fully open over HTTP on a managed
-node. Gating this (thread the drive through from the commit that references
-the blob, or require the referencing commit to land first) is a **follow-up**,
-tracked below — not folded into this fix.
+**F4 follow-up fixed (2026-07-02) — the browser's primary blob-write path is
+now gated:** `PUT /blob/{hash}` (`server/src/handlers/blob.rs::put_blob`) is
+how the browser actually uploads file bytes — the WS
+`BLOB_REQUEST`/`BLOB_RESPONSE` pair the fix above gates is the
+peer-to-peer/sync-catchup path, not the primary one. `put_blob` used to
+verify only that the body's BLAKE3 hash matches the URL (content-addressing
+integrity), then store it with zero admission, quota, or auth check —
+the hash alone is NOT a write capability, since an attacker choosing their
+own bytes can always compute a hash for them.
+
+**Fix:** bytes are only accepted when a resource *already on this server*
+references `did:ad:blob:<hash>` via the `BLOB` property (found via
+`Storelike::query`, `for_agent: Sudo` — existence only, not a read-rights
+check, so private-file uploads aren't blinded by the lookup) and **any** of
+those referencing resources' drives passes `admit_drive_write`, resolved the
+same way `resolve_destroy_drive` does (`DRIVE_PROP`, falling back to the
+resource's own subject). This works because the client's outbox drain always
+POSTs the referencing commit before pushing the blob's bytes
+(`local-outbox.ts`), so the ordering the gate depends on already holds in the
+legitimate flow. The gating logic lives in a standalone
+`resolve_blob_write_admission(&Db, hash_hex)` function, pulled out of the
+actix handler specifically so it's unit-testable directly against a `Db` —
+there's no config-level way to install a non-default `SyncPolicy` on a spun-up
+`atomic-server` process, so an HTTP-integration test alone couldn't exercise
+the rejection paths.
+
+**Second-review edge case, fixed in the same batch:** the first version
+queried with `limit: Some(1)` and checked only that one result's drive —
+correct when a hash is referenced from a single drive, but content-addressed
+bytes can legitimately be referenced from resources in *different* drives
+(the same file uploaded independently into two drives), and a single-result
+limit made the verdict depend on which resource the query happened to return
+first. Fixed to drop the limit and accept if any referencing resource's drive
+is admitted. `referenced_hash_admitted_via_any_matching_drive` uses
+hand-picked (not randomly-DID'd) subjects so the unadmitted resource is
+deterministically forced first in the property-value index — confirmed via
+revert-and-check that this fails 100% of runs against the `limit(1)` version
+(a randomized-subject version of the same test only failed ~60% of runs,
+which wasn't trustworthy as a regression guard).
+
+Four unit tests total (`unreferenced_hash_is_rejected`,
+`referenced_hash_on_admitted_drive_is_allowed`,
+`referenced_hash_on_unadmitted_drive_is_rejected`,
+`referenced_hash_admitted_via_any_matching_drive`), each verified via
+revert-and-check, plus two HTTP-level integration tests
+(`server/tests/put_blob.rs`) proving the real endpoint behaves the same way
+over the wire (legit commit-then-blob flow succeeds; unreferenced hash gets
+401). The separate `/upload` multipart endpoint (`handlers/upload.rs`) was
+checked and needed no change — it already requires `check_write` before
+inserting bytes, and doesn't call the new gate at all.
 
 **Quota accounting was already correct, no fix needed:** `per_drive_usage`
 (the number the managed control-plane reports) recomputes `blob_bytes` by
@@ -679,12 +718,10 @@ resurrection between honest replicas of the same agent.
   a pending-request map; quota accounting already correct (recompute-based
   `per_drive_usage`). Hash-as-capability for `BLOB_REQUEST` documented as
   accepted, not fixed.
-- [ ] **F4 follow-up (not yet done):** gate HTTP `PUT /blob/{hash}`
-  (`server/src/handlers/blob.rs::put_blob`) — no auth guard, no admission
-  check at all today, and it's the browser's primary blob-upload path (the
-  WS `BLOB_REQUEST`/`BLOB_RESPONSE` pair above is sync-catchup, not primary
-  upload). The disk-consumption gap F4 originally described is still fully
-  open here on a managed node.
+- [x] **F4 follow-up:** gate HTTP `PUT /blob/{hash}` (2026-07-02) — bytes
+  accepted only when a resource already references `did:ad:blob:<hash>` and
+  that resource's drive is admitted. This was the last unauthenticated write
+  path in the server. See the F4 write-up above for the fix and its tests.
 - [x] **F8 (critical):** delete the `SYNC_DELTAS` handler + `engine::handle_sync_deltas`
   — unauthenticated, unchecked write path with zero senders (2026-07-02).
 - [x] **F9 minimal:** stop `add_known_peer` on the accept path (2026-07-02).
@@ -829,23 +866,22 @@ F9-minimal landed before the decision since they were cheap either way.
 - [x] F3: session agent in live-mode fallback dispatch (`34fd15c2`).
 - [x] F1 interim: skip VV push for subjects with pending outbox entries
   (`computeDriveSyncState`, browser-only, 2026-07-02).
-- [x] F4 (sync-protocol write path only): blob admission via pending-request
-  map; quota accounting was already correct (2026-07-02). HTTP
-  `PUT /blob/{hash}` — the browser's primary upload path — is still
-  ungated; see the F4 follow-up in Engineering debt above.
+- [x] F4: blob admission via pending-request map on the sync-protocol path;
+  quota accounting was already correct (2026-07-02). HTTP `PUT /blob/{hash}`
+  — the browser's primary upload path — gated the same day as its own
+  follow-up item; see the F4 write-up above.
 - [x] F5: structured error codes on `ERROR` (wire change) and `/commit`
   (`errorCode` JSON-AD field); outbox switches on code, string-matching is
   now the fallback for a `code` outside the known set — including a
   garbled value misread from a pre-F5 server's frame, which the first
   version of this fix got wrong (see F5's writeup above) (2026-07-02).
 
-**Phase 0 substantially complete** as of 2026-07-02 — F1 (interim), F2, F3
-(+ follow-up), F5 fully fixed and tested; F4 fixed for the sync-protocol write path
-only, with the HTTP `PUT /blob/{hash}` gap tracked as an explicit follow-up (not yet
-done). Full audit findings F1-F6 status: F1 has an interim browser-side fix (the full
-fix is the state-first wire change in Phase 3); F2, F3, F5 fully fixed; F4 partially
-fixed (HTTP path open); F6 is still open (Phase 0 didn't include it — it's a
-lower-severity doc/naming fix, tracked in the Engineering debt checklist above).
+**Phase 0 complete** as of 2026-07-02 — F1 (interim), F2, F3 (+ follow-up), F4
+(both the sync-protocol and HTTP write paths), F5 all fully fixed and tested.
+Full audit findings F1-F6 status: F1 has an interim browser-side fix (the full
+fix is the state-first wire change in Phase 3); F2, F3, F4, F5 fully fixed; F6
+is still open (Phase 0 didn't include it — it's a lower-severity doc/naming
+fix, tracked in the Engineering debt checklist above).
 
 ### Phase 0b — Second-pass trust fixes (2026-07-02 audit; substantially complete)
 
@@ -867,8 +903,8 @@ work in that plan's Phase P0, not a decision-gated maybe.
   unprivileged peers (2026-07-02). **Does not** cover a known subject destroyed via
   the initiator's ungated remove-apply — that's F9 proper, above.
 - [x] F11: tombstone cleared on rights-checked re-create (2026-07-02).
-- [ ] F4 follow-up: gate HTTP `PUT /blob/{hash}` (see Engineering debt). Still open —
-  not touched this pass.
+- [x] F4 follow-up: gate HTTP `PUT /blob/{hash}` (2026-07-02, see Engineering debt
+  above) — the last unauthenticated write path in the server.
 - [x] Cheap inconsistency sweep — **done:** docs `ERROR` layout, unified Iroh frame
   cap (kept pre-auth tighter than post-auth, see Engineering debt), `auth_buf` offset
   (landed earlier with F5's second-review fixes), `pending_blob_requests` TTL (same),
