@@ -117,17 +117,19 @@ first attempt. Design + status: `atomic-saas/planning/ENFORCEMENT_GATE.md`.
     arbitrary data `IS_A: [Agent]`. Fixed; regression tests in `commit.rs`
     (`admission_gate_rejects_spoofed_agent_tag_on_unenrolled_drive`,
     `admission_gate_admits_real_agent_did_on_unenrolled_node`) lock this in.
-- ❌ **Not covered: Iroh live-sync `UPDATE`/`DESTROY`.** `peer.rs`'s
-  `AtomicHandler::accept` has no peer allowlist, and once a connection reaches
-  "live mode" (any `SYNC` that yields `SYNC_OK`/an empty diff is enough — no
-  `AUTH` frame required), the read loop calls `ws_apply::apply_state_update` /
-  `apply_destroy` directly with **no rights check and no policy check at all**
-  (pre-existing since ~April 2026, predates this feature). This is a full
-  bypass of both the ACL and the admission gate, reachable by any Iroh peer
-  that completes a handshake — not just an admission-gate gap. Needs a design
-  decision (peer allowlist vs. gate-check inside `ws_apply`) before a managed
-  node's Iroh port can be considered safe from either angle. See
-  `atomic-saas/planning/ENFORCEMENT_GATE.md`.
+- ✅ **Fixed 2026-07: Iroh live-sync `UPDATE`/`DESTROY`.** Was a full bypass of
+  both the ACL and the admission gate (pre-existing since ~April 2026, predates
+  this feature) — `AtomicHandler::accept` had no peer allowlist, and once a
+  connection reached "live mode" the read loop wrote with no rights check and
+  no policy check at all. Fixed uniformly (no inbound/outbound branching):
+  mutual best-effort `AUTH` (acceptor now also authenticates back, existing
+  frame type, not required — so anonymous access to genuinely public
+  resources is unaffected), the resulting identity threaded into
+  `register_live_peer`, and `admit_drive_write` + `check_write` checked once
+  per (connection, drive) — cached, not per-frame, to keep live typing/collab
+  fast. See `atomic-saas/planning/ENFORCEMENT_GATE.md` for the full design and
+  `lib/src/sync/peer.rs::live_write_admission_tests` for the regression
+  coverage.
 - The `AllowlistPolicy`, `set_sync_policy`, `allowed_drive_subjects`, and
   `has_resource_locally` plumbing is shared with the proactive pull.
 - Note: enrollment itself requires a verified-email session (`require_user` →
