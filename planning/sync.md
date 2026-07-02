@@ -278,6 +278,28 @@ Add or update tests at these levels:
 - [ ] **`EPHEMERAL (0x40)` binary tag** — declared in the tag table but no
   encoder/decoder/test. Decide if it's used; if not, mark `reserved` in
   `docs/src/websockets.md` so the tag table stops looking like a gap.
+- [ ] **Real bug, not flake: `WsClient.close()` doesn't deterministically flip
+  `serverConnected` before the `close` event fires (2026-07-02).** Found via
+  `browser/e2e/tests/sync.spec.ts`'s "offline edits sync to server when
+  connection is restored", which times out intermittently waiting for
+  `serverConnected === false` after a manual `getDefaultWebSocket()?.close()`
+  — a legitimately-flaky-*looking* symptom that got waved off as
+  "environmental" (leftover dev processes, worker contention) across three
+  review rounds. Root-caused this pass: killing the suspected leftover
+  processes and running serially both failed to fix it, and the actual trace
+  shows a commit's own 10s internal timeout firing before the WS `close`
+  event lands — meaning `setServerConnected(false)` (only called from that
+  event, see `websockets.ts`) doesn't fire promptly for a locally-initiated
+  close under Playwright's `context.setOffline(true)`. Likely real-world
+  impact, not just a test artifact: any code path that closes the socket
+  itself (not just this test) may see the same delay before
+  `store.serverConnected` reflects reality. **Not fixed yet** — this needs an
+  actual fix, not a longer timeout (per the no-timeouts-as-a-fix rule): make
+  `WsClient.close()` call `setServerConnected(false)` + `rejectAllPending`
+  synchronously itself (the caller already knows it initiated the close),
+  rather than waiting for the `close` event to race whatever else is in
+  flight. See the comment on the test's `waitForFunction` call for the full
+  trace evidence.
 
 ### Overlap to thin
 

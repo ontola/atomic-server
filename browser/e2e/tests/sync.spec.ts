@@ -221,15 +221,24 @@ test.describe('sync', () => {
     ).toBeVisible({ timeout: 15000 });
   });
 
-  // FLAKY (dagger CI + remote CI): on the second-context (page2) view of
-  // the document, the `Synced From Offline` H1 doesn't render within
-  // 30 s. Path is page1 edits offline → reconnect → page1
-  // `waitForSearchable` → page2 navigates to the resource subject.
-  // Already does a `waitForFunction` against `store.resources.get(...)`,
-  // but under dagger CPU contention the Loro WASM init + WS
-  // authenticate + GET round-trip exceeds the budget. Investigate:
-  // pre-warm Loro on page2 before navigation, or split the deadline so
-  // the WS GET budget is independent of the H1 render budget.
+  // FLAKY, two independent known causes:
+  //
+  // 1. (dagger CI + remote CI) on the second-context (page2) view of
+  //    the document, the `Synced From Offline` H1 doesn't render within
+  //    30 s. Path is page1 edits offline → reconnect → page1
+  //    `waitForSearchable` → page2 navigates to the resource subject.
+  //    Already does a `waitForFunction` against `store.resources.get(...)`,
+  //    but under dagger CPU contention the Loro WASM init + WS
+  //    authenticate + GET round-trip exceeds the budget. Investigate:
+  //    pre-warm Loro on page2 before navigation, or split the deadline so
+  //    the WS GET budget is independent of the H1 render budget.
+  //
+  // 2. (local, 2026-07-02) the EARLIER `serverConnected === false` wait
+  //    (below, step 2) also times out intermittently — NOT a CI/dagger
+  //    thing, reproduces locally with no other processes competing for
+  //    CPU. Root-caused, not just relabeled "environmental": see the
+  //    comment at that `waitForFunction` call for the actual race. Not
+  //    fixed yet — tracked in planning/sync.md's Test coverage gaps.
   test('offline edits sync to server when connection is restored', async ({
     page,
     context,
@@ -297,7 +306,25 @@ test.describe('sync', () => {
       window.store.getDefaultWebSocket()?.close();
     });
 
-    // Wait for the store to detect the disconnect
+    // Wait for the store to detect the disconnect.
+    //
+    // FLAKY (2026-07-02, root-caused): this times out intermittently even
+    // with zero other processes competing for CPU (ruled out: leftover
+    // dev-server processes, parallel-worker contention — both were tried
+    // and disproven; earlier attribution to "environmental" flakiness was
+    // wrong). Trace evidence: on a failing run, a commit still in flight
+    // from step 1 hits its own 10s internal timeout ("COMMIT timed out
+    // after 10000ms... using HTTP") only AFTER `setOffline(true)` + the
+    // manual `close()` above have already run — meaning the WS `close`
+    // event (the only thing that calls `setServerConnected(false)`, see
+    // `websockets.ts`) didn't fire promptly. Suspected cause: a race
+    // between Playwright's CDP-level `setOffline(true)` network block and
+    // the manual `ws.close()` call — Chromium may suppress or delay the
+    // `close` event once the transport is already CDP-blocked. Not fixed
+    // here — tracked in planning/sync.md's Test coverage gaps. Likely fix: don't rely
+    // on the `close` event for local closes; have `WsClient.close()` call
+    // `setServerConnected(false)` (and `rejectAllPending`) synchronously
+    // itself, since the caller already knows it initiated the close.
     await page.waitForFunction(
       () => window.store.getSyncStatus().serverConnected === false,
       undefined,
