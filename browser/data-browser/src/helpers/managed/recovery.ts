@@ -143,7 +143,7 @@ export async function decryptRecoverySecret(
       base64ToBytes(recovery.encrypted_secret),
     );
   } catch {
-    throw new Error('Wrong recovery password, or the backup is corrupted.');
+    throw new Error('Wrong recovery password');
   }
 
   return new TextDecoder().decode(plaintext);
