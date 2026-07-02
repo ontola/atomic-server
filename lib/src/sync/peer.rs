@@ -500,11 +500,54 @@ fn start_live_sync(store: Db) {
 }
 
 /// Register a live peer connection. Spawns read/write loops.
+/// Per-connection cache of drive-level write verdicts for live UPDATE/DESTROY
+/// frames, so a burst of writes to the same drive (e.g. live typing in one
+/// document) doesn't re-walk the rights hierarchy on every single frame.
+/// Scoped to one connection's lifetime — a fresh connection re-evaluates from
+/// scratch, which is exactly when a changed enrollment/rights grant should
+/// take effect anyway.
+async fn admitted_for_drive(
+    store: &Db,
+    agent: &ForAgent,
+    drive_subject: &str,
+    cache: &mut std::collections::HashMap<String, bool>,
+) -> bool {
+    if let Some(&verdict) = cache.get(drive_subject) {
+        return verdict;
+    }
+
+    // Admission gate first (allowlist/quota/bootstrap grace) — cheap,
+    // in-memory. No-op under the default OpenPolicy (self-hosted / FOSS).
+    if !store.sync_policy().admit_drive_write(drive_subject) {
+        cache.insert(drive_subject.to_string(), false);
+        return false;
+    }
+
+    // ACL: does this agent have write access to the drive? Checked once
+    // against the drive resource itself (rights are inherited by its
+    // children, so this answers "can this agent write anything in this
+    // drive," which is exactly what the cache should hold). Mirrors
+    // import_sync_push's existing bootstrap carve-out: a drive that doesn't
+    // exist locally yet has nothing to check against, so admission alone
+    // gates it (the same trust already extended to bulk SYNC_PUSH).
+    let drive_subj = crate::Subject::from_raw(drive_subject, store.get_base_domain().as_deref());
+    let verdict = match store.get_resource(&drive_subj).await {
+        Ok(drive_resource) => crate::hierarchy::check_write(store, &drive_resource, agent)
+            .await
+            .is_ok(),
+        Err(_) => true,
+    };
+
+    cache.insert(drive_subject.to_string(), verdict);
+    verdict
+}
+
 fn register_live_peer(
     peer_id: String,
     mut send: iroh::endpoint::SendStream,
     mut recv: iroh::endpoint::RecvStream,
     store: Db,
+    agent: ForAgent,
 ) {
     let key = normalize_node_id(&peer_id);
     add_known_peer(&store, &key, "");
@@ -573,9 +616,11 @@ fn register_live_peer(
     let read_peer_id = key.clone();
     tokio::spawn(async move {
         tracing::info!(
-            "[live] read loop started for {}",
+            "[live] read loop started for {} as {agent:?}",
             &read_peer_id[..read_peer_id.len().min(12)]
         );
+        let mut drive_cache: std::collections::HashMap<String, bool> =
+            std::collections::HashMap::new();
         loop {
             let len = match recv.read_u32().await {
                 Ok(n) => {
@@ -607,33 +652,82 @@ fn register_live_peer(
                 continue;
             }
 
-            // Handle DESTROY frames
+            // Handle DESTROY frames. Gated: a live connection has no
+            // established rights beyond whatever `agent` proved during the
+            // handshake (Public if it proved nothing) — the same admission +
+            // ACL check every other write path in this codebase applies.
             if buf[0] == super::protocol::tag::DESTROY {
                 if buf.len() > 3 {
                     let subject = std::str::from_utf8(&buf[3..])
                         .unwrap_or_default()
                         .to_string();
-                    let _ = super::ws_apply::apply_destroy(&store, &subject).await;
+                    match super::ws_apply::resolve_destroy_drive(&store, &subject).await {
+                        Some(drive_subject) => {
+                            if admitted_for_drive(&store, &agent, &drive_subject, &mut drive_cache)
+                                .await
+                            {
+                                let _ =
+                                    super::ws_apply::apply_destroy_checked(&store, &subject).await;
+                            } else {
+                                tracing::warn!(
+                                    "[live] rejected DESTROY for {} from {}: not admitted for drive {}",
+                                    &subject[..subject.len().min(20)],
+                                    &read_peer_id[..read_peer_id.len().min(12)],
+                                    &drive_subject[..drive_subject.len().min(20)]
+                                );
+                            }
+                        }
+                        // Resource doesn't exist locally — nothing to check
+                        // rights against; the tombstone-write is a no-op.
+                        None => {
+                            let _ =
+                                super::ws_apply::apply_destroy_checked(&store, &subject).await;
+                        }
+                    }
                 }
                 continue;
             }
 
-            // Handle UPDATE frames.
+            // Handle UPDATE frames. Gated the same way as DESTROY above.
             // Authoritative source of truth for the wire format: [docs/src/websockets.md](file:///Users/joep/dev/atomic-server/docs/src/websockets.md)
             if buf[0] == super::protocol::tag::UPDATE {
                 if let Some(decoded) = super::protocol::decode_update(&buf[1..]) {
                     if !decoded.loro_bytes.is_empty() {
-                        let _ = super::ws_apply::apply_state_update(
+                        if let Some(resolved) = super::ws_apply::resolve_update(
                             &store,
                             &decoded.subject,
                             &decoded.loro_bytes,
                         )
-                        .await;
-                        tracing::trace!(
-                            "[live] imported update for {} from {}",
-                            &decoded.subject[..decoded.subject.len().min(20)],
-                            &read_peer_id[..read_peer_id.len().min(12)]
-                        );
+                        .await
+                        {
+                            if admitted_for_drive(
+                                &store,
+                                &agent,
+                                &resolved.drive_subject,
+                                &mut drive_cache,
+                            )
+                            .await
+                            {
+                                let _ = super::ws_apply::persist_update(
+                                    &store,
+                                    &decoded.subject,
+                                    resolved,
+                                )
+                                .await;
+                                tracing::trace!(
+                                    "[live] imported update for {} from {}",
+                                    &decoded.subject[..decoded.subject.len().min(20)],
+                                    &read_peer_id[..read_peer_id.len().min(12)]
+                                );
+                            } else {
+                                tracing::warn!(
+                                    "[live] rejected UPDATE for {} from {}: not admitted for drive {}",
+                                    &decoded.subject[..decoded.subject.len().min(20)],
+                                    &read_peer_id[..read_peer_id.len().min(12)],
+                                    &resolved.drive_subject[..resolved.drive_subject.len().min(20)]
+                                );
+                            }
+                        }
                     }
                 }
                 continue;
@@ -947,6 +1041,11 @@ pub async fn sync_drive_with_peer_using_outcome(
     send.write_all(&hello_frame).await.map_err(io_err)?;
 
     let mut peer_display_name: Option<String> = None;
+    // Best-effort mutual auth: the identity the remote proved to us, if any.
+    // Stays Public (no special rights beyond whatever Public already has,
+    // same as an unauthenticated HTTP request) if the remote has no local
+    // agent to authenticate with — e.g. a truly anonymous guest.
+    let mut remote_agent = ForAgent::Public;
 
     // Build our local sync state
     let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
@@ -1131,6 +1230,37 @@ pub async fn sync_drive_with_peer_using_outcome(
                 tracing::warn!("Peer returned error: {msg}");
                 break;
             }
+            super::protocol::tag::AUTH => {
+                // The remote's best-effort auth-back (see handle_stream). Same
+                // verification as any other AUTH — pure signature/timestamp
+                // proof of identity, no rights check here.
+                if let Ok(json) = std::str::from_utf8(payload) {
+                    match serde_json::from_str::<crate::authentication::AuthValues>(json) {
+                        Ok(auth) => {
+                            match crate::authentication::get_agent_from_auth_values_and_check(
+                                Some(auth),
+                                store,
+                            )
+                            .await
+                            {
+                                Ok(a) => {
+                                    tracing::info!(
+                                        "[sync] peer {} authenticated back as {a:?}",
+                                        &remote_key[..remote_key.len().min(12)]
+                                    );
+                                    remote_agent = a;
+                                }
+                                Err(e) => {
+                                    tracing::debug!("[sync] peer's auth-back rejected: {e}");
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::debug!("[sync] invalid auth-back JSON from peer: {e}");
+                        }
+                    }
+                }
+            }
             _ => {
                 tracing::debug!("Unexpected frame tag from peer: 0x{tag:02x}");
             }
@@ -1154,7 +1284,7 @@ pub async fn sync_drive_with_peer_using_outcome(
             v.push(conn);
         }
     }
-    register_live_peer(remote_key.clone(), send, recv, store.clone());
+    register_live_peer(remote_key.clone(), send, recv, store.clone(), remote_agent);
 
     Ok(PeerSyncOutcome {
         count: total_imported,
@@ -1248,6 +1378,7 @@ async fn handle_stream(
     let mut total_imported = 0;
     let mut sent_sync_ok = false;
     let mut hello_sent = false;
+    let mut auth_sent = false;
     let mut peer_display_name: Option<String> = None;
 
     while let Ok(n) = recv.read_u32().await {
@@ -1359,6 +1490,31 @@ async fn handle_stream(
             }
         }
 
+        // Best-effort mutual auth: prove our own identity back to the peer, so
+        // it can resolve real write rights for whatever we send once live,
+        // instead of falling back to Public. Optional — a peer with no local
+        // agent (a truly anonymous guest) simply doesn't send this, and stays
+        // unidentified on the remote's side, same as an unauthenticated HTTP
+        // request. Sent once, the same trigger as HELLO.
+        if just_authed && !auth_sent {
+            auth_sent = true;
+            if let Ok(our_agent) = store.get_default_agent() {
+                if let Ok(auth_frame) = super::protocol::encode_auth(&our_agent, &remote_key) {
+                    if let Err(e) = send.write_u32(auth_frame.len() as u32).await {
+                        tracing::warn!(
+                            "[accept] failed to write auth-back header to {}: {e}",
+                            &remote_key[..remote_key.len().min(12)]
+                        );
+                    } else if let Err(e) = send.write_all(&auth_frame).await {
+                        tracing::warn!(
+                            "[accept] failed to write auth-back body to {}: {e}",
+                            &remote_key[..remote_key.len().min(12)]
+                        );
+                    }
+                }
+            }
+        }
+
         // Transition to live mode after the sync exchange is fully complete:
         // - SYNC_OK: no data to exchange, we're done
         // - Client's SYNC_PUSH: bidirectional exchange complete
@@ -1369,7 +1525,7 @@ async fn handle_stream(
                 "[accept] sync complete, transitioning to live mode with {}",
                 &remote_key[..remote_key.len().min(12)]
             );
-            register_live_peer(remote_key, send, recv, store);
+            register_live_peer(remote_key, send, recv, store, agent);
             return Ok(total_imported);
         }
     }
@@ -1380,8 +1536,99 @@ async fn handle_stream(
             "[accept] SYNC_OK sent, entering live mode with {}",
             &remote_key[..remote_key.len().min(12)]
         );
-        register_live_peer(remote_key, send, recv, store);
+        register_live_peer(remote_key, send, recv, store, agent);
     }
 
     Ok(total_imported)
+}
+
+#[cfg(test)]
+mod live_write_admission_tests {
+    use super::*;
+    use crate::Db;
+    use std::collections::HashMap;
+
+    /// Regression coverage for the live-sync write bypass: `apply_state_update`
+    /// / `apply_destroy` used to run with no ACL check and no admission-gate
+    /// check at all once a connection reached live mode. `admitted_for_drive`
+    /// is what closes it — these tests exercise it directly (rather than via a
+    /// full two-peer Iroh handshake) so the ACL and admission-gate layers are
+    /// each provable in isolation.
+    #[tokio::test]
+    async fn owner_admitted_stranger_rejected() {
+        let db = Db::init_temp("live_admission_owner_vs_stranger")
+            .await
+            .unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let mallory = db.create_agent(Some("Mallory")).await.unwrap();
+
+        let mut cache = HashMap::new();
+        assert!(
+            admitted_for_drive(
+                &db,
+                &ForAgent::AgentSubject(alice.subject.clone()),
+                &drive,
+                &mut cache
+            )
+            .await,
+            "the drive's own owner must be admitted"
+        );
+
+        let mut cache = HashMap::new();
+        assert!(
+            !admitted_for_drive(
+                &db,
+                &ForAgent::AgentSubject(mallory.subject.clone()),
+                &drive,
+                &mut cache
+            )
+            .await,
+            "an unrelated agent with no rights to the drive must be rejected"
+        );
+    }
+
+    /// The admission gate (allowlist/quota) is checked too, not just the ACL —
+    /// even the rightful owner is rejected once their drive isn't admitted
+    /// (e.g. a managed node whose allowlist doesn't include this drive).
+    #[tokio::test]
+    async fn owner_rejected_when_drive_not_admitted() {
+        let db = Db::init_temp("live_admission_policy_gate").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+
+        let policy = std::sync::Arc::new(crate::sync::policy::AllowlistPolicy::new());
+        policy.set_grace(std::time::Duration::ZERO);
+        db.set_sync_policy(policy);
+
+        let mut cache = HashMap::new();
+        assert!(
+            !admitted_for_drive(
+                &db,
+                &ForAgent::AgentSubject(alice.subject.clone()),
+                &drive,
+                &mut cache
+            )
+            .await,
+            "the owner's ACL rights don't matter if the drive isn't admitted by policy"
+        );
+    }
+
+    /// The cache actually gets populated after the first check, so a burst of
+    /// frames to the same drive on one connection doesn't re-walk the rights
+    /// hierarchy every time.
+    #[tokio::test]
+    async fn verdict_is_cached_after_first_check() {
+        let db = Db::init_temp("live_admission_cache").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+
+        let mut cache = HashMap::new();
+        assert!(cache.get(&drive).is_none());
+        admitted_for_drive(
+            &db,
+            &ForAgent::AgentSubject(alice.subject.clone()),
+            &drive,
+            &mut cache,
+        )
+        .await;
+        assert_eq!(cache.get(&drive), Some(&true));
+    }
 }
