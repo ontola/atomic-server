@@ -619,6 +619,12 @@ fn register_live_peer(
             "[live] read loop started for {} as {agent:?}",
             &read_peer_id[..read_peer_id.len().min(12)]
         );
+        // Mutable so a late AUTH frame (a well-behaved peer already sends one
+        // during the handshake, but the protocol allows it at any point) can
+        // strengthen the session's identity for the rest of the connection —
+        // used consistently by both the UPDATE/DESTROY gate below and the
+        // generic fallback dispatch, instead of each re-deciding independently.
+        let mut agent = agent;
         let mut drive_cache: std::collections::HashMap<String, bool> =
             std::collections::HashMap::new();
         loop {
@@ -738,7 +744,13 @@ fn register_live_peer(
             // WS handler at server/src/handlers/web_sockets.rs. Live mode and
             // handshake mode share the same protocol surface; the read loop
             // shouldn't be selective about which tags it understands.
-            let mut agent = crate::agents::ForAgent::Public;
+            //
+            // Uses the session's own (mutable) agent, not a fresh Public one:
+            // a SYNC_PUSH arriving in live mode must be checked as whoever
+            // this connection actually authenticated as — dispatching as
+            // Public here would silently downgrade every fallback-routed
+            // frame regardless of the AUTH this connection already completed
+            // (or a later AUTH mid-session, which this call can apply).
             let responses = super::engine::handle_frame(&buf, &store, &mut agent).await;
             for response in responses {
                 let mut framed = Vec::with_capacity(4 + response.len());
