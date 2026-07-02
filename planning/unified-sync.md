@@ -358,9 +358,9 @@ peer name into known-peers on the accept side (the initiator's own HELLO handler
 user-initiated dial). `e2e_hello_exchanges_device_names` now asserts the *negative*
 (accept side must NOT gain a known-peer entry from an unsolicited connection).
 
-**Fix (proper) — still open.** Gated behind Open Question 2 (Iroh Option A/B): under
-Option A the whole accept/auto-connect path is deleted rather than fixed, so this
-isn't worth building until that's settled. Concretely still unfixed today: initiator-side
+**Fix (proper) — still open, now unblocked.** Open Question 2 was decided for
+Option B (2026-07-02, see [`serverless-p2p.md`](./serverless-p2p.md)), so this is
+scheduled work (its Phase P0), not deferred. Concretely still unfixed today: initiator-side
 `pull` serving has no `check_read`, the initiator's `SYNC_PUSH` import still uses
 `ForAgent::Sudo`, **and** the initiator's `SYNC_DIFF.remove[]` handling
 (`sync_drive_with_peer_using_outcome`, peer.rs) applies `ws_apply::apply_destroy` with
@@ -559,11 +559,13 @@ stops the pattern; the rest are instances of it.
 
 ### Compounding note
 
-If Open Question 2 lands on **Option A** (server-only multi-device), the deletions
-compound: `peer_sync` variants, the event APIs, and the whole Iroh accept path (which
-also deletes F9/F10) go together. Even under Option B, this inventory plus the drift
-inventory is ~500+ deletable/mergeable lines — and item 1 is the structural fix that
-stops the two-copies growth pattern regardless of the decision.
+Open Question 2 is decided: **Option B** ([`serverless-p2p.md`](./serverless-p2p.md)).
+The deletions still happen — B replaces today's handshake/live machinery with
+`SyncSession` rather than preserving it (see that doc's deletion table: the six
+`peer_sync` variants, the FRB event-API trio, and the handshake/live duality all go).
+This inventory plus the drift inventory is ~500+ deletable/mergeable lines — and item 1
+(engine owns all tags) is now a **prerequisite** for serverless-p2p's "every peer is a
+hub" principle, not just the structural fix for the two-copies growth pattern.
 
 ## Outbox modernization
 
@@ -692,8 +694,9 @@ resurrection between honest replicas of the same agent.
   `sync_drive_with_peer_using_outcome`) — a peer the victim dialed can still delete +
   tombstone subjects the victim **already has**, no rights check at all. F10 only closed
   the *unknown*-subject phantom-tombstone case; the known-subject case is this same
-  initiator-trust hole and Open Question 4's territory. Gated on Open Question 2
-  (Option A/B) same as the rest of F9 proper.
+  initiator-trust hole and Open Question 4's territory. Now unblocked (Open
+  Question 2 → Option B) and scheduled as [`serverless-p2p.md`](./serverless-p2p.md)
+  Phase P0, where OQ4 resolves as "destroys travel as signed commits."
 - [x] **F10 (partial — see F9 proper above):** no phantom tombstones from unprivileged
   peers for locally-*unknown* subjects (2026-07-02). Does **not** cover a known subject
   destroyed via the initiator's ungated `SYNC_DIFF.remove[]` apply — that's F9 proper.
@@ -846,11 +849,10 @@ lower-severity doc/naming fix, tracked in the Engineering debt checklist above).
 
 ### Phase 0b — Second-pass trust fixes (2026-07-02 audit; substantially complete)
 
-Ordered by severity. F8 and F9 outrank everything else in this doc. Note the
-Option A/B dependency: **F9 and F10 live entirely on the Iroh accept/auto-connect
-path** — under Option A (delete bulk Iroh) they get deleted rather than fixed, so
-settle Open Question 2 before investing in the "proper" F9 fix (the *minimal* fix —
-no `add_known_peer` on accept — is cheap enough to do regardless).
+Ordered by severity. F8 and F9 outrank everything else in this doc. The former
+Option A/B dependency is resolved (Open Question 2 → **Option B**,
+[`serverless-p2p.md`](./serverless-p2p.md)): the "proper" F9 fix is now scheduled
+work in that plan's Phase P0, not a decision-gated maybe.
 
 - [x] F8: delete `SYNC_DELTAS` (server text handler + engine fn) (2026-07-02).
 - [x] F9 minimal: no `add_known_peer` on the accept path (pairing/explicit action
@@ -901,7 +903,8 @@ no `add_known_peer` on accept — is cheap enough to do regardless).
 
 - [ ] `SYNC_PUSH` entries carry `lastCommit` (+ signed envelope where available).
 - [ ] Import verifies/records provenance; policy decision for same-agent replicas.
-- [ ] Decide Option A vs B for Iroh; delete or harden accordingly.
+- [x] Decide Option A vs B for Iroh — **Option B** (2026-07-02,
+  [`serverless-p2p.md`](./serverless-p2p.md)); harden per that plan's P0/P1.
 
 ### Phase 4 — Tests
 
