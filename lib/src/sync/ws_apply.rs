@@ -99,22 +99,59 @@ pub async fn resolve_update(store: &Db, subject: &str, state_bytes: &[u8]) -> Op
     let snapshot = doc.export_snapshot();
 
     let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
-    // Base off any existing stored resource (same as the pre-refactor
-    // fetch-then-apply order), so its existing propvals — notably a
-    // previously-stamped `drive` — are preserved when the incoming delta
-    // doesn't re-assert them.
-    let mut resource = store
-        .get_resource(&subj)
-        .await
-        .unwrap_or_else(|_| crate::Resource::new(subject.to_string()));
+    let existing = store.get_resource(&subj).await.ok();
+
+    // The authoritative drive_subject MUST NOT be read from the resource
+    // after merging the incoming delta — `DRIVE_PROP` is an ordinary,
+    // last-write-wins property like any other, so a malicious peer could
+    // assert it in their payload to make an existing, protected resource get
+    // checked against a drive of their choosing (their own, or one that
+    // doesn't exist locally to hit the bootstrap carve-out), bypassing the
+    // real drive's admission/ACL entirely. Same class of bug as the
+    // IS_A: [Agent] spoof fixed in commit.rs (`7ae8bcc1`).
+    let drive_subject = if let Some(existing) = &existing {
+        // Existing subject: its already-stored drive is authoritative,
+        // captured BEFORE the incoming delta is merged. Never re-derived
+        // from post-merge state.
+        Some(
+            existing
+                .get(crate::urls::DRIVE_PROP)
+                .map(|v| v.to_string())
+                .unwrap_or_else(|_| existing.get_subject().to_string()),
+        )
+    } else {
+        // Genuinely new subject: nothing local to protect yet, but we still
+        // don't trust a directly-asserted DRIVE_PROP on the payload — resolve
+        // via PARENT instead (mirrors commit.rs's safety net). A lied-about
+        // PARENT can't escalate: admission/ACL then checks against whatever
+        // drive was claimed, and an attacker gains nothing by pointing at a
+        // drive they don't control. No parent (or it doesn't resolve
+        // locally) means this is a drive root — falls back to its own
+        // subject, exactly like the existing-subject case above.
+        None
+    };
+
+    let mut resource = existing.unwrap_or_else(|| crate::Resource::new(subject.to_string()));
     if resource.apply_state_doc(doc).is_err() {
         return None;
     }
 
-    let drive_subject = resource
-        .get(crate::urls::DRIVE_PROP)
-        .map(|v| v.to_string())
-        .unwrap_or_else(|_| resource.get_subject().to_string());
+    let drive_subject = match drive_subject {
+        Some(d) => d,
+        None => {
+            let mut resolved = resource.get_subject().to_string();
+            if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
+                let parent_subject = crate::Subject::from(parent_val.to_string());
+                if let Ok(parent_res) = store.get_resource(&parent_subject).await {
+                    resolved = parent_res
+                        .get(crate::urls::DRIVE_PROP)
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|_| parent_subject.to_string());
+                }
+            }
+            resolved
+        }
+    };
 
     Some(ResolvedUpdate {
         snapshot,
@@ -223,4 +260,103 @@ pub async fn apply_commit_json(store: &Db, body: &str) -> AtomicResult<()> {
     .await;
     set_importing(false);
     result
+}
+
+#[cfg(test)]
+mod resolve_update_drive_spoof_tests {
+    use super::*;
+    use crate::loro::AtomicLoroDoc;
+    use crate::values::Value;
+
+    /// Regression coverage for F2 (planning/unified-sync.md): `resolve_update`
+    /// used to read `drive_subject` from the resource AFTER merging the
+    /// incoming delta, so a malicious peer could assert `DRIVE_PROP` in their
+    /// payload and get an EXISTING, protected resource checked against a
+    /// drive of their choosing instead of its real one.
+    #[tokio::test]
+    async fn existing_resource_ignores_spoofed_drive_in_payload() {
+        let db = Db::init_temp("resolve_update_spoof_existing").await.unwrap();
+        let (_alice, real_drive) = db.setup("Alice").await.unwrap();
+
+        let doc_subject = db
+            .create_resource(
+                "https://atomicdata.dev/classes/Folder",
+                &real_drive,
+                "Alice's doc",
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Sanity: the resource really did get stamped with the real drive.
+        let stored = db.get_resource(&doc_subject.as_str().into()).await.unwrap();
+        assert_eq!(
+            stored.get(crate::urls::DRIVE_PROP).unwrap().to_string(),
+            real_drive
+        );
+
+        // Attacker's payload: NOT a fresh, unrelated doc (Loro won't merge
+        // properties from an unrelated op history into the resource's real
+        // container) — a continuing delta built from the resource's ACTUAL
+        // current snapshot, exactly what a peer already synced to this
+        // resource (a real attack precondition) would legitimately have.
+        let snapshot_key =
+            crate::Subject::from_raw(&doc_subject, db.get_base_domain().as_deref()).pure_id();
+        let real_snapshot = db
+            .kv
+            .get(crate::db::trees::Tree::LoroSnapshots, snapshot_key.as_bytes())
+            .unwrap()
+            .expect("resource should have a stored Loro snapshot");
+        let spoofed_drive = "https://attacker.example/not-your-drive";
+        let malicious = AtomicLoroDoc::from_snapshot(&real_snapshot).unwrap();
+        malicious
+            .set_property(
+                crate::urls::DRIVE_PROP,
+                &Value::AtomicUrl(spoofed_drive.to_string().into()),
+            )
+            .unwrap();
+        let malicious_bytes = malicious.export_snapshot();
+
+        let resolved = resolve_update(&db, &doc_subject, &malicious_bytes)
+            .await
+            .expect("a well-formed snapshot should still resolve");
+
+        assert_eq!(
+            resolved.drive_subject, real_drive,
+            "the existing resource's real drive must win over a spoofed payload assertion"
+        );
+        assert_ne!(resolved.drive_subject, spoofed_drive);
+    }
+
+    /// Companion: a genuinely new subject with no local parent resolves to
+    /// its own subject (drive-root fallback) rather than trusting a directly
+    /// asserted DRIVE_PROP with no supporting PARENT.
+    #[tokio::test]
+    async fn new_subject_with_no_resolvable_parent_falls_back_to_own_subject() {
+        let db = Db::init_temp("resolve_update_new_subject_no_parent")
+            .await
+            .unwrap();
+        let _ = db.setup("Alice").await.unwrap();
+
+        let new_subject = "https://example.test/brand-new-resource";
+        let spoofed_drive = "https://attacker.example/not-your-drive";
+        let malicious = AtomicLoroDoc::new();
+        malicious
+            .set_property(
+                crate::urls::DRIVE_PROP,
+                &Value::AtomicUrl(spoofed_drive.to_string().into()),
+            )
+            .unwrap();
+        let malicious_bytes = malicious.export_snapshot();
+
+        let resolved = resolve_update(&db, new_subject, &malicious_bytes)
+            .await
+            .expect("a well-formed snapshot should still resolve");
+
+        assert_eq!(
+            resolved.drive_subject, new_subject,
+            "no parent to borrow a drive from — must fall back to its own subject, not the payload's claimed drive"
+        );
+        assert_ne!(resolved.drive_subject, spoofed_drive);
+    }
 }
