@@ -46,16 +46,25 @@ pub async fn handle_frame(
                                 *agent = a;
                                 vec![protocol::encode_auth_ok()]
                             }
-                            Err(e) => vec![protocol::encode_error(0, &format!("Auth failed: {e}"))],
+                            Err(e) => vec![protocol::encode_error(
+                                0,
+                                protocol::error_code::UNKNOWN,
+                                &format!("Auth failed: {e}"),
+                            )],
                         }
                     }
                     Err(e) => vec![protocol::encode_error(
                         0,
+                        protocol::error_code::UNKNOWN,
                         &format!("Invalid auth JSON: {e}"),
                     )],
                 }
             } else {
-                vec![protocol::encode_error(0, "Invalid UTF-8 in auth")]
+                vec![protocol::encode_error(
+                    0,
+                    protocol::error_code::UNKNOWN,
+                    "Invalid UTF-8 in auth",
+                )]
             }
         }
 
@@ -75,7 +84,11 @@ pub async fn handle_frame(
                         });
 
                         if snapshot.is_empty() {
-                            vec![protocol::encode_error(decoded.request_id, "No state")]
+                            vec![protocol::encode_error(
+                                decoded.request_id,
+                                protocol::error_code::UNKNOWN,
+                                "No state",
+                            )]
                         } else {
                             // Include `lastCommit` so the recipient can set
                             // `previousCommit` on its next save. See
@@ -99,11 +112,19 @@ pub async fn handle_frame(
                         }
                     }
                     Err(e) => {
-                        vec![protocol::encode_error(decoded.request_id, &e.to_string())]
+                        vec![protocol::encode_error(
+                            decoded.request_id,
+                            protocol::error_code::UNKNOWN,
+                            &e.to_string(),
+                        )]
                     }
                 }
             } else {
-                vec![protocol::encode_error(0, "Invalid GET frame")]
+                vec![protocol::encode_error(
+                    0,
+                    protocol::error_code::UNKNOWN,
+                    "Invalid GET frame",
+                )]
             }
         }
 
@@ -119,7 +140,11 @@ pub async fn handle_frame(
                 )
                 .await
             } else {
-                vec![protocol::encode_error(0, "Invalid SYNC frame")]
+                vec![protocol::encode_error(
+                    0,
+                    protocol::error_code::UNKNOWN,
+                    "Invalid SYNC frame",
+                )]
             }
         }
 
@@ -130,7 +155,11 @@ pub async fn handle_frame(
                 responses.append(&mut blob_requests);
                 responses
             } else {
-                vec![protocol::encode_error(0, "Invalid SYNC_PUSH frame")]
+                vec![protocol::encode_error(
+                    0,
+                    protocol::error_code::UNKNOWN,
+                    "Invalid SYNC_PUSH frame",
+                )]
             }
         }
 
@@ -138,19 +167,63 @@ pub async fn handle_frame(
             if let Some(hash) = protocol::decode_blob_request(payload) {
                 match store.kv.get(Tree::Blobs, &hash) {
                     Ok(Some(bytes)) => vec![protocol::encode_blob_response(&hash, &bytes)],
-                    _ => vec![protocol::encode_error(0, "Blob not found")],
+                    _ => vec![protocol::encode_error(
+                        0,
+                        protocol::error_code::UNKNOWN,
+                        "Blob not found",
+                    )],
                 }
             } else {
-                vec![protocol::encode_error(0, "Invalid BLOB_REQUEST frame")]
+                vec![protocol::encode_error(
+                    0,
+                    protocol::error_code::UNKNOWN,
+                    "Invalid BLOB_REQUEST frame",
+                )]
             }
         }
 
         protocol::tag::BLOB_RESPONSE => {
             if let Some(resp) = protocol::decode_blob_response(payload) {
-                let _ = store.kv.insert(Tree::Blobs, &resp.hash, &resp.bytes);
-                vec![]
+                // F4 (planning/unified-sync.md): a `BLOB_RESPONSE` with no
+                // matching `BLOB_REQUEST` we issued is unsolicited — reject
+                // it rather than storing arbitrary bytes with no admission
+                // check at all. A matching entry names the (already-
+                // admitted at request time) drive; re-check admission here
+                // too, since enrollment/quota state can change between the
+                // request and this response.
+                match store.take_pending_blob_request(&resp.hash) {
+                    Some(drive) if store.sync_policy().admit_drive_write(&drive) => {
+                        let _ = store.kv.insert(Tree::Blobs, &resp.hash, &resp.bytes);
+                        vec![]
+                    }
+                    Some(drive) => {
+                        tracing::warn!(
+                            "BLOB_RESPONSE: drive {} not admitted by sync policy, dropping blob",
+                            drive
+                        );
+                        vec![protocol::encode_error(
+                            0,
+                            protocol::error_code::UNKNOWN,
+                            "Drive not admitted for sync",
+                        )]
+                    }
+                    None => {
+                        tracing::warn!(
+                            "BLOB_RESPONSE: no matching pending BLOB_REQUEST, dropping blob"
+                        );
+                        vec![protocol::encode_error(
+                            0,
+                            protocol::error_code::UNKNOWN,
+                            "Unsolicited blob response",
+                        )]
+                    }
+                }
             } else {
-                vec![protocol::encode_error(0, "Invalid BLOB_RESPONSE frame")]
+                vec![protocol::encode_error(
+                    0,
+                    protocol::error_code::UNKNOWN,
+                    "Invalid BLOB_RESPONSE frame",
+                )]
             }
         }
 
@@ -631,6 +704,12 @@ pub async fn import_sync_push(
                         let mut hash = [0u8; 32];
                         hash.copy_from_slice(&hash_bytes);
                         if !store.kv.contains_key(Tree::Blobs, &hash).unwrap_or(false) {
+                            // Record which (already-admitted, see the top of
+                            // this fn) drive this hash belongs to so the
+                            // BLOB_RESPONSE handler can gate the write
+                            // instead of accepting it unconditionally
+                            // (planning/unified-sync.md F4).
+                            store.note_pending_blob_request(hash, push.drive.clone());
                             blob_requests.push(protocol::encode_blob_request(&hash));
                         }
                     }
@@ -654,60 +733,3 @@ pub async fn import_sync_push(
     (count, blob_requests)
 }
 
-/// Import Loro deltas from a peer into server resources.
-pub async fn handle_sync_deltas(
-    drive: &str,
-    deltas: &std::collections::HashMap<String, String>,
-    store: &Db,
-) {
-    let mut count = 0;
-
-    for (subject_str, delta_b64) in deltas {
-        // Decode via the shared helper so it accepts the URL-safe encoding
-        // (`crate::agents::encode_base64`) as well as the legacy standard one.
-        let Ok(delta_bytes) = crate::agents::decode_base64(delta_b64) else {
-            tracing::warn!("SYNC_DELTAS: bad base64 for {}", subject_str);
-            continue;
-        };
-
-        let doc =
-            if let Ok(Some(snapshot)) = store.kv.get(Tree::LoroSnapshots, subject_str.as_bytes()) {
-                AtomicLoroDoc::from_snapshot(&snapshot).unwrap_or_default()
-            } else {
-                AtomicLoroDoc::new()
-            };
-
-        if doc.import_update(&delta_bytes).is_err() {
-            tracing::warn!("SYNC_DELTAS: import failed for {}", subject_str);
-            continue;
-        }
-
-        let new_snapshot = doc.export_snapshot();
-
-        if store
-            .kv
-            .insert(Tree::LoroSnapshots, subject_str.as_bytes(), &new_snapshot)
-            .is_err()
-        {
-            continue;
-        }
-
-        // No `get_resource` — `apply_state_doc` rebuilds propvals from the
-        // merged doc, so the read would be discarded. Sync builds directly.
-        let subject = crate::Subject::from_raw(subject_str, store.get_base_domain().as_deref());
-        let mut resource = crate::Resource::new(subject.to_string());
-
-        if resource.apply_state_doc(doc).is_err() {
-            continue;
-        }
-
-        let _ = store.add_resource_opts(&resource, false, true, true).await;
-        count += 1;
-    }
-
-    tracing::info!(
-        "SYNC_DELTAS: imported {} resources for drive {}",
-        count,
-        drive
-    );
-}

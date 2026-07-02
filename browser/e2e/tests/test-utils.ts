@@ -412,16 +412,7 @@ export async function signIn(page: Page, secret: string = SECRET) {
   if (await signInButton.isVisible({ timeout: 1500 }).catch(() => false)) {
     await signInButton.click();
     await page.getByLabel('Agent secret').fill(secret);
-    // The signin form auto-submits 150ms after the secret is filled
-    // (GettingStartedFlow useEffect). Clicking Continue races with that
-    // resubmit and can hit a detached element. Try the click but tolerate
-    // detach; either path completes the sign-in.
-    await page
-      .getByRole('button', { name: 'Continue' })
-      .click({ timeout: 2000 })
-      .catch(() => {
-        /* auto-submit raced us; keep going */
-      });
+    await page.getByRole('button', { name: 'Continue' }).click();
     // Wait for the signed-in sidebar to appear. Without this, callers
     // (e.g. `openSubject`) may navigate before the auth cookie + localStorage
     // are written, leaving the next page anonymous (the sidebar then renders

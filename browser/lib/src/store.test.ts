@@ -1,6 +1,7 @@
 import { describe, it, vi, afterEach } from 'vitest';
 import { Resource, Store, core, Core, Datatype } from './index.js';
 import { bootstrapCoreVocab } from './test-vocab.js';
+import { testStore } from './test-store.js';
 
 describe('Store', () => {
   afterEach(() => {
@@ -236,5 +237,40 @@ describe('Store', () => {
     ]);
 
     expect(exportCallCount).toBe(1);
+  });
+
+  it('excludes subjects with a pending outbox entry from the VV sync state (F1 interim)', async ({
+    expect,
+  }) => {
+    // planning/unified-sync.md F1: a subject mid-backoff (or just not yet
+    // drained this pass) must not appear in the VV state sent to the
+    // server — otherwise the server sees the client "ahead" and requests
+    // a SYNC_PUSH of the raw, unsigned Loro bytes for it, bypassing the
+    // outbox's signed-commit path (and the hub's rights check) entirely.
+    const { store } = await testStore();
+    const driveSubject = 'https://example.com/drive';
+
+    const clean = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Folder',
+      propVals: { [core.properties.name]: 'Clean' },
+      parent: driveSubject,
+    });
+    await clean.save();
+
+    const dirty = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Folder',
+      propVals: { [core.properties.name]: 'Dirty' },
+      parent: driveSubject,
+    });
+    await dirty.save();
+
+    // Simulate a pending outbox entry that hasn't drained yet — e.g. mid
+    // backoff after a prior failed attempt.
+    store.outbox.markDirty(dirty.subject);
+
+    const syncState = await store.computeDriveSyncState(driveSubject);
+
+    expect(syncState.resources[clean.subject]).toBeDefined();
+    expect(syncState.resources[dirty.subject]).toBeUndefined();
   });
 });

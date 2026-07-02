@@ -215,6 +215,15 @@ pub trait Storelike: Sized + Send + Sync {
         None
     }
 
+    /// Clear a bulk-sync tombstone for `subject` — see
+    /// [`crate::sync::tombstones::clear_tombstone`] (F11,
+    /// planning/unified-sync.md): a subject that legitimately passes a
+    /// rights-checked genesis again after being destroyed must not keep
+    /// being invisible to future bulk sync. No-op default for stores with
+    /// no tombstone concept (test doubles, non-`Db` stores); `Db` overrides
+    /// this to call the real KV-backed implementation.
+    fn clear_tombstone(&self, _subject: &str) {}
+
     /// Set the active drive subject.
     fn set_active_drive(&self, _drive: &str) -> AtomicResult<()> {
         Err("set_active_drive not implemented for this store".into())

@@ -3426,6 +3426,7 @@ msgid "New"
 msgstr "Nuevo"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
 msgstr "Crear cuenta"
 
@@ -4908,3 +4909,6 @@ msgstr ""
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in to your {0} account"
 msgstr ""
+
+#~ msgid "Don't have an account? Create one"
+#~ msgstr ""

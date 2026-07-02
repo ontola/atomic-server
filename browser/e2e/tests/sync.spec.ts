@@ -130,13 +130,6 @@ test.describe('sync', () => {
     });
   });
 
-  // FLAKY (dagger CI + remote CI): the `Edited Offline` editable-title
-  // doesn't appear within 15 s after the `setOffline(false)` reload.
-  // Path: edit while offline → reload → wait for `serverConnected` →
-  // expect title rendered with offline edit. Likely the WS reconnect +
-  // dirty-queue drain doesn't finish in time on a contended runner.
-  // Investigate: poll `store.getResourceLoading(subject).title === '...'`
-  // directly (we already do this for the cross-context test below).
   test('edits made offline persist across reload', async ({ page }) => {
     test.slow();
 
@@ -170,6 +163,14 @@ test.describe('sync', () => {
       page.getByTestId('sidebar').getByText('Before Offline'),
     ).toBeVisible({ timeout: 10000 });
 
+    // Get the resource subject for the post-reload poll below.
+    const resourceSubject = await page.evaluate(() => {
+      const main = document.querySelector('main[about]');
+
+      return main?.getAttribute('about');
+    });
+    expect(resourceSubject).toBeTruthy();
+
     // 2. Go offline
     await page.evaluate(() => {
       window.store.getDefaultWebSocket()?.close();
@@ -198,6 +199,19 @@ test.describe('sync', () => {
     // 4. Reload the page
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForClientDb(page);
+
+    // Wait for the resource itself to report the offline edit before
+    // asserting on the DOM. `waitForClientDb` only confirms the worker/
+    // OPFS bootstrap finished, not that THIS resource's local-first fetch
+    // (which can block on a WS reconnect + GET round-trip, see
+    // `store.ts` `waitForServerConnected`) has resolved — under a
+    // contended runner that can outlast a bare `toBeVisible` poll.
+    await page.waitForFunction(
+      (subject: string) =>
+        window.store.getResourceLoading(subject).title === 'Edited Offline',
+      resourceSubject,
+      { timeout: 20000 },
+    );
 
     // 5. Verify the offline edit survived the reload (the title appears in
     // the breadcrumb, sidebar tree, and main editable title — match the

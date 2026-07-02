@@ -197,15 +197,45 @@ pub async fn apply_destroy(store: &Db, subject: &str) -> AtomicResult<()> {
 
 async fn apply_destroy_unchecked(store: &Db, subject: &str) -> AtomicResult<()> {
     let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
+
+    // F10 (planning/unified-sync.md): checked BEFORE calling `remove_resource`,
+    // and independently of its result. The previous `existed =
+    // remove_resource(..).is_ok()` conflated "never existed" with "existed,
+    // but the delete transaction failed" (e.g. a transient KV error) — both
+    // read as `existed == false`, so a real, still-present resource whose
+    // deletion merely failed would be misclassified as unknown and skip its
+    // tombstone, leaving it able to resurrect on the next bulk sync.
+    let existed = store.get_resource(&subj).await.is_ok();
+
+    // A bulk-sync `SYNC_DIFF.remove[]` entry is peer-supplied and, for
+    // `apply_destroy` (as opposed to `apply_destroy_checked`), unauthenticated
+    // — nothing upstream verified the sender had any relationship to this
+    // subject at all. Recording a tombstone for a subject this node has NEVER
+    // heard of (never stored, never already tombstoned) isn't a "harmless
+    // no-op": it permanently poisons that subject name against future
+    // legitimate creation/import (`import_sync_push` and friends skip
+    // anything `is_tombstoned`) for a deletion that never happened here. Only
+    // record one for a subject we actually have prior history with — either
+    // we just deleted it (`existed`) or we already knew about it (a previous,
+    // presumably legitimate, tombstone). `record_tombstone` is idempotent, so
+    // re-recording an existing tombstone is harmless.
+    if !existed && !crate::sync::tombstones::is_tombstoned(store, subject) {
+        tracing::warn!(
+            "[ws_apply] ignoring DESTROY for locally-unknown subject {} (F10: not recording a phantom tombstone)",
+            &subject[..subject.len().min(20)]
+        );
+
+        return Ok(());
+    }
+
     // `remove_resource` deletes the resource, its Loro snapshot (keyed by
-    // `pure_id()`) and records a tombstone. The previous explicit
-    // `kv.remove(LoroSnapshots, subject.as_bytes())` here was mis-keyed by the
-    // raw subject and missed snapshots for `?drive=`-suffixed subjects.
+    // `pure_id()`) and records a tombstone for it and any cascade-deleted
+    // children. Best-effort here: even if it errors (e.g. a racing delete
+    // already removed it), we still (re-)record the tombstone below so a
+    // known-and-tombstoned subject can't lose that protection just because
+    // the removal call itself failed.
     let _ = store.remove_resource(&subj).await;
-    // Tombstone again unconditionally: a DESTROY for a subject we never
-    // stored makes `remove_resource` error out before it records one, and we
-    // still must not resurrect it on the next bulk sync. `record_tombstone`
-    // is idempotent.
+
     crate::sync::tombstones::record_tombstone(store, subject);
     tracing::info!("[ws_apply] deleted {}", &subject[..subject.len().min(20)]);
     Ok(())
@@ -213,9 +243,10 @@ async fn apply_destroy_unchecked(store: &Db, subject: &str) -> AtomicResult<()> 
 
 /// The drive an existing resource belongs to, resolved for an admission check
 /// before a DESTROY is applied. `None` when the resource doesn't exist
-/// locally — there's nothing to check rights against, and applying the
-/// tombstone for a subject we never stored is already a harmless no-op (see
-/// [`apply_destroy`]), so callers should apply it unconditionally in that case.
+/// locally — there's nothing to check rights against, and (since F10)
+/// applying the tombstone for a subject we never stored is now a real no-op
+/// (see [`apply_destroy`]), so callers should apply it unconditionally in
+/// that case.
 pub async fn resolve_destroy_drive(store: &Db, subject: &str) -> Option<String> {
     let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
     let resource = store.get_resource(&subj).await.ok()?;
@@ -358,5 +389,76 @@ mod resolve_update_drive_spoof_tests {
             "no parent to borrow a drive from — must fall back to its own subject, not the payload's claimed drive"
         );
         assert_ne!(resolved.drive_subject, spoofed_drive);
+    }
+}
+
+#[cfg(test)]
+mod destroy_phantom_tombstone_tests {
+    use super::*;
+    use crate::sync::tombstones;
+
+    /// F10 (planning/unified-sync.md): a DESTROY for a subject this node has
+    /// never heard of must NOT record a tombstone — otherwise a single
+    /// unauthenticated bulk-sync `SYNC_DIFF.remove[]` entry for an arbitrary,
+    /// never-locally-known subject permanently poisons that subject name
+    /// against future legitimate creation/import.
+    #[tokio::test]
+    async fn destroy_of_unknown_subject_does_not_record_tombstone() {
+        let db = Db::init_temp("ws_apply_f10_unknown_subject").await.unwrap();
+        let _ = db.setup("Alice").await.unwrap();
+
+        let unknown_subject = "https://example.test/never-existed-here";
+        assert!(!tombstones::is_tombstoned(&db, unknown_subject));
+
+        apply_destroy(&db, unknown_subject).await.unwrap();
+
+        assert!(
+            !tombstones::is_tombstoned(&db, unknown_subject),
+            "F10: DESTROY for a locally-unknown subject must not record a phantom tombstone"
+        );
+    }
+
+    /// Companion: a DESTROY for a subject we actually had (and just deleted)
+    /// still correctly records a tombstone — F10 only tightens the
+    /// never-seen-it-before case, it must not break legitimate deletions.
+    #[tokio::test]
+    async fn destroy_of_known_subject_still_records_tombstone() {
+        let db = Db::init_temp("ws_apply_f10_known_subject").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+
+        let subject = db
+            .create_resource(
+                "https://atomicdata.dev/classes/Folder",
+                &drive,
+                "Alice's doc",
+                None,
+            )
+            .await
+            .unwrap();
+
+        apply_destroy(&db, &subject).await.unwrap();
+
+        assert!(
+            tombstones::is_tombstoned(&db, &subject),
+            "a DESTROY for a subject we actually knew about must still record a tombstone"
+        );
+    }
+
+    /// Companion: a DESTROY for a subject that's ALREADY tombstoned (e.g. a
+    /// duplicate/retried remove entry) is idempotent — the tombstone stays.
+    #[tokio::test]
+    async fn destroy_of_already_tombstoned_subject_stays_tombstoned() {
+        let db = Db::init_temp("ws_apply_f10_already_tombstoned")
+            .await
+            .unwrap();
+        let _ = db.setup("Alice").await.unwrap();
+
+        let subject = "https://example.test/already-gone";
+        tombstones::record_tombstone(&db, subject);
+        assert!(tombstones::is_tombstoned(&db, subject));
+
+        apply_destroy(&db, subject).await.unwrap();
+
+        assert!(tombstones::is_tombstoned(&db, subject));
     }
 }

@@ -64,6 +64,9 @@ export { LocalSearch } from './local-search.js';
 export {
   LocalOutbox,
   isTerminalCommitErrorMessage,
+  isUnrecoverableCommitErrorMessage,
+  isTerminalCommitError,
+  isUnrecoverableCommitError,
   type OutboxEntry,
   type OutboxDrainContext,
 } from './local-outbox.js';

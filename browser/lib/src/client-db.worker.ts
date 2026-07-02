@@ -130,6 +130,21 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await db!.putResource(msg.jsonAd);
       if (msg.snapshot) db!.putLoroSnapshot(msg.subject, msg.snapshot);
 
+      // Per-write redb commits use `Durability::None` — see the periodic
+      // `flush()` tick below. Everywhere else that's fine (the periodic
+      // tick catches up within `FLUSH_INTERVAL_MS`), but this op is the
+      // one `resource.ts` `persistToClientDb` uses specifically because
+      // its caller (`saveOffline`) needs the write durable the moment its
+      // promise resolves — an offline edit has no server copy to fall
+      // back on. Without an immediate flush here, a reload landing before
+      // the next tick reads the pre-edit (or entirely absent) state and
+      // silently drops the offline edit.
+      try {
+        db!.flush();
+      } catch (e) {
+        console.error('[ClientDb] OPFS flush failed after putResourceWithSnapshot:', e);
+      }
+
       return;
     }
 

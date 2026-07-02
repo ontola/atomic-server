@@ -64,6 +64,18 @@ impl ResponseError for AtomicServerError {
             );
         }
 
+        // F5 (planning/unified-sync.md): classify against the same
+        // patterns the WS `ERROR` frame uses, so the outbox's drain error
+        // handling gets one structured code regardless of which transport
+        // posted the commit. Harmless (comes back UNKNOWN/0) for the vast
+        // majority of errors here that aren't commit-related at all — this
+        // handler serves every `AtomicServerError` in the server, not just
+        // `/commit`.
+        if r.get(urls::ERROR_CODE).is_err() {
+            let code = atomic_lib::sync::protocol::classify_commit_error(&self.message);
+            let _ = r.set_unsafe(urls::ERROR_CODE.into(), Value::Integer(code as i64));
+        }
+
         let body = r.to_json_ad_with_url("").unwrap();
         tracing::info!("Error response: {}", self.message);
         HttpResponse::build(self.status_code())

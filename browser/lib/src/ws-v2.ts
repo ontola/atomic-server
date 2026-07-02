@@ -55,6 +55,21 @@ export const SyncPushFlags = {
   LAST: 0b0001,
 } as const;
 
+/**
+ * Structured error codes on `ERROR` frames (mirrors `lib/src/sync/protocol.rs`
+ * `error_code`; F5, planning/unified-sync.md). `UNKNOWN` means "no
+ * structured classification" — callers fall back to message string
+ * matching (`local-outbox.ts`'s `isTerminalCommitErrorMessage` /
+ * `isUnrecoverableCommitErrorMessage`), which also covers older servers
+ * that predate this field.
+ */
+export const ErrorCode = {
+  UNKNOWN: 0,
+  GENESIS_COLLISION: 1,
+  MISSING_REQUIRED_PROPERTY: 2,
+  UNAUTHORIZED_WRITE: 3,
+} as const;
+
 // ---- Low-level read/write helpers ----
 
 const encoder = new TextEncoder();
@@ -284,6 +299,9 @@ export interface DecodedCommit {
 
 export interface DecodedError {
   requestId: number;
+  /** See {@link ErrorCode}. `ErrorCode.UNKNOWN` for frames from a
+   *  pre-F5 server (no code byte pair — see {@link decodeError}). */
+  code: number;
   message: string;
 }
 
@@ -354,11 +372,22 @@ export function decodeCommit(data: Uint8Array): DecodedCommit | undefined {
 }
 
 export function decodeError(data: Uint8Array): DecodedError | undefined {
-  if (data.length < 3) return undefined;
-  const [requestId, off] = readU16(data, 0);
-  const message = decoder.decode(data.subarray(off));
+  if (data.length < 4) return undefined;
+  const [requestId, off1] = readU16(data, 0);
+  const [code, off2] = readU16(data, off1);
+  const message = decoder.decode(data.subarray(off2));
 
-  return { requestId, message };
+  // A pre-F5 server has no code field — its message bytes start where we
+  // just read `code` from, so this client misreads the message's first 2
+  // bytes as `code` and drops them from the text. Accepted tradeoff
+  // (planning/unified-sync.md F5): cosmetically garbled, not a hard break.
+  // That garbled `code` is an ARBITRARY value, not necessarily `UNKNOWN`
+  // (0) — callers (`local-outbox.ts`'s `isTerminalCommitError` /
+  // `isUnrecoverableCommitError`) MUST only trust codes in their known set
+  // and treat everything else (not just literal `UNKNOWN`) as unclassified,
+  // or a garbled nonzero code could be read as "recognized, not terminal"
+  // and permanently skip the string-matching fallback.
+  return { requestId, code, message };
 }
 
 export function decodeSyncOk(data: Uint8Array): DecodedSyncOk | undefined {

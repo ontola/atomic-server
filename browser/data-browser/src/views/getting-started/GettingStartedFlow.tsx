@@ -103,9 +103,7 @@ export function GettingStartedFlow({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | undefined>();
   const stepDotsSlotRef = useRef<HTMLDivElement | null>(null);
-  const signInFormRef = useRef<HTMLFormElement | null>(null);
   const [secretValue, setSecretValue] = useState('');
-  const lastSubmittedSecret = useRef<string>('');
   const [managedUsername, setManagedUsername] = useState<string | undefined>(
     emailParam ? emailParam.split('@')[0] : undefined,
   );
@@ -291,20 +289,22 @@ export function GettingStartedFlow({
     await handleSignInWithSecret(trimmed);
   }
 
-  useEffect(() => {
-    if (step !== 'signin') return;
-    if (loading) return;
-    const trimmed = secretValue.trim();
-    if (!trimmed) return;
-    if (trimmed === lastSubmittedSecret.current) return;
-
-    const t = window.setTimeout(() => {
-      lastSubmittedSecret.current = trimmed;
-      signInFormRef.current?.requestSubmit();
-    }, 150);
-
-    return () => window.clearTimeout(t);
-  }, [loading, secretValue, step]);
+  // Pasting a secret submits immediately — no need to also click Continue.
+  // Reads the clipboard directly rather than watching secretValue on a
+  // timer: the previous version auto-submitted 150ms after ANY change to
+  // the field, which meant (a) manually typing a secret triggered spurious
+  // submit attempts (and error flashes) on every pause over 150ms, and (b)
+  // it raced a manual Continue click — the timer could disable/replace the
+  // button mid-click, which is exactly what made this flow flaky under
+  // Playwright (and could confuse a real user clicking right after a
+  // paste). Gating on the paste event itself removes both: typing never
+  // auto-submits, and a paste-then-click is a no-op double submit guarded
+  // by `loading`, not a race.
+  function handlePasteSecret(e: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = e.clipboardData.getData('text').trim();
+    if (!pasted || loading) return;
+    void handleSignInWithSecret(pasted);
+  }
 
   return (
     <Shell>
@@ -397,13 +397,14 @@ export function GettingStartedFlow({
                     Enter your agent secret to unlock this drive on this device.
                   </CardSubtitle>
                 ) : null}
-                <form ref={signInFormRef} onSubmit={handleSubmitSignIn}>
+                <form onSubmit={handleSubmitSignIn}>
                   <Column gap='1rem'>
                     <InputWrapper hasPrefix>
                       <FaKey />
                       <InputStyled
                         value={secretValue}
                         onChange={e => setSecretValue(e.target.value)}
+                        onPaste={handlePasteSecret}
                         type='password'
                         name='secret'
                         autoComplete='current-password'
@@ -433,6 +434,28 @@ export function GettingStartedFlow({
                     >
                       Forgot your secret?
                     </Button>
+                    {nextDrive ? (
+                      // The sign-in guard (ErrorPage → here with `next`) can't
+                      // tell a returning user on a new device from a total
+                      // stranger who's never had an account — both hit an
+                      // unauthorized private resource the same way. Without
+                      // this, a stranger has no visible path forward besides
+                      // "Back" (not obvious it leads to account creation).
+                      <Button
+                        type='button'
+                        subtle
+                        onClick={() => {
+                          setError(undefined);
+                          if (createTarget.kind === 'portal') {
+                            window.location.assign(createTarget.url);
+                          } else {
+                            setStep('create');
+                          }
+                        }}
+                      >
+                        Create account
+                      </Button>
+                    ) : null}
                   </Column>
                 </form>
               </Column>

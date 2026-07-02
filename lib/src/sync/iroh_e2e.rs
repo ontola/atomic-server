@@ -110,9 +110,15 @@ async fn assign_folder(db: &Db, canvas: &str, folder: &str) {
     r.save_locally(db).await.unwrap();
 }
 
-/// Both sides surface the other's `HELLO` device name. Initiator gets it
-/// back in `PeerSyncOutcome`; accept side logs it (and routes it through the
-/// live peer machinery — checked indirectly here via the initiator path).
+/// The HELLO exchange itself is symmetric (both sides learn the other's
+/// device name), but persisting it into `known-peers` — which the
+/// background auto-connect loop treats as "retry-forever" — is NOT: only
+/// the initiator (the side that explicitly dialed, i.e. an affirmative
+/// pairing/sync action by the local user) persists it. The accept side
+/// (an unsolicited inbound connection the local user never chose to sync
+/// with) deliberately does not (F9 minimal, planning/unified-sync.md) —
+/// without this asymmetry, any Iroh node that discovers and connects to
+/// us earns a permanent reconnect slot with zero consent.
 #[tokio::test]
 async fn e2e_hello_exchanges_device_names() {
     use crate::sync::peer;
@@ -122,8 +128,9 @@ async fn e2e_hello_exchanges_device_names() {
     // Pin a recognisable name on A so the assertion isn't at the mercy of
     // whatever the test host's `hostname` happens to be.
     peer::set_device_name(&pair.db_a, "Alice's Laptop");
-    // B too — its name flows back over the HELLO that A replies with
-    // (verified via the log only here; the rich outcome is initiator-side).
+    // B too — its name flows back over the HELLO that A replies with, but
+    // (per the asymmetry above) A must not persist it — see the negative
+    // assertion below.
     peer::set_device_name(&pair.db_b, "Bob's Phone");
 
     let outcome = peer::sync_drive_with_peer_using_outcome(
@@ -142,9 +149,8 @@ async fn e2e_hello_exchanges_device_names() {
         "initiator should see A's self-reported HELLO name"
     );
 
-    // Both sides should persist the other's name into known-peers so the
-    // UI picks it up on its next refresh without us threading the name
-    // through every layer manually.
+    // B is the initiator (explicit, user-chosen sync target) — it persists
+    // A's name into known-peers so the UI picks it up on its next refresh.
     let b_known = peer::get_known_peers(&pair.db_b);
     let alice_on_b = b_known
         .iter()
@@ -152,25 +158,22 @@ async fn e2e_hello_exchanges_device_names() {
     assert_eq!(
         alice_on_b.map(|p| p.name.as_str()),
         Some("Alice's Laptop"),
-        "B should have persisted A's HELLO name into known-peers"
+        "B (initiator) should have persisted A's HELLO name into known-peers"
     );
 
-    // Accept side gets a few hundred ms to process the initiator's HELLO
-    // and write it down; the bulk sync exchange already round-tripped, so
-    // a short bounded wait is plenty.
-    let ok = wait_until(std::time::Duration::from_secs(2), || async {
-        let a_known = peer::get_known_peers(&pair.db_a);
-        let ep_b_node_id = pair.ep_b.node_id().to_string();
-        a_known.iter().any(|p| {
-            peer::normalize_node_id(&p.node_id) == peer::normalize_node_id(&ep_b_node_id)
-                && p.name == "Bob's Phone"
-        })
-    })
-    .await;
+    // A is the accept side — B's connection was unsolicited from A's point
+    // of view (A never called sync_drive_with_peer against B). Give the
+    // accept side a few hundred ms to process the HELLO and NOT write it
+    // down, same window the old (vulnerable) assertion waited on.
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    let a_known = peer::get_known_peers(&pair.db_a);
+    let ep_b_node_id = pair.ep_b.node_id().to_string();
     assert!(
-        ok,
-        "A should have persisted B's HELLO name into known-peers (got {:?})",
-        peer::get_known_peers(&pair.db_a)
+        !a_known.iter().any(|p| peer::normalize_node_id(&p.node_id)
+            == peer::normalize_node_id(&ep_b_node_id)),
+        "A (accept side) must NOT persist an unsolicited peer into \
+         known-peers — that hands them a permanent auto-reconnect slot \
+         with no pairing/consent (got {a_known:?})"
     );
 }
 

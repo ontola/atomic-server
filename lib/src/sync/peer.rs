@@ -284,7 +284,7 @@ impl iroh::protocol::ProtocolHandler for AtomicHandler {
             // Handle initial sync, then transition to live mode on the same stream
             let store_clone = store.clone();
             let remote_id = remote_str.clone();
-            match handle_stream_then_live(send, recv, store_clone, remote_id).await {
+            match handle_stream(send, recv, store_clone, remote_id).await {
                 Ok(imported) => {
                     push_sync_event(&remote_str, imported);
                 }
@@ -542,6 +542,23 @@ async fn admitted_for_drive(
     verdict
 }
 
+/// Clear `drive_cache` when `agent` no longer matches `previous` — a late
+/// AUTH frame mid-connection (see the `handle_frame` fallback dispatch in
+/// `register_live_peer`'s read loop) can change the session's identity, and
+/// verdicts cached under the old identity are stale. Most consequential
+/// case: a `Public` verdict cached before AUTH would otherwise keep
+/// rejecting a drive for the rest of the connection even after the peer
+/// proves a stronger identity via a subsequent AUTH.
+fn invalidate_drive_cache_on_identity_change(
+    agent: &ForAgent,
+    previous: &ForAgent,
+    drive_cache: &mut std::collections::HashMap<String, bool>,
+) {
+    if agent != previous {
+        drive_cache.clear();
+    }
+}
+
 fn register_live_peer(
     peer_id: String,
     mut send: iroh::endpoint::SendStream,
@@ -550,7 +567,17 @@ fn register_live_peer(
     agent: ForAgent,
 ) {
     let key = normalize_node_id(&peer_id);
-    add_known_peer(&store, &key, "");
+    // F9 minimal (planning/unified-sync.md): this function upgrades BOTH
+    // the initiator's own explicitly-dialed connection AND an accept-side
+    // connection into live mode — it must not unconditionally register
+    // `key` as a known peer, since the auto-connect loop (`start`'s
+    // background task) treats "known" as "retry-forever." An unsolicited
+    // inbound connection getting auto-registered here meant any Iroh node
+    // that discovered and connected to us earned a permanent reconnect
+    // slot with zero pairing/consent. The initiator side already records
+    // the peer via its own HELLO handler in
+    // `sync_drive_with_peer_using_outcome` (an explicit, user-initiated
+    // action); nothing here needs to duplicate that.
 
     let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(64);
     // Cloned for the read loop so it can send responses (e.g. BLOB_RESPONSE
@@ -645,7 +672,18 @@ fn register_live_peer(
                     break;
                 }
             };
-            if len == 0 || len > 50_000_000 {
+            // Same "no proven identity → tight budget" rule as the accept-side
+            // dispatch loop (`handle_stream`): a connection can reach live
+            // mode while still `ForAgent::Public` — an unauthenticated peer
+            // that completes the sync handshake transitions into live mode
+            // with whatever agent it has, which may be none. Gate on the
+            // loop's own (mutable, AUTH-updatable) `agent`, not a flat cap.
+            let frame_cap = if matches!(agent, ForAgent::Public) {
+                super::protocol::IROH_PREAUTH_FRAME_MAX_BYTES
+            } else {
+                super::protocol::IROH_FRAME_MAX_BYTES
+            };
+            if len == 0 || len > frame_cap {
                 break;
             }
 
@@ -751,7 +789,13 @@ fn register_live_peer(
             // Public here would silently downgrade every fallback-routed
             // frame regardless of the AUTH this connection already completed
             // (or a later AUTH mid-session, which this call can apply).
+            let agent_before_frame = agent.clone();
             let responses = super::engine::handle_frame(&buf, &store, &mut agent).await;
+            invalidate_drive_cache_on_identity_change(
+                &agent,
+                &agent_before_frame,
+                &mut drive_cache,
+            );
             for response in responses {
                 let mut framed = Vec::with_capacity(4 + response.len());
                 framed.extend_from_slice(&(response.len() as u32).to_be_bytes());
@@ -1030,11 +1074,27 @@ pub async fn sync_drive_with_peer_using_outcome(
         Ok(n) => n as usize,
         Err(e) => return Err(format!("Failed to read auth response: {e}").into()),
     };
+    // Cheap inconsistency sweep (planning/unified-sync.md Phase 0b): this
+    // length prefix is attacker-controlled and, unlike every other
+    // length-prefixed Iroh read in this file, was never bounded before
+    // allocating — an unbounded `vec![0u8; auth_len]` from a hostile peer.
+    // Pre-auth cap: we haven't yet learned whether this AUTH succeeded.
+    if auth_len > super::protocol::IROH_PREAUTH_FRAME_MAX_BYTES {
+        return Err(format!(
+            "Auth response frame too large: {auth_len} bytes (max {})",
+            super::protocol::IROH_PREAUTH_FRAME_MAX_BYTES
+        )
+        .into());
+    }
     let mut auth_buf = vec![0u8; auth_len];
     recv.read_exact(&mut auth_buf).await.map_err(io_err)?;
     if auth_buf.is_empty() || auth_buf[0] != super::protocol::tag::AUTH_OK {
-        let msg = if auth_buf.len() > 3 {
-            std::str::from_utf8(&auth_buf[3..]).unwrap_or("unknown error")
+        // ERROR frame layout: [tag: u8] [request_id: u16] [code: u16]
+        // [message: utf8] (F5, planning/unified-sync.md) — skip 5 bytes,
+        // not the pre-F5 3. `code` isn't consumed here; this handshake
+        // path only needs the message for the error string.
+        let msg = if auth_buf.len() > 5 {
+            std::str::from_utf8(&auth_buf[5..]).unwrap_or("unknown error")
         } else {
             "auth rejected"
         };
@@ -1105,7 +1165,7 @@ pub async fn sync_drive_with_peer_using_outcome(
     // Read frames until the peer is done
     while let Ok(n) = recv.read_u32().await {
         let len = n as usize;
-        if len == 0 || len > 50_000_000 {
+        if len == 0 || len > super::protocol::IROH_FRAME_MAX_BYTES {
             break;
         }
 
@@ -1238,7 +1298,12 @@ pub async fn sync_drive_with_peer_using_outcome(
                 break;
             }
             super::protocol::tag::ERROR => {
-                let msg = std::str::from_utf8(&payload[2..]).unwrap_or("unknown error");
+                // [request_id: u16] [code: u16] [message: utf8] — `code`
+                // (F5, planning/unified-sync.md) isn't consumed here yet;
+                // Iroh live-mode just logs and drops the connection either
+                // way on an ERROR.
+                let msg =
+                    std::str::from_utf8(payload.get(4..).unwrap_or(&[])).unwrap_or("unknown error");
                 tracing::warn!("Peer returned error: {msg}");
                 break;
             }
@@ -1366,19 +1431,8 @@ pub fn remove_known_peer(store: &Db, node_id: &str) {
 /// Handle a single bidirectional QUIC stream.
 /// Reads length-prefixed v2 binary frames and dispatches them via the sync engine.
 /// Returns the number of resources imported from the remote peer.
-/// Handle initial sync frames, then transition to live mode on the same stream.
-async fn handle_stream_then_live(
-    send: iroh::endpoint::SendStream,
-    recv: iroh::endpoint::RecvStream,
-    store: Db,
-    remote_id: String,
-) -> anyhow::Result<usize> {
-    let total_imported = handle_stream(send, recv, store, remote_id).await?;
-    Ok(total_imported)
-}
-
-/// Handle sync frames. After SYNC_OK or SYNC_PUSH response, transitions to
-/// live mode by registering the stream for real-time updates.
+/// After SYNC_OK or SYNC_PUSH response, transitions to live mode by
+/// registering the stream for real-time updates.
 async fn handle_stream(
     mut send: iroh::endpoint::SendStream,
     mut recv: iroh::endpoint::RecvStream,
@@ -1396,7 +1450,20 @@ async fn handle_stream(
     while let Ok(n) = recv.read_u32().await {
         let len = n as usize;
 
-        if len == 0 || len > 10_000_000 {
+        // `agent` is still `Public` until AUTH succeeds — and stays `Public`
+        // for a peer that never authenticates at all. Either way, "no proven
+        // identity yet" is exactly when this frame budget should be tight:
+        // an unauthenticated dialer (anyone who learned our NodeID via pkarr
+        // discovery, same threat model as F9) shouldn't be able to force a
+        // 50MB allocation before proving who they are. Once `agent` carries
+        // a real identity, subsequent frames (bulk SYNC_PUSH payloads etc.)
+        // get the larger, authenticated-connection budget.
+        let frame_cap = if matches!(agent, ForAgent::Public) {
+            super::protocol::IROH_PREAUTH_FRAME_MAX_BYTES
+        } else {
+            super::protocol::IROH_FRAME_MAX_BYTES
+        };
+        if len == 0 || len > frame_cap {
             break;
         }
 
@@ -1415,12 +1482,16 @@ async fn handle_stream(
                         &remote_key[..remote_key.len().min(12)],
                         name
                     );
-                    // Persist into known-peers so flutter/server UIs see
-                    // the name on their next refresh — even for unsolicited
-                    // inbound syncs the local user never initiated.
-                    if !name.is_empty() {
-                        add_known_peer(&store, &remote_key, name);
-                    }
+                    // F9 minimal (planning/unified-sync.md): deliberately
+                    // NOT calling `add_known_peer` here. This is the accept
+                    // side of an unsolicited inbound connection — the local
+                    // user never chose to sync with this peer. Registering
+                    // it as "known" here used to hand it a permanent
+                    // reconnect slot via the auto-connect background loop
+                    // (`start`) with zero pairing/consent. `peer_display_name`
+                    // is still tracked in-memory for this connection's own
+                    // logs/UI; it just isn't persisted into the known-peers
+                    // list from the accept path.
                 }
             }
             continue;
@@ -1642,5 +1713,73 @@ mod live_write_admission_tests {
         )
         .await;
         assert_eq!(cache.get(&drive), Some(&true));
+    }
+
+    /// F3 follow-up: a `drive_cache` verdict computed under a weaker
+    /// identity (e.g. `Public`, before a late AUTH frame) must not survive
+    /// the identity change — otherwise a peer that proves a stronger
+    /// identity mid-connection keeps being rejected for a drive it now
+    /// legitimately has rights to, until reconnect.
+    #[tokio::test]
+    async fn stale_public_verdict_cleared_after_late_auth_upgrades_identity() {
+        let db = Db::init_temp("live_admission_cache_identity_change")
+            .await
+            .unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+
+        // Simulate the connection starting as Public and getting rejected
+        // for Alice's drive — the verdict lands in the cache.
+        let mut cache = HashMap::new();
+        assert!(
+            !admitted_for_drive(&db, &ForAgent::Public, &drive, &mut cache).await,
+            "Public should not be admitted for Alice's drive"
+        );
+        assert_eq!(cache.get(&drive), Some(&false));
+
+        // A late AUTH frame strengthens the session to Alice herself.
+        let previous = ForAgent::Public;
+        let upgraded = ForAgent::AgentSubject(alice.subject.clone());
+        invalidate_drive_cache_on_identity_change(&upgraded, &previous, &mut cache);
+        assert!(
+            cache.get(&drive).is_none(),
+            "the stale Public verdict must be gone after the identity change"
+        );
+
+        // Re-checking now correctly admits Alice — proving the clear
+        // wasn't just cosmetic; a *stale* cache would have kept returning
+        // the cached `false` regardless of the new identity.
+        assert!(
+            admitted_for_drive(&db, &upgraded, &drive, &mut cache).await,
+            "Alice must be admitted for her own drive once the stale cache is cleared"
+        );
+    }
+
+    /// Sanity check for the inverse: no identity change means no
+    /// invalidation — the whole point of the cache (skip re-walking rights
+    /// on every frame) would be defeated by clearing it unconditionally.
+    #[tokio::test]
+    async fn cache_survives_when_identity_is_unchanged() {
+        let db = Db::init_temp("live_admission_cache_identity_stable")
+            .await
+            .unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+
+        let mut cache = HashMap::new();
+        admitted_for_drive(
+            &db,
+            &ForAgent::AgentSubject(alice.subject.clone()),
+            &drive,
+            &mut cache,
+        )
+        .await;
+        assert_eq!(cache.get(&drive), Some(&true));
+
+        let same = ForAgent::AgentSubject(alice.subject.clone());
+        invalidate_drive_cache_on_identity_change(&same, &same, &mut cache);
+        assert_eq!(
+            cache.get(&drive),
+            Some(&true),
+            "an unchanged identity must not clear the cache"
+        );
     }
 }

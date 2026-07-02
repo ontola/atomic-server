@@ -45,6 +45,57 @@ pub mod tag {
     pub const EPHEMERAL: u8 = 0x40;
 }
 
+/// Structured error codes carried on `ERROR` frames (and the HTTP `/commit`
+/// error body's `code` field — same registry, shared source of truth).
+///
+/// F5 (planning/unified-sync.md): the outbox previously pattern-matched exact
+/// server error MESSAGE TEXT to decide whether a failed drain is terminal
+/// (drop the entry), blocking (stop retrying but keep it visible), or
+/// transient (keep retrying with backoff). A wording change on either side
+/// silently converted a terminal error into an infinite-retry loop. These
+/// codes are what the outbox should switch on now;
+/// `browser/lib/src/local-outbox.ts`'s string matchers remain as a fallback
+/// for a code of `UNKNOWN` (e.g. an older server that hasn't shipped this
+/// yet, or a genuinely unclassified error).
+#[allow(dead_code)]
+pub mod error_code {
+    /// No structured classification — client falls back to string matching.
+    pub const UNKNOWN: u16 = 0;
+    /// The commit's subject already exists server-side; this exact write can
+    /// never succeed by retrying (see `is_genesis: true, but the resource
+    /// already exists` in `commit.rs`). Terminal — drop the outbox entry.
+    pub const GENESIS_COLLISION: u16 = 1;
+    /// The resulting resource is missing a property its class requires;
+    /// structurally invalid on every attempt. Terminal — drop the entry.
+    pub const MISSING_REQUIRED_PROPERTY: u16 = 2;
+    /// The signer has no write right on the target (or its parents).
+    /// Retrying floods the server; only a rights change or a fresh edit
+    /// helps. Blocking — stop retrying, keep the entry visible.
+    pub const UNAUTHORIZED_WRITE: u16 = 3;
+}
+
+/// Classify a commit-application error message into a structured code for
+/// [`error_code`]. Called at the point an `ERROR` frame or `/commit` error
+/// response is built, so both wire paths share one classification. Mirrors
+/// (and is now authoritative over) `local-outbox.ts`'s
+/// `isTerminalCommitErrorMessage` / `isUnrecoverableCommitErrorMessage`
+/// patterns — update both sides together if you add a case.
+pub fn classify_commit_error(message: &str) -> u16 {
+    if message.contains("is_genesis: true, but the resource already exists") {
+        return error_code::GENESIS_COLLISION;
+    }
+
+    if message.contains("missing. Is required in class") {
+        return error_code::MISSING_REQUIRED_PROPERTY;
+    }
+
+    if message.contains("/properties/write right has been found") {
+        return error_code::UNAUTHORIZED_WRITE;
+    }
+
+    error_code::UNKNOWN
+}
+
 /// HELLO display name cap. Counted in Unicode scalar values, not bytes, so
 /// "🚀 prod-eu-3" doesn't get split mid-character on the wire. Anything
 /// longer is rejected by `decode_hello` rather than silently truncated —
@@ -72,6 +123,25 @@ pub mod sync_push_flags {
 /// either threshold is hit, whichever comes first.
 pub const SYNC_PUSH_MAX_ENTRIES: usize = 100;
 pub const SYNC_PUSH_MAX_BYTES: usize = 1_048_576; // 1 MB
+
+/// Max length-prefixed frame `peer.rs` will read off an **authenticated**
+/// Iroh QUIC stream before giving up on the connection — bounds the
+/// `vec![0u8; len]` allocation against an attacker-controlled `u32` length
+/// prefix. Shared by the live-sync loop and an initiator's own post-AUTH
+/// `SYNC_*` response reads (cheap inconsistency sweep, planning/unified-sync.md
+/// Phase 0b) — both run only after the peer has already proven its identity,
+/// so a generous cap doesn't expand who can trigger the allocation.
+pub const IROH_FRAME_MAX_BYTES: usize = 50_000_000;
+
+/// Same purpose, but for frames read from a peer that has **not yet**
+/// authenticated: the accept-side dispatch loop (`handle_stream`), whose
+/// very first frame IS the AUTH attempt, and an initiator's wait for that
+/// AUTH's `AUTH_OK`/`ERROR` reply (always tiny in practice). Kept well below
+/// [`IROH_FRAME_MAX_BYTES`] so an unauthenticated peer — anyone who learns a
+/// NodeID via pkarr discovery, same threat model as F9
+/// (planning/unified-sync.md) — can't force a 50MB allocation before proving
+/// who they are.
+pub const IROH_PREAUTH_FRAME_MAX_BYTES: usize = 10_000_000;
 
 // ---- Encoding ----
 
@@ -187,10 +257,16 @@ pub fn encode_commit_ok(request_id: u16, commit_json: &str) -> Vec<u8> {
 }
 
 /// Encode an ERROR message.
-pub fn encode_error(request_id: u16, message: &str) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(3 + message.len());
+/// Format: `[0x03] [request_id: u16] [code: u16] [message: utf8]` (F5:
+/// `code` added 2026-07-02 — see [`error_code`]). Older clients parsing
+/// this frame with the pre-F5 3-byte-header layout will see the 2 code
+/// bytes as leading garbage in the message text; not a hard break, just a
+/// cosmetically mangled error string until they upgrade.
+pub fn encode_error(request_id: u16, code: u16, message: &str) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(5 + message.len());
     buf.push(tag::ERROR);
     buf.extend_from_slice(&request_id.to_be_bytes());
+    buf.extend_from_slice(&code.to_be_bytes());
     buf.extend_from_slice(message.as_bytes());
     buf
 }
@@ -853,11 +929,35 @@ mod tests {
 
     #[test]
     fn error_encoding() {
-        let encoded = encode_error(99, "Not found");
+        let encoded = encode_error(99, error_code::UNAUTHORIZED_WRITE, "Not found");
         assert_eq!(encoded[0], tag::ERROR);
         let request_id = u16::from_be_bytes([encoded[1], encoded[2]]);
         assert_eq!(request_id, 99);
-        assert_eq!(&encoded[3..], b"Not found");
+        let code = u16::from_be_bytes([encoded[3], encoded[4]]);
+        assert_eq!(code, error_code::UNAUTHORIZED_WRITE);
+        assert_eq!(&encoded[5..], b"Not found");
+    }
+
+    #[test]
+    fn classify_commit_error_matches_known_patterns() {
+        assert_eq!(
+            classify_commit_error("is_genesis: true, but the resource already exists"),
+            error_code::GENESIS_COLLISION
+        );
+        assert_eq!(
+            classify_commit_error("Property foo missing. Is required in class Bar"),
+            error_code::MISSING_REQUIRED_PROPERTY
+        );
+        assert_eq!(
+            classify_commit_error(
+                "Unauthorized. No https://atomicdata.dev/properties/write right has been found for did:ad:agent:x"
+            ),
+            error_code::UNAUTHORIZED_WRITE
+        );
+        assert_eq!(
+            classify_commit_error("some other error"),
+            error_code::UNKNOWN
+        );
     }
 
     #[test]
@@ -865,14 +965,5 @@ mod tests {
         let encoded = encode_sub("did:ad:drive:abc");
         assert_eq!(encoded[0], tag::SUB);
         assert_eq!(&encoded[1..], b"did:ad:drive:abc");
-    }
-
-    // Keep encode_get available for tests even though the server doesn't use it yet
-    fn encode_get(request_id: u16, subject: &str) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(3 + subject.len());
-        buf.push(tag::GET);
-        buf.extend_from_slice(&request_id.to_be_bytes());
-        buf.extend_from_slice(subject.as_bytes());
-        buf
     }
 }

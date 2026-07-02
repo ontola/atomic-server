@@ -57,13 +57,22 @@ export function isAtomicError(error: Error): error is AtomicError {
  */
 export class AtomicError extends Error {
   public type: ErrorType;
+  /**
+   * Structured commit-error classification (F5, planning/unified-sync.md):
+   * see `ws-v2.ts`'s `ErrorCode` / `lib/src/sync/protocol.rs`'s
+   * `error_code`. `undefined` when the error didn't come from a commit
+   * response (or predates this field) — callers fall back to matching
+   * `message` text, as before.
+   */
+  public code?: number;
 
   /** Creates an AtomicError. The message can be either a plain string, or a JSON-AD Error Resource */
-  public constructor(message: string, type = ErrorType.Client) {
+  public constructor(message: string, type = ErrorType.Client, code?: number) {
     super(message);
     // https://stackoverflow.com/questions/31626231/custom-error-class-in-typescript
     Object.setPrototypeOf(this, AtomicError.prototype);
     this.type = type;
+    this.code = code;
     this.message = message;
 
     // The server should send Atomic Data Errors, which are JSON-AD resources with a Description.
@@ -73,6 +82,16 @@ export class AtomicError extends Error {
 
       if (description) {
         this.message = description;
+      }
+
+      // F5 (planning/unified-sync.md): the HTTP `/commit` error body sets
+      // this alongside `description` — see `server/src/errors.rs`. Only
+      // trust it if the constructor caller didn't already pass one in
+      // (the WS path decodes its own `code` off the binary frame).
+      const errorCode = parsed['https://atomicdata.dev/properties/errorCode'];
+
+      if (this.code === undefined && typeof errorCode === 'number') {
+        this.code = errorCode;
       }
     } catch (e) {
       // ignore

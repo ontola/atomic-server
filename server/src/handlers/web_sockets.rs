@@ -82,17 +82,17 @@ pub async fn web_socket_handler(
     )
     .protocols(&["atomicdata-ws.v2"])
     // actix-web-actors defaults `max_size` to 65 536 bytes (64 KiB). Real
-    // Loro snapshots and `SYNC_DELTAS` payloads — especially for documents
-    // with editing history or canvases with many strokes — routinely exceed
-    // that, and base64 + JSON wrapping adds another ~40% on top of the raw
+    // Loro snapshots — especially for documents with editing history or
+    // canvases with many strokes — routinely exceed that, and JSON/base64
+    // wrapping (SYNC_VV's text frames) adds another ~40% on top of the raw
     // bytes. A frame over the limit causes actix to drop the TCP socket
     // without sending a Close control frame, which the browser sees as a
     // CloseEvent `code=1006, wasClean=false`: an unexplained reconnect
-    // every second when the client tries to ship a doc's snapshot back as
-    // part of `SYNC_DELTAS`. 16 MiB is well above realistic doc sizes
-    // (Loro's own snapshot benchmarks top out in the low MBs even for
-    // multi-megabyte texts) and still far below the ~4 GiB WebSocket frame
-    // ceiling, so we don't risk silently truncating legitimate payloads.
+    // every second when the client tries to ship a doc's snapshot back.
+    // 16 MiB is well above realistic doc sizes (Loro's own snapshot
+    // benchmarks top out in the low MBs even for multi-megabyte texts) and
+    // still far below the ~4 GiB WebSocket frame ceiling, so we don't risk
+    // silently truncating legitimate payloads.
     .frame_size(16 * 1024 * 1024)
     .start()?;
 
@@ -218,7 +218,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
                 self.handle_binary(&bin, ctx);
             }
             Ok(ws::Message::Text(text)) => {
-                // Remaining text messages: Loro sync, SYNC_VV/SYNC_DELTAS, query subscriptions
+                // Remaining text messages: Loro sync, SYNC_VV, query subscriptions
                 self.handle_text(&text, ctx);
             }
             Ok(ws::Message::Close(reason)) => {
@@ -258,7 +258,9 @@ impl WebSocketConnection {
                             actor.agent = a;
                             ctx.binary(ws_v2::encode_auth_ok());
                         }
-                        Err(e) => ctx.binary(ws_v2::encode_error(0, &e)),
+                        Err(e) => {
+                            ctx.binary(ws_v2::encode_error(0, ws_v2::error_code::UNKNOWN, &e))
+                        }
                     }),
                 );
             }
@@ -313,7 +315,11 @@ impl WebSocketConnection {
                             });
 
                             if snapshot.is_empty() {
-                                ctx.binary(ws_v2::encode_error(rid, "Cannot build resource state"));
+                                ctx.binary(ws_v2::encode_error(
+                                    rid,
+                                    ws_v2::error_code::UNKNOWN,
+                                    "Cannot build resource state",
+                                ));
                             } else {
                                 // Resolve `internal:/…` to the server origin — `internal:` is a
                                 // server-side concept and must not cross the wire; the client
@@ -343,7 +349,11 @@ impl WebSocketConnection {
                                 ));
                             }
                         }
-                        Err(e) => ctx.binary(ws_v2::encode_error(rid, &e.to_string())),
+                        Err(e) => ctx.binary(ws_v2::encode_error(
+                            rid,
+                            ws_v2::error_code::UNKNOWN,
+                            &e.to_string(),
+                        )),
                     }),
                 );
             }
@@ -377,7 +387,12 @@ impl WebSocketConnection {
                             ctx.binary(ws_v2::encode_commit_ok(rid, &server_commit_json));
                         }
                         Err(e) => {
-                            ctx.binary(ws_v2::encode_error(rid, &e.to_string()));
+                            // F5 (planning/unified-sync.md): classify so the
+                            // outbox can switch on a structured code instead
+                            // of pattern-matching this exact message text.
+                            let msg = e.to_string();
+                            let code = ws_v2::classify_commit_error(&msg);
+                            ctx.binary(ws_v2::encode_error(rid, code, &msg));
                         }
                     }),
                 );
@@ -553,16 +568,6 @@ impl WebSocketConnection {
                         }),
                 );
             }
-        } else if let Some(json) = text.strip_prefix("SYNC_DELTAS ") {
-            if let Ok(request) = serde_json::from_str::<SyncDeltasRequest>(json) {
-                let store = self.store.clone();
-                let agent = self.agent.clone();
-                ctx.spawn(
-                    async move { handle_sync_deltas(request, store, agent).await }
-                        .into_actor(self)
-                        .map(|_, _, _| {}),
-                );
-            }
         } else {
             tracing::debug!("Unknown text message: {}", &text[..text.len().min(50)]);
         }
@@ -671,12 +676,6 @@ struct SyncVVRequest {
     resources: std::collections::HashMap<String, Vec<i32>>,
 }
 
-#[derive(serde::Deserialize)]
-struct SyncDeltasRequest {
-    drive: String,
-    deltas: std::collections::HashMap<String, String>,
-}
-
 /// Delegate to atomic_lib sync engine.
 async fn handle_sync_vv(request: SyncVVRequest, store: Db, agent: ForAgent) -> Vec<Vec<u8>> {
     atomic_lib::sync::engine::handle_sync_vv(
@@ -690,10 +689,6 @@ async fn handle_sync_vv(request: SyncVVRequest, store: Db, agent: ForAgent) -> V
     .await
 }
 
-/// Delegate to atomic_lib sync engine.
-async fn handle_sync_deltas(request: SyncDeltasRequest, store: Db, _agent: ForAgent) {
-    atomic_lib::sync::engine::handle_sync_deltas(&request.drive, &request.deltas, &store).await;
-}
 impl Handler<IndexStatusPush> for WebSocketConnection {
     type Result = ();
 

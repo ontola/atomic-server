@@ -3,7 +3,11 @@
 //! Hybrid v2 protocol: auth and resource UPDATEs are binary frames
 //! (`sync::protocol`); legacy collaboration and query messages are still
 //! text frames (`LORO_SYNC_*`, `LORO_EPHEMERAL_UPDATE`, `SUBSCRIBE_QUERY`,
-//! `QUERY_UPDATE`, `SYNC_VV` / `SYNC_DELTAS`).
+//! `QUERY_UPDATE`, `SYNC_VV`). `SYNC_DELTAS` was removed (F8,
+//! planning/unified-sync.md) — it imported peer-supplied Loro deltas with
+//! no rights check at all; `SYNC` → `SYNC_PUSH` (binary v2, admission- and
+//! rights-checked via `import_sync_push`) is the real replacement and
+//! predates the deletion, so nothing lost functionality.
 //!
 //! **Canonical wire-format spec:** `docs/src/websockets.md`. Frame
 //! encode/decode lives in [`crate::sync::protocol`]; the TypeScript client
@@ -194,38 +198,6 @@ impl WsClient {
         .await
     }
 
-    /// Fetch a resource over WebSocket (sends GET, waits for RESOURCE response).
-    pub async fn get_resource(&self, subject: &str) -> AtomicResult<String> {
-        let mut rx = self.subscribe();
-        self.send_raw(&format!("GET {}", subject)).await?;
-        let timeout = tokio::time::timeout(std::time::Duration::from_secs(10), async {
-            while let Ok(msg) = rx.recv().await {
-                match msg {
-                    WsMessage::Resource(json) => {
-                        // Check if this is the resource we requested
-                        if json.contains(subject) {
-                            return Ok(json);
-                        }
-                    }
-                    WsMessage::Error(e) => {
-                        return Err(AtomicError::from(format!(
-                            "Error fetching {}: {}",
-                            subject, e
-                        )))
-                    }
-                    _ => continue,
-                }
-            }
-            Err(AtomicError::from(
-                "WebSocket closed while waiting for resource",
-            ))
-        });
-
-        timeout
-            .await
-            .map_err(|_| AtomicError::from(format!("Timeout fetching resource {}", subject)))?
-    }
-
     /// Fetch a content-addressed blob by its 32-byte BLAKE3 hash.
     /// Sends a binary `BLOB_REQUEST` (0x34) and waits for a matching
     /// `BLOB_RESPONSE` (0x35).
@@ -254,7 +226,7 @@ impl WsClient {
     }
 
     /// Send a raw text frame over the WebSocket. Used for legacy text-protocol
-    /// commands (LORO_*, SUBSCRIBE_QUERY, SYNC_VV, SYNC_DELTAS).
+    /// commands (LORO_*, SUBSCRIBE_QUERY, SYNC_VV).
     pub async fn send_raw(&self, msg: &str) -> AtomicResult<()> {
         self.tx
             .send(Message::Text(msg.to_string().into()))
@@ -363,11 +335,15 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
     match tag {
         tag::AUTH_OK => Some(WsMessage::Authenticated),
         tag::ERROR => {
-            // [tag: u8] [request_id: u16] [message: utf8]
-            if bin.len() < 3 {
+            // [tag: u8] [request_id: u16] [code: u16] [message: utf8]
+            // The `code` (F5, planning/unified-sync.md) isn't surfaced via
+            // `WsMessage::Error` yet — no current consumer of this Rust
+            // client switches on it. Thread it through here (a new
+            // `WsMessage::Error { code, message }` shape) when that lands.
+            if bin.len() < 5 {
                 return Some(WsMessage::Error("Malformed ERROR frame".into()));
             }
-            let msg = std::str::from_utf8(&bin[3..])
+            let msg = std::str::from_utf8(&bin[5..])
                 .unwrap_or("(non-utf8 error message)")
                 .to_string();
             Some(WsMessage::Error(msg))

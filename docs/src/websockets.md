@@ -33,7 +33,7 @@ A connection is established over a WebSocket (typically to a responder's `/ws` e
 | ------ | --------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `0x01` | `AUTH`          | Init → Resp | UTF-8 JSON (Agent credentials)                                                                                                      |
 | `0x02` | `AUTH_OK`       | Resp → Init | (empty)                                                                                                                             |
-| `0x03` | `ERROR`         | either      | `[request_id: u16] [message: string]`                                                                                               |
+| `0x03` | `ERROR`         | either      | `[request_id: u16] [code: u16] [message: string]`                                                                                    |
 | `0x10` | `GET`           | either      | `[request_id: u16] [subject: string]`                                                                                               |
 | `0x11` | `UPDATE`        | either      | `[flags: u8] [request_id: u16] [subject_len: u16] [subject] [commit_id_len: u16 (optional)] [commit_id (optional)] [loro_bytes...]` |
 | `0x12` | `DESTROY`       | either      | `[request_id: u16] [subject: string]`                                                                                               |
@@ -124,7 +124,19 @@ commit parsing are unaffected.
 
 `server_commit_json` is the same created commit resource HTTP `/commit` returns
 today (JSON-AD `did:ad:commit:<sig>`). On failure, the responder emits
-`ERROR (0x03)` with the matching `request_id`.
+`ERROR (0x03)` with the matching `request_id` and a machine-readable `code`
+(see the `error_code` module in `lib/src/sync/protocol.rs`):
+
+| Code | Name                         | Meaning                                                     |
+| ---- | ---------------------------- | ------------------------------------------------------------|
+| `0`  | `UNKNOWN`                    | Unclassified error; only the message text is meaningful.    |
+| `1`  | `GENESIS_COLLISION`          | Commit tried to create a subject that already exists.       |
+| `2`  | `MISSING_REQUIRED_PROPERTY`  | Commit is missing a property required by its class/shape.   |
+| `3`  | `UNAUTHORIZED_WRITE`         | Signer lacks write rights on the target subject/drive.      |
+
+Only these known codes are safe for callers to branch on (e.g. to decide
+whether to give up retrying vs. keep retrying); an unrecognized code should be
+treated the same as `UNKNOWN` and fall back to string-matching the message.
 
 Each WebSocket connection has a per-process identifier. The responder tags the
 emitted database events with that id and skips broadcasting follow-up `UPDATE`

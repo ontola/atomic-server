@@ -184,7 +184,27 @@ pub struct Db {
     /// self-hosted / local-first nodes are unrestricted; a managed node
     /// installs a concrete policy via [`Db::set_sync_policy`].
     sync_policy: Arc<RwLock<Arc<dyn crate::sync::policy::SyncPolicy>>>,
+    /// Short-lived hash → (drive-subject, requested-at) map for blob hashes
+    /// the server has asked a peer for (via `BLOB_REQUEST`, emitted from
+    /// `import_sync_push` for an already-admitted drive). Consulted when
+    /// the matching `BLOB_RESPONSE` arrives — a frame with no matching
+    /// entry here was never requested and is rejected outright; one with a
+    /// match is gated through `sync_policy().admit_drive_write` before the
+    /// bytes are stored (planning/unified-sync.md F4). Node-wide rather
+    /// than per-connection: cloning `Db` shares the same `Arc`, so it
+    /// works uniformly whether the response arrives over the WS or Iroh
+    /// transport. Entries are normally consumed (removed) on first use; a
+    /// peer that never responds would otherwise leak one entry per missing
+    /// blob forever, so `note_pending_blob_request` also lazily prunes
+    /// anything older than `PENDING_BLOB_REQUEST_TTL`.
+    pending_blob_requests: Arc<RwLock<HashMap<[u8; 32], (String, std::time::Instant)>>>,
 }
+
+/// How long an unanswered `BLOB_REQUEST` stays in `pending_blob_requests`
+/// before lazy pruning drops it. Generous relative to a realistic peer
+/// round trip (seconds) — this bounds a slow leak from peers that vanish
+/// mid-sync, not a normal-latency budget.
+const PENDING_BLOB_REQUEST_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 
 /// The default (permissive) sync policy reference used by every `Db` until a
 /// managed node installs one.
@@ -211,6 +231,40 @@ impl Db {
             .map(|guard| guard.clone())
             .unwrap_or_else(|_| Arc::new(crate::sync::policy::OpenPolicy))
     }
+
+    /// Record that the server asked a peer for `hash` while importing a
+    /// `SYNC_PUSH` for `drive` (already admission-checked at that point).
+    /// Consulted by the `BLOB_RESPONSE` handler (planning/unified-sync.md
+    /// F4) so it can gate the write against that same drive instead of
+    /// accepting arbitrary blob bytes unconditionally.
+    pub fn note_pending_blob_request(&self, hash: [u8; 32], drive: String) {
+        if let Ok(mut guard) = self.pending_blob_requests.write() {
+            let now = std::time::Instant::now();
+            guard.retain(|_, (_, requested_at)| {
+                now.duration_since(*requested_at) < PENDING_BLOB_REQUEST_TTL
+            });
+            guard.insert(hash, (drive, now));
+        }
+    }
+
+    /// Consume (remove) the drive a pending `BLOB_REQUEST` for `hash` was
+    /// issued for, if any. `None` means this hash was never requested by
+    /// this node (or the request expired — see `PENDING_BLOB_REQUEST_TTL`)
+    /// — the caller should reject the response outright.
+    pub fn take_pending_blob_request(&self, hash: &[u8; 32]) -> Option<String> {
+        let (drive, requested_at) = self
+            .pending_blob_requests
+            .write()
+            .ok()
+            .and_then(|mut guard| guard.remove(hash))?;
+
+        if requested_at.elapsed() < PENDING_BLOB_REQUEST_TTL {
+            Some(drive)
+        } else {
+            None
+        }
+    }
+
     /// Creates a new store at the specified path, or opens the store if it already exists.
     /// Uses sled as the storage backend.
     #[cfg(feature = "db-sled")]
@@ -235,6 +289,7 @@ impl Db {
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
             sync_policy: default_sync_policy(),
+            pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -267,6 +322,7 @@ impl Db {
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
             sync_policy: default_sync_policy(),
+            pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -297,6 +353,7 @@ impl Db {
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
             sync_policy: default_sync_policy(),
+            pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -389,6 +446,7 @@ impl Db {
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
             sync_policy: default_sync_policy(),
+            pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -528,6 +586,7 @@ impl Db {
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             base_domain,
             sync_policy: default_sync_policy(),
+            pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -1869,6 +1928,10 @@ impl Storelike for Db {
         self.set_active_drive(drive)
     }
 
+    fn clear_tombstone(&self, subject: &str) {
+        crate::sync::tombstones::clear_tombstone(self, subject)
+    }
+
     fn clear_default_agent(&self) {
         self.clear_default_agent()
     }
@@ -2676,6 +2739,61 @@ mod resolver_tests {
         assert_eq!(
             resolved.subject.as_str(),
             "did:ad:test-child?drive=".to_string() + drive_did.as_str()
+        );
+    }
+}
+
+#[cfg(test)]
+mod pending_blob_request_ttl_tests {
+    use super::*;
+
+    /// F4 follow-up: a `BLOB_REQUEST` the server issued but the peer never
+    /// answers must not sit in `pending_blob_requests` forever — that's an
+    /// unbounded leak, one entry per missing blob a peer never delivers.
+    /// `note_pending_blob_request` lazily prunes anything older than
+    /// `PENDING_BLOB_REQUEST_TTL` on every insert; this reaches the private
+    /// map directly to backdate an entry past the TTL without an actual
+    /// 300s sleep, then drives the prune through the public API.
+    #[tokio::test]
+    async fn stale_entry_is_pruned_on_next_insert() {
+        let db = Db::init_temp("pending_blob_ttl_prune").await.unwrap();
+
+        let stale_hash = [1u8; 32];
+        let backdated = std::time::Instant::now()
+            .checked_sub(PENDING_BLOB_REQUEST_TTL + std::time::Duration::from_secs(1))
+            .expect("test host must have been up longer than the TTL");
+        db.pending_blob_requests.write().unwrap().insert(
+            stale_hash,
+            ("https://example.com/old-drive".into(), backdated),
+        );
+
+        // Insert a second, fresh entry — this is what triggers the prune.
+        let fresh_hash = [2u8; 32];
+        db.note_pending_blob_request(fresh_hash, "https://example.com/new-drive".into());
+
+        assert!(
+            db.take_pending_blob_request(&stale_hash).is_none(),
+            "an entry older than the TTL must be pruned, not returned"
+        );
+        assert_eq!(
+            db.take_pending_blob_request(&fresh_hash),
+            Some("https://example.com/new-drive".to_string()),
+            "a fresh entry inserted in the same call must survive its own prune"
+        );
+    }
+
+    /// Sanity check for the inverse: a request answered promptly (the
+    /// normal case) is unaffected by the TTL machinery.
+    #[tokio::test]
+    async fn fresh_entry_survives_take() {
+        let db = Db::init_temp("pending_blob_ttl_fresh").await.unwrap();
+
+        let hash = [3u8; 32];
+        db.note_pending_blob_request(hash, "https://example.com/drive".into());
+
+        assert_eq!(
+            db.take_pending_blob_request(&hash),
+            Some("https://example.com/drive".to_string())
         );
     }
 }

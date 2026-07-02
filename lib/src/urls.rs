@@ -32,6 +32,13 @@ pub const PLAIN_TEXT: &str = "https://atomicdata.dev/classes/PlainText";
 // Properties
 pub const SHORTNAME: &str = "https://atomicdata.dev/properties/shortname";
 pub const DESCRIPTION: &str = "https://atomicdata.dev/properties/description";
+/// Structured error classification on an `Error` resource, numeric — see
+/// `sync::protocol::error_code` (F5, planning/unified-sync.md). Set
+/// alongside `DESCRIPTION` on the HTTP `/commit` error body so the outbox
+/// can switch on a code instead of pattern-matching the message string.
+/// Absent (or `0`/unknown) means "no structured classification, fall back
+/// to string matching" — always true for non-commit errors.
+pub const ERROR_CODE: &str = "https://atomicdata.dev/properties/errorCode";
 pub const INCOMPLETE: &str = "https://atomicdata.dev/properties/incomplete";
 // ... for Properties
 pub const IS_A: &str = "https://atomicdata.dev/properties/isA";

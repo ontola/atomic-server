@@ -3,11 +3,14 @@ import {
   LocalOutbox,
   isTerminalCommitErrorMessage,
   isUnrecoverableCommitErrorMessage,
+  isTerminalCommitError,
+  isUnrecoverableCommitError,
   drainBackoffMs,
   BLOCK_AFTER_FAILURES,
   type OutboxEntry,
 } from './local-outbox.js';
 import { commitToJsonADObject, type Commit } from './commit.js';
+import { ErrorCode } from './ws-v2.js';
 
 function fakeCommit(
   subject: string,
@@ -175,6 +178,133 @@ describe('isUnrecoverableCommitErrorMessage', () => {
     ).toBe(false);
     expect(isUnrecoverableCommitErrorMessage('Network timeout')).toBe(false);
     expect(isUnrecoverableCommitErrorMessage('')).toBe(false);
+  });
+});
+
+describe('isTerminalCommitError (F5: code-first, planning/unified-sync.md)', () => {
+  it('trusts a recognized code even with unrelated message text', ({
+    expect,
+  }) => {
+    expect(
+      isTerminalCommitError('some unrelated wording', ErrorCode.GENESIS_COLLISION),
+    ).toBe(true);
+    expect(
+      isTerminalCommitError(
+        'some unrelated wording',
+        ErrorCode.MISSING_REQUIRED_PROPERTY,
+      ),
+    ).toBe(true);
+  });
+
+  it('a non-terminal recognized code overrides a terminal-looking message', ({
+    expect,
+  }) => {
+    // Proves the code wins over string matching, not just "code is checked
+    // too" — this message would match the terminal string pattern, but the
+    // server explicitly classified it as UNAUTHORIZED_WRITE, not terminal.
+    expect(
+      isTerminalCommitError(
+        'is_genesis: true, but the resource already exists',
+        ErrorCode.UNAUTHORIZED_WRITE,
+      ),
+    ).toBe(false);
+  });
+
+  it('falls back to string matching when code is UNKNOWN or absent', ({
+    expect,
+  }) => {
+    expect(
+      isTerminalCommitError(
+        'Commit for did:ad:abc has is_genesis: true, but the resource already exists.',
+        ErrorCode.UNKNOWN,
+      ),
+    ).toBe(true);
+    expect(
+      isTerminalCommitError(
+        'Commit for did:ad:abc has is_genesis: true, but the resource already exists.',
+        undefined,
+      ),
+    ).toBe(true);
+    expect(isTerminalCommitError('Network timeout', undefined)).toBe(false);
+  });
+});
+
+describe('isUnrecoverableCommitError (F5: code-first, planning/unified-sync.md)', () => {
+  it('trusts a recognized code even with unrelated message text', ({
+    expect,
+  }) => {
+    expect(
+      isUnrecoverableCommitError('some unrelated wording', ErrorCode.UNAUTHORIZED_WRITE),
+    ).toBe(true);
+  });
+
+  it('a non-blocking recognized code overrides a blocking-looking message', ({
+    expect,
+  }) => {
+    expect(
+      isUnrecoverableCommitError(
+        'No https://atomicdata.dev/properties/write right has been found',
+        ErrorCode.GENESIS_COLLISION,
+      ),
+    ).toBe(false);
+  });
+
+  it('falls back to string matching when code is UNKNOWN or absent', ({
+    expect,
+  }) => {
+    expect(
+      isUnrecoverableCommitError(
+        'Unauthorized. No https://atomicdata.dev/properties/write right has been found for did:ad:agent:Qmfp=',
+        ErrorCode.UNKNOWN,
+      ),
+    ).toBe(true);
+    expect(isUnrecoverableCommitError('Network timeout', undefined)).toBe(false);
+  });
+});
+
+describe('unrecognized codes fall back to string matching (F5 fallback bug)', () => {
+  // A pre-F5 server's ERROR frame has no code field; a post-F5 client's
+  // `decodeError` still reads 2 bytes for `code` and gets the message's
+  // first 2 UTF-8 bytes instead. For a message starting "Commit for...",
+  // that's 'C' (0x43) + 'o' (0x6F) = 0x436F — an arbitrary NONZERO value
+  // that isn't `ErrorCode.UNKNOWN` (0) and isn't in the known set either.
+  // Before the fix, `code !== undefined && code !== ErrorCode.UNKNOWN` took
+  // this as "recognized" and matched it against none of the known codes —
+  // returning false (not terminal / not blocking) even for a message that
+  // string-matching would correctly flag as terminal. That silently
+  // converts a genesis-collision from an old server into an infinite retry
+  // loop — exactly the ingest-flood failure mode F5 exists to prevent.
+  const GARBLED_CODE = 0x436f; // 'C' + 'o', see comment above
+
+  it('a garbled nonzero code does not suppress a terminal string match', ({
+    expect,
+  }) => {
+    expect(
+      isTerminalCommitError(
+        'Commit for did:ad:abc has is_genesis: true, but the resource already exists.',
+        GARBLED_CODE,
+      ),
+    ).toBe(true);
+  });
+
+  it('a garbled nonzero code does not suppress a blocking string match', ({
+    expect,
+  }) => {
+    expect(
+      isUnrecoverableCommitError(
+        'Unauthorized. No https://atomicdata.dev/properties/write right has been found for did:ad:agent:Qmfp=',
+        GARBLED_CODE,
+      ),
+    ).toBe(true);
+  });
+
+  it('a garbled code still correctly reports false for a non-matching message', ({
+    expect,
+  }) => {
+    expect(isTerminalCommitError('Network timeout', GARBLED_CODE)).toBe(false);
+    expect(isUnrecoverableCommitError('Network timeout', GARBLED_CODE)).toBe(
+      false,
+    );
   });
 });
 

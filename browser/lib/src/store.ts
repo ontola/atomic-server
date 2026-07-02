@@ -12,6 +12,7 @@ import {
   type Commit,
 } from './commit.js';
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
+import { AtomicError } from './error.js';
 import { EventManager } from './EventManager.js';
 import { hasBrowserAPI } from './hasBrowserAPI.js';
 import { collections } from './ontologies/collections.js';
@@ -42,8 +43,8 @@ import { LocalSearch } from './local-search.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
-  isTerminalCommitErrorMessage,
-  isUnrecoverableCommitErrorMessage,
+  isTerminalCommitError,
+  isUnrecoverableCommitError,
   type OutboxEntry,
 } from './local-outbox.js';
 
@@ -819,8 +820,9 @@ export class Store {
         drainSubject: this.drainOutboxSubject,
         isTerminalError: (_entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);
+          const code = e instanceof AtomicError ? e.code : undefined;
 
-          return isTerminalCommitErrorMessage(msg);
+          return isTerminalCommitError(msg, code);
         },
         onTerminalDrop: (entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);
@@ -837,8 +839,9 @@ export class Store {
         },
         isBlockingError: (_entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);
+          const code = e instanceof AtomicError ? e.code : undefined;
 
-          return isUnrecoverableCommitErrorMessage(msg);
+          return isUnrecoverableCommitError(msg, code);
         },
         onBlocked: (entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);
@@ -1203,6 +1206,21 @@ export class Store {
       }
     }
 
+    // F1 interim (planning/unified-sync.md): the outbox drain is the only
+    // writer for dirty subjects — signs a commit, rights-checked on the
+    // hub. VV sync must cover only subjects the outbox doesn't know about.
+    // A subject with a pending outbox entry (mid-backoff, or just not
+    // drained yet this pass) would otherwise show up "ahead" in the VV we
+    // send here, and the server answers by requesting a `SYNC_PUSH` of the
+    // raw (unsigned) Loro bytes for it — bypassing rights checks entirely
+    // for that edit. Dropping it here means the server sees no VV for the
+    // subject and won't ask; the drain picks it up once its backoff clears.
+    for (const subject of Object.keys(allVVs)) {
+      if (this.outbox.hasPending(subject)) {
+        delete allVVs[subject];
+      }
+    }
+
     // Collect unique peer IDs across all resources
     const peerSet = new Set<string>();
 
@@ -1488,10 +1506,25 @@ export class Store {
     // SUB push that delivered only some props) can surface only the seed's
     // props, leaving the resource class-less (the "deeply broken drive"). Don't
     // replace a commit-detail delta, and don't clobber unsaved local edits.
+    //
+    // `hasUnsavedChanges()` is in-memory only, so it's blind on a cold
+    // reload: a WS reconnect can deliver the server's stale (pre-offline-
+    // edit) snapshot for a subject whose offline edit only exists in
+    // clientDb + the outbox's durable (localStorage-backed) dirty bit —
+    // nothing has called `set()` on THIS freshly-created Resource object
+    // yet. Without also checking `outbox.hasPending`, `replace: true`
+    // wipes the doc via `resetLoroState()` before the OPFS-based local
+    // hydration (`fetchResourceWithLocalFallback`) gets a chance to merge
+    // the offline edit back in — silently dropping it. See
+    // `hydrateResourceFromJson`'s sibling comment for why that path
+    // deliberately does NOT gate the OPPOSITE decision (whether to
+    // hydrate at all) on this same durable bit — this is a different,
+    // narrower gate: only whether a destructive replace is safe.
     const replace =
       !!change.replaceLoroDocsFromRemote &&
       !subject.startsWith('did:ad:commit:') &&
-      !resource.hasUnsavedChanges();
+      !resource.hasUnsavedChanges() &&
+      !this.outbox.hasPending(subject);
     const { complete } = resource.importLoroUpdate(change.loroBytes, replace);
 
     // Commit-detail resources (`did:ad:commit:<sig>`) carry a single

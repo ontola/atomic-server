@@ -319,6 +319,70 @@ mod peer_sync_tests {
         assert_eq!(blob_b, test_content);
     }
 
+    /// F4 (planning/unified-sync.md): a `BLOB_RESPONSE` naming a hash the
+    /// node never issued a `BLOB_REQUEST` for must be rejected outright,
+    /// not stored unconditionally — otherwise a peer can push arbitrary
+    /// blob bytes with no admission/quota check at all.
+    #[tokio::test]
+    async fn blob_response_without_matching_request_is_rejected() {
+        let db = Db::init_temp("blob_unsolicited").await.unwrap();
+
+        let content = b"nobody asked for this";
+        let hash = blake3::hash(content);
+
+        let response_frame = crate::sync::protocol::encode_blob_response(hash.as_bytes(), content);
+        let mut agent = ForAgent::Sudo;
+        let out = crate::sync::engine::handle_frame(&response_frame, &db, &mut agent).await;
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0][0], crate::sync::protocol::tag::ERROR);
+        assert!(
+            db.kv
+                .get(crate::db::trees::Tree::Blobs, hash.as_bytes())
+                .unwrap()
+                .is_none(),
+            "unsolicited blob bytes must not be stored"
+        );
+    }
+
+    /// F4: even a *requested* blob must not be stored if the drive it was
+    /// requested for is no longer admitted by the time the response
+    /// arrives (e.g. quota/enrollment changed mid-flight).
+    #[tokio::test]
+    async fn blob_response_for_unadmitted_drive_is_rejected() {
+        struct DenyAll;
+        impl crate::sync::policy::SyncPolicy for DenyAll {
+            fn drive_is_allowed(&self, _drive_subject: &str) -> bool {
+                false
+            }
+
+            fn drive_within_quota(&self, _drive_subject: &str) -> bool {
+                true
+            }
+        }
+
+        let db = Db::init_temp("blob_unadmitted").await.unwrap();
+        db.set_sync_policy(std::sync::Arc::new(DenyAll));
+
+        let content = b"quota exceeded";
+        let hash = blake3::hash(content);
+        db.note_pending_blob_request(*hash.as_bytes(), "https://example.com/some-drive".into());
+
+        let response_frame = crate::sync::protocol::encode_blob_response(hash.as_bytes(), content);
+        let mut agent = ForAgent::Sudo;
+        let out = crate::sync::engine::handle_frame(&response_frame, &db, &mut agent).await;
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0][0], crate::sync::protocol::tag::ERROR);
+        assert!(
+            db.kv
+                .get(crate::db::trees::Tree::Blobs, hash.as_bytes())
+                .unwrap()
+                .is_none(),
+            "blob for an unadmitted drive must not be stored"
+        );
+    }
+
     /// Two-peer Iroh roundtrip: Device A holds a File resource and its blob;
     /// Device B has nothing. After `sync_drive_with_peer_using`, B should
     /// have both the resource AND the bytes in `Tree::Blobs`. Exercises the

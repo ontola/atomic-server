@@ -17,6 +17,7 @@
 
 import type { Commit } from './commit.js';
 import { commitToJsonADObject, parseCommitJSON } from './commit.js';
+import { ErrorCode } from './ws-v2.js';
 
 export interface OutboxEntry {
   subject: string;
@@ -156,6 +157,54 @@ export function isUnrecoverableCommitErrorMessage(message: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Codes this client actually knows how to interpret. `decodeError` (ws-v2.ts)
+ * has no way to tell "a pre-F5 server's [requestId][message] frame" apart
+ * from "a post-F5 [requestId][code][message] frame" — reading an old
+ * server's frame under the new layout misreads the message's first 2 UTF-8
+ * bytes as `code`, producing an arbitrary *nonzero* value that happens not
+ * to collide with `ErrorCode.UNKNOWN` (0). Without this allowlist, that
+ * garbage value would be treated as a recognized-but-unmatched code below —
+ * "trust the code, and it says not terminal/not blocking" — permanently
+ * skipping the string fallback and retrying a genuinely terminal error
+ * forever. Only members of this set are trusted; anything else (including
+ * `UNKNOWN` itself) falls back to string matching.
+ */
+const KNOWN_ERROR_CODES: ReadonlySet<number> = new Set([
+  ErrorCode.GENESIS_COLLISION,
+  ErrorCode.MISSING_REQUIRED_PROPERTY,
+  ErrorCode.UNAUTHORIZED_WRITE,
+]);
+
+/**
+ * Terminal-error check the outbox should actually call (F5,
+ * planning/unified-sync.md). Prefers the server's structured `code` when
+ * present and recognized — immune to server wording changes — and falls
+ * back to {@link isTerminalCommitErrorMessage}'s string matching for a
+ * `code` that's absent or unrecognized (older server, or a genuinely
+ * unclassified error).
+ */
+export function isTerminalCommitError(message: string, code?: number): boolean {
+  if (code !== undefined && KNOWN_ERROR_CODES.has(code)) {
+    return (
+      code === ErrorCode.GENESIS_COLLISION ||
+      code === ErrorCode.MISSING_REQUIRED_PROPERTY
+    );
+  }
+
+  return isTerminalCommitErrorMessage(message);
+}
+
+/** Blocking-error check the outbox should actually call — see
+ *  {@link isTerminalCommitError} for the code-first/string-fallback shape. */
+export function isUnrecoverableCommitError(message: string, code?: number): boolean {
+  if (code !== undefined && KNOWN_ERROR_CODES.has(code)) {
+    return code === ErrorCode.UNAUTHORIZED_WRITE;
+  }
+
+  return isUnrecoverableCommitErrorMessage(message);
 }
 
 /** Prefix for per-agent outbox namespaces: `atomic.outbox.<agentSubject>`. */

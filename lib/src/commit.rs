@@ -719,6 +719,17 @@ impl Commit {
             if is_new {
                 crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())
                     .await?;
+
+                // F11 (planning/unified-sync.md): this subject just passed a
+                // rights-checked genesis — if it was previously destroyed
+                // (and thus tombstoned to stop bulk-sync from resurrecting
+                // it), that invariant is now stale. Clear it so this
+                // legitimate re-create isn't invisible to future
+                // `SYNC_PUSH`/`SYNC_VV` bulk-sync with other replicas
+                // (`is_tombstoned` would otherwise keep skipping it there
+                // forever). No-op if there was nothing to clear.
+                store.clear_tombstone(commit.subject.as_str());
+
                 // For new DID resources, grant the signer explicit write access so future
                 // commits don't need drive-level rights. Agents are excluded because they
                 // already have self-write via their subject matching the agent check.
@@ -2092,6 +2103,47 @@ mod test {
         db.apply_commit(commit, &opts_with_rights)
             .await
             .expect("a real agent DID commit must be exempt from the drive-enrollment gate");
+    }
+
+    /// F11 (planning/unified-sync.md): a rights-checked genesis commit for a
+    /// subject that was previously destroyed (and thus tombstoned, to stop
+    /// bulk-sync from resurrecting it) must clear that tombstone — otherwise
+    /// the legitimate re-create is invisible to future `SYNC_PUSH`/`SYNC_VV`
+    /// bulk-sync with other replicas forever, since `is_tombstoned` keeps
+    /// skipping it there.
+    #[tokio::test]
+    async fn genesis_commit_clears_stale_tombstone_on_own_subject() {
+        let db = crate::Db::init_temp("f11_clear_tombstone_test").await.unwrap();
+        let (agent, drive_subject) = db.setup("Alice").await.unwrap();
+
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::PARENT.into(),
+            Value::AtomicUrl(drive_subject.into()),
+        );
+        builder.set(crate::urls::NAME.into(), Value::String("Reborn".into()));
+        let genesis = Commit::create_did(builder, &agent, &db).await.unwrap();
+        let subject = genesis.subject.clone();
+
+        // Simulate a prior local deletion of this exact subject.
+        crate::sync::tombstones::record_tombstone(&db, subject.as_str());
+        assert!(crate::sync::tombstones::is_tombstoned(&db, subject.as_str()));
+
+        let opts_with_rights = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: true,
+            validate_rights: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            update_index: true,
+            ..CommitOpts::no_validations_no_index()
+        };
+        db.apply_commit(genesis, &opts_with_rights).await.unwrap();
+
+        assert!(
+            !crate::sync::tombstones::is_tombstoned(&db, subject.as_str()),
+            "F11: a rights-checked genesis re-create must clear a stale tombstone on its own subject"
+        );
     }
 
     /// Tampering with the signature of an otherwise valid commit must be

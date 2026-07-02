@@ -2020,6 +2020,7 @@ msgid "Usage"
 msgstr "Usage"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account"
 msgstr "Create account"
 
@@ -4924,3 +4925,6 @@ msgstr "To restore your account, sign in to your {0} account first, then come ba
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in to your {0} account"
 msgstr "Sign in to your {0} account"
+
+#~ msgid "Don't have an account? Create one"
+#~ msgstr "Don't have an account? Create one"

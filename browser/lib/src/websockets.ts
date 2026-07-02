@@ -682,22 +682,6 @@ export class WSClient {
     this.ws.send(new Uint8Array(frame));
   }
 
-  /**
-   * Push a blob to the server proactively. The server's BLOB_RESPONSE handler
-   * stores it in `Tree::Blobs` and serves it from `/download/files/<hash>`.
-   *
-   * Used by {@link Store.uploadFiles} after committing a File resource so the
-   * server has the bytes without waiting for a sync round to fire BLOB_REQUEST.
-   * No-op if the WS isn't open.
-   */
-  public sendBlob(hash: Uint8Array, bytes: Uint8Array): void {
-    if (this.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
-    this.sendBinary(encodeBlobResponse(hash, bytes));
-  }
-
   // ---- Private: message handling ----
 
   private get serverOrigin(): string {
@@ -738,7 +722,7 @@ export class WSClient {
         if (!msg) break;
 
         if (msg.requestId) {
-          const err = new AtomicError(msg.message, ErrorType.Server);
+          const err = new AtomicError(msg.message, ErrorType.Server, msg.code);
           const pendingGet = this.takePending(msg.requestId);
 
           if (pendingGet) {
