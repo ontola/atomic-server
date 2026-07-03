@@ -275,6 +275,15 @@ export class AtomicServer {
       dag
         .container()
         .from(RUST_IMAGE)
+        // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
+        // build script (transitive dep via the default `vector-search`
+        // feature, which this container builds with — unlike `rustBuild`'s
+        // musl targets, this glibc container doesn't need `--features
+        // light`, since `ort`'s missing-prebuilt-binary gap is musl-cuda
+        // specific). Matches the apt list already on `rustBuild()` /
+        // `rustChecksContainer()` — this container just never had it.
+        .withExec(['apt-get', 'update', '-qq'])
+        .withExec(['apt', 'install', '-y', 'protobuf-compiler'])
         .withMountedCache('/usr/local/cargo/registry', cargoCache, {
           sharing: CacheSharingMode.Locked,
         })
@@ -307,7 +316,25 @@ export class AtomicServer {
           '-c',
           'echo "<html><body>integration test stub</body></html>" > /code/server/assets_tmp/index.html',
         ])
-        .withExec(['cargo', 'build', '-p', 'atomic-server'])
+        // `--no-default-features --features light`: default features pull
+        // in `vector-search` -> `ort`, and the prebuilt ONNX Runtime binary
+        // `ort` downloads here expects a newer glibc ABI than `rust:bookworm`
+        // ships (`undefined reference to __isoc23_strtoll` and friends —
+        // ISO C23 libc symbols this base image's glibc predates). Same
+        // underlying ort/onnxruntime binary-compatibility fragility as the
+        // musl-cuda gap in `rustBuild`/`rustChecksContainer`, different
+        // symptom. `jsTestIntegration` (this container's only caller) tests
+        // `@tomic/lib`'s NodeClientDb sync path — it never touches
+        // vector-search, so dropping it here costs no real coverage.
+        .withExec([
+          'cargo',
+          'build',
+          '-p',
+          'atomic-server',
+          '--no-default-features',
+          '--features',
+          'light',
+        ])
         .withExec([
           'cp',
           '/code/target/debug/atomic-server',
@@ -625,10 +652,38 @@ export class AtomicServer {
       ? ['cargo', 'build', '--release', '-p', 'atomic-server']
       : ['cargo', 'build', '-p', 'atomic-server'];
 
-    // The local fastembed/ORT vector-search stack does not ship ONNX Runtime
-    // binaries for aarch64 musl. Build that release target with the existing
-    // portable server feature set instead.
-    if (target === 'aarch64-unknown-linux-musl') {
+    // ⚠️ PRODUCTION IMPACT, not just CI plumbing (2026-07-02): this
+    // function backs BOTH the e2e test server (atomicService) AND the real
+    // deploy binary (deployServer -> rustBuildRelease -> here, shipped via
+    // SSH/rsync by deployment.yml). This carve-out means the actual
+    // deployed x86_64-unknown-linux-musl binary now ALSO loses
+    // vector-search, not just test builds.
+    //
+    // Root cause: the local fastembed/ORT vector-search stack does not ship
+    // ONNX Runtime binaries for musl targets at all — `ort`'s `cuda`
+    // feature (requested unconditionally alongside `coreml`/`directml` in
+    // server/Cargo.toml) has no prebuilt binary for `cu12` on musl, x86_64
+    // included. Previously only special-cased for aarch64 — x86_64 was
+    // assumed fine but had simply never been exercised: this whole CI
+    // pipeline never got far enough to reach `deployServer`'s build before
+    // 2026-07-02's fixes, so it's unknown whether the currently-deployed
+    // production binary already lacks vector-search (this build failing)
+    // or ships some other way that avoids this path entirely.
+    //
+    // This is a deliberate, explicitly-approved stopgap, not the real fix.
+    // The real fix is making `ort`'s `cuda`/`coreml`/`directml` features
+    // conditional per-target in server/Cargo.toml (each is only valid on
+    // one platform anyway) so the dependency spec matches reality instead
+    // of silently dropping a whole feature area on affected targets. No
+    // dedicated tracking doc yet — this comment + the git history on this
+    // line are the record until one exists. Before removing this carve-out,
+    // confirm the currently-deployed binary's actual feature set first
+    // (see the paragraph above — that's still unknown).
+    //
+    // Same fix as `rustChecksContainer`'s clippy/test path and
+    // `rustBuildSlim`'s glibc path (different symptom there — ABI mismatch,
+    // not a missing binary — same root cause).
+    if (target.includes('musl')) {
       buildArgs.push('--no-default-features', '--features', 'light');
     }
     const targetPath = release
@@ -678,7 +733,13 @@ export class AtomicServer {
         .container()
         .from(image)
         .withExec(['apt-get', 'update', '-qq'])
-        .withExec(['apt', 'install', '-y', 'nasm'])
+        // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
+        // build script (a transitive dep via the vector-search feature) —
+        // without it `cargo fetch`-triggered builds under this container
+        // (nextest, clippy) fail with "Could not find `protoc`". Matches
+        // `rustBuild()`'s apt list; this container split off from it later
+        // and the package was missed.
+        .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler'])
         .withMountedCache('/usr/local/cargo/registry', cargoCache, {
           sharing: CacheSharingMode.Locked,
         })
@@ -739,6 +800,27 @@ export class AtomicServer {
         // `--exclude atomic-server-tauri`: same reason as `rustClippy` —
         // the Tauri desktop crate needs system libs (glib-2.0, pkg-config)
         // that aren't installed in the musl-cross CI image.
+        //
+        // `--no-default-features --features light`: `atomic-server`'s
+        // default features include `vector-search`, which pulls in `ort`
+        // with `cuda`/`coreml`/`directml` all requested unconditionally.
+        // `ort` ships no prebuilt binary for musl + cuda, so the workspace
+        // fails to even compile here. Mirrors the existing
+        // `aarch64-unknown-linux-musl` release-build carve-out in
+        // `rustBuild()` (same underlying ort/musl gap, same fix). Verified
+        // locally: `--no-default-features --features light` at `--workspace`
+        // scope only strips `atomic-server`'s own defaults — other members
+        // don't define a `light` feature and are unaffected.
+        //
+        // `--build-jobs 2`: this workspace produces a lot of large,
+        // `-static-pie`-linked musl test binaries (one per integration
+        // test file). Left at nextest's default (num-cpus), several link
+        // concurrently and the linker gets OOM-killed (`ld terminated
+        // with signal 9`) partway through — observed locally even with
+        // 15GB available to the Docker VM. Capping build (link)
+        // concurrency avoids the spike; doesn't affect `--test-threads`
+        // (runtime test parallelism), only how many rustc/link jobs run
+        // at once during compilation.
         .withExec([
           'cargo',
           'nextest',
@@ -746,6 +828,11 @@ export class AtomicServer {
           '--workspace',
           '--exclude',
           'atomic-server-tauri',
+          '--no-default-features',
+          '--features',
+          'light',
+          '--build-jobs',
+          '2',
         ])
         .stdout()
     );
@@ -763,6 +850,13 @@ export class AtomicServer {
     // (e.g. `openssl-sys` via some opentelemetry / TLS feature) that need
     // system OpenSSL we don't ship. Default features are what the release
     // binary already builds with.
+    //
+    // `--no-default-features --features light`: same ort/musl/cuda gap as
+    // `rustTest` above — `vector-search`'s `ort` dep has no prebuilt binary
+    // for this target, so even a lint-only pass can't compile it. Means
+    // vector-search-gated code isn't clippy-checked on this path; the
+    // tradeoff was a deliberate call, not an oversight — see rustTest's
+    // comment for the full reasoning.
     return this.rustChecksContainer()
       .withExec([
         'cargo',
@@ -772,6 +866,9 @@ export class AtomicServer {
         'atomic-server-tauri',
         '--no-deps',
         '--all-targets',
+        '--no-default-features',
+        '--features',
+        'light',
       ])
       .stdout();
   }
@@ -976,8 +1073,28 @@ export class AtomicServer {
       .withExec(['npm', 'install', '-g', 'netlify-cli']);
 
     // Setup e2e test environment
+    // Bug fix (2026-07-02): `pnpm install` used to run right after mounting
+    // only `/app/e2e`, before the rest of the pnpm workspace (root
+    // package.json/pnpm-workspace.yaml, and the sibling `lib`/`cli`/etc.
+    // packages `@tomic/lib` et al. resolve against via the `workspace:*`
+    // protocol) was mounted at all — `pnpm install` failed outright with
+    // `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`. This path had never actually been
+    // exercised before (every prior CI run failed earlier in the pipeline),
+    // so the bug was latent. Fix: mount the full workspace context — root
+    // manifest files (borrowed from `browserContainer`, i.e. `jsBuild()`'s
+    // already-fully-installed container, for consistency) and every sibling
+    // package — before running `pnpm install`, not after.
     const e2eContainer = playwrightContainer
       .withEnvVariable('CI', 'true')
+      .withFile('/app/package.json', browserContainer.file('/app/package.json'))
+      .withFile(
+        '/app/pnpm-lock.yaml',
+        browserContainer.file('/app/pnpm-lock.yaml'),
+      )
+      .withFile(
+        '/app/pnpm-workspace.yaml',
+        browserContainer.file('/app/pnpm-workspace.yaml'),
+      )
       .withDirectory(
         '/app/e2e',
         this.source
@@ -987,9 +1104,6 @@ export class AtomicServer {
           .withoutDirectory('node_modules')
           .withoutDirectory('test-results'),
       )
-      .withWorkdir('/app/e2e')
-      .withExec(['pnpm', 'install'])
-      .withExec(['pnpm', 'exec', 'playwright', 'install'])
       .withDirectory('/app/cli', browserContainer.directory('/app/cli'))
       .withDirectory('/app/react', browserContainer.directory('/app/react'))
       .withDirectory('/app/svelte', browserContainer.directory('/app/svelte'))
@@ -1002,6 +1116,9 @@ export class AtomicServer {
         '/app/node_modules',
         browserContainer.directory('/app/node_modules'),
       )
+      .withWorkdir('/app/e2e')
+      .withExec(['pnpm', 'install'])
+      .withExec(['pnpm', 'exec', 'playwright', 'install'])
       .withEnvVariable('LANGUAGE', 'en_GB')
       // The browser hits a `*.localhost` URL so chromium considers it a
       // secure context (required for `crypto.subtle` → WASM ClientDb init).
