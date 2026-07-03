@@ -84,6 +84,13 @@ test.describe('data-browser', async () => {
     browser,
     context,
   }) => {
+    // `acceptInvite` (test-utils.ts) waits through two sequential server
+    // round trips (new agent genesis commit save, then invite accept POST)
+    // before its dialog opens — see the comment at that call site. Give the
+    // whole test a wider budget to match, same as plugin.spec.ts's install
+    // flow.
+    test.slow();
+
     await signIn(page);
     const { driveURL, driveTitle } = await newDrive(page);
     await currentDriveTitle(page).click();
@@ -140,14 +147,13 @@ test.describe('data-browser', async () => {
     await expect(page3.getByText(driveTitle).first()).toBeVisible();
   });
 
-  // FLAKY (dagger CI, recovered on retry 1): the second-context message
-  // (`text=My test: <timestamp>`) intermittently doesn't appear in the
-  // owner's window within 15 s. Cross-context chat propagation goes
-  // through the server's WS hub; under dagger CPU contention the
-  // round-trip eats the budget. Investigate: replace the DOM text wait
-  // with a `store.subscribe` poll on the chatroom resource's `messages`
-  // property.
   test('chatroom', async ({ page, browser, context }) => {
+    // This test also goes through `acceptInvite`'s two-round-trip agent
+    // creation flow (see that call site) partway through, on top of its own
+    // multi-round-trip chat/reload/invite steps — give it the same wider
+    // budget as the invite test above.
+    test.slow();
+
     const inputLocator = (currentPage: Page) =>
       currentPage.getByLabel('Chat input');
 

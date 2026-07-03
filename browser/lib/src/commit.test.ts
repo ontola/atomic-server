@@ -365,7 +365,7 @@ describe('offline persistence', () => {
     store.applyIncoming({
       subject,
       resource: stale,
-      source: 'remote-incoming-update',
+      source: 'ws-sub-push',
     });
     await Promise.resolve();
 

@@ -18,11 +18,6 @@ const BIRD =
 test.describe('Plugins', () => {
   test.beforeEach(before);
 
-  // FLAKY (dagger CI + remote CI): plugin install relies on a wasm
-  // upload + commit + plugin-install commit chain; one of the post-
-  // install assertions intermittently times out under dagger CPU load.
-  // Investigate: rerun locally with `--workers=1` and add intermediate
-  // `waitForCommit` poll points so we can see which step is slow.
   test('install a plugin', async ({ page }) => {
     // Two upload + commit + plugin-install chains, a full bird-creation
     // form, an iframe-driven picker, plus a reload-and-verify. The test
@@ -91,10 +86,15 @@ test.describe('Plugins', () => {
     await page.reload();
 
     // The plugin's after_commit fires async, signs a host.commit, and the
-    // rename then propagates over WS. Allow a longer poll window.
+    // rename then propagates over WS. That's a WASM invocation + a second
+    // signed commit + a WS round trip on top of the reload above — under
+    // dagger's CPU-constrained container 15s wasn't enough margin (observed
+    // failures at this exact assertion in CI). test.slow() above triples the
+    // *test's* budget but doesn't touch this call's own explicit timeout, so
+    // widen it directly.
     await expect(
       page.getByTestId('editable-title').getByText('My Problem'),
-    ).toBeVisible({ timeout: 15000 });
+    ).toBeVisible({ timeout: 30000 });
 
     // Removed: assertion that changing the plugin config (without a fresh
     // folder commit) re-renames existing folders. With the after_commit +

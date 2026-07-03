@@ -38,7 +38,9 @@ test.describe('AI Chat', () => {
       timeout: 15_000,
     });
 
-    // AIPanel waits 5 s after ResourceSaved before re-querying the search index.
+    // AIPanel polls the search index after ResourceSaved until the new chat
+    // shows up (see AIPanel.tsx's pollUntilIndexed), rather than waiting out
+    // a fixed delay.
     await expect(
       page.getByTestId('sidebar').getByRole('link', { name: 'Test Chat' }),
     ).toBeVisible({ timeout: 15_000 });

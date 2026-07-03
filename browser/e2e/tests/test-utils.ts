@@ -1051,12 +1051,14 @@ export function currentDialog(page: Page) {
   return page.locator('dialog[open][data-top-level="true"]');
 }
 
-export async function waitForCurrentDialog(page: Page) {
+export async function waitForCurrentDialog(page: Page, timeoutMs = 20000) {
   // Default waitFor uses the 5s `actionTimeout`. Several dialogs only open
   // after a server round-trip (plugin upload parses the zip server-side, file
   // chooser uploads the file, etc.). 20s covers the slow path without
-  // hiding genuine hangs.
-  await currentDialog(page).waitFor({ state: 'visible', timeout: 20000 });
+  // hiding genuine hangs. Callers with a heavier round-trip chain behind the
+  // click (e.g. `acceptInvite`'s agent-creation flow) can pass a larger
+  // value — see that call site for why.
+  await currentDialog(page).waitFor({ state: 'visible', timeout: timeoutMs });
 }
 
 export const DIALOG_CLOSE_BUTTON = 'dialog-close-button';
@@ -1091,8 +1093,9 @@ export async function inDialog(
     dialog: Locator,
     closeDialogWith: (buttonText: string) => Promise<void>,
   ) => Promise<void>,
+  timeoutMs = 20000,
 ): Promise<void> {
-  await waitForCurrentDialog(page);
+  await waitForCurrentDialog(page, timeoutMs);
 
   const closeDialogWith = async (buttonText: string) => {
     const button =
@@ -1150,12 +1153,22 @@ export async function acceptInvite(page: Page) {
   await expect(acceptBtn).toBeVisible({ timeout: 15000 });
   await acceptBtn.click();
 
-  await inDialog(page, async (dialog, closeDialog) => {
-    await expect(
-      dialog.getByRole('heading', { name: 'Agent created!' }),
-    ).toBeVisible();
-    await dialog.getByLabel('Agent Name').fill(`Test User ${timestamp()}`);
-    await dialog.getByRole('button', { name: 'Copy to clipboard' }).click();
-    await closeDialog('Continue');
-  });
+  // Unlike most dialogs (one round trip), the click above kicks off TWO
+  // sequential server round trips before the dialog opens: InvitePage's
+  // handleNew() saves the new agent's genesis commit, then handleAccept()
+  // POSTs to accept the invite — see InvitePage.tsx. Give it a wider budget
+  // than the 20s default so it isn't tight under load, same rationale as
+  // plugin.spec.ts's install flow.
+  await inDialog(
+    page,
+    async (dialog, closeDialog) => {
+      await expect(
+        dialog.getByRole('heading', { name: 'Agent created!' }),
+      ).toBeVisible();
+      await dialog.getByLabel('Agent Name').fill(`Test User ${timestamp()}`);
+      await dialog.getByRole('button', { name: 'Copy to clipboard' }).click();
+      await closeDialog('Continue');
+    },
+    40000,
+  );
 }
