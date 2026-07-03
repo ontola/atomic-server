@@ -3731,7 +3731,12 @@ export class Store {
     // server-side. Use the durable HTTP path; awaiting completion serializes
     // it with downstream commits.
     const url = `${this.getServerUrl()}/blob/${hashHex}`;
-    await fetch(url, {
+    // Honor `injectFetch` like every other network call on this class
+    // (see `Client.fetch`'s identical fallback) — a bare global `fetch()`
+    // here meant tests/embedders overriding the store's fetch couldn't
+    // observe or intercept blob pushes at all.
+    const fetchImpl = this.injectedFetch ?? fetch;
+    await fetchImpl(url, {
       method: 'PUT',
       // Cast: TS lib.dom marks Uint8Array<SharedArrayBuffer> incompatible with
       // BodyInit/BlobPart; at runtime our bytes are ArrayBuffer-backed.

@@ -36,7 +36,15 @@ export class LoroLoader {
 
     try {
       const mod = isBrowser
-        ? ((await import('loro-crdt/web')) as unknown as typeof Loro & {
+        ? // `loro-crdt`'s package.json has no `exports` map for the `web`
+          // subpath (only top-level `main`/`module`/`types`), so
+          // `moduleResolution: NodeNext` can't find its type declarations
+          // even though `web/index.d.ts` genuinely ships in the package
+          // and this resolves fine at runtime (bundler + Node). Reproduces
+          // with a bare `tsc --noEmit` too — not typedoc-specific.
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-expect-error TS2307 — see comment above; import path itself is correct.
+          ((await import('loro-crdt/web')) as unknown as typeof Loro & {
             default?: unknown;
           })
         : await import('loro-crdt');

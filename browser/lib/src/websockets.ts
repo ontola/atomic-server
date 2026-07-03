@@ -721,7 +721,15 @@ export class WSClient {
         const msg = decodeError(payload);
         if (!msg) break;
 
-        if (msg.requestId) {
+        // requestId 0 is the server's sentinel for connection-level errors
+        // (e.g. AUTH failure) not tied to one specific pending GET/COMMIT —
+        // `nextRequestId` starts at 1 and wraps back to 1, never 0, so this
+        // is unambiguous. `if (msg.requestId)` used to treat 0 as falsy and
+        // fall into the `else`, which only toasted the error — any pending
+        // `waitForTag` (e.g. `authenticate()`'s AUTH_OK wait) was left to
+        // hang until its own 30s internal timeout instead of failing
+        // immediately on the error frame that already arrived.
+        if (msg.requestId !== 0) {
           const err = new AtomicError(msg.message, ErrorType.Server, msg.code);
           const pendingGet = this.takePending(msg.requestId);
 
@@ -731,6 +739,7 @@ export class WSClient {
             this.takePendingCommit(msg.requestId)?.reject(err);
           }
         } else {
+          this.rejectAllPending(msg.message);
           this.store.notifyError(msg.message);
         }
 

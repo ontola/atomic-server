@@ -652,10 +652,17 @@ export class Resource<C extends OptionalClass = any> {
     const propsMap = this.getLoroMap();
     const json = propsMap?.toJSON();
     const nextCache: Record<string, JSONValue> = Object.create(null);
+    // The sibling `datatypes` map tags load-bearing properties (see
+    // `writeDatatypeTags`/`datatypeTag`) — `'resourceArray'` or `'json'`
+    // here means the stored string is legacy JSON-stringified content, not
+    // coincidentally JSON-looking text in a plain string/markdown property.
+    const datatypesJson = this._loroDoc?.getMap('datatypes').toJSON() as
+      | Record<string, string>
+      | undefined;
 
     if (json && typeof json === 'object') {
       for (const [key, value] of Object.entries(json)) {
-        nextCache[key] = normalizeLoroValue(value);
+        nextCache[key] = normalizeLoroValue(datatypesJson?.[key], value);
       }
     }
 
@@ -3061,19 +3068,35 @@ export class Resource<C extends OptionalClass = any> {
   }
 }
 
-function normalizeLoroValue(value: unknown): JSONValue {
+function normalizeLoroValue(
+  loroDatatypeTag: string | undefined,
+  value: unknown,
+): JSONValue {
   // LoroList.toJSON() returns a native JS array — pass through directly.
   if (Array.isArray(value)) {
     return value as JSONValue;
   }
 
-  // Legacy: JSON-stringified arrays/objects from older Loro docs.
+  // Legacy: arrays/objects were JSON-stringified before Loro arrays became
+  // native `LoroList`s (see `loroSetProperty`) and before the `json`
+  // datatype existed as such. The sibling `datatypes` map (`datatypeTag`,
+  // `writeDatatypeTags`) tags exactly which properties actually hold
+  // array/JSON content, so only THOSE strings get JSON.parsed — a plain
+  // string/markdown propval (a chat title, a resource description) that
+  // merely starts with `{` or `[` is never misread as JSON.
   if (
+    (loroDatatypeTag === 'resourceArray' || loroDatatypeTag === 'json') &&
     typeof value === 'string' &&
     (value.startsWith('[') || value.startsWith('{'))
   ) {
     try {
-      return JSON.parse(value) as JSONValue;
+      const parsed = JSON.parse(value) as JSONValue;
+
+      if (loroDatatypeTag === 'resourceArray' && !Array.isArray(parsed)) {
+        return value;
+      }
+
+      return parsed;
     } catch {
       return value;
     }
