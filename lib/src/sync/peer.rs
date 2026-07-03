@@ -724,8 +724,7 @@ fn register_live_peer(
                         // Resource doesn't exist locally — nothing to check
                         // rights against; the tombstone-write is a no-op.
                         None => {
-                            let _ =
-                                super::ws_apply::apply_destroy_checked(&store, &subject).await;
+                            let _ = super::ws_apply::apply_destroy_checked(&store, &subject).await;
                         }
                     }
                 }

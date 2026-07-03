@@ -91,7 +91,9 @@ test.describe('onboarding', () => {
     // Signing in lands the user on their home drive (sign-in is unified through
     // /app/welcome now; /app/agent no longer hosts its own login form). Wait for
     // the signed-in drive URL, then open settings to confirm the account.
-    await expect(page2).toHaveURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 10000 });
+    await expect(page2).toHaveURL(/did(?:%3A|:)ad(?:%3A|:)/, {
+      timeout: 10000,
+    });
     await page2.goto(`${FRONTEND_URL}/app/agent`);
     await expect(
       page2.getByRole('heading', { name: 'User Settings' }),

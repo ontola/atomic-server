@@ -26,7 +26,9 @@ export type ManagedEnrollmentSummary = {
  * there is no session or the control plane is unreachable (callers treat "no
  * enrollments" as "nothing to reconcile").
  */
-export async function getManagedEnrollments(): Promise<ManagedEnrollmentSummary[]> {
+export async function getManagedEnrollments(): Promise<
+  ManagedEnrollmentSummary[]
+> {
   const response = await fetch(`${getManagedApiBase()}/sync-enrollments`, {
     credentials: 'include',
   });

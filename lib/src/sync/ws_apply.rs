@@ -58,7 +58,11 @@ pub struct ResolvedUpdate {
 /// is a deliberate tightening vs. the old unconditional-persist behavior: if
 /// we can't derive a resource (and therefore can't resolve its drive), we
 /// can't run an admission check, so we don't persist — fail closed, not open.
-pub async fn resolve_update(store: &Db, subject: &str, state_bytes: &[u8]) -> Option<ResolvedUpdate> {
+pub async fn resolve_update(
+    store: &Db,
+    subject: &str,
+    state_bytes: &[u8],
+) -> Option<ResolvedUpdate> {
     if state_bytes.is_empty() {
         return None;
     }
@@ -306,7 +310,9 @@ mod resolve_update_drive_spoof_tests {
     /// drive of their choosing instead of its real one.
     #[tokio::test]
     async fn existing_resource_ignores_spoofed_drive_in_payload() {
-        let db = Db::init_temp("resolve_update_spoof_existing").await.unwrap();
+        let db = Db::init_temp("resolve_update_spoof_existing")
+            .await
+            .unwrap();
         let (_alice, real_drive) = db.setup("Alice").await.unwrap();
 
         let doc_subject = db
@@ -335,7 +341,10 @@ mod resolve_update_drive_spoof_tests {
             crate::Subject::from_raw(&doc_subject, db.get_base_domain().as_deref()).pure_id();
         let real_snapshot = db
             .kv
-            .get(crate::db::trees::Tree::LoroSnapshots, snapshot_key.as_bytes())
+            .get(
+                crate::db::trees::Tree::LoroSnapshots,
+                snapshot_key.as_bytes(),
+            )
             .unwrap()
             .expect("resource should have a stored Loro snapshot");
         let spoofed_drive = "https://attacker.example/not-your-drive";

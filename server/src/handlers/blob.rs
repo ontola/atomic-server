@@ -120,7 +120,9 @@ mod admission_tests {
         let db = Db::init_temp("blob_admission_unreferenced").await.unwrap();
         let _ = db.setup("Alice").await.unwrap();
 
-        let hash_hex = blake3::hash(b"nobody committed a reference to this").to_hex().to_string();
+        let hash_hex = blake3::hash(b"nobody committed a reference to this")
+            .to_hex()
+            .to_string();
 
         let err = resolve_blob_write_admission(&db, &hash_hex)
             .await
@@ -141,9 +143,16 @@ mod admission_tests {
             .unwrap();
         let (_alice, drive) = db.setup("Alice").await.unwrap();
 
-        let hash_hex = blake3::hash(b"legitimate upload bytes").to_hex().to_string();
+        let hash_hex = blake3::hash(b"legitimate upload bytes")
+            .to_hex()
+            .to_string();
         let subject = db
-            .create_resource("https://atomicdata.dev/classes/Folder", &drive, "a file", None)
+            .create_resource(
+                "https://atomicdata.dev/classes/Folder",
+                &drive,
+                "a file",
+                None,
+            )
             .await
             .unwrap();
         let mut resource = db.get_resource(&subject.as_str().into()).await.unwrap();
@@ -174,9 +183,16 @@ mod admission_tests {
             .unwrap();
         let (_alice, drive) = db.setup("Alice").await.unwrap();
 
-        let hash_hex = blake3::hash(b"bytes for an unenrolled drive").to_hex().to_string();
+        let hash_hex = blake3::hash(b"bytes for an unenrolled drive")
+            .to_hex()
+            .to_string();
         let subject = db
-            .create_resource("https://atomicdata.dev/classes/Folder", &drive, "a file", None)
+            .create_resource(
+                "https://atomicdata.dev/classes/Folder",
+                &drive,
+                "a file",
+                None,
+            )
             .await
             .unwrap();
         let mut resource = db.get_resource(&subject.as_str().into()).await.unwrap();
@@ -236,13 +252,16 @@ mod admission_tests {
             resource
                 .set_unsafe(
                     urls::IS_A.into(),
-                    atomic_lib::Value::ResourceArray(vec![
-                        "https://atomicdata.dev/classes/Folder".to_string().into(),
-                    ]),
+                    atomic_lib::Value::ResourceArray(vec!["https://atomicdata.dev/classes/Folder"
+                        .to_string()
+                        .into()]),
                 )
                 .unwrap();
             resource
-                .set_unsafe(urls::NAME.into(), atomic_lib::Value::String("a file".into()))
+                .set_unsafe(
+                    urls::NAME.into(),
+                    atomic_lib::Value::String("a file".into()),
+                )
                 .unwrap();
             resource
                 .set_unsafe(

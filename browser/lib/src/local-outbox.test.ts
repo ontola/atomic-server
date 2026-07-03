@@ -186,7 +186,10 @@ describe('isTerminalCommitError (F5: code-first, planning/unified-sync.md)', () 
     expect,
   }) => {
     expect(
-      isTerminalCommitError('some unrelated wording', ErrorCode.GENESIS_COLLISION),
+      isTerminalCommitError(
+        'some unrelated wording',
+        ErrorCode.GENESIS_COLLISION,
+      ),
     ).toBe(true);
     expect(
       isTerminalCommitError(
@@ -234,7 +237,10 @@ describe('isUnrecoverableCommitError (F5: code-first, planning/unified-sync.md)'
     expect,
   }) => {
     expect(
-      isUnrecoverableCommitError('some unrelated wording', ErrorCode.UNAUTHORIZED_WRITE),
+      isUnrecoverableCommitError(
+        'some unrelated wording',
+        ErrorCode.UNAUTHORIZED_WRITE,
+      ),
     ).toBe(true);
   });
 
@@ -258,7 +264,9 @@ describe('isUnrecoverableCommitError (F5: code-first, planning/unified-sync.md)'
         ErrorCode.UNKNOWN,
       ),
     ).toBe(true);
-    expect(isUnrecoverableCommitError('Network timeout', undefined)).toBe(false);
+    expect(isUnrecoverableCommitError('Network timeout', undefined)).toBe(
+      false,
+    );
   });
 });
 

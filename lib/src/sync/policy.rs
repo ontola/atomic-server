@@ -275,7 +275,10 @@ mod tests {
         let t0 = Instant::now();
 
         assert!(p.admit_at("did:ad:d", t0)); // grace
-        p.set_drive_policies([("did:ad:d".to_string(), None)]); // enrollment lands
+
+        // Enrollment lands.
+        p.set_drive_policies([("did:ad:d".to_string(), None)]);
+
         // Long after grace would have expired, still admitted because allowlisted.
         assert!(p.admit_at("did:ad:d", t0 + Duration::from_secs(10_000)));
     }

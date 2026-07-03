@@ -14,7 +14,9 @@ export type ManagedInfo = {
 
 const DEFAULT: ManagedInfo = { managed: false, portalUrl: null };
 
-export async function fetchManagedInfo(serverUrl: string): Promise<ManagedInfo> {
+export async function fetchManagedInfo(
+  serverUrl: string,
+): Promise<ManagedInfo> {
   if (!serverUrl) return DEFAULT;
 
   try {
@@ -40,9 +42,7 @@ export async function fetchManagedInfo(serverUrl: string): Promise<ManagedInfo> 
     return {
       managed: Boolean(data?.managed),
       portalUrl:
-        rawPortalUrl && onLocalhost
-          ? 'http://localhost:49237'
-          : rawPortalUrl,
+        rawPortalUrl && onLocalhost ? 'http://localhost:49237' : rawPortalUrl,
     };
   } catch {
     // Older/self-hosted nodes have no such endpoint — treat as non-managed.
@@ -65,7 +65,9 @@ export type AccountCreationTarget =
   | { kind: 'portal'; url: string }
   | { kind: 'local' };
 
-export function accountCreationTarget(info: ManagedInfo): AccountCreationTarget {
+export function accountCreationTarget(
+  info: ManagedInfo,
+): AccountCreationTarget {
   if (info.managed && info.portalUrl) {
     return { kind: 'portal', url: info.portalUrl };
   }

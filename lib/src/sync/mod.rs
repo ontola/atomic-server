@@ -4,11 +4,11 @@
 //! Used by WebSocket (server), Iroh QUIC (native peers), and WASM clients.
 
 pub mod engine;
-pub mod policy;
 #[cfg(all(test, feature = "iroh", feature = "db-redb"))]
 mod iroh_e2e;
 #[cfg(feature = "iroh")]
 pub mod peer;
+pub mod policy;
 pub mod protocol;
 #[cfg(all(test, feature = "iroh"))]
 mod tests;

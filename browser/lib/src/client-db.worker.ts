@@ -142,7 +142,10 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       try {
         db!.flush();
       } catch (e) {
-        console.error('[ClientDb] OPFS flush failed after putResourceWithSnapshot:', e);
+        console.error(
+          '[ClientDb] OPFS flush failed after putResourceWithSnapshot:',
+          e,
+        );
       }
 
       return;

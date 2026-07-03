@@ -109,7 +109,9 @@ export function GettingStartedFlow({
   );
   // Ready immediately for non-managed flows, or when the portal already handed
   // us the email in the URL (no fetch needed).
-  const [managedReady, setManagedReady] = useState(!fromManaged || !!emailParam);
+  const [managedReady, setManagedReady] = useState(
+    !fromManaged || !!emailParam,
+  );
 
   // Fallback for older portals that redirect without the `email` param: fetch
   // the managed account email and derive a default username before showing the
@@ -236,7 +238,9 @@ export function GettingStartedFlow({
       await handleSignInWithSecret(secret);
     } catch (err) {
       setError(
-        err instanceof Error ? err : new Error('Could not restore your account.'),
+        err instanceof Error
+          ? err
+          : new Error('Could not restore your account.'),
       );
     } finally {
       setLoading(false);
@@ -446,6 +450,7 @@ export function GettingStartedFlow({
                         subtle
                         onClick={() => {
                           setError(undefined);
+
                           if (createTarget.kind === 'portal') {
                             window.location.assign(createTarget.url);
                           } else {

@@ -215,10 +215,7 @@ fn default_sync_policy() -> Arc<RwLock<Arc<dyn crate::sync::policy::SyncPolicy>>
 impl Db {
     /// Install a sync admission/quota policy (managed nodes). The default is
     /// [`crate::sync::policy::OpenPolicy`] (allow everything, no quotas).
-    pub fn set_sync_policy(
-        &self,
-        policy: Arc<dyn crate::sync::policy::SyncPolicy>,
-    ) {
+    pub fn set_sync_policy(&self, policy: Arc<dyn crate::sync::policy::SyncPolicy>) {
         if let Ok(mut guard) = self.sync_policy.write() {
             *guard = policy;
         }
@@ -395,9 +392,8 @@ impl Db {
             // Without this the auto-migration never fires on a real in-place
             // upgrade, and `migrate_from_sled`'s rename-to-`.bak` would try to
             // rename the whole store dir — clobbering the redb we just wrote.
-            let legacy_root_sled = !sled_path.exists()
-                && path.join("db").exists()
-                && path.join("conf").exists();
+            let legacy_root_sled =
+                !sled_path.exists() && path.join("db").exists() && path.join("conf").exists();
             if legacy_root_sled {
                 tracing::warn!(
                     "Detected a legacy sled store at the store root; relocating it into `sled/` before migration."

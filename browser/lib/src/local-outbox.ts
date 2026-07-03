@@ -199,7 +199,10 @@ export function isTerminalCommitError(message: string, code?: number): boolean {
 
 /** Blocking-error check the outbox should actually call — see
  *  {@link isTerminalCommitError} for the code-first/string-fallback shape. */
-export function isUnrecoverableCommitError(message: string, code?: number): boolean {
+export function isUnrecoverableCommitError(
+  message: string,
+  code?: number,
+): boolean {
   if (code !== undefined && KNOWN_ERROR_CODES.has(code)) {
     return code === ErrorCode.UNAUTHORIZED_WRITE;
   }

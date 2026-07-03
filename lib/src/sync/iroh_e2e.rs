@@ -169,8 +169,9 @@ async fn e2e_hello_exchanges_device_names() {
     let a_known = peer::get_known_peers(&pair.db_a);
     let ep_b_node_id = pair.ep_b.node_id().to_string();
     assert!(
-        !a_known.iter().any(|p| peer::normalize_node_id(&p.node_id)
-            == peer::normalize_node_id(&ep_b_node_id)),
+        !a_known
+            .iter()
+            .any(|p| peer::normalize_node_id(&p.node_id) == peer::normalize_node_id(&ep_b_node_id)),
         "A (accept side) must NOT persist an unsolicited peer into \
          known-peers — that hands them a permanent auto-reconnect slot \
          with no pairing/consent (got {a_known:?})"
@@ -472,7 +473,11 @@ async fn e2e_managed_node_replicates_missing_drive() {
         .expect("B should have A's resource after replicating");
 
     // ...reports usage for it...
-    let usage = pair.db_b.per_drive_usage(&[pair.drive.clone()]).await.unwrap();
+    let usage = pair
+        .db_b
+        .per_drive_usage(&[pair.drive.clone()])
+        .await
+        .unwrap();
     let row = usage
         .iter()
         .find(|u| u.drive_subject == pair.drive)

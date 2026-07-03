@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { AtomicError, ErrorType, type Agent, type Resource } from '@tomic/react';
+import {
+  AtomicError,
+  ErrorType,
+  type Agent,
+  type Resource,
+} from '@tomic/react';
 import { isDriveSignInError } from './isDriveSignInError';
 
 const BASE = 'https://example.com';

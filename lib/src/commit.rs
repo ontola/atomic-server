@@ -2113,7 +2113,9 @@ mod test {
     /// skipping it there.
     #[tokio::test]
     async fn genesis_commit_clears_stale_tombstone_on_own_subject() {
-        let db = crate::Db::init_temp("f11_clear_tombstone_test").await.unwrap();
+        let db = crate::Db::init_temp("f11_clear_tombstone_test")
+            .await
+            .unwrap();
         let (agent, drive_subject) = db.setup("Alice").await.unwrap();
 
         let mut builder = CommitBuilder::new("placeholder".into());
@@ -2127,7 +2129,10 @@ mod test {
 
         // Simulate a prior local deletion of this exact subject.
         crate::sync::tombstones::record_tombstone(&db, subject.as_str());
-        assert!(crate::sync::tombstones::is_tombstoned(&db, subject.as_str()));
+        assert!(crate::sync::tombstones::is_tombstoned(
+            &db,
+            subject.as_str()
+        ));
 
         let opts_with_rights = CommitOpts {
             validate_signature: true,

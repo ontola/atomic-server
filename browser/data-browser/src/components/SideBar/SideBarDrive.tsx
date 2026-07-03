@@ -26,7 +26,6 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 import { LoaderInline } from '../Loader';
 import { QuickCreateRow } from '../NewInstanceButton';
 
-
 interface SideBarDriveProps {
   onItemClick: () => unknown;
   onIsRearangingChange: (isRearanging: boolean) => void;

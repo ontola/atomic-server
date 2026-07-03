@@ -116,9 +116,7 @@ async fn node_info_handler(
         .and_then(|guard| guard.clone());
 
     actix_web::HttpResponse::Ok().json(NodeInfo {
-        managed: appstate
-            .managed
-            .load(std::sync::atomic::Ordering::Relaxed),
+        managed: appstate.managed.load(std::sync::atomic::Ordering::Relaxed),
         portal_url,
     })
 }
