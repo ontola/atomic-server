@@ -5,6 +5,18 @@ By far most changes relate to `atomic-server`, so if not specified, assume the c
 **Changes to JS assets (including the front-end and JS libraries) are not shown here**, but in [`/browser/CHANGELOG`](/browser/CHANGELOG.md).
 See [STATUS.md](server/STATUS.md) to learn more about which features will remain stable.
 
+## [v0.40.2] - 2026-07-03
+
+- **Security (SSRF):** the `/bookmark` and `/import` endpoints fetched a
+  caller-supplied URL with no restriction on the target, letting an
+  unauthenticated caller make the server request internal-only hosts
+  (loopback, private ranges, and the link-local cloud-metadata endpoint) and,
+  via bookmark, read the response back. Outbound fetches are now blocked from
+  reaching non-public addresses, validated at DNS-resolution time so redirects
+  and DNS-rebinding are covered too. Set `ATOMIC_ALLOW_PRIVATE_FETCH=1` to opt
+  out (e.g. for intentional LAN fetches). Reported by Ray Sabee / Whitehat
+  Security (whitehatsecurity.nl).
+
 ## [v0.40.0] - 2024-10-07
 
 - Speed up Commits by bundling DB transactions #297
