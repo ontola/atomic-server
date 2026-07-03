@@ -146,12 +146,6 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
     });
   }
 
-  /// Settings → Retry and automatic sync on open.
-  Future<void> _autoSyncConnectivity() async {
-    if (_activeDrive == null) return;
-    await _syncConnectivity();
-  }
-
   Future<void> _discoverAndSync() => _syncConnectivity();
 
   Future<void> _syncConnectivity() async {

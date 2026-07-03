@@ -126,6 +126,7 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
           _ => '$name synced $count resource${count != 1 ? 's' : ''}',
         };
 
+        if (!ctx.mounted) continue;
         _showDebouncedSnack(ctx, '$kind:$nodeId', message);
       }
     });
