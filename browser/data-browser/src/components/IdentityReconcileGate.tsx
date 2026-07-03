@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@tomic/react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useSettings } from '../helpers/AppSettings';
@@ -36,6 +36,15 @@ export function IdentityReconcileGate({
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
+  // Re-checks fire on every `agent?.subject` change (e.g. a device
+  // creating/accepting-as a brand new local agent, not just managed-sync
+  // sign-in/out). Blanking `children` on every one of those unmounts the
+  // whole `<Outlet/>` subtree — including in-flight async flows lower down
+  // (the invite accept dialog is one) — which is the opposite of "silent".
+  // Only the very first check (initial mount) blanks the screen, matching
+  // the doc comment's intent of not flashing the wrong agent; later
+  // re-checks resolve in the background without disturbing the mounted UI.
+  const hasCheckedOnceRef = useRef(false);
 
   // The welcome/recover flow does its own convergence; don't double-handle it.
   const skip =
@@ -44,11 +53,14 @@ export function IdentityReconcileGate({
   const converge = useCallback(async () => {
     if (skip) {
       setChecking(false);
+      hasCheckedOnceRef.current = true;
 
       return;
     }
 
-    setChecking(true);
+    if (!hasCheckedOnceRef.current) {
+      setChecking(true);
+    }
 
     const localAgent = agent?.subject ?? store.getAgent()?.subject ?? undefined;
     const result = await evaluateIdentityReconciliation(localAgent);
@@ -71,6 +83,7 @@ export function IdentityReconcileGate({
     }
 
     setChecking(false);
+    hasCheckedOnceRef.current = true;
   }, [agent?.subject, skip, store, navigate]);
 
   useEffect(() => {
@@ -81,7 +94,7 @@ export function IdentityReconcileGate({
     return <>{children}</>;
   }
 
-  if (checking) {
+  if (checking && !hasCheckedOnceRef.current) {
     return <></>;
   }
 

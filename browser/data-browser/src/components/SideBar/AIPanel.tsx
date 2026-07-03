@@ -67,6 +67,33 @@ export function AIChatsPanel(): JSX.Element | null {
     search().then(setChats);
   }, [personalDrive, search]);
 
+  const pollUntilIndexed = useCallback(
+    async (subject: string) => {
+      // The server indexes a newly saved resource for search asynchronously.
+      // Poll for it to show up instead of guessing a fixed delay: resolves
+      // immediately once indexed, and still bounds the wait if indexing is
+      // slow (e.g. under CI load).
+      const maxAttempts = 20;
+      const intervalMs = 500;
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const results = await search();
+
+        if (results.includes(subject)) {
+          setChats(results);
+
+          return;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+      }
+
+      // Give up waiting for the index; show whatever the last query returned.
+      search().then(setChats);
+    },
+    [search],
+  );
+
   useEffect(() => {
     const unsubRemove = store.on(StoreEvents.ResourceRemoved, subject => {
       setChats(prev => prev.filter(s => s !== subject));
@@ -79,10 +106,7 @@ export function AIChatsPanel(): JSX.Element | null {
       }
 
       if (resource.hasClasses(ai.classes.aiChat)) {
-        // Wait 5 seconds for the search index to catch up.
-        setTimeout(() => {
-          search().then(setChats);
-        }, 5000);
+        pollUntilIndexed(resource.subject);
       }
     });
 
@@ -90,7 +114,7 @@ export function AIChatsPanel(): JSX.Element | null {
       unsubRemove();
       unsubSave();
     };
-  }, [store, search, chats]);
+  }, [store, chats, pollUntilIndexed]);
 
   return (
     <Wrapper>

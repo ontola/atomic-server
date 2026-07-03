@@ -87,7 +87,28 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
     return () => clearTimeout(id);
   }, [resource.loading, subject]);
 
-  if (resource.loading && !loadingExceeded) {
+  // Once a subject has rendered its real view, a later `loading` flip (a
+  // background refetch of the SAME subject — e.g. a POST that touches its
+  // own resource, like an invite accept) must not fall through to the
+  // spinner branch below: that branch renders a different component at
+  // this position, so React unmounts the live view and remounts it once
+  // loading clears, losing all of its component state (in-flight promises'
+  // closures now update a dead instance). Only show the spinner for a
+  // subject that hasn't loaded yet; resets when `subject` changes so a
+  // genuine navigation still gets its spinner.
+  const [loadedSubject, setLoadedSubject] = useState<string | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    if (!resource.loading) {
+      setLoadedSubject(subject);
+    }
+  }, [resource.loading, subject]);
+
+  const hasLoadedThisSubject = loadedSubject === subject;
+
+  if (resource.loading && !loadingExceeded && !hasLoadedThisSubject) {
     return (
       <Main subject={subject}>
         <ContainerNarrow>

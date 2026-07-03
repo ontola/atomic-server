@@ -3,7 +3,10 @@ import {
   clearManagedAccountBinding,
   readManagedAccountBinding,
 } from './binding';
-import { getManagedEnrollments, type ManagedEnrollmentSummary } from './enrollmentApi';
+import {
+  getManagedEnrollments,
+  type ManagedEnrollmentSummary,
+} from './enrollmentApi';
 import { getRecoverySecret } from './recovery';
 import { getManagedAccount, type ManagedAccount } from './session';
 
@@ -31,28 +34,13 @@ function activeEnrollmentAgents(
 
   for (const enrollment of enrollments) {
     if (enrollment.status === 'Disabled') continue;
+
     if (enrollment.agent_subject) {
       agents.add(enrollment.agent_subject);
     }
   }
 
   return [...agents];
-}
-
-function pickExpectedAgent({
-  recoveryAgent,
-  enrollmentAgents,
-  bindingAgent,
-}: {
-  recoveryAgent: string | null;
-  enrollmentAgents: string[];
-  bindingAgent: string | null;
-}): string | null {
-  if (recoveryAgent) return recoveryAgent;
-  if (enrollmentAgents.length === 1) return enrollmentAgents[0] ?? null;
-  if (bindingAgent) return bindingAgent;
-
-  return enrollmentAgents[0] ?? null;
 }
 
 /**
@@ -85,11 +73,6 @@ export async function evaluateIdentityReconciliation(
 
   const enrollmentAgents = activeEnrollmentAgents(enrollments);
   const recoveryAgent = recovery?.agent_subject ?? null;
-  const expectedAgentSubject = pickExpectedAgent({
-    recoveryAgent,
-    enrollmentAgents,
-    bindingAgent,
-  });
 
   if (!localAgentSubject) {
     return { ok: true, managedAccount };

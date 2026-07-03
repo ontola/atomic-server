@@ -118,7 +118,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     destination: string | undefined,
     name?: string,
   ): Promise<string | undefined> => {
-    const agentToSave = store.getResourceLoading(subject);
+    store.getResourceLoading(subject);
     let personalDriveSubject: string | undefined;
     let createdDrive = false;
 
