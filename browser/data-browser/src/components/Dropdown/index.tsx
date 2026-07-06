@@ -277,43 +277,58 @@ export function DropdownMenu({
     { enabled: !!isMainMenu },
     [isActive],
   );
-  // Click / open the item
-  useHotkeys(
-    'enter',
-    e => {
-      e.preventDefault();
-      (normalizedItems[selectedIndex] as MenuItemMinimial).onClick();
-      handleClose();
-    },
-    { enabled: isActive },
-    [selectedIndex, normalizedItems],
-  );
-  // Move up (or to bottom if at top)
-  useHotkeys(
-    'up',
-    e => {
-      e.preventDefault();
-      e.stopPropagation();
-      setUseKeys(true);
-      setSelectedIndex(prev => getNewIndex(prev, -1));
-    },
-    { enabled: isActive },
-    [getNewIndex],
-  );
-  // Move down (or to top if at bottom)
-  useHotkeys(
-    'down',
-    e => {
-      e.preventDefault();
-      e.stopPropagation();
-      setUseKeys(true);
-      setSelectedIndex(prev => getNewIndex(prev, 1));
+  // Arrow navigation + Enter/Escape are handled on the menu element itself
+  // (not via the global `useHotkeys` above): the menu renders in a portal, and
+  // react-hotkeys-hook's document listener does NOT fire for keys dispatched
+  // while focus is inside that portal — so after the first keypress moved focus
+  // into the menu, arrows stopped working. Handling `onKeyDown` on the menu (to
+  // which keydowns from the focused item bubble) is reliable.
+  const handleMenuKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setUseKeys(true);
+        setSelectedIndex(prev => getNewIndex(prev, 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setUseKeys(true);
+        setSelectedIndex(prev => getNewIndex(prev, -1));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const item = normalizedItems[selectedIndex];
 
-      return false;
+        if (isItem(item)) {
+          item.onClick();
+        }
+
+        handleClose();
+      } else if (e.key === 'Escape' || e.key === 'Tab') {
+        e.preventDefault();
+        handleClose();
+      }
     },
-    { enabled: isActive },
-    [getNewIndex],
+    [getNewIndex, normalizedItems, selectedIndex, handleClose],
   );
+
+  // Focus the menu on open so keyboard navigation works even when it opened at
+  // the cursor with no highlighted item (context menus). Only when focus isn't
+  // already inside it — a normal dropdown highlights + focuses its first item.
+  useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
+    const raf = requestAnimationFrame(() => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(document.activeElement)
+      ) {
+        dropdownRef.current.focus();
+      }
+    });
+
+    return () => cancelAnimationFrame(raf);
+  }, [isActive]);
 
   const handleBlur = useCallback(() => {
     // Doesn't work without delay, maybe the browser sets document.activeElement after firering the blur event?
@@ -342,6 +357,8 @@ export function DropdownMenu({
             isActive={isActive}
             position={inDialog ? 'absolute' : 'fixed'}
             id={menuId}
+            tabIndex={-1}
+            onKeyDown={handleMenuKeyDown}
             onMouseOver={handleMouseOverMenu}
             onBlur={handleBlur}
             aria-labelledby={triggerId}
@@ -547,6 +564,8 @@ const Menu = styled.div<{
   padding-top: 0.4rem;
   padding-bottom: 0.4rem;
   border-radius: 8px;
+  /* Focused programmatically on open for keyboard nav; items show selection. */
+  outline: none;
   position: ${p => p.position || 'fixed'};
   z-index: ${p => p.theme.zIndex.dropdown};
   width: auto;

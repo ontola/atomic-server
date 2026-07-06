@@ -170,6 +170,35 @@ test.describe('kanban', () => {
     await expect(menu.getByTestId('menu-item-share')).toBeVisible();
   });
 
+  test('context menu keyboard navigation advances and closes', async ({
+    page,
+  }) => {
+    await createIssueTracker(page, 'Bugs');
+    const todo = column(page, 'todo');
+    await addCard(page, todo, 'KB nav');
+
+    await cardIn(todo, 'KB nav').click({ button: 'right' });
+    await expect(page.getByRole('menu')).toBeVisible();
+
+    const activeId = () =>
+      page.evaluate(
+        () => document.activeElement?.getAttribute('data-testid') ?? null,
+      );
+
+    await page.keyboard.press('ArrowDown');
+    const first = await activeId();
+    await page.keyboard.press('ArrowDown');
+    const second = await activeId();
+
+    // Each arrow moves the selection — the bug was it sticking after the first.
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(second).not.toBe(first);
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu')).toHaveCount(0);
+  });
+
   test('right-click menu actions (use in code, add to chat) work', async ({
     page,
   }) => {
