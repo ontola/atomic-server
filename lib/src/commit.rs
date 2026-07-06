@@ -127,6 +127,32 @@ impl Commit {
         Ok(())
     }
 
+    /// Rejects `set`/`push` of properties that only the server itself may assign.
+    /// `internalId` is the motivating case: `/download` trusts it verbatim as a
+    /// filesystem path, so letting a client set it directly is an arbitrary-file-read
+    /// primitive, not just a data-integrity concern.
+    pub fn check_server_managed_properties(&self) -> AtomicResult<()> {
+        const SERVER_MANAGED_PROPERTIES: &[&str] = &[urls::INTERNAL_ID];
+
+        for prop in SERVER_MANAGED_PROPERTIES {
+            let in_set = self.set.as_ref().is_some_and(|set| set.contains_key(*prop));
+            let in_push = self
+                .push
+                .as_ref()
+                .is_some_and(|push| push.contains_key(*prop));
+
+            if in_set || in_push {
+                return Err(format!(
+                    "Property '{}' is managed by the server and cannot be set directly.",
+                    prop
+                )
+                .into());
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn validate_previous_commit(
         &self,
         resource_old: &Resource,
@@ -218,6 +244,15 @@ impl Commit {
         if !is_new && opts.validate_previous_commit {
             commit.validate_previous_commit(&resource_old, subject_url.as_str())?;
         };
+
+        // `validate_rights` is only false for commits the server builds and signs
+        // itself (e.g. Resource::save from a handler like /upload) - those are
+        // trusted. Anything that reaches here with `validate_rights: true` came in
+        // as a signed Commit from a client, however privileged, and must not be able
+        // to set properties the server alone is supposed to manage.
+        if opts.validate_rights {
+            commit.check_server_managed_properties()?;
+        }
 
         let mut applied = commit
             .apply_changes(resource_old.clone(), store)

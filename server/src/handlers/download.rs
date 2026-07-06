@@ -53,16 +53,30 @@ pub fn download_file_handler_partial(
     params: &web::Query<DownloadParams>,
     appstate: &AppState,
 ) -> AtomicServerResult<HttpResponse> {
-    let filename = resource
+    if !resource
+        .get(urls::IS_A)
+        .and_then(|v| v.to_subjects(None))
+        .map(|classes| classes.iter().any(|c| c == urls::FILE))
+        .unwrap_or(false)
+    {
+        return Err("Resource is not a File".into());
+    }
+
+    // `internalId` reaching here unsanitized would let a crafted value walk the
+    // path out of `uploads_path` (see the server-managed-property denylist in
+    // commit.rs for where this is actually blocked from being set). Sanitizing here
+    // too means this handler is safe on its own, independent of that denylist.
+    let raw_filename = resource
         .get(urls::INTERNAL_ID)
         .map_err(|e| format!("Internal ID of file could not be resolved. {}", e))?
         .to_string();
-    let mut file_path = appstate.config.uploads_path.clone();
-    file_path.push(&filename);
+    let filename = sanitize_filename::sanitize(&raw_filename);
+
+    let file_path = safe_join_uploads_path(&appstate.config.uploads_path, &filename)?;
 
     // No params were given, so we just return the file.
     if params.q.is_none() && params.w.is_none() && params.f.is_none() {
-        let file = NamedFile::open(file_path)?;
+        let file = NamedFile::open(&file_path)?;
         return Ok(file.into_response(req));
     }
 
@@ -88,6 +102,26 @@ pub fn download_file_handler_partial(
 
     let file = NamedFile::open(processed_file_path)?;
     Ok(file.into_response(req))
+}
+
+/// Joins `filename` onto `base`, refusing to serve anything outside `base`.
+/// `filename` is expected to already be a bare, sanitized path component; this
+/// additionally verifies containment via canonicalization so a traversal or absolute
+/// path smuggled into `internalId` can never escape the uploads directory, even if it
+/// somehow bypassed sanitization upstream.
+fn safe_join_uploads_path(base: &PathBuf, filename: &str) -> AtomicServerResult<PathBuf> {
+    let candidate = base.join(filename);
+
+    let canonical_base = base
+        .canonicalize()
+        .map_err(|_| "Upload storage is unavailable")?;
+    let canonical_candidate = candidate.canonicalize().map_err(|_| "File not found")?;
+
+    if !canonical_candidate.starts_with(&canonical_base) {
+        return Err("File not found".into());
+    }
+
+    Ok(candidate)
 }
 
 pub fn build_prossesed_file_path(
