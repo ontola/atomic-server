@@ -1,7 +1,6 @@
-import { dataBrowser, core, type Server, useStore } from '@tomic/react';
+import { dataBrowser, core, useStore } from '@tomic/react';
 import { useState, useCallback, useEffect, useRef, FormEvent, FC } from 'react';
 import { styled } from 'styled-components';
-import { stringToSlug } from '../../../../../helpers/stringToSlug';
 import { useSettings } from '../../../../../helpers/AppSettings';
 import { BetaBadge } from '../../../../BetaBadge';
 import { Button } from '../../../../Button';
@@ -24,7 +23,11 @@ import {
   TABLE_TEMPLATES,
   type TableTemplate,
 } from '../../../../../chunks/TablePage/tableTemplates';
-import { buildTableFromSpec } from '../../../../../chunks/TablePage/createTableFromSpec';
+import {
+  buildTableFromSpec,
+  createRowClass,
+  resolveOntologyParent,
+} from '../../../../../chunks/TablePage/createTableFromSpec';
 import { useNavigateWithTransition } from '../../../../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../../../../helpers/navigation';
 
@@ -100,27 +103,11 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     let classSubject: string;
 
     if (!useExistingClass) {
-      const drive = await store.getResource<Server.Drive>(driveSubject);
-      const ontologyParent = drive.props.defaultOntology;
-      const parentSubject =
-        ontologyParent &&
-        !ontologyParent.startsWith('internal:') &&
-        !ontologyParent.includes('unknown-subject')
-          ? ontologyParent
-          : driveSubject;
-      // The row class is named after what a single row IS ("Employee"), not
-      // after the (plural) table name.
-      const trimmedRowName = rowName.trim() || 'Row';
-      const instanceResource = await store.newResource({
+      const parentSubject = await resolveOntologyParent(store, driveSubject);
+      const instanceResource = await createRowClass(store, {
         parent: parentSubject,
-        isA: core.classes.class,
-        propVals: {
-          [core.properties.shortname]: stringToSlug(trimmedRowName),
-          [core.properties.name]: trimmedRowName,
-          [core.properties.description]:
-            `Represents a row in the ${name} table`,
-          [core.properties.recommends]: [core.properties.name],
-        },
+        tableName: name,
+        rowName,
       });
 
       await addToOntology(instanceResource);

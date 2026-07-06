@@ -89,6 +89,31 @@ export async function resolveOntologyParent(
     : driveSubject;
 }
 
+/**
+ * Creates (but does not save) a table's row class — named after what a single
+ * row IS ("Issue", "Employee"), not a generic "row", which reads wrong on
+ * every instance. The single class-genesis used by every table-creation flow
+ * (templates, the New Table dialog, the AI's create_table tool).
+ */
+export async function createRowClass(
+  store: Store,
+  opts: { parent: string; tableName: string; rowName?: string },
+): Promise<Resource> {
+  const rowName = opts.rowName?.trim() || 'Row';
+
+  return store.newResource({
+    parent: opts.parent,
+    isA: core.classes.class,
+    propVals: {
+      [core.properties.shortname]: stringToSlug(rowName),
+      [core.properties.name]: rowName,
+      [core.properties.description]:
+        `Represents a row in the ${opts.tableName} table`,
+      [core.properties.recommends]: [core.properties.name],
+    },
+  });
+}
+
 async function createColumn(
   store: Store,
   tableClass: Resource,
@@ -171,20 +196,10 @@ export async function buildTableFromSpec(
 ): Promise<BuildTableResult> {
   const ontologyParent = await resolveOntologyParent(store, opts.driveSubject);
 
-  // Rows are instances of a class named after what a single row IS ("Issue",
-  // "Employee") — not a generic "row", which reads wrong on every instance.
-  const rowName = spec.rowName?.trim() || 'Row';
-
-  const rowClass = await store.newResource({
+  const rowClass = await createRowClass(store, {
     parent: ontologyParent,
-    isA: core.classes.class,
-    propVals: {
-      [core.properties.shortname]: stringToSlug(rowName),
-      [core.properties.name]: rowName,
-      [core.properties.description]:
-        `Represents a row in the ${spec.name} table`,
-      [core.properties.recommends]: [core.properties.name],
-    },
+    tableName: spec.name,
+    rowName: spec.rowName,
   });
   await opts.addToOntology(rowClass);
 
