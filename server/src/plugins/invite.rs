@@ -8,6 +8,15 @@ use atomic_lib::{
     utils::check_valid_url,
     Resource, Storelike, Value,
 };
+use std::sync::LazyLock;
+use tokio::sync::Mutex;
+
+/// Serializes invite redemption so two concurrent requests can't both read
+/// `usagesLeft == 1`, both decrement, and both succeed at what's meant to be a
+/// single use (see `construct_invite_redirect` below). There's no atomic
+/// check-and-decrement on an arbitrary property in the store, so a process-wide
+/// lock around that read-decide-write is what closes the race.
+static INVITE_REDEEM_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 /// If there is a valid Agent in the correct query param, and the invite is valid, update the rights and respond with a redirect to the target resource
 #[tracing::instrument(skip(context))]
@@ -84,6 +93,18 @@ pub fn construct_invite_redirect<'a>(
             .await
             .map_err(|_| format!("Target for invite does not exist: {}", target))?;
 
+        // Check expiry before consuming a usage, so an expired attempt doesn't burn
+        // one of the invite's remaining uses.
+        if let Ok(expires) = db_resource.get(urls::EXPIRES_AT) {
+            if expires.to_int()? < atomic_lib::utils::now() {
+                return Err("Invite has expired".into());
+            }
+        }
+
+        // Holds across the whole read-decide-write below so a concurrent redemption
+        // of the same invite can't slip in between the check and the decrement.
+        let _redeem_guard = INVITE_REDEEM_LOCK.lock().await;
+
         // If any usages left value is present, make sure it's a positive number and decrement it by 1.
         if let Ok(usages_left) = db_resource.get(urls::USAGES_LEFT) {
             let num = usages_left.to_int()?;
@@ -102,12 +123,6 @@ pub fn construct_invite_redirect<'a>(
                 .save_locally(store)
                 .await
                 .map_err(|e| format!("Unable to save updated Invite. {}", e))?;
-        }
-
-        if let Ok(expires) = db_resource.get(urls::EXPIRES_AT) {
-            if expires.to_int()? > atomic_lib::utils::now() {
-                return Err("Invite is no longer valid".into());
-            }
         }
 
         // Make sure the creator of the invite is still allowed to Write the target

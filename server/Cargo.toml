@@ -126,7 +126,7 @@ features = ["derive"]
 version = "1"
 
 [dependencies.tokio]
-features = ["time"]
+features = ["time", "sync"]
 version = "1"
 
 [dependencies.image]
