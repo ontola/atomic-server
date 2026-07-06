@@ -22,6 +22,31 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 BREAKING: [#1107](https://github.com/atomicdata-dev/atomic-server/issues/1107) Named nested resources are no longer supported. Value::Resource and SubResource::Resource have been removed. If you need to include multiple resources in a response use an array.
 BREAKING: `store.get_resource_extended()` now returns a `ResourceResponse` instead of a `Resource` due to the removal of named nested resources. Use `.into()` or `.to_single()` to convert to a `Resource`.
 
+## [v0.40.3]
+
+Security patch release. All four fixes below are included.
+
+- Guard outbound fetches (`/bookmark`, `/import`) against SSRF: reject loopback,
+  RFC1918/CGNAT, and link-local (incl. cloud metadata) targets on every
+  connection and redirect hop, plus a scheme check. Escape hatch:
+  `ATOMIC_ALLOW_PRIVATE_FETCH=1`. Reported by Ray Sabee / Whitehat Security
+  (@raysabee).
+- Close two bugs undermining the single-use guarantee of the bootstrap
+  `/setup` invite: an inverted expiry check that rejected valid invites and
+  let expired ones through, and a TOCTOU race on `usagesLeft` that let
+  concurrent requests both redeem what's meant to be a single-use invite.
+  Reported by luuhung1217.
+- Block arbitrary file read via `internalId`: a signed Commit could set this
+  server-managed property directly, and `/download` trusted it verbatim as a
+  filesystem path (traversal / absolute path). `internalId` is now denied in
+  externally-submitted commits, and `/download` independently sanitizes and
+  confines the resolved path to the uploads directory. GHSA-8vc4-8hjq-988p,
+  reported by luuhung1217.
+- Prevent stored XSS via uploaded files: `/download` now forces
+  `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`, so
+  an uploaded HTML/SVG file can no longer render inline in the app's own
+  origin. GHSA-x277-3wcg-g9r2, reported by luuhung1217.
+
 ## [v0.40.2]
 
 - fix property sort order when importing + add tests #980
