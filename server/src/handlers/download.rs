@@ -1,5 +1,8 @@
 use crate::{appstate::AppState, errors::AtomicServerResult, helpers::get_client_agent};
 use actix_files::NamedFile;
+use actix_web::http::header::{
+    ContentDisposition, DispositionParam, DispositionType, HeaderName, HeaderValue,
+};
 use actix_web::{web, HttpRequest, HttpResponse};
 use atomic_lib::{urls, Resource, Storelike};
 
@@ -71,13 +74,14 @@ pub fn download_file_handler_partial(
         .map_err(|e| format!("Internal ID of file could not be resolved. {}", e))?
         .to_string();
     let filename = sanitize_filename::sanitize(&raw_filename);
+    let download_name = resource.get(urls::FILENAME).ok().map(|v| v.to_string());
 
     let file_path = safe_join_uploads_path(&appstate.config.uploads_path, &filename)?;
 
     // No params were given, so we just return the file.
     if params.q.is_none() && params.w.is_none() && params.f.is_none() {
         let file = NamedFile::open(&file_path)?;
-        return Ok(file.into_response(req));
+        return Ok(force_attachment(file, req, download_name));
     }
 
     create_processed_folder_if_not_exists(&appstate.config.uploads_path)?;
@@ -86,7 +90,7 @@ pub fn download_file_handler_partial(
 
     if processed_file_path.exists() {
         let file = NamedFile::open(processed_file_path)?;
-        return Ok(file.into_response(req));
+        return Ok(force_attachment(file, req, download_name));
     }
 
     // only if image feature flag is on
@@ -101,7 +105,7 @@ pub fn download_file_handler_partial(
     }
 
     let file = NamedFile::open(processed_file_path)?;
-    Ok(file.into_response(req))
+    Ok(force_attachment(file, req, download_name))
 }
 
 /// Joins `filename` onto `base`, refusing to serve anything outside `base`.
@@ -122,6 +126,27 @@ fn safe_join_uploads_path(base: &PathBuf, filename: &str) -> AtomicServerResult<
     }
 
     Ok(candidate)
+}
+
+/// Serves user-uploaded content as a forced download rather than rendering it inline.
+/// Uploaded HTML/SVG would otherwise be rendered by the browser in the app's own
+/// origin (actix-files defaults those mimetypes to `inline`), letting a stored script
+/// read the same-origin session cookie and the Agent's private key out of IndexedDB.
+fn force_attachment(file: NamedFile, req: &HttpRequest, filename: Option<String>) -> HttpResponse {
+    let parameters = match filename {
+        Some(name) => vec![DispositionParam::Filename(name)],
+        None => vec![],
+    };
+    let file = file.set_content_disposition(ContentDisposition {
+        disposition: DispositionType::Attachment,
+        parameters,
+    });
+    let mut response = file.into_response(req);
+    response.headers_mut().insert(
+        HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    response
 }
 
 pub fn build_prossesed_file_path(
