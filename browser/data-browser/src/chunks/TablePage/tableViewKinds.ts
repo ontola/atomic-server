@@ -4,7 +4,7 @@
  * kinds can be added without a schema migration; this union is the frontend's
  * source of truth for the ones we actually render.
  */
-export const VIEW_KINDS = ['table', 'kanban'] as const;
+export const VIEW_KINDS = ['table', 'kanban', 'calendar'] as const;
 
 export type ViewKind = (typeof VIEW_KINDS)[number];
 
@@ -20,4 +20,5 @@ export function normalizeViewKind(kind: string | undefined): ViewKind {
 export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
   table: 'Table',
   kanban: 'Kanban',
+  calendar: 'Calendar',
 };

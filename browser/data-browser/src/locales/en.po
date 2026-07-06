@@ -4467,6 +4467,7 @@ msgstr "Text"
 msgid "Number"
 msgstr "Number"
 
+#: src/chunks/TablePage/Calendar/useCalendarDateProp.ts
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Date"
 msgstr "Date"
@@ -4575,10 +4576,8 @@ msgstr "Remove filter"
 msgid "Filter operator"
 msgstr "Filter operator"
 
-#. placeholder {0}: views.length + 1
-#: src/chunks/TablePage/useTableView.ts
-msgid "View {0}"
-msgstr "View {0}"
+#~ msgid "View {0}"
+#~ msgstr "View {0}"
 
 #: src/chunks/TablePage/useTableView.ts
 #: src/chunks/TablePage/useTableView.ts
@@ -5016,3 +5015,27 @@ msgstr ""
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Delete view"
 msgstr "Delete view"
+
+#: src/chunks/TablePage/Calendar/CalendarView.tsx
+msgid "Setting up the calendar…"
+msgstr "Setting up the calendar…"
+
+#: src/chunks/TablePage/Calendar/CalendarView.tsx
+msgid "Previous month"
+msgstr "Previous month"
+
+#: src/chunks/TablePage/Calendar/CalendarView.tsx
+msgid "Today"
+msgstr "Today"
+
+#: src/chunks/TablePage/Calendar/CalendarView.tsx
+msgid "Next month"
+msgstr "Next month"
+
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Add item"
+msgstr "Add item"
+
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "New item…"
+msgstr "New item…"

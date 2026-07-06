@@ -36,6 +36,7 @@ import { TableFilterBar } from './TableFilterBar';
 import { TableViewTabs } from './TableViewTabs';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
 import { KanbanView } from './Kanban/KanbanView';
+import { CalendarView } from './Calendar/CalendarView';
 
 interface TableResourceProps {
   resource: Resource<DataBrowser.Table>;
@@ -403,6 +404,17 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
           tableClass={tableClass}
           allColumns={allColumns}
           columns={columns}
+          collection={collection}
+          ready={ready}
+          viewGroupBy={viewGroupBy}
+          setViewGroupBy={setViewGroupBy}
+          readOnly={!canWrite}
+        />
+      ) : viewKind === 'calendar' ? (
+        <CalendarView
+          tableSubject={resource.subject}
+          tableClass={tableClass}
+          allColumns={allColumns}
           collection={collection}
           ready={ready}
           viewGroupBy={viewGroupBy}

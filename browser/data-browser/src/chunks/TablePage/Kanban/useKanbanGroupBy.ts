@@ -48,17 +48,27 @@ export function useKanbanGroupBy(
   // Guards the create-once side effect against React re-runs / double-invoke.
   const creationStartedRef = useRef(false);
 
+  // The View's `view-group-by` slot is shared with the calendar view (which
+  // stores a date property there), so a stored value is only trusted when it
+  // actually is a select property — a view whose kind was switched
+  // calendar ↔ kanban self-heals instead of grouping by the wrong thing.
+  const storedSelect = useMemo(
+    () =>
+      allColumns.find(c => c.subject === viewGroupBy && isSelectProperty(c)),
+    [allColumns, viewGroupBy],
+  );
+
   const existingSelect = useMemo(
     () => allColumns.find(isSelectProperty),
     [allColumns],
   );
 
-  // If a group-by is already set, trust it. Otherwise adopt an existing enum
-  // property if there is one — persisted so it stays stable across reloads.
-  const resolved = viewGroupBy ?? existingSelect?.subject;
+  // If a valid group-by is already set, trust it. Otherwise adopt an existing
+  // enum property if there is one — persisted so it stays stable across reloads.
+  const resolved = storedSelect?.subject ?? existingSelect?.subject;
 
   useEffect(() => {
-    if (viewGroupBy) {
+    if (storedSelect) {
       return;
     }
 
@@ -97,7 +107,7 @@ export function useKanbanGroupBy(
     // until the class's columns have actually loaded before concluding none is
     // a select property (an empty list is the pre-load state, not "no enums").
   }, [
-    viewGroupBy,
+    storedSelect,
     existingSelect,
     canWrite,
     allColumns.length,

@@ -243,7 +243,7 @@ const FieldRow = styled.div`
 
 const FieldLabel = styled.span`
   flex-shrink: 0;
-  color: ${p => p.theme.colors.textLight2 ?? p.theme.colors.textLight};
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const FieldValue = styled.span`

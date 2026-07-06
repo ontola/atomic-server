@@ -1864,6 +1864,7 @@ msgstr "Texto"
 msgid "Number"
 msgstr "Número"
 
+#: src/chunks/TablePage/Calendar/useCalendarDateProp.ts
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Date"
 msgstr "Fecha"
@@ -4718,10 +4719,8 @@ msgstr "Vista predeterminada"
 msgid "Hide in this view"
 msgstr "Ocultar en esta vista"
 
-#. placeholder {0}: views.length + 1
-#: src/chunks/TablePage/useTableView.ts
-msgid "View {0}"
-msgstr "Vista {0}"
+#~ msgid "View {0}"
+#~ msgstr "Vista {0}"
 
 #~ msgid "Add view"
 #~ msgstr "Añadir vista"
@@ -4997,4 +4996,28 @@ msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Delete view"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarView.tsx
+msgid "Setting up the calendar…"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarView.tsx
+msgid "Previous month"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarView.tsx
+msgid "Today"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarView.tsx
+msgid "Next month"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Add item"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "New item…"
 msgstr ""

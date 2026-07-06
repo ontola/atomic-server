@@ -19,6 +19,7 @@ import {
   ViewKind,
   DEFAULT_VIEW_KIND,
   normalizeViewKind,
+  VIEW_KIND_LABELS,
 } from './tableViewKinds';
 
 const DEFAULT_SORT: TableSorting = { prop: DEFAULT_SORT_PROP, sortDesc: false };
@@ -241,14 +242,12 @@ export function useTableView(table: Resource): UseTableViewResult {
   const createView = useCallback(
     (kind: ViewKind = DEFAULT_VIEW_KIND) => {
       void (async () => {
-        const created = await createViewResource(
-          `View ${views.length + 1}`,
-          kind,
-        );
+        // A new view is named after its kind ("Table" / "Kanban" / "Calendar").
+        const created = await createViewResource(VIEW_KIND_LABELS[kind], kind);
         setActiveViewOverride(created.subject);
       })().catch(() => undefined);
     },
-    [createViewResource, views.length],
+    [createViewResource],
   );
 
   // --- Persist (debounced) whenever the local config changes post-hydration. ---
