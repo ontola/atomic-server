@@ -1,11 +1,13 @@
 import {
+  server,
   useCanWrite,
   useChildren,
   useResource,
   useStore,
+  useString,
   useTitle,
 } from '@tomic/react';
-import { Fragment, useEffect, useState, type JSX } from 'react';
+import { Fragment, useEffect, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
@@ -48,8 +50,21 @@ export function SideBarDrive({
     announcements,
   } = useSidebarDnd(onIsRearangingChange);
   const driveResource = useResource(drive);
-  const { subjects: subResources, loading: childrenLoading } =
+  const { subjects: allChildren, loading: childrenLoading } =
     useChildren(drive);
+
+  // The drive's default ontology is schema plumbing (auto-created by
+  // `createDrive`) — hide it from the tree so users aren't confronted with an
+  // "Ontology" they never made. It stays reachable via the drive page and
+  // class/property links. Ontologies the user creates themselves still show.
+  const [defaultOntology] = useString(
+    driveResource,
+    server.properties.defaultOntology,
+  );
+  const subResources = useMemo(
+    () => allChildren.filter(subject => subject !== defaultOntology),
+    [allChildren, defaultOntology],
+  );
   const [title] = useTitle(driveResource);
   const navigate = useNavigateWithTransition();
   const agentCanWrite = useCanWrite(driveResource);

@@ -15,6 +15,7 @@ import {
 import Field from '../../../Field';
 import { InputWrapper, InputStyled } from '../../../InputStyles';
 import type { CustomResourceDialogProps } from '../../useNewResourceUI';
+import { singularize } from '../../../../../helpers/singularize';
 import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate';
 import { ResourceSelector } from '../../../ResourceSelector';
 import { Checkbox, CheckboxLabel } from '../../../Checkbox';
@@ -35,6 +36,16 @@ interface NewTableDialogProps extends CustomResourceDialogProps {
 const defaultNameFor = (template: TableTemplate): string =>
   template.spec ? template.title : 'Table';
 
+/**
+ * Suggests what a single row should be called: the template's own row name
+ * while the table name is still the template default ("Issue Tracker" →
+ * "Issue"), else the singular of the typed name ("Employees" → "Employee").
+ */
+const suggestRowName = (tableName: string, template: TableTemplate): string =>
+  tableName.trim() === defaultNameFor(template)
+    ? template.rowName
+    : singularize(tableName) || template.rowName;
+
 export const NewTableDialog: FC<NewTableDialogProps> = ({
   parent,
   initialExistingClass,
@@ -51,6 +62,10 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
   );
   const [name, setName] = useState('Table');
   const [templateId, setTemplateId] = useState('blank');
+  // What a single row is called ("Issue", "Employee") — names the row class.
+  // Follows the table name (singularized) until the user edits it themselves.
+  const [rowName, setRowName] = useState('Row');
+  const [rowNameEdited, setRowNameEdited] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const addToOntology = useAddToOntology();
@@ -69,7 +84,7 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     if (template?.spec) {
       const { tableSubject } = await buildTableFromSpec(
         store,
-        { ...template.spec, name },
+        { ...template.spec, name, rowName },
         { parent, driveSubject, addToOntology },
       );
 
@@ -93,11 +108,15 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
         !ontologyParent.includes('unknown-subject')
           ? ontologyParent
           : driveSubject;
+      // The row class is named after what a single row IS ("Employee"), not
+      // after the (plural) table name.
+      const trimmedRowName = rowName.trim() || 'Row';
       const instanceResource = await store.newResource({
         parent: parentSubject,
         isA: core.classes.class,
         propVals: {
-          [core.properties.shortname]: stringToSlug(name),
+          [core.properties.shortname]: stringToSlug(trimmedRowName),
+          [core.properties.name]: trimmedRowName,
           [core.properties.description]:
             `Represents a row in the ${name} table`,
           [core.properties.recommends]: [core.properties.name],
@@ -130,6 +149,7 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     onClose();
   }, [
     name,
+    rowName,
     templateId,
     onClose,
     parent,
@@ -158,10 +178,11 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
   }, [isOpen]);
 
   const hasName = name.trim() !== '';
+  const hasRowName = rowName.trim() !== '';
   const saveDisabled =
     templateId === 'blank' && useExistingClass
       ? !hasName || !existingClass
-      : !hasName;
+      : !hasName || !hasRowName;
 
   return (
     <Dialog {...dialogProps}>
@@ -187,13 +208,20 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
                       $selected={template.id === templateId}
                       onClick={() => {
                         setTemplateId(template.id);
+
                         // Follow the template's default name, but never
                         // overwrite a name the user typed themselves.
-                        setName(prev =>
-                          TABLE_TEMPLATES.some(t => prev === defaultNameFor(t))
-                            ? defaultNameFor(template)
-                            : prev,
+                        const isDefaultName = TABLE_TEMPLATES.some(
+                          t => name === defaultNameFor(t),
                         );
+                        const nextName = isDefaultName
+                          ? defaultNameFor(template)
+                          : name;
+                        setName(nextName);
+
+                        if (!rowNameEdited) {
+                          setRowName(suggestRowName(nextName, template));
+                        }
                       }}
                       title={template.description}
                     >
@@ -211,10 +239,40 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
                     ref={nameInputRef}
                     placeholder='New Table'
                     value={name}
-                    onChange={e => setName(e.target.value)}
+                    onChange={e => {
+                      setName(e.target.value);
+
+                      if (!rowNameEdited) {
+                        const template = TABLE_TEMPLATES.find(
+                          t => t.id === templateId,
+                        );
+
+                        if (template) {
+                          setRowName(suggestRowName(e.target.value, template));
+                        }
+                      }
+                    }}
                   />
                 </InputWrapper>
               </Field>
+              {!(templateId === 'blank' && useExistingClass) && (
+                <Field
+                  required
+                  label='Each row is a'
+                  helper='Names the class of the rows — e.g. every row of an Employees table is an Employee.'
+                >
+                  <InputWrapper>
+                    <InputStyled
+                      placeholder='Row'
+                      value={rowName}
+                      onChange={e => {
+                        setRowName(e.target.value);
+                        setRowNameEdited(true);
+                      }}
+                    />
+                  </InputWrapper>
+                </Field>
+              )}
               {templateId === 'blank' && (
                 <>
                   <CheckboxLabel>

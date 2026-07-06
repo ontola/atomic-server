@@ -1876,7 +1876,41 @@ export class Store {
 
     await agentResource.save();
 
+    // Every drive gets a default Ontology: the home for classes and
+    // properties created inside the drive (e.g. table Row classes), so they
+    // don't pile up directly under the drive itself.
+    await this.createDefaultOntology(drive);
+
     return drive;
+  }
+
+  /**
+   * Creates the drive's default Ontology (titled "Ontology"), links it via
+   * `defaultOntology`, and saves the drive. New classes/properties created in
+   * the drive (table Row classes, columns, …) are organized under it instead
+   * of directly under the drive.
+   */
+  public async createDefaultOntology(drive: Resource): Promise<Resource> {
+    const ontology = await this.newResource({
+      isA: core.classes.ontology,
+      parent: drive.subject,
+      propVals: {
+        [core.properties.shortname]: 'ontology',
+        [core.properties.name]: 'Ontology',
+        [core.properties.description]:
+          'The default ontology of this drive. Classes and properties created in this drive are organized here.',
+        [core.properties.classes]: [],
+        [core.properties.properties]: [],
+        [core.properties.instances]: [],
+      },
+    });
+
+    await ontology.save();
+
+    await drive.set(server.properties.defaultOntology, ontology.subject);
+    await drive.save();
+
+    return ontology;
   }
 
   public async search(query: string, opts: SearchOpts = {}): Promise<string[]> {

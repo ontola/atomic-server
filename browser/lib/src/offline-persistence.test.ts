@@ -79,7 +79,8 @@ describe('Offline persistence', () => {
     const namesAsc = children.map(s =>
       store.resources.get(s)?.get(core.properties.name),
     );
-    expect(namesAsc).toEqual(['Alpha', 'Bravo', 'Charlie']);
+    // "Ontology" is the drive's default ontology, created by `createDrive`.
+    expect(namesAsc).toEqual(['Alpha', 'Bravo', 'Charlie', 'Ontology']);
 
     // Sort descending by name
     children.sort((a, b) => {
@@ -96,6 +97,6 @@ describe('Offline persistence', () => {
     const namesDesc = children.map(s =>
       store.resources.get(s)?.get(core.properties.name),
     );
-    expect(namesDesc).toEqual(['Charlie', 'Bravo', 'Alpha']);
+    expect(namesDesc).toEqual(['Ontology', 'Charlie', 'Bravo', 'Alpha']);
   });
 });

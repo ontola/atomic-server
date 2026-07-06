@@ -9,6 +9,7 @@ import {
   server,
 } from '@tomic/react';
 import { ViewKind } from './tableViewKinds';
+import { stringToSlug } from '@helpers/stringToSlug';
 import {
   createPropertyOnClass,
   createSelectPropertyOnClass,
@@ -48,6 +49,9 @@ export interface TableViewSpec {
 
 export interface TableSpec {
   name: string;
+  /** What a single row is called ("Issue", "Employee"); names the row class.
+   *  Falls back to "Row". */
+  rowName?: string;
   columns: TableColumnSpec[];
   views?: TableViewSpec[];
 }
@@ -167,11 +171,16 @@ export async function buildTableFromSpec(
 ): Promise<BuildTableResult> {
   const ontologyParent = await resolveOntologyParent(store, opts.driveSubject);
 
+  // Rows are instances of a class named after what a single row IS ("Issue",
+  // "Employee") — not a generic "row", which reads wrong on every instance.
+  const rowName = spec.rowName?.trim() || 'Row';
+
   const rowClass = await store.newResource({
     parent: ontologyParent,
     isA: core.classes.class,
     propVals: {
-      [core.properties.shortname]: 'row',
+      [core.properties.shortname]: stringToSlug(rowName),
+      [core.properties.name]: rowName,
       [core.properties.description]:
         `Represents a row in the ${spec.name} table`,
       [core.properties.recommends]: [core.properties.name],

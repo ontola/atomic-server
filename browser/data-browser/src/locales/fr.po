@@ -2381,10 +2381,8 @@ msgstr "Nommez votre collection"
 msgid "Set a value filter (optional)"
 msgstr "Définir un filtre de valeur (facultatif)"
 
-#. placeholder {0}: name
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Default ontology for the {0} drive"
-msgstr "Ontologie par défaut pour le lecteur {0}"
+#~ msgid "Default ontology for the {0} drive"
+#~ msgstr "Ontologie par défaut pour le lecteur {0}"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My Drive"
@@ -5017,4 +5015,19 @@ msgstr ""
 
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
 msgid "New item…"
+msgstr ""
+
+#: src/chunks/TablePage/createTableFromSpec.ts
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+msgid "Row"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+msgid "Each row is a"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+msgid "Names the class of the rows — e.g. every row of an Employees table is an Employee."
 msgstr ""

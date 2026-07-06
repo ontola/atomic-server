@@ -1,4 +1,4 @@
-import { core, useStore, server, dataBrowser } from '@tomic/react';
+import { core, useStore, server } from '@tomic/react';
 import { useState, useCallback, FormEvent, FC, useEffect, useId } from 'react';
 import { styled } from 'styled-components';
 import { stringToSlug } from '../../../../../helpers/stringToSlug';
@@ -81,31 +81,9 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
             // writable local resource).
           }
 
-          // Create a default ontology.
-          const ontologyName = stringToSlug(name.trim());
-          const ontology = await store.newResource({
-            isA: core.classes.ontology,
-            parent: resource.subject,
-            propVals: {
-              [core.properties.shortname]: ontologyName,
-              [core.properties.description]:
-                `Default ontology for the ${name} drive`,
-              [core.properties.classes]: [],
-              [core.properties.properties]: [],
-              [core.properties.instances]: [],
-            },
-          });
-
-          await ontology.save();
-
-          await resource.set(
-            server.properties.defaultOntology,
-            ontology.subject,
-          );
-          await resource.set(dataBrowser.properties.subResources, [
-            ontology.subject,
-          ]);
-          await resource.save();
+          // Create the drive's default Ontology and link it via
+          // `defaultOntology` — same shared path `store.createDrive` uses.
+          await store.createDefaultOntology(resource);
 
           // Change current drive to new drive - do this before navigation
           setDrive(resource.subject);
