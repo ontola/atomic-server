@@ -26,6 +26,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Add `drive` to Store. This used to be a React API, but it's useful in far more contexts.
 - #1163 New settings page design with search
 - #1160 Switch to Oxlint + Oxfmt
+- #1198 Kanban view and issue template
 - [#741](https://github.com/atomicdata-dev/atomic-server/issues/741) New feature: A brand new document editor with realtime collaboration and a fast and efficient editing experience.
 - [#741](https://github.com/atomicdata-dev/atomic-server/issues/741) New feature: A brand new document editor with realtime collaboration and a fast and efficient editing experience.
 - [#951](https://github.com/atomicdata-dev/atomic-server/issues/951) New feature: Atomic Assistant, AI chat interface with support for custom agents, MCP servers and more. Bring your own OpenRouter key or use Ollama to host your own models.

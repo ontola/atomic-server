@@ -1,0 +1,155 @@
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import { before, newResource } from './test-utils';
+
+/**
+ * Drag `source` onto `target` in a way that satisfies @dnd-kit's MouseSensor,
+ * which only starts a drag after the pointer moves past a 10px activation
+ * distance. A plain Playwright `dragTo` moves in one hop and never trips that
+ * threshold, so we drive the mouse manually: press, nudge >10px to activate,
+ * travel to the target in steps (so `onDragOver` fires along the way), then
+ * release.
+ */
+async function dndDrag(page: Page, source: Locator, target: Locator) {
+  const s = await source.boundingBox();
+  const t = await target.boundingBox();
+
+  if (!s || !t) {
+    throw new Error('drag source/target has no bounding box');
+  }
+
+  const sx = s.x + s.width / 2;
+  const sy = s.y + s.height / 2;
+  const tx = t.x + t.width / 2;
+  const ty = t.y + t.height / 2;
+
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  // Exceed the 10px activation distance to start the drag.
+  await page.mouse.move(sx + 15, sy, { steps: 5 });
+  await page.mouse.move(tx, ty, { steps: 10 });
+  // A tiny extra move ensures the final `onDragOver` lands on the target.
+  await page.mouse.move(tx, ty + 1, { steps: 2 });
+  await page.mouse.up();
+}
+
+const column = (page: Page, name: string) =>
+  page.getByTestId('kanban-column').filter({ hasText: name });
+
+const cardIn = (col: Locator, title: string) =>
+  col.getByTestId('kanban-card').filter({ hasText: title });
+
+/** Creates an Issue Tracker table and lands on its kanban board. */
+async function createIssueTracker(page: Page, name: string) {
+  await newResource('table', page);
+  await page.getByRole('button', { name: /Issue Tracker/ }).click();
+  await page.getByPlaceholder('New Table').fill(name);
+  await page.getByRole('button', { name: 'Create' }).click();
+  await expect(page.getByTestId('kanban-board')).toBeVisible();
+}
+
+/** Adds a card with `title` to the given column via its inline "Add card". */
+async function addCard(page: Page, col: Locator, title: string) {
+  await col.getByRole('button', { name: 'Add card' }).first().click();
+  const input = col.getByPlaceholder('Card title…');
+  await input.fill(title);
+  await input.press('Enter');
+  // Close the (rapid-entry) input so it doesn't overlap later interactions.
+  await input.press('Escape');
+  await expect(cardIn(col, title)).toBeVisible();
+}
+
+test.describe('kanban', () => {
+  test.beforeEach(before);
+
+  test('issue-tracker template opens a kanban board with status columns', async ({
+    page,
+  }) => {
+    await createIssueTracker(page, 'Bugs');
+
+    // Both views exist (rendered as tabs); the kanban board is the default.
+    await expect(page.getByRole('tab', { name: 'Board' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'All issues' })).toBeVisible();
+
+    for (const status of ['todo', 'doing', 'done']) {
+      await expect(column(page, status)).toBeVisible();
+    }
+
+    await expect(column(page, 'No status')).toBeVisible();
+  });
+
+  test('add a card, drag it between columns, and it persists', async ({
+    page,
+  }) => {
+    await createIssueTracker(page, 'Bugs');
+
+    const todo = column(page, 'todo');
+    const doing = column(page, 'doing');
+
+    await addCard(page, todo, 'Login button misaligned');
+
+    // Starts in todo, not doing.
+    await expect(cardIn(todo, 'Login button misaligned')).toBeVisible();
+    await expect(cardIn(doing, 'Login button misaligned')).toHaveCount(0);
+
+    // Drag from todo onto the doing column's card list.
+    await dndDrag(
+      page,
+      cardIn(todo, 'Login button misaligned'),
+      doing.getByTestId('kanban-column-body'),
+    );
+
+    // Now in doing, gone from todo.
+    await expect(cardIn(doing, 'Login button misaligned')).toBeVisible();
+    await expect(cardIn(todo, 'Login button misaligned')).toHaveCount(0);
+
+    // Survives a reload (the status change was persisted to the resource).
+    await page.reload();
+    await expect(page.getByTestId('kanban-board')).toBeVisible();
+    await expect(
+      column(page, 'doing').getByTestId('kanban-card').filter({
+        hasText: 'Login button misaligned',
+      }),
+    ).toBeVisible();
+  });
+
+  test('clicking a card opens it in the expanded modal (not full-screen)', async ({
+    page,
+  }) => {
+    await createIssueTracker(page, 'Bugs');
+
+    const todo = column(page, 'todo');
+    await addCard(page, todo, 'Open me in a modal');
+
+    const card = cardIn(todo, 'Open me in a modal');
+    await card.hover();
+    await card.getByRole('button', { name: 'Open' }).click();
+
+    // A modal dialog opens over the board with the row's properties…
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Open me in a modal');
+    await expect(dialog).toContainText('assignee');
+
+    // …and it's a modal, not a navigation: still on the table URL.
+    await expect(page).toHaveURL(/\/app\/show/);
+    await expect(page.getByTestId('kanban-board')).toBeVisible();
+  });
+
+  test('clicking a card title edits it inline', async ({ page }) => {
+    await createIssueTracker(page, 'Bugs');
+
+    const todo = column(page, 'todo');
+    await addCard(page, todo, 'Old title');
+
+    // Click the title text → it becomes an input.
+    await cardIn(todo, 'Old title').getByText('Old title').click();
+    const titleInput = todo.getByRole('textbox').first();
+    await titleInput.fill('New title');
+    await titleInput.press('Enter');
+
+    await expect(cardIn(todo, 'New title')).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId('kanban-board')).toBeVisible();
+    await expect(cardIn(column(page, 'todo'), 'New title')).toBeVisible();
+  });
+});

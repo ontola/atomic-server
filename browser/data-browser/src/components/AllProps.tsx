@@ -22,16 +22,16 @@ type Props = {
 
 /** Lists all PropVals for some resource. Optionally ignores a bunch of subjects */
 function AllProps({ resource, except = [], editable, columns, basic }: Props) {
-  const propvals = useSortedPropVals(resource, except);
+  const props = useSortedProps(resource, except, !!editable);
 
-  if (!propvals || propvals.length === 0) {
+  if (!props || props.length === 0) {
     return null;
   }
 
   return (
     <AllPropsWrapper basic={basic}>
-      {propvals.map(
-        ([prop]): JSX.Element => (
+      {props.map(
+        (prop): JSX.Element => (
           <StyledPropVal
             columns={columns}
             key={prop}
@@ -46,26 +46,48 @@ function AllProps({ resource, except = [], editable, columns, basic }: Props) {
   );
 }
 
-function useSortedPropVals(resource: Resource, exept: string[]) {
+/**
+ * The property subjects to render, in the class's declared order. When
+ * `editable`, also includes the class's `requires` + `recommends` properties
+ * that the resource hasn't set yet — so they show up as empty rows the user can
+ * fill in, rather than being invisible until they already have a value.
+ */
+function useSortedProps(
+  resource: Resource,
+  exept: string[],
+  editable: boolean,
+): string[] {
   const classResource = useResource<Core.Class>(resource.getClasses()[0]);
   const classProps = [
     ...(classResource.props.requires ?? []),
     ...(classResource.props.recommends ?? []),
   ];
 
-  const propvals = resource.getEntries();
-  propvals.sort((a, b) => {
-    const pA = classProps.indexOf(a[0]);
-    const pB = classProps.indexOf(b[0]);
+  const present = resource.getEntries().map(([prop]) => prop);
+  const presentSet = new Set(present);
+
+  const missing = editable
+    ? classProps.filter(prop => !presentSet.has(prop))
+    : [];
+
+  const all = [...present, ...missing];
+
+  all.sort((a, b) => {
+    const pA = classProps.indexOf(a);
+    const pB = classProps.indexOf(b);
 
     if (pA === -1) {
-      return 1;
+      return pB === -1 ? 0 : 1;
+    }
+
+    if (pB === -1) {
+      return -1;
     }
 
     return pA - pB;
   });
 
-  return propvals.filter(([prop]) => !exept.includes(prop));
+  return all.filter(prop => !exept.includes(prop));
 }
 
 const AllPropsWrapper = styled.div<{ basic: boolean | undefined }>`

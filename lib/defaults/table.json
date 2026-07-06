@@ -281,7 +281,8 @@
       "https://atomicdata.dev/properties/view-filters",
       "https://atomicdata.dev/properties/view-sort-by",
       "https://atomicdata.dev/properties/view-sort-desc",
-      "https://atomicdata.dev/properties/view-columns"
+      "https://atomicdata.dev/properties/view-columns",
+      "https://atomicdata.dev/properties/view-group-by"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/name",
@@ -340,6 +341,17 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "view-columns"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-group-by",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "For grouped views (e.g. kanban), the SelectProperty whose tags define the groups/columns. Cards are grouped by their value for this property.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-group-by"
   },
   {
     "@id": "https://atomicdata.dev/properties/table-views",

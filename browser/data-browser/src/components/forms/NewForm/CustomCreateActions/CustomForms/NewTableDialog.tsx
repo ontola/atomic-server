@@ -19,6 +19,10 @@ import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate'
 import { ResourceSelector } from '../../../ResourceSelector';
 import { Checkbox, CheckboxLabel } from '../../../Checkbox';
 import { useAddToOntology } from '../../../../../hooks/useAddToOntology';
+import { TABLE_TEMPLATES } from '../../../../../chunks/TablePage/tableTemplates';
+import { buildTableFromSpec } from '../../../../../chunks/TablePage/createTableFromSpec';
+import { useNavigateWithTransition } from '../../../../../hooks/useNavigateWithTransition';
+import { constructOpenURL } from '../../../../../helpers/navigation';
 
 interface NewTableDialogProps extends CustomResourceDialogProps {
   initialExistingClass?: string;
@@ -39,16 +43,38 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     initialExistingClass,
   );
   const [name, setName] = useState('Table');
+  const [templateId, setTemplateId] = useState('blank');
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const addToOntology = useAddToOntology();
   const createResourceAndNavigate = useCreateAndNavigate();
+  const navigate = useNavigateWithTransition();
 
   const onCancel = useCallback(() => {
     onClose();
   }, [onClose]);
 
   const onSuccess = useCallback(async () => {
+    // A template produces a fully-configured table (class + columns + views) in
+    // one shot via the shared spec builder, then we open it.
+    const template = TABLE_TEMPLATES.find(t => t.id === templateId);
+
+    if (template?.spec) {
+      const { tableSubject } = await buildTableFromSpec(
+        store,
+        { ...template.spec, name },
+        { parent, driveSubject, addToOntology },
+      );
+
+      if (!skipNavigation) {
+        navigate(constructOpenURL(tableSubject));
+      }
+
+      onClose();
+
+      return;
+    }
+
     let classSubject: string;
 
     if (!useExistingClass) {
@@ -97,12 +123,14 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     onClose();
   }, [
     name,
+    templateId,
     onClose,
     parent,
     useExistingClass,
     existingClass,
     addToOntology,
     createResourceAndNavigate,
+    navigate,
     skipNavigation,
     onCreated,
     store,
@@ -123,7 +151,10 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
   }, [isOpen]);
 
   const hasName = name.trim() !== '';
-  const saveDisabled = useExistingClass ? !hasName || !existingClass : !hasName;
+  const saveDisabled =
+    templateId === 'blank' && useExistingClass
+      ? !hasName || !existingClass
+      : !hasName;
 
   return (
     <Dialog {...dialogProps}>
@@ -140,6 +171,24 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
                 hide(true);
               }}
             >
+              <Field label='Start from'>
+                <TemplateGrid>
+                  {TABLE_TEMPLATES.map(template => (
+                    <TemplateCard
+                      key={template.id}
+                      type='button'
+                      $selected={template.id === templateId}
+                      onClick={() => setTemplateId(template.id)}
+                      title={template.description}
+                    >
+                      <strong>{template.title}</strong>
+                      <TemplateDescription>
+                        {template.description}
+                      </TemplateDescription>
+                    </TemplateCard>
+                  ))}
+                </TemplateGrid>
+              </Field>
               <Field required label='Name'>
                 <InputWrapper>
                   <InputStyled
@@ -150,24 +199,28 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
                   />
                 </InputWrapper>
               </Field>
-              <CheckboxLabel>
-                <Checkbox
-                  checked={useExistingClass}
-                  onChange={setUseExistingClass}
-                />
-                Use existing class
-              </CheckboxLabel>
-              <Field>
-                {useExistingClass && (
-                  <ResourceSelector
-                    hideCreateOption
-                    disabled={!useExistingClass}
-                    isA={core.classes.class}
-                    setSubject={setExistingClass}
-                    value={existingClass}
-                  />
-                )}
-              </Field>
+              {templateId === 'blank' && (
+                <>
+                  <CheckboxLabel>
+                    <Checkbox
+                      checked={useExistingClass}
+                      onChange={setUseExistingClass}
+                    />
+                    Use existing class
+                  </CheckboxLabel>
+                  <Field>
+                    {useExistingClass && (
+                      <ResourceSelector
+                        hideCreateOption
+                        disabled={!useExistingClass}
+                        isA={core.classes.class}
+                        setSubject={setExistingClass}
+                        value={existingClass}
+                      />
+                    )}
+                  </Field>
+                </>
+              )}
             </form>
           </WiderDialogContent>
           <DialogActions>
@@ -186,6 +239,36 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
 
 const WiderDialogContent = styled(DialogContent)`
   /* width: min(80vw, 20rem); */
+`;
+
+const TemplateGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+`;
+
+const TemplateCard = styled.button<{ $selected: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid
+    ${p => (p.$selected ? p.theme.colors.main : p.theme.colors.bg2)};
+  background-color: ${p =>
+    p.$selected ? p.theme.colors.mainSelectedBg : p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${p => p.theme.colors.main};
+  }
+`;
+
+const TemplateDescription = styled.span`
+  font-size: 0.8em;
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const RelativeDialogTitle = styled(DialogTitle)`

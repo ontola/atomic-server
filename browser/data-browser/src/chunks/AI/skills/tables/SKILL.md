@@ -21,7 +21,33 @@ Example JSON-AD Structure (Table):
 
 ## Creating Tables
 
-For instruction on how to properly create a table read `/creating-tables`.
+**Prefer the `create_table` tool.** It builds the whole table — the row Class,
+every column, and any saved views (table or kanban) — in a single call, and
+returns the table subject plus a `column name → property subject` map. This is
+far cheaper than creating the Class, Properties and Table one resource at a
+time. Describe the columns declaratively:
+
+```json
+{
+  "name": "Issues",
+  "columns": [
+    { "name": "Status", "type": "select", "options": ["Todo", "Doing", "Done"] },
+    { "name": "Assignee", "type": "relation" }
+  ],
+  "views": [
+    { "name": "Board", "kind": "kanban", "groupByColumn": "Status", "default": true }
+  ]
+}
+```
+
+A `name` title column is always added automatically — don't include it. Column
+`type` is one of `text`, `markdown`, `number`, `date`, `datetime`, `checkbox`,
+`relation`, `file`, `select` (`select` needs `options`). To add rows afterwards,
+use `create_resource` with `parent` = the returned table subject.
+
+Only fall back to building a table by hand (multiple `create_resource` calls)
+when you need something `create_table` can't express. For that lower-level
+recipe read `/creating-tables`.
 
 ## Editing The table structure
 

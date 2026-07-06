@@ -14,7 +14,9 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import { useAddToOntology } from '@hooks/useAddToOntology';
 import { constructOpenURL } from '@helpers/navigation';
+import { buildTableFromSpec } from '@chunks/TablePage/createTableFromSpec';
 import {
   getClassesOnDrive,
   toClassObject,
@@ -36,6 +38,7 @@ export const TOOL_NAMES = {
   CHANGE_THEME: 'change_theme',
   NAVIGATE_TO_RESOURCE: 'navigate_to_resource',
   CREATE_RESOURCE: 'create_resource',
+  CREATE_TABLE: 'create_table',
   READ_SKILL: 'read_skill',
   READ_SKILL_REFERENCE: 'read_skill_reference',
   CREATE_SKILL: 'create_skill',
@@ -67,6 +70,7 @@ export function useAtomicMCPTools({
 }: UseAtomicMCPToolsProps) {
   const store = useStore();
   const navigate = useNavigateWithTransition();
+  const addToOntology = useAddToOntology();
   const { drive } = useSettings();
   const runDocumentEdit = useDocumentEditAgent(editModel);
 
@@ -511,6 +515,95 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
             return `Created new resource with subject ${resource.subject}`;
           } catch (err) {
             return `Error creating resource: ${err}`;
+          }
+        },
+        strict: true,
+      }),
+      [TOOL_NAMES.CREATE_TABLE]: tool({
+        description:
+          'Create a fully-configured table in ONE call: its row Class, all columns, and any saved views (table or kanban). Prefer this over creating the class, properties and table separately with create_resource. Returns the table subject plus a map of column name → property subject, which you use to add rows (create_resource with parent = table subject) or to edit later.',
+        inputSchema: z.object({
+          name: z.string().describe('The display name of the table.'),
+          parent: z
+            .string()
+            .optional()
+            .describe(
+              'Subject of the folder or drive to create the table in. Defaults to the current drive.',
+            ),
+          columns: z
+            .array(
+              z.object({
+                name: z
+                  .string()
+                  .describe('The column (property) display name.'),
+                type: z
+                  .enum([
+                    'text',
+                    'markdown',
+                    'number',
+                    'date',
+                    'datetime',
+                    'checkbox',
+                    'relation',
+                    'file',
+                    'select',
+                  ])
+                  .describe(
+                    "The column datatype. Use 'select' for an enum/tag column; provide its `options`. Use 'relation' for a link to another resource.",
+                  ),
+                options: z
+                  .array(z.string())
+                  .optional()
+                  .describe(
+                    "For 'select' columns only: the allowed tag options, e.g. ['Todo','Doing','Done'].",
+                  ),
+                description: z.string().optional(),
+              }),
+            )
+            .describe(
+              'The columns of the table. A `name` title column is always added automatically, so do not include it.',
+            ),
+          views: z
+            .array(
+              z.object({
+                name: z.string(),
+                kind: z.enum(['table', 'kanban']),
+                groupByColumn: z
+                  .string()
+                  .optional()
+                  .describe(
+                    "For 'kanban' views: the name of the 'select' column whose tags become the board columns.",
+                  ),
+                default: z
+                  .boolean()
+                  .optional()
+                  .describe('Whether this is the view shown by default.'),
+              }),
+            )
+            .optional()
+            .describe(
+              'Optional saved views. Omit for a plain table with the default view.',
+            ),
+        }),
+        execute: async ({ name, parent, columns, views }) => {
+          try {
+            const result = await buildTableFromSpec(
+              store,
+              { name, columns, views },
+              {
+                parent: parent ?? drive,
+                driveSubject: drive,
+                addToOntology,
+              },
+            );
+
+            return {
+              table: result.tableSubject,
+              class: result.classSubject,
+              columns: result.columns,
+            };
+          } catch (err) {
+            return `Error creating table: ${err}`;
           }
         },
         strict: true,

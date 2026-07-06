@@ -14,6 +14,11 @@ import {
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { TableFilter, FilterOperator } from './tableFiltering';
 import { TableSorting, DEFAULT_SORT_PROP } from './tableSorting';
+import {
+  ViewKind,
+  DEFAULT_VIEW_KIND,
+  normalizeViewKind,
+} from './tableViewKinds';
 
 const DEFAULT_SORT: TableSorting = { prop: DEFAULT_SORT_PROP, sortDesc: false };
 
@@ -62,8 +67,14 @@ export interface UseTableViewResult {
   activeView: string | undefined;
   /** Switch the active view (session-scoped). */
   setActiveView: (subject: string) => void;
-  /** Create a new (empty) view, link it to the table, and switch to it. */
-  createView: () => void;
+  /** Create a new (empty) view of the given kind, link it, and switch to it. */
+  createView: (kind?: ViewKind) => void;
+  /** Which renderer the active view uses ('table' until a View exists). */
+  viewKind: ViewKind;
+  /** For kanban views: the SelectProperty whose tags define the columns. */
+  viewGroupBy: string | undefined;
+  /** Persist the group-by property to the active View (lazy-creates it). */
+  setViewGroupBy: (property: string) => void;
 }
 
 /**
@@ -102,6 +113,8 @@ export function useTableView(table: Resource): UseTableViewResult {
     dataBrowser.properties.viewSortDesc,
   );
   const [storedColumns] = useArray(view, dataBrowser.properties.viewColumns);
+  const [storedKind] = useString(view, dataBrowser.properties.viewKind);
+  const [viewGroupBy] = useString(view, dataBrowser.properties.viewGroupBy);
 
   const [filters, setFilters] = useState<TableFilter[]>([]);
   const [sorting, dispatchSort] = useReducer(sortReducer, DEFAULT_SORT);
@@ -180,14 +193,17 @@ export function useTableView(table: Resource): UseTableViewResult {
 
   // --- View creation / linking. ---
   const createViewResource = useCallback(
-    async (name: string): Promise<Resource> => {
+    async (
+      name: string,
+      kind: ViewKind = DEFAULT_VIEW_KIND,
+    ): Promise<Resource> => {
       const isFirst = views.length === 0 && !defaultViewSubject;
       const created = await store.newResource({
         parent: table.subject,
         isA: dataBrowser.classes.view,
         propVals: {
           [core.properties.name]: name,
-          [dataBrowser.properties.viewKind]: 'table',
+          [dataBrowser.properties.viewKind]: kind,
         },
       });
       await created.save();
@@ -215,12 +231,18 @@ export function useTableView(table: Resource): UseTableViewResult {
     setActiveViewOverride(subject);
   }, []);
 
-  const createView = useCallback(() => {
-    void (async () => {
-      const created = await createViewResource(`View ${views.length + 1}`);
-      setActiveViewOverride(created.subject);
-    })().catch(() => undefined);
-  }, [createViewResource, views.length]);
+  const createView = useCallback(
+    (kind: ViewKind = DEFAULT_VIEW_KIND) => {
+      void (async () => {
+        const created = await createViewResource(
+          `View ${views.length + 1}`,
+          kind,
+        );
+        setActiveViewOverride(created.subject);
+      })().catch(() => undefined);
+    },
+    [createViewResource, views.length],
+  );
 
   // --- Persist (debounced) whenever the local config changes post-hydration. ---
   const ensureView = useCallback(async (): Promise<Resource | undefined> => {
@@ -335,6 +357,22 @@ export function useTableView(table: Resource): UseTableViewResult {
     [ensureView],
   );
 
+  const setViewGroupBy = useCallback(
+    (property: string) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        await v.set(dataBrowser.properties.viewGroupBy, property, false);
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
   return {
     filters,
     addFilter,
@@ -355,5 +393,8 @@ export function useTableView(table: Resource): UseTableViewResult {
     activeView,
     setActiveView,
     createView,
+    viewKind: normalizeViewKind(storedKind),
+    viewGroupBy,
+    setViewGroupBy,
   };
 }

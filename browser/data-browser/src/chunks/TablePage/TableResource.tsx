@@ -35,6 +35,7 @@ import { TableHeading } from './TableHeading';
 import { TableFilterBar } from './TableFilterBar';
 import { TableViewTabs } from './TableViewTabs';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
+import { KanbanView } from './Kanban/KanbanView';
 
 interface TableResourceProps {
   resource: Resource<DataBrowser.Table>;
@@ -67,6 +68,9 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     collection,
     ready,
     invalidateCollection,
+    viewKind,
+    viewGroupBy,
+    setViewGroupBy,
   } = useTableData(resource);
 
   const { columns, allColumns, reorderColumns, hideColumn, showColumn } =
@@ -387,30 +391,48 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
         hideColumn={hideColumn}
         canWrite={canWrite}
       />
-      <TableFilterBar columns={columns} />
-      <FancyTable
-        readOnly={!canWrite}
-        columns={columns}
-        columnSizes={columnSizes}
-        itemCount={
-          ready ? memberCount + newRowSubjects.length : collection.totalMembers
-        }
-        itemKey={itemKey}
-        columnToKey={columnToKey}
-        labelledBy={titleId}
-        onClearRow={handleDeleteRow}
-        onCellResize={handleColumnResize}
-        onClearCells={handleClearCells}
-        onCopyCommand={handleCopyCommand}
-        onPasteCommand={handlePaste}
-        onUndoCommand={undoLastItem}
-        onColumnReorder={reorderColumns}
-        onRowExpand={handleRowExpand}
-        HeadingComponent={TableHeading}
-        NewColumnButtonComponent={NewColumnButton}
-      >
-        {Row}
-      </FancyTable>
+      {viewKind === 'kanban' ? (
+        <KanbanView
+          tableSubject={resource.subject}
+          tableClass={tableClass}
+          allColumns={allColumns}
+          columns={columns}
+          collection={collection}
+          ready={ready}
+          viewGroupBy={viewGroupBy}
+          setViewGroupBy={setViewGroupBy}
+          readOnly={!canWrite}
+        />
+      ) : (
+        <>
+          <TableFilterBar columns={columns} />
+          <FancyTable
+            readOnly={!canWrite}
+            columns={columns}
+            columnSizes={columnSizes}
+            itemCount={
+              ready
+                ? memberCount + newRowSubjects.length
+                : collection.totalMembers
+            }
+            itemKey={itemKey}
+            columnToKey={columnToKey}
+            labelledBy={titleId}
+            onClearRow={handleDeleteRow}
+            onCellResize={handleColumnResize}
+            onClearCells={handleClearCells}
+            onCopyCommand={handleCopyCommand}
+            onPasteCommand={handlePaste}
+            onUndoCommand={undoLastItem}
+            onColumnReorder={reorderColumns}
+            onRowExpand={handleRowExpand}
+            HeadingComponent={TableHeading}
+            NewColumnButtonComponent={NewColumnButton}
+          >
+            {Row}
+          </FancyTable>
+        </>
+      )}
       <ExpandedRowDialog
         subject={expandedRowSubject ?? unknownSubject}
         open={showExpandedRowDialog}

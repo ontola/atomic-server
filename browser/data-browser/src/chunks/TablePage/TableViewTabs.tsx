@@ -10,12 +10,13 @@ import { Column, Row } from '@components/Row';
 import { Checkbox } from '@components/forms/Checkbox';
 import { InputStyled } from '@components/forms/InputStyles';
 import { TablePageContext } from './tablePageContext';
+import { VIEW_KINDS, VIEW_KIND_LABELS, ViewKind } from './tableViewKinds';
 
 interface TableViewTabsProps {
   views: string[];
   activeView: string | undefined;
   setActiveView: (subject: string) => void;
-  createView: () => void;
+  createView: (kind?: ViewKind) => void;
   viewName: string;
   renameView: (name: string) => void;
   allColumns: Property[];
@@ -60,11 +61,7 @@ export function TableViewTabs({
             onRename={renameView}
           />
         ))}
-        {canWrite && (
-          <AddTab onClick={createView} title='Add view' type='button'>
-            <FaPlus />
-          </AddTab>
-        )}
+        {canWrite && <AddViewMenu createView={createView} />}
       </Tabs>
       <Actions>
         <FilterMenu columns={columns} />
@@ -78,6 +75,27 @@ export function TableViewTabs({
       </Actions>
     </Bar>
   );
+}
+
+const AddViewTrigger = buildDefaultTrigger(<FaPlus />, 'Add view');
+
+/** The `+` tab: a dropdown to add a new view of a chosen kind (Table/Kanban). */
+function AddViewMenu({
+  createView,
+}: {
+  createView: (kind?: ViewKind) => void;
+}): JSX.Element {
+  const items = useMemo(
+    (): DropdownItem[] =>
+      VIEW_KINDS.map(kind => ({
+        id: kind,
+        label: VIEW_KIND_LABELS[kind],
+        onClick: () => createView(kind),
+      })),
+    [createView],
+  );
+
+  return <DropdownMenu Trigger={AddViewTrigger} items={items} />;
 }
 
 const FilterTrigger = buildDefaultTrigger(<FaFilter />, 'Filter');
@@ -310,24 +328,6 @@ const TabInput = styled(InputStyled)`
   height: 1.85rem;
   width: 10rem;
   font-weight: bold;
-`;
-
-const AddTab = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.85rem;
-  width: 1.85rem;
-  border: none;
-  border-radius: ${p => p.theme.radius};
-  background-color: transparent;
-  color: ${p => p.theme.colors.textLight};
-  cursor: pointer;
-
-  &:hover {
-    background-color: ${p => p.theme.colors.bg1};
-    color: ${p => p.theme.colors.text};
-  }
 `;
 
 const ColumnsTrigger = styled(RadixPopover.Trigger)`

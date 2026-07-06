@@ -2429,6 +2429,7 @@ msgstr "Set a title"
 msgid "Untitled"
 msgstr "Untitled"
 
+#: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/components/EditableTitle.tsx
 msgid "Click to edit title"
 msgstr "Click to edit title"
@@ -2635,6 +2636,7 @@ msgstr "Add to favorites"
 msgid "Toggle whether this resource appears in your Favorites."
 msgstr "Toggle whether this resource appears in your Favorites."
 
+#: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Open"
 msgstr "Open"
@@ -2962,7 +2964,9 @@ msgstr "Ok"
 msgid "Table"
 msgstr "Table"
 
+#. placeholder {0}: spec.name
 #. placeholder {0}: name
+#: src/chunks/TablePage/createTableFromSpec.ts
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Represents a row in the {0} table"
 msgstr "Represents a row in the {0} table"
@@ -4015,6 +4019,7 @@ msgid "Select a class"
 msgstr "Select a class"
 
 #: src/components/LoroDocValue.tsx
+#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Empty"
 msgstr "Empty"
 
@@ -4533,9 +4538,8 @@ msgstr "Remove column"
 msgid "Export to CSV"
 msgstr "Export to CSV"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Add view"
+#~ msgid "Add view"
+#~ msgstr "Add view"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Untitled view"
@@ -4937,3 +4941,56 @@ msgstr "Sort by {0}"
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Edit unavailable"
 msgstr "Edit unavailable"
+
+#: src/chunks/TablePage/Kanban/useKanbanGroupBy.ts
+msgid "Status"
+msgstr "Status"
+
+#~ msgid "Assignee"
+#~ msgstr "Assignee"
+
+#~ msgid "Priority"
+#~ msgstr "Priority"
+
+#~ msgid "Low"
+#~ msgstr "Low"
+
+#~ msgid "Medium"
+#~ msgstr "Medium"
+
+#~ msgid "High"
+#~ msgstr "High"
+
+#~ msgid "Board"
+#~ msgstr "Board"
+
+#~ msgid "All issues"
+#~ msgstr "All issues"
+
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "No status"
+msgstr "No status"
+
+#: src/chunks/TablePage/Kanban/KanbanView.tsx
+msgid "Setting up the board…"
+msgstr "Setting up the board…"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+msgid "Start from"
+msgstr "Start from"
+
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Add card"
+msgstr "Add card"
+
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Card title…"
+msgstr "Card title…"
+
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "<0/> Add card"
+msgstr "<0/> Add card"
+
+#: src/components/forms/ValueForm/ValueForm.tsx
+msgid "Click to add a value"
+msgstr "Click to add a value"

@@ -66,6 +66,7 @@ export const dataBrowser = {
     viewSortBy: 'https://atomicdata.dev/properties/view-sort-by',
     viewSortDesc: 'https://atomicdata.dev/properties/view-sort-desc',
     viewColumns: 'https://atomicdata.dev/properties/view-columns',
+    viewGroupBy: 'https://atomicdata.dev/properties/view-group-by',
     tags: 'https://atomicdata.dev/properties/tags',
     tagList: 'https://atomicdata.dev/ontology/data-browser/property/tag-list',
     url: 'https://atomicdata.dev/property/url',
@@ -152,6 +153,7 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/view-sort-by',
       'https://atomicdata.dev/properties/view-sort-desc',
       'https://atomicdata.dev/properties/view-columns',
+      'https://atomicdata.dev/properties/view-group-by',
     ],
     ['https://atomicdata.dev/classes/Tag']: [
       'https://atomicdata.dev/properties/shortname',
@@ -317,7 +319,8 @@ declare module '../index.js' {
         | typeof dataBrowser.properties.viewFilters
         | typeof dataBrowser.properties.viewSortBy
         | typeof dataBrowser.properties.viewSortDesc
-        | typeof dataBrowser.properties.viewColumns;
+        | typeof dataBrowser.properties.viewColumns
+        | typeof dataBrowser.properties.viewGroupBy;
     };
     [dataBrowser.classes.tag]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/shortname';
@@ -385,6 +388,7 @@ declare module '../index.js' {
     [dataBrowser.properties.viewSortBy]: string;
     [dataBrowser.properties.viewSortDesc]: boolean;
     [dataBrowser.properties.viewColumns]: string[];
+    [dataBrowser.properties.viewGroupBy]: string;
     [dataBrowser.properties.tags]: string[];
     [dataBrowser.properties.tagList]: string[];
     [dataBrowser.properties.url]: string;
@@ -422,6 +426,7 @@ declare module '../index.js' {
     [dataBrowser.properties.viewSortBy]: 'viewSortBy';
     [dataBrowser.properties.viewSortDesc]: 'viewSortDesc';
     [dataBrowser.properties.viewColumns]: 'viewColumns';
+    [dataBrowser.properties.viewGroupBy]: 'viewGroupBy';
     [dataBrowser.properties.tags]: 'tags';
     [dataBrowser.properties.tagList]: 'tagList';
     [dataBrowser.properties.url]: 'url';
