@@ -2,6 +2,7 @@ use crate::{
     appstate::AppState, context::RequestContext, errors::AtomicServerResult,
     helpers::get_client_agent,
 };
+use actix_web::http::header::{ContentDisposition, DispositionType};
 use actix_web::{web, HttpRequest, HttpResponse};
 use atomic_lib::{urls, Resource, Storelike};
 
@@ -43,9 +44,7 @@ pub async fn handle_download(
     if params.q.is_none() && params.w.is_none() && params.f.is_none() {
         if let Some(hash_hex) = subject_path.strip_prefix("/files/") {
             if let Some(bytes) = blob_by_hash_hex(hash_hex, &appstate)? {
-                return Ok(HttpResponse::Ok()
-                    .content_type("application/octet-stream")
-                    .body(bytes));
+                return Ok(user_blob_response("application/octet-stream", bytes));
             }
         }
     }
@@ -56,9 +55,7 @@ pub async fn handle_download(
     if subject.is_blob_did() {
         if let Some(hash_hex) = subject.blob_hash_hex() {
             if let Some(bytes) = blob_by_hash_hex(hash_hex, &appstate)? {
-                return Ok(HttpResponse::Ok()
-                    .content_type("application/octet-stream")
-                    .body(bytes));
+                return Ok(user_blob_response("application/octet-stream", bytes));
             }
         }
     }
@@ -74,6 +71,32 @@ pub async fn handle_download(
         .to_single();
 
     download_file_handler_partial(&resource, &req, &params, &appstate)
+}
+
+/// Serves user-uploaded blob bytes as a forced download rather than rendering
+/// inline. The stored `mimetype` is attacker-controlled at upload time (e.g.
+/// `text/html`, `image/svg+xml`); with no Content-Disposition/nosniff, a
+/// browser opening the download link would render an uploaded script
+/// same-origin, reading the session cookie and the Agent's private key out of
+/// IndexedDB. Forcing `attachment` + `nosniff` closes that off; it doesn't
+/// affect legitimate inline use (e.g. `<img>` embedding), since
+/// Content-Disposition only governs top-level navigation, not embedded
+/// resource fetches.
+fn user_blob_response(content_type: impl AsRef<str>, bytes: Vec<u8>) -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type(content_type.as_ref())
+        .insert_header((
+            actix_web::http::header::CONTENT_DISPOSITION,
+            ContentDisposition {
+                disposition: DispositionType::Attachment,
+                parameters: vec![],
+            },
+        ))
+        .insert_header((
+            actix_web::http::header::HeaderName::from_static("x-content-type-options"),
+            actix_web::http::header::HeaderValue::from_static("nosniff"),
+        ))
+        .body(bytes)
 }
 
 /// Look up a blob by its hex-encoded BLAKE3 hash. Returns `None` if the input
@@ -127,7 +150,7 @@ pub fn download_file_handler_partial(
 
     // No params: serve the original bytes verbatim.
     if params.q.is_none() && params.w.is_none() && params.f.is_none() {
-        return Ok(HttpResponse::Ok().content_type(mimetype).body(bytes));
+        return Ok(user_blob_response(mimetype, bytes));
     }
 
     // With image params: serve a processed rendition. Cache it in Tree::Blobs
@@ -154,9 +177,7 @@ fn serve_processed_image(
         .kv
         .get(atomic_lib::db::trees::Tree::Blobs, &cache_key)?
     {
-        return Ok(HttpResponse::Ok()
-            .content_type(mimetype_for(&format))
-            .body(cached));
+        return Ok(user_blob_response(mimetype_for(&format), cached));
     }
 
     if !is_image_bytes(source_bytes) {
@@ -169,9 +190,7 @@ fn serve_processed_image(
         .kv
         .insert(atomic_lib::db::trees::Tree::Blobs, &cache_key, &encoded)?;
 
-    Ok(HttpResponse::Ok()
-        .content_type(mimetype_for(&format))
-        .body(encoded))
+    Ok(user_blob_response(mimetype_for(&format), encoded))
 }
 
 #[cfg(not(feature = "img"))]
