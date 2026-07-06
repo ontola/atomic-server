@@ -12,7 +12,7 @@ import {
 import { Column } from '../Row';
 import { useEffect, useMemo, useState } from 'react';
 import Markdown from '../datatypes/Markdown';
-import { dataBrowser, useResource, useResources, useStore } from '@tomic/react';
+import { useResources, useStore } from '@tomic/react';
 import toast from 'react-hot-toast';
 import { InlineErrMessage } from '../forms/InputStyles';
 import { useSettings } from '../../helpers/AppSettings';
@@ -37,7 +37,6 @@ export function ApplyTemplateDialog({
   const navigate = useNavigateWithTransition();
   const [dialogProps, show, close, isOpen] = useDialog({ bindShow: bindOpen });
   const { drive } = useSettings();
-  const driveResource = useResource(drive);
   const [error, setError] = useState<string>();
 
   const subjects = useMemo(
@@ -72,12 +71,11 @@ export function ApplyTemplateDialog({
     }
 
     try {
+      // The imported resources set `parent`; children are resolved via the
+      // `parent=` query, so no explicit child list needs maintaining.
       await store.importJsonAD(JSON.stringify(template.resources), {
         parent: drive,
       });
-
-      driveResource.push(dataBrowser.properties.subResources, subjects);
-      await driveResource.save();
 
       close();
       toast.success('Template applied!');

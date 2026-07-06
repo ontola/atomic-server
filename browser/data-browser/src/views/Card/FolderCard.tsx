@@ -1,7 +1,7 @@
 import { Column, Row } from '@components/Row';
 import type { CardViewProps } from './CardViewProps';
 import { ResourceCardTitle } from './ResourceCardTitle';
-import { dataBrowser, useArray, useResources } from '@tomic/react';
+import { dataBrowser, useArray, useChildren, useResources } from '@tomic/react';
 import { Tag } from '@components/Tag';
 import { ResourceContextMenu } from '@components/ResourceContextMenu';
 import { ListView } from '@views/FolderPage/ListView';
@@ -9,11 +9,10 @@ import { styled } from 'styled-components';
 
 export const FolderCard: React.FC<CardViewProps> = ({ resource }) => {
   const [tags] = useArray(resource, dataBrowser.properties.tags);
-  const [subResourcesSubjects] = useArray(
-    resource,
-    dataBrowser.properties.subResources,
-  );
-  const subResources = useResources(subResourcesSubjects);
+  // Children come from the `parent=` query (like FolderPage and the sidebar);
+  // the legacy `sub-resources` array misses normally-created children.
+  const { subjects: childSubjects } = useChildren(resource.subject);
+  const subResources = useResources(childSubjects);
 
   return (
     <Column gap='0.5rem'>

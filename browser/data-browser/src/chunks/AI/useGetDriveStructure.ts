@@ -1,5 +1,12 @@
 import { useSettings } from '@helpers/AppSettings';
-import { dataBrowser, useStore } from '@tomic/react';
+import {
+  ai,
+  CollectionBuilder,
+  core,
+  dataBrowser,
+  useStore,
+  type Store,
+} from '@tomic/react';
 
 export type TreeElement = {
   subject: string;
@@ -26,6 +33,34 @@ export function stringifyTree(tree: TreeNode, indent = 0): string {
     .join('\n');
 }
 
+/** Fetches a resource's direct children via the `parent=` query — the same
+ *  source of truth the sidebar uses. (The legacy `sub-resources` array this
+ *  used to read is not maintained by normal resource creation, so the tree
+ *  missed almost everything.) */
+async function fetchChildren(store: Store, parent: string): Promise<string[]> {
+  const collection = new CollectionBuilder(store)
+    .setProperty(core.properties.parent)
+    .setValue(parent)
+    .setPageSize(500)
+    .build();
+
+  const members = await collection.getAllMembers();
+
+  return members.filter(subject => !subject.startsWith('did:ad:commit:'));
+}
+
+/** Resources that present their own children in dedicated UI; recursing into
+ *  them (table rows, chat messages) would flood the tree. Same set the
+ *  sidebar hides children for. */
+function hideChildrenOf(classes: string[]): boolean {
+  return (
+    classes.includes(dataBrowser.classes.table) ||
+    classes.includes(dataBrowser.classes.chatroom) ||
+    classes.includes(ai.classes.aiChat) ||
+    classes.includes(core.classes.ontology)
+  );
+}
+
 export function useGetDriveStructure() {
   const store = useStore();
   const { drive } = useSettings();
@@ -49,30 +84,26 @@ export function useGetDriveStructure() {
 
       visited.add(subject);
 
-      const subResources =
-        (resource.get(dataBrowser.properties.subResources) as string[]) || [];
-
-      const title = resource.title;
-
       const element: TreeElement = {
         subject,
       };
 
-      if (subResources.length > 0) {
-        element.children = await buildTree(subResources, visited);
+      if (!hideChildrenOf(resource.getClasses())) {
+        const children = await fetchChildren(store, subject);
+
+        if (children.length > 0) {
+          element.children = await buildTree(children, visited);
+        }
       }
 
-      node[title] = element;
+      node[resource.title] = element;
     }
 
     return node;
   };
 
   return async (): Promise<TreeNode> => {
-    const driveResource = await store.getResource(drive);
-    const rootSubjects =
-      (driveResource.get(dataBrowser.properties.subResources) as string[]) ||
-      [];
+    const rootSubjects = await fetchChildren(store, drive);
 
     return buildTree(rootSubjects, new Set([drive]));
   };

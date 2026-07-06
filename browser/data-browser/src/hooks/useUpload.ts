@@ -1,10 +1,4 @@
-import {
-  AtomicError,
-  dataBrowser,
-  Resource,
-  useArray,
-  useStore,
-} from '@tomic/react';
+import { AtomicError, Resource, useStore } from '@tomic/react';
 import { useCallback, useState } from 'react';
 import { errorHandler } from '../handlers/errorHandler';
 
@@ -19,24 +13,19 @@ export function useUpload(parentResource: Resource): UseUploadResult {
   const store = useStore();
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<Error | undefined>(undefined);
-  const [subResources, setSubResources] = useArray(
-    parentResource,
-    dataBrowser.properties.subResources,
-  );
 
   const upload = useCallback(
     async (acceptedFiles: File[]) => {
       try {
         setError(undefined);
         setIsUploading(true);
-        const netUploaded = await store.uploadFiles(
+        // The uploaded files get `parent` set server-side; children are
+        // resolved via the `parent=` query, so no explicit child list needs
+        // maintaining here.
+        const allUploaded = await store.uploadFiles(
           acceptedFiles,
           parentResource.subject,
         );
-        const allUploaded = [...netUploaded];
-
-        await setSubResources([...subResources, ...allUploaded]);
-        await parentResource.save();
         setIsUploading(false);
 
         return allUploaded;
@@ -48,7 +37,7 @@ export function useUpload(parentResource: Resource): UseUploadResult {
         return [];
       }
     },
-    [parentResource, store, setSubResources, subResources],
+    [parentResource, store],
   );
 
   return {
