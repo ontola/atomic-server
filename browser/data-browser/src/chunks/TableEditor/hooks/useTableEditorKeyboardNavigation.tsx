@@ -10,12 +10,12 @@ import { useHasControlLock } from '../../../hooks/useControlLock';
 
 const matchShift = (
   handler: KeyboardHandler,
-  event: React.KeyboardEvent<HTMLDivElement>,
+  event: React.KeyboardEvent<HTMLDivElement> | KeyboardEvent,
 ) => handler.shift === undefined || handler.shift === event.shiftKey;
 
 const matchModifier = (
   handler: KeyboardHandler,
-  event: React.KeyboardEvent<HTMLDivElement>,
+  event: React.KeyboardEvent<HTMLDivElement> | KeyboardEvent,
 ) =>
   handler.mod === undefined ||
   handler.mod ===
@@ -51,7 +51,7 @@ export function useTableEditorKeyboardNavigation(
   const hasControlLock = useHasControlLock();
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
+    (e: React.KeyboardEvent<HTMLDivElement> | KeyboardEvent) => {
       if (hasControlLock || tableHeaderHasFocus(headerRef)) {
         return;
       }

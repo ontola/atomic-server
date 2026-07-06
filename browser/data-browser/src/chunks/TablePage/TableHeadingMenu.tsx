@@ -127,7 +127,7 @@ export function TableHeadingMenu({
       },
       {
         id: 'edit',
-        label: 'Edit',
+        label: canWriteProperty ? 'Edit' : 'Edit unavailable',
         onClick: () => setShowEditDialog(true),
         icon: <FaPencil />,
         disabled: !canWriteProperty,

@@ -441,7 +441,7 @@ export default defineConfig({
     warmup: {
       clientFiles: [
         './src/chunks/AI/AISidebar.tsx',
-        './src/chunks/AI/AIChatInput.tsx',
+        './src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx',
       ],
     },
     proxy: {

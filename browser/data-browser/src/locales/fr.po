@@ -4908,3 +4908,12 @@ msgstr ""
 
 #~ msgid "Don't have an account? Create one"
 #~ msgstr ""
+
+#. placeholder {0}: text
+#: src/chunks/TablePage/TableHeading.tsx
+msgid "Sort by {0}"
+msgstr ""
+
+#: src/chunks/TablePage/TableHeadingMenu.tsx
+msgid "Edit unavailable"
+msgstr ""

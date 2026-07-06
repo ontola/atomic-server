@@ -1,5 +1,5 @@
 import { core, Resource, unknownSubject, useString } from '@tomic/react';
-import { useCallback, useEffect, useMemo, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { ErrorChip } from '@components/forms/ErrorChip';
 import { useValidation } from '@components/forms/formValidation/useValidation';
@@ -12,6 +12,7 @@ interface PropertyFormProps {
   resource: Resource;
   category?: PropertyFormCategory;
   existingProperty?: boolean;
+  autoFocusName?: boolean;
 }
 
 export function PropertyForm({
@@ -19,7 +20,9 @@ export function PropertyForm({
   onSubmit,
   existingProperty,
   category,
+  autoFocusName,
 }: PropertyFormProps): JSX.Element {
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const {
     error: nameError,
     setError: setNameError,
@@ -86,6 +89,21 @@ export function PropertyForm({
     }
   }, []);
 
+  useEffect(() => {
+    if (!autoFocusName) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [autoFocusName, resource.subject]);
+
   const CategoryForm = categoryFormFactory(category);
 
   return (
@@ -93,11 +111,15 @@ export function PropertyForm({
       <div>
         <InputWrapper $invalid={!!nameError}>
           <InputStyled
+            ref={nameInputRef}
             id='name-form'
             type='text'
+            autoFocus={autoFocusName}
+            data-dialog-autofocus={autoFocusName ? true : undefined}
             value={name ?? ''}
             onChange={handleNameChange}
             placeholder='New Column'
+            onFocus={autoFocusName ? e => e.currentTarget.select() : undefined}
             onBlur={setNameTouched}
           />
         </InputWrapper>

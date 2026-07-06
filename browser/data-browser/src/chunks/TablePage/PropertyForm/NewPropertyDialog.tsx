@@ -165,7 +165,7 @@ export function NewPropertyDialog({
         ? tableClassParent.subject
         : tableClassResource.subject;
 
-      const name = selectedCategory ?? 'column';
+      const name = 'column';
       const { isA, propVals } = getCategoryGenesisPropVals(
         selectedCategory as PropertyFormCategory,
       );
@@ -218,6 +218,7 @@ export function NewPropertyDialog({
               resource={propertyResource}
               category={selectedCategory as PropertyFormCategory}
               onSubmit={handleCreateClick}
+              autoFocusName
             />
           )}
         </DialogContent>

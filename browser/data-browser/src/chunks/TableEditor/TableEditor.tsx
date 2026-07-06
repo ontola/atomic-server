@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -110,9 +111,13 @@ function FancyTableInner<T>({
     listRef,
     tableRef,
     setCursorMode,
+    cursorMode,
     disabledKeyboardInteractions,
     readOnly,
+    selectedRow,
+    selectedColumn,
   } = useTableEditorContext();
+  const previousCursorMode = useRef(cursorMode);
 
   const [onScroll, setOnScroll] = useState<OnScroll>(() => undefined);
 
@@ -151,6 +156,43 @@ function FancyTableInner<T>({
     headerRef,
     tableCommands,
   );
+
+  // Escape leaves an editing cell, handled in the capture phase on the table
+  // itself — the outermost ancestor of every cell editor and popover — so it
+  // fires before any input can `stopPropagation` or a native `popover=auto`
+  // can run its own Escape dismiss. `preventDefault` cancels that native
+  // dismiss so focus handling stays ours. Switching to Visual unmounts the
+  // editor; the `Edit -> Visual` layout effect above then focuses the table,
+  // after the unmount, so there's no focus race to fight.
+  const handleEscapeCapture = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (
+        e.key === 'Escape' &&
+        cursorMode === CursorMode.Edit &&
+        // Editors that render their own surface (Markdown's Dialog, JSON's
+        // inline editor) opt out via this flag and handle Escape themselves.
+        !disabledKeyboardInteractions.has(KeyboardInteraction.ExitEditMode)
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        setCursorMode(CursorMode.Visual);
+      }
+    },
+    [cursorMode, disabledKeyboardInteractions, setCursorMode],
+  );
+
+  useLayoutEffect(() => {
+    if (
+      previousCursorMode.current === CursorMode.Edit &&
+      cursorMode === CursorMode.Visual &&
+      selectedRow !== undefined &&
+      selectedColumn !== undefined
+    ) {
+      tableRef.current?.focus({ preventScroll: true });
+    }
+
+    previousCursorMode.current = cursorMode;
+  }, [cursorMode, selectedColumn, selectedRow, tableRef]);
 
   useClearCommands(columns, onClearRow, onClearCells);
 
@@ -239,6 +281,7 @@ function FancyTableInner<T>({
         contentRowWidth={contentRowWidth}
         rowHeight={rowHeight!}
         tabIndex={0}
+        onKeyDownCapture={handleEscapeCapture}
         onKeyDown={handleKeyDown}
         totalContentHeight={itemCount * rowHeight!}
         columnSizes={columnSizes ?? []}

@@ -80,7 +80,32 @@ export function TableRow({
 
   useMarkings(resource, index);
 
-  if (resource.subject === unknownSubject) {
+  // `useMemberFromCollection` resets to `unknownSubject` and re-resolves
+  // asynchronously any time its underlying query re-runs (e.g. the
+  // collection re-deriving after a save touches this row) — not just on
+  // first load. Falling through to the Loader branch on every one of those
+  // unmounts every cell in the row, including whatever's open inside one
+  // (a cell's edit popover, an open file picker) — the "save → re-fetch →
+  // remount churn" TableNewRow's comment below already calls out for the
+  // virtual-row case; this is the same failure mode for already-materialized
+  // rows. Keep rendering the last-known-good subject through a transient
+  // re-resolution; only show the Loader while this row has never resolved
+  // *at this index* — a genuine reorder (index actually changes) still
+  // falls through to the Loader rather than flashing the previous row's data.
+  const lastKnownRef = useRef<{ index: number; subject: string } | undefined>(
+    undefined,
+  );
+
+  if (resource.subject !== unknownSubject) {
+    lastKnownRef.current = { index, subject: resource.subject };
+  }
+
+  const displaySubject =
+    lastKnownRef.current?.index === index
+      ? lastKnownRef.current.subject
+      : undefined;
+
+  if (!displaySubject) {
     return (
       <>
         {columns.map((column, i) => (
@@ -97,7 +122,7 @@ export function TableRow({
           key={column.subject}
           rowIndex={index}
           columnIndex={cIndex + 1}
-          subject={resource.subject}
+          subject={displaySubject}
           property={column}
         />
       ))}

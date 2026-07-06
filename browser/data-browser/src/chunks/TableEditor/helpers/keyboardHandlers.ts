@@ -33,7 +33,7 @@ export type TableCommands = {
 
 export type HandlerContext = {
   tableContext: TableEditorContext;
-  event: React.KeyboardEvent;
+  event: React.KeyboardEvent | KeyboardEvent;
   tableRef: React.RefObject<HTMLDivElement | null>;
   translateCursor: (row: number, column: number) => void;
   columnCount: number;
@@ -103,17 +103,6 @@ const createCursorHandler =
     tableContext.setCursorMode(CursorMode.Visual);
     translateCursor(rowTranslation, columnTranslation);
   };
-
-const exitEditMode: KeyboardHandler = {
-  id: KeyboardInteraction.ExitEditMode,
-  keys: new Set(['Escape']),
-  cursorMode: new Set([CursorMode.Edit]),
-
-  handler: ({ tableContext, tableRef }) => {
-    tableContext.setCursorMode(CursorMode.Visual);
-    tableRef.current?.focus();
-  },
-};
 
 const editNextRow: KeyboardHandler = {
   id: KeyboardInteraction.EditNextRow,
@@ -354,7 +343,6 @@ const moveMultiSelectCornerRight: KeyboardHandler = {
 };
 
 export const tableKeyboardHandlers = [
-  exitEditMode,
   editNextRow,
   editNextCell,
   editPreviousCell,

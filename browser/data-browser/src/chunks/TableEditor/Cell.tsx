@@ -32,6 +32,7 @@ export interface CellProps {
   disabled?: boolean;
   align?: CellAlign;
   role?: string;
+  ariaLabel?: string;
   onClearCell?: () => void;
   onEnterEditModeWithCharacter?: (key: string) => void;
   onEditNextRow?: () => void;
@@ -49,6 +50,7 @@ export function Cell({
   disabled,
   align,
   role,
+  ariaLabel,
   onEnterEditModeWithCharacter = () => undefined,
   onEditNextRow,
 }: React.PropsWithChildren<CellProps>): JSX.Element {
@@ -256,6 +258,7 @@ export function Cell({
       ref={ref}
       disabled={disabled}
       role={role ?? 'gridcell'}
+      aria-label={ariaLabel}
       className={className}
       allowUserSelect={cursorMode === CursorMode.Edit}
       align={align}

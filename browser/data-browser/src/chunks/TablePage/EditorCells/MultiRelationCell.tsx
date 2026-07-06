@@ -11,12 +11,15 @@ import {
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 import { getIconForClass } from '@helpers/iconMap';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
 import { useResourceSearch } from './useResourceSearch';
 import { IconButton } from '@components/IconButton/IconButton';
 import { KeyboardInteraction, useCellOptions } from '@chunks/TableEditor';
+import {
+  CursorMode,
+  useTableEditorContext,
+} from '@chunks/TableEditor/TableEditorContext';
 import { InlineFormattedResourceList } from '@components/InlineFormattedResourceList';
 import { FaPlus, FaXmark } from 'react-icons/fa6';
 import {
@@ -51,11 +54,11 @@ function MultiRelationCellEdit({
   const inputRef = useRef<HTMLInputElement>(null);
   const val = Array.isArray(value) ? value : [];
   const { classType, hasClassType } = useClassType(property);
-  const { isOpen, triggerProps, popoverProps } = usePopover({
+  const { triggerProps, popoverProps } = usePopover({
     defaultOpen: true,
     autoFocusElement: inputRef,
   });
-  const { activeCellRef } = useTableEditorContext();
+  const { setCursorMode } = useTableEditorContext();
   const selectedElement = useRef<HTMLLIElement>(null);
 
   const [searchValue, setSearchValue] = useState('');
@@ -63,10 +66,6 @@ function MultiRelationCellEdit({
   const disabledKeyboardInteractions = new Set<KeyboardInteraction>([
     KeyboardInteraction.EditNextRow,
   ]);
-
-  if (isOpen) {
-    disabledKeyboardInteractions.add(KeyboardInteraction.ExitEditMode);
-  }
 
   useCellOptions({
     disabledKeyboardInteractions,
@@ -79,13 +78,22 @@ function MultiRelationCellEdit({
     setSearchValue(e.target.value);
   };
 
-  const handleResultClick = (result: string) => {
+  const handleResultClick = (result: string, source: 'keyboard' | 'mouse') => {
     if (!result) return;
 
     if (val.includes(result)) {
       onChange(val.filter(v => v !== result));
     } else {
       onChange([...val, result]);
+    }
+
+    // Enter picks and finishes: exiting edit mode unmounts this popover and
+    // hands focus back to the grid (same path as the Escape key, see
+    // TableEditor.tsx's Edit -> Visual layout effect), so arrow keys work
+    // immediately after picking. Mouse clicks (e.g. on the result
+    // checkboxes) keep the popover open so multi-select stays reachable.
+    if (source === 'keyboard') {
+      setCursorMode(CursorMode.Visual);
     }
   };
 
@@ -106,12 +114,6 @@ function MultiRelationCellEdit({
     handleResultClick,
     val as string[],
   );
-
-  useEffect(() => {
-    if (!isOpen) {
-      activeCellRef.current?.focus();
-    }
-  }, [isOpen, activeCellRef]);
 
   useEffect(() => {
     if (selectedElement.current && usingKeyboard) {

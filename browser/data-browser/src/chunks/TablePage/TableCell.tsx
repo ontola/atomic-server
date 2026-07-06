@@ -75,6 +75,7 @@ export function TableCell({
 
   const dataType = property.datatype;
   const isEditing = useIsEditing(rowIndex, columnIndex);
+  const propertyLabel = property.shortname || property.subject;
 
   const Editor = useMemo(
     () => dataTypeCellMap.get(dataType) ?? StringCell,
@@ -149,6 +150,7 @@ export function TableCell({
       rowIndex={rowIndex}
       columnIndex={columnIndex}
       align={alignment}
+      ariaLabel={`${propertyLabel}, row ${rowIndex + 1}`}
       onEnterEditModeWithCharacter={handleEnterEditModeWithCharacter}
       onEditNextRow={handleEditNextRow}
     >

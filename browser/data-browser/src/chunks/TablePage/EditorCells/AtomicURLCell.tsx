@@ -36,6 +36,10 @@ import {
 } from './CellComponents';
 import { FaXmark } from 'react-icons/fa6';
 import { usePopover } from '@components/CustomPopover';
+import {
+  CursorMode,
+  useTableEditorContext,
+} from '@chunks/TableEditor/TableEditorContext';
 
 const useClassType = (subject: string) => {
   const property = useResource<Core.Property>(subject);
@@ -59,10 +63,17 @@ function AtomicURLCellEdit({
   const cell = useResource(value as string);
   const { classType, hasClassType } = useClassType(property);
   const [title] = useTitle(cell);
-  const { triggerProps, popoverProps, isOpen, closePopover } = usePopover({
-    defaultOpen: true,
+  // `defaultOpen` only seeds the *initial* isOpen state — if this component
+  // remounts (e.g. its row briefly re-resolving after this cell's own save,
+  // see TableRow.tsx), a bare `true` would force the picker back open even
+  // though a value was already picked and the popover was explicitly closed
+  // moments earlier. Only auto-open for a cell that's actually empty.
+  const { triggerProps, popoverProps, closePopover } = usePopover({
+    defaultOpen: !value,
     autoFocusElement: inputRef,
   });
+  const { isOpen } = popoverProps;
+  const { setCursorMode } = useTableEditorContext();
   const selectedElement = useRef<HTMLLIElement>(null);
 
   const [searchValue, setSearchValue] = useState('');
@@ -87,12 +98,24 @@ function AtomicURLCellEdit({
     setSearchValue(e.target.value);
   }, []);
 
+  // Exiting edit mode (not just closing the popover) reuses the same,
+  // already-correct focus-restore path as the Escape key — TableEditor.tsx's
+  // Edit -> Visual layout effect refocuses the grid once cursorMode flips.
+  // Closing only the popover proved unreliable here (this cell's row can
+  // still be settling from its own save when the pick happens), so this is
+  // the belt-and-suspenders finish: pick a value, done editing, back to the
+  // grid — matching how a single-value cell should behave.
+  const finishEditing = useCallback(() => {
+    closePopover();
+    setCursorMode(CursorMode.Visual);
+  }, [closePopover, setCursorMode]);
+
   const handleResultClick = useCallback(
     (result: string) => {
       onChange(result);
-      closePopover();
+      finishEditing();
     },
-    [onChange, closePopover],
+    [onChange, finishEditing],
   );
 
   const {
@@ -114,10 +137,10 @@ function AtomicURLCellEdit({
 
       if (file) {
         onChange(file);
-        closePopover();
+        finishEditing();
       }
     },
-    [onChange, closePopover],
+    [onChange, finishEditing],
   );
 
   const Trigger = useMemo(() => {

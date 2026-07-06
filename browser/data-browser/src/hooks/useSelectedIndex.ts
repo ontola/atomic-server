@@ -15,7 +15,7 @@ interface UseSelectedIndexOptions {
  */
 export function useSelectedIndex<T, K>(
   list: T[],
-  onSelect: (index: number | undefined) => void,
+  onSelect: (index: number | undefined, source: 'keyboard' | 'mouse') => void,
   { initialIndex, key }: UseSelectedIndexOptions = {},
 ): {
   selectedIndex: number | undefined;
@@ -50,7 +50,7 @@ export function useSelectedIndex<T, K>(
     }
 
     if (e.key === 'Enter') {
-      onSelect(selectedIndex);
+      onSelect(selectedIndex, 'keyboard');
     }
 
     setUsingKeyboard(true);
@@ -63,7 +63,7 @@ export function useSelectedIndex<T, K>(
   };
 
   const onClick = (index: number) => {
-    onSelect(index);
+    onSelect(index, 'mouse');
   };
 
   const resetIndex = () => {

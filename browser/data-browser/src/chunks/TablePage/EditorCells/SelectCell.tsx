@@ -6,7 +6,7 @@ import {
   useResource,
   useStore,
 } from '@tomic/react';
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { IconButton } from '@components/IconButton/IconButton';
 import { TagButton, Tag } from '@components/Tag';
@@ -17,7 +17,6 @@ import { stringToSlug } from '@helpers/stringToSlug';
 import { loopingIndex } from '@helpers/loopingIndex';
 import { fadeIn } from '@helpers/commonAnimations';
 import { KeyboardInteraction, useCellOptions } from '@chunks/TableEditor';
-import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 import { AbsoluteCell } from './CellComponents';
 import { FaXmark, FaPlus } from 'react-icons/fa6';
 import { CustomPopover, usePopover } from '@components/CustomPopover';
@@ -57,21 +56,15 @@ function SelectCellEdit({
     .filter(v => v.title.includes(query))
     .map(ft => ft.subject);
 
-  const { isOpen, closePopover, triggerProps, popoverProps } = usePopover({
+  const { triggerProps, popoverProps } = usePopover({
     defaultOpen: true,
     autoFocusElement: inputRef,
   });
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const { activeCellRef } = useTableEditorContext();
-
   const disabledKeyboardInteractions = new Set<KeyboardInteraction>([
     KeyboardInteraction.EditNextRow,
   ]);
-
-  if (isOpen) {
-    disabledKeyboardInteractions.add(KeyboardInteraction.ExitEditMode);
-  }
 
   const cellOptions = {
     disabledKeyboardInteractions,
@@ -97,12 +90,6 @@ function SelectCellEdit({
     setSelectedIndex(prev => loopingIndex(prev + mod, filteredTags.length));
   };
 
-  useEffect(() => {
-    if (!isOpen) {
-      activeCellRef.current?.focus();
-    }
-  }, [activeCellRef, isOpen]);
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     switch (e.key) {
       case 'ArrowUp':
@@ -116,11 +103,6 @@ function SelectCellEdit({
       case 'Enter':
         e.preventDefault();
         handleAddTag(filteredTags[selectedIndex]);
-        break;
-      case 'Escape':
-        e.preventDefault();
-
-        closePopover();
         break;
     }
   };

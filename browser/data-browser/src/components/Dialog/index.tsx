@@ -193,8 +193,14 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
     }
 
     if (show) {
-      if (!dialogRef.current.hasAttribute('open'))
+      if (!dialogRef.current.hasAttribute('open')) {
         dialogRef.current.showModal();
+      }
+
+      const autoFocusElement = dialogRef.current.querySelector<HTMLElement>(
+        '[data-dialog-autofocus]',
+      );
+      autoFocusElement?.focus();
     }
 
     if (dialogRef.current.hasAttribute('data-closing')) {

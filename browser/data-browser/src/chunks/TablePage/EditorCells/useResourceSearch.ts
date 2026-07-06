@@ -6,7 +6,7 @@ import { useSelectedIndex } from '@hooks/useSelectedIndex';
 export function useResourceSearch(
   searchValue: string,
   classType: string | undefined,
-  onResultPick: (result: string) => void,
+  onResultPick: (result: string, source: 'keyboard' | 'mouse') => void,
   valuesWhenEmpty: string[] = [],
 ) {
   const { drive } = useSettings();
@@ -26,10 +26,10 @@ export function useResourceSearch(
   const { selectedIndex, onKeyDown, onMouseOver, onClick, usingKeyboard } =
     useSelectedIndex(
       list,
-      i => {
+      (i, source) => {
         if (i === undefined) return;
 
-        onResultPick(list[i]);
+        onResultPick(list[i], source);
       },
       { initialIndex: 0, key: searchValue },
     );
