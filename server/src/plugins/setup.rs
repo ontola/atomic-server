@@ -62,6 +62,20 @@ fn handle_setup_request<'a>(
         let request: BindDriveRequest =
             serde_json::from_slice(&body).map_err(|e| format!("Failed to parse request: {}", e))?;
 
+        // Binding a host to a drive must never be possible for a caller with no
+        // relationship to that drive. An unbound host previously had NO check at
+        // all here, so an unauthenticated caller could claim a fresh host and
+        // point it at any drive DID — including one the legitimate operator can
+        // never write to, which would permanently lock them out of re-binding it
+        // via this endpoint (rebinding above requires write on the CURRENT drive).
+        let target_drive = store
+            .get_resource(&request.drive.clone().into())
+            .await
+            .map_err(|_| format!("Drive not found: {}", request.drive))?;
+        check_write(store, &target_drive, for_agent)
+            .await
+            .map_err(|_| "You need write access to the drive you're binding this host to.")?;
+
         let server_agent = store.get_default_agent()?;
 
         // Commit INITIAL_DRIVE on internal:/ — the db layer picks this up and
