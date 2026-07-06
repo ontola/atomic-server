@@ -9,6 +9,7 @@ import {
   importerURL,
 } from '../../helpers/navigation';
 import { DIVIDER, DropdownMenu, isItem, DropdownItem } from '../Dropdown';
+import { AutoOpenTrigger } from '../Dropdown/AutoOpenTrigger';
 import toast from 'react-hot-toast';
 import { paths } from '../../routes/paths';
 import { shortcuts } from '../HotKeyWrapper';
@@ -51,6 +52,10 @@ export {
   useCustomContextItems,
 } from './CustomContextItemsContext';
 
+export { ResourceContextMenuProvider } from './ResourceContextMenuProvider';
+export { ResourceContextMenuHost } from './ResourceContextMenuHost';
+export { useResourceContextMenu } from './ResourceContextMenuContext';
+
 export { DIVIDER, type DropdownItem } from '../Dropdown';
 
 export const ContextMenuOptions = {
@@ -86,6 +91,12 @@ export interface ResourceContextMenuProps {
   onAfterDelete?: () => void;
   title?: string;
   external?: boolean;
+  /**
+   * When set, opens the menu at this viewport point (a right-click context
+   * menu) instead of anchoring to a trigger. Defaults the trigger to an
+   * invisible auto-opening one unless an explicit `trigger` is given.
+   */
+  anchorPoint?: { x: number; y: number };
 }
 
 /** Dropdown menu that opens a bunch of actions for some resource */
@@ -99,6 +110,7 @@ export function ResourceContextMenu({
   external,
   bindActive,
   onAfterDelete,
+  anchorPoint,
 }: ResourceContextMenuProps) {
   const navigate = useNavigateWithTransition();
   const location = window.location;
@@ -322,10 +334,12 @@ export function ResourceContextMenu({
 
   const triggerComp =
     trigger ??
-    buildDefaultTrigger(
-      <FaEllipsisVertical />,
-      title ?? `Open ${resource.title} menu`,
-    );
+    (anchorPoint
+      ? AutoOpenTrigger
+      : buildDefaultTrigger(
+          <FaEllipsisVertical />,
+          title ?? `Open ${resource.title} menu`,
+        ));
 
   return (
     <>
@@ -334,6 +348,7 @@ export function ResourceContextMenu({
         Trigger={triggerComp}
         isMainMenu={isMainMenu}
         bindActive={handleBindActive}
+        anchorPoint={anchorPoint}
       />
       <ConfirmationDialog
         title={`Delete resource`}
@@ -350,13 +365,13 @@ export function ResourceContextMenu({
           <ResourceUsage resource={resource} />
         </>
       </ConfirmationDialog>
-      {currentSubject && (
-        <ResourceCodeUsageDialog
-          subject={currentSubject}
-          show={showCodeUsageDialog}
-          bindShow={setShowCodeUsageDialog}
-        />
-      )}
+      {/* Use the menu's own subject, not the current page's — a right-click can
+       * target a resource other than the one being viewed. */}
+      <ResourceCodeUsageDialog
+        subject={subject}
+        show={showCodeUsageDialog}
+        bindShow={setShowCodeUsageDialog}
+      />
     </>
   );
 }

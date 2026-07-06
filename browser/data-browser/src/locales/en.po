@@ -583,6 +583,7 @@ msgid "Edit"
 msgstr "Edit"
 
 #: src/chunks/AI/AgentConfigItem.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Duplicate"
 msgstr "Duplicate"
 
@@ -4505,6 +4506,7 @@ msgstr "Drag column"
 
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/useTableView.ts
 msgid "View"
 msgstr "View"
 
@@ -4994,3 +4996,23 @@ msgstr "<0/> Add card"
 #: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Click to add a value"
 msgstr "Click to add a value"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Rename"
+msgstr "Rename"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "View type"
+msgstr "View type"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid ""
+"Are you sure you want to delete the <0/> view?\n"
+"This only removes the view, not the rows."
+msgstr ""
+"Are you sure you want to delete the <0/> view?\n"
+"This only removes the view, not the rows."
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Delete view"
+msgstr "Delete view"

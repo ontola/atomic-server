@@ -36,6 +36,7 @@ export interface CellProps {
   onClearCell?: () => void;
   onEnterEditModeWithCharacter?: (key: string) => void;
   onEditNextRow?: () => void;
+  onContextMenu?: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 interface IndexCellProps extends CellProps {
@@ -53,6 +54,7 @@ export function Cell({
   ariaLabel,
   onEnterEditModeWithCharacter = () => undefined,
   onEditNextRow,
+  onContextMenu,
 }: React.PropsWithChildren<CellProps>): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -267,6 +269,7 @@ export function Cell({
       onMouseUp={handleMouseUp}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
+      onContextMenu={onContextMenu}
     >
       {children}
     </CellWrapper>

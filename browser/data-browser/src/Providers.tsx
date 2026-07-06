@@ -22,7 +22,10 @@ import { NavStateProvider } from './components/NavState';
 import { Toaster } from './components/Toaster';
 import { AISettingsContextProvider } from '@components/AI/AISettingsContext';
 import { LocaleProvider } from '@components/LocaleContext';
-import { CustomContextItemsProvider } from './components/ResourceContextMenu';
+import {
+  CustomContextItemsProvider,
+  ResourceContextMenuProvider,
+} from './components/ResourceContextMenu';
 import { LazyMCPProvider } from '@components/AI/MCP/LazyMCPProvider';
 import { CustomViewProvider } from '@components/CustomViewProvider';
 import { LazyAIChangesProvider } from '@components/AI/AIChanges/LazyAIChangesProvider';
@@ -77,14 +80,16 @@ export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
                                     <PopoverContainer>
                                       <DropdownContainer>
                                         <CustomContextItemsProvider>
-                                          <NewResourceUIProvider>
-                                            <SkipNav />
-                                            <SearchOverlayContextProvider>
-                                              <NavWrapper>
-                                                {children}
-                                              </NavWrapper>
-                                            </SearchOverlayContextProvider>
-                                          </NewResourceUIProvider>
+                                          <ResourceContextMenuProvider>
+                                            <NewResourceUIProvider>
+                                              <SkipNav />
+                                              <SearchOverlayContextProvider>
+                                                <NavWrapper>
+                                                  {children}
+                                                </NavWrapper>
+                                              </SearchOverlayContextProvider>
+                                            </NewResourceUIProvider>
+                                          </ResourceContextMenuProvider>
                                         </CustomContextItemsProvider>
                                       </DropdownContainer>
                                     </PopoverContainer>

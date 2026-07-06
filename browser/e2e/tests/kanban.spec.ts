@@ -152,4 +152,77 @@ test.describe('kanban', () => {
     await expect(page.getByTestId('kanban-board')).toBeVisible();
     await expect(cardIn(column(page, 'todo'), 'New title')).toBeVisible();
   });
+
+  test('right-clicking a card opens the resource context menu', async ({
+    page,
+  }) => {
+    await createIssueTracker(page, 'Bugs');
+
+    const todo = column(page, 'todo');
+    await addCard(page, todo, 'Right click me');
+
+    await cardIn(todo, 'Right click me').click({ button: 'right' });
+
+    // The same actions as the navbar "More" menu, opened at the cursor.
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await expect(menu.getByTestId('menu-item-history')).toBeVisible();
+    await expect(menu.getByTestId('menu-item-share')).toBeVisible();
+  });
+
+  test('right-click menu actions (use in code, add to chat) work', async ({
+    page,
+  }) => {
+    await createIssueTracker(page, 'Bugs');
+    const todo = column(page, 'todo');
+    await addCard(page, todo, 'Action card');
+
+    // "Use in code" opens a dialog (for the card's own subject).
+    await cardIn(todo, 'Action card').click({ button: 'right' });
+    await page.getByTestId('menu-item-useInCode').click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // "Add to chat" opens the AI sidebar — proves the menu is mounted inside
+    // the AI-sidebar provider (it wasn't before, so this action no-oped).
+    await cardIn(todo, 'Action card').click({ button: 'right' });
+    await page.getByTestId('menu-item-addToChat').click();
+    await expect(page.getByTestId('ai-sidebar')).toHaveAttribute(
+      'data-open',
+      '',
+    );
+  });
+
+  test('view tab menu: change type, duplicate, and delete', async ({
+    page,
+  }) => {
+    await createIssueTracker(page, 'Bugs');
+
+    const boardTab = page.getByRole('tab', { name: 'Board' });
+
+    // Clicking the already-active tab opens its context menu.
+    await boardTab.click();
+    await expect(page.getByTestId('menu-item-duplicate')).toBeVisible();
+
+    // Change type Kanban → Table: the board is replaced by the table grid.
+    await page.getByTestId('menu-item-kind-table').click();
+    await expect(page.getByTestId('kanban-board')).toHaveCount(0);
+
+    // Duplicate the (now table) Board view → a "Board copy" tab appears.
+    await boardTab.click();
+    await page.getByTestId('menu-item-duplicate').click();
+    const copyTab = page.getByRole('tab', { name: 'Board copy' });
+    await expect(copyTab).toBeVisible();
+
+    // Delete the copy via its tab menu + confirmation dialog.
+    await copyTab.click();
+    await page.getByTestId('menu-item-delete').click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Delete' })
+      .click();
+    await expect(copyTab).toHaveCount(0);
+    await expect(boardTab).toBeVisible();
+  });
 });

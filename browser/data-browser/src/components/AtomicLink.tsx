@@ -8,6 +8,7 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import clsx from 'clsx';
 import { useIsInRTE } from '@hooks/useIsInRTE';
 import { useCombineRefs } from '@hooks/useCombineRefs';
+import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 
 export interface AtomicLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
   children?: ReactNode;
@@ -38,12 +39,25 @@ export const AtomicLink: React.FC<React.PropsWithChildren<AtomicLinkProps>> = ({
   untabbable,
   className,
   ref,
+  onContextMenu,
   ...props
 }) => {
   const innerRef = useRef<HTMLAnchorElement>(null);
   const combinedRef = useCombineRefs([ref, innerRef]);
   const navigate = useNavigateWithTransition();
   const isInRTE = useIsInRTE();
+  const { openResourceMenu } = useResourceContextMenu();
+
+  const handleContextMenu = (e: React.MouseEvent<HTMLElement>) => {
+    // Right-clicking a resource link opens the resource context menu (the same
+    // actions as the navbar "More" menu) at the cursor. Only for atomic
+    // subjects — external `href` / `path` links keep the native menu.
+    if (subject) {
+      openResourceMenu(subject, e);
+    }
+
+    onContextMenu?.(e as React.MouseEvent<HTMLAnchorElement>);
+  };
 
   let isOnCurrentPage: boolean;
 
@@ -127,6 +141,7 @@ export const AtomicLink: React.FC<React.PropsWithChildren<AtomicLinkProps>> = ({
       className={clsx(className, { 'atomic-link_external': href && !clean })}
       about={subject}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
       href={hrefConstructed}
       disabled={isOnCurrentPage}
       tabIndex={isOnCurrentPage || untabbable ? -1 : 0}

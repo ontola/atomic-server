@@ -65,6 +65,9 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     activeView,
     setActiveView,
     createView,
+    setViewKind,
+    duplicateView,
+    deleteView,
     collection,
     ready,
     invalidateCollection,
@@ -383,6 +386,9 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
         activeView={activeView}
         setActiveView={setActiveView}
         createView={createView}
+        setViewKind={setViewKind}
+        duplicateView={duplicateView}
+        deleteView={deleteView}
         viewName={viewName}
         renameView={renameView}
         allColumns={allColumns}

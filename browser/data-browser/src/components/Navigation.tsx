@@ -7,6 +7,7 @@ import { OverlayContainer } from './OverlayContainer';
 import { CalculatedPageHeight } from '../globalCssVars';
 import { AISidebarContextProvider } from './AI/AISidebarContext';
 import { AISidebarContainer } from './AI/AISidebarContainer';
+import { ResourceContextMenuHost } from './ResourceContextMenu';
 import { HideInPrint } from './HideInPrint';
 import { MAIN_CONTAINER } from '@helpers/containers';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
@@ -52,6 +53,9 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
 
   return (
     <AISidebarContextProvider>
+      {/* The single app-wide resource context menu (right-click). Mounted here
+       * so its actions have the AI-sidebar, dialog, and router contexts. */}
+      <ResourceContextMenuHost />
       {!hideGlobalChrome && (
         <TopBar subject={contextualSubject} top={navbarTop} />
       )}

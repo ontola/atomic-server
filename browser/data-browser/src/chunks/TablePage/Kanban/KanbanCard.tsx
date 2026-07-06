@@ -11,6 +11,7 @@ import { useCallback, useState, type JSX } from 'react';
 import { FaUpRightFromSquare } from 'react-icons/fa6';
 import ValueComp from '@components/ValueComp';
 import { InputStyled } from '@components/forms/InputStyles';
+import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 
 interface KanbanCardProps {
   subject: string;
@@ -33,6 +34,7 @@ export function KanbanCard({
 }: KanbanCardProps): JSX.Element {
   const resource = useResource(subject);
   const [title] = useTitle(resource);
+  const { openResourceMenu } = useResourceContextMenu();
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -85,6 +87,7 @@ export function KanbanCard({
       ref={setNodeRef}
       $dragging={isDragging}
       onClick={handleClick}
+      onContextMenu={e => openResourceMenu(subject, e)}
       data-testid='kanban-card'
       {...listeners}
       {...attributes}

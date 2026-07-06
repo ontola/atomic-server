@@ -21,6 +21,7 @@ import {
 import { StringCell } from './EditorCells/StringCell';
 import { TablePageContext } from './tablePageContext';
 import { createValueChangedHistoryItem } from './helpers/useTableHistory';
+import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 
 interface TableCellProps {
   columnIndex: number;
@@ -63,6 +64,7 @@ export function TableCell({
   const resource = useResource(subject);
   const { setActiveCell } = useTableEditorContext();
   const { addItemsToHistoryStack } = useContext(TablePageContext);
+  const { openResourceMenu } = useResourceContextMenu();
   // We give an empty error handler to debouncedSave so it doesn't spam the user with error popups when the value is invalid.
   const [save] = useDebouncedSave(resource, SAVE_DEBOUNCE_TIME, emptyFunc);
   const [value, setValue] = useValue(resource, property.subject, valueOpts);
@@ -122,6 +124,19 @@ export function TableCell({
     ],
   );
 
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      // While editing, keep the native menu (copy/paste in the input). A
+      // virtual `_new:` row isn't a real resource, so the menu no-ops there.
+      if (isEditing) {
+        return;
+      }
+
+      openResourceMenu(subject, e);
+    },
+    [isEditing, openResourceMenu, subject],
+  );
+
   const handleEnterEditModeWithCharacter = useCallback(
     (key: string) => {
       onChange(appendStringToType(undefined, key, dataType));
@@ -153,6 +168,7 @@ export function TableCell({
       ariaLabel={`${propertyLabel}, row ${rowIndex + 1}`}
       onEnterEditModeWithCharacter={handleEnterEditModeWithCharacter}
       onEditNextRow={handleEditNextRow}
+      onContextMenu={handleContextMenu}
     >
       {isEditing ? (
         <Editor.Edit

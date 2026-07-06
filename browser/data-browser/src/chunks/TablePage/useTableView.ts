@@ -1,6 +1,7 @@
 import {
   core,
   dataBrowser,
+  JSONValue,
   Resource,
   unknownSubject,
   useArray,
@@ -69,6 +70,12 @@ export interface UseTableViewResult {
   setActiveView: (subject: string) => void;
   /** Create a new (empty) view of the given kind, link it, and switch to it. */
   createView: (kind?: ViewKind) => void;
+  /** Change a view's renderer kind (table/kanban). */
+  setViewKind: (subject: string, kind: ViewKind) => void;
+  /** Copy a view (its config) into a new "<name> copy" view and switch to it. */
+  duplicateView: (subject: string) => void;
+  /** Remove a view from the table and destroy its resource. */
+  deleteView: (subject: string) => void;
   /** Which renderer the active view uses ('table' until a View exists). */
   viewKind: ViewKind;
   /** For kanban views: the SelectProperty whose tags define the columns. */
@@ -373,6 +380,92 @@ export function useTableView(table: Resource): UseTableViewResult {
     [ensureView],
   );
 
+  const setViewKind = useCallback(
+    (subject: string, kind: ViewKind) => {
+      void (async () => {
+        const v = store.getResourceLoading(subject);
+        await v.set(dataBrowser.properties.viewKind, kind, false);
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [store],
+  );
+
+  const duplicateView = useCallback(
+    (subject: string) => {
+      void (async () => {
+        const src = store.getResourceLoading(subject);
+        const srcName = (src.get(core.properties.name) as string) ?? 'View';
+
+        // Copy the source config; only include props that are actually set so
+        // we don't write `undefined` values onto the copy.
+        const propVals: Record<string, JSONValue> = {
+          [core.properties.name]: `${srcName} copy`,
+          [dataBrowser.properties.viewKind]:
+            (src.get(dataBrowser.properties.viewKind) as string) ??
+            DEFAULT_VIEW_KIND,
+        };
+
+        for (const prop of [
+          dataBrowser.properties.viewFilters,
+          dataBrowser.properties.viewSortBy,
+          dataBrowser.properties.viewSortDesc,
+          dataBrowser.properties.viewColumns,
+          dataBrowser.properties.viewGroupBy,
+        ]) {
+          const value = src.get(prop);
+
+          if (value !== undefined) {
+            propVals[prop] = value as JSONValue;
+          }
+        }
+
+        const created = await store.newResource({
+          parent: table.subject,
+          isA: dataBrowser.classes.view,
+          propVals,
+        });
+        await created.save();
+        await table.push(
+          dataBrowser.properties.tableViews,
+          [created.subject],
+          true,
+        );
+        await table.save();
+        setActiveViewOverride(created.subject);
+      })().catch(() => undefined);
+    },
+    [store, table],
+  );
+
+  const deleteView = useCallback(
+    (subject: string) => {
+      void (async () => {
+        const next = (views as string[]).filter(v => v !== subject);
+        await table.set(dataBrowser.properties.tableViews, next, false);
+
+        // The default view must not dangle at a deleted subject.
+        if (defaultViewSubject === subject) {
+          await table.set(
+            dataBrowser.properties.tableDefaultView,
+            next[0] ?? '',
+            false,
+          );
+        }
+
+        await table.save();
+
+        // Switch off the deleted tab before destroying it.
+        if (activeView === subject) {
+          setActiveViewOverride(next[0]);
+        }
+
+        await store.getResourceLoading(subject).destroy();
+      })().catch(() => undefined);
+    },
+    [views, table, defaultViewSubject, activeView, store],
+  );
+
   return {
     filters,
     addFilter,
@@ -393,6 +486,9 @@ export function useTableView(table: Resource): UseTableViewResult {
     activeView,
     setActiveView,
     createView,
+    setViewKind,
+    duplicateView,
+    deleteView,
     viewKind: normalizeViewKind(storedKind),
     viewGroupBy,
     setViewGroupBy,

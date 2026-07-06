@@ -6,9 +6,18 @@ import {
   useString,
   core,
 } from '@tomic/react';
-import { useCallback, useContext, useMemo, useState, type JSX } from 'react';
+import {
+  useCallback,
+  useContext,
+  useImperativeHandle,
+  useMemo,
+  useState,
+  type JSX,
+  type Ref,
+} from 'react';
 import { DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
+import { AutoOpenTrigger } from '@components/Dropdown/AutoOpenTrigger';
 import {
   FaPencil,
   FaEllipsisVertical,
@@ -31,8 +40,14 @@ import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { Column } from '@components/Row';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
+/** Imperative handle so the header can open this menu on right-click. */
+export interface TableHeadingMenuHandle {
+  openAt: (event: React.MouseEvent) => void;
+}
+
 interface TableHeadingMenuProps {
   resource: Resource;
+  ref?: Ref<TableHeadingMenuHandle>;
 }
 
 const Trigger = buildDefaultTrigger(<FaEllipsisVertical />, 'Edit column');
@@ -46,10 +61,25 @@ const useIsExternalProperty = (property: Resource) => {
 
 export function TableHeadingMenu({
   resource,
+  ref,
 }: TableHeadingMenuProps): JSX.Element {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog_internal] = useState(false);
   const [fullDelete, setFullDelete] = useState(false);
+  // Cursor point of a right-click-opened menu (undefined = closed). Shares its
+  // `items` and dialogs with the kebab-triggered menu below.
+  const [menuPoint, setMenuPoint] = useState<{ x: number; y: number }>();
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      openAt: (event: React.MouseEvent) => {
+        event.preventDefault();
+        setMenuPoint({ x: event.clientX, y: event.clientY });
+      },
+    }),
+    [],
+  );
 
   const setShowDeleteDialog = useCallback((show: boolean) => {
     setShowDeleteDialog_internal(show);
@@ -154,6 +184,14 @@ export function TableHeadingMenu({
   return (
     <Wrapper>
       <DropdownMenu Trigger={Trigger} items={items} />
+      {menuPoint && (
+        <DropdownMenu
+          Trigger={AutoOpenTrigger}
+          items={items}
+          anchorPoint={menuPoint}
+          bindActive={active => !active && setMenuPoint(undefined)}
+        />
+      )}
       <EditPropertyDialog
         resource={resource}
         showDialog={showEditDialog}

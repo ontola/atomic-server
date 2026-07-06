@@ -1,22 +1,49 @@
-import { Property, useResource, useTitle } from '@tomic/react';
+import {
+  dataBrowser,
+  Property,
+  useResource,
+  useString,
+  useTitle,
+} from '@tomic/react';
 import { useContext, useMemo, useState, type JSX } from 'react';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { styled } from 'styled-components';
-import { FaFilter, FaPlus, FaTableColumns } from 'react-icons/fa6';
+import {
+  FaCheck,
+  FaCopy,
+  FaFilter,
+  FaPencil,
+  FaPlus,
+  FaTableColumns,
+  FaTrash,
+} from 'react-icons/fa6';
 import { Popover } from '@components/Popover';
-import { DropdownMenu, DropdownItem } from '@components/Dropdown';
+import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
+import { AutoOpenTrigger } from '@components/Dropdown/AutoOpenTrigger';
+import {
+  ConfirmationDialog,
+  ConfirmationDialogTheme,
+} from '@components/ConfirmationDialog';
 import { Column, Row } from '@components/Row';
 import { Checkbox } from '@components/forms/Checkbox';
 import { InputStyled } from '@components/forms/InputStyles';
 import { TablePageContext } from './tablePageContext';
-import { VIEW_KINDS, VIEW_KIND_LABELS, ViewKind } from './tableViewKinds';
+import {
+  normalizeViewKind,
+  VIEW_KINDS,
+  VIEW_KIND_LABELS,
+  ViewKind,
+} from './tableViewKinds';
 
 interface TableViewTabsProps {
   views: string[];
   activeView: string | undefined;
   setActiveView: (subject: string) => void;
   createView: (kind?: ViewKind) => void;
+  setViewKind: (subject: string, kind: ViewKind) => void;
+  duplicateView: (subject: string) => void;
+  deleteView: (subject: string) => void;
   viewName: string;
   renameView: (name: string) => void;
   allColumns: Property[];
@@ -36,6 +63,9 @@ export function TableViewTabs({
   activeView,
   setActiveView,
   createView,
+  setViewKind,
+  duplicateView,
+  deleteView,
   viewName,
   renameView,
   allColumns,
@@ -59,6 +89,9 @@ export function TableViewTabs({
             canWrite={canWrite}
             onSelect={() => subject && setActiveView(subject)}
             onRename={renameView}
+            setViewKind={setViewKind}
+            duplicateView={duplicateView}
+            deleteView={deleteView}
           />
         ))}
         {canWrite && <AddViewMenu createView={createView} />}
@@ -137,6 +170,9 @@ function ViewTab({
   canWrite,
   onSelect,
   onRename,
+  setViewKind,
+  duplicateView,
+  deleteView,
 }: {
   subject: string | undefined;
   active: boolean;
@@ -144,13 +180,75 @@ function ViewTab({
   canWrite: boolean;
   onSelect: () => void;
   onRename: (name: string) => void;
+  setViewKind: (subject: string, kind: ViewKind) => void;
+  duplicateView: (subject: string) => void;
+  deleteView: (subject: string) => void;
 }): JSX.Element {
   const resource = useResource(subject ?? 'unknown-subject');
   const [title] = useTitle(resource);
+  const [storedKind] = useString(resource, dataBrowser.properties.viewKind);
+  const currentKind = normalizeViewKind(storedKind);
   const name = subject ? title || 'Untitled view' : (fallbackName ?? 'View');
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
+  // The cursor point of an open context menu (right-click, or clicking the
+  // already-active tab). `undefined` = closed.
+  const [menuPoint, setMenuPoint] = useState<{ x: number; y: number }>();
+  const [showDelete, setShowDelete] = useState(false);
+
+  const startRename = () => {
+    setDraft(name);
+    setEditing(true);
+  };
+
+  // The menu is only meaningful for saved views (real subject) with write access.
+  const hasMenu = canWrite && !!subject;
+
+  const openMenuAt = (e: React.MouseEvent) => {
+    if (!hasMenu) {
+      return;
+    }
+
+    e.preventDefault();
+    setMenuPoint({ x: e.clientX, y: e.clientY });
+  };
+
+  const menuItems: DropdownItem[] = subject
+    ? [
+        {
+          id: 'rename',
+          label: 'Rename',
+          icon: <FaPencil />,
+          onClick: startRename,
+        },
+        {
+          id: 'duplicate',
+          label: 'Duplicate',
+          icon: <FaCopy />,
+          onClick: () => duplicateView(subject),
+        },
+        {
+          id: 'delete',
+          label: 'Delete',
+          icon: <FaTrash />,
+          onClick: () => setShowDelete(true),
+        },
+        DIVIDER,
+        {
+          id: 'view-type',
+          label: 'View type',
+          header: true,
+          onClick: () => undefined,
+        },
+        ...VIEW_KINDS.map(kind => ({
+          id: `kind-${kind}`,
+          label: VIEW_KIND_LABELS[kind],
+          icon: kind === currentKind ? <FaCheck /> : undefined,
+          onClick: () => setViewKind(subject, kind),
+        })),
+      ]
+    : [];
 
   if (editing) {
     return (
@@ -180,21 +278,48 @@ function ViewTab({
   }
 
   return (
-    <Tab
-      role='tab'
-      aria-selected={active}
-      $active={active}
-      onClick={onSelect}
-      onDoubleClick={() => {
-        if (active && canWrite) {
-          setDraft(name);
-          setEditing(true);
-        }
-      }}
-      type='button'
-    >
-      {name}
-    </Tab>
+    <>
+      <Tab
+        role='tab'
+        aria-selected={active}
+        $active={active}
+        onClick={e => {
+          // Clicking the already-active tab opens its menu; otherwise select.
+          if (active && hasMenu) {
+            openMenuAt(e);
+          } else {
+            onSelect();
+          }
+        }}
+        onContextMenu={openMenuAt}
+        type='button'
+      >
+        {name}
+      </Tab>
+      {menuPoint && (
+        <DropdownMenu
+          items={menuItems}
+          Trigger={AutoOpenTrigger}
+          anchorPoint={menuPoint}
+          bindActive={a => !a && setMenuPoint(undefined)}
+        />
+      )}
+      {subject && (
+        <ConfirmationDialog
+          title='Delete view'
+          show={showDelete}
+          bindShow={setShowDelete}
+          theme={ConfirmationDialogTheme.Alert}
+          confirmLabel='Delete'
+          onConfirm={() => deleteView(subject)}
+        >
+          <p>
+            Are you sure you want to delete the <strong>{name}</strong> view?
+            This only removes the view, not the rows.
+          </p>
+        </ConfirmationDialog>
+      )}
+    </>
   );
 }
 

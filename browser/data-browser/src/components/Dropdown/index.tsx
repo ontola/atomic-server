@@ -47,6 +47,12 @@ interface DropdownMenuProps {
   /** Enables the keyboard shortcut */
   isMainMenu?: boolean;
   bindActive?: (active: boolean) => void;
+  /**
+   * When set, positions the menu at this viewport point (a right-click / context
+   * menu) instead of anchoring it to the trigger element. Pair with
+   * `AutoOpenTrigger` to open it programmatically at the cursor.
+   */
+  anchorPoint?: { x: number; y: number };
 }
 
 export const isItem = (
@@ -113,6 +119,7 @@ export function DropdownMenu({
   Trigger,
   isMainMenu,
   bindActive = () => undefined,
+  anchorPoint,
 }: DropdownMenuProps): JSX.Element {
   const menuId = useId();
   const triggerId = useId();
@@ -162,8 +169,29 @@ export function DropdownMenu({
         return;
       }
 
-      const triggerRect = triggerRef.current.getBoundingClientRect();
       const menuRect = dropdownRef.current.getBoundingClientRect();
+
+      // A right-click / context menu: position at the cursor point with the
+      // usual convention (below-right, flipping left/up when it would overflow
+      // the viewport, clamped to stay on-screen).
+      if (anchorPoint) {
+        const left =
+          anchorPoint.x + menuRect.width > window.innerWidth
+            ? anchorPoint.x - menuRect.width
+            : anchorPoint.x;
+        const top =
+          anchorPoint.y + menuRect.height > window.innerHeight
+            ? anchorPoint.y - menuRect.height
+            : anchorPoint.y;
+
+        dropdownRef.current.style.left = `${Math.max(0, left)}px`;
+        dropdownRef.current.style.top = `${Math.max(0, top)}px`;
+        dropdownRef.current.style.visibility = 'visible';
+
+        return;
+      }
+
+      const triggerRect = triggerRef.current.getBoundingClientRect();
 
       // Check if we're inside a dialog
       const dialog = dropdownRef.current.closest('dialog');
@@ -215,7 +243,7 @@ export function DropdownMenu({
 
       dropdownRef.current.style.visibility = 'visible';
     });
-  }, [isActive, setIsActive]);
+  }, [isActive, setIsActive, anchorPoint]);
 
   const handleMouseOverMenu = useCallback(() => {
     setUseKeys(false);

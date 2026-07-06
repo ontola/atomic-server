@@ -14,11 +14,11 @@ import {
   FaGripVertical,
 } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { TableHeadingMenu } from './TableHeadingMenu';
+import { TableHeadingMenu, TableHeadingMenuHandle } from './TableHeadingMenu';
 import { TablePageContext } from './tablePageContext';
 import { IconType } from 'react-icons';
 import { TableSorting } from './tableSorting';
-import { useContext, useState, type JSX } from 'react';
+import { useContext, useRef, useState, type JSX } from 'react';
 import { TableHeadingComponent } from '@chunks/TableEditor/TableHeader';
 import { dataTypeIconMap } from '../../helpers/iconMap';
 
@@ -45,6 +45,7 @@ export const TableHeading: TableHeadingComponent<Property> = ({
   dragAttributes,
 }): JSX.Element => {
   const [hoverOrFocus, setHoverOrFocus] = useState(false);
+  const menuRef = useRef<TableHeadingMenuHandle>(null);
 
   const propResource = useResource(column.subject);
   const [title] = useTitle(propResource);
@@ -66,6 +67,7 @@ export const TableHeading: TableHeadingComponent<Property> = ({
         onMouseLeave={() => setHoverOrFocus(false)}
         onFocus={() => setHoverOrFocus(true)}
         onBlur={() => setHoverOrFocus(false)}
+        onContextMenu={e => menuRef.current?.openAt(e)}
       >
         <DragIconButton {...dragListeners} {...dragAttributes}>
           <Icon title='Drag column' />
@@ -78,7 +80,7 @@ export const TableHeading: TableHeadingComponent<Property> = ({
         >
           <span aria-hidden>{text}</span>
         </NameButton>
-        <TableHeadingMenu resource={propResource} />
+        <TableHeadingMenu ref={menuRef} resource={propResource} />
       </Wrapper>
     </>
   );
@@ -89,6 +91,10 @@ const Wrapper = styled.div`
   align-items: center;
   gap: 0.5rem;
   width: 100%;
+  /* Fill the full header-cell height so a right-click anywhere on the header
+   * (not just the vertically-centred text) opens the column menu — the cell is
+   * taller than this content, leaving dead strips above/below otherwise. */
+  align-self: stretch;
 `;
 
 interface NameButtonProps {

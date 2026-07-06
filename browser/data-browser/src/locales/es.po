@@ -1890,6 +1890,7 @@ msgstr "Arrastrar columna"
 
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/useTableView.ts
 msgid "View"
 msgstr "Ver"
 
@@ -4282,6 +4283,7 @@ msgid "Show summary"
 msgstr "Mostrar resumen"
 
 #: src/chunks/AI/AgentConfigItem.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Duplicate"
 msgstr "Duplicar"
 
@@ -4977,4 +4979,22 @@ msgstr ""
 
 #: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Click to add a value"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Rename"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "View type"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid ""
+"Are you sure you want to delete the <0/> view?\n"
+"This only removes the view, not the rows."
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Delete view"
 msgstr ""
