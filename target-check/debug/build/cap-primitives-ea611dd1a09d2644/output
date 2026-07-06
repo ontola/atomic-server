@@ -1,9 +1,0 @@
-cargo:rustc-check-cfg=cfg(unix_file_vectored_at)
-cargo:rustc-check-cfg=cfg(windows_by_handle)
-cargo:rustc-check-cfg=cfg(windows_file_type_ext)
-cargo:rustc-check-cfg=cfg(io_error_more)
-cargo:rustc-check-cfg=cfg(io_error_uncategorized)
-cargo:rustc-check-cfg=cfg(racy_asserts)
-cargo:rustc-check-cfg=cfg(emulate_second_only_system)
-cargo:rustc-check-cfg=cfg(io_lifetimes_use_std)
-cargo:rerun-if-changed=build.rs

@@ -1,5 +1,0 @@
-cargo:rustc-check-cfg=cfg(can_vector)
-cargo:rustc-check-cfg=cfg(write_all_vectored)
-cargo:rustc-check-cfg=cfg(windows_file_type_ext)
-cargo:rustc-check-cfg=cfg(io_lifetimes_use_std)
-cargo:rerun-if-changed=build.rs
