@@ -16,7 +16,7 @@ use url::Url;
 use urlencoding::encode;
 
 use atomic_lib::{
-    client::fetch_body,
+    client::fetch_body_untrusted,
     endpoints::{BoxFuture, Endpoint, HandleGetContext},
     errors::AtomicResult,
     storelike::ResourceResponse,
@@ -118,7 +118,7 @@ fn handle_bookmark_request<'a>(
 }
 
 async fn fetch_data(url: &str) -> AtomicResult<String> {
-    fetch_body(url, "text/html", None)
+    fetch_body_untrusted(url, "text/html")
         .await
         .map_err(|e| format!("Fetching failed: {}", e).into())
 }

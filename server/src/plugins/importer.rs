@@ -76,7 +76,7 @@ pub fn handle_post<'a>(
 
         if let Some(fetch_url) = url {
             json = Some(
-                client::fetch_body(&fetch_url, parse::JSON_AD_MIME, None)
+                client::fetch_body_untrusted(&fetch_url, parse::JSON_AD_MIME)
                     .await
                     .map_err(|e| format!("Error while fetching {}: {}", fetch_url, e))?,
             );

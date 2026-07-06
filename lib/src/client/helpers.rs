@@ -8,6 +8,158 @@ use crate::{
     Resource, Storelike, Subject,
 };
 
+// ---------------------------------------------------------------------------
+// SSRF guard for outbound fetches of caller-supplied URLs.
+//
+// Only `fetch_body_untrusted` (used by the `/bookmark` and `/import` endpoints,
+// which pass a `url` parameter straight through from an unauthenticated
+// caller) goes through this guard. Plain `fetch_body`/`fetch_resource`/
+// `post_commit` fetch or post to URLs the system itself determined (a
+// resource's own subject, a peer/federation target, its own configured server)
+// — including, legitimately, `localhost` for same-host client/server round
+// trips, which this architecture relies on. Guarding those too breaks that.
+//
+// Reject loopback, RFC1918/CGNAT, and link-local (incl. the 169.254.169.254
+// cloud-metadata endpoint) targets, on the initial request AND on every
+// redirect hop, for both domain names and IP literals.
+//
+// Native reqwest/hyper-util bypasses the DNS resolver entirely for IP-literal
+// hosts (connects directly), so a resolver hook alone isn't enough — an
+// explicit pre-flight check on every URL (initial + each redirect target)
+// catches that case, while `PublicOnlyResolver` additionally filters resolved
+// addresses for domain names (closing DNS-rebinding). WASM builds run under
+// the browser's own fetch sandboxing and get neither hook.
+//
+// Escape hatch: `ATOMIC_ALLOW_PRIVATE_FETCH=1` disables the guard for
+// deployments that intentionally want `/bookmark`/`/import` to reach internal
+// hosts. Secure by default.
+#[cfg(not(target_arch = "wasm32"))]
+mod ssrf_guard {
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
+
+    pub fn allow_private_fetch() -> bool {
+        static ALLOW: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *ALLOW.get_or_init(|| {
+            matches!(
+                std::env::var("ATOMIC_ALLOW_PRIVATE_FETCH").as_deref(),
+                Ok("1") | Ok("true") | Ok("TRUE")
+            )
+        })
+    }
+
+    fn ipv4_is_blocked(v4: Ipv4Addr) -> bool {
+        let o = v4.octets();
+        v4.is_loopback()        // 127.0.0.0/8
+            || v4.is_private()    // 10/8, 172.16/12, 192.168/16
+            || v4.is_link_local() // 169.254.0.0/16 — cloud metadata
+            || v4.is_broadcast()  // 255.255.255.255
+            || v4.is_unspecified()// 0.0.0.0
+            || v4.is_documentation()
+            || (o[0] == 100 && (64..128).contains(&o[1])) // 100.64.0.0/10 CGNAT
+    }
+
+    fn ipv6_is_blocked(v6: Ipv6Addr) -> bool {
+        v6.is_loopback()
+            || v6.is_unspecified()
+            || v6.is_unique_local() // fc00::/7
+            || v6.is_unicast_link_local() // fe80::/10
+            || v6
+                .to_ipv4_mapped()
+                .map(ipv4_is_blocked)
+                .unwrap_or(false)
+    }
+
+    pub fn ip_is_blocked(ip: IpAddr) -> bool {
+        match ip {
+            IpAddr::V4(v4) => ipv4_is_blocked(v4),
+            IpAddr::V6(v6) => ipv6_is_blocked(v6),
+        }
+    }
+
+    /// Validates scheme + (if the host is an IP literal) that it's public.
+    /// Domain-name hosts are validated later, at actual connect time, by
+    /// `PublicOnlyResolver` — this only needs to catch what the resolver
+    /// never sees. Pure / parameterized on `allow_private` so it's testable
+    /// without touching process-global env state.
+    pub fn preflight(url: &url::Url, allow_private: bool) -> Result<(), String> {
+        match url.scheme() {
+            "http" | "https" => {}
+            other => {
+                return Err(format!(
+                "Refusing to fetch '{url}': unsupported scheme '{other}' (only http/https allowed)"
+            ))
+            }
+        }
+
+        if allow_private {
+            return Ok(());
+        }
+
+        // Use the parsed `Host` enum, not `host_str()` — for an IPv6 literal
+        // `host_str()` returns the bracketed form (`[::1]`), which
+        // `IpAddr::from_str` rejects, silently letting it through a naive
+        // string-parse check.
+        let blocked_ip = match url.host() {
+            Some(url::Host::Ipv4(v4)) => ip_is_blocked(IpAddr::V4(v4)).then_some(IpAddr::V4(v4)),
+            Some(url::Host::Ipv6(v6)) => ip_is_blocked(IpAddr::V6(v6)).then_some(IpAddr::V6(v6)),
+            _ => None,
+        };
+        if let Some(ip) = blocked_ip {
+            return Err(format!(
+                "Refusing to fetch '{url}': target address {ip} is not a public address"
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn check_url(url: &url::Url) -> Result<(), String> {
+        preflight(url, allow_private_fetch())
+    }
+
+    type BoxErr = Box<dyn std::error::Error + Send + Sync>;
+
+    /// Resolves a domain name and filters out any non-public addresses, so a
+    /// name that resolves (now, or on a later request — DNS rebinding) to an
+    /// internal address can't be connected to. Uses `ToSocketAddrs` (the OS
+    /// resolver) since it's the same resolution DNS-rebinding attacks target.
+    pub fn resolve_public(host: &str, allow_private: bool) -> std::io::Result<Vec<SocketAddr>> {
+        let addrs: Vec<SocketAddr> = (host, 0).to_socket_addrs()?.collect();
+
+        let public: Vec<SocketAddr> = addrs
+            .into_iter()
+            .filter(|addr| allow_private || !ip_is_blocked(addr.ip()))
+            .collect();
+
+        if public.is_empty() {
+            return Err(std::io::Error::other(format!(
+                "'{host}' resolved only to non-public addresses; refusing to connect"
+            )));
+        }
+
+        Ok(public)
+    }
+
+    #[derive(Clone, Copy, Default)]
+    pub struct PublicOnlyResolver;
+
+    impl reqwest::dns::Resolve for PublicOnlyResolver {
+        fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+            let host = name.as_str().to_string();
+            Box::pin(async move {
+                let allow_private = allow_private_fetch();
+                let addrs =
+                    tokio::task::spawn_blocking(move || resolve_public(&host, allow_private))
+                        .await
+                        .map_err(|e| std::io::Error::other(e.to_string()))?
+                        .map_err(|e| Box::new(e) as BoxErr)?;
+
+                Ok(Box::new(addrs.into_iter()) as reqwest::dns::Addrs)
+            })
+        }
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn http_client_builder() -> reqwest::ClientBuilder {
     reqwest::Client::builder().timeout(std::time::Duration::from_secs(10))
@@ -16,6 +168,26 @@ fn http_client_builder() -> reqwest::ClientBuilder {
 #[cfg(target_arch = "wasm32")]
 fn http_client_builder() -> reqwest::ClientBuilder {
     reqwest::Client::builder()
+}
+
+/// Same as `http_client_builder`, but with the SSRF guard wired in — for
+/// fetching URLs that came from an unauthenticated, external caller (see
+/// `fetch_body_untrusted`).
+#[cfg(not(target_arch = "wasm32"))]
+fn untrusted_http_client_builder() -> reqwest::ClientBuilder {
+    let redirect_policy = reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() >= 10 {
+            return attempt.error("too many redirects");
+        }
+        match ssrf_guard::check_url(attempt.url()) {
+            Ok(()) => attempt.follow(),
+            Err(e) => attempt.error(e),
+        }
+    });
+
+    http_client_builder()
+        .redirect(redirect_policy)
+        .dns_resolver(std::sync::Arc::new(ssrf_guard::PublicOnlyResolver))
 }
 
 /// Fetches a resource, makes sure its subject matches.
@@ -115,6 +287,9 @@ pub fn get_authentication_headers(url: &str, agent: &Agent) -> AtomicResult<Vec<
 
 /// Fetches a URL, returns its body.
 /// Uses the store's Agent agent (if set) to sign the request.
+/// For a URL the system itself determined (a resource's own subject, a
+/// federation peer, its own server) — NOT for a caller-supplied URL. See
+/// `fetch_body_untrusted` for that.
 #[tracing::instrument(skip_all)]
 pub async fn fetch_body(
     url: &str,
@@ -129,6 +304,41 @@ pub async fn fetch_body(
         .build()
         .map_err(|e| format!("Could not build HTTP client: {}", e))?;
 
+    fetch_body_with_client(&client, url, content_type, client_agent).await
+}
+
+/// Fetches a URL that was supplied by an unauthenticated, external caller
+/// (currently: the `/bookmark` and `/import` endpoints' `url` parameter).
+/// Guards against SSRF — see the `ssrf_guard` module docs above.
+#[tracing::instrument(skip_all)]
+pub async fn fetch_body_untrusted(url: &str, content_type: &str) -> AtomicResult<String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL '{url}': {e}"))?;
+        if let Err(e) = ssrf_guard::check_url(&parsed) {
+            return Err(e.into());
+        }
+
+        let client = untrusted_http_client_builder()
+            .build()
+            .map_err(|e| format!("Could not build HTTP client: {}", e))?;
+
+        fetch_body_with_client(&client, url, content_type, None).await
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        // Runs under the browser's own fetch sandboxing; no separate guard available.
+        fetch_body(url, content_type, None).await
+    }
+}
+
+async fn fetch_body_with_client(
+    client: &reqwest::Client,
+    url: &str,
+    content_type: &str,
+    client_agent: Option<&Agent>,
+) -> AtomicResult<String> {
     let mut req = client.get(url).header("Accept", content_type);
     if let Some(agent) = client_agent {
         if should_sign_request(url, agent) {
@@ -275,5 +485,111 @@ mod test {
         //     .sign(&agent)
         //     .unwrap();
         // post_commit(&commit).unwrap();
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod ssrf_guard_tests {
+    use super::ssrf_guard::{ip_is_blocked, preflight, resolve_public};
+    use std::net::IpAddr;
+
+    fn url(s: &str) -> url::Url {
+        url::Url::parse(s).unwrap()
+    }
+
+    #[test]
+    fn blocks_internal_ips() {
+        for s in [
+            "127.0.0.1",
+            "169.254.169.254", // cloud metadata
+            "10.0.0.5",
+            "172.16.9.9",
+            "192.168.1.1",
+            "100.64.0.1", // CGNAT
+            "0.0.0.0",
+            "::1",
+            "fc00::1",          // ULA
+            "fe80::1",          // link-local
+            "::ffff:127.0.0.1", // v4-mapped loopback
+        ] {
+            let ip: IpAddr = s.parse().unwrap();
+            assert!(ip_is_blocked(ip), "{s} must be blocked");
+        }
+    }
+
+    #[test]
+    fn allows_public_ips() {
+        for s in [
+            "1.1.1.1",
+            "8.8.8.8",
+            "93.184.216.34",
+            "2606:4700:4700::1111",
+        ] {
+            let ip: IpAddr = s.parse().unwrap();
+            assert!(!ip_is_blocked(ip), "{s} must be allowed");
+        }
+    }
+
+    #[test]
+    fn preflight_rejects_bad_scheme_and_literal_internal() {
+        assert!(preflight(&url("http://127.0.0.1/"), false).is_err());
+        assert!(preflight(&url("http://169.254.169.254/latest/meta-data/"), false).is_err());
+        assert!(preflight(&url("http://[::1]/"), false).is_err());
+        assert!(preflight(&url("http://192.168.0.1/admin"), false).is_err());
+        assert!(preflight(&url("ftp://example.com/"), false).is_err());
+        assert!(url::Url::parse("not a url").is_err());
+    }
+
+    #[test]
+    fn preflight_allows_public_literal_and_domains() {
+        // Domains pass preflight and are screened at connect time by the resolver.
+        assert!(preflight(&url("http://example.com/page"), false).is_ok());
+        assert!(preflight(&url("https://1.1.1.1/"), false).is_ok());
+    }
+
+    #[test]
+    fn preflight_escape_hatch_allows_internal_but_still_rejects_bad_scheme() {
+        // With the escape hatch, internal literals are allowed...
+        assert!(preflight(&url("http://127.0.0.1/"), true).is_ok());
+        // ...but non-http(s) schemes are still refused.
+        assert!(preflight(&url("ftp://example.com/"), true).is_err());
+    }
+
+    #[test]
+    fn resolver_rejects_loopback_domain() {
+        // `localhost` resolves only to loopback → the resolver refuses it,
+        // before any socket is opened.
+        assert!(resolve_public("localhost", false).is_err());
+    }
+
+    #[test]
+    fn resolver_filters_but_keeps_public() {
+        // A literal public IP passes the resolver unchanged.
+        let addrs = resolve_public("1.1.1.1", false).unwrap();
+        assert!(!addrs.is_empty());
+        assert!(addrs.iter().all(|sa| !ip_is_blocked(sa.ip())));
+    }
+
+    #[test]
+    fn resolver_escape_hatch_allows_loopback() {
+        assert!(resolve_public("localhost", true).is_ok());
+    }
+
+    /// End-to-end wiring: fetching a loopback-resolving domain must be refused
+    /// via the untrusted (bookmark/import) path.
+    #[tokio::test]
+    async fn fetch_body_untrusted_blocks_localhost_domain() {
+        let result = super::fetch_body_untrusted("http://localhost:1/", "text/html").await;
+        assert!(
+            result.is_err(),
+            "untrusted fetch of loopback-resolving domain must fail"
+        );
+    }
+
+    /// Non-http(s) schemes are rejected before any network activity.
+    #[tokio::test]
+    async fn fetch_body_untrusted_blocks_bad_scheme() {
+        let result = super::fetch_body_untrusted("file:///etc/passwd", "text/html").await;
+        assert!(result.is_err());
     }
 }
