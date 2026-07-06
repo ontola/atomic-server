@@ -19,7 +19,10 @@ import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate'
 import { ResourceSelector } from '../../../ResourceSelector';
 import { Checkbox, CheckboxLabel } from '../../../Checkbox';
 import { useAddToOntology } from '../../../../../hooks/useAddToOntology';
-import { TABLE_TEMPLATES } from '../../../../../chunks/TablePage/tableTemplates';
+import {
+  TABLE_TEMPLATES,
+  type TableTemplate,
+} from '../../../../../chunks/TablePage/tableTemplates';
 import { buildTableFromSpec } from '../../../../../chunks/TablePage/createTableFromSpec';
 import { useNavigateWithTransition } from '../../../../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../../../../helpers/navigation';
@@ -27,6 +30,10 @@ import { constructOpenURL } from '../../../../../helpers/navigation';
 interface NewTableDialogProps extends CustomResourceDialogProps {
   initialExistingClass?: string;
 }
+
+/** The name a table gets when the user doesn't type one: the template's title. */
+const defaultNameFor = (template: TableTemplate): string =>
+  template.spec ? template.title : 'Table';
 
 export const NewTableDialog: FC<NewTableDialogProps> = ({
   parent,
@@ -178,7 +185,16 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
                       key={template.id}
                       type='button'
                       $selected={template.id === templateId}
-                      onClick={() => setTemplateId(template.id)}
+                      onClick={() => {
+                        setTemplateId(template.id);
+                        // Follow the template's default name, but never
+                        // overwrite a name the user typed themselves.
+                        setName(prev =>
+                          TABLE_TEMPLATES.some(t => prev === defaultNameFor(t))
+                            ? defaultNameFor(template)
+                            : prev,
+                        );
+                      }}
                       title={template.description}
                     >
                       <strong>{template.title}</strong>
