@@ -2430,10 +2430,8 @@ msgstr ""
 "Der Titel wird verwendet, um das Subjekt zu erstellen. Bitte beachte, dass\n"
 "das Subjekt später nicht mehr geändert werden kann."
 
-#. placeholder {0}: spec.name
-#. placeholder {0}: name
+#. placeholder {0}: opts.tableName
 #: src/chunks/TablePage/createTableFromSpec.ts
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Represents a row in the {0} table"
 msgstr "Repräsentiert eine Zeile in der {0} Tabelle"
 
@@ -5019,7 +5017,6 @@ msgstr ""
 #: src/chunks/TablePage/createTableFromSpec.ts
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Row"
 msgstr ""
 
@@ -5029,4 +5026,12 @@ msgstr ""
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Names the class of the rows — e.g. every row of an Employees table is an Employee."
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+msgid "Drive created"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+msgid "Failed to create drive"
 msgstr ""

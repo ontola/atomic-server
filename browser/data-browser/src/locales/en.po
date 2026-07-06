@@ -2966,10 +2966,8 @@ msgstr "Ok"
 msgid "Table"
 msgstr "Table"
 
-#. placeholder {0}: spec.name
-#. placeholder {0}: name
+#. placeholder {0}: opts.tableName
 #: src/chunks/TablePage/createTableFromSpec.ts
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Represents a row in the {0} table"
 msgstr "Represents a row in the {0} table"
 
@@ -5042,7 +5040,6 @@ msgstr "New item…"
 #: src/chunks/TablePage/createTableFromSpec.ts
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Row"
 msgstr "Row"
 
@@ -5053,3 +5050,11 @@ msgstr "Each row is a"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Names the class of the rows — e.g. every row of an Employees table is an Employee."
 msgstr "Names the class of the rows — e.g. every row of an Employees table is an Employee."
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+msgid "Drive created"
+msgstr "Drive created"
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+msgid "Failed to create drive"
+msgstr "Failed to create drive"

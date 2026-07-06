@@ -161,10 +161,10 @@ export function NewIdentitySection({
 
       const driveName = username ? `${username}'s Drive` : 'Personal';
 
-      const resource = await store.createDrive(
-        driveName,
-        'Your private space on this server. Only you can read and write here.',
-      );
+      const resource = await store.createDrive(driveName, {
+        description:
+          'Your private space on this server. Only you can read and write here.',
+      });
 
       const finalSecret = Agent.buildSecret(
         identity.privateKey,

@@ -223,6 +223,27 @@ export interface AddResourcesOpts {
   alias?: string;
 }
 
+/** Mirrors `SUBDOMAIN` in the server's `lib/src/urls.rs` (not yet part of a
+ *  generated ontology). Serves the drive on its own subdomain. */
+const SUBDOMAIN_PROP = 'https://atomicdata.dev/properties/subdomain';
+
+export interface CreateDriveOpts {
+  /** Shown on the drive page. Personal drives default to 'Your personal drive.'. */
+  description?: string;
+  /** Subdomain to serve the drive on (e.g. 'my-drive'). */
+  subdomain?: string;
+  /** Name to persist on the Agent resource as part of the same commit that
+   *  links `personalDrive`. Only applies to personal drives — avoids a
+   *  separate save for callers (e.g. dev-drive) that want the agent to be
+   *  renderable as a named resource right away. */
+  agentName?: string;
+  /** A personal drive becomes the agent's home: it is linked as the agent's
+   *  `personalDrive` and hosts the saved-drives switcher list (seeded with
+   *  itself). A non-personal (additional) drive is instead pushed onto the
+   *  agent's EXISTING personal drive's list. Defaults to true. */
+  personal?: boolean;
+}
+
 /**
  * Handlers are functions that are called when a certain event occurs.
  */
@@ -1791,40 +1812,75 @@ export class Store {
   }
 
   /**
-   * Creates a new personal Drive for the current Agent, saves it, and links
-   * it to the Agent resource. Returns the Drive's Resource (already saved).
+   * Creates a new Drive for the current Agent, saves it, links it into the
+   * agent's drive list, and gives it a default Ontology. Returns the Drive's
+   * Resource (already saved).
    *
-   * This is the canonical way to create a drive — use it instead of
-   * duplicating the create-drive-save-link-agent pattern.
+   * This is the canonical way to create a drive — EVERY drive-creation flow
+   * (onboarding, dev-drive, the New Drive dialog) must go through it, so
+   * drive invariants (permissions, switcher list, default ontology) live in
+   * exactly one place.
    */
   public async createDrive(
     name: string,
-    description?: string,
-    /** Optional name to persist on the Agent resource as part of the same
-     *  commit that links `personalDrive` + `drives`. Avoids needing a
-     *  separate save call for callers (e.g. `useDevDrive`) that want the
-     *  agent to be renderable as a named resource right away. */
-    agentName?: string,
+    opts: CreateDriveOpts = {},
   ): Promise<Resource> {
+    const { description, subdomain, agentName, personal = true } = opts;
     const agent = this.getAgent();
 
     if (!agent?.subject) {
       throw new Error('Cannot create a drive without an Agent');
     }
 
+    const propVals: Record<string, JSONValue> = {
+      [core.properties.name]: name,
+      [core.properties.write]: [agent.subject],
+      [core.properties.read]: [agent.subject],
+    };
+
+    const resolvedDescription =
+      description ?? (personal ? 'Your personal drive.' : undefined);
+
+    if (resolvedDescription !== undefined) {
+      propVals[core.properties.description] = resolvedDescription;
+    }
+
+    if (subdomain) {
+      propVals[SUBDOMAIN_PROP] = subdomain;
+    }
+
     const drive = await this.newResource({
       isA: server.classes.drive,
       noParent: true,
-      propVals: {
-        [core.properties.name]: name,
-        [core.properties.description]: description ?? 'Your personal drive.',
-        [core.properties.write]: [agent.subject],
-        [core.properties.read]: [agent.subject],
-      },
+      propVals,
     });
 
     await drive.save();
 
+    if (personal) {
+      await this.linkPersonalDrive(drive, agent.subject, agentName);
+    } else {
+      await this.addToSavedDrives(drive, agent.subject);
+    }
+
+    // Every drive gets a default Ontology: the home for classes and
+    // properties created inside the drive (e.g. table Row classes), so they
+    // don't pile up directly under the drive itself.
+    await this.createDefaultOntology(drive);
+
+    return drive;
+  }
+
+  /**
+   * Makes `drive` the agent's personal/home drive: seeds the saved-drives
+   * switcher list with itself and links it on the Agent resource (optionally
+   * naming the agent in the same commit).
+   */
+  private async linkPersonalDrive(
+    drive: Resource,
+    agentSubject: string,
+    agentName?: string,
+  ): Promise<void> {
     // The user's saved-drives switcher list lives on the personal DRIVE itself
     // (the per-user home index), not on the Agent. Seed it with this drive so
     // it shows up in the switcher. This must be a second commit: the drive's
@@ -1851,7 +1907,7 @@ export class Store {
     // created one — the WS auth is fire-and-forget and races the GET).
     // HTTP signs each request with the current agent and never has stale
     // session state.
-    const agentResource = await this.fetchResourceFromServer(agent.subject, {
+    const agentResource = await this.fetchResourceFromServer(agentSubject, {
       noWebSocket: true,
     });
     await agentResource.set(
@@ -1875,13 +1931,31 @@ export class Store {
     }
 
     await agentResource.save();
+  }
 
-    // Every drive gets a default Ontology: the home for classes and
-    // properties created inside the drive (e.g. table Row classes), so they
-    // don't pile up directly under the drive itself.
-    await this.createDefaultOntology(drive);
+  /**
+   * Adds a non-personal (additional) drive to the saved-drives switcher list
+   * on the agent's personal drive. Best-effort: the agent may not have
+   * provisioned a personal drive yet.
+   */
+  private async addToSavedDrives(
+    drive: Resource,
+    agentSubject: string,
+  ): Promise<void> {
+    try {
+      const agentResource = await this.getResource(agentSubject);
+      const personalDrive = agentResource.get(
+        core.properties.personalDrive,
+      ) as string | undefined;
 
-    return drive;
+      if (personalDrive) {
+        const personalDriveResource = await this.getResource(personalDrive);
+        personalDriveResource.push(server.properties.drives, [drive.subject]);
+        await personalDriveResource.save();
+      }
+    } catch (_e) {
+      // Ignore (e.g. no personal drive yet, or an unwritable agent resource).
+    }
   }
 
   /**

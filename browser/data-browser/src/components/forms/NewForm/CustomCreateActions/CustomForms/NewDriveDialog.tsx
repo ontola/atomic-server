@@ -1,7 +1,10 @@
-import { core, useStore, server } from '@tomic/react';
+import { useStore } from '@tomic/react';
 import { useState, useCallback, FormEvent, FC, useEffect, useId } from 'react';
 import { styled } from 'styled-components';
+import toast from 'react-hot-toast';
 import { stringToSlug } from '../../../../../helpers/stringToSlug';
+import { constructOpenURL } from '../../../../../helpers/navigation';
+import { useNavigateWithTransition } from '../../../../../hooks/useNavigateWithTransition';
 import { Button } from '../../../../Button';
 import {
   useDialog,
@@ -13,10 +16,7 @@ import {
 import Field from '../../../Field';
 import { InputWrapper, InputStyled } from '../../../InputStyles';
 import { CustomResourceDialogProps } from '../../useNewResourceUI';
-import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate';
 import { useSettings } from '../../../../../helpers/AppSettings';
-
-const SUBDOMAIN = 'https://atomicdata.dev/properties/subdomain';
 
 export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
   onClose,
@@ -37,67 +37,42 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
     }
   }, [name, subdomainEdited]);
 
-  const createAndNavigate = useCreateAndNavigate();
+  const navigate = useNavigateWithTransition();
 
   const onSuccess = useCallback(async () => {
     if (!name.trim()) return;
 
-    const agent = store.getAgent();
+    try {
+      // `createDrive` owns all drive invariants (permissions, saved-drives
+      // list, default ontology); this dialog only adds UI concerns.
+      const resource = await store.createDrive(name, {
+        subdomain: subdomain.trim() || undefined,
+        // An ADDITIONAL drive: linked into the switcher list, but it does not
+        // replace the agent's personal/home drive.
+        personal: false,
+      });
 
-    if (!agent || agent.subject === undefined) {
-      throw new Error(
-        'No agent set in the Store, required when creating a Drive',
-      );
+      store.notifyResourceManuallyCreated(resource);
+
+      // Change current drive to the new drive — before navigation.
+      setDrive(resource.subject);
+
+      if (!skipNavigation) {
+        navigate(constructOpenURL(resource.subject));
+      }
+
+      toast.success('Drive created');
+      onCreated?.(resource);
+    } catch (e) {
+      store.notifyError(e);
+      toast.error('Failed to create drive');
     }
-
-    await createAndNavigate(
-      server.classes.drive,
-      {
-        [core.properties.name]: name,
-        [core.properties.write]: [agent.subject],
-        [core.properties.read]: [agent.subject],
-        [SUBDOMAIN]: subdomain.trim(),
-      },
-      {
-        noParent: true,
-        skipNavigation,
-        onCreated: async resource => {
-          // Add the new drive to the user's saved-drives list. That list lives
-          // on their PRIVATE DRIVE (the per-user home index), not on the Agent.
-          // Best-effort: a user may not have provisioned a personal drive yet.
-          try {
-            const agentResource = await store.getResource(agent.subject!);
-            const personalDrive = agentResource.get(
-              core.properties.personalDrive,
-            ) as string | undefined;
-
-            if (personalDrive) {
-              const driveResource = await store.getResource(personalDrive);
-              driveResource.push(server.properties.drives, [resource.subject]);
-              await driveResource.save();
-            }
-          } catch (_e) {
-            // Ignore (e.g. no personal drive yet, or DID agent without a
-            // writable local resource).
-          }
-
-          // Create the drive's default Ontology and link it via
-          // `defaultOntology` — same shared path `store.createDrive` uses.
-          await store.createDefaultOntology(resource);
-
-          // Change current drive to new drive - do this before navigation
-          setDrive(resource.subject);
-
-          onCreated?.(resource);
-        },
-      },
-    );
 
     onClose();
   }, [
     name,
     subdomain,
-    createAndNavigate,
+    navigate,
     onClose,
     setDrive,
     store,

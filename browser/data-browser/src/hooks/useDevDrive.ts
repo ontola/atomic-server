@@ -61,16 +61,15 @@ export function useDevDrive() {
 
       store.setAgent(newAgent);
 
-      // The third arg pipes `DEV_DRIVE_AGENT_NAME` into the same
+      // `agentName` pipes `DEV_DRIVE_AGENT_NAME` into the same
       // agent-resource save that `createDrive` already does (to wire up
       // `personalDrive` + `drives`). The agent shows up as "Dev User"
       // wherever its resource is rendered (commit author lines, chat
       // messages, etc.). E2E tests assert against this constant.
-      const driveResource = await store.createDrive(
-        DEV_DRIVE_DISPLAY_NAME,
-        `Created via \`/app/dev-drive\` for local development and E2E. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
-        DEV_DRIVE_AGENT_NAME,
-      );
+      const driveResource = await store.createDrive(DEV_DRIVE_DISPLAY_NAME, {
+        description: `Created via \`/app/dev-drive\` for local development and E2E. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
+        agentName: DEV_DRIVE_AGENT_NAME,
+      });
 
       const finalSecret = Agent.buildSecret(
         agentKeys.privateKey,
