@@ -78,7 +78,14 @@ function Comments({ subject }: { subject: string }) {
     invalidate();
   };
 
-  return <ChatView messages={messages} loading={loading} onSend={handleSend} />;
+  return (
+    <ChatView
+      messages={messages}
+      loading={loading}
+      onSend={handleSend}
+      noContainerPadding
+    />
+  );
 }
 
 const PanelWrapper = styled(Column)`

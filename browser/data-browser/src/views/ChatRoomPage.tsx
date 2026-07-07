@@ -16,7 +16,7 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
           resource={resource}
           onCommit={() => inputRef.current?.focus()}
         />
-        <ChatRoomView resource={resource} inputRef={inputRef} />
+        <ChatRoomView resource={resource} inputRef={inputRef} viewTransition />
       </Column>
     </FullPageWrapper>
   );

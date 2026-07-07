@@ -4,6 +4,7 @@ import {
   dataBrowser,
   Resource,
   Store,
+  useArray,
   useCanWrite,
   useCollection,
   useCreatedAt,
@@ -18,6 +19,7 @@ import toast from 'react-hot-toast';
 import {
   FaCopy,
   FaLink,
+  FaLocationArrow,
   FaMessage,
   FaPencil,
   FaReply,
@@ -44,6 +46,13 @@ export interface ChatViewProps {
   onSend: (text: string, replyTo?: string) => Promise<void>;
   /** Pass a ref to control composer focus from outside (e.g. after a title edit). */
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  /** Give the composer the `chat-input` view-transition-name. Only ONE
+   *  mounted chat may do this (the full-page ChatRoom) — duplicate names
+   *  make the browser skip view transitions with a warning. */
+  viewTransition?: boolean;
+  /** Drop the message container's own padding — for hosts (panels) whose
+   *  chrome already pads; message rows keep their inline padding. */
+  noContainerPadding?: boolean;
 }
 
 /**
@@ -56,6 +65,8 @@ export function ChatView({
   loading: messagesLoading,
   onSend,
   inputRef: inputRefProp,
+  viewTransition = false,
+  noContainerPadding = false,
 }: ChatViewProps) {
   const [newMessageVal, setNewMessage] = useState('');
   const [isReplyTo, setReplyTo] = useState<string | undefined>(undefined);
@@ -135,6 +146,7 @@ export function ChatView({
         <ChatMessagesContainer
           enableAutoScroll
           scrollToBottomTrigger={scrollToBottomTrigger}
+          fullView={noContainerPadding}
         >
           {messagesLoading ? (
             <LoaderInline>Loading messages...</LoaderInline>
@@ -163,7 +175,7 @@ export function ChatView({
           </Button>
         </Detail>
       )}
-      <MessageForm onSubmit={sendMessage}>
+      <MessageForm onSubmit={sendMessage} $viewTransition={viewTransition}>
         <MessageInput
           aria-label='Chat input'
           rows={textAreaHight}
@@ -191,13 +203,22 @@ export interface ChatRoomViewProps {
   resource: Resource;
   /** Pass a ref to control composer focus from outside (e.g. after a title edit). */
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  /** See {@link ChatViewProps.viewTransition}. */
+  viewTransition?: boolean;
+  /** See {@link ChatViewProps.noContainerPadding}. */
+  noContainerPadding?: boolean;
 }
 
 /**
  * Message list and composer for an existing ChatRoom. Used by the full-page
  * ChatRoom view and the Comments panel.
  */
-export function ChatRoomView({ resource, inputRef }: ChatRoomViewProps) {
+export function ChatRoomView({
+  resource,
+  inputRef,
+  viewTransition,
+  noContainerPadding,
+}: ChatRoomViewProps) {
   const store = useStore();
   const { messages, loading, invalidate } = useChatMessages(resource.subject);
 
@@ -212,6 +233,8 @@ export function ChatRoomView({ resource, inputRef }: ChatRoomViewProps) {
       loading={loading}
       onSend={handleSend}
       inputRef={inputRef}
+      viewTransition={viewTransition}
+      noContainerPadding={noContainerPadding}
     />
   );
 }
@@ -223,16 +246,19 @@ interface SendChatMessageOptions {
   /** For comments: the resource this message is about. The comment thread of a resource is the set of Messages with `about` pointing to it. */
   about?: string;
   replyTo?: string;
+  /** Additional classes besides Message (e.g. FollowEvent for
+   *  follow-session trail entries, which render as compact system lines). */
+  extraClasses?: string[];
 }
 
 /** Creates and saves a Message resource. */
 export async function sendChatMessage(
   store: Store,
-  { parent, text, about, replyTo }: SendChatMessageOptions,
+  { parent, text, about, replyTo, extraClasses }: SendChatMessageOptions,
 ) {
   const msgResource = await store.newResource({
     parent,
-    isA: dataBrowser.classes.message,
+    isA: [dataBrowser.classes.message, ...(extraClasses ?? [])],
     propVals: {
       [core.properties.description]: text,
       // `createdAt` is NOT set here: it's derived from the genesis Loro
@@ -266,6 +292,8 @@ const MESSAGE_MAX_LEN = 500;
 const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   const resource = useResource(subject);
   const [description] = useString(resource, core.properties.description);
+  const [isA] = useArray(resource, core.properties.isA);
+  const isFollowEvent = isA.includes(dataBrowser.classes.followEvent);
   // Creation date + creator come from the genesis change in the resource's own
   // Loro oplog (materialized into propvals) — no commit fetch, so they survive
   // a refresh. The commit subject is intentionally NOT passed.
@@ -278,6 +306,16 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   function handleCopyUrl() {
     navigator.clipboard.writeText(subject);
     toast.success('Copied message URL to clipboard');
+  }
+
+  if (isFollowEvent) {
+    return (
+      <FollowEventMessage
+        description={description ?? ''}
+        createdAt={createdAt}
+        createdBy={createdBy}
+      />
+    );
   }
 
   function handleCopyText() {
@@ -327,10 +365,92 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
           </Button>
         </MessageActions>
       </MessageDetails>
-      <Markdown text={description || ''} maxLength={MESSAGE_MAX_LEN} />
+      {/* markExternalLinks routes links through AtomicLink: subject links
+          navigate in-app instead of triggering a full page load. */}
+      <Markdown
+        text={description || ''}
+        maxLength={MESSAGE_MAX_LEN}
+        markExternalLinks
+      />
     </MessageComponent>
   );
 });
+
+/** Matches the trail text written by the follow-session logger:
+ *  `Viewing [title](subject)`. The markdown is kept as a fallback for
+ *  clients without FollowEvent support; we render a live resource link. */
+const TRAIL_TEXT_REGEX = /^Viewing \[.*\]\((\S+)\)$/;
+
+// Data-matching prefixes of stored trail messages. Module scope keeps them
+// out of Wuchale's i18n transform — as capitalized literals inside the
+// component they'd be wrapped in runtime translation lookups, so matching
+// would break in any locale where "Started" translates differently.
+const SESSION_STARTED_PREFIX = 'Started';
+const SESSION_ENDED_PREFIX = 'Ended';
+
+/** Compact system-style line for follow-session events (trail entries and
+ *  session start/end markers) — visually distinct from chat messages. */
+function FollowEventMessage({
+  description,
+  createdAt,
+  createdBy,
+}: {
+  description: string;
+  createdAt: Date | undefined;
+  createdBy: string | undefined;
+}) {
+  const visited = description.match(TRAIL_TEXT_REGEX)?.[1];
+
+  const text = description.startsWith(SESSION_STARTED_PREFIX)
+    ? /* @wc-ignore */ 'started a follow session'
+    : description.startsWith(SESSION_ENDED_PREFIX)
+      ? /* @wc-ignore */ 'ended the follow session'
+      : description;
+
+  return (
+    <FollowEventLine>
+      <FaLocationArrow />
+      {/* Trail entries show only the visited resource — the author is the
+          session's agent on every line, so repeating it is pure noise. */}
+      {visited ? (
+        <ResourceInline subject={visited} />
+      ) : (
+        <>
+          {createdBy && <ResourceInline subject={createdBy} />}
+          <span>{text}</span>
+        </>
+      )}
+      {createdAt && (
+        <EventTime dateTime={createdAt.toISOString()}>
+          {createdAt.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </EventTime>
+      )}
+    </FollowEventLine>
+  );
+}
+
+const FollowEventLine = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.4ch;
+  padding: 0.1rem 1rem;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.85rem;
+
+  & svg {
+    font-size: 0.7rem;
+    flex-shrink: 0;
+  }
+`;
+
+const EventTime = styled.time`
+  margin-left: 0.5ch;
+  font-size: 0.7rem;
+  opacity: 0.7;
+`;
 
 interface MessageLineProps {
   subject: string;
@@ -437,14 +557,14 @@ const MessageInput = styled.textarea`
 `;
 
 /** Wrapper for the new message form */
-const MessageForm = styled.form`
+const MessageForm = styled.form<{ $viewTransition?: boolean }>`
   display: flex;
   flex-basis: 3rem;
   flex-direction: row;
   border-radius: ${p => p.theme.radius};
   background: ${p => p.theme.colors.bg};
 
-  view-transition-name: chat-input;
+  view-transition-name: ${p => (p.$viewTransition ? 'chat-input' : 'none')};
 
   > :first-child {
     border-top-left-radius: ${p => p.theme.radius};

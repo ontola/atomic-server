@@ -49,6 +49,8 @@ import { isRunningInTauri } from '../helpers/tauri';
 import { openSearchOverlay } from './OverlayContainer';
 import { useAIChanges } from './AIChangesContext';
 import { Row } from './Row';
+import { ResourcePresenceRow } from './Presence/ResourcePresenceRow';
+import { FollowStatus } from './Presence/FollowStatus';
 
 export type NavBarProps = {
   resource?: Resource;
@@ -269,6 +271,8 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
       <EditableBreadcrumb resource={resource} fallback={title} />
       <Spacer />
       <ButtonArea>
+        <FollowStatus />
+        <ResourcePresenceRow subject={resource.subject} />
         {hasAiChanges && (
           <Row gap='0.5rem' center>
             <SmallButton clean onClick={() => revertResource(resource.subject)}>

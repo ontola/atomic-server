@@ -1,7 +1,7 @@
 import React, { useCallback, useContext, createContext } from 'react';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 
-export type RightPanelId = 'ai' | 'comments';
+export type RightPanelId = 'ai' | 'comments' | 'followSession';
 
 /**
  * Manages which panel occupies the right side of the screen. Panels are

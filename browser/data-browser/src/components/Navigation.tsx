@@ -9,6 +9,7 @@ import { AISidebarContextProvider } from './AI/AISidebarContext';
 import { AISidebarContainer } from './AI/AISidebarContainer';
 import { RightPanelProvider } from './RightPanel/RightPanelContext';
 import { CommentsPanelContainer } from './CommentsPanel/CommentsPanelContainer';
+import { FollowSessionPanelContainer } from './Presence/FollowSessionPanelContainer';
 import { ResourceContextMenuHost } from './ResourceContextMenu';
 import { HideInPrint } from './HideInPrint';
 import { MAIN_CONTAINER } from '@helpers/containers';
@@ -26,6 +27,7 @@ interface NavWrapperProps {
 
 const AISidebarMemo = React.memo(AISidebarContainer);
 const CommentsPanelMemo = React.memo(CommentsPanelContainer);
+const FollowSessionPanelMemo = React.memo(FollowSessionPanelContainer);
 
 /** Wraps the entire app and adds a navbar at the top or bottom */
 export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
@@ -69,6 +71,7 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
           {!hideGlobalChrome && (
             <HideInPrint>
               <CommentsPanelMemo />
+              <FollowSessionPanelMemo />
               <AISidebarMemo />
             </HideInPrint>
           )}

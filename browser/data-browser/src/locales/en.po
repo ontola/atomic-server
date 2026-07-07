@@ -5078,3 +5078,109 @@ msgstr "Comments"
 #: src/chunks/TablePage/TableResource.tsx
 msgid "Failed to insert row"
 msgstr "Failed to insert row"
+
+#: src/components/Presence/ResourcePresenceRow.tsx
+msgid "Also viewing this resource"
+msgstr "Also viewing this resource"
+
+#: src/components/Presence/SidebarPresence.tsx
+msgid "Currently here"
+msgstr "Currently here"
+
+#: src/components/Presence/FollowStatus.tsx
+#: src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Show profile"
+msgstr "Show profile"
+
+#: src/components/Presence/FollowStatus.tsx
+#: src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Stop following"
+msgstr "Stop following"
+
+#: src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Follow"
+msgstr "Follow"
+
+#: src/components/Presence/PresenceAvatarMenu.tsx
+msgid "PresenceAvatarTrigger"
+msgstr "PresenceAvatarTrigger"
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "Don’t allow following me"
+msgstr "Don’t allow following me"
+
+#~ msgid "Followers are disconnected; re-enable any time via this menu."
+#~ msgstr "Followers are disconnected; re-enable any time via this menu."
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "Following you"
+msgstr "Following you"
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "Following"
+msgstr "Following"
+
+#~ msgid "Following disabled"
+#~ msgstr "Following disabled"
+
+#~ msgid "Enable"
+#~ msgstr "Enable"
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "Disconnects current followers."
+msgstr "Disconnects current followers."
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "Following — press for actions"
+msgstr "Following — press for actions"
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "These users follow you — press for actions"
+msgstr "These users follow you — press for actions"
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "Enable following"
+msgstr "Enable following"
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "BadgedFollowTrigger"
+msgstr "BadgedFollowTrigger"
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "Jump to their location"
+msgstr "Jump to their location"
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "Go to the resource they are viewing right now."
+msgstr "Go to the resource they are viewing right now."
+
+#: src/components/Presence/FollowStatus.tsx
+#: src/components/Presence/FollowStatus.tsx
+msgid "Open session chat"
+msgstr "Open session chat"
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "Chat and the log of resources visited during the session."
+msgstr "Chat and the log of resources visited during the session."
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "Chat and the log of resources you visited while followed."
+msgstr "Chat and the log of resources you visited while followed."
+
+#~ msgid "Started"
+#~ msgstr "Started"
+
+#~ msgid "Ended"
+#~ msgstr "Ended"
+
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid ""
+"No follow session yet. Follow someone — or be followed — to start\n"
+"one."
+msgstr ""
+"No follow session yet. Follow someone — or be followed — to start\n"
+"one."
+
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "Follow session"
+msgstr "Follow session"

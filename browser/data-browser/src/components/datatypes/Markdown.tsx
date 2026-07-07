@@ -1,4 +1,7 @@
-import ReactMarkdown, { Components } from 'react-markdown';
+import ReactMarkdown, {
+  Components,
+  defaultUrlTransform,
+} from 'react-markdown';
 import { styled } from 'styled-components';
 import remarkGFM from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -35,10 +38,23 @@ const disableElementsInLink = ['a'];
 
 const ExternalLinkComponent = ({
   children: linkChildren,
+  href,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+  // Links to atomic subjects navigate in-app; a plain anchor would trigger
+  // a full page (re)load. Everything else stays a regular external link.
+  if (href?.startsWith('did:')) {
+    return (
+      <AtomicLink subject={href} {...(props as AtomicLinkProps)}>
+        {linkChildren}
+      </AtomicLink>
+    );
+  }
+
   return (
-    <AtomicLink {...(props as AtomicLinkProps)}>{linkChildren}</AtomicLink>
+    <AtomicLink href={href} {...(props as AtomicLinkProps)}>
+      {linkChildren}
+    </AtomicLink>
   );
 };
 
@@ -69,6 +85,11 @@ const Markdown: FC<Props> = ({
           remarkDiff,
         ]}
         rehypePlugins={[rehypeKatex]}
+        // The default transform strips unknown protocols, which would turn
+        // links to atomic subjects (did:...) into dead anchors.
+        urlTransform={url =>
+          url.startsWith('did:') ? url : defaultUrlTransform(url)
+        }
         disallowedElements={nestedInLink ? disableElementsInLink : undefined}
         components={
           {

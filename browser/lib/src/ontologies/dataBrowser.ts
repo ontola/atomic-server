@@ -21,6 +21,7 @@ export const dataBrowser = {
     formattedNumber: 'https://atomicdata.dev/classes/FormattedNumber',
     importer: 'https://atomicdata.dev/classes/Importer',
     message: 'https://atomicdata.dev/classes/Message',
+    followEvent: 'https://atomicdata.dev/classes/FollowEvent',
     numberFormat: 'https://atomicdata.dev/classes/NumberFormat',
     paragraph: 'https://atomicdata.dev/classes/elements/Paragraph',
     rangeProperty: 'https://atomicdata.dev/classes/RangeProperty',
@@ -36,6 +37,8 @@ export const dataBrowser = {
     about: 'https://atomicdata.dev/properties/about',
     color: 'https://atomicdata.dev/properties/color',
     commentsFolder: 'https://atomicdata.dev/properties/commentsFolder',
+    followSessionsChatroom:
+      'https://atomicdata.dev/properties/followSessionsChatroom',
     currency: 'https://atomicdata.dev/ontology/data-browser/property/currency',
     customNodePositioning:
       'https://atomicdata.dev/properties/custom-node-positioning',
@@ -197,6 +200,7 @@ export namespace DataBrowser {
   export type FormattedNumber = typeof dataBrowser.classes.formattedNumber;
   export type Importer = typeof dataBrowser.classes.importer;
   export type Message = typeof dataBrowser.classes.message;
+  export type FollowEvent = typeof dataBrowser.classes.followEvent;
   export type NumberFormat = typeof dataBrowser.classes.numberFormat;
   export type Paragraph = typeof dataBrowser.classes.paragraph;
   export type RangeProperty = typeof dataBrowser.classes.rangeProperty;
@@ -285,6 +289,10 @@ declare module '../index.js' {
         | typeof dataBrowser.properties.about
         | typeof dataBrowser.properties.replyTo;
     };
+    [dataBrowser.classes.followEvent]: {
+      requires: BaseProps;
+      recommends: 'https://atomicdata.dev/properties/description';
+    };
     [dataBrowser.classes.numberFormat]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/shortname';
       recommends: never;
@@ -360,6 +368,7 @@ declare module '../index.js' {
     [dataBrowser.properties.about]: string;
     [dataBrowser.properties.color]: string;
     [dataBrowser.properties.commentsFolder]: string;
+    [dataBrowser.properties.followSessionsChatroom]: string;
     [dataBrowser.properties.currency]: string;
     [dataBrowser.properties.customNodePositioning]: Record<
       string,
@@ -407,6 +416,7 @@ declare module '../index.js' {
     [dataBrowser.properties.about]: 'about';
     [dataBrowser.properties.color]: 'color';
     [dataBrowser.properties.commentsFolder]: 'commentsFolder';
+    [dataBrowser.properties.followSessionsChatroom]: 'followSessionsChatroom';
     [dataBrowser.properties.currency]: 'currency';
     [dataBrowser.properties.customNodePositioning]: 'customNodePositioning';
     [dataBrowser.properties.dateFormat]: 'dateFormat';

@@ -85,6 +85,9 @@ These components help with rendering resources in different contexts.
 - `src/components/HighlightedCodeBlock.tsx` - Lazy-loaded syntax-highlighted code block boundary.
 - `src/components/ErrorLook.tsx` - Shared error typography, simple error box, and `ErrorBlock` with optional trace details.
 - `src/components/CommentCountBadge.tsx` - Live comment-count pill for any resource (counts Messages whose `about` points at it); highlights when there are unseen messages (device-local, via `useLastSeenComments`).
+- `src/components/Presence/ResourcePresenceRow.tsx` - Facepile of agents currently viewing a resource (ephemeral drive presence); also announces the viewer's own presence. Skips the currently-followed agent (their avatar lives in the navbar's Following badge).
+- `src/components/Presence/AgentAvatar.tsx` - Round agent avatar: profile image (`image` File prop or `imageUrl`) with colored-initial fallback; any size. Exports `colorForAgent` for a stable per-agent color on any presence surface.
+- `src/components/Presence/SidebarPresence.tsx` - Compact read-only avatar strip for sidebar rows showing who is currently at that resource.
 
 ## Accessibility And Input Affordances
 

@@ -44,6 +44,17 @@
     "https://atomicdata.dev/properties/shortname": "comments-folder"
   },
   {
+    "@id": "https://atomicdata.dev/properties/followSessionsChatroom",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/ChatRoom",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Points to the ChatRoom in this Drive where follow sessions are logged: while an agent is being followed, their client posts which resources they visit, so past sessions can be reviewed and discussed.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "follow-sessions-chatroom"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/replyTo",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Message",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
@@ -85,5 +96,17 @@
       "https://atomicdata.dev/properties/parent"
     ],
     "https://atomicdata.dev/properties/shortname": "message"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/FollowEvent",
+    "https://atomicdata.dev/properties/description": "A system Message in a follow-session ChatRoom documenting the followed agent's activity: which resource they viewed, or a session starting / ending. Clients render these more compactly than regular chat messages. FollowEvents are also Messages (both classes are set).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/description"
+    ],
+    "https://atomicdata.dev/properties/shortname": "follow-event"
   }
 ]

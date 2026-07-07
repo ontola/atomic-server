@@ -40,7 +40,7 @@ import {
 } from '@tomic/react';
 import { EditorEvents } from './EditorEvents';
 import { useLoroSync } from './useLoroSync';
-import { randomItem } from '@helpers/randomItem';
+import { colorForAgent } from '@components/Presence/AgentAvatar';
 import { EditorWrapperBase } from './EditorWrapperBase';
 import styled, { useTheme } from 'styled-components';
 import { useSettings } from '@helpers/AppSettings';
@@ -72,8 +72,6 @@ export type CollaborativeEditorProps = {
   onBlur?: () => void;
 };
 
-const COLORS = ['#70d6ff', '#ff70a6', '#ff9770', '#ffd670', '#e9ff70'];
-
 const UNDO_KEYS = 'Mod-z';
 const REDO_KEYS = 'Mod-Shift-z';
 const REDO_WINDOWS_KEYS = 'Mod-y';
@@ -86,10 +84,12 @@ export default function CollaborativeEditor({
   onBlur,
 }: CollaborativeEditorProps): React.JSX.Element {
   const store = useStore();
-  const [color] = useState(randomItem(COLORS));
   const showNewResourceUI = useNewResourceUI();
   const [save] = useDebouncedSave(resource, 500);
   const { agent, drive } = useSettings();
+  // Same deterministic per-agent color as the presence avatars, so a
+  // user's cursor and their avatar match everywhere.
+  const color = agent?.subject ? colorForAgent(agent.subject) : '#70d6ff';
   const agentResource = useResource<Core.Agent>(agent?.subject);
   const { upload } = useUpload(resource);
   const ephemeralStore = useLoroSync(resource, doc);

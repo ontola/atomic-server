@@ -23,7 +23,13 @@ export async function getOrCreateDriveLocation(
   const existing = drive.get(pointerProperty) as string | undefined;
 
   if (existing) {
-    return existing;
+    // A pointer to a deleted/broken resource should not be returned —
+    // recreate instead (the stale pointer gets overwritten below).
+    const target = await store.getResource(existing);
+
+    if (!target.error) {
+      return existing;
+    }
   }
 
   const resource = await store.newResource({
@@ -63,5 +69,22 @@ export async function getOrCreateAiChatsFolder(
     driveSubject,
     ai.properties.aiChatsFolder,
     { isA: dataBrowser.classes.folder, name: /* @wc-ignore */ 'AI Chats' },
+  );
+}
+
+/** The Drive's follow-sessions ChatRoom: while an agent is being followed,
+ *  their client logs which resources they visit here (issue #1229). */
+export async function getOrCreateFollowSessionsChatroom(
+  store: Store,
+  driveSubject: string,
+): Promise<string> {
+  return getOrCreateDriveLocation(
+    store,
+    driveSubject,
+    dataBrowser.properties.followSessionsChatroom,
+    {
+      isA: dataBrowser.classes.chatroom,
+      name: /* @wc-ignore */ 'Follow sessions',
+    },
   );
 }

@@ -164,6 +164,7 @@ pub const MESSAGES: &str = "https://atomicdata.dev/properties/messages";
 pub const NEXT_PAGE: &str = "https://atomicdata.dev/properties/nextPage";
 pub const ABOUT: &str = "https://atomicdata.dev/properties/about";
 pub const COMMENTS_FOLDER: &str = "https://atomicdata.dev/properties/commentsFolder";
+pub const FOLLOW_SESSIONS_CHATROOM: &str = "https://atomicdata.dev/properties/followSessionsChatroom";
 // ... for DocumentV2
 pub const DOCUMENT_CONTENT: &str = "https://atomicdata.dev/properties/documentContent";
 // ... for Importers
