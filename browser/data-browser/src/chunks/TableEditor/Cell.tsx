@@ -32,7 +32,11 @@ export interface CellProps {
   disabled?: boolean;
   align?: CellAlign;
   role?: string;
-  ariaLabel?: string;
+  /** Supplementary position/context info (e.g. "name, row 1"). Exposed as
+   * `aria-description`, NOT `aria-label` — an aria-label would override the
+   * cell's own content as its accessible name, hiding the actual value from
+   * both screen readers and role-based queries. */
+  ariaDescription?: string;
   onClearCell?: () => void;
   onEnterEditModeWithCharacter?: (key: string) => void;
   onEditNextRow?: () => void;
@@ -51,7 +55,7 @@ export function Cell({
   disabled,
   align,
   role,
-  ariaLabel,
+  ariaDescription,
   onEnterEditModeWithCharacter = () => undefined,
   onEditNextRow,
   onContextMenu,
@@ -260,7 +264,7 @@ export function Cell({
       ref={ref}
       disabled={disabled}
       role={role ?? 'gridcell'}
-      aria-label={ariaLabel}
+      aria-description={ariaDescription}
       className={className}
       allowUserSelect={cursorMode === CursorMode.Edit}
       align={align}

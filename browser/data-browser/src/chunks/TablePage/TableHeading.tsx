@@ -76,9 +76,9 @@ export const TableHeading: TableHeadingComponent<Property> = ({
           onClick={() => setSortBy(propResource.subject)}
           bold={isSorted}
           title={text}
-          aria-label={`Sort by ${text}`}
+          aria-description={`Sort by ${text}`}
         >
-          <span aria-hidden>{text}</span>
+          {text}
         </NameButton>
         <TableHeadingMenu ref={menuRef} resource={propResource} />
       </Wrapper>

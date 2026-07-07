@@ -165,7 +165,7 @@ export function TableCell({
       rowIndex={rowIndex}
       columnIndex={columnIndex}
       align={alignment}
-      ariaLabel={`${propertyLabel}, row ${rowIndex + 1}`}
+      ariaDescription={`${propertyLabel}, row ${rowIndex + 1}`}
       onEnterEditModeWithCharacter={handleEnterEditModeWithCharacter}
       onEditNextRow={handleEditNextRow}
       onContextMenu={handleContextMenu}

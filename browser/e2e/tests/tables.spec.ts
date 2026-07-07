@@ -490,8 +490,6 @@ test.describe('tables', async () => {
 
     // Reload so the rows are collection members (positional insert targets
     // persisted rows; this-session virtual rows always append at the bottom).
-    // Note: gridcells are aria-labelled "name, row N", so cell CONTENT is
-    // asserted via text, not role name.
     await page.reload();
     await expect(page.getByTestId('editable-title').first()).toBeVisible();
     await expect(page.getByText('rowA', { exact: true })).toBeVisible({
