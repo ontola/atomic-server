@@ -14,6 +14,7 @@ pub const REDIRECT: &str = "https://atomicdata.dev/classes/Redirect";
 pub const ATOM: &str = "https://atomicdata.dev/classes/Atom";
 pub const FILE: &str = "https://atomicdata.dev/classes/File";
 pub const CHATROOM: &str = "https://atomicdata.dev/classes/ChatRoom";
+pub const FOLDER: &str = "https://atomicdata.dev/classes/Folder";
 pub const PARAGRAPH: &str = "https://atomicdata.dev/classes/elements/Paragraph";
 pub const MESSAGE: &str = "https://atomicdata.dev/classes/Message";
 pub const IMPORTER: &str = "https://atomicdata.dev/classes/Importer";
@@ -158,6 +159,8 @@ pub const IMAGE_HEIGHT: &str = "https://atomicdata.dev/properties/imageHeight";
 // ... for ChatRooms and Messages
 pub const MESSAGES: &str = "https://atomicdata.dev/properties/messages";
 pub const NEXT_PAGE: &str = "https://atomicdata.dev/properties/nextPage";
+pub const ABOUT: &str = "https://atomicdata.dev/properties/about";
+pub const COMMENTS_FOLDER: &str = "https://atomicdata.dev/properties/commentsFolder";
 // ... for DocumentV2
 pub const DOCUMENT_CONTENT: &str = "https://atomicdata.dev/properties/documentContent";
 // ... for Importers

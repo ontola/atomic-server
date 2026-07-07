@@ -33,7 +33,9 @@ export const dataBrowser = {
     plainText: 'https://atomicdata.dev/classes/PlainText',
   },
   properties: {
+    about: 'https://atomicdata.dev/properties/about',
     color: 'https://atomicdata.dev/properties/color',
+    commentsFolder: 'https://atomicdata.dev/properties/commentsFolder',
     currency: 'https://atomicdata.dev/ontology/data-browser/property/currency',
     customNodePositioning:
       'https://atomicdata.dev/properties/custom-node-positioning',
@@ -123,6 +125,8 @@ export const dataBrowser = {
     ['https://atomicdata.dev/classes/Message']: [
       'https://atomicdata.dev/properties/description',
       'https://atomicdata.dev/properties/parent',
+      'https://atomicdata.dev/properties/about',
+      'https://atomicdata.dev/properties/replyTo',
     ],
     ['https://atomicdata.dev/classes/NumberFormat']: [
       'https://atomicdata.dev/properties/shortname',
@@ -277,7 +281,9 @@ declare module '../index.js' {
         | BaseProps
         | 'https://atomicdata.dev/properties/description'
         | 'https://atomicdata.dev/properties/parent';
-      recommends: never;
+      recommends:
+        | typeof dataBrowser.properties.about
+        | typeof dataBrowser.properties.replyTo;
     };
     [dataBrowser.classes.numberFormat]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/shortname';
@@ -351,7 +357,9 @@ declare module '../index.js' {
   }
 
   interface PropTypeMapping {
+    [dataBrowser.properties.about]: string;
     [dataBrowser.properties.color]: string;
+    [dataBrowser.properties.commentsFolder]: string;
     [dataBrowser.properties.currency]: string;
     [dataBrowser.properties.customNodePositioning]: Record<
       string,
@@ -396,7 +404,9 @@ declare module '../index.js' {
   }
 
   interface PropSubjectToNameMapping {
+    [dataBrowser.properties.about]: 'about';
     [dataBrowser.properties.color]: 'color';
+    [dataBrowser.properties.commentsFolder]: 'commentsFolder';
     [dataBrowser.properties.currency]: 'currency';
     [dataBrowser.properties.customNodePositioning]: 'customNodePositioning';
     [dataBrowser.properties.dateFormat]: 'dateFormat';

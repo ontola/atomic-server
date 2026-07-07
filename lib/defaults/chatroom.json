@@ -23,6 +23,27 @@
     "https://atomicdata.dev/properties/shortname": "next-page"
   },
   {
+    "@id": "https://atomicdata.dev/properties/about",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The resource this resource is about. For example, a comment Message points to the resource being discussed. The thread of comments on a resource is the set of Messages whose `about` points to it.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "about"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/commentsFolder",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Folder",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Points to the Folder in this Drive that contains the discussion ChatRooms for resources in the Drive.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "comments-folder"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/replyTo",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Message",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
@@ -50,11 +71,15 @@
   },
   {
     "@id": "https://atomicdata.dev/classes/Message",
-    "https://atomicdata.dev/properties/description": "A single Chat Message, usually in a ChatRoom.\n\nInformation about its creator, and created data can be found using `last-commit`.",
+    "https://atomicdata.dev/properties/description": "A single Chat Message, usually in a ChatRoom. When used as a comment on another resource, `about` points to the commented resource.\n\nInformation about its creator, and created data can be found using `last-commit`.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Class"
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/about",
+      "https://atomicdata.dev/properties/replyTo"
+    ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/description",
       "https://atomicdata.dev/properties/parent"

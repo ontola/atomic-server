@@ -21,6 +21,7 @@ export const GridCard = styled.div.attrs<ViewTransitionProps>(p => ({
 `;
 
 export const GridItemWrapper = styled.a`
+  position: relative;
   --shadow:
     0px 0.7px 1.3px rgba(0, 0, 0, 0.06), 0px 1.8px 3.2px rgba(0, 0, 0, 0.043),
     0px 3.4px 6px rgba(0, 0, 0, 0.036), 0px 6px 10.7px rgba(0, 0, 0, 0.03),

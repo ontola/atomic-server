@@ -1,7 +1,7 @@
-import React, { useContext, useState, createContext } from 'react';
+import React, { useCallback, useContext, useState, createContext } from 'react';
 
 import type { AIMessageContext } from '../../chunks/AI/types';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { useRightPanel } from '../RightPanel/RightPanelContext';
 
 export const AISidebarContext = createContext<{
   isOpen: boolean;
@@ -18,10 +18,23 @@ export const AISidebarContext = createContext<{
 export const useAISidebar = () => {
   return useContext(AISidebarContext);
 };
+
+/**
+ * Open state lives in the shared RightPanelContext so the AI sidebar and the
+ * Comments panel are mutually exclusive. This provider keeps the boolean
+ * isOpen/setIsOpen API the AI components already use.
+ */
 export const AISidebarContextProvider: React.FC<React.PropsWithChildren> = ({
   children,
 }) => {
-  const [isOpen, setIsOpen] = useLocalStorage('atomic.aiSidebar.open', false);
+  const { activePanel, setPanelOpen } = useRightPanel();
+  const isOpen = activePanel === 'ai';
+
+  const setIsOpen = useCallback<React.Dispatch<React.SetStateAction<boolean>>>(
+    action => setPanelOpen('ai', action),
+    [setPanelOpen],
+  );
+
   const [contextItems, setContextItems] = useState<AIMessageContext[]>([]);
 
   return (

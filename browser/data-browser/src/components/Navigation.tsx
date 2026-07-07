@@ -7,6 +7,8 @@ import { OverlayContainer } from './OverlayContainer';
 import { CalculatedPageHeight } from '../globalCssVars';
 import { AISidebarContextProvider } from './AI/AISidebarContext';
 import { AISidebarContainer } from './AI/AISidebarContainer';
+import { RightPanelProvider } from './RightPanel/RightPanelContext';
+import { CommentsPanelContainer } from './CommentsPanel/CommentsPanelContainer';
 import { ResourceContextMenuHost } from './ResourceContextMenu';
 import { HideInPrint } from './HideInPrint';
 import { MAIN_CONTAINER } from '@helpers/containers';
@@ -23,6 +25,7 @@ interface NavWrapperProps {
 }
 
 const AISidebarMemo = React.memo(AISidebarContainer);
+const CommentsPanelMemo = React.memo(CommentsPanelContainer);
 
 /** Wraps the entire app and adds a navbar at the top or bottom */
 export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
@@ -52,24 +55,27 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
   );
 
   return (
-    <AISidebarContextProvider>
-      {/* The single app-wide resource context menu (right-click). Mounted here
-       * so its actions have the AI-sidebar, dialog, and router contexts. */}
-      <ResourceContextMenuHost />
-      {!hideGlobalChrome && (
-        <TopBar subject={contextualSubject} top={navbarTop} />
-      )}
-      <SideBarWrapper top={navbarTop} fullViewportContent={hideGlobalChrome}>
-        {!hideGlobalChrome && <SideBar />}
-        <Content>{children}</Content>
+    <RightPanelProvider>
+      <AISidebarContextProvider>
+        {/* The single app-wide resource context menu (right-click). Mounted here
+         * so its actions have the AI-sidebar, dialog, and router contexts. */}
+        <ResourceContextMenuHost />
         {!hideGlobalChrome && (
-          <HideInPrint>
-            <AISidebarMemo />
-          </HideInPrint>
+          <TopBar subject={contextualSubject} top={navbarTop} />
         )}
-      </SideBarWrapper>
-      <OverlayContainer />
-    </AISidebarContextProvider>
+        <SideBarWrapper top={navbarTop} fullViewportContent={hideGlobalChrome}>
+          {!hideGlobalChrome && <SideBar />}
+          <Content>{children}</Content>
+          {!hideGlobalChrome && (
+            <HideInPrint>
+              <CommentsPanelMemo />
+              <AISidebarMemo />
+            </HideInPrint>
+          )}
+        </SideBarWrapper>
+        <OverlayContainer />
+      </AISidebarContextProvider>
+    </RightPanelProvider>
   );
 }
 

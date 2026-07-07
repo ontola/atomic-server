@@ -487,50 +487,50 @@ msgstr "Effacer l'erreur"
 msgid "Try Again"
 msgstr "Réessayer"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Chat input"
 msgstr "Saisie de chat"
 
 #: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Send"
 msgstr "Envoyer"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Send message [enter]"
 msgstr "Envoyer le message [entrée]"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copied message URL to clipboard"
 msgstr "URL du message copiée dans le presse-papiers"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copied message text to clipboard"
 msgstr "Texte du message copié dans le presse-papiers"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Edit message"
 msgstr "Modifier le message"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Reply to this message"
 msgstr "Répondre à ce message"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copy link to this message"
 msgstr "Copier le lien vers ce message"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copy message text"
 msgstr "Copier le texte du message"
 
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 #: src/views/BookmarkPage/BookmarkPreview.tsx
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "loading..."
 msgstr "chargement..."
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "to"
 msgstr "à"
 
@@ -3251,11 +3251,11 @@ msgstr "Supprimer le tag"
 msgid "Open tag page"
 msgstr "Ouvrir la page des tags"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "No messages yet"
 msgstr "Aucun message pour le moment"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Be the first to say something"
 msgstr "Soyez le premier à dire quelque chose"
 
@@ -3610,7 +3610,7 @@ msgstr "Lien copié dans le presse-papiers"
 msgid "<0/> Copy link"
 msgstr "<0/> Copier le lien"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Loading messages..."
 msgstr "Chargement des messages..."
 
@@ -5036,3 +5036,22 @@ msgstr ""
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Failed to create drive"
 msgstr ""
+
+#: src/components/CommentsPanel/CommentsPanelContainer.tsx
+msgid "Open a resource to see its comments."
+msgstr ""
+
+#: src/components/CommentsPanel/CommentsPanelContainer.tsx
+#: src/components/NavBar.tsx
+#: src/helpers/standardLocations.ts
+msgid "Comments"
+msgstr ""
+
+#~ msgid "No comments yet"
+#~ msgstr ""
+
+#~ msgid "Start discussion"
+#~ msgstr ""
+
+#~ msgid "Only editors of this resource can start a discussion."
+#~ msgstr ""

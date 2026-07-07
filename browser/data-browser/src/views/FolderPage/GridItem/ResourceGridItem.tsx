@@ -24,6 +24,7 @@ import { useNavigateWithTransition } from '../../../hooks/useNavigateWithTransit
 import { LoaderBlock } from '../../../components/Loader';
 import { ArticleGridItem } from './ArticleGridItem';
 import { FilePreviewThumbnail } from '../../File/FilePreviewThumbnail';
+import { CommentCountBadge } from '../../../components/CommentCountBadge';
 
 export interface ResourceGridItemProps {
   subject: string;
@@ -82,6 +83,7 @@ export function ResourceGridItem({
 
   return (
     <GridItemWrapper onClick={handleClick} href={subject}>
+      <CornerBadge subject={subject} />
       <GridItemTitle subject={transitionSubject}>{title}</GridItemTitle>
       {isFolder ? (
         <FolderIcon />
@@ -99,6 +101,14 @@ export function ResourceGridItem({
     </GridItemWrapper>
   );
 }
+
+const CornerBadge = styled(CommentCountBadge)`
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 1;
+  box-shadow: var(--shadow);
+`;
 
 const ClassBanner = styled.div`
   display: flex;

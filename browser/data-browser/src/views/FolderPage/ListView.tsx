@@ -13,6 +13,7 @@ import { CommitDetail } from '../../components/CommitDetail';
 import { ViewProps } from './FolderDisplayStyle';
 import { getIconForClass } from '../../helpers/iconMap';
 import { QuickCreateRow } from '../../components/NewInstanceButton';
+import { CommentCountBadge } from '../../components/CommentCountBadge';
 
 import type { JSX } from 'react';
 
@@ -78,6 +79,7 @@ function Title({ resource }: CellProps): JSX.Element {
         <Icon />
       </IconWrapper>
       <AtomicLink subject={resource.subject}>{title}</AtomicLink>
+      <CommentCountBadge subject={resource.subject} />
     </TitleWrapper>
   );
 }

@@ -1299,62 +1299,62 @@ msgstr "Plugins"
 msgid "Remove tag"
 msgstr "Remove tag"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Loading messages..."
 msgstr "Loading messages..."
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "No messages yet"
 msgstr "No messages yet"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Be the first to say something"
 msgstr "Be the first to say something"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Chat input"
 msgstr "Chat input"
 
 #: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Send"
 msgstr "Send"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Send message [enter]"
 msgstr "Send message [enter]"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copied message URL to clipboard"
 msgstr "Copied message URL to clipboard"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copied message text to clipboard"
 msgstr "Copied message text to clipboard"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Edit message"
 msgstr "Edit message"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Reply to this message"
 msgstr "Reply to this message"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copy link to this message"
 msgstr "Copy link to this message"
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copy message text"
 msgstr "Copy message text"
 
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 #: src/views/BookmarkPage/BookmarkPreview.tsx
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "loading..."
 msgstr "loading..."
 
-#: src/views/ChatRoomPage.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "to"
 msgstr "to"
 
@@ -5058,3 +5058,22 @@ msgstr "Drive created"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "Failed to create drive"
 msgstr "Failed to create drive"
+
+#: src/components/CommentsPanel/CommentsPanelContainer.tsx
+msgid "Open a resource to see its comments."
+msgstr "Open a resource to see its comments."
+
+#: src/components/CommentsPanel/CommentsPanelContainer.tsx
+#: src/components/NavBar.tsx
+#: src/helpers/standardLocations.ts
+msgid "Comments"
+msgstr "Comments"
+
+#~ msgid "No comments yet"
+#~ msgstr "No comments yet"
+
+#~ msgid "Start discussion"
+#~ msgstr "Start discussion"
+
+#~ msgid "Only editors of this resource can start a discussion."
+#~ msgstr "Only editors of this resource can start a discussion."

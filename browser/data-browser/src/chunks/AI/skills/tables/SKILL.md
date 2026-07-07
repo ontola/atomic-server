@@ -31,11 +31,20 @@ time. Describe the columns declaratively:
 {
   "name": "Issues",
   "columns": [
-    { "name": "Status", "type": "select", "options": ["Todo", "Doing", "Done"] },
+    {
+      "name": "Status",
+      "type": "select",
+      "options": ["Todo", "Doing", "Done"]
+    },
     { "name": "Assignee", "type": "relation" }
   ],
   "views": [
-    { "name": "Board", "kind": "kanban", "groupByColumn": "Status", "default": true }
+    {
+      "name": "Board",
+      "kind": "kanban",
+      "groupByColumn": "Status",
+      "default": true
+    }
   ]
 }
 ```

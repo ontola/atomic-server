@@ -25,6 +25,7 @@ import {
   FaArrowLeft,
   FaArrowRight,
   FaBars,
+  FaComments,
   FaMagnifyingGlass,
   FaShare,
   FaTags,
@@ -33,6 +34,8 @@ import * as RadixPopover from '@radix-ui/react-popover';
 import type { JSX } from 'react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
+import { useRightPanel } from './RightPanel/RightPanelContext';
+import { useCommentCount } from '../hooks/useCommentCount';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
 import { TagSelectPopover } from './Tag/TagSelectPopover';
@@ -285,6 +288,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
             </LabelButton>
           }
         />
+        <CommentsButton subject={resource.subject} />
         {enableAI && (
           <LabelButton onClick={() => setIsOpen(prev => !prev)}>
             <AIIcon />
@@ -299,6 +303,28 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         />
       </ButtonArea>
     </NavBarWrapper>
+  );
+}
+
+/** Comments panel toggle showing the live comment count at the icon. */
+function CommentsButton({ subject }: { subject: string }): JSX.Element {
+  const { togglePanel } = useRightPanel();
+  const { count, hasUnseen } = useCommentCount(subject);
+
+  return (
+    <CommentsLabelButton
+      onClick={() => togglePanel('comments')}
+      data-testid='navbar-comments-button'
+      data-unseen={hasUnseen ? '' : undefined}
+      title={
+        count > 0
+          ? /* @wc-ignore */ `${count} comments`
+          : /* @wc-ignore */ 'Comments'
+      }
+    >
+      {count > 0 ? <CommentCount>{count}</CommentCount> : <FaComments />}
+      <span>Comments</span>
+    </CommentsLabelButton>
   );
 }
 
@@ -362,6 +388,27 @@ const LabelButton = styled.button`
     background: ${p => p.theme.colors.bg1};
     color: ${p => p.theme.colors.text};
   }
+`;
+
+const CommentsLabelButton = styled(LabelButton)`
+  &[data-unseen] {
+    color: ${p => p.theme.colors.main};
+    font-weight: bold;
+  }
+`;
+
+/**
+ * Rendered in place of the comment icon, matching its 1em footprint so the
+ * navbar doesn't shift. Uses <b>: ButtonArea's icon-only rule hides <span>s
+ * on narrow screens, but the count must stay visible.
+ */
+const CommentCount = styled.b`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1em;
+  font-weight: inherit;
+  line-height: 1;
 `;
 
 const TagsButton = styled.button`

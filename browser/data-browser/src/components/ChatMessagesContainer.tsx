@@ -10,12 +10,20 @@ interface ChatMessagesContainerProps {
   enableAutoScroll?: boolean;
   /** When this value changes, scroll the compact separator (or bottom) into view. */
   scrollToCompactTrigger?: number;
+  /** When this value changes, force-scroll to the bottom and re-attach, e.g. after the user sends a message. */
+  scrollToBottomTrigger?: number;
   fullView?: boolean;
 }
 
 export const ChatMessagesContainer: React.FC<
   React.PropsWithChildren<ChatMessagesContainerProps>
-> = ({ children, enableAutoScroll, scrollToCompactTrigger, fullView }) => {
+> = ({
+  children,
+  enableAutoScroll,
+  scrollToCompactTrigger,
+  scrollToBottomTrigger,
+  fullView,
+}) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -67,6 +75,15 @@ export const ChatMessagesContainer: React.FC<
 
     scrollToCompactSeparator();
   }, [scrollToCompactTrigger]);
+
+  useEffect(() => {
+    if (scrollToBottomTrigger === undefined || scrollToBottomTrigger === 0) {
+      return;
+    }
+
+    stuckToBottomRef.current = true;
+    scrollToBottom();
+  }, [scrollToBottomTrigger]);
 
   useEffect(() => {
     // Initial scroll to bottom when component mounts.

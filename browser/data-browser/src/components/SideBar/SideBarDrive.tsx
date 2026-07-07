@@ -1,4 +1,5 @@
 import {
+  dataBrowser,
   server,
   useCanWrite,
   useChildren,
@@ -61,9 +62,19 @@ export function SideBarDrive({
     driveResource,
     server.properties.defaultOntology,
   );
+  // Same for the Comments folder (the standard location holding comment
+  // Messages, created lazily on the first comment): comments are reached
+  // through the Comments panel, not by browsing the folder.
+  const [commentsFolder] = useString(
+    driveResource,
+    dataBrowser.properties.commentsFolder,
+  );
   const subResources = useMemo(
-    () => allChildren.filter(subject => subject !== defaultOntology),
-    [allChildren, defaultOntology],
+    () =>
+      allChildren.filter(
+        subject => subject !== defaultOntology && subject !== commentsFolder,
+      ),
+    [allChildren, defaultOntology, commentsFolder],
   );
   const [title] = useTitle(driveResource);
   const navigate = useNavigateWithTransition();

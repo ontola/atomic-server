@@ -10,7 +10,7 @@ import { GeneratingIndicator } from './GeneratingIndicator';
 import { IconButton } from '@components/IconButton/IconButton';
 import { Button } from '@components/Button';
 import { FaXmark, FaPaperclip, FaFile } from 'react-icons/fa6';
-import { ChatMessagesContainer } from './ChatMessagesContainer';
+import { ChatMessagesContainer } from '@components/ChatMessagesContainer';
 import { useStore, type Resource } from '@tomic/react';
 import { AIProvider } from '@components/AI/aiContstants';
 import {
