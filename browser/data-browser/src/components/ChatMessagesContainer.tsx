@@ -155,10 +155,13 @@ export const ChatMessagesContainer: React.FC<
   );
 };
 
+/**
+ * Transparent: the backdrop color comes from the surrounding surface (the
+ * right panel or the full-page chat window), so chats look the same
+ * everywhere instead of rendering as an inset box.
+ */
 const MessagesContainer = styled(ScrollArea)<{ $fullView?: boolean }>`
   overflow: auto;
   height: 100%;
-  background-color: ${p => p.theme.colors.bgBody};
-  border-radius: ${p => p.theme.radius};
   padding: ${p => (p.$fullView ? '0' : p.theme.size())};
 `;

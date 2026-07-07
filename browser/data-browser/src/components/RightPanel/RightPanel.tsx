@@ -57,7 +57,9 @@ const PanelContainer = styled.div.attrs<PanelContainerProps>(p => ({
   } as Record<string, string>,
 }))`
   position: relative;
-  background-color: ${p => p.theme.colors.bg};
+  /* Grey backdrop: chat content renders directly on it (no inset box),
+   * matching the full-page AI chat. */
+  background-color: ${p => p.theme.colors.bgBody};
   display: none;
   transform: translateX(${PANEL_WIDTH_PROP.var()});
   width: min(${PANEL_WIDTH_PROP.var()}, 100vw);

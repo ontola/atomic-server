@@ -947,6 +947,7 @@ const AttachmentPreview = styled.div`
 `;
 
 const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
+  ${p => p.fullView && `background-color: ${p.theme.colors.bgBody};`}
   padding: ${p => (p.fullView ? p.theme.size() : 0)};
   padding-top: ${p => (p.fullView ? p.theme.size(2) : 0)};
   position: relative;
