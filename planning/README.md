@@ -129,6 +129,7 @@ Design intent, kept for direction. None has a line of code behind it.
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Recorded tours; `unified-templates.md` defers them. |
+| [`atomic-forms.md`](./atomic-forms.md) | **Planned.** Forms/Survey feature — schema, builder UI, agent-less submission endpoint, `/form/:id` runtime, results in Tables. Research: [`atomic-forms-research.md`](./atomic-forms-research.md). |
 
 ## Slices and companions
 
