@@ -108,19 +108,16 @@ test.describe('canvas live update', () => {
     await pageB.context().close();
   });
 
-  // KNOWN BUG (reproduction): a stroke committed by the canvas owner is NOT
-  // delivered over WS fan-out to a DIFFERENT viewer subscribed to the same
-  // public drive — the viewer's Store never receives the update (verified:
-  // its `strokeData` stays empty), so its canvas never repaints. Same-agent
-  // multi-tab live update (the test above) works, which isolates this to
-  // cross-identity drive fan-out. Marked `fail` so the suite stays green
-  // until it's fixed; remove the annotation once fan-out delivers here.
+  // A stroke committed by the canvas owner must reach a DIFFERENT viewer
+  // subscribed to the same public drive. This used to fail: the browser only
+  // sent the drive SUB inside its auth handshake, so an anonymous viewer never
+  // subscribed, and setting the drive after connect (deep-link adoption) never
+  // (re)subscribed either — the viewer's Store stayed empty. Fixed by making
+  // the drive subscription connection-lifecycle-driven (see websockets.ts).
   test('a stroke drawn by the owner appears live for a different viewer on a public drive', async ({
     page,
     browser,
   }) => {
-    test.fail();
-
     // Owner: dev drive made public, plus a canvas.
     await devDrive(page);
     await makeDrivePublic(page);

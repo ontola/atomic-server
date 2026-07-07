@@ -8,7 +8,7 @@
 import { createAuthentication } from './authentication.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
-import type { Store } from './store.js';
+import { StoreEvents, type Store } from './store.js';
 import { AtomicError, ErrorType } from './error.js';
 import {
   type Commit,
@@ -177,6 +177,7 @@ export class WSClient {
   private _retryDelay = 1000;
   private _retryTimer: ReturnType<typeof setTimeout> | undefined;
   private _onlineListener: (() => void) | undefined;
+  private _driveUnsub: (() => void) | undefined;
 
   /** When true, all WS frames are logged to the console in human-readable form. */
   public debug =
@@ -266,6 +267,15 @@ export class WSClient {
     this.store = store;
     this.handleMessage = this.handleMessage.bind(this);
     this.handleOpen = this.handleOpen.bind(this);
+
+    // Switching (or first setting) the drive must (re)subscribe for live
+    // commit fan-out. The drive is often chosen AFTER the socket opens — a
+    // returning user's `setDrive` on hydration, or a deep-linked/anonymous
+    // session adopting a drive once the resource resolves — so subscribing
+    // only inside the connect handshake misses it. Idempotent server-side.
+    this._driveUnsub = store.on(StoreEvents.DriveChanged, () =>
+      this.subscribeToDrive(),
+    );
 
     const wsURL = new URL(url);
     wsURL.protocol = wsURL.protocol === 'http:' ? 'ws' : 'wss';
@@ -389,6 +399,9 @@ export class WSClient {
       clearTimeout(this._retryTimer);
     }
 
+    this._driveUnsub?.();
+    this._driveUnsub = undefined;
+
     if (
       this._onlineListener &&
       typeof window !== 'undefined' &&
@@ -443,14 +456,9 @@ export class WSClient {
           this.ws.protocol || WS_PROTOCOL,
         );
 
-        // Re-subscribe to drive queries
-        const drive = this.store.getDrive();
-
-        if (drive) {
-          this.sendBinary(encodeSub(drive));
-        }
-
-        // Re-subscribe to active Loro sync and ephemeral channels
+        // Re-subscribe to the drive + active Loro sync and ephemeral channels.
+        // `reSubscribeAll` now owns the drive SUB (for both authenticated and
+        // anonymous sessions), so there's no separate `encodeSub` here.
         this.reSubscribeAll();
 
         // Refetch resources that had 401 errors
@@ -993,7 +1001,28 @@ export class WSClient {
     }
   }
 
+  /** Subscribe to the current drive for live commit fan-out (UPDATE/DESTROY).
+   *  Sent for authenticated AND anonymous connections — the server gates the
+   *  subscription on read access to the drive, so a public drive is delivered
+   *  to anyone and a private one is rejected. No-op with no drive set or a
+   *  closed socket. Idempotent: the server dedups repeat SUBs for a drive. */
+  private subscribeToDrive(): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const drive = this.store.getDrive();
+
+    if (drive) {
+      this.sendBinary(encodeSub(drive));
+    }
+  }
+
   private reSubscribeAll(): void {
+    // Drive-wide live subscription. Previously sent only inside
+    // `authenticate()`, so an anonymous session never subscribed at all.
+    this.subscribeToDrive();
+
     for (const subject of this.store.getLoroSyncSubjects()) {
       this.subscribeLoroSync(subject);
     }
