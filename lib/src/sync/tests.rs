@@ -1695,4 +1695,97 @@ mod peer_sync_tests {
         );
     }
 
+    /// A signed `COMMIT` frame applied through `engine::handle_frame` must
+    /// create the resource and answer with `COMMIT_OK` — this is what makes a
+    /// peer "a hub": it applies a commit exactly like the server's commit path,
+    /// with full signature + rights validation, over any transport.
+    #[tokio::test]
+    async fn engine_commit_from_authorized_signer_is_applied() {
+        use crate::client::commit_to_wire_json;
+        use crate::commit::{Commit, CommitBuilder};
+
+        let db = Db::init_temp("engine_commit_authorized").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+
+        // Alice signs a genesis commit for a new resource under her drive.
+        // Classless (no `isA`) so there are no required-property schema
+        // constraints — this test is about COMMIT application + rights, not
+        // schema, which has its own coverage.
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::NAME.into(),
+            crate::Value::String("Peer Doc".into()),
+        );
+        builder.set(
+            crate::urls::PARENT.into(),
+            crate::Value::AtomicUrl(drive.into()),
+        );
+        let commit = Commit::create_did(builder, &alice, &db).await.unwrap();
+        let new_subject = commit.subject.to_string();
+        let commit_json = commit_to_wire_json(&commit, &db).await.unwrap();
+
+        let frame = crate::sync::protocol::encode_commit(11, &commit_json);
+        let mut agent = ForAgent::Public;
+        let responses = crate::sync::engine::handle_frame(&frame, &db, &mut agent).await;
+
+        assert_eq!(
+            responses.len(),
+            1,
+            "COMMIT should produce exactly one response"
+        );
+        assert_eq!(
+            responses[0][0],
+            crate::sync::protocol::tag::COMMIT_OK,
+            "an authorized signer's COMMIT must be answered with COMMIT_OK, got tag 0x{:02x}",
+            responses[0][0]
+        );
+        db.get_resource(&new_subject.as_str().into())
+            .await
+            .expect("the committed resource must exist locally after COMMIT_OK");
+    }
+
+    /// A COMMIT signed by an agent with no write rights on the target must be
+    /// rejected with an ERROR frame and must not create the resource — the
+    /// commit's own signature + the signer's rights are the authority, not the
+    /// transport it arrived on.
+    #[tokio::test]
+    async fn engine_commit_from_unauthorized_signer_is_rejected() {
+        use crate::client::commit_to_wire_json;
+        use crate::commit::{Commit, CommitBuilder};
+
+        let db = Db::init_temp("engine_commit_unauthorized").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        // Mallory is a real, valid agent — but has no write rights on Alice's
+        // (non-public-write) drive.
+        let mallory = db.create_agent(Some("Mallory")).await.unwrap();
+
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::NAME.into(),
+            crate::Value::String("Intruder Doc".into()),
+        );
+        builder.set(
+            crate::urls::PARENT.into(),
+            crate::Value::AtomicUrl(drive.into()),
+        );
+        let commit = Commit::create_did(builder, &mallory, &db).await.unwrap();
+        let new_subject = commit.subject.to_string();
+        let commit_json = commit_to_wire_json(&commit, &db).await.unwrap();
+
+        let frame = crate::sync::protocol::encode_commit(12, &commit_json);
+        let mut agent = ForAgent::Public;
+        let responses = crate::sync::engine::handle_frame(&frame, &db, &mut agent).await;
+
+        assert_eq!(responses.len(), 1);
+        assert_eq!(
+            responses[0][0],
+            crate::sync::protocol::tag::ERROR,
+            "an unauthorized signer's COMMIT must be rejected with ERROR, got tag 0x{:02x}",
+            responses[0][0]
+        );
+        assert!(
+            db.get_resource(&new_subject.as_str().into()).await.is_err(),
+            "a rejected COMMIT must not create the resource"
+        );
+    }
 }

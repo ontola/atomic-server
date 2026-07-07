@@ -20,7 +20,7 @@ pub fn is_importing() -> bool {
     IMPORTING.load(Ordering::Relaxed)
 }
 
-fn set_importing(v: bool) {
+pub(crate) fn set_importing(v: bool) {
     IMPORTING.store(v, Ordering::Relaxed);
 }
 

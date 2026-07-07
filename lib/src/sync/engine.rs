@@ -138,6 +138,45 @@ pub async fn handle_frame(
             }
         }
 
+        protocol::tag::COMMIT => {
+            // A signed commit is the unit of authority on every transport: it
+            // carries its own signature and the signer's rights are checked
+            // here, so a peer relaying it can only ever apply a change its
+            // signer was already entitled to make — no escalation from "I
+            // dialed you." This is what lets a serverless peer apply a `COMMIT`
+            // exactly like atomic-server's HTTP path does; the connection's own
+            // AUTH identity is not the gate (the commit's signature is).
+            //
+            // Differs from the server's WS `COMMIT` arm in two deliberate ways:
+            // no `source_id` echo-suppression (peer transports don't fan out
+            // through the commit monitor), and `validate_loro_causality` is
+            // OFF because concurrent writes between peers are expected (see the
+            // field's own docs in `commit.rs`).
+            match protocol::decode_commit(payload) {
+                Some(decoded) => {
+                    let request_id = decoded.request_id;
+                    match apply_peer_commit(store, decoded.commit_json).await {
+                        Ok(commit_json) => {
+                            vec![protocol::encode_commit_ok(request_id, &commit_json)]
+                        }
+                        Err(e) => {
+                            let msg = e.to_string();
+                            vec![protocol::encode_error(
+                                request_id,
+                                protocol::classify_commit_error(&msg),
+                                &msg,
+                            )]
+                        }
+                    }
+                }
+                None => vec![protocol::encode_error(
+                    0,
+                    protocol::error_code::UNKNOWN,
+                    "Invalid COMMIT frame",
+                )],
+            }
+        }
+
         protocol::tag::SYNC => {
             if let Some(sync) = protocol::decode_sync(payload) {
                 handle_sync_vv(
@@ -242,6 +281,53 @@ pub async fn handle_frame(
             vec![]
         }
     }
+}
+
+/// Apply a JSON-AD `COMMIT` received over a peer transport, returning the
+/// server-created commit resource as JSON-AD (the `COMMIT_OK` payload).
+///
+/// This is the transport-agnostic sibling of the server's HTTP/WS commit
+/// application. It validates signature, schema, and the signer's rights — the
+/// commit is a self-authorizing certificate, so those checks (not the
+/// connection's AUTH identity) are the authority. `validate_loro_causality` is
+/// off (concurrent peer writes are expected) and `validate_previous_commit` is
+/// off (peers don't share a single linear commit chain), mirroring the Iroh
+/// sync paths. No `source_id`: peer transports don't fan out through the
+/// commit monitor, so there's no echo to suppress.
+///
+/// Deliberately skips the server's domain-ownership gate (`apply_commit_json`
+/// in `server/src/handlers/commit.rs` rejects a commit whose subject belongs
+/// to another domain): a peer replica legitimately hosts subjects it doesn't
+/// own — that's what replication is — so no such gate applies here.
+async fn apply_peer_commit(store: &Db, commit_json: &str) -> crate::errors::AtomicResult<String> {
+    let resource = crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
+    let commit = crate::commit::Commit::from_resource(resource)?;
+    let signer = commit.signer.to_string();
+    let opts = crate::commit::CommitOpts {
+        validate_schema: true,
+        validate_signature: true,
+        // Timestamp validation bounds replay: without it, a captured signed
+        // destroy commit could be replayed unboundedly later (e.g. after the
+        // subject was legitimately recreated). Peers therefore need
+        // roughly-sane clocks — the same requirement AUTH already imposes.
+        validate_timestamp: true,
+        validate_rights: true,
+        validate_previous_commit: false,
+        validate_loro_causality: false,
+        validate_for_agent: Some(signer),
+        update_index: true,
+        source_id: None,
+    };
+    // Applying a remote peer's commit must not rebroadcast to live peers
+    // (the sender included) — mirrors `ws_apply::apply_commit_json`'s
+    // suppression of the same echo via the live push loop.
+    super::ws_apply::set_importing(true);
+    let result = store.apply_commit(commit, &opts).await;
+    super::ws_apply::set_importing(false);
+    let response = result?;
+    let origin = store.get_base_domain();
+    let json = response.commit_resource.to_json_ad(origin.as_deref())?;
+    Ok(json)
 }
 
 /// Collects all resource subjects belonging to a drive via BFS on parent relationships.
