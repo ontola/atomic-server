@@ -70,6 +70,13 @@ if (initialDrive) {
   store.setDrive(initialDrive);
 }
 
+// A deep link into a resource (share/show `?subject=` entry URL) starts the
+// session in that resource's drive, overriding the stored/fallback drive.
+// Fire-and-forget: resolves once the resource is fetched, and `setDrive`
+// propagates into AppSettings via the DriveChanged event.
+import { adoptDriveFromDeepLink } from './helpers/adoptDriveFromDeepLink';
+adoptDriveFromDeepLink(store);
+
 import { bootstrap } from './bootstrap';
 bootstrap(store);
 
