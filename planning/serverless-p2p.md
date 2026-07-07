@@ -143,20 +143,24 @@ unblocked:
 From the [consolidation inventory](./unified-sync.md#consolidation-inventory-2026-07-02-third-pass),
 now load-bearing rather than hygiene:
 
-- [~] **Engine owns ALL tags** — *AUTH + GET + COMMIT-apply done (2026-07-07):*
-  AUTH and GET now delegate to `engine::handle_frame` (the engine resolves
-  `internal:/` against its own base domain — no hook needed — closing the drift
-  bug). The engine also gained a `COMMIT` arm (`apply_peer_commit`): a peer
-  routing a `COMMIT` through the engine applies it with full signature + rights
-  validation, which is the "every peer is a hub" write path serverless P2P needs
-  (P4). **Still to move:** the *server's* `COMMIT` arm doesn't yet delegate to
-  the engine — it keeps its own richer path for `source_id` echo-suppression +
-  commit-monitor fan-out, which the engine arm deliberately omits (peer transports
-  don't fan out that way). Converging the server onto the engine `COMMIT` needs a
-  fan-out/source_id hook the server injects. `SUB`/`UNSUB` also stay hand-rolled
-  (need the commit-monitor actor handle). AUTH+GET were the pure request→response
-  pair that had actually drifted; COMMIT-apply is the additive capability peers
-  needed.
+- [~] **Engine owns ALL tags** — *AUTH + GET + COMMIT-apply done (2026-07-07);
+  server COMMIT converged same day:* AUTH and GET now delegate to
+  `engine::handle_frame` (the engine resolves `internal:/` against its own base
+  domain — no hook needed — closing the drift bug). The engine also gained a
+  `COMMIT` arm (`apply_peer_commit`): a peer routing a `COMMIT` through the
+  engine applies it with full signature + rights validation, which is the
+  "every peer is a hub" write path serverless P2P needs (P4). **Server COMMIT
+  now delegates too:** `engine::ingest_commit_json(store, commit_json,
+  &CommitIngestOpts)` is the single implementation; the server's
+  `apply_commit_json` and the engine's `apply_peer_commit` are both thin
+  wrappers. The "fan-out/source_id hook" this item used to call out turned out
+  not to need a `handle_frame` signature change — `source_id` is just a field
+  on `CommitIngestOpts`, and the hub's per-source echo-suppression /
+  domain-ownership / Loro-causality gates are opts booleans the peer path
+  leaves off. **`SUB`/`UNSUB` remain the only hand-rolled arms** (need the
+  commit-monitor actor handle). AUTH+GET were the pure request→response pair
+  that had actually drifted; COMMIT-apply was the additive capability peers
+  needed, and is now one implementation instead of two.
 - [ ] **`trusted_hub` / `untrusted_peer` module split** in `ws_apply.rs` so
   the unconditional apply paths can't be reached from accept code.
 - [ ] Collapse the six `sync_drive_with_peer*` variants into one

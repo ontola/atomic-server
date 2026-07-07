@@ -1788,4 +1788,108 @@ mod peer_sync_tests {
             "a rejected COMMIT must not create the resource"
         );
     }
+
+    /// The legacy `set`/`push`/`remove`-field rejection is a naive
+    /// string-contains check on the raw commit body, applied before parsing.
+    /// It must run identically under hub policy (server) and peer policy
+    /// (P2P) — `ingest_commit_json` is a single implementation, so there's no
+    /// second place this could silently be skipped.
+    #[tokio::test]
+    async fn ingest_commit_rejects_legacy_field_commits() {
+        use crate::sync::engine::{ingest_commit_json, CommitIngestOpts};
+
+        let db = Db::init_temp("ingest_commit_legacy_fields").await.unwrap();
+
+        let commit_json = r#"{"https://atomicdata.dev/properties/set": {"https://atomicdata.dev/properties/name": "x"}}"#;
+
+        let hub_opts = CommitIngestOpts {
+            source_id: None,
+            validate_loro_causality: true,
+            enforce_subject_ownership: true,
+            suppress_live_echo: false,
+            response_origin: None,
+        };
+        let peer_opts = CommitIngestOpts {
+            source_id: None,
+            validate_loro_causality: false,
+            enforce_subject_ownership: false,
+            suppress_live_echo: true,
+            response_origin: None,
+        };
+
+        for opts in [&hub_opts, &peer_opts] {
+            let err = ingest_commit_json(&db, commit_json, opts)
+                .await
+                .expect_err("legacy `set`-field commits must be rejected under every policy");
+            assert!(
+                err.to_string().contains("no longer accepted"),
+                "expected the legacy-fields rejection message, got: {err}"
+            );
+        }
+    }
+
+    /// `enforce_subject_ownership` is the only thing standing between "hub
+    /// rejects a commit for a subject it doesn't own" and "peer replica hosts
+    /// a subject it doesn't own (that's what replication is)". Prove the gate
+    /// actually flips on the opts field, not just that it fires once.
+    #[tokio::test]
+    async fn ingest_commit_ownership_gate_is_policy_gated() {
+        use crate::client::commit_to_wire_json;
+        use crate::commit::CommitBuilder;
+        use crate::sync::engine::{ingest_commit_json, CommitIngestOpts};
+
+        let db = Db::init_temp("ingest_commit_ownership_gate").await.unwrap();
+        let (alice, _drive) = db.setup("Alice").await.unwrap();
+
+        // A plain https:// subject on a domain this node (base domain
+        // `https://localhost`) does not own, and not a DID, and not ending in
+        // `/` — exactly the shape `enforce_subject_ownership` exists to reject.
+        let subject = "https://example.com/foreign-doc".to_string();
+        let empty = crate::Resource::new(subject.clone());
+        let mut builder = CommitBuilder::new(subject.clone().into());
+        builder.set(
+            crate::urls::NAME.into(),
+            crate::Value::String("Foreign Doc".into()),
+        );
+        let commit = builder.sign(&alice, &db, &empty).await.unwrap();
+        let commit_json = commit_to_wire_json(&commit, &db).await.unwrap();
+
+        const OWNERSHIP_ERR: &str =
+            "Subject of commit should be sent to other domain - this store can not own this resource.";
+
+        let hub_opts = CommitIngestOpts {
+            source_id: None,
+            validate_loro_causality: true,
+            enforce_subject_ownership: true,
+            suppress_live_echo: false,
+            response_origin: None,
+        };
+        let hub_err = ingest_commit_json(&db, &commit_json, &hub_opts)
+            .await
+            .expect_err("hub policy must reject a commit for a subject on a foreign domain");
+        assert_eq!(
+            hub_err.to_string(),
+            OWNERSHIP_ERR,
+            "hub policy must fail with the exact ownership message"
+        );
+
+        let peer_opts = CommitIngestOpts {
+            source_id: None,
+            validate_loro_causality: false,
+            enforce_subject_ownership: false,
+            suppress_live_echo: true,
+            response_origin: None,
+        };
+        // With the gate off, the outcome must differ from the hub case above:
+        // either the commit fully applies, or it fails for some other reason
+        // — but never with the ownership message, since the gate is off.
+        match ingest_commit_json(&db, &commit_json, &peer_opts).await {
+            Ok(_) => {}
+            Err(e) => assert_ne!(
+                e.to_string(),
+                OWNERSHIP_ERR,
+                "peer policy has the ownership gate off, so it must not fail with the ownership message"
+            ),
+        }
+    }
 }

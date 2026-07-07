@@ -590,11 +590,22 @@ stops the pattern; the rest are instances of it.
    `apply_peer_commit` arm lets any peer transport routing through
    `handle_frame` apply a signed commit with full signature + rights validation
    (the Iroh live loop's unhandled-tag fallback reaches it) — the "every peer is
-   a hub" write path. The *server's* WS `COMMIT` arm still doesn't delegate to
-   it: it keeps its own path for `source_id` echo-suppression + commit-monitor
-   fan-out, which the engine arm omits by design. **Still hand-rolled
-   (actor-bound):** the server `COMMIT` convergence (needs a fan-out/source_id
-   hook) and `SUB`/`UNSUB` (need the commit-monitor actor handle).
+   a hub" write path. **Done, same day: the server's commit ingestion converged
+   too.** `engine::ingest_commit_json(store, commit_json, &CommitIngestOpts)` is
+   now the single implementation — schema/signature/timestamp/rights validation,
+   the legacy-field rejection, the "Incoming commit" log, and agent
+   auto-creation for unknown signers all live there once. `CommitIngestOpts`
+   parameterizes the two roles: `source_id` (hub echo-suppression by the
+   commit-monitor), `validate_loro_causality` and `enforce_subject_ownership`
+   (hub-only gates, off between peers), `suppress_live_echo` (peer-only —
+   holds the importing flag so the live push loop doesn't rebroadcast; the hub
+   suppresses its echo per-`source_id` instead), and `response_origin`. The
+   server's `apply_commit_json` (same public signature, so its HTTP and WS
+   callers are untouched) and the engine's `apply_peer_commit` are now both
+   thin wrappers around it. No `handle_frame` signature change was needed —
+   `source_id` is just a field on the opts struct the server passes through.
+   **Still hand-rolled (actor-bound):** only `SUB`/`UNSUB` now (need the
+   commit-monitor actor handle).
 2. **AUTH-frame parsing ×3**: `engine.rs:39`, `web_sockets.rs:251`, `peer.rs:1284`
    (auth-back) — three copies of "parse `AuthValues` → verify → assign". One
    `protocol::handle_auth_frame` helper.
@@ -792,8 +803,12 @@ resurrection between honest replicas of the same agent.
 - [x] **Engine owns AUTH/GET (2026-07-07):** the server WS handler's hand-rolled
   `AUTH`/`GET` arms are deleted and delegate to `engine::handle_frame`. The engine
   resolves `internal:/` via `store.get_base_domain()` (no hook needed — no-op for
-  External/DID), closing the drift bug. `COMMIT`/`SUB`/`UNSUB` stay hand-rolled
-  (actor-bound). See consolidation inventory item 1.
+  External/DID), closing the drift bug. **Update (2026-07-07, same day):** the
+  server's commit ingestion now delegates too — `apply_commit_json` calls the
+  new `engine::ingest_commit_json` with hub policy (`source_id` passes through
+  as a field on `CommitIngestOpts`; no `handle_frame` signature change was
+  needed). Only `SUB`/`UNSUB` remain hand-rolled (commit-monitor actor handle).
+  See consolidation inventory item 1.
 - [ ] **`LIVE_CONNECTIONS` leak:** prune on peer removal (consolidation inventory).
 - [x] **Unified Iroh frame cap (2026-07-02):** `peer.rs` had three inbound
   length-prefix checks that had drifted apart (50MB / 50MB / 10MB) plus one
