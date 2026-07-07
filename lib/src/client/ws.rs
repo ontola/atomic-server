@@ -35,6 +35,9 @@ pub enum WsMessage {
     LoroSyncUpdate { subject: String, update: Vec<u8> },
     /// A Loro ephemeral update (cursors/presence). Contains `{ subject, update }` JSON.
     LoroEphemeralUpdate { subject: String, update: Vec<u8> },
+    /// A drive-scoped presence update. Contains `{ subject, update }` JSON
+    /// where `subject` is the drive.
+    PresenceUpdate { subject: String, update: Vec<u8> },
     /// Server confirmed authentication.
     Authenticated,
     /// A `BLOB_RESPONSE` (0x35) frame: server returned the bytes for a
@@ -198,6 +201,35 @@ impl WsClient {
         .await
     }
 
+    /// Subscribe to the ephemeral presence channel of a drive.
+    pub async fn subscribe_presence(&self, drive: &str) -> AtomicResult<()> {
+        self.send_raw(&format!(
+            "PRESENCE_SUBSCRIBE {}",
+            serde_json::json!({ "subject": drive })
+        ))
+        .await
+    }
+
+    /// Unsubscribe from the ephemeral presence channel of a drive.
+    pub async fn unsubscribe_presence(&self, drive: &str) -> AtomicResult<()> {
+        self.send_raw(&format!(
+            "PRESENCE_UNSUBSCRIBE {}",
+            serde_json::json!({ "subject": drive })
+        ))
+        .await
+    }
+
+    /// Broadcast a presence update (Loro EphemeralStore bytes) to a drive's
+    /// presence subscribers.
+    pub async fn send_presence_update(&self, drive: &str, update: &[u8]) -> AtomicResult<()> {
+        let b64 = crate::agents::encode_base64(update);
+        self.send_raw(&format!(
+            "PRESENCE_UPDATE {}",
+            serde_json::json!({ "subject": drive, "update": b64 })
+        ))
+        .await
+    }
+
     /// Fetch a content-addressed blob by its 32-byte BLAKE3 hash.
     /// Sends a binary `BLOB_REQUEST` (0x34) and waits for a matching
     /// `BLOB_RESPONSE` (0x35).
@@ -317,6 +349,16 @@ fn parse_server_message(text: &str) -> WsMessage {
                 WsMessage::LoroEphemeralUpdate { subject, update }
             }
             Err(_) => WsMessage::Error(format!("Invalid LORO_EPHEMERAL_UPDATE: {}", text)),
+        }
+    } else if let Some(stripped) = text.strip_prefix("PRESENCE_UPDATE ") {
+        match serde_json::from_str::<serde_json::Value>(stripped) {
+            Ok(v) => {
+                let subject = v["subject"].as_str().unwrap_or("").to_string();
+                let update_b64 = v["update"].as_str().unwrap_or("");
+                let update = crate::agents::decode_base64(update_b64).unwrap_or_default();
+                WsMessage::PresenceUpdate { subject, update }
+            }
+            Err(_) => WsMessage::Error(format!("Invalid PRESENCE_UPDATE: {}", text)),
         }
     } else if text.starts_with("AUTHENTICATED") {
         WsMessage::Authenticated

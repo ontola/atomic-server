@@ -1,6 +1,7 @@
 use crate::{
     actor_messages::{
-        LoroEphemeralUpdate, LoroSyncUpdate, SubscribeLoroSync, UnsubscribeAll, UnsubscribeLoroSync,
+        LoroEphemeralUpdate, LoroSyncUpdate, PresenceUpdate, SubscribeLoroSync, SubscribePresence,
+        UnsubscribeAll, UnsubscribeLoroSync, UnsubscribePresence,
     },
     handlers::web_sockets::WebSocketConnection,
 };
@@ -22,9 +23,20 @@ struct Subscription {
 /// Handles real-time document sync updates and ephemeral updates (cursors, presence).
 /// Persistent changes go through Commits with loroUpdate — this broadcaster handles
 /// only the fast, non-persisted real-time channel.
+///
+/// Also hosts the drive-scoped presence channel (`PRESENCE_*` frames):
+/// same opaque-relay model, but keyed by drive instead of resource, and
+/// with each connection's latest state cached so late joiners are brought
+/// up to date at subscribe time.
 pub struct LoroSyncBroadcaster {
     /// Subscriptions keyed by resource subject (not per-property — Loro is per-document)
     subscriptions: HashMap<atomic_lib::Subject, HashSet<Subscription>>,
+    /// Presence subscriptions keyed by drive subject. The value per
+    /// connection is its most recent `PRESENCE_UPDATE` payload (base64
+    /// `EphemeralStore.encodeAll()`), replayed to new subscribers. `None`
+    /// until the connection first broadcasts.
+    #[allow(clippy::mutable_key_type)]
+    presence: HashMap<atomic_lib::Subject, HashMap<Addr<WebSocketConnection>, Option<String>>>,
     store: Db,
 }
 
@@ -137,6 +149,12 @@ impl Handler<UnsubscribeAll> for LoroSyncBroadcaster {
         }
         self.subscriptions
             .retain(|_, subscribers| !subscribers.is_empty());
+
+        for subscribers in self.presence.values_mut() {
+            subscribers.remove(&msg.addr);
+        }
+        self.presence
+            .retain(|_, subscribers| !subscribers.is_empty());
     }
 }
 
@@ -191,10 +209,129 @@ impl Handler<LoroEphemeralUpdate> for LoroSyncBroadcaster {
     }
 }
 
+impl Handler<SubscribePresence> for LoroSyncBroadcaster {
+    type Result = ResponseActFuture<Self, ()>;
+
+    #[allow(clippy::mutable_key_type)]
+    fn handle(&mut self, msg: SubscribePresence, _ctx: &mut Context<Self>) -> Self::Result {
+        let store = self.store.clone();
+        Box::pin(
+            async move {
+                if !msg.drive.is_local() {
+                    tracing::warn!("can't subscribe to presence of external drive: {}", msg.drive);
+                    return None;
+                }
+
+                let resource = match store.get_resource(&msg.drive).await {
+                    Ok(resource) => resource,
+                    Err(e) => {
+                        tracing::debug!(
+                            "Presence subscribe failed for {} by {}: {}",
+                            &msg.drive,
+                            msg.agent,
+                            e
+                        );
+                        return None;
+                    }
+                };
+
+                if let Err(unauthorized_err) = atomic_lib::hierarchy::check_read(
+                    &store,
+                    &resource,
+                    &ForAgent::AgentSubject(msg.agent.clone().into()),
+                )
+                .await
+                {
+                    tracing::debug!(
+                        "Not allowed {} to subscribe to presence for {}: {}",
+                        &msg.agent,
+                        &msg.drive,
+                        unauthorized_err
+                    );
+                    return None;
+                }
+
+                Some((msg.drive, msg.addr))
+            }
+            .into_actor(self)
+            .map(|res, actor, _ctx| {
+                if let Some((drive, addr)) = res {
+                    let subscribers = actor.presence.entry(drive.clone()).or_default();
+
+                    // Bring the newcomer up to date: replay every other
+                    // connection's cached state. LWW timestamps inside the
+                    // EphemeralStore payloads make duplicate replays
+                    // harmless.
+                    for cached in subscribers
+                        .iter()
+                        .filter(|(peer, _)| **peer != addr)
+                        .filter_map(|(_, state)| state.clone())
+                    {
+                        addr.do_send(PresenceUpdate {
+                            subject: drive.clone(),
+                            update: cached,
+                            addr: None,
+                        });
+                    }
+
+                    subscribers.entry(addr).or_insert(None);
+                    tracing::debug!("Presence subscribed to {}", drive);
+                }
+            }),
+        )
+    }
+}
+
+impl Handler<UnsubscribePresence> for LoroSyncBroadcaster {
+    type Result = ();
+
+    fn handle(&mut self, msg: UnsubscribePresence, _ctx: &mut Context<Self>) {
+        if let Some(subscribers) = self.presence.get_mut(&msg.drive) {
+            subscribers.remove(&msg.addr);
+
+            if subscribers.is_empty() {
+                self.presence.remove(&msg.drive);
+            }
+        }
+    }
+}
+
+impl Handler<PresenceUpdate> for LoroSyncBroadcaster {
+    type Result = ();
+
+    fn handle(&mut self, msg: PresenceUpdate, _ctx: &mut Context<Self>) {
+        let Some(subscribers) = self.presence.get_mut(&msg.subject) else {
+            return;
+        };
+
+        let Some(sender) = msg.addr.as_ref() else {
+            tracing::warn!("no addr in presence update for {}", msg.subject);
+            return;
+        };
+
+        // Only subscribers may broadcast — subscribing is where the drive
+        // read-access check happens, so this is the auth gate.
+        let Some(cached) = subscribers.get_mut(sender) else {
+            tracing::warn!("presence update from non-subscriber for {}", msg.subject);
+            return;
+        };
+        *cached = Some(msg.update.clone());
+
+        for subscriber in subscribers.keys() {
+            if subscriber == sender {
+                continue;
+            }
+
+            subscriber.do_send(msg.clone());
+        }
+    }
+}
+
 pub fn create_loro_sync_broadcaster(store: Db) -> Addr<LoroSyncBroadcaster> {
     LoroSyncBroadcaster::create(
         |_ctx: &mut Context<LoroSyncBroadcaster>| LoroSyncBroadcaster {
             subscriptions: HashMap::new(),
+            presence: HashMap::new(),
             store,
         },
     )

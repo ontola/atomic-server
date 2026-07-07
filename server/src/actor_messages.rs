@@ -69,6 +69,45 @@ pub struct LoroEphemeralUpdate {
     pub addr: Option<Addr<crate::handlers::web_sockets::WebSocketConnection>>,
 }
 
+// === Drive presence messages ===
+//
+// Ephemeral "who is where" state for a whole drive (issue #1229). Like the
+// Loro ephemeral channel above, payloads are opaque Loro EphemeralStore
+// bytes that the server relays without inspecting — but the subscription is
+// keyed by *drive*, not by resource, and the broadcaster caches each
+// connection's latest state so late joiners see who's present immediately.
+
+/// Subscribe a connection to the ephemeral presence channel of a drive.
+/// Requires read access on the drive resource.
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct SubscribePresence {
+    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
+    pub drive: atomic_lib::Subject,
+    pub agent: String,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct UnsubscribePresence {
+    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
+    pub drive: atomic_lib::Subject,
+}
+
+/// A drive-scoped presence update — not persisted. `update` carries the
+/// sender's full `EphemeralStore.encodeAll()` (base64) so the broadcaster
+/// can cache it per connection and replay it to newcomers. The field is
+/// named `subject` (holding the drive) to keep the wire JSON shape
+/// identical to the `LORO_*` frames.
+#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+#[rtype(result = "()")]
+pub struct PresenceUpdate {
+    pub subject: atomic_lib::Subject,
+    pub update: String,
+    #[serde(skip)]
+    pub addr: Option<Addr<crate::handlers::web_sockets::WebSocketConnection>>,
+}
+
 /// Subscribe to all commits on resources living under a drive. Every
 /// commit under the drive fans out to this connection as a `CommitMessage`
 /// (encoded as UPDATE / DESTROY by the WebSocketConnection handler).

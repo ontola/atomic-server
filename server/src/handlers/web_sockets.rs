@@ -526,6 +526,37 @@ impl WebSocketConnection {
                 update.addr = Some(ctx.address());
                 self.loro_sync_broadcaster_addr.do_send(update);
             }
+        } else if let Some(json) = text.strip_prefix("PRESENCE_SUBSCRIBE ") {
+            // Drive-scoped ephemeral presence (issue #1229). Reuses the
+            // Loro subscription JSON shape: `{"subject": "<drive>"}`.
+            if let Ok(msg) =
+                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
+            {
+                self.loro_sync_broadcaster_addr
+                    .do_send(crate::actor_messages::SubscribePresence {
+                        addr: ctx.address(),
+                        drive: msg.subject,
+                        agent: self.agent.to_string(),
+                    });
+            }
+        } else if let Some(json) = text.strip_prefix("PRESENCE_UNSUBSCRIBE ") {
+            if let Ok(msg) =
+                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
+            {
+                self.loro_sync_broadcaster_addr.do_send(
+                    crate::actor_messages::UnsubscribePresence {
+                        addr: ctx.address(),
+                        drive: msg.subject,
+                    },
+                );
+            }
+        } else if let Some(json) = text.strip_prefix("PRESENCE_UPDATE ") {
+            if let Ok(mut update) =
+                serde_json::from_str::<crate::actor_messages::PresenceUpdate>(json)
+            {
+                update.addr = Some(ctx.address());
+                self.loro_sync_broadcaster_addr.do_send(update);
+            }
         } else if let Some(json) = text.strip_prefix("SUBSCRIBE_QUERY ") {
             // Filter subscription: `{property,value,drive[,sort_by]}`.
             // Membership changes for this filter arrive as plain
@@ -614,6 +645,21 @@ impl Handler<crate::actor_messages::LoroEphemeralUpdate> for WebSocketConnection
     ) {
         ctx.text(format!(
             "LORO_EPHEMERAL_UPDATE {}",
+            serde_json::to_string(&msg).unwrap()
+        ));
+    }
+}
+
+impl Handler<crate::actor_messages::PresenceUpdate> for WebSocketConnection {
+    type Result = ();
+
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::PresenceUpdate,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
+        ctx.text(format!(
+            "PRESENCE_UPDATE {}",
             serde_json::to_string(&msg).unwrap()
         ));
     }
