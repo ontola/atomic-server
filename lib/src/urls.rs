@@ -63,6 +63,9 @@ pub const DESTROY: &str = "https://atomicdata.dev/properties/destroy";
 pub const LORO_UPDATE: &str = "https://atomicdata.dev/properties/loroUpdate";
 pub const SIGNER: &str = "https://atomicdata.dev/properties/signer";
 pub const CREATED_AT: &str = "https://atomicdata.dev/properties/createdAt";
+/// Fractional sort key ordering a resource among its siblings. Falls back to
+/// `createdAt` when absent — both live on one numeric (timestamp) axis.
+pub const SORT_ORDER: &str = "https://atomicdata.dev/properties/sortOrder";
 pub const CREATED_BY: &str = "https://atomicdata.dev/properties/createdBy";
 pub const SIGNATURE: &str = "https://atomicdata.dev/properties/signature";
 pub const PREVIOUS_COMMIT: &str = "https://atomicdata.dev/properties/previousCommit";

@@ -454,4 +454,172 @@ test.describe('tables', async () => {
       'After sorting by name, first row should be "alpha"',
     ).toBeVisible();
   });
+
+  test('Shift+Enter inserts a row below the current row', async ({ page }) => {
+    test.slow();
+    await page.getByTitle('New Table').first().click();
+    await page.getByPlaceholder('New Table').fill('Insert Below Test');
+    await page.locator('dialog[open] button:has-text("Create")').click();
+    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
+      timeout: 15000,
+    });
+    await expect(page.getByTestId('editable-title').first()).toBeVisible({
+      timeout: 15000,
+    });
+    await page.keyboard.press('Escape');
+
+    const firstCell = page.getByRole('gridcell').first();
+    await expect(firstCell).toBeVisible({ timeout: 15000 });
+    await firstCell.click({ force: true });
+    await page.waitForTimeout(300);
+
+    // Two rows via normal fast entry.
+    for (const value of ['rowA', 'rowB']) {
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(100);
+      await page.keyboard.type(value, { delay: 30 });
+      await page.waitForTimeout(100);
+    }
+
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
+
+    // Reload so the rows are collection members (positional insert targets
+    // persisted rows; this-session virtual rows always append at the bottom).
+    // Note: gridcells are aria-labelled "name, row N", so cell CONTENT is
+    // asserted via text, not role name.
+    await page.reload();
+    await expect(page.getByTestId('editable-title').first()).toBeVisible();
+    await expect(page.getByText('rowA', { exact: true })).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Select rowA's name cell, then insert a row below it.
+    await page.getByText('rowA', { exact: true }).click({ force: true });
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Shift+Enter');
+
+    // The inserted row is persisted with a fractional sortOrder between rowA
+    // and rowB, so rowB shifts from aria-rowindex 3 to 4 once it lands.
+    await expect(
+      page.locator('[aria-rowindex="4"]'),
+      'rowB should shift down after inserting below rowA',
+    ).toContainText('rowB', { timeout: 15000 });
+
+    // The cursor moved to the inserted row; typing fills its name cell.
+    await page.keyboard.type('rowINSERTED', { delay: 30 });
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Escape');
+
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
+
+    const expectOrder = async () => {
+      await expect(page.locator('[aria-rowindex="2"]')).toContainText('rowA', {
+        timeout: 15000,
+      });
+      await expect(page.locator('[aria-rowindex="3"]')).toContainText(
+        'rowINSERTED',
+        { timeout: 15000 },
+      );
+      await expect(page.locator('[aria-rowindex="4"]')).toContainText('rowB', {
+        timeout: 15000,
+      });
+    };
+
+    await expectOrder();
+
+    // The order comes from the server's sortOrder→createdAt fallback axis, so
+    // it must survive a reload.
+    await page.reload();
+    await expect(page.getByTestId('editable-title').first()).toBeVisible();
+    await expectOrder();
+  });
+
+  test('Shift+Enter inserts among freshly typed (unsaved) rows', async ({
+    page,
+  }) => {
+    test.slow();
+    await page.getByTitle('New Table').first().click();
+    await page.getByPlaceholder('New Table').fill('Insert Session Test');
+    await page.locator('dialog[open] button:has-text("Create")').click();
+    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
+      timeout: 15000,
+    });
+    await expect(page.getByTestId('editable-title').first()).toBeVisible({
+      timeout: 15000,
+    });
+    await page.keyboard.press('Escape');
+
+    const firstCell = page.getByRole('gridcell').first();
+    await expect(firstCell).toBeVisible({ timeout: 15000 });
+    await firstCell.click({ force: true });
+    await page.waitForTimeout(300);
+
+    for (const value of ['rowA', 'rowB']) {
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(100);
+      await page.keyboard.type(value, { delay: 30 });
+      await page.waitForTimeout(100);
+    }
+
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+
+    // Without reloading (rows are still session drafts), insert below rowA.
+    await page.getByText('rowA', { exact: true }).click({ force: true });
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Shift+Enter');
+    await page.waitForTimeout(300);
+
+    // The spliced virtual row renders immediately at aria-rowindex 3,
+    // pushing rowB down; the cursor is on it.
+    await expect(
+      page.locator('[aria-rowindex="4"]'),
+      'rowB should shift down after inserting below rowA',
+    ).toContainText('rowB', { timeout: 15000 });
+    // Enter edit mode explicitly (focuses the cell input) before typing —
+    // typing into a just-mounted cell via the type-to-edit relay can race
+    // its event-listener registration at automation speed.
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(100);
+    await page.keyboard.type('rowMID', { delay: 30 });
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Escape');
+
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 10000 },
+    );
+
+    const expectOrder = async () => {
+      await expect(page.locator('[aria-rowindex="2"]')).toContainText('rowA', {
+        timeout: 15000,
+      });
+      await expect(page.locator('[aria-rowindex="3"]')).toContainText(
+        'rowMID',
+        { timeout: 15000 },
+      );
+      await expect(page.locator('[aria-rowindex="4"]')).toContainText('rowB', {
+        timeout: 15000,
+      });
+    };
+
+    await expectOrder();
+
+    // The spliced row's minted sortOrder must make this order survive
+    // materialization + reload — its createdAt (sign time) is later than
+    // rowB's and would otherwise sort it last.
+    await page.reload();
+    await expect(page.getByTestId('editable-title').first()).toBeVisible();
+    await expectOrder();
+  });
 });

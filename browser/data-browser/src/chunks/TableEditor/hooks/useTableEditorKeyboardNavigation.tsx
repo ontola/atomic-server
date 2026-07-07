@@ -90,6 +90,7 @@ export function useTableEditorKeyboardNavigation(
         event: e,
         tableRef,
         columnCount,
+        rowCount,
         ...commands,
         translateCursor,
       };

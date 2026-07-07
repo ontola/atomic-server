@@ -1,4 +1,5 @@
 import {
+  dataBrowser,
   unknownSubject,
   useCanWrite,
   useStore,
@@ -6,6 +7,8 @@ import {
   type Property,
   type Resource,
 } from '@tomic/react';
+import toast from 'react-hot-toast';
+import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
 import { useHandleClearCells } from '@chunks/TablePage/helpers/useHandleClearCells';
 import { useHandleColumnResize } from '@chunks/TablePage/helpers/useHandleColumnResize';
 import { useHandleCopyCommand } from '@chunks/TablePage/helpers/useHandleCopyCommand';
@@ -103,8 +106,25 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     [store, resource.subject],
   );
 
+  // Fractional order key per session row, minted with the subject. Seeded
+  // into the draft (see TableNewRow) so a row's on-screen position persists
+  // when it materializes — including rows spliced mid-session via
+  // Shift+Enter, whose eventual `createdAt` (sign time) wouldn't match their
+  // visual position.
+  const [sessionSortOrders] = useState(() => new Map<string, number>());
+
+  const mintSessionRow = useCallback(
+    (sortOrder: number) => {
+      const subject = generateRowSubject();
+      sessionSortOrders.set(subject, sortOrder);
+
+      return subject;
+    },
+    [generateRowSubject, sessionSortOrders],
+  );
+
   const [newRowSubjects, setNewRowSubjects] = useState<string[]>(() => [
-    generateRowSubject(),
+    mintSessionRow(Date.now()),
   ]);
 
   // `memberCount` is the number of rows the collection already had when it
@@ -214,8 +234,8 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       }
     }
 
-    setNewRowSubjects([generateRowSubject()]);
-  }, [queryKey, store, generateRowSubject]);
+    setNewRowSubjects([mintSessionRow(Date.now())]);
+  }, [queryKey, store, mintSessionRow]);
 
   const decrementMemberCount = useCallback(() => {
     if (baselineMemberCountRef.current && baselineMemberCountRef.current > 0) {
@@ -223,9 +243,118 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     }
   }, []);
 
+  const incrementMemberCount = useCallback(() => {
+    if (baselineMemberCountRef.current !== null) {
+      baselineMemberCountRef.current += 1;
+    }
+  }, []);
+
+  /**
+   * Shift+Enter: insert a row directly below the given row.
+   *
+   * - Anchor is a persisted member: a row is created and saved immediately
+   *   with a fractional `sortOrder` between its neighbors' keys (their
+   *   explicit sortOrder or createdAt — the server sorts by the same
+   *   fallback), so it materializes at exactly `index + 1`.
+   * - Anchor is an unsaved session row: a fresh virtual row is spliced in
+   *   below it, keyed between its neighbors' minted sort keys so the
+   *   position also survives materialization.
+   *
+   * Returns false (= jump to the trailing empty row instead) under a column
+   * sort, where a mid-table position has no meaning.
+   */
+  const handleInsertRowBelow = useCallback(
+    (index: number): boolean => {
+      if (
+        sorting.prop !== dataBrowser.properties.sortOrder ||
+        sorting.sortDesc
+      ) {
+        return false;
+      }
+
+      if (index >= memberCount) {
+        const sessionIdx = index - memberCount;
+
+        // Inserting below the trailing empty placeholder is meaningless.
+        if (sessionIdx >= newRowSubjects.length - 1) {
+          return false;
+        }
+
+        const anchorKey = sessionSortOrders.get(newRowSubjects[sessionIdx]);
+        const nextKey = sessionSortOrders.get(newRowSubjects[sessionIdx + 1]);
+        const spliced = mintSessionRow(computeSortOrder(anchorKey, nextKey));
+        setNewRowSubjects(prev => [
+          ...prev.slice(0, sessionIdx + 1),
+          spliced,
+          ...prev.slice(sessionIdx + 1),
+        ]);
+
+        return true;
+      }
+
+      const insert = async () => {
+        const anchorSubject = await collection.getMemberWithIndex(index);
+
+        if (!anchorSubject) {
+          return;
+        }
+
+        const nextSubject =
+          index + 1 < memberCount
+            ? await collection.getMemberWithIndex(index + 1)
+            : undefined;
+
+        const anchor = await store.getResource(anchorSubject);
+        const next = nextSubject
+          ? await store.getResource(nextSubject)
+          : undefined;
+
+        const row = await store.newResource({
+          parent: resource.subject,
+          isA: tableClass.subject,
+          propVals: {
+            [dataBrowser.properties.sortOrder]: computeSortOrder(
+              readSortKey(anchor),
+              readSortKey(next),
+            ),
+          },
+        });
+
+        // Table classes only `recommend` their columns, so an empty row is
+        // valid to persist right away.
+        await row.save();
+        store.notifyResourceManuallyCreated(row);
+        incrementMemberCount();
+        // Refresh so the server-authoritative order (and the new member's
+        // position at index + 1) lands promptly.
+        await invalidateCollection();
+      };
+
+      insert().catch(error => {
+        console.error('Failed to insert row:', error);
+        toast.error('Failed to insert row');
+      });
+
+      return true;
+    },
+    [
+      sorting,
+      memberCount,
+      newRowSubjects,
+      sessionSortOrders,
+      mintSessionRow,
+      collection,
+      store,
+      resource.subject,
+      tableClass.subject,
+      incrementMemberCount,
+      invalidateCollection,
+    ],
+  );
+
   const addNewRow = useCallback(() => {
-    setNewRowSubjects(prev => [...prev, generateRowSubject()]);
-  }, [generateRowSubject]);
+    setNewRowSubjects(prev => [...prev, mintSessionRow(Date.now())]);
+  }, [mintSessionRow]);
 
   const itemKey = useCallback(
     (index: number) => {
@@ -364,6 +493,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
           subject={newRowSubjects[newRowIndex]}
           isLast={isLastNewRow}
           addNewRow={addNewRow}
+          sortOrder={sessionSortOrders.get(newRowSubjects[newRowIndex])}
         />
       );
     },
@@ -444,6 +574,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
             onUndoCommand={undoLastItem}
             onColumnReorder={reorderColumns}
             onRowExpand={handleRowExpand}
+            onInsertRowBelow={handleInsertRowBelow}
             HeadingComponent={TableHeading}
             NewColumnButtonComponent={NewColumnButton}
           >

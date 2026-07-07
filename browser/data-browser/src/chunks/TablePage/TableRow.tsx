@@ -9,6 +9,7 @@ import {
 import {
   Collection,
   core,
+  dataBrowser,
   DataBrowser,
   Property,
   Resource,
@@ -140,6 +141,10 @@ type TableNewRowProps = Omit<TableRowProps, 'collection'> & {
    * trailing placeholder when it first gains content. */
   isLast: boolean;
   addNewRow: () => void;
+  /** Fractional sibling-order key minted with the subject. Seeded into the
+   * draft so the row's on-screen position persists when it materializes
+   * (rows are server-sorted by `sortOrder`, falling back to `createdAt`). */
+  sortOrder?: number;
 };
 
 const resourceOpts = {
@@ -153,6 +158,7 @@ export function TableNewRow({
   subject,
   isLast,
   addNewRow,
+  sortOrder,
 }: TableNewRowProps): JSX.Element {
   // A synchronous, *virtual* new-row resource: a stable local `_new:`
   // placeholder, editable on first paint. The old code awaited
@@ -183,14 +189,24 @@ export function TableNewRow({
   const spawnedRef = useRef(false);
   const isLastRef = useRef(isLast);
   isLastRef.current = isLast;
+  const seededOrderRef = useRef(false);
   const handleFirstContent = useCallback(() => {
+    // Stamp the minted `sortOrder` the moment the row gains content — NOT at
+    // mount: an empty placeholder must keep exactly the seeded `isA` +
+    // `parent` entries, because "more than 2 entries" is what the
+    // materialize/rebase/advance heuristics treat as "has user content".
+    if (!seededOrderRef.current && sortOrder !== undefined) {
+      seededOrderRef.current = true;
+      void resource.set(dataBrowser.properties.sortOrder, sortOrder, false);
+    }
+
     if (spawnedRef.current || !isLastRef.current) {
       return;
     }
 
     spawnedRef.current = true;
     addNewRow();
-  }, [addNewRow]);
+  }, [addNewRow, resource, sortOrder]);
 
   // Seed class + parent locally (validate:false → no fetch, no commit) so the
   // genesis sign at materialization builds a valid row of the table's class.

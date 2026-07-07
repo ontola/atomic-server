@@ -800,9 +800,25 @@ export class Collection {
     if (sortBy) {
       const sortDesc = !!this.params.sort_desc;
       const sortKeys = new Map<string, unknown>();
+      // `sortOrder` (fractional sibling-order key) falls back to the creation
+      // time — mirroring the server's query index — so explicitly positioned
+      // resources interleave with untouched ones. Client resources usually
+      // lack a materialized `createdAt` propval, so read the genesis Loro
+      // change directly.
+      const isSortOrder =
+        sortBy === 'https://atomicdata.dev/properties/sortOrder';
 
       for (const s of result.subjects) {
-        sortKeys.set(s, this.store.resources.get(s)?.get(sortBy));
+        const resource = this.store.resources.get(s);
+        let key = resource?.get(sortBy);
+
+        if (key === undefined && isSortOrder && resource) {
+          key =
+            resource.get('https://atomicdata.dev/properties/createdAt') ??
+            resource.getCreatedAt();
+        }
+
+        sortKeys.set(s, key);
       }
 
       result.subjects.sort((a, b) => {

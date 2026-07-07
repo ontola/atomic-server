@@ -9,13 +9,18 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { commits, core, dataBrowser, Resource, useStore } from '@tomic/react';
+import { core, dataBrowser, useStore } from '@tomic/react';
 import { useCallback, useState } from 'react';
 import {
   SIDEBAR_TRANSITION_TAG,
   getTransitionName,
 } from '../../helpers/transitionName';
 import { useSettings } from '../../helpers/AppSettings';
+// Fractional-key math shared with table row insertion.
+import {
+  computeSortOrder,
+  readSortKey,
+} from '../../helpers/fractionalSortOrder';
 
 /**
  * Data attached to a sidebar drop target.
@@ -42,54 +47,6 @@ export type SideBarDropData = {
 export type SideBarDragData = {
   renderedUnder: string;
 };
-
-/**
- * Resolve a resource's sort key: its explicit `sortOrder` if set, else
- * `createdAt` (which is what the server query returns siblings sorted
- * by, and what `useChildren` uses as the implicit fallback). Returns
- * `undefined` if neither is available — the caller picks a default.
- */
-function readSortKey(resource: Resource | undefined): number | undefined {
-  if (!resource) return undefined;
-  const explicit = resource.get(dataBrowser.properties.sortOrder);
-  if (typeof explicit === 'number') return explicit;
-  const createdAt = resource.get(commits.properties.createdAt);
-  if (typeof createdAt === 'number') return createdAt;
-
-  return undefined;
-}
-
-/**
- * Compute the fractional `sortOrder` to assign to a dragged resource
- * given its new neighbors. Mirrors the classic fractional-index pattern
- * — midpoint when both neighbors exist; offset by 1 when only one does.
- *
- * The `±1` step at the ends is arbitrary but big enough that subsequent
- * drops on the same side still get sub-second resolution (next midpoint
- * is `±0.5`, then `±0.25`, …).
- */
-function computeSortOrder(
-  prevKey: number | undefined,
-  nextKey: number | undefined,
-): number {
-  if (prevKey !== undefined && nextKey !== undefined) {
-    return (prevKey + nextKey) / 2;
-  }
-
-  if (prevKey !== undefined) {
-    // Drop at end — must come after `prev`.
-    return prevKey + 1;
-  }
-
-  if (nextKey !== undefined) {
-    // Drop at start — must come before `next`.
-    return nextKey - 1;
-  }
-
-  // Empty folder — any value works; align with the implicit createdAt
-  // axis so future drops sit naturally.
-  return Date.now();
-}
 
 export const useSidebarDnd = (
   onIsRearangingChange: (isRearanging: boolean) => void,

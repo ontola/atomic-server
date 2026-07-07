@@ -379,10 +379,7 @@ pub fn check_if_atom_matches_watched_query_filters(
 
     for q_filter in &filters {
         if let Some(prop) = should_update_property(q_filter, index_atom, resource) {
-            let update_val = match resource.get(prop) {
-                Ok(val) => val.to_sortable_string(),
-                Err(_e) => NO_VALUE.to_string(),
-            };
+            let update_val = sortable_value_for(resource, prop);
             update_indexed_member(
                 q_filter,
                 index_atom.subject.as_str(),
@@ -393,6 +390,25 @@ pub fn check_if_atom_matches_watched_query_filters(
         }
     }
     Ok(())
+}
+
+/// The sortable value a resource contributes to an index sorted by `prop`.
+/// `sortOrder` falls back to `createdAt`: the property is defined as a
+/// fractional sibling-order key that defaults to creation time, so explicitly
+/// positioned resources interleave with untouched ones on one numeric axis —
+/// no migration or backfill needed when a listing switches to sortOrder.
+pub fn sortable_value_for(resource: &Resource, prop: &str) -> SortableValue {
+    if let Ok(val) = resource.get(prop) {
+        return val.to_sortable_string();
+    }
+
+    if prop == crate::urls::SORT_ORDER {
+        if let Ok(created_at) = resource.get(crate::urls::CREATED_AT) {
+            return created_at.to_sortable_string();
+        }
+    }
+
+    NO_VALUE.to_string()
 }
 
 /// Adds or removes a single item (IndexAtom) to the [Tree::QueryMembers] cache.

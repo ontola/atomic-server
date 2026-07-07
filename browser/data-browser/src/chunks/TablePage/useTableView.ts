@@ -1,4 +1,5 @@
 import {
+  commits,
   core,
   dataBrowser,
   JSONValue,
@@ -182,8 +183,17 @@ export function useTableView(table: Resource): UseTableViewResult {
     const initialFilters = Array.isArray(rawFilters)
       ? (rawFilters as unknown as TableFilter[])
       : [];
-    const initialSort: TableSorting = rawSortBy
-      ? { prop: rawSortBy, sortDesc: !!rawSortDesc }
+    // Views saved before `sortOrder` became the default persisted `createdAt`
+    // as their sort. That was the old default — not a user choice (createdAt
+    // isn't a column) — and `sortOrder` sorts identically via its createdAt
+    // fallback, so normalize. Keeps positional row insertion working on old
+    // tables.
+    const normalizedSortBy =
+      rawSortBy === commits.properties.createdAt
+        ? DEFAULT_SORT.prop
+        : rawSortBy;
+    const initialSort: TableSorting = normalizedSortBy
+      ? { prop: normalizedSortBy, sortDesc: !!rawSortDesc }
       : DEFAULT_SORT;
 
     setFilters(initialFilters);

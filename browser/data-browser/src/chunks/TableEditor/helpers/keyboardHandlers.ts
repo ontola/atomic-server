@@ -6,6 +6,7 @@ const triggerCharacters =
 export enum KeyboardInteraction {
   ExitEditMode,
   EditNextRow,
+  InsertRowBelow,
   EditNextCell,
   EditPreviousCell,
   ExpandRow,
@@ -29,6 +30,13 @@ export type TableCommands = {
   copy?: () => void;
   undo?: () => void;
   expand?: (row: number) => void;
+  /**
+   * Create a new row below the given row index. Returns true when the row is
+   * inserted at that position (the caller moves the cursor one row down), or
+   * false when it was appended at the bottom instead (e.g. under a column
+   * sort, where a mid-table position has no meaning).
+   */
+  insertRowBelow?: (row: number) => boolean;
 };
 
 export type HandlerContext = {
@@ -37,6 +45,7 @@ export type HandlerContext = {
   tableRef: React.RefObject<HTMLDivElement | null>;
   translateCursor: (row: number, column: number) => void;
   columnCount: number;
+  rowCount: number;
 } & TableCommands;
 
 export interface KeyboardHandler {
@@ -113,6 +122,33 @@ const editNextRow: KeyboardHandler = {
   preventDefault: true,
   handler: ({ translateCursor }) => {
     translateCursor(1, 0);
+  },
+};
+
+const insertRowBelow: KeyboardHandler = {
+  id: KeyboardInteraction.InsertRowBelow,
+  keys: new Set(['Enter']),
+  shift: true,
+  cursorMode: new Set([CursorMode.Visual, CursorMode.Edit]),
+  disabledInReadOnly: true,
+  preventDefault: true,
+  condition: ({ insertRowBelow: command, tableContext }) =>
+    command !== undefined && tableContext.selectedRow !== undefined,
+  handler: context => {
+    const { tableContext, translateCursor, rowCount } = context;
+    const row = tableContext.selectedRow!;
+    const positional = context.insertRowBelow!(row);
+
+    tableContext.setCursorMode(CursorMode.Visual);
+
+    if (positional) {
+      // The new row materializes at row + 1; the cursor is already there
+      // when it lands.
+      translateCursor(1, 0);
+    } else {
+      // Appended: jump to the trailing empty row.
+      translateCursor(rowCount - 1 - row, 0);
+    }
   },
 };
 
@@ -240,6 +276,7 @@ const moveCursorRight: KeyboardHandler = {
 const enterEditModeWithEnter: KeyboardHandler = {
   id: KeyboardInteraction.EnterEditModeWithEnter,
   keys: new Set(['Enter']),
+  shift: false,
   cursorMode: new Set([CursorMode.Visual]),
   disabledInReadOnly: true,
   condition: ({ tableContext }) =>
@@ -256,6 +293,7 @@ const expandRow: KeyboardHandler = {
   id: KeyboardInteraction.ExpandRow,
   cursorMode: new Set([CursorMode.Visual]),
   keys: new Set(['Enter']),
+  shift: false,
   condition: ({ tableContext }) => tableContext.selectedColumn === 0,
   handler: ({ expand, tableContext }) => {
     expand?.(tableContext.selectedRow!);
@@ -344,6 +382,7 @@ const moveMultiSelectCornerRight: KeyboardHandler = {
 
 export const tableKeyboardHandlers = [
   editNextRow,
+  insertRowBelow,
   editNextCell,
   editPreviousCell,
   expandRow,

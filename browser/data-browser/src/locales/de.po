@@ -5051,3 +5051,7 @@ msgstr ""
 
 #~ msgid "Only editors of this resource can start a discussion."
 #~ msgstr ""
+
+#: src/chunks/TablePage/TableResource.tsx
+msgid "Failed to insert row"
+msgstr ""

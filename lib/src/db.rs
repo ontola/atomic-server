@@ -1479,6 +1479,17 @@ impl Db {
                 // Find the sort value in the store
                 match self.get_value(atom.subject.as_str(), sort).await {
                     Ok(val) => val.to_sortable_string(),
+                    // `sortOrder` defaults to `createdAt` — see
+                    // `query_index::sortable_value_for`.
+                    Err(_) if sort == urls::SORT_ORDER => {
+                        match self
+                            .get_value(atom.subject.as_str(), urls::CREATED_AT)
+                            .await
+                        {
+                            Ok(val) => val.to_sortable_string(),
+                            Err(_) => NO_VALUE.to_string(),
+                        }
+                    }
                     // If we try sorting on a value that does not exist,
                     // we'll use an empty string as the sortable value.
                     Err(_) => NO_VALUE.to_string(),

@@ -57,6 +57,8 @@ interface FancyTableProps<T> {
   onCellResize?: (sizes: number[]) => void;
   onColumnReorder?: ColumnReorderHandler;
   onRowExpand?: (index: number) => void;
+  /** See {@link TableCommands.insertRowBelow}. */
+  onInsertRowBelow?: (index: number) => boolean;
   itemKey?: (index: number) => string;
   HeadingComponent: TableHeadingComponent<T>;
   NewColumnButtonComponent: React.ComponentType;
@@ -101,6 +103,7 @@ function FancyTableInner<T>({
   onPasteCommand,
   onColumnReorder,
   onRowExpand = () => undefined,
+  onInsertRowBelow,
   HeadingComponent,
   NewColumnButtonComponent,
 }: FancyTableProps<T>): JSX.Element {
@@ -145,8 +148,9 @@ function FancyTableInner<T>({
       copy: triggerCopyCommand,
       undo: onUndoCommand,
       expand: onRowExpand,
+      insertRowBelow: onInsertRowBelow,
     }),
-    [triggerCopyCommand, onUndoCommand, onRowExpand],
+    [triggerCopyCommand, onUndoCommand, onRowExpand, onInsertRowBelow],
   );
 
   const handleKeyDown = useTableEditorKeyboardNavigation(
