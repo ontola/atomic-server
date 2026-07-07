@@ -525,6 +525,38 @@ export class WSClient {
     this.ws.send('UNSUBSCRIBE_INDEX_STATUS ' + JSON.stringify({ drive }));
   }
 
+  /** Subscribe to the ephemeral presence channel of a drive (issue #1229).
+   *  Waits for auth like `subscribeIndexStatus`: the server checks drive
+   *  read access at subscribe time, so subscribing pre-auth would get
+   *  refused for any non-public drive. */
+  public subscribePresence(drive: string): void {
+    this.authPromise
+      .catch(() => {
+        // Authentication errors are handled in authenticate()
+      })
+      .finally(() => {
+        if (this.readyState !== WebSocket.OPEN) {
+          console.warn('WebSocket is not open, cannot subscribe to presence');
+
+          return;
+        }
+
+        this.ws.send('PRESENCE_SUBSCRIBE ' + JSON.stringify({ subject: drive }));
+      });
+  }
+
+  public unsubscribePresence(drive: string): void {
+    if (this.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    this.ws.send('PRESENCE_UNSUBSCRIBE ' + JSON.stringify({ subject: drive }));
+  }
+
+  public sendPresenceUpdate(message: string): void {
+    this.sendText('PRESENCE_UPDATE', message);
+  }
+
   /** Sends a GET message for some resource over websockets. */
   public async fetch(subject: string): Promise<Resource> {
     // Ensure auth has been kicked off before sending the GET. `authPromise`
@@ -945,6 +977,8 @@ export class WSClient {
       this.store.__handleLoroEphemeralMessage(
         text.slice('LORO_EPHEMERAL_UPDATE '.length),
       );
+    } else if (text.startsWith('PRESENCE_UPDATE ')) {
+      this.store.__handlePresenceMessage(text.slice('PRESENCE_UPDATE '.length));
     } else if (text.startsWith('INDEX_STATUS ')) {
       const json = text.slice('INDEX_STATUS '.length);
 
@@ -963,6 +997,15 @@ export class WSClient {
     for (const subject of this.store.getLoroSyncSubjects()) {
       this.subscribeLoroSync(subject);
     }
+
+    for (const drive of this.store.getPresenceSubjects()) {
+      this.subscribePresence(drive);
+    }
+
+    // The fresh connection's server-side presence cache is empty; announce
+    // ourselves again so peers (and the cache) pick us up immediately
+    // instead of after the next heartbeat.
+    this.store.__rebroadcastPresence();
   }
 
   // ---- Private: connection lifecycle ----
@@ -1006,6 +1049,14 @@ export class WSClient {
           // Only flip `_serverConnected` AFTER AUTH_OK arrives. See the
           // comment in the `open` handler above for the race this closes.
           this.store.setServerConnected(true);
+          // Re-run subscriptions AFTER the connected flag flips. The
+          // AUTH_OK handler already called reSubscribeAll(), but that runs
+          // with `_serverConnected` still false — a subscription created
+          // between that call and this flip (e.g. the presence manager
+          // mounting during a slow cold load) would be silently skipped
+          // and never retried. Duplicate subscribe frames are idempotent
+          // server-side.
+          this.reSubscribeAll();
         })
         .then(doSync)
         .catch(e => {

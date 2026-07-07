@@ -57,6 +57,7 @@ export * from './collectionBuilder.js';
 export * from './ontology.js';
 export * from './invites.js';
 export * from './loro-loader.js';
+export * from './presence.js';
 export * from './CryptoProvider.js';
 export { ClientDbWorker } from './client-db.js';
 export type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';

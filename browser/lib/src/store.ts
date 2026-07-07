@@ -40,6 +40,7 @@ import type {
   ClientDbQueryResult,
 } from './client-db.js';
 import { LocalSearch } from './local-search.js';
+import { DrivePresenceManager } from './presence.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
@@ -56,6 +57,8 @@ type ResourceCallback<C extends OptionalClass = UnknownClass> = (
 type LoroSyncCallback = (update: Uint8Array) => void;
 /** Callback for Loro ephemeral updates (cursors, presence) */
 type LoroEphemeralCallback = (update: Uint8Array) => void;
+/** Callback for drive-scoped presence updates */
+type PresenceCallback = (update: Uint8Array) => void;
 type SubjectCallback = (subject: string) => void;
 /** Callback called when the stores agent changes */
 type AgentCallback = (agent: Agent | undefined) => void;
@@ -361,6 +364,10 @@ export class Store {
   private loroSyncSubscribers: Map<string, LoroSyncCallback[]> = new Map();
   private loroEphemeralSubscribers: Map<string, LoroEphemeralCallback[]> =
     new Map();
+  private presenceSubscribers: Map<string, PresenceCallback[]> = new Map();
+  /** One presence manager per drive; managers remove themselves when
+   *  their last subscriber leaves. */
+  private presenceManagers: Map<string, DrivePresenceManager> = new Map();
   private injectedFetch: Fetch;
   /** The base URL of an Atomic Server. Where commits, search, and
    *  new-instance requests are sent. */
@@ -3501,6 +3508,78 @@ export class Store {
     this.getWebSocketForSubject(subject)?.sendLoroEphemeralUpdate(
       JSON.stringify({ subject, update: encodeB64(update) }),
     );
+  }
+
+  // === Drive presence (ephemeral, issue #1229) ===
+
+  /** Get (or lazily create) the presence manager for a drive. The manager
+   *  owns the drive's shared Loro EphemeralStore and the `PRESENCE_*`
+   *  websocket subscription. One instance per drive for the store's
+   *  lifetime: consumers memoize it across renders, so replacing the
+   *  instance would leave them writing to a dead manager (its transport
+   *  still shuts down while unobserved — see `subscribe`). */
+  public getPresence(drive: string): DrivePresenceManager {
+    let manager = this.presenceManagers.get(drive);
+
+    if (!manager) {
+      manager = new DrivePresenceManager(this, drive);
+      this.presenceManagers.set(drive, manager);
+    }
+
+    return manager;
+  }
+
+  /** Subscribe to raw presence payloads for a drive. Transport-level —
+   *  use `getPresence(drive)` for the decoded presence list. */
+  public subscribePresenceUpdates(
+    drive: string,
+    callback: PresenceCallback,
+  ): () => void {
+    return this.addLoroSubscriber(
+      this.presenceSubscribers,
+      drive,
+      callback,
+      () => {
+        if (this._serverConnected) {
+          this.presenceWebSocket(drive)?.subscribePresence(drive);
+        }
+      },
+      () => {
+        if (this._serverConnected) {
+          this.presenceWebSocket(drive)?.unsubscribePresence(drive);
+        }
+      },
+    );
+  }
+
+  /** Broadcast raw presence bytes (Loro EphemeralStore update) to a
+   *  drive's presence subscribers. */
+  public broadcastPresenceUpdate(drive: string, update: Uint8Array): void {
+    if (!this._serverConnected) return;
+    this.presenceWebSocket(drive)?.sendPresenceUpdate(
+      JSON.stringify({ subject: drive, update: encodeB64(update) }),
+    );
+  }
+
+  private presenceWebSocket(drive: string): WSClient | undefined {
+    return this.getDefaultWebSocket() ?? this.getWebSocketForSubject(drive);
+  }
+
+  public getPresenceSubjects(): string[] {
+    return Array.from(this.presenceSubscribers.keys());
+  }
+
+  /** @internal */
+  public __handlePresenceMessage(message: string): void {
+    this.dispatchLoroMessage(this.presenceSubscribers, message);
+  }
+
+  /** @internal Re-announce local presence after a websocket (re)connect:
+   *  the new connection's server-side cache starts empty. */
+  public __rebroadcastPresence(): void {
+    for (const manager of this.presenceManagers.values()) {
+      manager.rebroadcast();
+    }
   }
 
   public getLoroSyncSubjects(): string[] {
