@@ -1629,4 +1629,70 @@ mod peer_sync_tests {
             ratio,
         );
     }
+
+    /// A GET served by `engine::handle_frame` must emit the resource's subject
+    /// resolved against the node's origin — a resource stored under the node's
+    /// own base domain is kept internally as an `internal:/…` subject, and that
+    /// node-local form must never cross the wire (the recipient keys its cache
+    /// on whatever subject we send). The server used to resolve this in its own
+    /// hand-rolled GET arm while the engine's GET emitted the raw form, so an
+    /// Iroh peer GETting the same resource received an unusable `internal:/`
+    /// subject. This proves the single engine-owned GET resolves for every
+    /// transport.
+    #[tokio::test]
+    async fn engine_get_resolves_internal_subject_to_origin() {
+        use crate::values::Value;
+
+        // `init_temp` sets the base domain to `https://localhost`, so a subject
+        // under it round-trips through storage as an `internal:/…` subject.
+        let db = Db::init_temp("engine_get_internal_resolution")
+            .await
+            .unwrap();
+
+        let subject = "https://localhost/internal-get-doc";
+        let mut resource = crate::Resource::new(subject.into());
+        resource
+            .set_unsafe(
+                crate::urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::urls::CLASS.into()]),
+            )
+            .unwrap();
+        resource
+            .set_unsafe(
+                crate::urls::NAME.into(),
+                Value::String("Internal Doc".into()),
+            )
+            .unwrap();
+        // Public read so a `ForAgent::Public` GET is served without needing a
+        // parent/drive rights walk.
+        resource
+            .set_unsafe(
+                crate::urls::READ.into(),
+                Value::ResourceArray(vec![crate::urls::PUBLIC_AGENT.into()]),
+            )
+            .unwrap();
+        db.add_resource_opts(&resource, false, true, true)
+            .await
+            .unwrap();
+
+        let get_frame = crate::sync::protocol::encode_get(7, subject);
+        let mut agent = ForAgent::Public;
+        let responses = crate::sync::engine::handle_frame(&get_frame, &db, &mut agent).await;
+
+        let update = responses
+            .iter()
+            .find_map(|f| crate::sync::protocol::decode_update(&f[1..]))
+            .expect("GET should produce a decodable UPDATE frame");
+
+        assert_eq!(
+            update.subject, subject,
+            "the UPDATE must carry the origin-resolved subject, not the node-local internal:/ form"
+        );
+        assert!(
+            !update.subject.starts_with("internal:"),
+            "internal:/ must never cross the wire, got {}",
+            update.subject
+        );
+    }
+
 }

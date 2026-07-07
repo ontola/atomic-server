@@ -90,6 +90,16 @@ pub async fn handle_frame(
                                 "No state",
                             )]
                         } else {
+                            // Resolve `internal:/…` to this node's origin —
+                            // `internal:` is a node-local concept and must not
+                            // cross the wire; the recipient keys its resource
+                            // cache on whatever subject we emit. A no-op for
+                            // normal (External/DID) subjects, so it's safe on
+                            // every transport, not just the server's origin.
+                            let origin = store
+                                .get_base_domain()
+                                .unwrap_or_else(|| "http://localhost".to_string());
+                            let subject_resolved = resource.get_subject().resolve(&origin);
                             // Include `lastCommit` so the recipient can set
                             // `previousCommit` on its next save. See
                             // `planning/fix-canvas-genesis-save.md`.
@@ -105,7 +115,7 @@ pub async fn handle_frame(
                             vec![protocol::encode_update(
                                 flags,
                                 decoded.request_id,
-                                resource.get_subject().as_str(),
+                                &subject_resolved,
                                 last_commit.as_deref(),
                                 &snapshot,
                             )]

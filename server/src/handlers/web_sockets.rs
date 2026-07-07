@@ -18,9 +18,7 @@ use actix::{
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web_actors::ws::{self, WsResponseBuilder};
 use atomic_lib::{
-    agents::ForAgent,
-    authentication::{get_agent_from_auth_values_and_check, AuthValues},
-    Db, Storelike,
+    agents::ForAgent, authentication::get_agent_from_auth_values_and_check, Db, Storelike,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -238,122 +236,56 @@ impl WebSocketConnection {
         }
 
         match bin[0] {
+            // AUTH is engine-owned (verify + assign identity). It's the one
+            // engine-delegated frame that MUTATES the session agent, so unlike
+            // the read-only delegations below we must write the (possibly
+            // changed) agent back onto the actor after the future resolves —
+            // a cloned agent handed to `handle_frame` would otherwise drop the
+            // identity the AUTH just proved.
             ws_v2::tag::AUTH => {
-                let Ok(json) = std::str::from_utf8(&bin[1..]) else {
-                    return;
-                };
-                let json = json.to_string();
                 let store = self.store.clone();
+                let mut agent = self.agent.clone();
+                let bin_vec = bin.to_vec();
                 ctx.spawn(
                     async move {
-                        let auth: AuthValues = serde_json::from_str(&json)
-                            .map_err(|e| format!("Invalid AUTH JSON: {e}"))?;
-                        get_agent_from_auth_values_and_check(Some(auth), &store)
-                            .await
-                            .map_err(|e| format!("Auth failed: {e}"))
+                        let responses =
+                            atomic_lib::sync::engine::handle_frame(&bin_vec, &store, &mut agent)
+                                .await;
+                        (responses, agent)
                     }
                     .into_actor(self)
-                    .map(|res, actor, ctx| match res {
-                        Ok(a) => {
-                            actor.agent = a;
-                            ctx.binary(ws_v2::encode_auth_ok());
-                        }
-                        Err(e) => {
-                            ctx.binary(ws_v2::encode_error(0, ws_v2::error_code::UNKNOWN, &e))
+                    .map(|(responses, agent), actor, ctx| {
+                        actor.agent = agent;
+                        for response in responses {
+                            ctx.binary(response);
                         }
                     }),
                 );
             }
 
-            ws_v2::tag::GET => {
-                let Some(decoded) = ws_v2::decode_get(&bin[1..]) else {
-                    return;
-                };
-                let subject_str = decoded.subject.to_string();
-                let request_id = decoded.request_id;
+            // GET is engine-owned too (read-only: resolve subject, materialize
+            // state, emit UPDATE). The engine resolves `internal:/` against the
+            // node's base domain, so folding it in here also removed the drift
+            // where only the server resolved it and an Iroh peer received raw
+            // `internal:/` subjects. Delegated alongside the other read-only
+            // frames below.
+            ws_v2::tag::GET
+            | ws_v2::tag::SYNC
+            | ws_v2::tag::SYNC_PUSH
+            | ws_v2::tag::BLOB_REQUEST
+            | ws_v2::tag::BLOB_RESPONSE => {
                 let store = self.store.clone();
-                let agent = self.agent.clone();
-                let origin = self
-                    .store
-                    .get_base_domain()
-                    .unwrap_or_else(|| "http://localhost".to_string());
+                let mut agent = self.agent.clone();
+                let bin_vec = bin.to_vec();
                 ctx.spawn(
                     async move {
-                        let subject = atomic_lib::Subject::from_raw(
-                            &subject_str,
-                            store.get_base_domain().as_deref(),
-                        );
-                        (
-                            store.get_resource_extended(&subject, false, &agent).await,
-                            request_id,
-                            origin,
-                        )
+                        atomic_lib::sync::engine::handle_frame(&bin_vec, &store, &mut agent).await
                     }
                     .into_actor(self)
-                    .map(|(res, rid, origin), _actor, ctx| match res {
-                        Ok(r) => {
-                            let resource = r.to_single();
-
-                            // KNOWN GAP: extender-modified state isn't reflected on the
-                            // wire. `get_resource_extended` runs `on_resource_get` and
-                            // updates propvals (e.g. plugin renames folder), but the
-                            // persisted Loro snapshot still encodes the unmodified state.
-                            // We send the stored snapshot here because rebuilding from
-                            // propvals would discard the CRDT history (Lamport timeline,
-                            // peer ids) that clients rely on for offline edits + merges.
-                            // The right long-term fix is for plugins to emit real commits
-                            // via `host.commit` so transformations land in the persisted
-                            // Loro state — read-side decoration is fundamentally
-                            // incompatible with content-addressed sync. See atomic-plugin
-                            // wit `on-install` (declared, not yet wired) for the install-
-                            // time fan-out hook.
-                            let snapshot = resource.materialized_state().unwrap_or_else(|| {
-                                match resource.build_state_doc() {
-                                    Ok(doc) => doc.export_snapshot(),
-                                    Err(_) => Vec::new(),
-                                }
-                            });
-
-                            if snapshot.is_empty() {
-                                ctx.binary(ws_v2::encode_error(
-                                    rid,
-                                    ws_v2::error_code::UNKNOWN,
-                                    "Cannot build resource state",
-                                ));
-                            } else {
-                                // Resolve `internal:/…` to the server origin — `internal:` is a
-                                // server-side concept and must not cross the wire; the client
-                                // keys its resource cache on whatever subject we emit.
-                                let subject_resolved = resource.get_subject().resolve(&origin);
-                                // Include `lastCommit` so the recipient can set
-                                // `previousCommit` correctly on its next save. Without it,
-                                // a client that learned this resource purely from WS would
-                                // sign its next commit with `isGenesis: true` and the
-                                // server would reject it as duplicate creation. See
-                                // `planning/fix-canvas-genesis-save.md`.
-                                let last_commit = resource
-                                    .get(atomic_lib::urls::LAST_COMMIT)
-                                    .ok()
-                                    .map(|v| v.to_string())
-                                    .filter(|s| !s.is_empty());
-                                let mut flags = ws_v2::flags::SNAPSHOT;
-                                if last_commit.is_some() {
-                                    flags |= ws_v2::flags::HAS_COMMIT_ID;
-                                }
-                                ctx.binary(ws_v2::encode_update(
-                                    flags,
-                                    rid,
-                                    &subject_resolved,
-                                    last_commit.as_deref(),
-                                    &snapshot,
-                                ));
-                            }
+                    .map(|responses, _actor, ctx| {
+                        for response in responses {
+                            ctx.binary(response);
                         }
-                        Err(e) => ctx.binary(ws_v2::encode_error(
-                            rid,
-                            ws_v2::error_code::UNKNOWN,
-                            &e.to_string(),
-                        )),
                     }),
                 );
             }
@@ -438,26 +370,6 @@ impl WebSocketConnection {
                     );
                     self.subscribed.remove(&subject);
                 }
-            }
-
-            ws_v2::tag::SYNC
-            | ws_v2::tag::SYNC_PUSH
-            | ws_v2::tag::BLOB_REQUEST
-            | ws_v2::tag::BLOB_RESPONSE => {
-                let store = self.store.clone();
-                let mut agent = self.agent.clone();
-                let bin_vec = bin.to_vec();
-                ctx.spawn(
-                    async move {
-                        atomic_lib::sync::engine::handle_frame(&bin_vec, &store, &mut agent).await
-                    }
-                    .into_actor(self)
-                    .map(|responses, _actor, ctx| {
-                        for response in responses {
-                            ctx.binary(response);
-                        }
-                    }),
-                );
             }
 
             _ => {
