@@ -24,6 +24,8 @@ export const ai = {
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/tool-call-part',
   },
   properties: {
+    aiChatsFolder:
+      'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/ai-chats-folder',
     parts: 'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content',
     data: 'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/data',
     mcpServerId:
@@ -54,6 +56,7 @@ export const ai = {
     ['https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-chat']: [
       'https://atomicdata.dev/properties/name',
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/messages',
+      'https://atomicdata.dev/properties/about',
     ],
     ['https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-message']: [
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/role',
@@ -113,7 +116,9 @@ declare module '../index.js' {
   interface Classes {
     [ai.classes.aiChat]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/name';
-      recommends: typeof ai.properties.messages;
+      recommends:
+        | typeof ai.properties.messages
+        | 'https://atomicdata.dev/properties/about';
     };
     [ai.classes.aiMessage]: {
       requires:
@@ -165,6 +170,7 @@ declare module '../index.js' {
   }
 
   interface PropTypeMapping {
+    [ai.properties.aiChatsFolder]: string;
     [ai.properties.parts]: string[];
     [ai.properties.data]: string;
     [ai.properties.mcpServerId]: string;
@@ -182,6 +188,7 @@ declare module '../index.js' {
   }
 
   interface PropSubjectToNameMapping {
+    [ai.properties.aiChatsFolder]: 'aiChatsFolder';
     [ai.properties.parts]: 'parts';
     [ai.properties.data]: 'data';
     [ai.properties.mcpServerId]: 'mcpServerId';

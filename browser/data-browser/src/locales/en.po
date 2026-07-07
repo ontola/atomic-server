@@ -27,6 +27,7 @@ msgstr "Failed to regenerate AI chat message"
 
 #: src/chunks/AI/AISidebar.tsx
 #: src/components/OverlayContainer.tsx
+#: src/components/SideBar/AIPanel.tsx
 msgid "New Chat"
 msgstr "New Chat"
 
@@ -1053,7 +1054,6 @@ msgstr "Collapse"
 msgid "Expand"
 msgstr "Expand"
 
-#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 #: src/components/forms/FilePicker/FilePickerItem.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
@@ -1061,7 +1061,6 @@ msgstr "Expand"
 msgid "loading"
 msgstr "loading"
 
-#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 msgid "Invalid Resource"
 msgstr "Invalid Resource"
@@ -1070,9 +1069,8 @@ msgstr "Invalid Resource"
 msgid "Untitled Chat"
 msgstr "Untitled Chat"
 
-#: src/components/SideBar/AIPanel.tsx
-msgid "<0/> New Chat"
-msgstr "<0/> New Chat"
+#~ msgid "<0/> New Chat"
+#~ msgstr "<0/> New Chat"
 
 #: src/components/ErrorLook.tsx
 msgid "Stack trace:"
@@ -5065,7 +5063,6 @@ msgstr "Open a resource to see its comments."
 
 #: src/components/CommentsPanel/CommentsPanelContainer.tsx
 #: src/components/NavBar.tsx
-#: src/helpers/standardLocations.ts
 msgid "Comments"
 msgstr "Comments"
 

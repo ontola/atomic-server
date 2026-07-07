@@ -1,183 +1,179 @@
 import { styled } from 'styled-components';
 import {
   ai,
+  commits,
   core,
-  removeCachedSearchResults,
   StoreEvents,
   unknownSubject,
+  useArray,
   useCanWrite,
+  useChildren,
+  useCollection,
   useResource,
   useStore,
+  useString,
 } from '@tomic/react';
-import { Row } from '@components/Row';
-import { AtomicLink } from '@components/AtomicLink';
-import { ScrollArea } from '@components/ScrollArea';
-import { ErrorLook } from '@components/ErrorLook';
-import { useCallback, useEffect, useState, type JSX } from 'react';
-import { usePersonalDrive } from '@hooks/usePersonalDrive';
-import { SideBarItem } from './SideBarItem';
+import { useEffect, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa6';
+import { usePersonalDrive } from '@hooks/usePersonalDrive';
 import { useCreateAndNavigate } from '@hooks/useCreateAndNavigate';
+import { getOrCreateAiChatsFolder } from '@helpers/standardLocations';
+import { SharedWithMeLink } from './SharedWithMeLink';
+import {
+  SideBarMenuRow,
+  SideBarMenuRowIcon,
+  SideBarMenuRowLabel,
+} from './SideBarMenuItem';
 
+/**
+ * Lists the user's AI chats: the children of the personal drive's "AI Chats"
+ * folder (a standard location), newest first, plus any legacy chats that still
+ * live directly under the drive root. Rows match the Favorites / Shared-with-me
+ * panels. Listing children directly (instead of full-text search) means the
+ * panel is populated as soon as the resources are, with no index lag.
+ */
 export function AIChatsPanel(): JSX.Element | null {
   const store = useStore();
-  const [chats, setChats] = useState<string[]>([]);
   const { personalDrive, loading } = usePersonalDrive();
   const driveResource = useResource(personalDrive);
   const canWriteToDrive = useCanWrite(driveResource);
+  const [aiChatsFolder] = useString(driveResource, ai.properties.aiChatsFolder);
+  const folderChats = useNewestFirstChildren(aiChatsFolder);
+  const { subjects: rootChildren } = useChildren(
+    personalDrive ?? unknownSubject,
+  );
   const createAndNavigate = useCreateAndNavigate();
+  // Chats created from this panel, shown instantly (the collection catches up
+  // through its live-membership bridge).
+  const [justCreated, setJustCreated] = useState<string[]>([]);
 
-  const createNewChat = () => {
+  useEffect(() => {
+    return store.on(StoreEvents.ResourceRemoved, subject => {
+      setJustCreated(prev => prev.filter(s => s !== subject));
+    });
+  }, [store]);
+
+  const createNewChat = async () => {
+    if (!personalDrive) {
+      return;
+    }
+
+    const folder = await getOrCreateAiChatsFolder(store, personalDrive);
+
     createAndNavigate(
       ai.classes.aiChat,
       {
         [core.properties.name]: 'Untitled Chat',
       },
       {
-        parent: personalDrive,
+        parent: folder,
         onCreated: newChat => {
-          setChats(prev => [newChat.subject, ...prev]);
+          setJustCreated(prev => [newChat.subject, ...prev]);
         },
-        // By skipping the notification we avoid adding the chat to the sidebar.
+        // The folder is hidden from the drive tree; no need to notify it.
         skipNotify: true,
       },
     );
   };
 
-  const search = useCallback(async () => {
-    removeCachedSearchResults(store);
-
-    const result = await store.search('', {
-      filters: {
-        [core.properties.isA]: ai.classes.aiChat,
-      },
-      parents: personalDrive,
-    });
-
-    return result.toSorted((a, b) => b.localeCompare(a));
-  }, [store, personalDrive]);
-
-  useEffect(() => {
-    if (!personalDrive) {
-      setChats([]);
-
-      return;
-    }
-
-    search().then(setChats);
-  }, [personalDrive, search]);
-
-  const pollUntilIndexed = useCallback(
-    async (subject: string) => {
-      // The server indexes a newly saved resource for search asynchronously.
-      // Poll for it to show up instead of guessing a fixed delay: resolves
-      // immediately once indexed, and still bounds the wait if indexing is
-      // slow (e.g. under CI load).
-      const maxAttempts = 20;
-      const intervalMs = 500;
-
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        const results = await search();
-
-        if (results.includes(subject)) {
-          setChats(results);
-
-          return;
-        }
-
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
-      }
-
-      // Give up waiting for the index; show whatever the last query returned.
-      search().then(setChats);
-    },
-    [search],
+  const seen = new Set<string>();
+  const chats = [...justCreated, ...folderChats].filter(subject =>
+    seen.has(subject) ? false : (seen.add(subject), true),
   );
-
-  useEffect(() => {
-    const unsubRemove = store.on(StoreEvents.ResourceRemoved, subject => {
-      setChats(prev => prev.filter(s => s !== subject));
-    });
-
-    const unsubSave = store.on(StoreEvents.ResourceSaved, resource => {
-      if (chats.includes(resource.subject)) {
-        // Chat is already displayed in the list.
-        return;
-      }
-
-      if (resource.hasClasses(ai.classes.aiChat)) {
-        pollUntilIndexed(resource.subject);
-      }
-    });
-
-    return () => {
-      unsubRemove();
-      unsubSave();
-    };
-  }, [store, chats, pollUntilIndexed]);
 
   return (
     <Wrapper>
-      <StyledScrollArea key={personalDrive} type='hover'>
-        {!loading && canWriteToDrive && personalDrive && (
-          <SideBarItem onClick={createNewChat}>
-            <Row gap='1ch' center>
-              <FaPlus />
-              New Chat
-            </Row>
-          </SideBarItem>
-        )}
-        {chats.map(subject => (
-          <Item key={subject} subject={subject} />
-        ))}
-      </StyledScrollArea>
+      {!loading && canWriteToDrive && personalDrive && (
+        <NewChatButton onClick={createNewChat}>
+          <SideBarMenuRowIcon>
+            <FaPlus />
+          </SideBarMenuRowIcon>
+          <SideBarMenuRowLabel>New Chat</SideBarMenuRowLabel>
+        </NewChatButton>
+      )}
+      {chats.map(subject => (
+        <SharedWithMeLink key={subject} subject={subject} />
+      ))}
+      {rootChildren.map(subject => (
+        <LegacyRootChat key={subject} subject={subject} />
+      ))}
     </Wrapper>
   );
 }
 
-const Wrapper = styled.div`
-  padding-top: 0;
-  max-height: 20rem;
-  overflow: hidden;
-`;
+/**
+ * Children of the given folder, newest first. Live: the collection updates
+ * membership from store events without refetching.
+ */
+function useNewestFirstChildren(folder: string | undefined): string[] {
+  const [subjects, setSubjects] = useState<string[]>([]);
 
-const StyledScrollArea = styled(ScrollArea)`
-  height: 20rem;
-  overflow: hidden;
-`;
-
-interface ItemProps {
-  subject: string;
-}
-
-function Item({ subject }: ItemProps): JSX.Element {
-  const resource = useResource(subject);
-
-  if (resource.loading) {
-    return <div>loading</div>;
-  }
-
-  if (resource.error || resource.subject === unknownSubject) {
-    return (
-      <SideBarItem>
-        <ErrorLook>Invalid Resource</ErrorLook>
-      </SideBarItem>
-    );
-  }
-
-  return (
-    <StyledLink subject={subject} clean>
-      <SideBarItem>
-        <Row gap='1ch' center>
-          {resource.title}
-        </Row>
-      </SideBarItem>
-    </StyledLink>
+  const { collection, ready } = useCollection(
+    {
+      property: core.properties.parent,
+      value: folder ?? unknownSubject,
+      sort_by: commits.properties.createdAt,
+      sort_desc: true,
+    },
+    { pageSize: 100 },
   );
+
+  useEffect(() => {
+    if (!ready || !folder) {
+      setSubjects([]);
+
+      return;
+    }
+
+    let cancelled = false;
+
+    const extract = async () => {
+      const members: string[] = [];
+
+      for (let i = 0; i < collection.totalMembers; i++) {
+        const member = await collection.getMemberWithIndex(i);
+
+        if (member) {
+          members.push(member);
+        }
+      }
+
+      if (!cancelled) {
+        setSubjects(members);
+      }
+    };
+
+    extract();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [collection, ready, folder]);
+
+  return subjects;
 }
 
-const StyledLink = styled(AtomicLink)`
-  flex: 1;
-  overflow: hidden;
-  white-space: nowrap;
+/** Chats from before the AI Chats folder existed sit directly under the drive root. */
+function LegacyRootChat({ subject }: { subject: string }): JSX.Element | null {
+  const resource = useResource(subject);
+  const [isA] = useArray(resource, core.properties.isA);
+
+  if (!isA.includes(ai.classes.aiChat)) {
+    return null;
+  }
+
+  return <SharedWithMeLink subject={subject} />;
+}
+
+const Wrapper = styled.div`
+  max-height: 20rem;
+  overflow-y: auto;
+`;
+
+/** Same row look as the menu links, but a real button. */
+const NewChatButton = styled(SideBarMenuRow).attrs({ as: 'button' })`
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
 `;

@@ -7,12 +7,24 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
     "https://atomicdata.dev/properties/recommends": [
-      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/messages"
+      "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/messages",
+      "https://atomicdata.dev/properties/about"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/name"
     ],
     "https://atomicdata.dev/properties/shortname": "ai-chat"
+  },
+  {
+    "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/ai-chats-folder",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Folder",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Points to the Folder in this Drive that contains AI chats. A standard location: clients find (and lazily create) it by following this property on the Drive.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "ai-chats-folder"
   },
   {
     "@id": "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-message",

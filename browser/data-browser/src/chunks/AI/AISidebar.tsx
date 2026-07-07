@@ -15,6 +15,7 @@ import { Row } from '@components/Row';
 import {
   ai,
   core,
+  dataBrowser,
   useStore,
   type Ai,
   type Resource,
@@ -23,10 +24,13 @@ import {
 import { useGenerativeData } from './useGenerativeData';
 import {
   addMessageToChatResource,
+  messageResourcesToDisplayMessages,
   persistMessageResourceToServer,
   removeFollowingMessagesFromChatResource,
   removeMessageFromChatResource,
 } from './chatConversionUtils';
+import { findLatestAiChatAbout } from './findLatestAiChatAbout';
+import { getOrCreateAiChatsFolder } from '@helpers/standardLocations';
 import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
@@ -160,6 +164,14 @@ const AISidebar: React.FC = () => {
   const [currentSubject] = useCurrentSubject();
   const titlePromiseRef = useRef<TitlePromise | undefined>(undefined);
   const autoContextSubjectRef = useRef<string | undefined>(undefined);
+  // Subject for which a re-open lookup already ran (or was suppressed).
+  const reopenAttemptRef = useRef<string | undefined>(undefined);
+  // Mirror for async draft creation, which runs outside the render cycle.
+  const currentSubjectRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    currentSubjectRef.current = currentSubject;
+  }, [currentSubject]);
   const { generateTitleFromConversation } = useGenerativeData();
 
   const getOrCreateDraftChatResource = useCallback(async () => {
@@ -174,13 +186,27 @@ const AISidebar: React.FC = () => {
     const generation = chatGenerationRef.current;
 
     if (!draftChatPromiseRef.current) {
-      draftChatPromiseRef.current = store.newResource<Ai.AiChat>({
-        parent: personalDrive,
-        isA: ai.classes.aiChat,
-        propVals: {
-          [core.properties.name]: DEFAULT_AICHAT_NAME,
-        },
-      });
+      // Chats live in the personal drive's "AI Chats" folder (a standard
+      // location) instead of cluttering the drive root. `about` records which
+      // resource the chat was started on, so the sidebar can re-open it when
+      // the user returns to that resource.
+      const aboutSubject =
+        autoContextSubjectRef.current ?? currentSubjectRef.current;
+      draftChatPromiseRef.current = getOrCreateAiChatsFolder(
+        store,
+        personalDrive,
+      ).then(folder =>
+        store.newResource<Ai.AiChat>({
+          parent: folder,
+          isA: ai.classes.aiChat,
+          propVals: {
+            [core.properties.name]: DEFAULT_AICHAT_NAME,
+            ...(aboutSubject && {
+              [dataBrowser.properties.about]: aboutSubject,
+            }),
+          },
+        }),
+      );
     }
 
     const draftChatPromise = draftChatPromiseRef.current;
@@ -199,6 +225,53 @@ const AISidebar: React.FC = () => {
 
     return newChatResource;
   }, [personalDrive, store]);
+
+  /**
+   * Loads a previously saved chat into the sidebar (used to re-open the chat
+   * that was created on the current resource). Mirrors AIChatPage's loading:
+   * convert the chat's message resources to display messages and split off
+   * everything before the last compaction summary.
+   */
+  const loadExistingChat = useCallback(
+    async (chatSubject: string) => {
+      const generation = chatGenerationRef.current;
+      const chatRes = await store.getResource<Ai.AiChat>(chatSubject);
+      const messageSubjects =
+        (chatRes.get(ai.properties.messages) as string[] | undefined) ?? [];
+      const map = await messageResourcesToDisplayMessages(
+        messageSubjects,
+        store,
+      );
+
+      if (generation !== chatGenerationRef.current) {
+        return;
+      }
+
+      const allMessages = Array.from(map.keys());
+      const lastSummaryIndex = allMessages.findLastIndex(
+        m => m.metadata?.isSummary,
+      );
+      const visible =
+        lastSummaryIndex > 0
+          ? allMessages.slice(lastSummaryIndex)
+          : allMessages;
+      const historical =
+        lastSummaryIndex > 0 ? allMessages.slice(0, lastSummaryIndex) : [];
+
+      chatResourceRef.current = chatRes;
+      setChatResource(chatRes);
+      isChatSavedRef.current = true;
+      setIsChatSaved(true);
+      messagesRef.current = visible;
+      setMessages(visible);
+      setCompactedMessages(historical);
+      messageToResourceMapRef.current = map;
+      setMessageToResourceMap(map);
+      // Remount RealAIChat so useChat re-seeds from initialMessages.
+      updateRenderKey();
+    },
+    [store],
+  );
 
   const handleCompacted = (
     priorMessages: AtomicUIMessage[],
@@ -290,6 +363,9 @@ const AISidebar: React.FC = () => {
   };
 
   const startNewChat = () => {
+    // The user explicitly wants a fresh chat — don't immediately re-open the
+    // existing chat for the resource they're viewing.
+    reopenAttemptRef.current = currentSubject;
     chatGenerationRef.current += 1;
     draftChatPromiseRef.current = null;
     chatResourceRef.current = undefined;
@@ -378,6 +454,47 @@ const AISidebar: React.FC = () => {
     draftChatPromiseRef.current = null;
     chatResourceRef.current = undefined;
   }, [personalDrive]);
+
+  // Re-open the chat that was created on the current resource: when the
+  // sidebar is open on subject X with a completely empty chat, load the most
+  // recent saved chat whose `about` points at X. Attempted once per subject
+  // so a not-found result (or an explicit New Chat) doesn't re-query forever.
+  // Waits for `personalDrive`: its resolution bumps chatGenerationRef (see the
+  // effect above), which would discard a lookup started before it.
+  useEffect(() => {
+    if (!isOpen || !currentSubject || !personalDrive) {
+      return;
+    }
+
+    if (
+      messagesRef.current.length > 0 ||
+      chatResourceRef.current ||
+      isChatSavedRef.current ||
+      reopenAttemptRef.current === currentSubject
+    ) {
+      return;
+    }
+
+    reopenAttemptRef.current = currentSubject;
+    const generation = chatGenerationRef.current;
+
+    findLatestAiChatAbout(store, currentSubject)
+      .then(found => {
+        if (
+          !found ||
+          generation !== chatGenerationRef.current ||
+          messagesRef.current.length > 0 ||
+          chatResourceRef.current
+        ) {
+          return;
+        }
+
+        return loadExistingChat(found);
+      })
+      .catch(error => {
+        console.error('Failed to re-open AI chat for resource:', error);
+      });
+  }, [isOpen, currentSubject, personalDrive, store, loadExistingChat]);
 
   useEffect(() => {
     // Avoid re-adding the same subject after the user removes or changes the

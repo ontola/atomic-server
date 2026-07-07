@@ -1,4 +1,5 @@
 import {
+  ai,
   dataBrowser,
   server,
   useCanWrite,
@@ -69,12 +70,18 @@ export function SideBarDrive({
     driveResource,
     dataBrowser.properties.commentsFolder,
   );
+  // And the AI Chats folder (on the personal drive): chats re-open through
+  // the AI sidebar on the resource they were started on.
+  const [aiChatsFolder] = useString(driveResource, ai.properties.aiChatsFolder);
   const subResources = useMemo(
     () =>
       allChildren.filter(
-        subject => subject !== defaultOntology && subject !== commentsFolder,
+        subject =>
+          subject !== defaultOntology &&
+          subject !== commentsFolder &&
+          subject !== aiChatsFolder,
       ),
-    [allChildren, defaultOntology, commentsFolder],
+    [allChildren, defaultOntology, commentsFolder, aiChatsFolder],
   );
   const [title] = useTitle(driveResource);
   const navigate = useNavigateWithTransition();

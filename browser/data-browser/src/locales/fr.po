@@ -578,6 +578,7 @@ msgstr "Aucun résultat"
 
 #: src/chunks/AI/AISidebar.tsx
 #: src/components/OverlayContainer.tsx
+#: src/components/SideBar/AIPanel.tsx
 msgid "New Chat"
 msgstr "Nouvelle discussion"
 
@@ -1769,7 +1770,6 @@ msgstr "Créer une nouvelle ressource"
 msgid "New Resource"
 msgstr "Nouvelle ressource"
 
-#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 #: src/components/forms/FilePicker/FilePickerItem.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
@@ -2028,7 +2028,6 @@ msgstr "Transport : {0}"
 msgid "<0/> Resource with error"
 msgstr "<0/> Ressource avec erreur"
 
-#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 msgid "Invalid Resource"
 msgstr "Ressource invalide"
@@ -4560,9 +4559,8 @@ msgstr "Ne répond pas"
 msgid "Untitled Chat"
 msgstr "Discussion sans titre"
 
-#: src/components/SideBar/AIPanel.tsx
-msgid "<0/> New Chat"
-msgstr "<0/> Nouvelle discussion"
+#~ msgid "<0/> New Chat"
+#~ msgstr "<0/> Nouvelle discussion"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "LLM Instructions"
@@ -5043,7 +5041,6 @@ msgstr ""
 
 #: src/components/CommentsPanel/CommentsPanelContainer.tsx
 #: src/components/NavBar.tsx
-#: src/helpers/standardLocations.ts
 msgid "Comments"
 msgstr ""
 

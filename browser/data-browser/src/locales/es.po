@@ -578,6 +578,7 @@ msgstr "Sin resultados"
 
 #: src/chunks/AI/AISidebar.tsx
 #: src/components/OverlayContainer.tsx
+#: src/components/SideBar/AIPanel.tsx
 msgid "New Chat"
 msgstr "Nuevo Chat"
 
@@ -1769,7 +1770,6 @@ msgstr "Crear nuevo recurso"
 msgid "New Resource"
 msgstr "Nuevo recurso"
 
-#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 #: src/components/forms/FilePicker/FilePickerItem.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
@@ -2028,7 +2028,6 @@ msgstr "Transporte: {0}"
 msgid "<0/> Resource with error"
 msgstr "<0/> Recurso con error"
 
-#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 msgid "Invalid Resource"
 msgstr "Recurso Inválido"
@@ -4381,9 +4380,8 @@ msgstr "sin establecer"
 msgid "Untitled Chat"
 msgstr "Chat sin título"
 
-#: src/components/SideBar/AIPanel.tsx
-msgid "<0/> New Chat"
-msgstr "<0/> Nuevo chat"
+#~ msgid "<0/> New Chat"
+#~ msgstr "<0/> Nuevo chat"
 
 #: src/components/SideBar/index.tsx
 msgid "AI Chats"
@@ -5047,7 +5045,6 @@ msgstr ""
 
 #: src/components/CommentsPanel/CommentsPanelContainer.tsx
 #: src/components/NavBar.tsx
-#: src/helpers/standardLocations.ts
 msgid "Comments"
 msgstr ""
 

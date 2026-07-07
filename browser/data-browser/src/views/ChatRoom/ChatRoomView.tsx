@@ -495,6 +495,11 @@ const EmptyChatState = styled.div`
   }
 `;
 
+// `about` is also used by AI chats; only Messages belong in a chat/comment thread.
+const ONLY_MESSAGES = [
+  { property: core.properties.isA, value: dataBrowser.classes.message },
+];
+
 /**
  * Fetches messages linked to a subject using the Collection system, sorted by
  * createdAt ascending (oldest first) with pagination. ChatRooms link their
@@ -510,6 +515,7 @@ export function useChatMessages(
     {
       property,
       value: subject,
+      filters: ONLY_MESSAGES,
       sort_by: commits.properties.createdAt,
       sort_desc: false,
     },

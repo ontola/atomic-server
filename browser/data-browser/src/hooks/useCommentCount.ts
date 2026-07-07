@@ -1,5 +1,10 @@
-import { commits, dataBrowser, useCollection } from '@tomic/react';
+import { commits, core, dataBrowser, useCollection } from '@tomic/react';
 import { useLastSeenComments } from './useLastSeenComments';
+
+// `about` is also used by AI chats; only Messages are comments.
+const ONLY_MESSAGES = [
+  { property: core.properties.isA, value: dataBrowser.classes.message },
+];
 
 /**
  * Live number of comments on a resource (Messages whose `about` points at it)
@@ -18,6 +23,7 @@ export function useCommentCount(subject: string): {
     {
       property: dataBrowser.properties.about,
       value: subject,
+      filters: ONLY_MESSAGES,
       sort_by: commits.properties.createdAt,
     },
     { pageSize: 100 },

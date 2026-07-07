@@ -1,4 +1,4 @@
-import { core, dataBrowser, type Store } from '@tomic/react';
+import { ai, core, dataBrowser, type Store } from '@tomic/react';
 
 /**
  * Standard locations are well-known resources inside a Drive (the Comments
@@ -49,6 +49,19 @@ export async function getOrCreateCommentsFolder(
     store,
     driveSubject,
     dataBrowser.properties.commentsFolder,
-    { isA: dataBrowser.classes.folder, name: 'Comments' },
+    { isA: dataBrowser.classes.folder, name: /* @wc-ignore */ 'Comments' },
+  );
+}
+
+/** The Drive's AI Chats folder: home for sidebar AI chats (usually on the personal drive). */
+export async function getOrCreateAiChatsFolder(
+  store: Store,
+  driveSubject: string,
+): Promise<string> {
+  return getOrCreateDriveLocation(
+    store,
+    driveSubject,
+    ai.properties.aiChatsFolder,
+    { isA: dataBrowser.classes.folder, name: /* @wc-ignore */ 'AI Chats' },
   );
 }

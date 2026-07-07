@@ -610,6 +610,7 @@ msgstr "Antwort neu generieren"
 
 #: src/chunks/AI/AISidebar.tsx
 #: src/components/OverlayContainer.tsx
+#: src/components/SideBar/AIPanel.tsx
 msgid "New Chat"
 msgstr "Neuer Chat"
 
@@ -1707,7 +1708,6 @@ msgstr "Keine Instanzen"
 msgid "Use <0/> in code"
 msgstr "<0/> im Code verwenden"
 
-#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 #: src/components/forms/FilePicker/FilePickerItem.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
@@ -2050,7 +2050,6 @@ msgstr "Schreiben"
 msgid "Drive Configuration"
 msgstr "Laufwerkskonfiguration"
 
-#: src/components/SideBar/AIPanel.tsx
 #: src/components/SideBar/OntologySideBar/OntologiesPanel.tsx
 msgid "Invalid Resource"
 msgstr "Ungültige Ressource"
@@ -4500,9 +4499,8 @@ msgstr "Optionale HTTP-Header, die beim Verbinden mit diesem MCP-Server gesendet
 msgid "Untitled Chat"
 msgstr "Unbenannter Chat"
 
-#: src/components/SideBar/AIPanel.tsx
-msgid "<0/> New Chat"
-msgstr "<0/> Neuer Chat"
+#~ msgid "<0/> New Chat"
+#~ msgstr "<0/> Neuer Chat"
 
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Searching online"
@@ -5038,7 +5036,6 @@ msgstr ""
 
 #: src/components/CommentsPanel/CommentsPanelContainer.tsx
 #: src/components/NavBar.tsx
-#: src/helpers/standardLocations.ts
 msgid "Comments"
 msgstr ""
 

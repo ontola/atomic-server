@@ -10,7 +10,7 @@ import type { JSX } from 'react';
 
 type SharedWithMeLinkProps = {
   subject: string;
-  onClick: () => void;
+  onClick?: () => void;
   'data-testid'?: string;
 };
 

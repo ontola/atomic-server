@@ -547,7 +547,9 @@ export async function enableAIForTesting(page: Page) {
       }),
     );
     localStorage.setItem('atomic.ai.setupComplete', JSON.stringify(true));
-    localStorage.setItem('atomic.aiSidebar.open', JSON.stringify(true));
+    // The AI sidebar shares the right-panel slot with the Comments panel;
+    // its open state lives in `atomic.rightPanel.active`.
+    localStorage.setItem('atomic.rightPanel.active', JSON.stringify('ai'));
     localStorage.setItem('atomic.sidebar-panels', JSON.stringify(['aichats']));
   });
 }
