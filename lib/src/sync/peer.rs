@@ -542,6 +542,80 @@ async fn admitted_for_drive(
     verdict
 }
 
+/// Serve a peer-supplied `pull` list from local Loro snapshots — gated per
+/// subject on `check_read` for the identity the peer proved via auth-back.
+/// This is the initiator-side mirror of the acceptor's `handle_sync_vv`,
+/// which has always done this check before pushing: the `pull` half of a
+/// `SYNC_DIFF` is chosen by the remote peer, so serving it from a raw
+/// `Tree::LoroSnapshots` read would let a dialed peer name any subject in the
+/// drive and receive it regardless of read rights. Dialing a peer never
+/// established that peer's rights. Fail closed: a subject that doesn't
+/// materialize into a resource can't be rights-checked, so it isn't served.
+async fn collect_pull_snapshots(
+    store: &Db,
+    agent: &ForAgent,
+    subjects: &[String],
+) -> Vec<(String, Vec<u8>)> {
+    let mut entries = Vec::new();
+    for subject in subjects {
+        let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
+        match store.get_resource(&subj).await {
+            Ok(resource) => {
+                if crate::hierarchy::check_read(store, &resource, agent)
+                    .await
+                    .is_err()
+                {
+                    tracing::warn!(
+                        "[sync] refusing to serve {} to peer: no read access for {:?}",
+                        &subject[..subject.len().min(30)],
+                        agent
+                    );
+                    continue;
+                }
+            }
+            Err(_) => continue,
+        }
+        if let Ok(Some(snapshot)) = store
+            .kv
+            .get(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes())
+        {
+            entries.push((subject.clone(), snapshot));
+        }
+    }
+    entries
+}
+
+/// Apply one peer-supplied `SYNC_DIFF.remove[]` entry, gated exactly like a
+/// live `DESTROY` frame: the remove list arrives unauthenticated-by-default
+/// from whatever peer we dialed, so deleting a subject we actually hold
+/// requires the peer's proven identity to pass the same admission + ACL check
+/// as any other write. A subject we don't hold has nothing to check rights
+/// against — applied unconditionally, where the tombstone-write is a real
+/// no-op for a never-seen subject.
+async fn apply_peer_remove(
+    store: &Db,
+    agent: &ForAgent,
+    subject: &str,
+    drive_cache: &mut std::collections::HashMap<String, bool>,
+) {
+    match super::ws_apply::resolve_destroy_drive(store, subject).await {
+        Some(drive_subject) => {
+            if admitted_for_drive(store, agent, &drive_subject, drive_cache).await {
+                let _ = super::ws_apply::apply_destroy_checked(store, subject).await;
+            } else {
+                tracing::warn!(
+                    "[sync] rejected SYNC_DIFF remove for {} from peer: not admitted for drive {}",
+                    &subject[..subject.len().min(30)],
+                    &drive_subject[..drive_subject.len().min(30)]
+                );
+            }
+        }
+        None => {
+            let _ = super::ws_apply::apply_destroy_checked(store, subject).await;
+        }
+    }
+}
+
 /// Clear `drive_cache` when `agent` no longer matches `previous` — a late
 /// AUTH frame mid-connection (see the `handle_frame` fallback dispatch in
 /// `register_live_peer`'s read loop) can change the session's identity, and
@@ -1115,8 +1189,19 @@ pub async fn sync_drive_with_peer_using_outcome(
     // Best-effort mutual auth: the identity the remote proved to us, if any.
     // Stays Public (no special rights beyond whatever Public already has,
     // same as an unauthenticated HTTP request) if the remote has no local
-    // agent to authenticate with — e.g. a truly anonymous guest.
+    // agent to authenticate with — e.g. a truly anonymous guest. Every write
+    // the remote's SYNC_DIFF/SYNC_PUSH frames cause below, and every subject
+    // we serve back for its `pull` list, is gated on THIS identity: the accept
+    // side writes its auth-back AUTH immediately after AUTH_OK — before any
+    // SYNC_* response — and the QUIC bi-stream is ordered, so a peer that
+    // authenticates is identified before its sync frames are processed; a peer
+    // that never does stays Public and gets Public semantics. Dialing a peer
+    // must not, by itself, grant that peer Sudo over our store.
     let mut remote_agent = ForAgent::Public;
+    // Same per-connection drive-verdict cache the live loop uses; cleared on
+    // a late identity change, since verdicts cached under the old identity
+    // are stale (see `invalidate_drive_cache_on_identity_change`).
+    let mut drive_cache: std::collections::HashMap<String, bool> = std::collections::HashMap::new();
 
     // Build our local sync state
     let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
@@ -1216,7 +1301,7 @@ pub async fn sync_drive_with_peer_using_outcome(
                         diff.remove.len()
                     );
                     for subject in &diff.remove {
-                        let _ = super::ws_apply::apply_destroy(store, subject).await;
+                        apply_peer_remove(store, &remote_agent, subject, &mut drive_cache).await;
                     }
                     pull_subjects = diff.pull.clone();
 
@@ -1224,18 +1309,13 @@ pub async fn sync_drive_with_peer_using_outcome(
                     // Send our data now and break.
                     if diff.push.is_empty() {
                         if !diff.pull.is_empty() {
-                            let mut entries: Vec<(&str, Vec<u8>)> = Vec::new();
-                            for subject in &diff.pull {
-                                if let Ok(Some(snapshot)) = store
-                                    .kv
-                                    .get(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes())
-                                {
-                                    entries.push((subject.as_str(), snapshot));
-                                }
-                            }
+                            let entries =
+                                collect_pull_snapshots(store, &remote_agent, &diff.pull).await;
                             if !entries.is_empty() {
-                                let refs: Vec<(&str, &[u8])> =
-                                    entries.iter().map(|(s, b)| (*s, b.as_slice())).collect();
+                                let refs: Vec<(&str, &[u8])> = entries
+                                    .iter()
+                                    .map(|(s, b)| (s.as_str(), b.as_slice()))
+                                    .collect();
                                 for chunk in super::protocol::encode_sync_push_chunks(drive, &refs)
                                 {
                                     send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
@@ -1253,12 +1333,14 @@ pub async fn sync_drive_with_peer_using_outcome(
                 let mut last_chunk = false;
                 if let Some(push) = super::protocol::decode_sync_push(payload) {
                     last_chunk = push.last;
-                    let (count, blob_requests) = super::engine::import_sync_push(
-                        &push,
-                        store,
-                        &crate::agents::ForAgent::Sudo,
-                    )
-                    .await;
+                    // Import with the identity the peer proved via auth-back,
+                    // NOT Sudo — dialing a peer never established the peer's
+                    // write rights. `import_sync_push` runs the same
+                    // drive-level `check_write` + admission gate the accept
+                    // path runs, with the same bootstrap carve-out for a drive
+                    // that doesn't exist locally yet.
+                    let (count, blob_requests) =
+                        super::engine::import_sync_push(&push, store, &remote_agent).await;
                     total_imported += count;
 
                     // Send blob requests if any
@@ -1275,18 +1357,13 @@ pub async fn sync_drive_with_peer_using_outcome(
                     continue;
                 }
                 if !pull_subjects.is_empty() {
-                    let mut entries: Vec<(&str, Vec<u8>)> = Vec::new();
-                    for subject in &pull_subjects {
-                        if let Ok(Some(snapshot)) = store
-                            .kv
-                            .get(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes())
-                        {
-                            entries.push((subject.as_str(), snapshot));
-                        }
-                    }
+                    let entries =
+                        collect_pull_snapshots(store, &remote_agent, &pull_subjects).await;
                     if !entries.is_empty() {
-                        let refs: Vec<(&str, &[u8])> =
-                            entries.iter().map(|(s, b)| (*s, b.as_slice())).collect();
+                        let refs: Vec<(&str, &[u8])> = entries
+                            .iter()
+                            .map(|(s, b)| (s.as_str(), b.as_slice()))
+                            .collect();
                         for chunk in super::protocol::encode_sync_push_chunks(drive, &refs) {
                             send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
                             send.write_all(&chunk).await.map_err(io_err)?;
@@ -1323,6 +1400,11 @@ pub async fn sync_drive_with_peer_using_outcome(
                                     tracing::info!(
                                         "[sync] peer {} authenticated back as {a:?}",
                                         &remote_key[..remote_key.len().min(12)]
+                                    );
+                                    invalidate_drive_cache_on_identity_change(
+                                        &a,
+                                        &remote_agent,
+                                        &mut drive_cache,
                                     );
                                     remote_agent = a;
                                 }
@@ -1779,6 +1861,185 @@ mod live_write_admission_tests {
             cache.get(&drive),
             Some(&true),
             "an unchanged identity must not clear the cache"
+        );
+    }
+}
+
+#[cfg(test)]
+mod initiator_trust_tests {
+    //! When THIS node dials a peer (the initiator side,
+    //! `sync_drive_with_peer_using_outcome`), it used to trust that peer
+    //! unconditionally — serve any subject it named in `pull` straight from the
+    //! snapshot tree with no `check_read`, import its `SYNC_PUSH` as
+    //! `ForAgent::Sudo`, and apply its `remove[]` deletes with no rights check.
+    //! Dialing a peer never established the peer's rights. These tests exercise
+    //! the three gate helpers directly, mirroring how
+    //! `live_write_admission_tests` exercises `admitted_for_drive`.
+    use super::*;
+    use crate::Db;
+    use std::collections::HashMap;
+
+    /// Build a drive whose read/write is restricted to `owner` (no public
+    /// grant) plus one child resource under it. Returns `(drive_did, child)`.
+    async fn private_drive_with_child(db: &Db, owner: &crate::agents::Agent) -> (String, String) {
+        let mut builder = crate::commit::CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::IS_A.into(),
+            crate::Value::ResourceArray(vec![crate::urls::DRIVE.into()]),
+        );
+        builder.set(
+            crate::urls::NAME.into(),
+            crate::Value::String("Private Drive".into()),
+        );
+        builder.set(
+            crate::urls::WRITE.into(),
+            crate::Value::ResourceArray(vec![owner.subject.to_string().into()]),
+        );
+        builder.set(
+            crate::urls::READ.into(),
+            crate::Value::ResourceArray(vec![owner.subject.to_string().into()]),
+        );
+        let commit = crate::commit::Commit::create_did(builder, owner, db)
+            .await
+            .unwrap();
+        let drive_did = commit.subject.to_string();
+        let opts = crate::commit::CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            update_index: true,
+            ..crate::commit::CommitOpts::no_validations_no_index()
+        };
+        db.apply_commit(commit, &opts).await.unwrap();
+        db.set_active_drive(&drive_did).unwrap();
+
+        let child = db
+            .create_resource(
+                crate::urls::CLASS,
+                &drive_did,
+                "Secret Doc",
+                Some(vec![(
+                    crate::urls::DESCRIPTION,
+                    crate::Value::String("top secret".into()),
+                )]),
+            )
+            .await
+            .unwrap();
+        (drive_did, child)
+    }
+
+    /// A peer we dialed that only proved `Public` (or nothing) must NOT be
+    /// served snapshots for subjects it can't read — even though it named them
+    /// in its `pull` list. The old code read `Tree::LoroSnapshots` directly and
+    /// handed the bytes over regardless.
+    #[tokio::test]
+    async fn pull_serving_refuses_unreadable_subjects_for_public_peer() {
+        let db = Db::init_temp("initiator_pull_public").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (_drive, child) = private_drive_with_child(&db, &alice).await;
+
+        // Public peer asks for the secret child — must get nothing.
+        let served = collect_pull_snapshots(&db, &ForAgent::Public, &[child.clone()]).await;
+        assert!(
+            served.is_empty(),
+            "a Public peer must not be served a snapshot for a subject it can't read"
+        );
+
+        // The rightful owner asking for the same subject IS served — proving
+        // the gate rejects on rights, not on some unrelated failure.
+        let served_owner = collect_pull_snapshots(
+            &db,
+            &ForAgent::AgentSubject(alice.subject.clone()),
+            &[child.clone()],
+        )
+        .await;
+        assert_eq!(
+            served_owner.len(),
+            1,
+            "the owner must still be served the snapshot it can read"
+        );
+        assert_eq!(served_owner[0].0, child);
+    }
+
+    /// A stranger agent (proved identity, but no rights on this drive) is
+    /// treated the same as Public for the pull-serving gate.
+    #[tokio::test]
+    async fn pull_serving_refuses_unreadable_subjects_for_stranger() {
+        let db = Db::init_temp("initiator_pull_stranger").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (_drive, child) = private_drive_with_child(&db, &alice).await;
+        let mallory = db.create_agent(Some("Mallory")).await.unwrap();
+
+        let served = collect_pull_snapshots(
+            &db,
+            &ForAgent::AgentSubject(mallory.subject.clone()),
+            &[child],
+        )
+        .await;
+        assert!(
+            served.is_empty(),
+            "a peer that authenticated as an unrelated agent must not receive unreadable snapshots"
+        );
+    }
+
+    /// A peer we dialed that isn't admitted for the drive must NOT be able to
+    /// delete + tombstone a subject we legitimately hold via `remove[]`. The
+    /// old code called `apply_destroy` (unchecked) for every remove entry.
+    #[tokio::test]
+    async fn remove_rejected_for_unadmitted_peer_known_subject() {
+        let db = Db::init_temp("initiator_remove_stranger").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (_drive, child) = private_drive_with_child(&db, &alice).await;
+        let mallory = db.create_agent(Some("Mallory")).await.unwrap();
+
+        let mut cache = HashMap::new();
+        apply_peer_remove(
+            &db,
+            &ForAgent::AgentSubject(mallory.subject.clone()),
+            &child,
+            &mut cache,
+        )
+        .await;
+
+        assert!(
+            db.get_resource(&child.as_str().into()).await.is_ok(),
+            "an unadmitted peer's remove[] entry must NOT delete a subject we hold"
+        );
+        assert!(
+            !crate::sync::tombstones::is_tombstoned(&db, &child),
+            "an unadmitted peer's remove[] entry must NOT tombstone a subject we hold"
+        );
+    }
+
+    /// The rightful owner's remove IS applied — proving the gate is about
+    /// rights, not a blanket refusal that would break legitimate reconcile.
+    #[tokio::test]
+    async fn remove_applied_for_admitted_owner() {
+        let db = Db::init_temp("initiator_remove_owner").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (_drive, child) = private_drive_with_child(&db, &alice).await;
+
+        let mut cache = HashMap::new();
+        apply_peer_remove(
+            &db,
+            &ForAgent::AgentSubject(alice.subject.clone()),
+            &child,
+            &mut cache,
+        )
+        .await;
+
+        assert!(
+            db.get_resource(&child.as_str().into()).await.is_err(),
+            "the owner's remove[] entry must delete the subject"
+        );
+        assert!(
+            crate::sync::tombstones::is_tombstoned(&db, &child),
+            "the owner's remove[] entry must record a tombstone"
         );
     }
 }
