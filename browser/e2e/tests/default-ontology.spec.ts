@@ -21,9 +21,9 @@ test.describe('default ontology', () => {
     await expect(
       sidebar.getByRole('button', { name: 'Issue Tracker' }).first(),
     ).toBeVisible();
-    await expect(
-      sidebar.getByRole('button', { name: 'Ontology' }),
-    ).toHaveCount(0);
+    await expect(sidebar.getByRole('button', { name: 'Ontology' })).toHaveCount(
+      0,
+    );
 
     // It stays reachable via the drive page's (collapsed) resource list.
     await page.getByTestId('sidebar-drive-open').click();
