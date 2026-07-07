@@ -1,6 +1,27 @@
 import { describe, it, vi } from 'vitest';
 import { LoroLoader } from './loro-loader.js';
 
+describe('LoroLoader.initializeLoro', () => {
+  it('shares one in-flight init between concurrent callers', ({ expect }) => {
+    if (LoroLoader.isLoaded()) {
+      // Already loaded (shared vitest module state): the fast path returns
+      // a resolved promise; identity no longer matters because no init runs.
+      return;
+    }
+
+    // The critical invariant: overlapping calls MUST get the same promise.
+    // Two independent inits would instantiate the WASM module twice; the
+    // second instance replaces the module-global `wasm` and every object
+    // created against the first corrupts the second's heap (dlmalloc
+    // panics, "indirect call signature mismatch" on commit).
+    const p1 = LoroLoader.initializeLoro();
+    const p2 = LoroLoader.initializeLoro();
+    expect(p1).toBe(p2);
+
+    return p1;
+  });
+});
+
 describe('LoroLoader.onReady', () => {
   it('fires sync when Loro is already loaded', ({ expect }) => {
     // The previous test runs in the same module load already initialize

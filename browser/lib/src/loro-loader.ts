@@ -6,6 +6,7 @@ import type * as Loro from 'loro-crdt';
  */
 export class LoroLoader {
   private static _Loro: typeof Loro | undefined;
+  private static _initInFlight: Promise<void> | undefined;
   private static _readyListeners: Set<() => void> = new Set();
 
   public static get Loro(): typeof Loro {
@@ -16,11 +17,39 @@ export class LoroLoader {
     return this._Loro;
   }
 
-  public static async initializeLoro(): Promise<void> {
+  /**
+   * Single-flight: concurrent callers MUST share one in-flight init.
+   * `enableLoro()` is called fire-and-forget at app startup (App.tsx) AND
+   * awaited on demand (`signChanges`, collections, canvas). The web build's
+   * wasm-bindgen init has a TOCTOU hole — its `if (wasm !== undefined)`
+   * guard is only satisfied AFTER the async fetch+instantiate completes —
+   * so two overlapping `init()` calls instantiate TWO wasm modules and the
+   * second silently replaces the module-global instance. Every doc created
+   * against the first then dereferences (and writes!) stale pointers into
+   * the second instance's heap: delayed dlmalloc heap-corruption panics,
+   * "indirect call signature mismatch" on `doc.commit()`, and
+   * finalizer crashes (`CLOSURE_DTORS` / `Loro*Finalization`), long after
+   * the race itself. Sharing the promise closes the race window entirely.
+   */
+  public static initializeLoro(): Promise<void> {
     if (this._Loro) {
-      return;
+      return Promise.resolve();
     }
 
+    if (!this._initInFlight) {
+      this._initInFlight = this.doInitialize();
+      // A failed load (network error fetching the .wasm) must not poison
+      // the loader forever — clear the in-flight slot so a later call can
+      // retry. `_Loro` stays unset, so retry goes through the full init.
+      this._initInFlight.catch(() => {
+        this._initInFlight = undefined;
+      });
+    }
+
+    return this._initInFlight;
+  }
+
+  private static async doInitialize(): Promise<void> {
     // In a browser, import loro-crdt's `web` build and run its
     // wasm-bindgen init. The default `loro-crdt` entry resolves (via
     // its `module` field) to the `bundler` build, whose WASM↔JS

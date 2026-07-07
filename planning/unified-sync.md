@@ -463,6 +463,27 @@ clear when nothing was tombstoned). Regression test
 (`commit::test::genesis_commit_clears_stale_tombstone_on_own_subject`), verified via
 revert-and-check.
 
+### F12 — Browser Loro WASM double-init race corrupts the heap ✅ Fixed 2026-07-07
+
+`LoroLoader.initializeLoro` (browser/lib/src/loro-loader.ts) guarded only on
+`_Loro`, which is assigned *after* several awaits — and loro-crdt's own
+`__wbg_init` has the same TOCTOU hole (`if (wasm !== undefined)` is only
+satisfied once the async fetch+instantiate finishes). `enableLoro()` is called
+fire-and-forget at app startup (App.tsx) AND awaited on demand (`signChanges`,
+collections, canvas), so overlapping calls in the wasm-download window
+instantiated **two** wasm modules; the second silently replaced the
+module-global `wasm`. Docs created against the first instance then dereference
+— and write through — stale pointers into the second instance's heap.
+Symptoms surface long after the race: dlmalloc panics
+(`psize >= size + min_overhead`), `indirect call signature mismatch` on
+`doc.commit()` (drain/sign path), `index out of bounds` in `CLOSURE_DTORS`,
+and crashes in `Loro*Finalization` GC finalizers.
+
+**Fixed (2026-07-07).** Single-flight promise in `LoroLoader.initializeLoro`:
+concurrent callers share one in-flight init; a failed load clears the slot so
+retry is possible. Regression test in `loro-loader.test.ts` asserts promise
+identity for overlapping calls.
+
 ## Dead code & drift inventory (2026-07-02 second pass)
 
 ### Dead code (delete)
