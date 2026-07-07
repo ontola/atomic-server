@@ -156,6 +156,20 @@ becomes a thin shim that calls `applyIncoming({ source:
 
 Replaces P2.
 
+> **Status (2026-07-07): the atomic-write core has effectively landed.**
+> `ClientDbWorker.putResourceWithSnapshot` is a single `postMessage` that
+> writes the JSON-AD index entry + the Loro snapshot in one serialised worker
+> op (then a synchronous `flush()` for offline durability — see the
+> local-cache durability fix in [`unified-sync.md`](./unified-sync.md)). Both
+> primary write paths already go through it: `resource.ts::persistToClientDb`
+> and `store.ts::addResource`. So the P2 "two round-trips, no atomic coupling"
+> risk is closed on the paths that mattered. **Still not done** (the formalizing
+> part of this section): there's no `OpfsPersistor` *class* — the atomic method
+> lives on `ClientDb` directly — and the bare `putResource`/`putLoroSnapshot`
+> worker ops remain public (still used for index-only seeding in
+> `initClientDb`/`devtools`). Making those private behind an `OpfsPersistor`
+> facade is the remaining, low-value cleanup; the correctness win is banked.
+
 ```ts
 class OpfsPersistor {
   // The ONLY way to write a resource. Both forms land atomically
@@ -485,8 +499,11 @@ mostly stay.
 
 ## Migration order (smallest-blast-radius first)
 
-1. **`OpfsPersistor`** — low-risk, atomic-write benefit, mostly
-   moves existing code behind one function. (S2)
+1. **`OpfsPersistor`** — ✅ *atomic-write core landed (2026-07-07):*
+   `putResourceWithSnapshot` is the single atomic worker op on both primary
+   write paths; the P2 correctness risk is closed. Only the `OpfsPersistor`
+   *class* facade + making `putResource`/`putLoroSnapshot` private remains, and
+   that's optional cleanup. (S2)
 2. **`LocalOutbox`** — wraps existing `_pendingCommits` +
    `dirtyForSync`. Existing tests keep passing. (S4)
 3. **Resource save decomposition** — make `Resource.save()` sign

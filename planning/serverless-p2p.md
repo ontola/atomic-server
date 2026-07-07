@@ -103,11 +103,25 @@ One state machine replaces today's handshake/live duality in `peer.rs`.
 The F9-proper cluster, previously gated on this very decision — now
 unblocked:
 
-- [ ] **Initiator-side `check_read`** on `SYNC_DIFF.pull` serving (today:
-  raw `Tree::LoroSnapshots` reads). Symmetric with the acceptor's
-  `handle_sync_vv`.
-- [ ] **Replace the initiator's `ForAgent::Sudo` import** with the auth-back
-  agent (mutual AUTH is already sent; it's just not enforced).
+- [x] **Initiator-side `check_read`** on `SYNC_DIFF.pull` serving (2026-07-07)
+  — was raw `Tree::LoroSnapshots` reads. New `collect_pull_snapshots`
+  (peer.rs) gates every pulled subject on `check_read` for the identity the
+  peer proved via auth-back, mirroring the acceptor's `handle_sync_vv`; fails
+  closed (a subject that doesn't materialize isn't served). Covers both the
+  no-SYNC_PUSH and the post-SYNC_PUSH pushback sites.
+- [x] **Replace the initiator's `ForAgent::Sudo` import** with the auth-back
+  agent (2026-07-07). `sync_drive_with_peer_using_outcome`'s `import_sync_push`
+  call now passes `remote_agent` (the identity proven by the peer's auth-back
+  AUTH, which the accept side writes right after `AUTH_OK`, before any SYNC_*
+  frame, on the ordered QUIC stream) instead of `Sudo`. `import_sync_push`'s
+  existing drive-level `check_write` + admission gate now actually bite;
+  same-agent replicas still import (auth-back proves the shared key → write
+  rights hold). Initiator's `SYNC_DIFF.remove[]` apply is gated the same way
+  via `apply_peer_remove` (admission + ACL, like a live `DESTROY`) — closes
+  the F10 known-subject residual too. Four regression tests
+  (`sync::peer::initiator_trust_tests`), each proven against a reverted build
+  (3 fail vulnerable, owner-still-works stays green); full 64-test sync suite
+  incl. real two-endpoint Iroh e2e green.
 - [ ] **Require `AUTH` before `SYNC`/`SYNC_PUSH`/live frames** on accept
   paths; reject instead of defaulting to `Public`.
 - [ ] **Bind `AUTH.requestedSubject` to the session's drive** so a proof for
@@ -129,12 +143,20 @@ unblocked:
 From the [consolidation inventory](./unified-sync.md#consolidation-inventory-2026-07-02-third-pass),
 now load-bearing rather than hygiene:
 
-- [ ] **Engine owns ALL tags** — move the server's hand-rolled `AUTH`, `GET`,
-  `COMMIT`, `SUB`, `UNSUB` arms into `engine::handle_frame` (server injects
-  an origin-resolver for `internal:/` and a fan-out hook for
-  subscriptions). After this, "every peer is a hub" is literally true: the
-  `COMMIT` arm peers need in P2 already exists and is the same code the
-  server runs.
+- [~] **Engine owns ALL tags** — *AUTH + GET + COMMIT-apply done (2026-07-07):*
+  AUTH and GET now delegate to `engine::handle_frame` (the engine resolves
+  `internal:/` against its own base domain — no hook needed — closing the drift
+  bug). The engine also gained a `COMMIT` arm (`apply_peer_commit`): a peer
+  routing a `COMMIT` through the engine applies it with full signature + rights
+  validation, which is the "every peer is a hub" write path serverless P2P needs
+  (P4). **Still to move:** the *server's* `COMMIT` arm doesn't yet delegate to
+  the engine — it keeps its own richer path for `source_id` echo-suppression +
+  commit-monitor fan-out, which the engine arm deliberately omits (peer transports
+  don't fan out that way). Converging the server onto the engine `COMMIT` needs a
+  fan-out/source_id hook the server injects. `SUB`/`UNSUB` also stay hand-rolled
+  (need the commit-monitor actor handle). AUTH+GET were the pure request→response
+  pair that had actually drifted; COMMIT-apply is the additive capability peers
+  needed.
 - [ ] **`trusted_hub` / `untrusted_peer` module split** in `ws_apply.rs` so
   the unconditional apply paths can't be reached from accept code.
 - [ ] Collapse the six `sync_drive_with_peer*` variants into one
@@ -181,9 +203,22 @@ Same-agent pairing needs no consent dialog — the key is the consent
 
 ### P4 — Ship same-agent Android ↔ Android
 
-- [ ] Outbox drains `COMMIT` frames over the Iroh session when it's the
+- [~] Outbox drains `COMMIT` frames over the Iroh session when it's the
   reachable transport (Principle 3 — the peer applies with full validation
-  via the engine's COMMIT arm from P1).
+  via the engine's COMMIT arm from P1). **The receiving half is done
+  (2026-07-07):** `engine::handle_frame` now has a `COMMIT` arm
+  (`apply_peer_commit`) that validates signature + schema + the signer's
+  rights and answers `COMMIT_OK`/`ERROR`, so any peer transport routing
+  through the engine (the Iroh live loop already falls through to it) applies
+  commits exactly like the server's path — "every peer is a hub" for writes.
+  Gated by the commit's own signature, not the connection's AUTH (a relayed
+  valid commit grants only what its signer could already do); causality +
+  previous-commit checks off for concurrent peer writes, but timestamps ARE
+  validated (replay bounding). Tests:
+  `engine_commit_from_authorized_signer_is_applied` /
+  `..._unauthorized_signer_is_rejected` (rights gate revert-proven). **Still
+  to do:** the *sending* half — the outbox actually draining `COMMIT` frames
+  over an Iroh `SyncSession` (needs P2's outbox port + session).
 - [ ] `SYNC_PUSH` fast-path kept for initial reconcile between the two
   same-agent devices (permitted by Principle 3's exception; both sides have
   proven the same key).

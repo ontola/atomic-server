@@ -574,13 +574,27 @@ stops the pattern; the rest are instances of it.
 
 ### Duplicated implementations (merge)
 
-1. **Server `GET`/`AUTH` arms duplicate `engine::handle_frame` — with live drift.**
-   `web_sockets.rs:268` and `engine.rs:62` both implement GET, but only the server
-   copy resolves `internal:/` URLs to the server origin (`web_sockets.rs:324`) — an
-   Iroh peer GETting the same resource receives unresolved `internal:/` subjects.
-   Same duplication for AUTH (`web_sockets.rs:241` vs `engine.rs:35`). **Fix: engine
-   owns both arms; server passes an origin-resolver hook.** This is the
-   one-lands-instead-of-two change.
+1. ✅ **Done (2026-07-07): server `GET`/`AUTH` arms now delegate to
+   `engine::handle_frame`.** Both hand-rolled copies deleted from
+   `web_sockets.rs`; the engine owns GET and AUTH. No origin-resolver *hook*
+   was needed — the engine resolves `internal:/` against `store.get_base_domain()`
+   itself (a no-op for External/DID subjects, so it's correct on every
+   transport), which closed the drift where only the server resolved it and an
+   Iroh peer received raw `internal:/` subjects. GET folds into the existing
+   read-only delegation arm (SYNC/SYNC_PUSH/BLOB_*); AUTH is separate because it
+   *mutates* the session agent — the server writes the engine's post-call agent
+   back onto the actor. Regression tests: `engine_get_resolves_internal_subject_to_origin`
+   (revert-proven at the engine layer) plus the full server WS integration suite
+   (ws_get/ws_commit/sync/ws_subscribe_query/ws_drive_membership/multi_client_sync
+   green). **COMMIT-apply now also lives in the engine (2026-07-07):** a new
+   `apply_peer_commit` arm lets any peer transport routing through
+   `handle_frame` apply a signed commit with full signature + rights validation
+   (the Iroh live loop's unhandled-tag fallback reaches it) — the "every peer is
+   a hub" write path. The *server's* WS `COMMIT` arm still doesn't delegate to
+   it: it keeps its own path for `source_id` echo-suppression + commit-monitor
+   fan-out, which the engine arm omits by design. **Still hand-rolled
+   (actor-bound):** the server `COMMIT` convergence (needs a fan-out/source_id
+   hook) and `SUB`/`UNSUB` (need the commit-monitor actor handle).
 2. **AUTH-frame parsing ×3**: `engine.rs:39`, `web_sockets.rs:251`, `peer.rs:1284`
    (auth-back) — three copies of "parse `AuthValues` → verify → assign". One
    `protocol::handle_auth_frame` helper.
@@ -746,15 +760,19 @@ resurrection between honest replicas of the same agent.
 - [x] **F8 (critical):** delete the `SYNC_DELTAS` handler + `engine::handle_sync_deltas`
   — unauthenticated, unchecked write path with zero senders (2026-07-02).
 - [x] **F9 minimal:** stop `add_known_peer` on the accept path (2026-07-02).
-- [ ] **F9 proper (still open):** `check_read` on initiator-side `pull` serving; replace
-  the initiator's `ForAgent::Sudo` import with the auth-back agent; also covers the
-  initiator's ungated `apply_destroy` on `SYNC_DIFF.remove[]` entries (peer.rs, in
-  `sync_drive_with_peer_using_outcome`) — a peer the victim dialed can still delete +
-  tombstone subjects the victim **already has**, no rights check at all. F10 only closed
-  the *unknown*-subject phantom-tombstone case; the known-subject case is this same
-  initiator-trust hole and Open Question 4's territory. Now unblocked (Open
-  Question 2 → Option B) and scheduled as [`serverless-p2p.md`](./serverless-p2p.md)
-  Phase P0, where OQ4 resolves as "destroys travel as signed commits."
+- [x] **F9 proper (write/read gates fixed 2026-07-07):** `check_read` on
+  initiator-side `pull` serving (`collect_pull_snapshots`, peer.rs — was raw
+  `Tree::LoroSnapshots` reads); the initiator's `ForAgent::Sudo` `import_sync_push`
+  replaced with the auth-back `remote_agent`; and the initiator's previously-ungated
+  `apply_destroy` on `SYNC_DIFF.remove[]` entries now goes through `apply_peer_remove`
+  (admission + ACL, same as a live `DESTROY`) — closing the F10 known-subject
+  tombstone-injection residual in the same change. Four regression tests
+  (`sync::peer::initiator_trust_tests`), revert-proven; full sync suite (64) incl. real
+  Iroh e2e green. **Still open under F9's umbrella (separate checklist items below):**
+  requiring `AUTH` before `SYNC`/`SYNC_PUSH` on accept paths (fail closed, not
+  Public) and binding `AUTH.requestedSubject` to `SYNC.drive`; OQ4's "destroys as
+  signed commits on the wire" reshape is [`serverless-p2p.md`](./serverless-p2p.md)
+  Phase P0's larger move, of which this fix is the interim hardening.
 - [x] **F10 (partial — see F9 proper above):** no phantom tombstones from unprivileged
   peers for locally-*unknown* subjects (2026-07-02). Does **not** cover a known subject
   destroyed via the initiator's ungated `SYNC_DIFF.remove[]` apply — that's F9 proper.
@@ -771,10 +789,11 @@ resurrection between honest replicas of the same agent.
 - [x] **Docs:** update `docs/src/websockets.md` for the F5 `ERROR` layout (2026-07-02)
   — table row now shows `[request_id] [code] [message]`, plus an error-code reference
   table.
-- [ ] **Engine owns AUTH/GET:** move the server WS handler's hand-rolled `AUTH`/`GET`
-  arms into `engine::handle_frame` (origin-resolver hook for `internal:/`) — stops
-  the two-copies growth pattern; already produced one drift bug (see consolidation
-  inventory item 1).
+- [x] **Engine owns AUTH/GET (2026-07-07):** the server WS handler's hand-rolled
+  `AUTH`/`GET` arms are deleted and delegate to `engine::handle_frame`. The engine
+  resolves `internal:/` via `store.get_base_domain()` (no hook needed — no-op for
+  External/DID), closing the drift bug. `COMMIT`/`SUB`/`UNSUB` stay hand-rolled
+  (actor-bound). See consolidation inventory item 1.
 - [ ] **`LIVE_CONNECTIONS` leak:** prune on peer removal (consolidation inventory).
 - [x] **Unified Iroh frame cap (2026-07-02):** `peer.rs` had three inbound
   length-prefix checks that had drifted apart (50MB / 50MB / 10MB) plus one
@@ -914,12 +933,14 @@ work in that plan's Phase P0, not a decision-gated maybe.
 - [x] F8: delete `SYNC_DELTAS` (server text handler + engine fn) (2026-07-02).
 - [x] F9 minimal: no `add_known_peer` on the accept path (pairing/explicit action
   only) (2026-07-02).
-- [ ] F9 proper (still open — **now unblocked**, Open Question 2 decided for
-  Option B; scheduled as [`serverless-p2p.md`](./serverless-p2p.md) Phase P0):
-  `check_read` on initiator `pull` serving; auth-back agent instead of `Sudo` on
-  initiator import; **also** the initiator's ungated `apply_destroy` on
-  `SYNC_DIFF.remove[]` for known subjects (see F10 below and Open Question 4 —
-  resolved by "deletes travel as signed destroy commits").
+- [x] F9 proper — initiator-side read/write/remove gates (2026-07-07):
+  `check_read` on initiator `pull` serving (`collect_pull_snapshots`); auth-back
+  `remote_agent` instead of `Sudo` on initiator `import_sync_push`; the initiator's
+  ungated `apply_destroy` on `SYNC_DIFF.remove[]` for known subjects now gated via
+  `apply_peer_remove` (closes the F10 known-subject residual). Revert-proven
+  `sync::peer::initiator_trust_tests`. The remaining P0 items (fail-closed AUTH-before-SYNC,
+  `AUTH.requestedSubject`↔drive binding, "deletes as signed destroy commits" per OQ4)
+  stay open in [`serverless-p2p.md`](./serverless-p2p.md) Phase P0.
 - [x] F10: reject phantom tombstones for locally-*unknown* subjects from
   unprivileged peers (2026-07-02). **Does not** cover a known subject destroyed via
   the initiator's ungated remove-apply — that's F9 proper, above.
