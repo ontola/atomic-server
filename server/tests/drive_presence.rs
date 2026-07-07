@@ -68,11 +68,7 @@ async fn wait_for_server(port: u16) {
 }
 
 /// Wait up to `secs` for a `PresenceUpdate` on `drive`; `None` on timeout.
-async fn recv_presence(
-    rx: &mut Receiver<WsMessage>,
-    drive: &str,
-    secs: u64,
-) -> Option<Vec<u8>> {
+async fn recv_presence(rx: &mut Receiver<WsMessage>, drive: &str, secs: u64) -> Option<Vec<u8>> {
     tokio::time::timeout(Duration::from_secs(secs), async {
         loop {
             match rx.recv().await {

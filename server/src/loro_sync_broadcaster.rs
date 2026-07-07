@@ -218,7 +218,10 @@ impl Handler<SubscribePresence> for LoroSyncBroadcaster {
         Box::pin(
             async move {
                 if !msg.drive.is_local() {
-                    tracing::warn!("can't subscribe to presence of external drive: {}", msg.drive);
+                    tracing::warn!(
+                        "can't subscribe to presence of external drive: {}",
+                        msg.drive
+                    );
                     return None;
                 }
 
