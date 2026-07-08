@@ -675,7 +675,8 @@ pub async fn drive_sync_hash(store: &Db, drive: &str) -> String {
     compute_drive_hash(&server_vvs)
 }
 
-/// Compare client and server VVs, return binary SYNC_OK/SYNC_DIFF/SYNC_PUSH frames.
+/// Compare client and server VVs, return binary SYNC_OK/SYNC_DIFF/SYNC_PUSH
+/// frames over the whole drive. Thin wrapper over [`handle_sync_vv_filtered`].
 pub async fn handle_sync_vv(
     drive: &str,
     drive_hash: &str,
@@ -684,9 +685,61 @@ pub async fn handle_sync_vv(
     store: &Db,
     agent: &crate::agents::ForAgent,
 ) -> Vec<Vec<u8>> {
-    let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
-    let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
-    let server_vvs = build_drive_vvs(store, &drive_subjects);
+    handle_sync_vv_filtered(
+        drive,
+        drive_hash,
+        client_peers,
+        client_resources,
+        None,
+        store,
+        agent,
+    )
+    .await
+}
+
+/// Same as [`handle_sync_vv`], but when `subjects` is `Some(set)` only that set
+/// is reconciled — the RBSR-differing set (`planning/drive-reconciliation.md`
+/// Phase 2b). The server then builds VVs for only those subjects (O(|set|)
+/// rather than O(drive)) and both loops skip anything outside it, so the client
+/// sending version vectors for just the differing subjects is processed exactly
+/// like the full path processes those same subjects.
+///
+/// **RBSR-path limitation:** the filtered path relies purely on version-vector
+/// divergence. The full path (`subjects == None`) additionally pulls a subject
+/// whose VV *matches* but whose blob the server lacks (an HTTP-POST-metadata
+/// backstop, below). A VV fingerprint cannot encode server-only blob presence,
+/// so that backstop does not run for pruned (VV-matching) subjects on the RBSR
+/// path — accepted and documented; the full path is unchanged.
+pub async fn handle_sync_vv_filtered(
+    drive: &str,
+    drive_hash: &str,
+    client_peers: &[String],
+    client_resources: &std::collections::HashMap<String, Vec<i32>>,
+    subjects: Option<&std::collections::HashSet<String>>,
+    store: &Db,
+    agent: &crate::agents::ForAgent,
+) -> Vec<Vec<u8>> {
+    let server_vvs = match subjects {
+        // RBSR path: build VVs for only the differing subjects — no full-drive
+        // parent walk, no full-drive snapshot reads.
+        Some(set) => {
+            let mut vvs = std::collections::HashMap::new();
+            for subject in set {
+                if let Ok(Some(bytes)) = store.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
+                    if let Ok(vv) = AtomicLoroDoc::vv_map_from_snapshot(&bytes) {
+                        vvs.insert(subject.clone(), vv);
+                    }
+                }
+            }
+            vvs
+        }
+        None => {
+            let drive_subject =
+                crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+            let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
+            build_drive_vvs(store, &drive_subjects)
+        }
+    };
 
     // Fast path: hash match
     if !drive_hash.is_empty() {
@@ -802,6 +855,11 @@ pub async fn handle_sync_vv(
 
     // Client resources not on server: pull new data, or tell client to delete tombstones.
     for subject in client_vvs.keys() {
+        // On the RBSR path, only reconcile the differing set even if the client
+        // sent extra version vectors.
+        if subjects.is_some_and(|set| !set.contains(subject)) {
+            continue;
+        }
         if !server_vvs.contains_key(subject) {
             if super::tombstones::is_tombstoned(store, subject) {
                 remove.push(subject.clone());

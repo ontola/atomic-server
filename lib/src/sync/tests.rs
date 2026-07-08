@@ -1936,6 +1936,149 @@ mod peer_sync_tests {
         );
     }
 
+    /// The safety gate for the RBSR live wire: reconciling only the
+    /// RBSR-differing subject set (`handle_sync_vv_filtered(Some(D))`, fed the
+    /// client's VVs for just those subjects) must produce the IDENTICAL
+    /// pull/push/remove sets as reconciling the whole drive
+    /// (`handle_sync_vv`, fed the client's full VV) — for version-vector
+    /// divergence. If these ever diverge, the wire would sync differently than
+    /// the baseline, which is the failure mode the whole design guards against.
+    #[tokio::test]
+    async fn rbsr_reduced_matches_full_sync_vv() {
+        use crate::sync::engine::{drive_items, handle_sync_vv, handle_sync_vv_filtered};
+        use crate::sync::rbsr::{reconcile, Item, RemoteRange};
+        use std::collections::{HashMap, HashSet};
+
+        // Server has a drive with three resources.
+        let db = Db::init_temp("rbsr_differential").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        const CANVAS: &str = "https://atomicdata.dev/ontology/canvas/Canvas";
+        let _r1 = db.create_resource(CANVAS, &drive, "R1", None).await.unwrap();
+        let r2 = db.create_resource(CANVAS, &drive, "R2", None).await.unwrap();
+        let r3 = db.create_resource(CANVAS, &drive, "R3", None).await.unwrap();
+        let r2p = crate::Subject::from_raw(&r2, db.get_base_domain().as_deref()).pure_id();
+        let r3p = crate::Subject::from_raw(&r3, db.get_base_domain().as_deref()).pure_id();
+
+        // Client state, derived from the server so matching subjects match
+        // exactly, then diverged:
+        //  - drive, R1: identical → must be pruned (no frames).
+        //  - R2: client rolled back to empty VV → server ahead → push.
+        //  - R3: client doesn't have it → server has, client lacks → push.
+        //  - R4: client-only synthetic → server lacks → pull.
+        let server_items = drive_items(&db, &drive).await;
+        let mut client_vvs: HashMap<String, std::collections::BTreeMap<String, i32>> =
+            server_items.iter().cloned().collect();
+        client_vvs.get_mut(&r2p).unwrap().clear(); // behind on R2
+        client_vvs.remove(&r3p); // doesn't have R3
+        client_vvs.insert(
+            "https://example.test/client-only-R4".to_string(),
+            std::collections::BTreeMap::from([("client-peer".to_string(), 7)]),
+        );
+
+        // Compact (peers array + per-subject counter arrays) form the wire uses.
+        let (peers, resources) = to_compact(&client_vvs);
+
+        // D = the differing set RBSR would find (client vs server).
+        let client_items: Vec<Item> = client_vvs.iter().map(|(s, v)| (s.clone(), v.clone())).collect();
+        let mut client_sorted = client_items.clone();
+        client_sorted.sort_by(|a, b| a.0.cmp(&b.0));
+        struct Mem(Vec<Item>);
+        impl RemoteRange for Mem {
+            fn fingerprint(&mut self, lo: &str, hi: Option<&str>) -> [u8; 32] {
+                crate::sync::rbsr::range_fingerprint(&self.0, lo, hi)
+            }
+            fn items(&mut self, lo: &str, hi: Option<&str>) -> Vec<Item> {
+                self.0
+                    .iter()
+                    .filter(|(s, _)| s.as_str() >= lo && hi.map(|h| s.as_str() < h).unwrap_or(true))
+                    .cloned()
+                    .collect()
+            }
+        }
+        let mut server_remote = Mem(server_items.clone());
+        let diff = reconcile(&client_sorted, &mut server_remote, 4, 2);
+        let d: HashSet<String> = diff
+            .only_local
+            .iter()
+            .chain(diff.only_remote.iter())
+            .chain(diff.differ.iter())
+            .cloned()
+            .collect();
+
+        // Full reconcile over the whole drive.
+        let full = handle_sync_vv(&drive, "", &peers, &resources, &db, &ForAgent::Sudo).await;
+        // Reduced reconcile over only D, fed the client's VVs restricted to D.
+        let (peers_d, resources_d) = to_compact(
+            &client_vvs
+                .iter()
+                .filter(|(s, _)| d.contains(*s))
+                .map(|(s, v)| (s.clone(), v.clone()))
+                .collect(),
+        );
+        let reduced = handle_sync_vv_filtered(
+            &drive,
+            "",
+            &peers_d,
+            &resources_d,
+            Some(&d),
+            &db,
+            &ForAgent::Sudo,
+        )
+        .await;
+
+        assert_eq!(
+            decode_diff_sets(&full),
+            decode_diff_sets(&reduced),
+            "RBSR-reduced reconcile must yield the same pull/push/remove as the full reconcile"
+        );
+    }
+
+    /// Convert `subject → VV` maps into the wire's compact `(peers, resources)`
+    /// form (counters indexed by the sorted unique peer list).
+    fn to_compact(
+        vvs: &std::collections::HashMap<String, std::collections::BTreeMap<String, i32>>,
+    ) -> (Vec<String>, std::collections::HashMap<String, Vec<i32>>) {
+        let mut peer_set = std::collections::BTreeSet::new();
+        for vv in vvs.values() {
+            for p in vv.keys() {
+                peer_set.insert(p.clone());
+            }
+        }
+        let peers: Vec<String> = peer_set.into_iter().collect();
+        let index: std::collections::HashMap<&str, usize> =
+            peers.iter().enumerate().map(|(i, p)| (p.as_str(), i)).collect();
+        let resources = vvs
+            .iter()
+            .map(|(subject, vv)| {
+                let mut counters = vec![0i32; peers.len()];
+                for (p, &c) in vv {
+                    counters[index[p.as_str()]] = c;
+                }
+                (subject.clone(), counters)
+            })
+            .collect();
+        (peers, resources)
+    }
+
+    /// Decode `SYNC_DIFF` frames into sorted (pull, push, remove) sets for a
+    /// stable, order-independent comparison.
+    fn decode_diff_sets(frames: &[Vec<u8>]) -> (Vec<String>, Vec<String>, Vec<String>) {
+        for frame in frames {
+            if frame.first() == Some(&crate::sync::protocol::tag::SYNC_DIFF) {
+                if let Some(diff) = crate::sync::protocol::decode_sync_diff(&frame[1..]) {
+                    let mut pull = diff.pull.clone();
+                    let mut push = diff.push.clone();
+                    let mut remove = diff.remove.clone();
+                    pull.sort();
+                    push.sort();
+                    remove.sort();
+                    return (pull, push, remove);
+                }
+            }
+        }
+        (vec![], vec![], vec![])
+    }
+
     /// Bridge from the pure RBSR algorithm (`sync::rbsr`) to real store data:
     /// `drive_items` must turn a Db's drive into the sorted `(subject, VV)`
     /// items the reconcile runs over, and reconciling a store's items against a
