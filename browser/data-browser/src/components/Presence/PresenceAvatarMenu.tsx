@@ -78,7 +78,13 @@ const buildAvatarTrigger = (
   size: string | undefined,
   following: boolean,
 ): React.FC<DropdownTriggerProps> => {
-  const Comp = ({ onClick, menuId, isActive, ref, id }: DropdownTriggerProps) => (
+  const Comp = ({
+    onClick,
+    menuId,
+    isActive,
+    ref,
+    id,
+  }: DropdownTriggerProps) => (
     <AvatarButton
       id={id}
       role='button'

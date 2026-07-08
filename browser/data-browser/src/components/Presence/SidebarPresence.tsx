@@ -32,7 +32,9 @@ export function SidebarPresence({
       {agents.slice(0, MAX_AVATARS).map(agent => (
         <PresenceAvatarMenu key={agent} agentSubject={agent} size='1.1rem' />
       ))}
-      {agents.length > MAX_AVATARS && <More>+{agents.length - MAX_AVATARS}</More>}
+      {agents.length > MAX_AVATARS && (
+        <More>+{agents.length - MAX_AVATARS}</More>
+      )}
     </Strip>
   );
 }

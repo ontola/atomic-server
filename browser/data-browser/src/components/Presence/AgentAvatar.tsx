@@ -38,14 +38,8 @@ export function AgentAvatar({
 }: AgentAvatarProps): React.JSX.Element {
   const agentResource = useResource(agentSubject);
   const [name] = useTitle(agentResource);
-  const [imageFile] = useString(
-    agentResource,
-    dataBrowser.properties.image,
-  );
-  const [imageUrl] = useString(
-    agentResource,
-    dataBrowser.properties.imageUrl,
-  );
+  const [imageFile] = useString(agentResource, dataBrowser.properties.image);
+  const [imageUrl] = useString(agentResource, dataBrowser.properties.imageUrl);
 
   if (imageFile) {
     return (
@@ -64,7 +58,11 @@ export function AgentAvatar({
   }
 
   return (
-    <InitialCircle $size={size} $color={colorForAgent(agentSubject)} title={name}>
+    <InitialCircle
+      $size={size}
+      $color={colorForAgent(agentSubject)}
+      title={name}
+    >
       {name.charAt(0).toUpperCase()}
     </InitialCircle>
   );

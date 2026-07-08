@@ -1,7 +1,4 @@
-import ReactMarkdown, {
-  Components,
-  defaultUrlTransform,
-} from 'react-markdown';
+import ReactMarkdown, { Components, defaultUrlTransform } from 'react-markdown';
 import { styled } from 'styled-components';
 import remarkGFM from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';

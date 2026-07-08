@@ -101,7 +101,7 @@ export const SidebarItemTitle = memo(
                       <TextWrapper>
                         <TreeRowTitle>{title}</TreeRowTitle>
                         <UnsavedIndicator resource={resource} />
-                    <SidebarPresence subject={subject} />
+                        <SidebarPresence subject={subject} />
                       </TextWrapper>
                     </ResourceLinkSideBarItem>
                   </NavResourceLink>
@@ -162,7 +162,7 @@ export const SidebarItemTitle = memo(
                     <TextWrapper>
                       <TreeRowTitle>{title}</TreeRowTitle>
                       <UnsavedIndicator resource={resource} />
-                    <SidebarPresence subject={subject} />
+                      <SidebarPresence subject={subject} />
                     </TextWrapper>
                   </ResourceLinkSideBarItem>
                 </NavResourceLink>

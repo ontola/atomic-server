@@ -29,8 +29,7 @@ function FollowSessionPanel() {
   if (!chatroomSubject) {
     return (
       <EmptyState>
-        No follow session yet. Follow someone — or be followed — to start
-        one.
+        No follow session yet. Follow someone — or be followed — to start one.
       </EmptyState>
     );
   }

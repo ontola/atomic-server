@@ -168,7 +168,13 @@ const buildBadgedTrigger = (
   badge: string,
   title: string,
 ): React.FC<DropdownTriggerProps> => {
-  const Comp = ({ onClick, menuId, isActive, ref, id }: DropdownTriggerProps) => (
+  const Comp = ({
+    onClick,
+    menuId,
+    isActive,
+    ref,
+    id,
+  }: DropdownTriggerProps) => (
     <BadgedButton
       id={id}
       type='button'

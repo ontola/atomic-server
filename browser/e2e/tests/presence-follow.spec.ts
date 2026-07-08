@@ -41,23 +41,23 @@ test('presence avatars, follow mode and session trail across two sessions', asyn
   let created!: { drive: string; folder: string };
   await expect(async () => {
     created = await pageA.evaluate(async () => {
-    const s = window.store;
-    const d = s.getDrive();
+      const s = window.store;
+      const d = s.getDrive();
 
-    if (!d) throw new Error('no drive');
+      if (!d) throw new Error('no drive');
 
-    const tmp = await s.createSubject('presence-e2e');
-    const f = await s.newResource({
-      subject: tmp,
-      parent: d,
-      isA: 'https://atomicdata.dev/classes/Folder',
-    });
-    await f.set(
-      'https://atomicdata.dev/properties/name',
-      'FollowTarget',
-      false,
-    );
-    await f.save();
+      const tmp = await s.createSubject('presence-e2e');
+      const f = await s.newResource({
+        subject: tmp,
+        parent: d,
+        isA: 'https://atomicdata.dev/classes/Folder',
+      });
+      await f.set(
+        'https://atomicdata.dev/properties/name',
+        'FollowTarget',
+        false,
+      );
+      await f.save();
 
       return { drive: d, folder: f.subject };
     });
@@ -108,15 +108,16 @@ test('presence avatars, follow mode and session trail across two sessions', asyn
   // along. A full-page goto would start a NEW presence session and leave
   // the old one lingering until its TTL — in-app navigation is also what
   // a real leader does.
-  await pageA
-    .getByRole('button', { name: 'FollowTarget' })
-    .first()
-    .click();
+  await pageA.getByRole('button', { name: 'FollowTarget' }).first().click();
   await expect(pageA).toHaveURL(
-    new RegExp(encodeURIComponent(folder).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    new RegExp(
+      encodeURIComponent(folder).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    ),
   );
   await expect(pageB).toHaveURL(
-    new RegExp(encodeURIComponent(folder).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    new RegExp(
+      encodeURIComponent(folder).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    ),
     { timeout: 30_000 },
   );
 
@@ -133,9 +134,9 @@ test('presence avatars, follow mode and session trail across two sessions', asyn
   await expect(
     pageB.getByRole('heading', { name: 'Follow session' }),
   ).toBeVisible();
-  await expect(
-    pageB.getByText('started a follow session'),
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(pageB.getByText('started a follow session')).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(
     pageB
       .getByTestId('follow-session-panel')
