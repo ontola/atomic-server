@@ -309,6 +309,13 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
         .await
         .map_err(|e| format!("Failed to import ontologies.json: {e}"))?;
     store
+        .import(
+            include_str!("../defaults/forms.json"),
+            &ParseOpts::default(),
+        )
+        .await
+        .map_err(|e| format!("Failed to import forms.json: {e}"))?;
+    store
         .import(include_str!("../defaults/ai.json"), &ParseOpts::default())
         .await
         .map_err(|e| format!("Failed to import ai.json: {e}"))?;
