@@ -1,50 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Client, core, useCanWrite, useResource } from '@tomic/react';
-import {
-  editURL,
-  dataURL,
-  constructOpenURL,
-  historyURL,
-  shareURL,
-  importerURL,
-} from '../../helpers/navigation';
+import { Client } from '@tomic/react';
 import { DIVIDER, DropdownMenu, isItem, DropdownItem } from '../Dropdown';
 import { AutoOpenTrigger } from '../Dropdown/AutoOpenTrigger';
-import toast from 'react-hot-toast';
-import { paths } from '../../routes/paths';
-import { shortcuts } from '../HotKeyWrapper';
 import { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
 import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
-import {
-  FaClock,
-  FaCode,
-  FaDownload,
-  FaPencil,
-  FaEllipsisVertical,
-  FaMagnifyingGlass,
-  FaShare,
-  FaTrash,
-  FaPlus,
-  FaArrowUpRightFromSquare,
-  FaMessage,
-  FaStar,
-  FaRegStar,
-} from 'react-icons/fa6';
-import { useFavorites } from '../../hooks/useFavorites';
-import { useQueryScopeHandler } from '../../hooks/useQueryScope';
+import { FaEllipsisVertical } from 'react-icons/fa6';
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
 } from '../ConfirmationDialog';
-import { ResourceInline } from '../../views/ResourceInline';
-import { ResourceUsage } from '../ResourceUsage';
-import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { ResourceCodeUsageDialog } from '../../views/CodeUsage/ResourceCodeUsageDialog';
-import { useNewRoute } from '../../helpers/useNewRoute';
 import { addIf } from '../../helpers/addIf';
-import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { newContextItem, useAISidebar } from '../AI/AISidebarContext';
-import { type AIAtomicResourceMessageContext } from '@chunks/AI/types';
+import { resourceActions } from '../../actions/resourceActions';
+import { useActionContext } from '../../actions/useActionContext';
+import type { ActionDefinition } from '../../actions/types';
 import { useCustomContextItemsContext } from './CustomContextItemsContext';
 
 export {
@@ -58,6 +27,7 @@ export { useResourceContextMenu } from './ResourceContextMenuContext';
 
 export { DIVIDER, type DropdownItem } from '../Dropdown';
 
+/** Ids of the actions in the registry (`actions/resourceActions.tsx`). */
 export const ContextMenuOptions = {
   View: 'view',
   Data: 'data',
@@ -73,6 +43,7 @@ export const ContextMenuOptions = {
   Open: 'open',
   AddToChat: 'addToChat',
   Favorite: 'favorite',
+  Parent: 'parent',
 } as const;
 
 export type ContextMenuOptionsUnion =
@@ -99,7 +70,11 @@ export interface ResourceContextMenuProps {
   anchorPoint?: { x: number; y: number };
 }
 
-/** Dropdown menu that opens a bunch of actions for some resource */
+/**
+ * Dropdown menu that opens a bunch of actions for some resource. Items come
+ * from the central action registry; the main menu (navbar kebab / cmd+m) is
+ * searchable, right-click menus are plain.
+ */
 export function ResourceContextMenu({
   subject,
   showOnly,
@@ -112,54 +87,21 @@ export function ResourceContextMenu({
   onAfterDelete,
   anchorPoint,
 }: ResourceContextMenuProps) {
-  const navigate = useNavigateWithTransition();
-  const location = window.location;
-  const resource = useResource(subject);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [confirmingAction, setConfirmingAction] = useState<ActionDefinition>();
   const [showCodeUsageDialog, setShowCodeUsageDialog] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
-  const handleAddClick = useNewRoute(subject);
-  const [currentSubject] = useCurrentSubject();
-  const canWrite = useCanWrite(resource);
-  const { enableScope } = useQueryScopeHandler(subject);
-  const { setContextItems, isOpen, setIsOpen } = useAISidebar();
+  const openCodeUsageDialog = useCallback(
+    () => setShowCodeUsageDialog(true),
+    [],
+  );
+  const ctx = useActionContext(subject, {
+    external,
+    onAfterDelete,
+    showCodeUsageDialog: openCodeUsageDialog,
+  });
   const { items: customItems } = useCustomContextItemsContext();
-  const [favorites, addFavorite, removeFavorite] = useFavorites();
-  const isFavorite = favorites.includes(subject);
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
-
-  const addToChat = () => {
-    setContextItems(prev => [
-      ...prev.filter(
-        x => x.type === 'atomic-resource' && x.subject !== subject,
-      ),
-      newContextItem({
-        type: 'atomic-resource',
-        subject,
-      } as AIAtomicResourceMessageContext),
-    ]);
-
-    if (!isOpen) {
-      setIsOpen(true);
-    }
-  };
-
-  const handleDestroy = useCallback(async () => {
-    const parent = resource.get(core.properties.parent);
-
-    try {
-      await resource.destroy();
-      onAfterDelete?.();
-      toast.success('Resource deleted!');
-
-      if (currentSubject === subject) {
-        navigate(parent ? constructOpenURL(parent) : '/');
-      }
-    } catch (error) {
-      toast.error(error.message);
-    }
-  }, [resource, navigate, currentSubject, subject, onAfterDelete]);
 
   const handleBindActive = useCallback(
     (active: boolean) => {
@@ -202,126 +144,48 @@ export function ResourceContextMenu({
     return null;
   }
 
-  const items: DropdownItem[] = [
-    ...addIf<DropdownItem>(
-      !simple,
-      {
-        disabled: location.pathname.startsWith(paths.show),
-        id: ContextMenuOptions.View,
-        label: 'Normal View',
-        helper: 'Open the regular, default View.',
-        onClick: () => navigate(constructOpenURL(subject)),
-      },
-      {
-        disabled: location.pathname.startsWith(paths.data),
-        id: ContextMenuOptions.Data,
-        label: 'Data View',
-        helper: 'View the resource and its properties in the Data View.',
-        shortcut: shortcuts.data,
-        onClick: () => navigate(dataURL(subject)),
-      },
-      DIVIDER,
-    ),
-    {
-      id: ContextMenuOptions.Favorite,
-      label: isFavorite ? 'Remove from favorites' : 'Add to favorites',
-      helper: 'Toggle whether this resource appears in your Favorites.',
-      icon: isFavorite ? <FaStar /> : <FaRegStar />,
-      onClick: () =>
-        isFavorite ? removeFavorite(subject) : addFavorite(subject),
-    },
-    ...addIf(!!external, {
-      id: ContextMenuOptions.Open,
-      label: 'Open',
-      helper: 'Open the resource',
-      onClick: () => navigate(constructOpenURL(subject)),
-      icon: <FaArrowUpRightFromSquare />,
-    }),
-    ...addIf(
-      canWrite,
-      {
-        id: ContextMenuOptions.Edit,
-        label: 'Edit',
-        helper: 'Open the edit form.',
-        icon: <FaPencil />,
-        shortcut: simple ? '' : shortcuts.edit,
-        onClick: () => navigate(editURL(subject)),
-      },
-      {
-        id: ContextMenuOptions.NewChild,
-        label: 'Add child',
-        helper: 'Create a new resource under this resource.',
-        icon: <FaPlus />,
-        onClick: handleAddClick,
-      },
-    ),
-    {
-      id: ContextMenuOptions.UseInCode,
-      label: 'Use in code',
-      helper:
-        'Usage instructions for how to fetch and use the resource in your code.',
-      icon: <FaCode />,
-      onClick: () => setShowCodeUsageDialog(true),
-    },
-    {
-      id: ContextMenuOptions.AddToChat,
-      label: 'Add to chat',
-      helper: 'Add the resource as context to the AI sidebar',
-      icon: <FaMessage />,
-      onClick: addToChat,
-    },
-    {
-      id: ContextMenuOptions.Scope,
-      label: 'Search children',
-      helper: 'Scope search to resource',
-      icon: <FaMagnifyingGlass />,
-      onClick: enableScope,
-    },
-    {
-      id: ContextMenuOptions.Share,
-      label: 'Permissions & Invites',
-      icon: <FaShare />,
-      helper: 'Edit permissions and create invites.',
-      onClick: () => navigate(shareURL(subject)),
-    },
+  const availableActions = resourceActions.filter(
+    action =>
+      (!simple || action.section !== 'view') &&
+      (action.available?.(ctx) ?? true),
+  );
 
-    {
-      id: ContextMenuOptions.History,
-      icon: <FaClock />,
-      label: 'History',
-      helper: 'Show the history of this resource',
-      onClick: () => navigate(historyURL(subject)),
-    },
-    ...addIf(
-      canWrite,
-      {
-        id: ContextMenuOptions.Import,
-        icon: <FaDownload />,
-        label: 'Import',
-        helper: 'Import Atomic Data to this resource',
-        onClick: () => navigate(importerURL(subject)),
+  const items: DropdownItem[] = [];
+  let previousSection: string | undefined;
+
+  for (const action of availableActions) {
+    if (previousSection !== undefined && action.section !== previousSection) {
+      items.push(DIVIDER);
+    }
+
+    previousSection = action.section;
+
+    items.push({
+      id: action.id,
+      label:
+        shiftHeld && action.danger && action.dangerLabel
+          ? action.dangerLabel(ctx)
+          : action.label(ctx),
+      helper: action.helper(ctx),
+      icon: action.icon?.(ctx),
+      shortcut: simple ? undefined : action.shortcut,
+      disabled: action.disabled?.(ctx),
+      keywords: action.keywords,
+      onClick: () => {
+        // Shift skips the confirmation dialog for danger actions.
+        if (action.danger && action.confirmation && !shiftHeld) {
+          setConfirmingAction(action);
+        } else {
+          action.run(ctx);
+        }
       },
-      {
-        disabled: !canWrite,
-        id: ContextMenuOptions.Delete,
-        icon: <FaTrash />,
-        label: shiftHeld ? 'Confirm Delete' : 'Delete',
-        helper: 'Delete this resource.',
-        onClick: () => {
-          if (shiftHeld) {
-            handleDestroy();
-          } else {
-            setShowDeleteDialog(true);
-          }
-        },
-      },
-    ),
-  ];
+    });
+  }
 
   // Add custom items from context (if any) before filtering
   const allItems = [
     ...items,
-    ...addIf(subject === currentSubject, ...customItems),
+    ...addIf(subject === ctx.currentSubject, ...customItems),
   ];
 
   const filteredItems = showOnly
@@ -338,8 +202,10 @@ export function ResourceContextMenu({
       ? AutoOpenTrigger
       : buildDefaultTrigger(
           <FaEllipsisVertical />,
-          title ?? `Open ${resource.title} menu`,
+          title ?? `Open ${ctx.resource.title} menu`,
         ));
+
+  const confirmation = confirmingAction?.confirmation;
 
   return (
     <>
@@ -347,23 +213,23 @@ export function ResourceContextMenu({
         items={filteredItems}
         Trigger={triggerComp}
         isMainMenu={isMainMenu}
+        searchable={isMainMenu}
         bindActive={handleBindActive}
         anchorPoint={anchorPoint}
       />
       <ConfirmationDialog
-        title={`Delete resource`}
-        show={showDeleteDialog}
-        bindShow={setShowDeleteDialog}
+        title={confirmation?.title(ctx) ?? ''}
+        show={confirmingAction !== undefined}
+        bindShow={show => {
+          if (!show) {
+            setConfirmingAction(undefined);
+          }
+        }}
         theme={ConfirmationDialogTheme.Alert}
-        confirmLabel={'Delete'}
-        onConfirm={handleDestroy}
+        confirmLabel={confirmation?.confirmLabel(ctx)}
+        onConfirm={() => confirmingAction?.run(ctx)}
       >
-        <>
-          <p>
-            Are you sure you want to delete <ResourceInline subject={subject} />
-          </p>
-          <ResourceUsage resource={resource} />
-        </>
+        {confirmation?.body(ctx)}
       </ConfirmationDialog>
       {/* Use the menu's own subject, not the current page's — a right-click can
        * target a resource other than the one being viewed. */}

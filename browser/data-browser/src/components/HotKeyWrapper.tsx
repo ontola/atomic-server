@@ -1,9 +1,9 @@
 // @wc-ignore-file
 import * as React from 'react';
-import { dataURL, editURL } from '../helpers/navigation';
+import { constructOpenURL, dataURL, editURL } from '../helpers/navigation';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
-import { Client } from '@tomic/react';
+import { Client, core, useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { paths } from '../routes/paths';
 import { openSearchOverlay, openShortcutsOverlay } from './OverlayContainer';
@@ -35,6 +35,8 @@ export const shortcuts = {
   search: osCtrl('k'),
   /** Open resource menu */
   menu: osCtrl('m'),
+  /** Go to the parent of the current resource */
+  parent: osCtrl('up'),
   /** Locks the sidebar menu */
   sidebarToggle: '\\',
   /** Move line up (documents) */
@@ -63,7 +65,9 @@ export function displayShortcut(shortcut: string): string {
       .replace('meta+', '⌘')
       .replace('option+', '⌥')
       .replace('shift+', '⇧')
-      .replace('backspace', '⌫');
+      .replace('backspace', '⌫')
+      .replace('up', '↑')
+      .replace('down', '↓');
   }
 
   return shortcut;
@@ -74,6 +78,7 @@ function HotKeysWrapper({ children }: Props): JSX.Element {
   const navigate = useNavigateWithTransition();
   const [subject] = useCurrentSubject();
   const { sideBarLocked, setSideBarLocked } = useSettings();
+  const store = useStore();
 
   useHotkeys(
     shortcuts.edit,
@@ -103,6 +108,28 @@ function HotKeysWrapper({ children }: Props): JSX.Element {
     e.preventDefault();
     navigate('/');
   });
+  useHotkeys(
+    shortcuts.parent,
+    e => {
+      e.preventDefault();
+
+      if (!Client.isValidSubject(subject)) {
+        return;
+      }
+
+      store.getResource(subject!).then(resource => {
+        const parent = resource.get(core.properties.parent) as
+          | string
+          | undefined;
+
+        if (parent) {
+          navigate(constructOpenURL(parent));
+        }
+      });
+    },
+    {},
+    [subject],
+  );
   useHotkeys(shortcuts.new, e => {
     e.preventDefault();
     navigate(paths.new);

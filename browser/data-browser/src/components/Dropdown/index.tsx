@@ -36,6 +36,8 @@ export type MenuItemMinimial = {
   header?: boolean;
   /** Keyboard shortcut helper */
   shortcut?: string;
+  /** Extra search terms for searchable menus. */
+  keywords?: string[];
 };
 
 export type DropdownItem = typeof DIVIDER | MenuItemMinimial;
@@ -46,6 +48,11 @@ interface DropdownMenuProps {
   Trigger: DropdownTriggerComponent;
   /** Enables the keyboard shortcut */
   isMainMenu?: boolean;
+  /**
+   * Renders a filter input at the top of the menu that narrows the items by
+   * label/keywords while keeping arrow+enter keyboard navigation.
+   */
+  searchable?: boolean;
   bindActive?: (active: boolean) => void;
   /**
    * When set, positions the menu at this viewport point (a right-click / context
@@ -114,10 +121,15 @@ function normalizeItems(items: DropdownItem[]) {
  * clicking outside. Use arrow keys to select items, and open items on Enter.
  * Renders the Dropdown on a place where there is room on screen.
  */
+const matchesQuery = (item: MenuItemMinimial, query: string): boolean =>
+  item.label.toLowerCase().includes(query) ||
+  (item.keywords ?? []).some(keyword => keyword.toLowerCase().includes(query));
+
 export function DropdownMenu({
   items,
   Trigger,
   isMainMenu,
+  searchable,
   bindActive = () => undefined,
   anchorPoint,
 }: DropdownMenuProps): JSX.Element {
@@ -125,6 +137,7 @@ export function DropdownMenu({
   const triggerId = useId();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [isActive, _setIsActive] = useState(false);
   const { inDialog } = useDialogTreeInfo();
@@ -148,10 +161,32 @@ export function DropdownMenu({
     'click',
   ]);
 
-  const normalizedItems = useMemo(() => normalizeItems(items), [items]);
+  const [query, setQuery] = useState('');
+  const search = query.trim().toLowerCase();
+
+  const filteredItems = useMemo(() => {
+    if (!searchable || !search) {
+      return items;
+    }
+
+    // Dividers are dropped while filtering.
+    return items.filter(item => isItem(item) && matchesQuery(item, search));
+  }, [items, searchable, search]);
+
+  const normalizedItems = useMemo(
+    () => normalizeItems(filteredItems),
+    [filteredItems],
+  );
+  const hasSelectable = normalizedItems.some(item => !shouldSkip(item));
 
   const getNewIndex = createIndexOffset(normalizedItems);
-  const [selectedIndex, setSelectedIndex] = useState<number>(getNewIndex(0, 0));
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  // Filtering can leave the stored index on a divider/disabled/out-of-range
+  // slot; resolve to the nearest selectable item for highlight and Enter.
+  const effectiveSelectedIndex =
+    hasSelectable && shouldSkip(normalizedItems[selectedIndex])
+      ? getNewIndex(0, 0)
+      : selectedIndex;
   // if the keyboard is used to navigate the menu items
   const [useKeys, setUseKeys] = useState(true);
 
@@ -162,6 +197,7 @@ export function DropdownMenu({
       return;
     }
 
+    setQuery('');
     setIsActive(true);
 
     requestAnimationFrame(() => {
@@ -251,9 +287,9 @@ export function DropdownMenu({
 
   const handleTriggerActivate = useCallback(() => {
     setUseKeys(true);
-    setSelectedIndex(getNewIndex(0, 0));
+    setSelectedIndex(hasSelectable ? getNewIndex(0, 0) : 0);
     handleToggle();
-  }, [handleToggle]);
+  }, [handleToggle, hasSelectable]);
 
   // Close the menu
   useHotkeys('esc', handleClose, { enabled: isActive });
@@ -288,16 +324,22 @@ export function DropdownMenu({
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setUseKeys(true);
-        setSelectedIndex(prev => getNewIndex(prev, 1));
+
+        if (hasSelectable) {
+          setSelectedIndex(getNewIndex(effectiveSelectedIndex, 1));
+        }
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setUseKeys(true);
-        setSelectedIndex(prev => getNewIndex(prev, -1));
+
+        if (hasSelectable) {
+          setSelectedIndex(getNewIndex(effectiveSelectedIndex, -1));
+        }
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        const item = normalizedItems[selectedIndex];
+        const item = normalizedItems[effectiveSelectedIndex];
 
-        if (isItem(item)) {
+        if (isItem(item) && !item.disabled) {
           item.onClick();
         }
 
@@ -307,18 +349,33 @@ export function DropdownMenu({
         handleClose();
       }
     },
-    [getNewIndex, normalizedItems, selectedIndex, handleClose],
+    [
+      getNewIndex,
+      normalizedItems,
+      effectiveSelectedIndex,
+      hasSelectable,
+      handleClose,
+    ],
   );
 
   // Focus the menu on open so keyboard navigation works even when it opened at
   // the cursor with no highlighted item (context menus). Only when focus isn't
   // already inside it — a normal dropdown highlights + focuses its first item.
+  // Deferred to the frame AFTER the positioning RAF made the menu visible —
+  // focusing a visibility:hidden element is refused (which is also why the
+  // search input can't use the autoFocus attribute).
   useEffect(() => {
     if (!isActive) {
       return;
     }
 
     const raf = requestAnimationFrame(() => {
+      if (searchable) {
+        searchInputRef.current?.focus();
+
+        return;
+      }
+
       if (
         dropdownRef.current &&
         !dropdownRef.current.contains(document.activeElement)
@@ -328,7 +385,7 @@ export function DropdownMenu({
     });
 
     return () => cancelAnimationFrame(raf);
-  }, [isActive]);
+  }, [isActive, searchable]);
 
   const handleBlur = useCallback(() => {
     // Doesn't work without delay, maybe the browser sets document.activeElement after firering the blur event?
@@ -363,7 +420,27 @@ export function DropdownMenu({
             onBlur={handleBlur}
             aria-labelledby={triggerId}
             role='menu'
+            searchable={searchable}
           >
+            {searchable && (
+              <SearchInputWrapper>
+                <SearchInput
+                  ref={searchInputRef}
+                  type='text'
+                  placeholder='Filter actions…'
+                  aria-label='Filter actions'
+                  value={query}
+                  onChange={e => {
+                    setQuery(e.target.value);
+                    setUseKeys(true);
+                    setSelectedIndex(0);
+                  }}
+                />
+              </SearchInputWrapper>
+            )}
+            {searchable && search && !hasSelectable && (
+              <NoResults>No matching actions</NoResults>
+            )}
             {normalizedItems.map((props, i) => {
               if (!isItem(props)) {
                 return <ItemDivider key={i} />;
@@ -392,10 +469,13 @@ export function DropdownMenu({
                   key={id}
                   helper={shortcut ? `${helper} (${shortcut})` : helper}
                   label={label}
-                  selected={useKeys && selectedIndex === i}
+                  selected={useKeys && effectiveSelectedIndex === i}
                   icon={icon}
                   shortcut={shortcut}
                   header={header}
+                  // In searchable mode focus stays in the filter input;
+                  // selection is shown by highlight + scrolled into view.
+                  focusOnSelect={!searchable}
                 />
               );
             })}
@@ -423,6 +503,12 @@ export interface MenuItemSidebarProps extends MenuItemMinimial {
 
 interface MenuItemPropsExtended extends MenuItemSidebarProps {
   selected: boolean;
+  /**
+   * Whether the item grabs DOM focus when selected (default). Searchable
+   * menus keep focus in their filter input and only scroll the item into
+   * view.
+   */
+  focusOnSelect?: boolean;
 }
 
 export function MenuItem({
@@ -434,15 +520,25 @@ export function MenuItem({
   icon,
   label,
   header,
+  focusOnSelect = true,
+  keywords: _keywords,
   ...props
 }: MenuItemPropsExtended): JSX.Element {
   const ref = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (selected && document.activeElement !== ref.current) {
-      ref.current?.focus();
+    if (!selected) {
+      return;
     }
-  }, [selected]);
+
+    if (focusOnSelect) {
+      if (document.activeElement !== ref.current) {
+        ref.current?.focus();
+      }
+    } else {
+      ref.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selected, focusOnSelect]);
 
   if (header) {
     return (
@@ -550,9 +646,35 @@ const ItemDivider = styled.div`
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
 `;
 
+const SearchInputWrapper = styled.div`
+  padding: 0 0.5rem 0.4rem 0.5rem;
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  margin-bottom: 0.4rem;
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: ${p => p.theme.colors.text};
+  font-size: inherit;
+  padding: 0.2rem 0.5rem;
+
+  &::placeholder {
+    color: ${p => p.theme.colors.textLight};
+  }
+`;
+
+const NoResults = styled.div`
+  padding: 0.4rem 1rem;
+  color: ${p => p.theme.colors.textLight};
+`;
+
 const Menu = styled.div<{
   isActive: boolean;
   position?: 'fixed' | 'absolute';
+  searchable?: boolean;
 }>`
   visibility: hidden;
   font-size: 0.9rem;
@@ -569,6 +691,7 @@ const Menu = styled.div<{
   position: ${p => p.position || 'fixed'};
   z-index: ${p => p.theme.zIndex.dropdown};
   width: auto;
+  min-width: ${p => (p.searchable ? '15rem' : 'auto')};
   box-shadow: ${p => p.theme.boxShadowSoft};
   opacity: ${p => (p.isActive ? 1 : 0)};
   ${transition('opacity')};

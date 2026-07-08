@@ -519,9 +519,9 @@ msgstr "En-têtes"
 msgid "Optional HTTP headers to send when connecting to this MCP server"
 msgstr "En-têtes HTTP optionnels à envoyer lors de la connexion à ce serveur MCP"
 
+#: src/actions/resourceActions.tsx
 #: src/chunks/AI/AgentConfigItem.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
-#: src/components/ResourceContextMenu/index.tsx
 #: src/routes/EditRoute.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
 #: src/views/ResourcePageDefault.tsx
@@ -1233,7 +1233,7 @@ msgstr "Cette URL sera utilisée comme parent par défaut pour les ressources im
 msgid "Importing..."
 msgstr "Importation..."
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 #: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr "Importer"
@@ -2026,7 +2026,7 @@ msgstr "Saisissez un DID ou une URL de lecteur"
 msgid "Set"
 msgstr "Définir"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 #: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
 msgid "History"
@@ -2294,119 +2294,118 @@ msgstr "Erreur copiée dans le presse-papier"
 msgid "Clear"
 msgstr "Effacer"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Resource deleted!"
 msgstr "Ressource supprimée !"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Normal View"
 msgstr "Vue Normale"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Open the regular, default View."
 msgstr "Ouvrir la vue régulière par défaut."
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Data View"
 msgstr "Vue de Données"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "View the resource and its properties in the Data View."
 msgstr "Afficher la ressource et ses propriétés dans la Vue de Données."
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 #: src/routes/SettingsServer/FavoriteButton.tsx
 msgid "Remove from favorites"
 msgstr "Supprimer des favoris"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 #: src/routes/SettingsServer/FavoriteButton.tsx
 msgid "Add to favorites"
 msgstr "Ajouter aux favoris"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Toggle whether this resource appears in your Favorites."
 msgstr ""
 
+#: src/actions/resourceActions.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
-#: src/components/ResourceContextMenu/index.tsx
 msgid "Open"
 msgstr "Ouvrir"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Open the resource"
 msgstr "Ouvrir la ressource"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Open the edit form."
 msgstr "Ouvrir le formulaire de modification."
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Add child"
 msgstr "Ajouter un enfant"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Create a new resource under this resource."
 msgstr "Créer une nouvelle ressource sous cette ressource."
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Use in code"
 msgstr "Utiliser dans le code"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Usage instructions for how to fetch and use the resource in your code."
 msgstr "Instructions d'utilisation pour savoir comment récupérer et utiliser la ressource dans votre code."
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Add to chat"
 msgstr "Ajouter au chat"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Add the resource as context to the AI sidebar"
 msgstr "Ajouter la ressource comme contexte à la barre latérale de l'IA"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Search children"
 msgstr "Rechercher les enfants"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Scope search to resource"
 msgstr "Étendue de la recherche à la ressource"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Permissions & Invites"
 msgstr "Permissions & Invitations"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Edit permissions and create invites."
 msgstr "Modifier les permissions et créer des invitations."
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Show the history of this resource"
 msgstr "Afficher l'historique de cette ressource"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Import Atomic Data to this resource"
 msgstr "Importer des Données Atomiques vers cette ressource"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Confirm Delete"
 msgstr "Confirmer la suppression"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Delete this resource."
 msgstr "Supprimer cette ressource."
 
-#. 0: resource.title
+#. 0: ctx.resource.title
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Open {0} menu"
 msgstr "Ouvrir le menu {0}"
 
-#: src/components/ResourceContextMenu/index.tsx
-msgid "Are you sure you want to delete <0/>"
-msgstr "Êtes-vous sûr de vouloir supprimer <0/>"
+#~ msgid "Are you sure you want to delete <0/>"
+#~ msgstr "Êtes-vous sûr de vouloir supprimer <0/>"
 
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/resourceActions.tsx
 msgid "Delete resource"
 msgstr "Supprimer la ressource"
 
@@ -4959,4 +4958,38 @@ msgstr ""
 
 #: src/chunks/AI/jsonAdCompact.test.ts
 msgid "Wat"
+msgstr ""
+
+#. 0: DID_A
+#: src/helpers/subjectRefs.test.ts
+msgid "See {0} for details"
+msgstr ""
+
+#: src/components/Dropdown/index.tsx
+msgid "Filter actions…"
+msgstr ""
+
+#: src/components/Dropdown/index.tsx
+msgid "Filter actions"
+msgstr ""
+
+#: src/components/Dropdown/index.tsx
+msgid "No matching actions"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Go to parent"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Open the parent of this resource."
+msgstr ""
+
+#. 0: ' '
+#: src/actions/resourceActions.tsx
+msgid "Are you sure you want to delete{0} <0/>"
+msgstr ""
+
+#: src/routes/ShortcutsRoute.tsx
+msgid "<0/> Go to parent resource"
 msgstr ""

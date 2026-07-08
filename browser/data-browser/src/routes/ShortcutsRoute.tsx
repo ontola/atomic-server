@@ -40,6 +40,9 @@ const Shortcuts: React.FunctionComponent = () => {
           <Key shortcut={shortcuts.home} /> Show <b>h</b>ome page
         </p>
         <p>
+          <Key shortcut={shortcuts.parent} /> Go to parent resource
+        </p>
+        <p>
           <Key shortcut={shortcuts.new} /> <b>N</b>ew resource
         </p>
         <p>

@@ -55,4 +55,47 @@ test.describe('resource context menu', () => {
     await expect(page.getByTestId('menu-item-hide')).toBeVisible();
     await expect(page.getByTestId('menu-item-remove')).toBeVisible();
   });
+
+  test('cmd+m opens searchable action menu; cmd+up goes to parent', async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    // The dev drive is the current resource; its did identifies it in URLs.
+    const driveDid = decodeURIComponent(page.url()).match(
+      /did:ad:[A-Za-z0-9_-]+/,
+    )?.[0];
+    expect(driveDid).toBeTruthy();
+
+    await newResource('table', page);
+    await page.getByRole('button', { name: /Blank/ }).click();
+    await page.getByPlaceholder('New Table').fill('Widgets');
+    await page.getByRole('button', { name: 'Create' }).click();
+    await expect(page.getByRole('columnheader').nth(1)).toBeVisible();
+    // Leave the table's cell editor — hotkeys are ignored while an input has
+    // focus.
+    await page.keyboard.press('Escape');
+
+    // cmd+m opens the main resource menu with a focused filter input.
+    await page.keyboard.press('ControlOrMeta+m');
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    const filter = page.getByPlaceholder(/Filter actions/);
+    await expect(filter).toBeFocused();
+
+    // Typing narrows the items; Enter runs the selected action.
+    await filter.fill('histo');
+    await expect(page.getByTestId('menu-item-history')).toBeVisible();
+    await expect(page.getByTestId('menu-item-edit')).toHaveCount(0);
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/history/);
+
+    // Back on the table, cmd+up navigates to the parent (the drive root).
+    await page.goBack();
+    await expect(page.getByRole('columnheader').nth(1)).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+ArrowUp');
+    await page.waitForURL(url =>
+      decodeURIComponent(url.toString()).includes(driveDid!),
+    );
+  });
 });
