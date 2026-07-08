@@ -5,7 +5,7 @@
   "identifier": "com.atomicdata.dev",
   "build": {
     "frontendDist": "../browser/data-browser/dist-tauri",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:6747",
     "beforeDevCommand": "TAURI=1 pnpm -C browser/data-browser dev",
     "beforeBuildCommand": "pnpm -C browser/data-browser build:tauri"
   },

@@ -23,7 +23,7 @@ const config: PlaywrightTestConfig = {
       cookies: [],
       origins: [
         {
-          origin: 'http://localhost:5173',
+          origin: 'http://localhost:6747',
           localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
         },
         {

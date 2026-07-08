@@ -96,7 +96,7 @@ const TopRouteComponent: React.FC = () => {
     };
   }, [isRoot, agent, drive, baseURL, store, navigate]);
 
-  // In dev, the UI is often on :5173 while JSON-AD is served from the Atomic
+  // In dev, the UI is often on :6747 while JSON-AD is served from the Atomic
   // server (e.g. :9883). In Tauri, the UI is on a custom protocol while the
   // embedded server is on 9883. In both cases, resolve `/` against the
   // configured server (baseURL) or the embedded-server fallback — not

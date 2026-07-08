@@ -8,7 +8,7 @@ import { useNavigateWithTransition } from './useNavigateWithTransition';
 
 /** Default dev server. Used as a fallback when the page wasn't loaded from
  *  an atomic-server origin (e.g. when developing the data-browser via Vite
- *  on localhost:5173). When the SPA is being served by an atomic-server
+ *  on localhost:6747). When the SPA is being served by an atomic-server
  *  directly — production, dagger CI, or any non-Vite host — we use the
  *  page's own origin so dev-drive talks to the server it came from. */
 export const DEV_SERVER = 'http://localhost:9883';

@@ -4,7 +4,7 @@ Guidance for coding agents working in this repo.
 
 ## Local Setup
 
-- `http://localhost:5173` — Vite dev server (frontend). (`cd browser && pnpm dev`)
+- `http://localhost:6747` — Vite dev server (frontend). (`cd browser && pnpm dev`)
 - `http://localhost:9883` — local AtomicServer. (`cd server && cargo run`)
 
 The frontend auto-updates via HMR. If changes don't appear, reload the page. If you edit `@tomic/lib` or `@tomic/react`, those packages may need a rebuild first.
@@ -18,14 +18,14 @@ Remove planning documents that are completed.
 
 ## Quick Dev Setup
 
-Use the Charlotte MCP server and navigate to `http://localhost:5173/app/dev-drive` to instantly create a fresh agent.
+Use the Charlotte MCP server and navigate to `http://localhost:6747/app/dev-drive` to instantly create a fresh agent.
 
 In E2E tests, most specs use `test.beforeEach(before)` from `test-utils.ts`, which calls `devDrive(page)` and gives every test a fresh agent + drive. For a second browser context signed in as the same user, use `getDevDriveSecret(page)` after `before` has run. Call `devDrive(page)` directly only when a spec does not use the shared `before` hook.
 
 ## Charlotte / Browser Automation
 
-- Operate the app at `localhost:5173` for quick iterations on react code.
-- Start every session by navigating to `http://localhost:5173/app/dev-drive` to get a clean, authenticated state.
+- Operate the app at `localhost:6747` for quick iterations on react code.
+- Start every session by navigating to `http://localhost:6747/app/dev-drive` to get a clean, authenticated state.
 - If the app shows `Unauthorized` or `Something went wrong`, navigate to `/app/dev-drive` to fix it.
 
 ## Debugging process
@@ -60,7 +60,7 @@ Atomic Server is a graph database with real-time sync, built on **Loro CRDT** fo
 - **`atomic-server`** (`server/`) — Actix-web HTTP/WS server. Uses `atomic_lib` + search (tantivy).
 - **`@tomic/lib`** (`browser/lib/`) — TypeScript client library, powering the other JS projects
 - **`@tomic/react`** (`browser/react/`) — React hooks.
-- **`data-browser`** (`browser/data-browser/`) — The web app (React + TipTap + Loro), feels similar to notion.
+- **`data-browser`** (`browser/data-browser/`) — The web app (React + TipTap + Loro), feels similar to notion. See the related AGENTS.md
 - **`flutter/`** — Cross-platform canvas app (Android/iOS/Web). Uses `flutter_rust_bridge` to call `atomic_lib`. See `flutter/README.md` and `flutter/AGENTS.md`.
 
 ### Data model

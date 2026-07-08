@@ -20,12 +20,13 @@ gave up and sent to everyone). Two consequences:
    cascades. The flake was always "A's store ingests B's resources" — i.e. the leak.
 
 Verified by a full 2-worker shared-server e2e run on the fix: **0 × 401** (was the
-flake's signature). So the drive-scoped fan-out closes the leak *and* the flake at the
+flake's signature). So the drive-scoped fan-out closes the leak _and_ the flake at the
 root — the per-worker e2e server harness becomes unnecessary (see §Per-worker harness).
 
 ## The fix (shipped, server-side)
 
 Scope the fan-out to the resource's **owning drive**:
+
 - `lib/src/subject.rs` — `Subject::is_within_drive(&self, drive)`: identity match
   (normalized `pure_id`, ignoring query hints / trailing slash); for URL subjects also a
   path-segment-boundary containment (so `…/d2` is not within `…/d` — what a bare
@@ -45,7 +46,7 @@ All green: `ws_commit_isolation`, `ws_drive_membership`, `subject::tests::test_i
 ## The regression it exposed: cross-agent realtime (chatroom)
 
 Drive-scoped fan-out needs a commit's resource to carry the **correct** drive. The
-`chatroom` e2e (a *guest* invited to a drive they don't own replies in it) regressed:
+`chatroom` e2e (a _guest_ invited to a drive they don't own replies in it) regressed:
 the guest's reply reaches the server with **`drive=None`** (proven via a server-side
 filesystem trace), so it's routed to no one and the owner never sees it. The old blind
 fan-out hid this by broadcasting to everyone.
@@ -56,8 +57,9 @@ the **drive-wide `UPDATE`** channel — so delivery hinges on the reply's drive 
 
 **Root cause is client-side, not the DID mechanism.** `set(DRIVE_PROP,…)` writes `drive`
 into the Loro doc at genesis, and `rebuildCacheFromLoro` (`resource.ts:624`) restores it
-from the Loro map — *if it's there*. The guest's chatroom isn't reliably carrying `drive`
+from the Loro map — _if it's there_. The guest's chatroom isn't reliably carrying `drive`
 at reply-stamp time. Candidate mechanisms (to confirm during impl, §A2):
+
 - (i) the guest's chatroom Loro doc lacks the genesis `drive` (delta-only / replaced doc);
 - (ii) `drive` present then dropped by `rebuildCacheFromLoro` (it preserves only
   `lastCommit`/`createdAt`);
@@ -66,7 +68,7 @@ at reply-stamp time. Candidate mechanisms (to confirm during impl, §A2):
 
 Dead ends already ruled out: a broad `await store.getResource(parent)` in the genesis
 hot path stalls bulk creation (breaks dev-drive setup); server-side drive resolution
-conflicts with the signed-genesis-cert direction; the server does *not* strip `drive`
+conflicts with the signed-genesis-cert direction; the server does _not_ strip `drive`
 when serving.
 
 ## Part A — close the regression (LANDED)
@@ -90,12 +92,13 @@ parent (and its drive) always exist:
   client already stamped a drive. Verified: guest reply now arrives `drive=Some(owner)`.
 
 Client-side improvements kept (belt-and-suspenders, correct regardless):
+
 - `rebuildCacheFromLoro` (`resource.ts:636`) now preserves `drive` + `parent` (genesis-
   immutable) across a Loro delta rebuild.
 - `signChanges` drive resolution is parent-first (the parent's drive is authoritative;
   the active drive is only a fallback), sync, no hot-path awaits.
 
-> When the full genesis-cert wiring lands (Part B), `drive` becomes part of the *signed*
+> When the full genesis-cert wiring lands (Part B), `drive` becomes part of the _signed_
 > identity and the client must stamp it correctly — at which point the server safety net
 > becomes a redundant guard (or a verification check), not the primary mechanism.
 
@@ -130,13 +133,14 @@ ATOMICSERVER_SKIP_JS_BUILD=true cargo test -p atomic-server \
   --test ws_commit_isolation --test ws_drive_membership
 cargo test -p atomic_lib --lib subject::tests::test_is_within_drive
 cd browser/lib && pnpm exec vitest run src/resource.test.ts
-# e2e clean: atomic-server :9883 + vite :5173, rm -rf data-browser/node_modules/.vite
+# e2e clean: atomic-server :9883 + vite :6747, rm -rf data-browser/node_modules/.vite
 cd browser/e2e && ATOMIC_NO_PER_WORKER_SERVER=true SERVER_URL=http://localhost:9883 \
-  FRONTEND_URL=http://localhost:5173 pnpm exec playwright test --project=chromium
+  FRONTEND_URL=http://localhost:6747 pnpm exec playwright test --project=chromium
 # expect: chatroom green; 0 occurrences of "401"; search/ontology are pre-existing flakes
 ```
 
 ## Cross-references
+
 - [`sync.md`](./sync.md) — WS `UPDATE`/`DESTROY` fan-out channel + test-coverage table
   (add `ws_commit_isolation`).
 - [`genesis-self-verifying.md`](./genesis-self-verifying.md) — the `drive` field, its

@@ -19,7 +19,7 @@ https://user-images.githubusercontent.com/2183313/139728539-d69b899f-6f9b-44cb-a
 # To run, simply run the following commands:
 pnpm install # install dependencies
 pnpm start # run the server!
-# visit http://localhost:5173
+# visit http://localhost:6747
 ```
 
 [→ Read more](data-browser/README.md)
@@ -54,7 +54,6 @@ Library with `Store`, `Commit`, `JSON-AD` parsing, and more.
   <img src="https://img.shields.io/bundlephobia/min/@tomic/react">
 </a>
 
-
 React library with many useful hooks for rendering and editing Atomic Data.
 
 [**demo + template on codesandbox**](https://codesandbox.io/s/atomic-data-react-template-4y9qu?file=/src/MyResource.tsx:0-1223)
@@ -67,13 +66,13 @@ React library with many useful hooks for rendering and editing Atomic Data.
 
 In dev mode, `window.devtools` exposes diagnostics for inspecting state across persistence layers. Run `devtools.help()` in the browser console for the list.
 
-| call | what it does |
-|---|---|
+| call                         | what it does                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `devtools.inspect(subject?)` | JS store + WASM/OPFS + server HTTP GET, side-by-side. Defaults to the URL's `?subject=` (or current drive). |
-| `devtools.opfsList(prefix?)` | Subjects in the WASM DB (default prefix `did:ad:`) |
-| `devtools.wsLog(n?)` | `console.table` of the last N commit log entries |
-| `devtools.problems()` | Resources currently loading, errored, or new |
-| `devtools.forcePut(subject)` | Re-serialize a JS-store resource into OPFS with round-trip verification |
+| `devtools.opfsList(prefix?)` | Subjects in the WASM DB (default prefix `did:ad:`)                                                          |
+| `devtools.wsLog(n?)`         | `console.table` of the last N commit log entries                                                            |
+| `devtools.problems()`        | Resources currently loading, errored, or new                                                                |
+| `devtools.forcePut(subject)` | Re-serialize a JS-store resource into OPFS with round-trip verification                                     |
 
 Source: `data-browser/src/helpers/devtools.ts`.
 

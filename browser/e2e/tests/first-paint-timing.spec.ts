@@ -11,7 +11,7 @@ import { applyCpuThrottle, envCpuThrottle } from './perf-attach';
  * Measures the latency from `goto` to "the resource's title is visible".
  *
  * For the SSR meta-tag fast path to work, the test must hit atomic-server
- * directly (port 9883) — Vite's `index.html` (5173) doesn't carry the
+ * directly (port 9883) — Vite's `index.html` (6747) doesn't carry the
  * `<meta property="json-ad-initial">` tag.
  *
  * Flow:
@@ -24,7 +24,7 @@ import { applyCpuThrottle, envCpuThrottle } from './perf-attach';
  * `parseMetaTags()`, so the title appears WELL before Loro's WASM
  * download completes.
  */
-// Perf-instrumentation test: cross-origin navigates from Vite (5173) to
+// Perf-instrumentation test: cross-origin navigates from Vite (6747) to
 // atomic-server (9883) to exercise the SSR meta-tag fast path.
 // localStorage isn't shared between origins, so the SPA on 9883 starts
 // agent-less and the drive title doesn't render. Run with

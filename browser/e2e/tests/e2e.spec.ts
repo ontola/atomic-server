@@ -238,7 +238,7 @@ test.describe('data-browser', async () => {
     // Build the chatroom fallback URL on the SERVER's origin (same as the
     // invite URL the guest opens), not the frontend dev server. The guest
     // sets up their agent on `localhost:9883` after accepting the invite —
-    // crossing to `localhost:5173` would land on a fresh-origin localStorage
+    // crossing to `localhost:6747` would land on a fresh-origin localStorage
     // with no agent and bounce the guest to the welcome page.
     const chatSubject = await getCurrentSubject(page);
     const showFallback = new URL('/app/show', SERVER_URL);

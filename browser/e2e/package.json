@@ -21,7 +21,7 @@
     "test-e2e": "playwright test --config=./playwright.config.ts",
     "test-debug": "PWDEBUG=1 playwright test",
     "test-update": "playwright test --update-snapshots",
-    "test-new": "playwright codegen http://localhost:5173",
+    "test-new": "playwright codegen http://localhost:6747",
     "test-query": "DELETE_PREVIOUS_TEST_DRIVES=false playwright test -g",
     "test-query-debug": "PWDEBUG=1 playwright test --project=chromium -g",
     "test-ui": "playwright test --ui",

@@ -12,7 +12,7 @@ import {
  * Captures Navigation Timing, top resource loads by transfer + duration,
  * Long Tasks, paint timings, and (if instrumented) user marks from the app.
  */
-// Perf-instrumentation test: cross-origin navigates from Vite (5173) to
+// Perf-instrumentation test: cross-origin navigates from Vite (6747) to
 // atomic-server (9883). localStorage isn't shared between origins, so
 // the SPA on 9883 starts agent-less and can't render the drive title.
 // Run explicitly with `PROFILE_PERF=1` when measuring; skip otherwise.

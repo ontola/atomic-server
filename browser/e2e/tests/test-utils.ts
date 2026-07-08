@@ -17,7 +17,7 @@ export const SECRET =
   'eyJwcml2YXRlS2V5IjoiVUZDV2xoMGM0b05XVm4ySnNXbndWRVp0VXVEZXBpQmRQelFRMWVVcjdLbz0iLCJzdWJqZWN0IjoiZGlkOmFkOmFnZW50OmdKUlpWVEdQbmdhRzNtU1BBL2U2TEVld0tpeFlwWnR1VVlRaE5nK3Q3WTQ9IiwiaW5pdGlhbERyaXZlIjoiZGlkOmFkOmJiWlRJd2hBbFdhQjl0enpuUVpVSlB0QlhldGhvSFcxYmpMc3VhMXQ5RUtYU3ZNU0k3TWdaKzg0bzJsRGZKR0lhbk8zai8zb2xYNTNwam9GWGVwT0RnPT0ifQ==';
 
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
-export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
 
 export const DEMO_INVITE_NAME = 'document demo invite';
 
