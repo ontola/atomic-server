@@ -3,6 +3,7 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useLocation, useSearch } from '@tanstack/react-router';
 import { paths } from '../routes/paths';
 import { ShowRoute } from '../routes/ShowRoute';
+import { getLocalServerOrigin } from './tauri';
 
 type setFunc = (latestValue: string) => void;
 
@@ -39,8 +40,10 @@ export function useCurrentSubject(
 
     // The pathname defaults to a trailing slash, which leads to issues
     const correctedPathName = pathname === '/' ? '' : pathname;
+    // In Tauri the window origin (tauri://localhost) isn't a fetchable
+    // subject; the embedded server's origin is.
     const subject =
-      window.location.origin + correctedPathName + window.location.search;
+      getLocalServerOrigin() + correctedPathName + window.location.search;
 
     return [subject, handleSetSubject];
   }

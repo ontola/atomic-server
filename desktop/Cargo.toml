@@ -32,6 +32,13 @@ features = ["db-redb", "iroh"]
 features = ["derive"]
 version = "1.0"
 
+# reqwest's rustls backend delegates certificate verification to the Android
+# system trust store; that bridge must be initialized with the app's JVM
+# context at startup (see lib.rs) or every outbound HTTPS request panics.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { version = "0.22", default-features = false }
+rustls-platform-verifier = "0.7"
+
 [lib]
 name = "atomic_server_tauri"
 crate-type = ["staticlib", "cdylib", "rlib"]

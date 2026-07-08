@@ -1195,6 +1195,8 @@ dependencies = [
  "atomic-server",
  "atomic_lib",
  "clap",
+ "jni 0.22.4",
+ "rustls-platform-verifier",
  "serde",
  "serde_json",
  "tauri",
