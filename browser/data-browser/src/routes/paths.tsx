@@ -25,6 +25,7 @@ export const pathNames = {
   pruneTests: '/prunetests',
   linkOpenRouter: '/link-openrouter',
   devDrive: '/dev-drive',
+  demo: '/demo',
   invite: '/invite',
 } as const;
 export const paths = {
@@ -51,4 +52,5 @@ export const paths = {
   pruneTests: `${pathNames.app}${pathNames.pruneTests}`,
   linkOpenRouter: `${pathNames.app}${pathNames.linkOpenRouter}`,
   devDrive: `${pathNames.app}${pathNames.devDrive}`,
+  demo: `${pathNames.app}${pathNames.demo}`,
 } as const;

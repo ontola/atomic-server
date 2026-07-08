@@ -5,16 +5,21 @@ import {
   useTitle,
   useProperty,
 } from '@tomic/react';
-import { useDraggable } from '@dnd-kit/core';
+import { useDndContext, useDraggable } from '@dnd-kit/core';
 import { styled } from 'styled-components';
-import { useCallback, useState, type JSX } from 'react';
+import { useCallback, useContext, useState, type JSX } from 'react';
 import { FaUpRightFromSquare } from 'react-icons/fa6';
 import ValueComp from '@components/ValueComp';
 import { InputStyled } from '@components/forms/InputStyles';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
+import { RemoteCellPresence, TablePresenceContext } from '../TablePresence';
+import { useCardFlip } from './cardFlip';
 
 interface KanbanCardProps {
   subject: string;
+  /** The column this card renders in — enables the FLIP move animation.
+   *  Unset for the DragOverlay copy (it must not touch the registry). */
+  columnId?: string;
   /** Fields to preview on the card (already excludes the group-by property). */
   fields: Property[];
   readOnly: boolean;
@@ -28,6 +33,7 @@ interface KanbanCardProps {
  */
 export function KanbanCard({
   subject,
+  columnId,
   fields,
   readOnly,
   onOpen,
@@ -35,6 +41,15 @@ export function KanbanCard({
   const resource = useResource(subject);
   const [title] = useTitle(resource);
   const { openResourceMenu } = useResourceContextMenu();
+
+  // Presence: which remote sessions are on this card (hover, a selected
+  // cell in the grid view, or a drag — the ring pulses while they drag),
+  // and the announcer for our own hover. The DragOverlay's copy of the
+  // card announces nothing: `onOpen` is unset there, and hover can't
+  // reach it anyway (it rides under the pointer).
+  const { rows, setActiveCard } = useContext(TablePresenceContext);
+  const remote = rows.get(resource.subject);
+  const remoteDragging = remote?.some(p => p.dragging) ?? false;
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -44,6 +59,22 @@ export function KanbanCard({
     data: { subject },
     disabled: readOnly,
   });
+
+  const flipRef = useCardFlip(resource.subject, columnId, isDragging);
+
+  // While ANY drag is live, hover announcements are suppressed: the drag
+  // announcement (made by the board) owns our presence entry, and cards
+  // passing under the pointer mid-drag would clobber it.
+  const { active: dndActive } = useDndContext();
+
+  const announceHover = useCallback(
+    (row: string | undefined) => {
+      if (!dndActive && onOpen) {
+        setActiveCard(row);
+      }
+    },
+    [dndActive, onOpen, setActiveCard],
+  );
 
   const handleClick = useCallback(() => {
     onOpen?.(subject);
@@ -84,10 +115,16 @@ export function KanbanCard({
   // animation fly back to the source's old slot). It just dims in place.
   return (
     <Card
-      ref={setNodeRef}
+      ref={el => {
+        flipRef.current = el;
+        setNodeRef(el);
+      }}
       $dragging={isDragging}
+      $remoteDragging={remoteDragging}
       onClick={handleClick}
       onContextMenu={e => openResourceMenu(subject, e)}
+      onMouseEnter={() => announceHover(resource.subject)}
+      onMouseLeave={() => announceHover(undefined)}
       data-testid='kanban-card'
       {...listeners}
       {...attributes}
@@ -133,6 +170,12 @@ export function KanbanCard({
       {fields.map(field => (
         <CardField key={field.subject} field={field} resource={resource} />
       ))}
+      {remote && remote.length > 0 && (
+        <RemoteCellPresence
+          agents={remote.map(p => p.agent)}
+          dragging={remoteDragging}
+        />
+      )}
     </Card>
   );
 }
@@ -161,7 +204,9 @@ function CardField({
   );
 }
 
-const Card = styled.div<{ $dragging: boolean }>`
+const Card = styled.div<{ $dragging: boolean; $remoteDragging: boolean }>`
+  /* Anchor for the presence ring + name tag. */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -170,8 +215,13 @@ const Card = styled.div<{ $dragging: boolean }>`
   border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: ${p => p.theme.radius};
   cursor: pointer;
-  box-shadow: ${p => (p.$dragging ? p.theme.boxShadowIntense : 'none')};
+  box-shadow: ${p =>
+    p.$dragging || p.$remoteDragging ? p.theme.boxShadowIntense : 'none'};
   opacity: ${p => (p.$dragging ? 0.6 : 1)};
+  /* A slight lift while a REMOTE session drags it — mirrors the drag
+   * overlay they see, without moving the card out of its slot. */
+  transform: ${p => (p.$remoteDragging ? 'rotate(1.5deg)' : 'none')};
+  transition: transform 0.15s ease-in-out;
   user-select: none;
 
   &:hover {

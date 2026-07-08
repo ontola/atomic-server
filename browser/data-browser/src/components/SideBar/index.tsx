@@ -3,12 +3,15 @@ import * as React from 'react';
 import { useHover } from '../../helpers/useHover';
 import { useSettings } from '../../helpers/AppSettings';
 import { SideBarDrive } from './SideBarDrive';
-import { DragAreaBase, useResizable } from '../../hooks/useResizable';
+import {
+  DragAreaBase,
+  responsiveWidth,
+  useResizable,
+} from '../../hooks/useResizable';
 import { useCombineRefs } from '../../hooks/useCombineRefs';
 import { OverlapSpacer } from './OverlapSpacer';
 import { AppMenu } from './AppMenu';
 import { SideBarHomePanels } from './SideBarHomePanels';
-import { About } from './About';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { Column } from '../Row';
 import { OntologiesPanel } from './OntologySideBar/OntologiesPanel';
@@ -37,7 +40,7 @@ export function SideBar(): JSX.Element {
   );
 
   const { size, dragAreaRef, isDragging, dragAreaListeners } = useResizable({
-    initialSize: 300,
+    initialSize: responsiveWidth({ large: 300, laptop: 240 }),
     minSize: 200,
     maxSize: 2000,
     targetRef,
@@ -92,7 +95,6 @@ export function SideBar(): JSX.Element {
             <SideBarPanel title='App'>
               <Column gap='0.5rem' align='stretch'>
                 <AppMenu onItemClick={closeSideBar} />
-                <About />
               </Column>
             </SideBarPanel>
           </Column>

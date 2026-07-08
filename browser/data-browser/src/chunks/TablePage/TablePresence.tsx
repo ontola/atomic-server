@@ -1,5 +1,5 @@
 import { createContext, useCallback, useMemo, useRef } from 'react';
-import { styled } from 'styled-components';
+import { css, keyframes, styled } from 'styled-components';
 import {
   useResourcePresence,
   useStore,
@@ -10,26 +10,40 @@ import { colorForAgent } from '@components/Presence/AgentAvatar';
 import { PresenceUserTag } from '@components/Presence/PresenceUserTag';
 
 /**
- * What a table session shares about its selection. Identity, not indexes:
- * a remote session's sort/filter/view can order rows differently, so the
- * cell is named by row resource subject + column property subject and
- * each cell self-matches on the receiving side.
+ * What a table session shares about where it is. Identity, not indexes:
+ * a remote session's sort/filter/view can order rows differently, so
+ * positions are named by subjects and each cell/card self-matches on
+ * the receiving side.
  */
-export interface TableCellPresenceData {
-  /** Subject of the row resource. */
+export interface TablePresenceData {
+  /** Subject of the row resource (grid row / kanban card). */
   row: string;
-  /** Subject of the column property. */
-  column: string;
+  /** Subject of the column property whose cell is selected (grid). */
+  column?: string;
+  /** True while this session is dragging the card (kanban). */
+  dragging?: boolean;
 }
 
-export const cellPresenceKey = (row: string, column: string): string =>
-  `${row} ${column}`;
+/** One remote session's position within the table, agent attached. */
+export interface RowPresence {
+  agent: string;
+  column?: string;
+  dragging?: boolean;
+}
 
-/** Cell key (see {@link cellPresenceKey}) → agents of remote sessions
- *  whose active cell it is. Empty map when alone. */
-export const TablePresenceContext = createContext<Map<string, string[]>>(
-  new Map(),
-);
+export interface TablePresenceValue {
+  /** Row subject → remote sessions on that row (cell selections, card
+   *  hovers, drags). Empty map when alone. */
+  rows: Map<string, RowPresence[]>;
+  /** Announce which card this session is on (kanban hover/drag);
+   *  `undefined` row retracts the announcement. */
+  setActiveCard: (row: string | undefined, dragging?: boolean) => void;
+}
+
+export const TablePresenceContext = createContext<TablePresenceValue>({
+  rows: new Map(),
+  setActiveCard: () => undefined,
+});
 
 interface UseTablePresenceOptions {
   collection: Collection;
@@ -40,8 +54,9 @@ interface UseTablePresenceOptions {
 }
 
 interface TablePresence {
-  /** Provide on {@link TablePresenceContext} for the grid's cells. */
-  cellPresence: Map<string, string[]>;
+  /** Provide on {@link TablePresenceContext} for the grid's cells and
+   *  the kanban's cards. */
+  presenceValue: TablePresenceValue;
   /** Wire to `FancyTable`'s `onSelectedCellChange`. */
   handleSelectedCellChange: (
     row: number | undefined,
@@ -50,9 +65,9 @@ interface TablePresence {
 }
 
 /**
- * Selected-cell presence for one table, on the drive presence channel
- * (`PresenceEntry.data`). Announces our active cell and exposes which
- * cells remote sessions are on.
+ * Position presence for one table, on the drive presence channel
+ * (`PresenceEntry.data`). Announces our active cell (grid) or card
+ * (kanban) and exposes which rows remote sessions are on.
  */
 export function useTablePresence(
   tableSubject: string,
@@ -60,32 +75,53 @@ export function useTablePresence(
 ): TablePresence {
   const store = useStore();
   const { presence, setData } =
-    useResourcePresence<TableCellPresenceData>(tableSubject);
+    useResourcePresence<TablePresenceData>(tableSubject);
 
-  const cellPresence = useMemo(() => {
-    const map = new Map<string, string[]>();
+  const rows = useMemo(() => {
+    const map = new Map<string, RowPresence[]>();
 
     for (const item of presence) {
       // A cleared payload travels as `null`; validate the shape.
-      if (
-        typeof item.data?.row !== 'string' ||
-        typeof item.data.column !== 'string'
-      ) {
+      if (typeof item.data?.row !== 'string') {
         continue;
       }
 
-      const key = cellPresenceKey(item.data.row, item.data.column);
-      const agents = map.get(key) ?? [];
+      const entry: RowPresence = {
+        agent: item.agent,
+        column:
+          typeof item.data.column === 'string' ? item.data.column : undefined,
+        dragging: item.data.dragging === true,
+      };
+      const existing = map.get(item.data.row) ?? [];
 
-      if (!agents.includes(item.agent)) {
-        agents.push(item.agent);
+      // One entry per agent+column, so an agent's second tab doesn't
+      // double their indicator (a dragging duplicate wins).
+      const twin = existing.find(
+        p => p.agent === entry.agent && p.column === entry.column,
+      );
+
+      if (twin) {
+        twin.dragging = twin.dragging || entry.dragging;
+      } else {
+        existing.push(entry);
+        map.set(item.data.row, existing);
       }
-
-      map.set(key, agents);
     }
 
     return map;
   }, [presence]);
+
+  const setActiveCard = useCallback(
+    (row: string | undefined, dragging?: boolean) => {
+      setData(row ? (dragging ? { row, dragging: true } : { row }) : undefined);
+    },
+    [setData],
+  );
+
+  const presenceValue = useMemo(
+    () => ({ rows, setActiveCard }),
+    [rows, setActiveCard],
+  );
 
   // Member-row subjects resolve asynchronously; rapid selection moves can
   // resolve out of order. Only the newest announcement may land.
@@ -95,7 +131,7 @@ export function useTablePresence(
     (row: number | undefined, column: number | undefined) => {
       const seq = ++announceSeqRef.current;
 
-      const announce = (data: TableCellPresenceData | undefined) => {
+      const announce = (data: TablePresenceData | undefined) => {
         if (seq === announceSeqRef.current) {
           setData(data);
         }
@@ -141,23 +177,25 @@ export function useTablePresence(
     [collection, columns, memberCount, newRowSubjects, setData, store],
   );
 
-  return { cellPresence, handleSelectedCellChange };
+  return { presenceValue, handleSelectedCellChange };
 }
 
 /**
- * Marks a cell a remote session has selected: an inset ring plus a name
- * tag in the agent's presence color, matching their canvas cursor and
- * avatar. Rendered inside the cell (`CellWrapper` is `position:
- * relative`); never intercepts pointer events.
+ * Marks a cell or card a remote session is on: an inset ring plus a
+ * name tag in the agent's presence color, matching their canvas cursor
+ * and avatar. Pulses while they're dragging. Rendered inside a
+ * `position: relative` parent; never intercepts pointer events.
  */
 export function RemoteCellPresence({
   agents,
+  dragging,
 }: {
   agents: string[];
+  dragging?: boolean;
 }): React.JSX.Element {
   return (
     <>
-      <PresenceRing $color={colorForAgent(agents[0])} />
+      <PresenceRing $color={colorForAgent(agents[0])} $dragging={!!dragging} />
       <CornerTag>
         <PresenceUserTag agentSubject={agents[0]} />
         {agents.length > 1 && <Overflow>+{agents.length - 1}</Overflow>}
@@ -166,11 +204,28 @@ export function RemoteCellPresence({
   );
 }
 
-const PresenceRing = styled.div<{ $color: string }>`
+const dragPulse = keyframes`
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.45;
+  }
+`;
+
+const PresenceRing = styled.div<{ $color: string; $dragging: boolean }>`
   position: absolute;
   inset: 0;
   border: 2px solid ${p => p.$color};
+  border-radius: inherit;
   pointer-events: none;
+
+  ${p =>
+    p.$dragging &&
+    css`
+      animation: 0.7s ease-in-out infinite alternate ${dragPulse};
+    `}
 `;
 
 const CornerTag = styled.div`

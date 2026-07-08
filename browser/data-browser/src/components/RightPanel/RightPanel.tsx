@@ -1,6 +1,10 @@
 import React, { useRef } from 'react';
 import { styled } from 'styled-components';
-import { DragAreaBase, useResizable } from '@hooks/useResizable';
+import {
+  DragAreaBase,
+  responsiveWidth,
+  useResizable,
+} from '@hooks/useResizable';
 import { CSSVar } from '@helpers/CSSVar';
 
 const PANEL_WIDTH_PROP = new CSSVar('right-panel-width');
@@ -24,7 +28,7 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
 
   const { size, dragAreaRef, isDragging, dragAreaListeners } = useResizable({
     edge: 'right',
-    initialSize: 480,
+    initialSize: responsiveWidth({ large: 480, laptop: 380 }),
     minSize: 280,
     maxSize: 2000,
     targetRef,

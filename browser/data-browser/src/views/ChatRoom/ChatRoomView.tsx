@@ -376,20 +376,15 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   );
 });
 
-/** Matches the trail text written by the follow-session logger:
+/** Matches the trail text written by the meeting/follow logger:
  *  `Viewing [title](subject)`. The markdown is kept as a fallback for
  *  clients without FollowEvent support; we render a live resource link. */
 const TRAIL_TEXT_REGEX = /^Viewing \[.*\]\((\S+)\)$/;
 
-// Data-matching prefixes of stored trail messages. Module scope keeps them
-// out of Wuchale's i18n transform — as capitalized literals inside the
-// component they'd be wrapped in runtime translation lookups, so matching
-// would break in any locale where "Started" translates differently.
-const SESSION_STARTED_PREFIX = 'Started';
-const SESSION_ENDED_PREFIX = 'Ended';
-
-/** Compact system-style line for follow-session events (trail entries and
- *  session start/end markers) — visually distinct from chat messages. */
+/** Compact system-style line for meeting events (trail entries and
+ *  start/end markers) — visually distinct from chat messages. Markers
+ *  ("Started the meeting.", "The meeting has ended.") render verbatim;
+ *  "Viewing […](…)" entries render as a live resource link. */
 function FollowEventMessage({
   description,
   createdAt,
@@ -400,12 +395,7 @@ function FollowEventMessage({
   createdBy: string | undefined;
 }) {
   const visited = description.match(TRAIL_TEXT_REGEX)?.[1];
-
-  const text = description.startsWith(SESSION_STARTED_PREFIX)
-    ? /* @wc-ignore */ 'started a follow session'
-    : description.startsWith(SESSION_ENDED_PREFIX)
-      ? /* @wc-ignore */ 'ended the follow session'
-      : description;
+  const text = description;
 
   return (
     <FollowEventLine>

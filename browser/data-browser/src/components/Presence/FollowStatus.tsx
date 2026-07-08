@@ -29,7 +29,7 @@ export function FollowStatus(): React.JSX.Element | null {
     followers,
     allowFollow,
     setAllowFollow,
-    sessionChatroom,
+    activeMeeting,
     followedSession,
   } = useFollow();
   const navigate = useNavigateWithTransition();
@@ -67,8 +67,8 @@ export function FollowStatus(): React.JSX.Element | null {
     if (followedSession) {
       items.push({
         id: 'open-session-chat',
-        label: 'Open session chat',
-        helper: 'Chat and the log of resources visited during the session.',
+        label: 'Open meeting chat',
+        helper: 'Chat and the log of resources visited during the meeting.',
         icon: <FaComments />,
         onClick: () => togglePanel('followSession'),
       });
@@ -87,11 +87,11 @@ export function FollowStatus(): React.JSX.Element | null {
   const followerItems = useMemo((): DropdownItem[] => {
     const items: DropdownItem[] = [];
 
-    if (sessionChatroom) {
+    if (activeMeeting) {
       items.push({
         id: 'open-session-chat',
-        label: 'Open session chat',
-        helper: 'Chat and the log of resources you visited while followed.',
+        label: 'Open meeting chat',
+        helper: 'Chat and the log of resources visited during the meeting.',
         icon: <FaComments />,
         onClick: () => togglePanel('followSession'),
       });
@@ -106,7 +106,7 @@ export function FollowStatus(): React.JSX.Element | null {
     });
 
     return items;
-  }, [setAllowFollow, sessionChatroom, togglePanel]);
+  }, [setAllowFollow, activeMeeting, togglePanel]);
 
   const FollowingTrigger = useMemo(
     () =>

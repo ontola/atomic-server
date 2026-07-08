@@ -22,11 +22,7 @@ import { StringCell } from './EditorCells/StringCell';
 import { TablePageContext } from './tablePageContext';
 import { createValueChangedHistoryItem } from './helpers/useTableHistory';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
-import {
-  cellPresenceKey,
-  RemoteCellPresence,
-  TablePresenceContext,
-} from './TablePresence';
+import { RemoteCellPresence, TablePresenceContext } from './TablePresence';
 
 interface TableCellProps {
   columnIndex: number;
@@ -84,9 +80,10 @@ export function TableCell({
   // subject (`resource.subject`, not the `subject` prop): peers announce
   // real `did:ad:` subjects, and a materialized session row's `_new:`
   // prop subject aliases to one.
-  const remoteAgents = useContext(TablePresenceContext).get(
-    cellPresenceKey(resource.subject, property.subject),
-  );
+  const remoteAgents = useContext(TablePresenceContext)
+    .rows.get(resource.subject)
+    ?.filter(p => p.column === property.subject)
+    .map(p => p.agent);
 
   const dataType = property.datatype;
   const isEditing = useIsEditing(rowIndex, columnIndex);
@@ -197,7 +194,9 @@ export function TableCell({
           property={property.subject}
         />
       )}
-      {remoteAgents && <RemoteCellPresence agents={remoteAgents} />}
+      {remoteAgents && remoteAgents.length > 0 && (
+        <RemoteCellPresence agents={remoteAgents} />
+      )}
     </Cell>
   );
 }

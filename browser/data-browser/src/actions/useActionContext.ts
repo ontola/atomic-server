@@ -1,4 +1,5 @@
-import { useCanWrite, useResource, useStore } from '@tomic/react';
+import { useCanWrite, useDrive, useResource, useStore } from '@tomic/react';
+import { useFollow } from '../components/Presence/FollowContext';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
@@ -35,6 +36,8 @@ export function useActionContext(
   const addChild = useNewRoute(subject);
   const [favorites, addFavorite, removeFavorite] = useFavorites();
   const { setContextItems, isOpen, setIsOpen } = useAISidebar();
+  const [drive] = useDrive();
+  const { activeMeeting, startMeeting, endMeeting } = useFollow();
 
   const addToChat = () => {
     setContextItems(prev => [
@@ -66,6 +69,10 @@ export function useActionContext(
     addToChat,
     enableScope,
     addChild,
+    drive,
+    activeMeeting,
+    startMeeting,
+    endMeeting,
     ...overrides,
   };
 }

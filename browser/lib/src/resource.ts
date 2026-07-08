@@ -530,6 +530,10 @@ export class Resource<C extends OptionalClass = any> {
         // strand in the outbox after the subject mutates.
         if (this.subject.startsWith('_new:')) return;
         if (!this._store.isOwnedSubject(this.subject)) return;
+        // Local-only drives never drain — their saves persist to
+        // clientDb directly (see `saveLocalOnly`). Marking dirty here
+        // would strand an entry the drain can only fail on.
+        if (this._store.isLocalOnlySubject(this.subject)) return;
         // Skip when offline: `pendingDirtyCount > 0` is the canonical
         // "edit is durable" signal. Marking dirty here while offline
         // would race the async `saveOffline` clientDb write — a
@@ -2652,6 +2656,14 @@ export class Resource<C extends OptionalClass = any> {
       return 'offline';
     }
 
+    // Local-only drives: sign-at-save. Same signing pipeline as the
+    // drain (so history, attribution, and the Loro save cursor behave
+    // identically), but the commit is materialized locally instead of
+    // POSTed — these subjects never reach a server.
+    if (this.store.isLocalOnlySubject(this.subject)) {
+      return this.saveLocalOnly(agent, hasChanges);
+    }
+
     // True when this save creates the resource for the first time (a genesis
     // commit). Newly-created online resources are not otherwise written to the
     // local clientDb — `addResource` skips OPFS puts for `_new:`/unsynced
@@ -2759,6 +2771,64 @@ export class Resource<C extends OptionalClass = any> {
       this.applyToStore('local-pre-push');
       throw e;
     }
+  }
+
+  /**
+   * Persist a resource that belongs to a local-only drive (never
+   * synced to any server). Mirrors the online path's contract
+   * ('persisted' = durable) without a POST: sign the accumulated
+   * changes through the same pipeline as the drain — advancing the
+   * Loro save cursor and chaining `lastCommit` identically — then
+   * materialize each commit for the local history log and write the
+   * full state to clientDb (OPFS).
+   */
+  private async saveLocalOnly(
+    agent: Agent,
+    hasChanges: boolean,
+  ): Promise<SaveResult> {
+    const settled: Commit[] = [];
+    const genesis = this._pendingGenesis;
+    this._pendingGenesis = undefined;
+
+    if (genesis) {
+      settled.push(genesis);
+      // The delta sign below chains on `lastCommit` — point it at the
+      // genesis first.
+      this.setLastCommitValue(`did:ad:commit:${genesis.signature}`);
+    }
+
+    if (hasChanges) {
+      try {
+        settled.push(await this.signChanges(agent));
+      } catch (e) {
+        if (e instanceof Error && e.message.startsWith('No changes to sign')) {
+          if (settled.length === 0) return 'noop';
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    // Server sets `createdAt` on apply; local-only resources need it
+    // locally for sorting (mirrors `saveOffline`).
+    if (this.get(commits.properties.createdAt) === undefined) {
+      this.setCreatedAtValue(Date.now());
+    }
+
+    for (const commit of settled) {
+      this.store.materializeCommitLocally(commit);
+      this.setLastCommitValue(`did:ad:commit:${commit.signature}`);
+      this.store.logLocalOnlyCommitSettled(commit);
+    }
+
+    await this.persistToClientDb();
+
+    this.commitError = undefined;
+    this.loading = false;
+    this.applyToStore('local-acked');
+    this.store.notifyResourceSaved(this);
+
+    return 'persisted';
   }
 
   /**

@@ -51,6 +51,7 @@ import { useAIChanges } from './AIChangesContext';
 import { Row } from './Row';
 import { ResourcePresenceRow } from './Presence/ResourcePresenceRow';
 import { FollowStatus } from './Presence/FollowStatus';
+import { MeetingBanner } from './Presence/MeetingBanner';
 
 export type NavBarProps = {
   resource?: Resource;
@@ -271,6 +272,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
       <EditableBreadcrumb resource={resource} fallback={title} />
       <Spacer />
       <ButtonArea>
+        <MeetingBanner />
         <FollowStatus />
         <ResourcePresenceRow subject={resource.subject} />
         {hasAiChanges && (

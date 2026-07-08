@@ -8,13 +8,12 @@ import {
   useState,
 } from 'react';
 import {
+  core,
   dataBrowser,
   useCurrentAgent,
   useDrive,
   useDrivePresence,
-  useResource,
   useStore,
-  useString,
   type PresenceItem,
   type Store,
 } from '@tomic/react';
@@ -22,8 +21,8 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 import { constructOpenURL } from '../../helpers/navigation';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
-import { getOrCreateFollowSessionsChatroom } from '../../helpers/standardLocations';
 import { sendChatMessage } from '../../views/ChatRoom/ChatRoomView';
+import { getOrCreateMeetingsFolder } from '../../helpers/standardLocations';
 
 interface FollowContextValue {
   /** Agent subject currently being followed, if any. */
@@ -42,10 +41,20 @@ interface FollowContextValue {
   setAllowFollow: (allow: boolean) => void;
   /** True when `agentSubject` announced that they don't want followers. */
   isFollowDisabledFor: (agentSubject: string) => boolean;
-  /** ChatRoom logging OUR follow sessions (we are the one being followed). */
-  sessionChatroom: string | undefined;
-  /** ChatRoom logging the followed agent's session (we are the follower). */
+  /** The Meeting of the agent WE follow, from their presence entry
+   *  (they're leading it). Opens in the session panel. */
   followedSession: string | undefined;
+  /** The Meeting this agent is currently LEADING, if any. While set, the
+   *  presence `session` points at it so joiners open the meeting chat. */
+  activeMeeting: string | undefined;
+  /** Start leading a meeting: creates the Meeting (a ChatRoom with the
+   *  Meeting class) in the drive, lists it in the drive's
+   *  `currentMeetings`, and announces it on presence. Name is optional
+   *  (defaults to a dated title the user can rename). */
+  startMeeting: (name?: string) => Promise<string>;
+  /** Stop leading: de-lists the meeting (the resource remains as
+   *  minutes). */
+  endMeeting: () => Promise<void>;
 }
 
 const FollowContext = createContext<FollowContextValue>({
@@ -58,9 +67,11 @@ const FollowContext = createContext<FollowContextValue>({
   allowFollow: true,
   setAllowFollow: () => undefined,
   isFollowDisabledFor: () => false,
-  sessionChatroom: undefined,
   followedSession: undefined,
-});
+  activeMeeting: undefined,
+  startMeeting: async () => '',
+  endMeeting: async () => undefined,
+} satisfies FollowContextValue);
 
 /** Post a trail entry: a plain chat message linking the visited resource. */
 async function postTrailMessage(
@@ -99,31 +110,28 @@ export function FollowProvider({
   const presence = useDrivePresence();
   const navigate = useNavigateWithTransition();
   const [currentSubject] = useCurrentSubject();
-  // The drive's pointer is the live source of truth for the session
-  // chatroom. Two leaders racing on first creation each write it; LWW picks
-  // one, and this subscription makes every client converge on the winner.
-  const driveResource = useResource(drive);
-  const [sessionChatroom] = useString(
-    driveResource,
-    dataBrowser.properties.followSessionsChatroom,
-  );
-  // What THIS client created during the race, so it can clean up on loss.
-  const createdChatroomRef = useRef<string>(undefined);
+  /** The Meeting this agent is currently leading (state is local: a
+   *  reload ends leadership; the banner hides once presence expires). */
+  const [activeMeeting, setActiveMeeting] = useState<string>();
 
   const manager = drive ? store.getPresence(drive) : undefined;
 
+  // While leading a meeting, the presence session points at it — joiners
+  // read it and open the meeting chat. (Following without a meeting shares
+  // navigation only; there's no ad-hoc session chat anymore — start a
+  // meeting for that.)
   // Announce the follow-related fields on our presence entry. Runs on
   // manager changes too (drive switch resets the entry).
   useEffect(() => {
     if (manager && agentSubject) {
       manager.patchLocal({
         following: followedAgent,
-        session: sessionChatroom,
+        session: activeMeeting,
         // Absent means followable — only announce the opt-out.
         allowFollow: allowFollow ? undefined : false,
       });
     }
-  }, [manager, agentSubject, followedAgent, allowFollow, sessionChatroom]);
+  }, [manager, agentSubject, followedAgent, allowFollow, activeMeeting]);
 
   const isFollowDisabledFor = useCallback(
     (subject: string) =>
@@ -183,76 +191,18 @@ export function FollowProvider({
     [presence, agentSubject],
   );
 
-  // === Session trail (we are the one being followed) ===
-  // While followed, log which resources we visit into the drive's
-  // follow-sessions ChatRoom, so sessions can be reviewed and discussed
-  // afterwards. Plain Messages — no new primitive.
-  const hasFollowers = followers.length > 0;
-  const sessionActiveRef = useRef(false);
   const lastTrailRef = useRef<string>(undefined);
 
-  // The chatroom belongs to the drive; reset session state when switching.
+  // Reset leadership when switching drives.
   useEffect(() => {
-    sessionActiveRef.current = false;
-    createdChatroomRef.current = undefined;
+    setActiveMeeting(undefined);
+    lastTrailRef.current = undefined;
   }, [drive]);
 
+  // While leading a meeting, log each resource visited into it — the
+  // meeting is the shared trail, and late joiners read it back.
   useEffect(() => {
-    if (!hasFollowers || !drive || sessionChatroom) {
-      return;
-    }
-
-    getOrCreateFollowSessionsChatroom(store, drive)
-      .then(created => {
-        createdChatroomRef.current = created;
-      })
-      .catch(e => console.warn('[Follow] session chatroom unavailable:', e));
-  }, [hasFollowers, drive, sessionChatroom, store]);
-
-  // Race lost: another leader's pointer write won. Our freshly created
-  // chatroom (holding at most our own session marker) is an orphan in the
-  // drive — remove it and continue in the winner.
-  useEffect(() => {
-    const created = createdChatroomRef.current;
-
-    if (!created || !sessionChatroom || created === sessionChatroom) {
-      return;
-    }
-
-    createdChatroomRef.current = undefined;
-    store
-      .getResource(created)
-      .then(orphan => orphan.destroy())
-      .catch(e => console.warn('[Follow] orphan cleanup failed:', e));
-  }, [sessionChatroom, store]);
-
-  // Session start / end markers.
-  useEffect(() => {
-    if (!sessionChatroom) {
-      return;
-    }
-
-    if (hasFollowers && !sessionActiveRef.current) {
-      sessionActiveRef.current = true;
-      lastTrailRef.current = undefined;
-      sendChatMessage(store, {
-        parent: sessionChatroom,
-        text: /* @wc-ignore */ 'Started a follow session.',
-        extraClasses: [dataBrowser.classes.followEvent],
-      }).catch(() => undefined);
-    } else if (!hasFollowers && sessionActiveRef.current) {
-      sessionActiveRef.current = false;
-      sendChatMessage(store, {
-        parent: sessionChatroom,
-        text: /* @wc-ignore */ 'Ended the follow session.',
-        extraClasses: [dataBrowser.classes.followEvent],
-      }).catch(() => undefined);
-    }
-  }, [hasFollowers, sessionChatroom, store]);
-
-  // One trail entry per visited resource while followed.
-  useEffect(() => {
-    if (!hasFollowers || !sessionChatroom || !currentSubject) {
+    if (!activeMeeting || !currentSubject) {
       return;
     }
 
@@ -261,12 +211,12 @@ export function FollowProvider({
     }
 
     lastTrailRef.current = currentSubject;
-    postTrailMessage(store, sessionChatroom, currentSubject).catch(
+    postTrailMessage(store, activeMeeting, currentSubject).catch(
       () => undefined,
     );
-  }, [hasFollowers, sessionChatroom, currentSubject, store]);
+  }, [activeMeeting, currentSubject, store]);
 
-  // The session chatroom of the agent WE follow, from their presence entry.
+  // The meeting of the agent WE follow, from their presence entry.
   const followedSession = useMemo(() => {
     if (!followedAgent) {
       return undefined;
@@ -298,6 +248,83 @@ export function FollowProvider({
     [setAllowFollowStored],
   );
 
+  const startMeeting = useCallback(
+    async (name?: string): Promise<string> => {
+      if (!drive) {
+        throw new Error('Cannot start a meeting without a drive.');
+      }
+
+      // A title is optional — default to a dated name the user can
+      // rename by clicking the meeting title.
+      const meetingName =
+        name?.trim() ||
+        `Meeting · ${new Date().toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })}`;
+
+      // Meetings live in the drive's Meetings folder (a standard
+      // location found via the drive's `meetingsFolder` pointer), not
+      // in the drive root.
+      const meetingsFolder = await getOrCreateMeetingsFolder(store, drive);
+
+      const meeting = await store.newResource({
+        parent: meetingsFolder,
+        isA: [dataBrowser.classes.chatroom, dataBrowser.classes.meeting],
+        propVals: { [core.properties.name]: meetingName },
+      });
+      await meeting.save();
+
+      const driveRes = await store.getResource(drive);
+      driveRes.push(
+        dataBrowser.properties.currentMeetings,
+        [meeting.subject],
+        true,
+      );
+      await driveRes.save();
+
+      await sendChatMessage(store, {
+        parent: meeting.subject,
+        text: /* @wc-ignore */ 'Started the meeting.',
+        extraClasses: [dataBrowser.classes.followEvent],
+      }).catch(() => undefined);
+
+      setActiveMeeting(meeting.subject);
+
+      return meeting.subject;
+    },
+    [drive, store],
+  );
+
+  const endMeeting = useCallback(async (): Promise<void> => {
+    if (!activeMeeting) return;
+
+    await sendChatMessage(store, {
+      parent: activeMeeting,
+      text: /* @wc-ignore */ 'The meeting has ended.',
+      extraClasses: [dataBrowser.classes.followEvent],
+    }).catch(() => undefined);
+
+    if (drive) {
+      try {
+        const driveRes = await store.getResource(drive);
+        const current = (driveRes.get(dataBrowser.properties.currentMeetings) ??
+          []) as string[];
+        await driveRes.set(
+          dataBrowser.properties.currentMeetings,
+          current.filter(subject => subject !== activeMeeting),
+        );
+        await driveRes.save();
+      } catch (e) {
+        console.warn('[Meeting] could not de-list meeting:', e);
+      }
+    }
+
+    setActiveMeeting(undefined);
+  }, [activeMeeting, drive, store]);
+
   const value = useMemo(
     () => ({
       followedAgent,
@@ -309,8 +336,10 @@ export function FollowProvider({
       allowFollow,
       setAllowFollow,
       isFollowDisabledFor,
-      sessionChatroom,
       followedSession,
+      activeMeeting,
+      startMeeting,
+      endMeeting,
     }),
     [
       followedAgent,
@@ -322,8 +351,10 @@ export function FollowProvider({
       allowFollow,
       setAllowFollow,
       isFollowDisabledFor,
-      sessionChatroom,
       followedSession,
+      activeMeeting,
+      startMeeting,
+      endMeeting,
     ],
   );
 

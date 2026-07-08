@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { FaGear, FaInfo, FaCirclePlus, FaUser, FaCode } from 'react-icons/fa6';
-import { isDev } from '../../config';
+import { FaGear, FaInfo, FaCirclePlus, FaUser } from 'react-icons/fa6';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { SideBarMenuItem } from './SideBarMenuItem';
@@ -13,6 +12,7 @@ import {
   useResource,
 } from '@tomic/react';
 import { SyncMenuItem } from './SyncMenuItem';
+import { DemoExitMenuItem } from '../DemoExitButton';
 
 // Non standard event type so we have to type it ourselfs for now.
 type BeforeInstallPromptEvent = {
@@ -82,15 +82,6 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         path={paths.about}
         onClick={onItemClick}
       />
-      {isDev() && (
-        <SideBarMenuItem
-          icon={<FaCode />}
-          label='Dev Drive'
-          helper='Create a fresh agent + drive on localhost:9883'
-          path={paths.devDrive}
-          onClick={onItemClick}
-        />
-      )}
       {showInstallButton && (
         <SideBarMenuItem
           icon={<FaCirclePlus />}
@@ -100,6 +91,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
           onClick={install}
         />
       )}
+      <DemoExitMenuItem onItemClick={onItemClick} />
     </AppMenuSection>
   );
 }

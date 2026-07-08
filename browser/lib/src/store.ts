@@ -563,6 +563,21 @@ export class Store {
       this.drive = undefined;
     }
 
+    // Local-only drives (e.g. the demo workspace) survive reloads: their
+    // resources live in OPFS, so the routing decisions that keep them off
+    // the wire must be restored before any save/subscribe runs.
+    if (typeof window !== 'undefined') {
+      try {
+        const rawLocalOnly = localStorage.getItem('atomic.localOnlyDrives');
+
+        if (rawLocalOnly) {
+          this.localOnlyDrives = new Set(JSON.parse(rawLocalOnly));
+        }
+      } catch {
+        // ignore corrupt value
+      }
+    }
+
     this.client = new Client(this.injectedFetch);
 
     // Rehydrate the commit log from the outbox so the Sync page
@@ -641,6 +656,70 @@ export class Store {
     }
 
     return current;
+  }
+
+  /** Drives that exist only on this client (e.g. the demo workspace).
+   *  Their resources are fully functional locally — OPFS persistence,
+   *  commit history, presence — but never touch a server: no outbox
+   *  drains, no websocket subscriptions, no server fetches. Persisted
+   *  to localStorage so a reload keeps treating them as local. */
+  private localOnlyDrives = new Set<string>();
+
+  /** Mark a drive as local-only. Must be called BEFORE the drive's first
+   *  `save()` — registration is what routes saves away from the outbox. */
+  public registerLocalOnlyDrive(drive: string): void {
+    this.localOnlyDrives.add(drive);
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(
+        'atomic.localOnlyDrives',
+        JSON.stringify([...this.localOnlyDrives]),
+      );
+    }
+  }
+
+  /** Forget a local-only drive (e.g. after deleting a demo workspace),
+   *  keeping the persisted registration set bounded. */
+  public unregisterLocalOnlyDrive(drive: string): void {
+    if (!this.localOnlyDrives.delete(drive)) return;
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(
+        'atomic.localOnlyDrives',
+        JSON.stringify([...this.localOnlyDrives]),
+      );
+    }
+  }
+
+  public isLocalOnlyDrive(drive: string): boolean {
+    return this.localOnlyDrives.has(drive);
+  }
+
+  /**
+   * Whether a subject belongs to a local-only drive. Resolution mirrors
+   * the server's rights check: the resource's stable `drive` propval
+   * first, the in-memory parent chain as fallback. Best-effort — a
+   * subject that isn't hydrated yet resolves through `driveOf` to
+   * itself, so callers on cold paths should consult it AFTER local
+   * (OPFS) hydration has run.
+   */
+  public isLocalOnlySubject(subject: string): boolean {
+    if (this.localOnlyDrives.size === 0) return false;
+
+    const normalized = this.normalizeSubject(subject);
+
+    if (this.localOnlyDrives.has(normalized)) return true;
+
+    const resource = this.resources.get(
+      this.aliases.get(normalized) ?? normalized,
+    );
+    const drive = resource?.get('https://atomicdata.dev/properties/drive');
+
+    if (typeof drive === 'string' && this.localOnlyDrives.has(drive)) {
+      return true;
+    }
+
+    return this.localOnlyDrives.has(this.driveOf(normalized));
   }
 
   /** Drives whose full local search index has been built (or is being built)
@@ -2290,6 +2369,23 @@ export class Store {
       }
     }
 
+    // Local-only subjects never exist on any server — the OPFS lookup
+    // above is authoritative. Without this guard a cache miss would GET
+    // the subject from the server (a guaranteed 404 that also leaks
+    // local-only subjects onto the wire).
+    if (this.isLocalOnlySubject(subject)) {
+      if (!hasLocalData) {
+        this.failResource(
+          subject,
+          new Error(
+            'This resource belongs to a local-only drive but was not found in local storage.',
+          ),
+        );
+      }
+
+      return;
+    }
+
     // Try the server if connected. Skip if we have local data and are offline
     // to avoid overwriting good data with error responses.
     try {
@@ -2757,6 +2853,21 @@ export class Store {
           );
         }, defaultTimeout);
       });
+    }
+
+    // Local-only subjects never exist on any server, but on a cold load
+    // the subject's drive isn't known yet — the `drive` prop lives in
+    // the resource. When local-only drives exist, consult OPFS first:
+    // hydrating restores the drive prop, and if the resource turns out
+    // to be local-only, the local copy is authoritative. Without this,
+    // the online path below GETs the subject from the server — a
+    // guaranteed "not found" (plus a leaked local subject).
+    if (resolved.startsWith('did:') && this.localOnlyDrives.size > 0) {
+      const fromDb = await this.fetchResourceFromClientDb(resolved);
+
+      if (fromDb && this.isLocalOnlySubject(resolved)) {
+        return fromDb;
+      }
     }
 
     // If offline and the resource can't be fetched via HTTP (DID subjects),
@@ -3377,7 +3488,8 @@ export class Store {
     if (
       normalized === unknownSubject ||
       normalized.includes('/commits/') ||
-      normalized.startsWith('did:ad:commit:')
+      normalized.startsWith('did:ad:commit:') ||
+      this.isLocalOnlySubject(normalized)
     ) {
       return;
     }
@@ -3509,12 +3621,12 @@ export class Store {
       subject,
       callback,
       () => {
-        if (this._serverConnected) {
+        if (this._serverConnected && !this.isLocalOnlySubject(subject)) {
           this.getWebSocketForSubject(subject)?.subscribeLoroSync(subject);
         }
       },
       () => {
-        if (this._serverConnected) {
+        if (this._serverConnected && !this.isLocalOnlySubject(subject)) {
           this.getWebSocketForSubject(subject)?.unsubscribeLoroSync(subject);
         }
       },
@@ -3525,6 +3637,7 @@ export class Store {
    *  Non-persistent real-time; persistence is via commits. */
   public broadcastLoroSyncUpdate(subject: string, update: Uint8Array): void {
     if (!this._serverConnected) return;
+    if (this.isLocalOnlySubject(subject)) return;
     this.getWebSocketForSubject(subject)?.sendLoroSyncUpdate(
       JSON.stringify({ subject, update: encodeB64(update) }),
     );
@@ -3548,6 +3661,7 @@ export class Store {
     update: Uint8Array,
   ): void {
     if (!this._serverConnected) return;
+    if (this.isLocalOnlySubject(subject)) return;
     this.getWebSocketForSubject(subject)?.sendLoroEphemeralUpdate(
       JSON.stringify({ subject, update: encodeB64(update) }),
     );
@@ -3583,12 +3697,12 @@ export class Store {
       drive,
       callback,
       () => {
-        if (this._serverConnected) {
+        if (this._serverConnected && !this.isLocalOnlyDrive(drive)) {
           this.presenceWebSocket(drive)?.subscribePresence(drive);
         }
       },
       () => {
-        if (this._serverConnected) {
+        if (this._serverConnected && !this.isLocalOnlyDrive(drive)) {
           this.presenceWebSocket(drive)?.unsubscribePresence(drive);
         }
       },
@@ -3599,6 +3713,9 @@ export class Store {
    *  drive's presence subscribers. */
   public broadcastPresenceUpdate(drive: string, update: Uint8Array): void {
     if (!this._serverConnected) return;
+    // Local-only drives have no peers behind a relay; their presence
+    // (including injected demo sessions) stays in this tab.
+    if (this.isLocalOnlyDrive(drive)) return;
     this.presenceWebSocket(drive)?.sendPresenceUpdate(
       JSON.stringify({ subject: drive, update: encodeB64(update) }),
     );
@@ -3792,6 +3909,14 @@ export class Store {
    */
   public logPendingCommit(commit: Commit): void {
     this.pushCommitLog(this.buildCommitLogEntry(commit, 'outgoing', 'pending'));
+  }
+
+  /** @internal Settle a commit that will never be POSTed (local-only
+   *  drives sign and materialize locally). Transitions the `pending`
+   *  entry `logPendingCommit` created so the Sync page doesn't show it
+   *  as queued forever. */
+  public logLocalOnlyCommitSettled(commit: Commit): void {
+    this.pushCommitLog(this.buildCommitLogEntry(commit, 'outgoing', 'sent'));
   }
 
   private summarizeCommit(commit: Commit): string {

@@ -647,6 +647,19 @@ export class Collection {
       return;
     }
 
+    // Local-only parents (e.g. the demo drive's folders/tables) have no
+    // server-side members by definition — a `/query` can only return
+    // empty while leaking local subjects. The local DB result above is
+    // authoritative; when it couldn't answer, empty is the truth.
+    if (
+      typeof this.params.value === 'string' &&
+      this.store.isLocalOnlySubject(this.params.value)
+    ) {
+      this.setEmptyPage(page);
+
+      return;
+    }
+
     if (this.store.serverConnected) {
       await this.fetchPageFromServer(page).catch(() => undefined);
 

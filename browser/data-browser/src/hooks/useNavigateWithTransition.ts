@@ -19,7 +19,11 @@ let activeTransition: Promise<void> = Promise.resolve();
 // transition wrap there. `navigator.webdriver` is the standard W3C signal
 // set by automation drivers.
 const IS_AUTOMATED =
-  typeof navigator !== 'undefined' && navigator.webdriver === true;
+  typeof navigator !== 'undefined' &&
+  navigator.webdriver === true &&
+  // Escape hatch for debugging transitions under automation (e.g. a
+  // driven browser session): localStorage.setItem('forceViewTransitions', '1')
+  localStorage.getItem('forceViewTransitions') !== '1';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function wrapWithTransition<F extends (...args: any[]) => Promise<void>>(

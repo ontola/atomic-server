@@ -9,6 +9,11 @@ import { ResourcePageProps } from './ResourcePage';
 import { Column, Row } from '../components/Row';
 import { upgradeDocument } from './Document/upgradeDocument';
 import toast from 'react-hot-toast';
+import {
+  PAGE_TITLE_TRANSITION_TAG,
+  transitionName,
+} from '../helpers/transitionName';
+import { ViewTransitionProps } from '../helpers/ViewTransitionProps';
 
 /** A full page, editable document, consisting of Elements */
 export function DocumentPage({ resource }: ResourcePageProps): JSX.Element {
@@ -22,7 +27,9 @@ export function DocumentPage({ resource }: ResourcePageProps): JSX.Element {
       <DocumentContainer>
         <Column fullHeight>
           <Row>
-            <h1>{resource.title}</h1>
+            <DocumentTitle subject={resource.subject}>
+              {resource.title}
+            </DocumentTitle>
           </Row>
           {canWrite && (
             <UpgradeMessage>
@@ -56,6 +63,12 @@ export function DocumentPage({ resource }: ResourcePageProps): JSX.Element {
     </FullPageWrapper>
   );
 }
+
+const DocumentTitle = styled.h1<ViewTransitionProps>`
+  width: fit-content;
+  max-width: 100%;
+  ${p => transitionName(PAGE_TITLE_TRANSITION_TAG, p.subject)};
+`;
 
 const DocumentContainer = styled.div`
   width: min(100%, ${p => p.theme.containerWidth}rem);

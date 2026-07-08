@@ -85,6 +85,7 @@ export function KanbanColumn({
           <KanbanCard
             key={subject}
             subject={subject}
+            columnId={columnId}
             fields={fields}
             readOnly={readOnly}
             onOpen={onOpenCard}

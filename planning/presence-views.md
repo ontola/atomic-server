@@ -109,9 +109,26 @@ Three layers exist, two of them shipped:
 - World→screen mapping confirmed exact: a cursor broadcast at world
   (x, y) renders at `x·scale + offset.x` on every peer.
 
+## Follow-up: kanban presence (implemented)
+
+The table payload grew into `TablePresenceData { row, column?,
+dragging? }` and the context became row-keyed
+(`Map<rowSubject, RowPresence[]>` + a `setActiveCard` announcer):
+
+- **Kanban cards** announce hover (`{ row }`) and drags
+  (`{ row, dragging: true }`, sent by the board's dnd handlers); hover
+  announcements are suppressed while any drag is live so cards passing
+  under the pointer don't clobber the drag entry.
+- **Rendering** reuses `RemoteCellPresence` (ring + name tag); the ring
+  pulses and the card lifts/tilts while a remote session drags it.
+- **Cross-view**: a grid cell selection (`{ row, column }`) renders on
+  the matching kanban card too; kanban hovers carry no `column`, so
+  they don't light up any grid cell.
+- The demo's `moveCard` broadcasts a dragging beat before each move.
+
 ## Later / out of scope
 
-- Kanban/calendar selection presence (no cell-selection concept yet).
+- Calendar selection presence (no cell-selection concept yet).
 - Multi-select range presence in tables (only the active cell is
   announced; the multi-select corner is not).
 - Canvas "who is drawing" stroke preview (remote in-progress strokes

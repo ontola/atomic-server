@@ -57,6 +57,26 @@ function setDragStyling(id: string, enable: boolean) {
   }
 }
 
+/**
+ * A width default that adapts to the screen. Laptop-class displays
+ * (≤ ~15", logical width under this breakpoint) get the narrower value
+ * so drawers don't swallow the content area; large / external monitors
+ * keep the roomier one. Read once at mount (the panels are resizable,
+ * so this is only the starting width).
+ */
+export function responsiveWidth(opts: {
+  large: number;
+  laptop: number;
+}): number {
+  // 1728 = a 16" MacBook's logical width; 13–15" laptops sit below it
+  // and get the laptop size, desktop monitors get the large size.
+  if (typeof window === 'undefined' || window.innerWidth >= 1728) {
+    return opts.large;
+  }
+
+  return opts.laptop;
+}
+
 export type ResizeEdge = 'left' | 'right';
 
 export type UseResizableProps<E extends HTMLElement> = {

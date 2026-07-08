@@ -72,6 +72,20 @@ export async function getOrCreateAiChatsFolder(
   );
 }
 
+/** The Drive's Meetings folder: home for Meeting ChatRooms, so live and
+ *  past meetings don't clutter the drive root. */
+export async function getOrCreateMeetingsFolder(
+  store: Store,
+  driveSubject: string,
+): Promise<string> {
+  return getOrCreateDriveLocation(
+    store,
+    driveSubject,
+    dataBrowser.properties.meetingsFolder,
+    { isA: dataBrowser.classes.folder, name: /* @wc-ignore */ 'Meetings' },
+  );
+}
+
 /** The Drive's follow-sessions ChatRoom: while an agent is being followed,
  *  their client logs which resources they visit here (issue #1229). */
 export async function getOrCreateFollowSessionsChatroom(

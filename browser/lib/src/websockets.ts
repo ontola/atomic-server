@@ -1054,7 +1054,9 @@ export class WSClient {
 
     const drive = this.store.getDrive();
 
-    if (drive) {
+    // Local-only drives are unknown to the server — a SUB would only
+    // produce an error frame (and leak the drive subject).
+    if (drive && !this.store.isLocalOnlyDrive(drive)) {
       this.sendBinary(encodeSub(drive));
     }
   }
@@ -1106,7 +1108,9 @@ export class WSClient {
       // store and starved the per-conn actor for seconds (see the
       // `anon_ws_get_during_sync_vv_is_fast` bench in
       // `server/tests/ws_get_unauthorized_latency.rs`).
-      if (drive) {
+      // Local-only drives never reconcile with a server: a SYNC_VV would
+      // upload the whole local drive's version state for nothing.
+      if (drive && !this.store.isLocalOnlyDrive(drive)) {
         await this.startVVSync(drive);
       }
     };

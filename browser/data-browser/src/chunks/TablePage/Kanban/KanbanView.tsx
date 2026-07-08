@@ -18,7 +18,15 @@ import {
   DragStartEvent,
   closestCorners,
 } from '@dnd-kit/core';
-import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type JSX,
+} from 'react';
 import { styled } from 'styled-components';
 import { useDragSensors } from '@chunks/TableEditor/hooks/useDragSensors';
 import { LoaderBlock } from '@components/Loader';
@@ -26,6 +34,8 @@ import { KanbanColumn, UNCATEGORIZED_COLUMN_ID } from './KanbanColumn';
 import { KanbanCard } from './KanbanCard';
 import { ExpandedRowDialog } from '../ExpandedRowDialog';
 import { useKanbanGroupBy } from './useKanbanGroupBy';
+import { TablePresenceContext } from '../TablePresence';
+import { KanbanFlipContext, type CardFlipRecord } from './cardFlip';
 
 interface KanbanViewProps {
   /** The Table resource; new cards are created as its children. */
@@ -134,6 +144,17 @@ export function KanbanView({
 
   const [draggingSubject, setDraggingSubject] = useState<string>();
 
+  // Presence: broadcast which card we're dragging so other sessions see
+  // it pulse (hover is announced per card, in KanbanCard). Retract the
+  // announcement when the board unmounts (e.g. a switch to grid view).
+  const { setActiveCard } = useContext(TablePresenceContext);
+
+  useEffect(() => () => setActiveCard(undefined), [setActiveCard]);
+
+  // Last-commit card positions, for the FLIP move animation (see
+  // `cardFlip.ts`). Board-wide so a card can animate across columns.
+  const flipRegistry = useRef(new Map<string, CardFlipRecord>());
+
   // Open a card in the same modal the table's row-expand uses, rather than
   // navigating away to the full resource page.
   const [expandedSubject, setExpandedSubject] = useState<string>();
@@ -175,13 +196,18 @@ export function KanbanView({
     [store, tableSubject, tableClass, groupBy],
   );
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setDraggingSubject(event.active.id as string);
-  }, []);
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      setDraggingSubject(event.active.id as string);
+      setActiveCard(event.active.id as string, true);
+    },
+    [setActiveCard],
+  );
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       setDraggingSubject(undefined);
+      setActiveCard(undefined);
       const { active, over } = event;
 
       if (!over || !groupBy) {
@@ -208,7 +234,7 @@ export function KanbanView({
         await resource.save();
       })().catch(() => undefined);
     },
-    [groupBy, store],
+    [groupBy, store, setActiveCard],
   );
 
   if (status === 'creating' || (!ready && memberSubjects.length === 0)) {
@@ -233,30 +259,35 @@ export function KanbanView({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <Board data-testid='kanban-board'>
-          {columnIds.map(columnId => {
-            const isUncategorized = columnId === UNCATEGORIZED_COLUMN_ID;
+        <KanbanFlipContext value={flipRegistry}>
+          <Board data-testid='kanban-board'>
+            {columnIds.map(columnId => {
+              const isUncategorized = columnId === UNCATEGORIZED_COLUMN_ID;
 
-            return (
-              <KanbanColumn
-                key={columnId}
-                columnId={columnId}
-                tagSubject={isUncategorized ? undefined : columnId}
-                cardSubjects={buckets.get(columnId) ?? []}
-                fields={cardFields}
-                readOnly={readOnly}
-                onAddCard={name =>
-                  handleCreateCard(isUncategorized ? undefined : columnId, name)
-                }
-                onOpenCard={handleOpenCard}
-              />
-            );
-          })}
-        </Board>
-        {/* No drop animation: the card moves to a different column on drop (async
-         * status change), so animating the overlay back to the source's old slot
-         * would always look backwards. It just disappears; the card re-renders in
-         * its new column. */}
+              return (
+                <KanbanColumn
+                  key={columnId}
+                  columnId={columnId}
+                  tagSubject={isUncategorized ? undefined : columnId}
+                  cardSubjects={buckets.get(columnId) ?? []}
+                  fields={cardFields}
+                  readOnly={readOnly}
+                  onAddCard={name =>
+                    handleCreateCard(
+                      isUncategorized ? undefined : columnId,
+                      name,
+                    )
+                  }
+                  onOpenCard={handleOpenCard}
+                />
+              );
+            })}
+          </Board>
+        </KanbanFlipContext>
+        {/* No overlay drop animation — the CARD animates instead: on drop it
+         * re-renders in its new column and the FLIP hook glides it over from
+         * the source slot (see cardFlip.ts). Animating the overlay too would
+         * double the motion. */}
         <DragOverlay dropAnimation={null}>
           {draggingSubject ? (
             <KanbanCard

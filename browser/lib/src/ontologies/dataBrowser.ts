@@ -22,6 +22,7 @@ export const dataBrowser = {
     importer: 'https://atomicdata.dev/classes/Importer',
     message: 'https://atomicdata.dev/classes/Message',
     followEvent: 'https://atomicdata.dev/classes/FollowEvent',
+    meeting: 'https://atomicdata.dev/classes/Meeting',
     numberFormat: 'https://atomicdata.dev/classes/NumberFormat',
     paragraph: 'https://atomicdata.dev/classes/elements/Paragraph',
     rangeProperty: 'https://atomicdata.dev/classes/RangeProperty',
@@ -39,6 +40,8 @@ export const dataBrowser = {
     commentsFolder: 'https://atomicdata.dev/properties/commentsFolder',
     followSessionsChatroom:
       'https://atomicdata.dev/properties/followSessionsChatroom',
+    currentMeetings: 'https://atomicdata.dev/properties/currentMeetings',
+    meetingsFolder: 'https://atomicdata.dev/properties/meetingsFolder',
     currency: 'https://atomicdata.dev/ontology/data-browser/property/currency',
     customNodePositioning:
       'https://atomicdata.dev/properties/custom-node-positioning',
@@ -201,6 +204,7 @@ export namespace DataBrowser {
   export type Importer = typeof dataBrowser.classes.importer;
   export type Message = typeof dataBrowser.classes.message;
   export type FollowEvent = typeof dataBrowser.classes.followEvent;
+  export type Meeting = typeof dataBrowser.classes.meeting;
   export type NumberFormat = typeof dataBrowser.classes.numberFormat;
   export type Paragraph = typeof dataBrowser.classes.paragraph;
   export type RangeProperty = typeof dataBrowser.classes.rangeProperty;
@@ -293,6 +297,10 @@ declare module '../index.js' {
       requires: BaseProps;
       recommends: 'https://atomicdata.dev/properties/description';
     };
+    [dataBrowser.classes.meeting]: {
+      requires: BaseProps | 'https://atomicdata.dev/properties/name';
+      recommends: typeof dataBrowser.properties.messages;
+    };
     [dataBrowser.classes.numberFormat]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/shortname';
       recommends: never;
@@ -369,6 +377,8 @@ declare module '../index.js' {
     [dataBrowser.properties.color]: string;
     [dataBrowser.properties.commentsFolder]: string;
     [dataBrowser.properties.followSessionsChatroom]: string;
+    [dataBrowser.properties.currentMeetings]: string[];
+    [dataBrowser.properties.meetingsFolder]: string;
     [dataBrowser.properties.currency]: string;
     [dataBrowser.properties.customNodePositioning]: Record<
       string,
@@ -417,6 +427,8 @@ declare module '../index.js' {
     [dataBrowser.properties.color]: 'color';
     [dataBrowser.properties.commentsFolder]: 'commentsFolder';
     [dataBrowser.properties.followSessionsChatroom]: 'followSessionsChatroom';
+    [dataBrowser.properties.currentMeetings]: 'currentMeetings';
+    [dataBrowser.properties.meetingsFolder]: 'meetingsFolder';
     [dataBrowser.properties.currency]: 'currency';
     [dataBrowser.properties.customNodePositioning]: 'customNodePositioning';
     [dataBrowser.properties.dateFormat]: 'dateFormat';

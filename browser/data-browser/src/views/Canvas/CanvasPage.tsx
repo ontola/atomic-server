@@ -236,6 +236,14 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const isPanModeRef = useRef(false);
   const [panMode, setPanMode] = useState<'idle' | 'ready' | 'panning'>('idle');
 
+  // Fit the drawing to the viewport once per canvas, when its strokes
+  // first arrive — but never after the user has taken over the view
+  // (drawn, panned, or zoomed), so a late Loro sync or their own first
+  // stroke on an empty canvas can't yank the viewport out from under
+  // them.
+  const initialFitSubjectRef = useRef<string | null>(null);
+  const viewTouchedRef = useRef(false);
+
   // Track Space key for pan mode (Space+drag = pan, matching Figma/Photoshop).
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -296,6 +304,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     // canvas navigation, so we can detect "this wheel session began
     // before this canvas was visible".
     canvasMountedAtRef.current = performance.now();
+    viewTouchedRef.current = false;
 
     reloadStrokesFromResource(resource);
 
@@ -871,6 +880,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
+    viewTouchedRef.current = true;
     // Drawing / erasing starts — hide the hover preview; the stroke itself
     // is the feedback.
     setCursorPos(null);
@@ -1053,6 +1063,8 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       if (currentWheelSessionStartedAt() < canvasMountedAtRef.current) {
         return;
       }
+
+      viewTouchedRef.current = true;
 
       // Match Flutter's `_onPointerSignal` (infinite_canvas.dart:747-768):
       //
@@ -1426,6 +1438,19 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   // Mirror the latest `handleZoomToFit` into the ref so the zoom button's
   // tap path always sees fresh strokes (see `handleZoomToFitRef` above).
   handleZoomToFitRef.current = handleZoomToFit;
+
+  // Initial fit-to-drawing: the drawing may extend past the default
+  // viewport (it was made on another device, or at another zoom), so
+  // opening a canvas starts with everything visible. Waits for strokes
+  // (they load in the mount effect, or arrive on the first Loro sync)
+  // and yields to the user the moment they touch the view.
+  useEffect(() => {
+    if (initialFitSubjectRef.current === resource.subject) return;
+    if (viewTouchedRef.current || strokes.length === 0) return;
+
+    initialFitSubjectRef.current = resource.subject;
+    handleZoomToFit();
+  }, [resource.subject, strokes, handleZoomToFit]);
 
   const widthDotPx = Math.max(4, Math.min(22, penWidth * 0.6));
 

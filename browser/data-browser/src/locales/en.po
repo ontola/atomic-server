@@ -624,6 +624,7 @@ msgstr "Required field."
 msgid "Error: {0}"
 msgstr "Error: {0}"
 
+#: src/chunks/Demo/SimulatedTypist.ts
 #: src/chunks/RTE/applyPatchedJsonToLoroDocCollaborative.ts
 msgid "Editor was destroyed before it finished initializing"
 msgstr "Editor was destroyed before it finished initializing"
@@ -887,14 +888,6 @@ msgid "Welcome page, tells about this app"
 msgstr "Welcome page, tells about this app"
 
 #: src/components/SideBar/AppMenu.tsx
-msgid "Dev Drive"
-msgstr "Dev Drive"
-
-#: src/components/SideBar/AppMenu.tsx
-msgid "Create a fresh agent + drive on localhost:9883"
-msgstr "Create a fresh agent + drive on localhost:9883"
-
-#: src/components/SideBar/AppMenu.tsx
 msgid "Install App"
 msgstr "Install App"
 
@@ -922,10 +915,6 @@ msgstr "Favorites"
 #: src/components/SideBar/SideBarHomePanels.tsx
 msgid "Shared with me"
 msgstr "Shared with me"
-
-#: src/components/SideBar/About.tsx
-msgid "Sandbox, test components in isolation"
-msgstr "Sandbox, test components in isolation"
 
 #: src/components/SideBar/SideBarPanel.tsx
 msgid "Collapse"
@@ -1276,9 +1265,6 @@ msgstr "Canvas help"
 msgid "Show canvas help"
 msgstr "Show canvas help"
 
-#~ msgid "New canvas"
-#~ msgstr "New canvas"
-
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Switch to draw"
 msgstr "Switch to draw"
@@ -1366,80 +1352,44 @@ msgstr "<0/> chat"
 msgid "<0>esc</0> close"
 msgstr "<0>esc</0> close"
 
-#~ msgid "Mac"
-#~ msgstr "Mac"
-
-#~ msgid "Ctrl+K"
-#~ msgstr "Ctrl+K"
-
 #: src/components/OverlayContainer.tsx
 msgid "Open search"
 msgstr "Open search"
 
-#~ msgid "Shift+/"
-#~ msgstr "Shift+/"
-
 #: src/components/OverlayContainer.tsx
 msgid "Show keyboard shortcuts"
 msgstr "Show keyboard shortcuts"
-
-#~ msgid "Ctrl+E"
-#~ msgstr "Ctrl+E"
 
 #: src/components/OverlayContainer.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 msgid "Edit resource"
 msgstr "Edit resource"
 
-#~ msgid "Ctrl+D"
-#~ msgstr "Ctrl+D"
-
 #: src/components/OverlayContainer.tsx
 msgid "Show data view"
 msgstr "Show data view"
-
-#~ msgid "Ctrl+H"
-#~ msgstr "Ctrl+H"
-
-#~ msgid "Ctrl+N"
-#~ msgstr "Ctrl+N"
 
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/components/OverlayContainer.tsx
 msgid "New resource"
 msgstr "New resource"
 
-#~ msgid "Ctrl+M"
-#~ msgstr "Ctrl+M"
-
 #: src/components/OverlayContainer.tsx
 msgid "Open menu"
 msgstr "Open menu"
-
-#~ msgid "Ctrl+U"
-#~ msgstr "Ctrl+U"
 
 #: src/components/OverlayContainer.tsx
 msgid "User settings"
 msgstr "User settings"
 
-#~ msgid "Ctrl+T"
-#~ msgstr "Ctrl+T"
-
 #: src/components/OverlayContainer.tsx
 msgid "Theme settings"
 msgstr "Theme settings"
-
-#~ msgid "This page"
-#~ msgstr "This page"
 
 #: src/components/OverlayContainer.tsx
 #: src/routes/ShortcutsRoute.tsx
 msgid "Keyboard shortcuts"
 msgstr "Keyboard shortcuts"
-
-#~ msgid "Press esc to close..."
-#~ msgstr "Press esc to close..."
 
 #. 0: metadata.author
 #. 0: resource.props.pluginAuthor
@@ -2379,9 +2329,6 @@ msgstr "Delete this resource."
 #: src/components/ResourceContextMenu/index.tsx
 msgid "Open {0} menu"
 msgstr "Open {0} menu"
-
-#~ msgid "Are you sure you want to delete <0/>"
-#~ msgstr "Are you sure you want to delete <0/>"
 
 #: src/actions/resourceActions.tsx
 msgid "Delete resource"
@@ -3819,6 +3766,7 @@ msgstr "Toggle inline code"
 msgid "No alt text"
 msgstr "No alt text"
 
+#: src/chunks/Demo/SimulatedTypist.ts
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Text"
 msgstr "Text"
@@ -4433,23 +4381,6 @@ msgstr "Jump to their location"
 msgid "Go to the resource they are viewing right now."
 msgstr "Go to the resource they are viewing right now."
 
-#: src/components/Presence/FollowStatus.tsx
-#: src/components/Presence/FollowStatus.tsx
-msgid "Open session chat"
-msgstr "Open session chat"
-
-#: src/components/Presence/FollowStatus.tsx
-msgid "Chat and the log of resources visited during the session."
-msgstr "Chat and the log of resources visited during the session."
-
-#: src/components/Presence/FollowStatus.tsx
-msgid "Chat and the log of resources you visited while followed."
-msgstr "Chat and the log of resources you visited while followed."
-
-#: src/components/Presence/FollowSessionPanelContainer.tsx
-msgid "Follow session"
-msgstr "Follow session"
-
 #. 0: step + 1; 1: totalSteps
 #: src/views/Canvas/HistoryScrubOverlay.tsx
 msgid "Version {0} / {1}"
@@ -4682,10 +4613,6 @@ msgstr "The generative features model uses a provider that is not available."
 #: src/components/AI/AISettings.tsx
 msgid "<0/> Enable AI Features"
 msgstr "<0/> Enable AI Features"
-
-#: src/components/Presence/FollowSessionPanelContainer.tsx
-msgid "No follow session yet. Follow someone — or be followed — to start one."
-msgstr "No follow session yet. Follow someone — or be followed — to start one."
 
 #: src/components/ResourceUsage/PropertyUsage.tsx
 msgid "resources have a"
@@ -4972,11 +4899,6 @@ msgstr "Lead"
 msgid "Wat"
 msgstr "Wat"
 
-#. 0: DID_A
-#: src/helpers/subjectRefs.test.ts
-msgid "See {0} for details"
-msgstr "See {0} for details"
-
 #: src/components/Dropdown/index.tsx
 msgid "Filter actions…"
 msgstr "Filter actions…"
@@ -5018,3 +4940,116 @@ msgstr "Filter shortcuts…"
 #: src/components/OverlayContainer.tsx
 msgid "No matching shortcuts"
 msgstr "No matching shortcuts"
+
+#: src/actions/resourceActions.tsx
+msgid "End meeting"
+msgstr "End meeting"
+
+#: src/actions/resourceActions.tsx
+msgid "Start meeting"
+msgstr "Start meeting"
+
+#: src/actions/resourceActions.tsx
+msgid "Stop leading; the meeting log stays in the drive."
+msgstr "Stop leading; the meeting log stays in the drive."
+
+#: src/actions/resourceActions.tsx
+msgid "Invite everyone in this drive to follow you live."
+msgstr "Invite everyone in this drive to follow you live."
+
+#: src/components/DemoExitButton.tsx
+msgid "Leaving…"
+msgstr "Leaving…"
+
+#: src/components/DemoExitButton.tsx
+msgid "Exit demo"
+msgstr "Exit demo"
+
+#: src/components/DemoExitButton.tsx
+msgid "Leave the demo workspace"
+msgstr "Leave the demo workspace"
+
+#: src/routes/DemoRoute.tsx
+msgid "Could not start the demo"
+msgstr "Could not start the demo"
+
+#: src/routes/DemoRoute.tsx
+msgid "The demo could not start"
+msgstr "The demo could not start"
+
+#: src/routes/DemoRoute.tsx
+msgid "Setting up your demo team…"
+msgstr "Setting up your demo team…"
+
+#: src/routes/DemoRoute.tsx
+msgid "The demo needs the local database, which is disabled in this environment."
+msgstr "The demo needs the local database, which is disabled in this environment."
+
+#: src/chunks/Demo/SimulatedTypist.ts
+msgid "Map"
+msgstr "Map"
+
+#: src/chunks/Demo/SimulatedTypist.ts
+msgid "List"
+msgstr "List"
+
+#. 0: new Date().toLocaleString(undefined, { month\\: 'short', day\\: 'numeric', hour\\: '2-digit', minute\\: '2-digit', })
+#: src/components/Presence/FollowContext.tsx
+msgid "Meeting · {0}"
+msgstr "Meeting · {0}"
+
+#: src/components/Presence/FollowStatus.tsx
+#: src/components/Presence/FollowStatus.tsx
+msgid "Open meeting chat"
+msgstr "Open meeting chat"
+
+#: src/components/Presence/FollowStatus.tsx
+#: src/components/Presence/FollowStatus.tsx
+msgid "Chat and the log of resources visited during the meeting."
+msgstr "Chat and the log of resources visited during the meeting."
+
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "No meeting yet. Join a meeting, or start one from the drive menu."
+msgstr "No meeting yet. Join a meeting, or start one from the drive menu."
+
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "End"
+msgstr "End"
+
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "Leave"
+msgstr "Leave"
+
+#. 0: participants.length
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "{0} here"
+msgstr "{0} here"
+
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "Ending…"
+msgstr "Ending…"
+
+#: src/components/Presence/MeetingBanner.tsx
+msgid "Meet"
+msgstr "Meet"
+
+#: src/components/Presence/MeetingBanner.tsx
+msgid "Start a meeting — invite everyone in this drive to follow you live"
+msgstr "Start a meeting — invite everyone in this drive to follow you live"
+
+#: src/components/Presence/MeetingBanner.tsx
+msgid "Open the meeting chat"
+msgstr "Open the meeting chat"
+
+#. 0: title; 1: leaderName
+#: src/components/Presence/MeetingBanner.tsx
+msgid "Join {0} — led by {1}"
+msgstr "Join {0} — led by {1}"
+
+#: src/components/Presence/MeetingBanner.tsx
+msgid "Join"
+msgstr "Join"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Try the live demo"
+msgstr "Try the live demo"

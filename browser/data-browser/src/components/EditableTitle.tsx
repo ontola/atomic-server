@@ -162,6 +162,11 @@ const Title = styled.h1<TitleProps & ViewTransitionProps>`
   gap: ${p => p.theme.size()};
   cursor: ${props => (props.canEdit ? 'pointer' : 'initial')};
   opacity: ${props => (props.subtle ? 0.5 : 1)};
+  /* Hug the text: this element is a view-transition morph target, and a
+     full-width box makes small titles (grid items, cards) stretch across
+     the whole content width mid-morph before snapping back. */
+  width: fit-content;
+  max-width: 100%;
 
   ${props => transitionName(PAGE_TITLE_TRANSITION_TAG, props.subject)};
 `;

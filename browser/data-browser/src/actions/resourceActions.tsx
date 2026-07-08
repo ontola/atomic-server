@@ -14,6 +14,8 @@ import {
   FaStar,
   FaTrash,
   FaTurnUp,
+  FaVideo,
+  FaVideoSlash,
 } from 'react-icons/fa6';
 import {
   constructOpenURL,
@@ -38,6 +40,26 @@ const getParent = (ctx: ActionContext): string | undefined =>
  * test ids stay valid.
  */
 export const resourceActions: ActionDefinition[] = [
+  {
+    id: 'meeting',
+    scope: 'app',
+    section: 'action',
+    label: ctx => (ctx.activeMeeting ? 'End meeting' : 'Start meeting'),
+    helper: ctx =>
+      ctx.activeMeeting
+        ? 'Stop leading; the meeting log stays in the drive.'
+        : 'Invite everyone in this drive to follow you live.',
+    keywords: ['meeting', 'present', 'tour', 'follow', 'call'],
+    icon: ctx => (ctx.activeMeeting ? <FaVideoSlash /> : <FaVideo />),
+    available: ctx => !!ctx.drive && !!ctx.startMeeting,
+    run: ctx => {
+      if (ctx.activeMeeting) {
+        void ctx.endMeeting?.();
+      } else {
+        void ctx.startMeeting?.();
+      }
+    },
+  },
   {
     id: 'view',
     scope: 'resource',

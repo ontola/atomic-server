@@ -380,6 +380,17 @@ export function GettingStartedFlow({
                   >
                     Sign in
                   </CtaButton>
+                  <CtaButton
+                    type='button'
+                    subtle
+                    onClick={() => {
+                      // No account needed: the demo mints a throwaway
+                      // guest agent and runs entirely on this device.
+                      navigate(paths.demo);
+                    }}
+                  >
+                    Try the live demo
+                  </CtaButton>
                 </Column>
                 {error ? (
                   <CardError role='alert'>{error.message}</CardError>

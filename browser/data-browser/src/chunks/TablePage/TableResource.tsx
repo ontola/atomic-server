@@ -464,9 +464,10 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     ],
   );
 
-  // Presence: announce which cell we're on, learn which cells remote
-  // sessions are on (rendered by the cells via TablePresenceContext).
-  const { cellPresence, handleSelectedCellChange } = useTablePresence(
+  // Presence: announce which cell (grid) or card (kanban) we're on,
+  // learn which rows remote sessions are on (rendered by the cells and
+  // cards via TablePresenceContext).
+  const { presenceValue, handleSelectedCellChange } = useTablePresence(
     resource.subject,
     { collection, columns, memberCount, newRowSubjects },
   );
@@ -520,7 +521,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
 
   return (
     <TablePageContext value={tablePageContext}>
-      <TablePresenceContext value={cellPresence}>
+      <TablePresenceContext value={presenceValue}>
         <TableViewTabs
           views={views}
           activeView={activeView}

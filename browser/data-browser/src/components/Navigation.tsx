@@ -41,8 +41,15 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     pathname.startsWith(`${paths.onboarding}/`);
   const welcomeOrChild =
     pathname === paths.welcome || pathname.startsWith(`${paths.welcome}/`);
+  // The demo splash ("Setting up your demo team…") is a transient
+  // full-screen moment; rendering it between the sidebars reads as a
+  // broken page.
+  const demoSplash = pathname === paths.demo;
   const hideGlobalChrome =
-    rootWelcomeChromeHidden || onboardingOrChild || welcomeOrChild;
+    rootWelcomeChromeHidden ||
+    onboardingOrChild ||
+    welcomeOrChild ||
+    demoSplash;
 
   const search = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
 

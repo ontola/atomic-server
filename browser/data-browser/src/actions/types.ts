@@ -36,6 +36,15 @@ export interface ActionContext {
   addToChat: () => void;
   enableScope: () => void;
   addChild: () => void;
+  /** Current drive subject, if any (meetings are drive-scoped). */
+  drive?: string;
+  /** The meeting this session is currently leading, if any. */
+  activeMeeting?: string;
+  /** Start leading a meeting in the current drive. Absent when the
+   *  surface has no follow context. Name is optional. */
+  startMeeting?: (name?: string) => Promise<string>;
+  /** Stop leading the current meeting. */
+  endMeeting?: () => Promise<void>;
   /** The subject lives on another server (e.g. shown via an AtomicLink). */
   external?: boolean;
   showCodeUsageDialog?: () => void;

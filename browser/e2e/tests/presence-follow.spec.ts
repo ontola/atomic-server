@@ -10,12 +10,11 @@ import { before, getDevDriveSecret, signIn, FRONTEND_URL } from './test-utils';
  *    and the followed avatar leaves the facepile (deduped into the badge).
  * 3. The leader (A) sees the "Following you" badge.
  * 4. Live following: A navigates to a folder → B auto-navigates along.
- * 5. Trail: the visit is logged in the drive's "Follow sessions" chatroom,
- *    reachable from the badge menu, rendered as a compact event line.
  *
- * This pins the full client stack (presence manager, websocket resubscribe
- * ordering, LWW entry patching, follow context, session chatroom) that the
- * Rust integration tests can't see.
+ * This pins the client stack (presence manager, websocket resubscribe
+ * ordering, LWW entry patching, follow context) that the Rust integration
+ * tests can't see. The shared session chat / trail now lives in Meetings
+ * (#1127) — see meetings.spec.ts; plain follow is navigation-only.
  */
 
 const followingBadge = (page: Page) =>
@@ -25,7 +24,7 @@ const followingYouBadge = (page: Page) =>
 const facepile = (page: Page) =>
   page.locator('[aria-label="Also viewing this resource"]');
 
-test('presence avatars, follow mode and session trail across two sessions', async ({
+test('presence avatars and follow mode across two sessions', async ({
   browser,
 }) => {
   test.setTimeout(120_000);
@@ -120,28 +119,6 @@ test('presence avatars, follow mode and session trail across two sessions', asyn
     ),
     { timeout: 30_000 },
   );
-
-  // 5. The visit is logged in the session chatroom, opened from the badge.
-  // The "Open session chat" item only appears once the leader announced the
-  // chatroom — retry the open-menu-and-click unit until it does.
-  await expect(async () => {
-    await pageB.keyboard.press('Escape');
-    await followingBadge(pageB).click();
-    await pageB
-      .getByRole('menuitem', { name: 'Open session chat' })
-      .click({ timeout: 2000 });
-  }).toPass({ timeout: 30_000 });
-  await expect(
-    pageB.getByRole('heading', { name: 'Follow session' }),
-  ).toBeVisible();
-  await expect(pageB.getByText('started a follow session')).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(
-    pageB
-      .getByTestId('follow-session-panel')
-      .getByRole('link', { name: 'FollowTarget' }),
-  ).toBeVisible({ timeout: 30_000 });
 
   await ctxA.close();
   await ctxB.close();

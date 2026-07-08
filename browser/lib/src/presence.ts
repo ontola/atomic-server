@@ -60,6 +60,8 @@ export class DrivePresenceManager {
   private ephemeral?: EphemeralStore;
   /** Remote payloads received before the WASM module finished loading. */
   private pendingRemote: Uint8Array[] = [];
+  /** Injected synthetic entries buffered until the WASM module loads. */
+  private pendingInjected = new Map<string, PresenceEntry>();
   private local?: PresenceEntry;
   private listeners = new Set<() => void>();
   private snapshot: PresenceItem[] = [];
@@ -139,6 +141,39 @@ export class DrivePresenceManager {
     this.ephemeral?.set(this.sessionId, this.local as never);
   }
 
+  /**
+   * Write a synthetic remote session into the drive's presence store —
+   * the seam for scripted "teammates" (demo workspace, tests). The
+   * entry renders exactly like a real remote session: any key that is
+   * not our own `sessionId` is a peer. Subject to the normal TTL —
+   * refresh within 30s or the session reads as departed (which a
+   * scripted leave can also do explicitly via {@link removeEntry}).
+   *
+   * On a local-only drive the write stays in this tab (the store's
+   * transport guard drops the broadcast). On a synced drive it WOULD
+   * go out over the websocket like any local write — injectors should
+   * stick to local-only drives.
+   */
+  public injectEntry(sessionId: string, entry: PresenceEntry): void {
+    const stamped = { ...entry, updatedAt: Date.now() };
+
+    if (this.ephemeral) {
+      this.ephemeral.set(sessionId, stamped as never);
+    } else {
+      this.pendingInjected.set(sessionId, stamped);
+    }
+  }
+
+  /** Remove a synthetic session immediately — an explicit "leave",
+   *  faster than waiting out the TTL. */
+  public removeEntry(sessionId: string): void {
+    if (this.ephemeral) {
+      this.ephemeral.delete(sessionId);
+    } else {
+      this.pendingInjected.delete(sessionId);
+    }
+  }
+
   /** Re-send the local entry, bumping its LWW timestamp. Called by the
    *  heartbeat and after websocket reconnects (the server's per-connection
    *  cache starts empty on a fresh connection). */
@@ -193,6 +228,12 @@ export class DrivePresenceManager {
 
     this.pendingRemote = [];
 
+    for (const [sessionId, entry] of this.pendingInjected) {
+      ephemeral.set(sessionId, entry as never);
+    }
+
+    this.pendingInjected.clear();
+
     if (this.local) {
       ephemeral.set(this.sessionId, this.local as never);
     }
@@ -215,6 +256,7 @@ export class DrivePresenceManager {
     this.ephemeral?.destroy();
     this.ephemeral = undefined;
     this.pendingRemote = [];
+    this.pendingInjected.clear();
     this.snapshot = [];
   }
 

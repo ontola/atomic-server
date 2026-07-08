@@ -8,6 +8,7 @@ import './reset.css';
 import { useContext, type JSX } from 'react';
 import { SettingsContext } from './helpers/AppSettings';
 import { CurrentBackgroundColor } from './globalCssVars';
+import { BREADCRUMB_BAR_TRANSITION_TAG } from './helpers/transitionName';
 
 interface ThemeWrapperProps {
   children: React.ReactNode;
@@ -356,9 +357,38 @@ export const GlobalStyle = createGlobalStyle`
     font-weight: bold;
   }
 
+  /* —— View transitions ——
+     Matched pairs (same view-transition-name on both pages, e.g. a grid
+     item's title morphing into the page H1) get the UA's plus-lighter
+     cross-fade, which is seamless where pixels are identical. */
   ::view-transition-old(*),
   ::view-transition-new(*) {
     animation-duration: var(--view-transition-duration);
+    /* Scale snapshots by height, preserving aspect ratio. The UA default
+       (inline-size: 100%, block-size: auto) smears text horizontally when a
+       narrow snapshot morphs into a wide group (grid title → page H1) —
+       most visible in Firefox, which doesn't interpolate changing aspect
+       ratios as smoothly as Chromium. */
+    block-size: 100%;
+    inline-size: auto;
+  }
+
+  /* Keep geometry (group) animations on the same clock as the fades. The UA
+     default is 250ms, which held the snapshot overlay up ~100ms after the
+     150ms fades had already finished. */
+  ::view-transition-group(*) {
+    animation-duration: var(--view-transition-duration);
+  }
+
+  /* A snapshot with no counterpart on the other page (old- or new-only —
+     every group during a sidebar navigation) must swap instantly. Letting
+     it alpha-fade dims unchanged-looking content ~25% mid-fade, which reads
+     as a full-page flash. Morphing pairs are unaffected (their image-pair
+     has two children). The download-button rules below intentionally
+     override this to keep their slide in/out. */
+  ::view-transition-old(*):only-child,
+  ::view-transition-new(*):only-child {
+    animation-duration: 0ms;
   }
 
   ::view-transition-old(root),
@@ -392,7 +422,8 @@ export const GlobalStyle = createGlobalStyle`
     animation-direction: reverse;
   }
 
-  ::view-transition-group(navbar) {
+  /* Keep the navigation bar above the morphing page groups. */
+  ::view-transition-group(${BREADCRUMB_BAR_TRANSITION_TAG}) {
     z-index: 10;
   }
 
