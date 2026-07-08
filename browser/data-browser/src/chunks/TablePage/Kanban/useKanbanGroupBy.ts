@@ -90,10 +90,14 @@ export function useKanbanGroupBy(
 
     void (async () => {
       try {
-        const subject = await createSelectPropertyOnClass(store, tableClass, {
-          name: 'Status',
-          tags: DEFAULT_STATUS_TAGS,
-        });
+        const { subject } = await createSelectPropertyOnClass(
+          store,
+          tableClass,
+          {
+            name: 'Status',
+            tags: DEFAULT_STATUS_TAGS,
+          },
+        );
         setViewGroupBy(subject);
       } finally {
         setCreating(false);

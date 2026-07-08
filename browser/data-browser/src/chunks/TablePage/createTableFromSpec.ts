@@ -4,6 +4,7 @@ import {
   Resource,
   Server,
   Store,
+  commits,
   core,
   dataBrowser,
   server,
@@ -54,6 +55,12 @@ export interface TableSpec {
   rowName?: string;
   columns: TableColumnSpec[];
   views?: TableViewSpec[];
+  /**
+   * Initial rows to insert, each an object of column name → cell value, plus
+   * `name` for the row title. `select` cells accept the tag option name (or
+   * its subject); a single value is wrapped into the required array.
+   */
+  rows?: Array<Record<string, JSONValue>>;
 }
 
 export interface BuildTableResult {
@@ -61,6 +68,10 @@ export interface BuildTableResult {
   classSubject: string;
   /** Column name → created property subject. */
   columns: Record<string, string>;
+  /** For `select` columns: column name → (tag option name → tag subject). */
+  tags: Record<string, Record<string, string>>;
+  /** Subjects of the rows created from `spec.rows`, in the same order. */
+  rowSubjects: string[];
 }
 
 const DATATYPE_BY_TYPE: Record<Exclude<TableColumnType, 'select'>, Datatype> = {
@@ -118,7 +129,7 @@ async function createColumn(
   store: Store,
   tableClass: Resource,
   column: TableColumnSpec,
-): Promise<string> {
+): Promise<{ subject: string; tags?: Record<string, string> }> {
   if (column.type === 'select') {
     return createSelectPropertyOnClass(store, tableClass, {
       name: column.name,
@@ -126,12 +137,64 @@ async function createColumn(
     });
   }
 
-  return createPropertyOnClass(store, tableClass, {
+  const subject = await createPropertyOnClass(store, tableClass, {
     name: column.name,
     datatype: DATATYPE_BY_TYPE[column.type],
     classtype: column.type === 'file' ? server.classes.file : undefined,
     description: column.description,
   });
+
+  return { subject };
+}
+
+/**
+ * Translates one row spec (column name → cell value) into propVals keyed by
+ * property subject. `name` (any casing) maps to the core name property, select
+ * cells map tag option names to their subjects and are wrapped into the
+ * ResourceArray the datatype requires.
+ */
+function rowToPropVals(
+  row: Record<string, JSONValue>,
+  columns: Record<string, string>,
+  tags: Record<string, Record<string, string>>,
+): Record<string, JSONValue> {
+  const propVals: Record<string, JSONValue> = {};
+
+  for (const [column, value] of Object.entries(row)) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    if (column.toLowerCase() === 'name') {
+      propVals[core.properties.name] = value;
+      continue;
+    }
+
+    const property = columns[column];
+
+    if (!property) {
+      throw new Error(
+        `Unknown column "${column}". Available columns: name, ${Object.keys(
+          columns,
+        ).join(', ')}`,
+      );
+    }
+
+    const tagsByName = tags[column];
+
+    if (tagsByName) {
+      const options = Array.isArray(value) ? value : [value];
+      propVals[property] = options.map(
+        option => tagsByName[String(option)] ?? String(option),
+      );
+    } else {
+      propVals[property] = value;
+    }
+  }
+
+  propVals[commits.properties.createdAt] = Date.now();
+
+  return propVals;
 }
 
 async function createView(
@@ -204,9 +267,15 @@ export async function buildTableFromSpec(
   await opts.addToOntology(rowClass);
 
   const columns: Record<string, string> = {};
+  const tags: Record<string, Record<string, string>> = {};
 
   for (const column of spec.columns) {
-    columns[column.name] = await createColumn(store, rowClass, column);
+    const created = await createColumn(store, rowClass, column);
+    columns[column.name] = created.subject;
+
+    if (created.tags) {
+      tags[column.name] = created.tags;
+    }
   }
 
   const table = await store.newResource({
@@ -223,9 +292,23 @@ export async function buildTableFromSpec(
     await createView(store, table, view, columns);
   }
 
+  const rowSubjects: string[] = [];
+
+  for (const row of spec.rows ?? []) {
+    const rowResource = await store.newResource({
+      parent: table.subject,
+      isA: rowClass.subject,
+      propVals: rowToPropVals(row, columns, tags),
+    });
+    await rowResource.save();
+    rowSubjects.push(rowResource.subject);
+  }
+
   return {
     tableSubject: table.subject,
     classSubject: rowClass.subject,
     columns,
+    tags,
+    rowSubjects,
   };
 }

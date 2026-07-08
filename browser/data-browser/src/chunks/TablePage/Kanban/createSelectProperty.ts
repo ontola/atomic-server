@@ -16,6 +16,12 @@ export interface TagSeed {
   color?: string;
 }
 
+export interface CreatedSelectProperty {
+  subject: string;
+  /** Tag option name → created tag subject. */
+  tags: Record<string, string>;
+}
+
 /** Resolves the parent a new property of `tableClass` should be created under. */
 async function resolvePropertyParent(
   store: Store,
@@ -110,7 +116,7 @@ export async function createSelectPropertyOnClass(
   store: Store,
   tableClass: Resource,
   opts: { name: string; tags: TagSeed[] },
-): Promise<string> {
+): Promise<CreatedSelectProperty> {
   const parent = await resolvePropertyParent(store, tableClass);
 
   const property = await store.newResource({
@@ -128,6 +134,7 @@ export async function createSelectPropertyOnClass(
 
   // Create the tags, parented to the property (same as SelectPropertyForm).
   const tagSubjects: string[] = [];
+  const tagsByName: Record<string, string> = {};
 
   for (const seed of opts.tags) {
     const subject = property.subject.startsWith('did:')
@@ -148,6 +155,7 @@ export async function createSelectPropertyOnClass(
     });
     await tag.save();
     tagSubjects.push(tag.subject);
+    tagsByName[seed.name] = tag.subject;
   }
 
   await property.set(core.properties.allowsOnly, tagSubjects);
@@ -155,7 +163,7 @@ export async function createSelectPropertyOnClass(
 
   await attachPropertyToClass(store, tableClass, property.subject);
 
-  return property.subject;
+  return { subject: property.subject, tags: tagsByName };
 }
 
 /** The default Todo / Doing / Done status seed for auto-created kanban columns. */
