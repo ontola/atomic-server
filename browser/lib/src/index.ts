@@ -56,6 +56,7 @@ export * from './collection.js';
 export * from './collectionBuilder.js';
 export * from './ontology.js';
 export * from './invites.js';
+export * from './pairing.js';
 export * from './loro-loader.js';
 export * from './presence.js';
 export * from './CryptoProvider.js';
