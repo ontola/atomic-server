@@ -146,6 +146,50 @@ gate, so discovery cannot become a security hole by construction:
   devices that roamed networks. Useless for first pairing (nothing to look
   up yet) and grants nothing.
 
+## SaaS-assisted pairing (account login as rendezvous)
+
+For cloud-account holders, `atomic-saas` can make pairing fully automatic —
+"log in on a new device and it just syncs." Two of the three legs already
+exist there:
+
+- **Identity**: `/api/recovery-secret` (atomic-saas `main.rs`) stores the
+  agent secret encrypted under a user-chosen recovery password;
+  `GettingStartedFlow` already restores it on sign-in. SaaS never sees the
+  plaintext key — the product stays non-custodial.
+- **Routing (the missing piece)**: a per-account **device directory** —
+  `{device_id, name, node_id, relay_hint?, http_origin?, platform,
+  last_seen}` with register/list/revoke endpoints authenticated by the
+  portal session. Each signed-in device upserts its record on connect
+  (managed nodes already report `iroh_node_id` via heartbeat; this extends
+  the idea to the user's own devices).
+- **Enrollment**: the account's enrollments already say which drives live
+  where.
+
+New-device flow: sign in → restore secret (recovery password) → fetch
+device directory → write `KnownPeer`s → dial managed node over WS +
+personal devices over Iroh → reconcile. No QR, no typing.
+
+Why this is safe under Principle 1: SaaS-provided node-ids are routing
+only. A compromised control plane can hand out wrong node-ids, but the
+dialed stranger fails same-agent AUTH and receives nothing — SaaS never
+becomes a trust root by operating the directory. (It does learn device
+count/liveness; the directory is opt-in and per-account.)
+
+Guardrails:
+
+- **FOSS guardrail #3 holds**: the directory client is the *browser/app*
+  posting under the user's cloud session (like the existing
+  `helpers/managed/*` code) — never the open-core server phoning home.
+  Self-hosters have no session and keep the QR path as the full-featured
+  flow; SaaS is a third *issuer* of the same `KnownPeer` data, not a
+  different mechanism.
+- Remaining friction is the recovery password, which is deliberate
+  (non-custodial). v2: passkeys with the PRF extension derive the
+  encryption key, making "sign in with passkey" a true one-step restore.
+- The directory doubles as the portal's "your devices" list with
+  routing-level revocation (remove device → record deleted everywhere).
+  Key-level revocation stays out of scope: all devices share the agent key.
+
 ## Security notes
 
 - **Stop logging `agent_secret`.** The server prints the full secret to
@@ -196,6 +240,15 @@ for it.
       iff same agent; `KnownPeer` capability record per serverless-p2p P3).
 - [ ] mDNS candidate list in the pairing screen (tap instead of scan).
 - [ ] pkarr-based redial when `KnownPeer` NodeIDs go stale.
+
+### P2.5 — SaaS device directory (parallel track, mostly atomic-saas)
+
+- [ ] `devices` table + register/list/revoke endpoints (portal-session
+      auth) in atomic-saas; portal "your devices" list with remove.
+- [ ] Browser: upsert own device record on cloud sign-in; after
+      secret-restore, seed `KnownPeer`s from the directory and kick
+      reconcile (WS to managed origin, Iroh to personal devices).
+- [ ] Later: passkey + PRF-derived encryption key for one-step restore.
 
 ### P3 — channel-provisioned secret (v2, after knock/inbox)
 
