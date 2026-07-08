@@ -4288,6 +4288,9 @@ msgstr "Sort by {0}"
 msgid "Edit unavailable"
 msgstr "Edit unavailable"
 
+#: src/chunks/AI/jsonAdCompact.test.ts
+#: src/chunks/AI/jsonAdCompact.test.ts
+#: src/chunks/AI/jsonAdCompact.test.ts
 #: src/chunks/TablePage/Kanban/useKanbanGroupBy.ts
 msgid "Status"
 msgstr "Status"
@@ -4978,3 +4981,16 @@ msgstr "Creating table <0/>"
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Creating <0>{0} resources</0>"
 msgstr "Creating <0>{0} resources</0>"
+
+#: src/chunks/AI/jsonAdCompact.test.ts
+msgid "Due date"
+msgstr "Due date"
+
+#: src/chunks/AI/jsonAdCompact.test.ts
+#: src/chunks/AI/jsonAdCompact.test.ts
+msgid "Lead"
+msgstr "Lead"
+
+#: src/chunks/AI/jsonAdCompact.test.ts
+msgid "Wat"
+msgstr "Wat"

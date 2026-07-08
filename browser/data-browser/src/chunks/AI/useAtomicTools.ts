@@ -17,13 +17,18 @@ import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { useAddToOntology } from '@hooks/useAddToOntology';
 import { constructOpenURL } from '@helpers/navigation';
 import { buildTableFromSpec } from '@chunks/TablePage/createTableFromSpec';
-import {
-  getClassesOnDrive,
-  toClassObject,
-  toClassString,
-} from './atomicSchemaHelpers';
+import { getClassesOnDrive, toClassObject } from './atomicSchemaHelpers';
 import { useDocumentEditAgent } from './documentEditAgent';
-import { toResourceResultObjectForAgent } from './getDocumentContentForAgent';
+import { getDocumentContentForAgent } from './getDocumentContentForAgent';
+import {
+  buildClassContext,
+  coerceValueIn,
+  compactValueOut,
+  describeClassCompact,
+  fromCompact,
+  resolveKey,
+  toCompact,
+} from './jsonAdCompact';
 import type { AIModelIdentifier } from './types';
 
 export const TOOL_NAMES = {
@@ -73,6 +78,46 @@ export function useAtomicMCPTools({
   const addToOntology = useAddToOntology();
   const { drive } = useSettings();
   const runDocumentEdit = useDocumentEditAgent(editModel);
+
+  /** Resolves a `@class` shortname (or title) to a class subject on the
+   *  current drive. Full URLs pass through. */
+  const resolveClass = async (nameOrSubject: string): Promise<string> => {
+    if (Client.isValidSubject(nameOrSubject)) {
+      return nameOrSubject;
+    }
+
+    const classSubjects = await getClassesOnDrive(drive, store);
+    const wanted = nameOrSubject.toLowerCase();
+    const matches: string[] = [];
+
+    for (const subject of classSubjects) {
+      const resource = await store.getResource(subject);
+      const shortname = resource.get(core.properties.shortname) as
+        | string
+        | undefined;
+
+      if (
+        shortname?.toLowerCase() === wanted ||
+        resource.title.toLowerCase() === wanted
+      ) {
+        matches.push(subject);
+      }
+    }
+
+    if (matches.length === 1) {
+      return matches[0];
+    }
+
+    if (matches.length > 1) {
+      throw new Error(
+        `Ambiguous class "${nameOrSubject}": ${matches.join(', ')}. Use the full class URL.`,
+      );
+    }
+
+    throw new Error(
+      `Unknown class "${nameOrSubject}". Use get_user_classes to list available classes, or pass a full class URL.`,
+    );
+  };
 
   const tools = {
     read: {
@@ -131,23 +176,29 @@ export function useAtomicMCPTools({
       }),
       [TOOL_NAMES.QUERY]: tool({
         description:
-          'Perform a query based on one or more properties. Use this to find resources with specific values for properties. **NOTE**: The results are not sorted!',
+          'Perform a query based on one or more properties. Use this to find resources with specific values for properties. When you pass `class`, the where/select entries accept compact property shortnames and tag names (e.g. class: "deal", where: [{property: "status", value: "Lead"}]) and an isA filter is added automatically. Without `class`, properties must be full URLs. **NOTE**: The results are not sorted!',
         inputSchema: z.object({
           description: z
             .string()
             .describe(
               'A short one sentence description of the query to tell the user what you are doing. For example: "Looking for todo\'s" or "Searching for data about x',
             ),
+          class: z
+            .string()
+            .optional()
+            .describe(
+              'Class to query instances of, as a shortname (e.g. "deal") or full URL. Scopes shortname resolution for where/select and adds the isA filter.',
+            ),
           select: z
             .array(z.string())
             .describe(
-              'A list of properties to include in the result. Kind of like a SELECT statement in a SQL query. By default only the subject and title are included.',
+              'A list of properties to include in the result. Kind of like a SELECT statement in a SQL query. By default only the subject and title are included. Shortnames allowed when `class` is set.',
             )
             .optional(),
           where: z
             .array(z.object({ property: z.string(), value: z.any() }))
             .describe(
-              'A list of query filters mapping property subjects to values to filter the results by. For example: [{property: "https://atomicdata.dev/properties/name", value: "John Doe"}] or [{property: "https://atomicdata.dev/properties/isA", value: "https://atomicdata.dev/classes/Person"}]',
+              'A list of query filters. With `class` set, use shortnames and tag names: [{property: "status", value: "Lead"}]. Otherwise use full property URLs: [{property: "https://atomicdata.dev/properties/name", value: "John Doe"}]',
             ),
           limit: z
             .number()
@@ -162,57 +213,82 @@ export function useAtomicMCPTools({
           ],
           where,
           limit,
+          class: classRef,
         }) => {
-          for (const { property } of where) {
-            if (!Client.isValidSubject(property)) {
-              return `Error: Invalid property subject in where clause: '${property}'`;
-            }
-          }
+          try {
+            const classSubject = classRef
+              ? await resolveClass(classRef)
+              : undefined;
+            const ctx = classSubject
+              ? await buildClassContext(store, [classSubject])
+              : undefined;
 
-          const whereObj = where.reduce(
-            (acc, c) => ({
-              ...acc,
-              [c.property]: c.value,
-            }),
-            {},
-          );
+            const whereObj: Record<string, string | number | string[]> = {};
+            const filterProps: string[] = [];
 
-          const results = await store.search('', {
-            filters: whereObj,
-            limit,
-            include: true,
-          });
-
-          const resources = await Promise.all(
-            results.map(subject => store.getResource(subject)),
-          );
-
-          const props = Array.from(
-            new Set([...select, ...where.map(qf => qf.property)]),
-          );
-
-          const result = resources.map(res => {
-            const obj: Record<string, unknown> = {
-              '@id': res.subject,
-            };
-
-            for (const prop of props) {
-              const val = res.get(prop);
-
-              if (val) {
-                obj[prop] = val;
+            for (const { property, value } of where) {
+              if (!ctx && !Client.isValidSubject(property)) {
+                return `Error: Invalid property subject in where clause: '${property}'. Pass \`class\` to use shortnames.`;
               }
+
+              const info = ctx
+                ? resolveKey(ctx, property)
+                : { subject: property, shortname: property, datatype: '' };
+              const coerced = coerceValueIn(info, value as JSONValue);
+              // The query index matches array membership on scalars.
+              whereObj[info.subject] = (
+                Array.isArray(coerced) && coerced.length === 1
+                  ? coerced[0]
+                  : coerced
+              ) as string | number | string[];
+              filterProps.push(info.subject);
             }
 
-            return obj;
-          });
+            if (classSubject) {
+              whereObj[core.properties.isA] = classSubject;
+            }
 
-          return result;
+            const results = await store.search('', {
+              filters: whereObj,
+              limit,
+              include: true,
+            });
+
+            const resources = await Promise.all(
+              results.map(subject => store.getResource(subject)),
+            );
+
+            const selectProps = ctx
+              ? select.map(s => resolveKey(ctx, s).subject)
+              : select;
+            const props = Array.from(new Set([...selectProps, ...filterProps]));
+
+            return resources.map(res => {
+              const obj: Record<string, unknown> = {
+                '@id': res.subject,
+              };
+
+              for (const prop of props) {
+                const val = res.get(prop);
+
+                if (val) {
+                  const info = ctx?.bySubject.get(prop);
+                  obj[info?.shortname ?? prop] = info
+                    ? compactValueOut(info, val as JSONValue)
+                    : val;
+                }
+              }
+
+              return obj;
+            });
+          } catch (error) {
+            return `Error running query: ${error}`;
+          }
         },
       }),
       [TOOL_NAMES.GET_ATOMIC_RESOURCE]: tool({
         description:
-          'Retrieve specific resources from the Atomic Data Database by their subjects',
+          'Retrieve specific resources from the Atomic Data Database by their subjects. Returns compact JSON-AD: shortname keys, tag values by name, plus a one-line `_schema` signature per class — the same compact form the write tools accept.',
         inputSchema: z.object({
           subjects: z
             .array(z.string())
@@ -231,29 +307,48 @@ export function useAtomicMCPTools({
           includeCommitData: boolean;
         }) => {
           try {
-            const resources = await Promise.all(
-              subjects.map(s => store.getResource(s)),
-            );
+            const result: Record<string, unknown> = {};
 
-            const result = resources.reduce(async (acc, res, i) => {
-              const resourceResult = toResourceResultObjectForAgent(
-                res,
+            for (const subject of subjects) {
+              const res = await store.getResource(subject);
+
+              if (res.error) {
+                result[subject] = `Error: ${res.error.message}`;
+                continue;
+              }
+
+              const classes = res.getClasses();
+              const ctx = await buildClassContext(store, classes);
+              const compact = await toCompact(store, res, {
                 includeCommitData,
-                store,
-              );
+                context: ctx,
+              });
 
-              return {
-                ...(await acc),
-                [subjects[i]]: {
-                  ...resourceResult,
-                  _schema: await Promise.all(
-                    res
-                      .getClasses()
-                      .map(classSubject => toClassString(classSubject, store)),
-                  ),
-                },
-              };
-            }, Promise.resolve({}));
+              const entry: Record<string, unknown> = compact;
+
+              if (res.hasClasses(dataBrowser.classes.documentV2)) {
+                // The raw document body is Loro state; replace it with the
+                // agent-readable text, same as the old result shape did.
+                const contentInfo = ctx.bySubject.get(
+                  dataBrowser.properties.documentContent,
+                );
+                delete entry[dataBrowser.properties.documentContent];
+
+                if (contentInfo) {
+                  delete entry[contentInfo.shortname];
+                }
+
+                const content = getDocumentContentForAgent(res, store);
+                entry._documentContent = content.ok ? content.text : null;
+
+                if (!content.ok) {
+                  entry._documentContentError = content.error;
+                }
+              }
+
+              entry._schema = classes.map(c => describeClassCompact(ctx, c));
+              result[subject] = entry;
+            }
 
             return result;
           } catch (error) {
@@ -359,12 +454,15 @@ export function useAtomicMCPTools({
     },
     write: {
       [TOOL_NAMES.EDIT_ATOMIC_RESOURCE]: tool({
-        description: 'Change a property on a resource',
+        description:
+          'Change a property on a resource. The property accepts a compact shortname (resolved against the resource\'s class, e.g. "status") or a full property URL. Select/tag values accept tag names.',
         inputSchema: z.object({
           subject: z.string().describe('The subject of the resource to edit'),
           property: z
             .string()
-            .describe('The subject of the property to change'),
+            .describe(
+              'The property to change: a shortname from the resource schema, or a full property URL',
+            ),
           value: z
             .union([z.string(), z.number(), z.boolean(), z.array(z.string())])
             .describe('The new value of the property'),
@@ -374,12 +472,21 @@ export function useAtomicMCPTools({
           const originalResource = resource.clone();
 
           try {
-            await resource.set(property, value as JSONValue);
+            const ctx = await buildClassContext(store, resource.getClasses());
+            const info = resolveKey(ctx, property);
+            const coerced = coerceValueIn(info, value as JSONValue);
+
+            await resource.set(info.subject, coerced);
 
             // Notify parent component about the edited resource
             onResourceEdited?.(originalResource);
 
-            return `Changed property ${property} on resource ${subject} to ${value}`;
+            const propertyEcho =
+              info.subject === property
+                ? property
+                : `${property} (${info.subject})`;
+
+            return `Changed property ${propertyEcho} on resource ${subject} to ${JSON.stringify(coerced)}`;
           } catch (error) {
             return `Error changing property ${property} on resource ${subject}: ${error}`;
           }
@@ -451,52 +558,32 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
       }),
       [TOOL_NAMES.CREATE_RESOURCE]: tool({
         description:
-          'Create one or more new resources. You provide a JSON-AD object, or an ARRAY of JSON-AD objects to create many resources (e.g. table rows) in a single call — always prefer one batched call over multiple calls. Do not include an @id property as this is auto generated by the server. Each object MUST contain http://atomicdata.dev/properties/isA and http://atomicdata.dev/properties/parent as they are always required.',
+          'Create one or more new resources from compact JSON-AD. Provide one object, or an ARRAY of objects to create many resources (e.g. table rows) in a single call — always prefer one batched call over multiple calls. Each object needs "@class" (class shortname or URL) and "@parent" (subject), plus property shortnames as keys, e.g. {"@class": "deal", "@parent": "did:ad:…", "name": "Acme", "status": "Lead"}. Full property URLs also work as keys. DO NOT include an @id, it is auto generated.',
         inputSchema: z.object({
           jsonAD: z
             .string()
             .describe(
-              `A JSON-AD object, or an array of JSON-AD objects to create multiple resources at once. Each must include an ${core.properties.isA} and a ${core.properties.parent} as they are always required. DO NOT include an @id as this is auto generated.`,
+              'A compact JSON-AD object, or an array of them to create multiple resources at once. Each must include "@class" and "@parent". DO NOT include an @id as this is auto generated.',
             ),
         }),
         execute: async ({ jsonAD }) => {
           const createOne = async (data: Record<string, JSONValue>) => {
-            const foundID = data['@id'];
+            const { isA, parent, propVals, resolved } = await fromCompact(
+              store,
+              data,
+              { resolveClass },
+            );
 
-            if (foundID) {
-              throw new Error(
-                'Do not include an @id in the JSON-AD, the subject is auto generated',
-              );
-            }
-
-            const {
-              [core.properties.isA]: isA,
-              [core.properties.parent]: parent,
-              ...propVals
-            } = data;
-
-            if (!isA) {
-              throw new Error('Missing isA property');
-            }
-
-            if (!Array.isArray(isA)) {
-              throw new Error('isA must be an array');
-            }
-
-            if (!parent) {
-              throw new Error('Missing parent property');
-            }
-
-            const parentResource = await store.getResource(parent as string);
+            const parentResource = await store.getResource(parent);
 
             if (parentResource.hasClasses(dataBrowser.classes.table)) {
               // The parent is a table meaning the resource that is being created is a row. We should add a createdAt property to it.
-              propVals[commits.properties.createdAt] = Date.now();
+              propVals[commits.properties.createdAt] ??= Date.now();
             }
 
             const resource = await store.newResource({
-              parent: parent as string,
-              isA: isA as string[],
+              parent,
+              isA,
               propVals,
             });
 
@@ -510,7 +597,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
               await store.notifyResourceManuallyCreated(resource);
             }
 
-            return resource.subject;
+            return { subject: resource.subject, resolved };
           };
 
           let data: unknown;
@@ -523,11 +610,19 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
 
           if (!Array.isArray(data)) {
             try {
-              const subject = await createOne(
+              const { subject, resolved } = await createOne(
                 data as Record<string, JSONValue>,
               );
 
-              return `Created new resource with subject ${subject}`;
+              // The echoed resolution map makes silent misresolution visible.
+              // The subject stays at the very end of the message; callers
+              // parse it from there.
+              const resolvedLine =
+                Object.keys(resolved).length > 0
+                  ? `Resolved properties: ${JSON.stringify(resolved)}\n`
+                  : '';
+
+              return `${resolvedLine}Created new resource with subject ${subject}`;
             } catch (err) {
               return `Error creating resource: ${err}`;
             }
@@ -535,10 +630,13 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
 
           const created: string[] = [];
           const errors: string[] = [];
+          const resolved: Record<string, string> = {};
 
           for (const [index, item] of data.entries()) {
             try {
-              created.push(await createOne(item as Record<string, JSONValue>));
+              const result = await createOne(item as Record<string, JSONValue>);
+              created.push(result.subject);
+              Object.assign(resolved, result.resolved);
             } catch (err) {
               errors.push(`Item ${index}: ${err}`);
             }
@@ -546,6 +644,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
 
           return {
             created,
+            ...(Object.keys(resolved).length > 0 ? { resolved } : {}),
             ...(errors.length > 0 ? { errors } : {}),
           };
         },

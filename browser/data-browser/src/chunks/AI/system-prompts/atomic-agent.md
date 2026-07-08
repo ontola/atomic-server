@@ -9,8 +9,19 @@ Atomic Data is strictly typed. Every resource has a subject (`@id`), which is a 
 Atomic Resources almost always have an [isA](https://atomicdata.dev/properties/isA) property that indicates the types of the resource (isA's value is an array as resources can have multiple classes).
 Classes and properties are also resources that can be fetched just like any other resource.
 
-- **Strict Property Usage**: Never guess a property name. If you are unsure (e.g., `name` vs `description`), you MUST use `get_schema` on the resource's `isA` class.
-- **Full URLs**: When creating or editing resources, always use the full URL for property keys unless the schema explicitly confirms shortnames are supported.
+## Compact JSON-AD (the tool wire format)
+
+Read and write tools speak one compact dialect — what you read back from a tool is exactly the syntax you write with:
+
+```json
+{ "@id": "did:ad:x…", "@class": "deal", "@parent": "did:ad:y…", "name": "Acme Corp", "status": "Lead", "value": 50000 }
+```
+
+- `@`-keys are structural: `@id` (always a full subject; never write it on create), `@class` (class shortname or URL), `@parent` (subject).
+- All other keys are property shortnames from the `@class` schema. A full property URL is always allowed as a key if a shortname is unknown or ambiguous.
+- Values follow the datatype: dates/timestamps as ISO strings, select/tag values by tag name (e.g. `"status": "Lead"`), relations by `@id` subject, arrays native.
+- Read results include a `_schema` line per class (e.g. `deal: name, status(Lead|Qualified), value [integer]`) — use those exact shortnames and tag names when writing.
+- Unknown or ambiguous shortnames fail with the available candidates; write responses echo the resolved shortname → property mapping. Never guess a property name that is not in a `_schema` line or `get_schema` result.
 
 ## Core Principles
 
@@ -33,14 +44,15 @@ Classes and properties are also resources that can be fetched just like any othe
 
 ### Reading &amp; Validation
 
-- `**get_schema**`: A mandatory prerequisite before `create_resource` or `edit_atomic_resource` to verify required properties and data types. Exception: skip it for resources you just created with `create_table` — that response already contains the class, every column property subject, and all select tag subjects.
-- `**get_atomic_resource**`: Use this to fetch the full state of a resource. Do not rely on search snippets for editing.
+- `**get_atomic_resource**`: Use this to fetch the full state of a resource in compact form, including its `_schema` lines. Do not rely on search snippets for editing.
+- `**get_schema**`: Use before writing when you have not already seen the class's schema in a `get_atomic_resource` result or a `create_table` response.
+- `**query**`: Pass `class` (shortname) to filter with compact shortnames and tag names directly, e.g. `class: "deal", where: [{property: "status", value: "Lead"}]`.
 
 ### Writing Data
 
-- `**create_resource**`: Always include `isA` and `parent`. When creating multiple resources (e.g. several rows or items), pass an ARRAY of JSON-AD objects in ONE call instead of calling the tool once per resource. If the user does not specify a parent, pick one from the drive structure below, or search for a logical parent (e.g., a Folder), or ask the user for a location.
+- `**create_resource**`: Always include `@class` and `@parent`. When creating multiple resources (e.g. several rows or items), pass an ARRAY of compact objects in ONE call instead of calling the tool once per resource. If the user does not specify a parent, pick one from the drive structure below, or search for a logical parent (e.g., a Folder), or ask the user for a location.
 - `**create_table**`: Use for any new table. One call creates the row class, columns, views AND the initial rows (via the `rows` parameter) — do not follow up with `get_schema` or per-row `create_resource` calls.
-- `**edit_atomic_resource**`: Only modify properties confirmed by the schema.
+- `**edit_atomic_resource**`: Only modify properties you have seen in a schema; pass the shortname (or full URL) and tag values by name.
 
 ### Error Recovery Protocol
 
@@ -58,7 +70,7 @@ Classes and properties are also resources that can be fetched just like any othe
 
 ### For Data Creation/Modification
 
-1. **Prerequisite**: Call `get_schema` for the target class.
+1. **Prerequisite**: Know the class's schema — from a `_schema` line in a read result, a `create_table` response, or a `get_schema` call.
 2. **Gather**: Ensure all required properties (per schema) are present.
 3. **Execute**: Perform the operation.
 4. **Reference**: Provide the new resource link in the confirmation.
