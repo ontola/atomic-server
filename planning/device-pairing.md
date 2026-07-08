@@ -222,19 +222,28 @@ for it.
       the whole config file (secret included) via `tracing::warn!` on
       first boot; now logs only the config path + a pointer to the
       pairing/sign-in flow.
-- [ ] `SyncRoute`: show local node DID as QR (`pair` kind) next to the
-      existing copy button — display-only, no scanner yet, no new deps
-      beyond a QR renderer.
+- [x] `SyncRoute`: show local node DID as QR (`pair` kind). **Built
+      2026-07-09** as a "Pair device" dialog (`PairDeviceDialog.tsx`,
+      QR renderer: `uqr`, zero-dep SVG).
 
 ### P1 — onboard flow (server/desktop → phone)
 
-- [ ] Envelope encode/decode module in `browser/lib` (versioned, unit-tested
-      against tampered/unknown payloads).
-- [ ] "Pair new device" screen rendering the `onboard` QR (explicit action,
-      blur-until-press).
+- [x] Envelope encode/decode module in `browser/lib` (versioned, unit-tested
+      against tampered/unknown payloads). **Built 2026-07-09**
+      (`browser/lib/src/pairing.ts`, 11 tests): unknown `v` gets a
+      distinct 'unsupported-version' error code; a `pair` envelope
+      carrying a secret is rejected; encode round-trips the validator.
+- [x] "Pair new device" screen rendering the `onboard` QR (explicit action,
+      blur-until-press). **Built 2026-07-09** — onboard QR sits in the
+      same dialog, blurred behind "Reveal setup code", hidden when no
+      local agent; secret rebuilt via `getAgentSecretFromIDB()` (the
+      SubtleCrypto keypair is non-extractable, the plaintext fallback
+      record is the source). The Sync page's peer input also accepts a
+      pasted `atomic://pair` link (routing only).
 - [ ] Phone: scan path (webview `getUserMedia` + JS detector, or
       `tauri-plugin-barcode-scanner`) + `atomic://` deep link
       (`tauri-plugin-deep-link`, intent filter in `gen/android`).
+      Needs the scanner-dependency spike on a real device (OQ1).
 - [ ] Import: secret → `agentStorage`, `KnownPeer` persisted, WS-first /
       Iroh-fallback initial reconcile, "Paired with <name>" confirmation.
 
