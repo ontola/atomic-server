@@ -4,14 +4,44 @@ import { before, devDrive, getCurrentSubject, newResource } from './test-utils';
 const CANVAS_CLASS = 'https://atomicdata.dev/ontology/canvas/Canvas';
 const STROKE_DATA = 'https://atomicdata.dev/ontology/canvas/strokeData';
 
+/** Minimal shape of the `window.store` exposed in App.tsx. */
+type StoreWindow = {
+  store: {
+    getResourceLoading: (subject: string) => {
+      get: (prop: string) => unknown;
+    };
+    outbox: {
+      hasPending: (subject: string) => boolean;
+    };
+  };
+};
+
+/** Wait until the subject's local commits have been acked by the server
+ *  (its outbox entry drained). Reloading while commits are still pending
+ *  races the refetch: the server would answer with a pre-stroke state. */
+async function waitForSubjectSynced(
+  page: Page,
+  subject: string,
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          subj =>
+            (window as unknown as StoreWindow).store.outbox.hasPending(subj),
+          subject,
+        ),
+      { timeout: 15000 },
+    )
+    .toBe(false);
+}
+
 /** Read the number of strokes on the canvas from the page's live Store. */
 async function strokeCount(page: Page, subject: string): Promise<number> {
   return page.evaluate(
     ([subj, prop]) => {
-      // `window.store` is exposed in App.tsx.
-      const store = (window as unknown as { store: any }).store;
-      const resource = store.getResourceLoading(subj);
-      const strokes = resource.get(prop);
+      const store = (window as unknown as StoreWindow).store;
+      const strokes = store.getResourceLoading(subj).get(prop);
 
       return Array.isArray(strokes) ? strokes.length : 0;
     },
@@ -204,6 +234,11 @@ test.describe('canvas undo', () => {
     await drawStroke(page, subject, -80, -40);
     await drawStroke(page, subject, 80, 40);
 
+    // Both stroke commits must be server-acked before reloading —
+    // otherwise the post-reload refetch races the drain and can answer
+    // with a pre-stroke state.
+    await waitForSubjectSynced(page, subject);
+
     // Wipe the locally persisted undo state and reload: the undo stack must
     // be bootstrapped from the resource's Loro history after the WASM
     // loads (this used to leave the button permanently disabled).
@@ -215,12 +250,20 @@ test.describe('canvas undo', () => {
     await expect(page.locator('canvas').first()).toBeVisible({
       timeout: 20000,
     });
+
+    // Precondition: the strokes survived the reload. Without history there
+    // is nothing to undo and the button is CORRECTLY disabled — failing
+    // here means the environment lost the data across the reload (e.g.
+    // the server rejected the stroke commits), not that undo is broken.
+    await expect
+      .poll(() => strokeCount(page, subject), { timeout: 15000 })
+      .toBe(2);
+
     await expect(undoButton(page)).toBeEnabled({ timeout: 20000 });
 
-    const countBefore = await strokeCount(page, subject);
     await undoButton(page).click();
     await expect
       .poll(() => strokeCount(page, subject), { timeout: 15000 })
-      .not.toBe(countBefore);
+      .not.toBe(2);
   });
 });

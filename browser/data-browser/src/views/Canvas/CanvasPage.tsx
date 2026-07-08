@@ -241,11 +241,18 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   // Track Space key for pan mode (Space+drag = pan, matching Figma/Photoshop).
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !e.repeat) {
+      if (e.code === 'Space') {
         if (isEditableKeyboardTarget(e.target)) return;
+        // preventDefault on EVERY keydown, including auto-repeats: a held
+        // Space fires repeat events, and an unprevented repeat performs
+        // the browser default (scroll / button activation) while the user
+        // is mid-pan.
         e.preventDefault();
-        isPanModeRef.current = true;
-        setPanMode('ready');
+
+        if (!e.repeat) {
+          isPanModeRef.current = true;
+          setPanMode('ready');
+        }
       }
     };
 
@@ -253,7 +260,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       if (e.code === 'Space') {
         if (isEditableKeyboardTarget(e.target)) return;
         isPanModeRef.current = false;
-        setPanMode(p => (p === 'panning' ? 'idle' : 'idle'));
+        setPanMode('idle');
       }
     };
 

@@ -11,16 +11,23 @@ import {
 const CANVAS_CLASS = 'https://atomicdata.dev/ontology/canvas/Canvas';
 const STROKE_DATA = 'https://atomicdata.dev/ontology/canvas/strokeData';
 
+/** Minimal shape of the `window.store` exposed in App.tsx. */
+type StoreWindow = {
+  store: {
+    getResourceLoading: (subject: string) => {
+      get: (prop: string) => unknown;
+    };
+  };
+};
+
 /** Read the number of strokes on a canvas from the page's live Store — the
  *  same in-memory resource the canvas renders from, so this reflects live
  *  updates without a reload. */
 async function strokeCount(page: Page, subject: string): Promise<number> {
   return page.evaluate(
     ([subj, prop]) => {
-      // `window.store` is exposed in App.tsx.
-      const store = (window as unknown as { store: any }).store;
-      const resource = store.getResourceLoading(subj);
-      const strokes = resource.get(prop);
+      const store = (window as unknown as StoreWindow).store;
+      const strokes = store.getResourceLoading(subj).get(prop);
 
       return Array.isArray(strokes) ? strokes.length : 0;
     },
