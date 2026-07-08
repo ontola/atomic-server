@@ -1,15 +1,21 @@
 // @wc-ignore-file
-import { useStore, type Store } from '@tomic/react';
+import { dataBrowser, useStore, type Store } from '@tomic/react';
 import { type AIMessageContext, type AtomicUIMessage } from './types';
-import { toClassString } from './atomicSchemaHelpers';
 import {
   useMcpServers,
   type ReadMCPResource,
 } from '@components/AI/MCP/McpServersContext';
 import { findSkillByName } from './skills/skill';
 import { useSettings } from '@helpers/AppSettings';
+import { shortenRefsDeep } from '@helpers/subjectRefs';
 import { getDriveInstructionsContext } from './driveInstructionsContext';
-import { toResourceResultObjectForAgent } from './getDocumentContentForAgent';
+import { getDocumentContentForAgent } from './getDocumentContentForAgent';
+import {
+  buildClassContext,
+  describeClassCompact,
+  toCompact,
+} from './jsonAdCompact';
+import { getTableContextForAgent } from './tableContextProvider';
 import {
   appendTransientContextToLastUser,
   buildIndexingWarningContext,
@@ -81,7 +87,11 @@ export function useProcessMessages({
 }
 
 /**
- * Processes atomic resources from context
+ * Processes atomic resources from context. Each attached resource is rendered
+ * in compact JSON-AD with its `_schema` lines (mirroring get_atomic_resource
+ * results), and tables additionally expand into their row-class schema, row
+ * count, and a compact row sample — so the model can act on "this table"
+ * without discovery tool calls.
  */
 const processAtomicResources = async (
   context: AIMessageContext[],
@@ -90,29 +100,63 @@ const processAtomicResources = async (
   const atomicContext = context.filter(x => x.type === 'atomic-resource');
 
   if (atomicContext.length === 0) {
-    return { resourcesContent: '', schemasContent: '' };
+    return { resourcesContent: '' };
   }
 
-  const subjects = atomicContext.map(x => x.subject);
-  const resources = await Promise.all(subjects.map(s => store.getResource(s)));
+  const blocks: string[] = [];
 
-  const resourcesContent = resources
-    .map(
-      r => `An atomicdata resource called ${r.title}. Data:\n\`\`\`json
-${JSON.stringify(toResourceResultObjectForAgent(r, true, store, { includeAtId: true }), null, 2)}
-\`\`\``,
-    )
-    .join('\n');
+  for (const { subject } of atomicContext) {
+    const resource = await store.getResource(subject);
 
-  const classes = Array.from(new Set(resources.flatMap(r => r.getClasses())));
-  const schemaDefs = await Promise.all(
-    classes.map(c => toClassString(c, store)),
-  );
+    if (resource.error) {
+      blocks.push(
+        `Could not read attached resource ${subject}: ${resource.error.message}`,
+      );
+      continue;
+    }
 
-  return {
-    resourcesContent,
-    schemasContent: schemaDefs.join('\n'),
-  };
+    const classes = resource.getClasses();
+    const ctx = await buildClassContext(store, classes);
+    const compact: Record<string, unknown> = await toCompact(store, resource, {
+      includeCommitData: true,
+      context: ctx,
+    });
+
+    if (resource.hasClasses(dataBrowser.classes.documentV2)) {
+      const contentInfo = ctx.bySubject.get(
+        dataBrowser.properties.documentContent,
+      );
+      delete compact[dataBrowser.properties.documentContent];
+
+      if (contentInfo) {
+        delete compact[contentInfo.shortname];
+      }
+
+      const content = getDocumentContentForAgent(resource, store);
+      compact._documentContent = content.ok ? content.text : null;
+    }
+
+    compact._schema = classes.map(c => describeClassCompact(ctx, c));
+
+    const lines = [
+      `An atomicdata resource called ${resource.title}. Data:`,
+      '```json',
+      JSON.stringify(shortenRefsDeep(compact)),
+      '```',
+    ];
+
+    if (resource.hasClasses(dataBrowser.classes.table)) {
+      const tableContext = await getTableContextForAgent(store, resource);
+
+      if (tableContext) {
+        lines.push(tableContext);
+      }
+    }
+
+    blocks.push(lines.join('\n'));
+  }
+
+  return { resourcesContent: blocks.join('\n\n') };
 };
 
 /**
@@ -200,19 +244,10 @@ const addContextToMessage = async (
       processMCPResources(userContext, readMCPResource),
     ]);
 
-    // Add atomic context if we have any atomic resources or schemas
-    if (atomicData.resourcesContent || atomicData.schemasContent) {
-      messageWithContext += `\n<atomic-context provided-by="user">`;
-
-      if (atomicData.resourcesContent) {
-        messageWithContext += `\n<resources>\n${atomicData.resourcesContent}\n</resources>`;
-      }
-
-      if (atomicData.schemasContent) {
-        messageWithContext += `\n<schemas>\n${atomicData.schemasContent}\n</schemas>`;
-      }
-
-      messageWithContext += `\n</atomic-context>`;
+    // Add atomic context if we have any atomic resources. Schemas are inline
+    // (`_schema` per resource), same shape as get_atomic_resource results.
+    if (atomicData.resourcesContent) {
+      messageWithContext += `\n<atomic-context provided-by="user">\n<resources>\n${atomicData.resourcesContent}\n</resources>\n</atomic-context>`;
     }
 
     // Add MCP context if we have any MCP resources

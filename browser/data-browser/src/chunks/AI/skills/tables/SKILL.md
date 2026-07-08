@@ -1,5 +1,13 @@
 # Atomic Data Tables
 
+## Zero-discovery rule
+
+If the table is already attached to this chat (an `<atomic-context>` block
+with `Row schema:`, `Row class:` and a row sample), you have EVERYTHING needed
+to add or edit rows. Do NOT read the table, its class, its properties, its
+tags, or its rows again — go straight to ONE `create_resource` /
+`edit_atomic_resource` call using the refs and shortnames from that block.
+
 ## Architecture Overview
 
 A table setup consists of three interconnected parts:
@@ -8,24 +16,15 @@ A Table resource: The entry point for the user.
 A Class resource: Defines the "schema" or columns of the table. Linked to the table via the table's `classtype` property.
 The Properties: Individual fields used by the Class. These represent the columns of the table.
 
-Example JSON-AD Structure (Table):
-
-```json-ad
-{
-  "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Table"],
-  "https://atomicdata.dev/properties/name": "My Table",
-  "https://atomicdata.dev/properties/classtype": "<SUBJECT_OF_THE_ROW_CLASS>",
-  "https://atomicdata.dev/properties/parent": "<SUBJECT_OF_PARENT_FOLDER>"
-}
-```
+Reading a table with `get_atomic_resource` returns it in compact form; its
+`classtype` is the row class. Reading is only needed when the table is NOT
+already attached as context.
 
 ## Creating Tables
 
 **Prefer the `create_table` tool.** It builds the whole table — the row Class,
-every column, and any saved views (table or kanban) — in a single call, and
-returns the table subject plus a `column name → property subject` map. This is
-far cheaper than creating the Class, Properties and Table one resource at a
-time. Describe the columns declaratively:
+every column, any saved views (table or kanban), AND the initial rows — in a
+single call. Describe it declaratively:
 
 ```json
 {
@@ -45,14 +44,14 @@ time. Describe the columns declaratively:
       "groupByColumn": "Status",
       "default": true
     }
-  ]
+  ],
+  "rows": [{ "name": "Set up CI", "Status": "Todo" }]
 }
 ```
 
 A `name` title column is always added automatically — don't include it. Column
 `type` is one of `text`, `markdown`, `number`, `date`, `datetime`, `checkbox`,
-`relation`, `file`, `select` (`select` needs `options`). To add rows afterwards,
-use `create_resource` with `parent` = the returned table subject.
+`relation`, `file`, `select` (`select` needs `options`).
 
 Only fall back to building a table by hand (multiple `create_resource` calls)
 when you need something `create_table` can't express. For that lower-level
@@ -62,25 +61,28 @@ recipe read `/creating-tables`.
 
 If you need to edit the structure of a table read `/creating-tables` to learn how tables are made. From there you can infer how that structure is modified.
 
-## Modifying table rows
+## Adding and modifying rows
 
-The rows in a table are just resources that are children of the table resource.
-They are instances of the table's `classtype`.
-They should have always have a [createdAt](https://atomicdata.dev/properties/createdAt) property, they won't appear in the table until this property is set.
-The default table sort order is based on the `createdAt` property.
+Rows are children of the table, instances of the table's `classtype`. Add
+rows with ONE batched `create_resource` call — an array of compact objects:
 
-Example JSON-AD Structure (Row):
-
-```json-ad
-{
-  "https://atomicdata.dev/properties/isA": ["<SUBJECT_OF_THE_ROW_CLASS>"],
-  "https://atomicdata.dev/properties/parent": "<SUBJECT_OF_THE_TABLE_RESOURCE>",
-  "https://atomicdata.dev/properties/createdAt": <UNIX_TIMESTAMP>,
-  ...any other properties of the row class...
-}
+```json
+[
+  { "@class": "<row class ref>", "@parent": "<table ref>", "name": "Acme Corp", "status": "Lead", "value": 50000 },
+  { "@class": "<row class ref>", "@parent": "<table ref>", "name": "TechNova", "status": "Qualified" }
+]
 ```
 
-If you need every row in a table you can use the `query` tool with a where parameter of `{"https://atomicdata.dev/properties/parent": "<SUBJECT_OF_THE_TABLE_RESOURCE>"}`.
-Keep in mind that a table might have a huge amount of rows, so it might not always be preferable to load them all if you're looking for something.
+- Keys are the row-class shortnames from the schema line; select values are
+  tag names. Never call `create_resource` once per row.
+- `createdAt` is added automatically when the parent is a table (rows only
+  appear in the table once it is set; it drives the default sort order).
+- Edit a single cell with `edit_atomic_resource` (shortname + tag name work).
+
+To list rows use `query` with the row class:
+`{"class": "<row class ref or shortname>", "where": [...]}` — filters accept
+shortnames and tag names (e.g. `{"property": "status", "value": "Done"}`).
+Keep in mind that a table might have a huge amount of rows, so it might not
+always be preferable to load them all if you're looking for something.
 
 ## Gochas
