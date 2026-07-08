@@ -66,6 +66,23 @@ export async function getAgentFromIDB(): Promise<Agent | undefined> {
   return undefined;
 }
 
+/**
+ * The portable agent secret (base64 JSON of privateKey + subject), rebuilt
+ * from the plaintext fallback record — the SubtleCrypto keypair itself is
+ * non-extractable. Undefined on installs that predate the fallback record.
+ */
+export async function getAgentSecretFromIDB(): Promise<string | undefined> {
+  const fallback = (await get(AGENT_FALLBACK_KEY)) as
+    | StoredAgentFallback
+    | undefined;
+
+  if (!fallback) {
+    return undefined;
+  }
+
+  return Agent.buildSecret(fallback.privateKey, fallback.subject);
+}
+
 export async function saveAgentToIDB(
   keyPair: CryptoKeyPair,
   subject: string,

@@ -34,6 +34,12 @@ import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
 import { isRunningInTauri } from '../helpers/tauri';
+import { PairDeviceDialog } from '../components/PairDeviceDialog';
+import {
+  decodePairingEnvelope,
+  PairingEnvelopeError,
+  PAIRING_URI_PREFIX,
+} from '@tomic/lib';
 import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
@@ -166,6 +172,7 @@ function SyncPage() {
   const [peerSyncing, setPeerSyncing] = useState(false);
   const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
   const [showAddPeer, setShowAddPeer] = useState(false);
+  const [showPairDialog, setShowPairDialog] = useState(false);
   const [knownPeers, setKnownPeers] = useState<KnownPeer[]>(() => {
     try {
       return (
@@ -306,8 +313,25 @@ function SyncPage() {
     localStorage.setItem('atomic-peers', JSON.stringify(peers));
   }
 
-  async function syncWithPeer(nodeDid: string) {
-    if (!nodeDid || !status.drive) return;
+  async function syncWithPeer(input: string) {
+    if (!input || !status.drive) return;
+
+    // A pasted atomic://pair link is routing sugar for the same thing: pull
+    // the node identity out of the envelope. (An onboard link pasted here is
+    // used for its routing only — identity import belongs to the scan flow.)
+    let nodeDid = input;
+
+    if (input.startsWith(PAIRING_URI_PREFIX)) {
+      try {
+        nodeDid = decodePairingEnvelope(input).node;
+      } catch (e) {
+        setPeerSyncResult(
+          `Error: ${e instanceof PairingEnvelopeError ? e.message : e}`,
+        );
+
+        return;
+      }
+    }
 
     const rawNodeId = nodeDidToRaw(nodeDid);
 
@@ -570,7 +594,15 @@ function SyncPage() {
                     >
                       Copy
                     </NodeAction>
+                    <NodeAction onClick={() => setShowPairDialog(true)}>
+                      Pair device
+                    </NodeAction>
                   </PeerIdRow>
+                  <PairDeviceDialog
+                    nodeDid={rawToNodeDid(localNodeId)}
+                    show={showPairDialog}
+                    bindShow={setShowPairDialog}
+                  />
                 </DetailValue>
               </DetailItem>
             )}

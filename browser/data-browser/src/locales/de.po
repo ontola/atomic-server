@@ -613,11 +613,13 @@ msgstr "Pflichtfeld."
 
 #. 0: JSON.stringify(error)
 #. 0: searchError.message
+#. 0: e instanceof PairingEnvelopeError ? e.message \\: e
 #. 0: data.error
 #. 0: e
 #. 0: resource.error.message
 #: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 #: src/views/ResourceRow.tsx
@@ -5018,4 +5020,32 @@ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Try the live demo"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Pair device"
+msgstr ""
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Pair a device"
+msgstr ""
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Device with your account"
+msgstr ""
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Scan from another device that is already signed in as you. The code only says where to find this node — the other device still has to prove it holds your key."
+msgstr ""
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Reveal setup code"
+msgstr ""
+
+#: src/components/PairDeviceDialog.tsx
+msgid "New device setup"
+msgstr ""
+
+#: src/components/PairDeviceDialog.tsx
+msgid "This code contains your account secret. Anyone who scans it becomes you — reveal it only when the new device is ready to scan."
 msgstr ""
