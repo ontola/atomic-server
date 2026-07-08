@@ -68,8 +68,19 @@ rows with ONE batched `create_resource` call — an array of compact objects:
 
 ```json
 [
-  { "@class": "<row class ref>", "@parent": "<table ref>", "name": "Acme Corp", "status": "Lead", "value": 50000 },
-  { "@class": "<row class ref>", "@parent": "<table ref>", "name": "TechNova", "status": "Qualified" }
+  {
+    "@class": "<row class ref>",
+    "@parent": "<table ref>",
+    "name": "Acme Corp",
+    "status": "Lead",
+    "value": 50000
+  },
+  {
+    "@class": "<row class ref>",
+    "@parent": "<table ref>",
+    "name": "TechNova",
+    "status": "Qualified"
+  }
 ]
 ```
 

@@ -14,7 +14,14 @@ Classes and properties are also resources that can be fetched just like any othe
 Read and write tools speak one compact dialect — what you read back from a tool is exactly the syntax you write with:
 
 ```json
-{ "@id": "did:ad:x…", "@class": "deal", "@parent": "did:ad:y…", "name": "Acme Corp", "status": "Lead", "value": 50000 }
+{
+  "@id": "did:ad:x…",
+  "@class": "deal",
+  "@parent": "did:ad:y…",
+  "name": "Acme Corp",
+  "status": "Lead",
+  "value": 50000
+}
 ```
 
 - `@`-keys are structural: `@id` (never write it on create), `@class` (class shortname or URL), `@parent` (subject or ref).
