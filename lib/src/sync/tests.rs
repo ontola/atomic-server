@@ -1936,6 +1936,96 @@ mod peer_sync_tests {
         );
     }
 
+    /// Bridge from the pure RBSR algorithm (`sync::rbsr`) to real store data:
+    /// `drive_items` must turn a Db's drive into the sorted `(subject, VV)`
+    /// items the reconcile runs over, and reconciling a store's items against a
+    /// peer that's behind on exactly one resource must find exactly that
+    /// resource — over VVs derived from a real store, not hand-built maps.
+    #[tokio::test]
+    async fn reconcile_over_real_store_finds_the_lagging_resource() {
+        use crate::sync::engine::drive_items;
+        use crate::sync::rbsr::{item_fingerprint, range_fingerprint, reconcile, Item, RemoteRange};
+
+        let db = Db::init_temp("rbsr_real_store").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        db.create_resource(
+            "https://atomicdata.dev/ontology/canvas/Canvas",
+            &drive,
+            "Canvas One",
+            None,
+        )
+        .await
+        .unwrap();
+        let target = db
+            .create_resource(
+                "https://atomicdata.dev/ontology/canvas/Canvas",
+                &drive,
+                "Canvas Two",
+                None,
+            )
+            .await
+            .unwrap();
+
+        // Local: the store's real drive items (drive root + two canvases).
+        let local = drive_items(&db, &drive).await;
+        assert!(
+            local.len() >= 3,
+            "expected drive root + 2 canvases, got {}",
+            local.len()
+        );
+
+        // Remote: the same set, but behind on `target` (drop a peer counter so
+        // its VV differs) — models a peer that hasn't received the last edit.
+        let mut remote_items: Vec<Item> = local.clone();
+        remote_items.sort_by(|a, b| a.0.cmp(&b.0));
+        let target_pure =
+            crate::Subject::from_raw(&target, db.get_base_domain().as_deref()).pure_id();
+        let mut mutated = false;
+        for (subject, vv) in remote_items.iter_mut() {
+            if *subject == target_pure {
+                // Roll the VV back to empty — guaranteed different fingerprint.
+                let before = item_fingerprint(subject, vv);
+                vv.clear();
+                assert_ne!(before, item_fingerprint(subject, vv));
+                mutated = true;
+            }
+        }
+        assert!(mutated, "target {target_pure} not found in drive items");
+
+        struct MemRemote {
+            items: Vec<Item>,
+        }
+        impl RemoteRange for MemRemote {
+            fn fingerprint(&mut self, lo: &str, hi: Option<&str>) -> [u8; 32] {
+                range_fingerprint(&self.items, lo, hi)
+            }
+            fn items(&mut self, lo: &str, hi: Option<&str>) -> Vec<Item> {
+                self.items
+                    .iter()
+                    .filter(|(s, _)| {
+                        s.as_str() >= lo && hi.map(|h| s.as_str() < h).unwrap_or(true)
+                    })
+                    .cloned()
+                    .collect()
+            }
+        }
+
+        let mut remote = MemRemote {
+            items: remote_items,
+        };
+        let diff = reconcile(&local, &mut remote, 4, 2);
+
+        assert_eq!(
+            diff.differ,
+            vec![target_pure],
+            "reconcile must flag exactly the lagging resource"
+        );
+        assert!(
+            diff.only_local.is_empty() && diff.only_remote.is_empty(),
+            "no subjects should be only-local or only-remote: {diff:?}"
+        );
+    }
+
     /// Golden cross-implementation vector for the canonical drive hash
     /// (planning/drive-reconciliation.md Phase 1). The JS client
     /// (`canonicalDriveHash` in `browser/lib/src/store.ts`) asserts the SAME

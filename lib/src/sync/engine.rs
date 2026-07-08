@@ -643,6 +643,26 @@ pub fn build_drive_vvs(
     vvs
 }
 
+/// The drive's resources as sorted range-reconciliation items
+/// (`(subject, version-vector)`), the input to
+/// [`crate::sync::rbsr`]. Same VVs `handle_sync_vv` builds, re-shaped as a
+/// sorted `Vec` with per-item `BTreeMap` VVs so a range fingerprint is
+/// deterministic. The server answers RBSR range queries by slicing this;
+/// making the slice O(log n) rather than an O(range) scan is the incremental
+/// fingerprint tree, a later step (planning/drive-reconciliation.md Phase 2c).
+pub async fn drive_items(store: &Db, drive: &str) -> Vec<crate::sync::rbsr::Item> {
+    let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+    let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
+    let vvs = build_drive_vvs(store, &drive_subjects);
+
+    let mut items: Vec<crate::sync::rbsr::Item> = vvs
+        .into_iter()
+        .map(|(subject, vv)| (subject, vv.into_iter().collect()))
+        .collect();
+    items.sort_by(|a, b| a.0.cmp(&b.0));
+    items
+}
+
 /// The drive's version-vector hash — the same value `handle_sync_vv` compares
 /// against for its fast path, computed on its own. Used by the hash-first probe
 /// path: a client sends only its hash, and the server answers "in sync" or
