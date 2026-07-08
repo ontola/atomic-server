@@ -10,6 +10,7 @@ mod iroh_e2e;
 pub mod peer;
 pub mod policy;
 pub mod protocol;
+pub mod rbsr;
 #[cfg(all(test, feature = "iroh"))]
 mod tests;
 pub mod tombstones;
