@@ -501,15 +501,39 @@ impl WebSocketConnection {
             if let Ok(request) = serde_json::from_str::<SyncVVRequest>(json) {
                 let store = self.store.clone();
                 let agent = self.agent.clone();
-                ctx.spawn(
-                    async move { handle_sync_vv(request, store, agent).await }
+                if request.probe {
+                    // Hash-first probe: the client sent only its hash. Compare
+                    // it to the drive's hash without it (or us) exchanging the
+                    // full O(drive) version vector. In sync → `SYNC_OK`;
+                    // otherwise ask for the full state via `SYNC_RESEND`.
+                    let drive = request.drive.clone();
+                    let client_hash = request.drive_hash.clone();
+                    ctx.spawn(
+                        async move {
+                            let server_hash =
+                                atomic_lib::sync::engine::drive_sync_hash(&store, &drive).await;
+                            (drive, server_hash == client_hash)
+                        }
                         .into_actor(self)
-                        .map(|frames, _actor, ctx| {
-                            for frame in frames {
-                                ctx.binary(frame);
+                        .map(|(drive, in_sync), _actor, ctx| {
+                            if in_sync {
+                                ctx.binary(atomic_lib::sync::protocol::encode_sync_ok(&drive));
+                            } else {
+                                ctx.text(format!("SYNC_RESEND {drive}"));
                             }
                         }),
-                );
+                    );
+                } else {
+                    ctx.spawn(
+                        async move { handle_sync_vv(request, store, agent).await }
+                            .into_actor(self)
+                            .map(|frames, _actor, ctx| {
+                                for frame in frames {
+                                    ctx.binary(frame);
+                                }
+                            }),
+                    );
+                }
             }
         } else {
             tracing::debug!("Unknown text message: {}", &text[..text.len().min(50)]);
@@ -630,7 +654,14 @@ struct SyncVVRequest {
     drive: String,
     #[serde(rename = "driveHash")]
     drive_hash: String,
+    /// Hash-first probe: the client sent only its drive hash, not the full
+    /// version-vector state. `peers`/`resources` are absent. The server
+    /// answers `SYNC_OK` (in sync) or `SYNC_RESEND <drive>` (send full state).
+    #[serde(default)]
+    probe: bool,
+    #[serde(default)]
     peers: Vec<String>,
+    #[serde(default)]
     resources: std::collections::HashMap<String, Vec<i32>>,
 }
 

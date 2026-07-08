@@ -1892,4 +1892,47 @@ mod peer_sync_tests {
             ),
         }
     }
+
+    /// The hash-first probe answers "in sync" purely from `drive_sync_hash`.
+    /// For that to ever say yes, the standalone hash MUST equal the hash
+    /// `handle_sync_vv` compares against — and it MUST change when the drive's
+    /// state changes, or a probe would report a stale drive as in sync.
+    #[tokio::test]
+    async fn drive_sync_hash_matches_fast_path_and_moves_on_change() {
+        use crate::sync::engine::{
+            build_drive_vvs, collect_drive_subjects, compute_drive_hash, drive_sync_hash,
+        };
+
+        let db = Db::init_temp("drive_sync_hash").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+
+        // Consistency: the standalone hash equals the fast-path hash (the same
+        // value handle_sync_vv builds from build_drive_vvs + compute_drive_hash).
+        let drive_subject = crate::Subject::from_raw(&drive, db.get_base_domain().as_deref());
+        let fast_path_hash = compute_drive_hash(&build_drive_vvs(
+            &db,
+            &collect_drive_subjects(&db, &drive_subject).await,
+        ));
+        let probe_hash = drive_sync_hash(&db, &drive).await;
+        assert_eq!(
+            probe_hash, fast_path_hash,
+            "the probe hash must equal the hash handle_sync_vv compares against, or a probe can never hit SYNC_OK"
+        );
+
+        // Sensitivity: a write to the drive must move the hash, so a probe
+        // carrying the pre-write hash is correctly seen as out of sync.
+        db.create_resource(
+            "https://atomicdata.dev/ontology/canvas/Canvas",
+            &drive,
+            "New Canvas",
+            None,
+        )
+        .await
+        .unwrap();
+        let hash_after = drive_sync_hash(&db, &drive).await;
+        assert_ne!(
+            probe_hash, hash_after,
+            "adding a resource to the drive must change its sync hash"
+        );
+    }
 }

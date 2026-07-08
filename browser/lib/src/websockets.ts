@@ -178,6 +178,12 @@ export class WSClient {
   private _retryTimer: ReturnType<typeof setTimeout> | undefined;
   private _onlineListener: (() => void) | undefined;
   private _driveUnsub: (() => void) | undefined;
+  /** Drive-sync state computed for a hash-first probe, kept until the server
+   *  either accepts it (SYNC_OK) or asks for the full state (SYNC_RESEND). */
+  private _pendingSyncState = new Map<
+    string,
+    Awaited<ReturnType<Store['computeDriveSyncState']>>
+  >();
 
   /** When true, all WS frames are logged to the console in human-readable form. */
   public debug =
@@ -996,6 +1002,12 @@ export class WSClient {
       } catch {
         console.warn('Invalid INDEX_STATUS message:', json);
       }
+    } else if (text.startsWith('SYNC_RESEND ')) {
+      // The hash-first probe missed: the drive isn't in sync, so the server
+      // needs our full version-vector state to compute the diff. Send the
+      // state we already computed for the probe (recompute if it aged out).
+      const drive = text.slice('SYNC_RESEND '.length);
+      void this.sendFullSyncState(drive);
     } else if (text === 'AUTHENTICATED') {
       // Legacy auth response — handled for backward compat
     }
@@ -1116,14 +1128,43 @@ export class WSClient {
     const close = perfSpan('ws.computeDriveSyncState');
 
     try {
+      // Hash-first: compute our state (needed for the hash) but send only the
+      // hash as a probe. In the common "nothing changed" case the server
+      // answers SYNC_OK and we never transmit the O(drive-size) version vector.
+      // On a mismatch the server replies SYNC_RESEND and we send the full
+      // state we stashed here (see `sendFullSyncState`).
       const syncState = await this.store.computeDriveSyncState(drive);
       close({ resourceCount: Object.keys(syncState.resources).length });
-      // Still sending as text SYNC_VV — will migrate to binary SYNC later
-      this.ws.send('SYNC_VV ' + JSON.stringify(syncState));
+      this._pendingSyncState.set(drive, syncState);
+      this.ws.send(
+        'SYNC_VV ' +
+          JSON.stringify({
+            drive,
+            driveHash: syncState.driveHash,
+            probe: true,
+          }),
+      );
       perfMark('ws.SYNC_VV.sent');
     } catch (e) {
       close({ err: String(e) });
       console.warn('[WS] VV sync failed:', e);
+    }
+  }
+
+  /** Send the full version-vector state for a drive (response to SYNC_RESEND).
+   *  Uses the state stashed by the probe; recomputes if it's no longer around
+   *  (e.g. a reconnect between probe and resend). */
+  private async sendFullSyncState(drive: string): Promise<void> {
+    if (this.readyState !== WebSocket.OPEN) return;
+
+    try {
+      const syncState =
+        this._pendingSyncState.get(drive) ??
+        (await this.store.computeDriveSyncState(drive));
+      this._pendingSyncState.delete(drive);
+      this.ws.send('SYNC_VV ' + JSON.stringify(syncState));
+    } catch (e) {
+      console.warn('[WS] full VV resend failed:', e);
     }
   }
 

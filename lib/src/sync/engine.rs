@@ -645,6 +645,18 @@ pub fn build_drive_vvs(
     vvs
 }
 
+/// The drive's version-vector hash — the same value `handle_sync_vv` compares
+/// against for its fast path, computed on its own. Used by the hash-first probe
+/// path: a client sends only its hash, and the server answers "in sync" or
+/// "resend your full state" without the client ever transmitting an
+/// O(drive-size) version vector when nothing changed.
+pub async fn drive_sync_hash(store: &Db, drive: &str) -> String {
+    let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+    let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
+    let server_vvs = build_drive_vvs(store, &drive_subjects);
+    compute_drive_hash(&server_vvs)
+}
+
 /// Compare client and server VVs, return binary SYNC_OK/SYNC_DIFF/SYNC_PUSH frames.
 pub async fn handle_sync_vv(
     drive: &str,
