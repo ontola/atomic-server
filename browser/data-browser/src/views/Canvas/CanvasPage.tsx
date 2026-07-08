@@ -20,7 +20,6 @@ import {
   FaEraser,
   FaExpand,
   FaPen,
-  FaPlus,
   FaRotateLeft,
   FaRotateRight,
 } from 'react-icons/fa6';
@@ -1135,33 +1134,6 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   // the start of the bottom toolbar.
   const [helpDialogProps, showHelp, , isHelpOpen] = useDialog();
 
-  /** New canvas: create one in the same parent and navigate to it. */
-  const handleNewCanvas = useCallback(async () => {
-    const parent = resource.get(PARENT_PROP);
-
-    if (typeof parent !== 'string' || !parent) return;
-
-    setSaving(true);
-    setSaveError(undefined);
-
-    try {
-      await enableLoro();
-      const newCanvas = await store.newResource({
-        parent,
-        isA: canvas.classes.canvas,
-        propVals: {
-          [core.properties.name]: 'Canvas',
-        },
-      });
-      await newCanvas.save();
-      navigate(constructOpenURL(newCanvas.subject));
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
-    }
-  }, [resource, store, navigate]);
-
   // ──────────────── Color & Width fans (Flutter parity) ───────────────────
   //
   // Press-and-hold the Color (or Width) button: a fan of swatches sprouts
@@ -1500,13 +1472,6 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             aria-label='Show canvas help'
           >
             <FaCircleInfo />
-          </CircleButton>
-          <CircleButton
-            type='button'
-            title='New canvas'
-            onClick={handleNewCanvas}
-          >
-            <FaPlus />
           </CircleButton>
           <CircleButton
             type='button'
