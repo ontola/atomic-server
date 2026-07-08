@@ -1,4 +1,5 @@
 import { useSettings } from '@helpers/AppSettings';
+import { shortenSubject } from '@helpers/subjectRefs';
 import {
   ai,
   CollectionBuilder,
@@ -17,12 +18,13 @@ export type TreeNode = {
   [title: string]: TreeElement;
 };
 
-/** Serializes a TreeNode into a string optimized for LLM agents (indented list with subjects) */
+/** Serializes a TreeNode into a string optimized for LLM agents (indented
+ *  list with short subject refs — also seeds the ref registry every turn). */
 export function stringifyTree(tree: TreeNode, indent = 0): string {
   return Object.entries(tree)
     .map(([title, { subject, children }]) => {
       const prefix = '  '.repeat(indent);
-      const line = `${prefix}- ${title} (${subject})`;
+      const line = `${prefix}- ${title} (${shortenSubject(subject)})`;
 
       if (children) {
         return `${line}\n${stringifyTree(children, indent + 1)}`;

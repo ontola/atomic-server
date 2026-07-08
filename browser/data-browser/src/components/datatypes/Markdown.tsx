@@ -7,6 +7,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { Button } from '@components/Button';
 import { truncateMarkdown } from '@helpers/markdown';
+import { tryExpandRef } from '@helpers/subjectRefs';
 import { FC, useState } from 'react';
 import { AtomicLink, AtomicLinkProps } from '@components/AtomicLink';
 import { remarkMention, Mention } from './markdown/MarkdownMention';
@@ -35,9 +36,12 @@ const disableElementsInLink = ['a'];
 
 const ExternalLinkComponent = ({
   children: linkChildren,
-  href,
+  href: rawHref,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+  // AI messages link resources via short `#refs`; expand to the full subject.
+  const href = rawHref ? (tryExpandRef(rawHref) ?? rawHref) : rawHref;
+
   // Links to atomic subjects navigate in-app; a plain anchor would trigger
   // a full page (re)load. Everything else stays a regular external link.
   if (href?.startsWith('did:')) {

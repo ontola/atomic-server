@@ -19,6 +19,7 @@ import { createOllama } from 'ollama-ai-provider-v2';
 import { addFieldsIf } from '@helpers/addIf';
 import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 import { useSettings } from '@helpers/AppSettings';
+import { shortenSubject } from '@helpers/subjectRefs';
 import { getClassesOnDrive } from './atomicSchemaHelpers';
 
 export type Modalities = 'text' | 'image';
@@ -207,7 +208,7 @@ export const useClientOnlyTransport = (options: ClientOnlyTransportOptions) => {
         classSubjects.map(async cls => {
           const resource = await store.getResource(cls);
 
-          return `${resource.title}: ${cls}`;
+          return `${resource.title}: ${shortenSubject(cls)}`;
         }),
       );
 

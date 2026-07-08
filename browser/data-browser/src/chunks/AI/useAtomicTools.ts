@@ -17,6 +17,11 @@ import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { useAddToOntology } from '@hooks/useAddToOntology';
 import { constructOpenURL } from '@helpers/navigation';
 import { buildTableFromSpec } from '@chunks/TablePage/createTableFromSpec';
+import {
+  expandSubject,
+  shortenRefsDeep,
+  shortenSubject,
+} from '@helpers/subjectRefs';
 import { getClassesOnDrive, toClassObject } from './atomicSchemaHelpers';
 import { useDocumentEditAgent } from './documentEditAgent';
 import { getDocumentContentForAgent } from './getDocumentContentForAgent';
@@ -80,8 +85,10 @@ export function useAtomicMCPTools({
   const runDocumentEdit = useDocumentEditAgent(editModel);
 
   /** Resolves a `@class` shortname (or title) to a class subject on the
-   *  current drive. Full URLs pass through. */
-  const resolveClass = async (nameOrSubject: string): Promise<string> => {
+   *  current drive. Full URLs and `#refs` pass through/expand. */
+  const resolveClass = async (nameOrRef: string): Promise<string> => {
+    const nameOrSubject = expandSubject(nameOrRef);
+
     if (Client.isValidSubject(nameOrSubject)) {
       return nameOrSubject;
     }
@@ -155,7 +162,10 @@ export function useAtomicMCPTools({
 
           const results = await store.semanticSearch(query, {
             limit,
-            parents: parents && parents.length !== 0 ? parents : [drive],
+            parents:
+              parents && parents.length !== 0
+                ? parents.map(expandSubject)
+                : [drive],
             text_query,
           });
 
@@ -164,7 +174,7 @@ export function useAtomicMCPTools({
               const r = await store.getResource(res.subject);
 
               return {
-                subject: res.subject,
+                subject: shortenSubject(res.subject),
                 title: r.title,
                 classes: await getClassesString(r, store),
                 chunk: res.chunk,
@@ -263,24 +273,26 @@ export function useAtomicMCPTools({
               : select;
             const props = Array.from(new Set([...selectProps, ...filterProps]));
 
-            return resources.map(res => {
-              const obj: Record<string, unknown> = {
-                '@id': res.subject,
-              };
+            return shortenRefsDeep(
+              resources.map(res => {
+                const obj: Record<string, unknown> = {
+                  '@id': res.subject,
+                };
 
-              for (const prop of props) {
-                const val = res.get(prop);
+                for (const prop of props) {
+                  const val = res.get(prop);
 
-                if (val) {
-                  const info = ctx?.bySubject.get(prop);
-                  obj[info?.shortname ?? prop] = info
-                    ? compactValueOut(info, val as JSONValue)
-                    : val;
+                  if (val) {
+                    const info = ctx?.bySubject.get(prop);
+                    obj[info?.shortname ?? prop] = info
+                      ? compactValueOut(info, val as JSONValue)
+                      : val;
+                  }
                 }
-              }
 
-              return obj;
-            });
+                return obj;
+              }),
+            );
           } catch (error) {
             return `Error running query: ${error}`;
           }
@@ -309,7 +321,8 @@ export function useAtomicMCPTools({
           try {
             const result: Record<string, unknown> = {};
 
-            for (const subject of subjects) {
+            for (const subjectOrRef of subjects) {
+              const subject = expandSubject(subjectOrRef);
               const res = await store.getResource(subject);
 
               if (res.error) {
@@ -350,7 +363,7 @@ export function useAtomicMCPTools({
               result[subject] = entry;
             }
 
-            return result;
+            return shortenRefsDeep(result);
           } catch (error) {
             return `Error getting atomic resource: ${error}`;
           }
@@ -366,7 +379,13 @@ export function useAtomicMCPTools({
             .describe('The subject of the class to get the schema for.'),
         }),
         execute: async ({ subject }) => {
-          return await toClassObject(subject, store);
+          try {
+            return shortenRefsDeep(
+              await toClassObject(expandSubject(subject), store),
+            );
+          } catch (error) {
+            return `Error getting schema: ${error}`;
+          }
         },
         strict: true,
       }),
@@ -381,7 +400,10 @@ export function useAtomicMCPTools({
             classSubjects.map(async cls => {
               const resource = await store.getResource(cls);
 
-              return { shortname: resource.title, subject: cls };
+              return {
+                shortname: resource.title,
+                subject: shortenSubject(cls),
+              };
             }),
           );
         },
@@ -445,9 +467,16 @@ export function useAtomicMCPTools({
             .describe('The subject of the resource to navigate to'),
         }),
         execute: async ({ subject }) => {
-          await navigate(constructOpenURL(subject));
+          try {
+            await navigate(constructOpenURL(expandSubject(subject)));
 
-          return { success: true, message: `Navigated to resource ${subject}` };
+            return {
+              success: true,
+              message: `Navigated to resource ${subject}`,
+            };
+          } catch (error) {
+            return `Error navigating to ${subject}: ${error}`;
+          }
         },
         strict: true,
       }),
@@ -467,7 +496,15 @@ export function useAtomicMCPTools({
             .union([z.string(), z.number(), z.boolean(), z.array(z.string())])
             .describe('The new value of the property'),
         }),
-        execute: async ({ subject, property, value }) => {
+        execute: async ({ subject: subjectOrRef, property, value }) => {
+          let subject = subjectOrRef;
+
+          try {
+            subject = expandSubject(subjectOrRef);
+          } catch (error) {
+            return `Error changing property ${property} on resource ${subjectOrRef}: ${error}`;
+          }
+
           const resource = await store.getResource(subject);
           const originalResource = resource.clone();
 
@@ -533,7 +570,15 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
               'Specify ONLY the precise lines of text that you wish to edit. **NEVER specify or write out unchanged text**. Instead, represent all unchanged text using the `<unchanged-text>` element.',
             ),
         }),
-        execute: async ({ subject, instruction, edit }) => {
+        execute: async ({ subject: subjectOrRef, instruction, edit }) => {
+          let subject = subjectOrRef;
+
+          try {
+            subject = expandSubject(subjectOrRef);
+          } catch (error) {
+            return `Error editing document ${subjectOrRef}: ${error}`;
+          }
+
           const resource = await store.getResource(subject);
           const originalResource = resource.clone();
 
@@ -622,7 +667,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
                   ? `Resolved properties: ${JSON.stringify(resolved)}\n`
                   : '';
 
-              return `${resolvedLine}Created new resource with subject ${subject}`;
+              return `${resolvedLine}Created new resource with subject ${shortenSubject(subject)}`;
             } catch (err) {
               return `Error creating resource: ${err}`;
             }
@@ -635,7 +680,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
           for (const [index, item] of data.entries()) {
             try {
               const result = await createOne(item as Record<string, JSONValue>);
-              created.push(result.subject);
+              created.push(shortenSubject(result.subject));
               Object.assign(resolved, result.resolved);
             } catch (err) {
               errors.push(`Item ${index}: ${err}`);
@@ -728,7 +773,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
               store,
               { name, columns, views, rows },
               {
-                parent: parent ?? drive,
+                parent: parent ? expandSubject(parent) : drive,
                 driveSubject: drive,
                 addToOntology,
               },
@@ -752,15 +797,18 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
               };
             }
 
-            return {
+            const tableRef = shortenSubject(result.tableSubject);
+            const classRef = shortenSubject(result.classSubject);
+
+            return shortenRefsDeep({
               table: result.tableSubject,
               class: result.classSubject,
               columns: columnsOut,
               ...(result.rowSubjects.length > 0
                 ? { rows: result.rowSubjects }
                 : {}),
-              addingMoreRows: `Call create_resource with an ARRAY of JSON-AD objects (one call for all rows), each with parent = ${result.tableSubject}, isA = ["${result.classSubject}"], the property subjects above as keys (tag subjects in an array for select columns), and ${core.properties.name} for the title. createdAt is added automatically. No get_schema needed.`,
-            };
+              addingMoreRows: `Call create_resource with an ARRAY of compact objects (one call for all rows), each with "@parent": "${tableRef}", "@class": "${classRef}", the column names as keys, tag names for select columns, and "name" for the title. createdAt is added automatically. No get_schema needed.`,
+            });
           } catch (err) {
             return `Error creating table: ${err}`;
           }

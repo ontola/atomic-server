@@ -25,6 +25,7 @@ import {
   type Resource,
   type Store,
 } from '@tomic/react';
+import { expandSubject, tryExpandRef } from '@helpers/subjectRefs';
 
 export interface CompactPropertyInfo {
   subject: string;
@@ -114,11 +115,27 @@ export const resolveKey = (
   );
 };
 
+/** Short `#ref` strings (in any position, incl. array members) expand to
+ *  their full subjects; everything else passes through. */
+const expandValueRefs = (value: JSONValue): JSONValue => {
+  if (typeof value === 'string') {
+    return tryExpandRef(value) ?? value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(expandValueRefs);
+  }
+
+  return value;
+};
+
 /** Coerces a compact wire value into its stored JSON-AD form. */
 export const coerceValueIn = (
   info: CompactPropertyInfo,
-  value: JSONValue,
+  rawValue: JSONValue,
 ): JSONValue => {
+  const value = expandValueRefs(rawValue);
+
   if (info.tags) {
     const entries = Array.isArray(value) ? value : [value];
 
@@ -404,7 +421,7 @@ export const fromCompact = async (
     '@parent': atParent,
     [core.properties.isA]: rawIsA,
     [core.properties.parent]: rawParent,
-    ...rest
+    ...restRaw
   } = data;
 
   if (atId) {
@@ -431,14 +448,24 @@ export const fromCompact = async (
     ),
   );
 
-  const parent = (atParent ?? rawParent) as string | undefined;
+  const rawParentValue = (atParent ?? rawParent) as string | undefined;
 
-  if (!parent) {
+  if (!rawParentValue) {
     throw new Error('Missing @parent (or a full parent property)');
   }
 
+  const parent = expandSubject(rawParentValue);
+
   const propVals: Record<string, JSONValue> = {};
   const resolved: Record<string, string> = {};
+
+  // Keys may be short `#refs` (emitted for shortname collisions on read).
+  const rest = Object.fromEntries(
+    Object.entries(restRaw).map(([key, value]) => [
+      tryExpandRef(key) ?? key,
+      value,
+    ]),
+  );
 
   // Raw JSON-AD (all-URL keys) needs no schema fetches; only build the
   // resolution context when a shortname key is actually present.
@@ -451,12 +478,12 @@ export const fromCompact = async (
 
   for (const [key, value] of Object.entries(rest)) {
     if (Client.isValidSubject(key)) {
-      propVals[key] = value;
+      propVals[key] = expandValueRefs(value as JSONValue);
       continue;
     }
 
     const info = resolveKey(ctx, key);
-    propVals[info.subject] = coerceValueIn(info, value);
+    propVals[info.subject] = coerceValueIn(info, value as JSONValue);
     resolved[key] = info.subject;
   }
 

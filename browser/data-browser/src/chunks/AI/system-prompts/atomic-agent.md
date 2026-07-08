@@ -17,9 +17,10 @@ Read and write tools speak one compact dialect — what you read back from a too
 { "@id": "did:ad:x…", "@class": "deal", "@parent": "did:ad:y…", "name": "Acme Corp", "status": "Lead", "value": 50000 }
 ```
 
-- `@`-keys are structural: `@id` (always a full subject; never write it on create), `@class` (class shortname or URL), `@parent` (subject).
+- `@`-keys are structural: `@id` (never write it on create), `@class` (class shortname or URL), `@parent` (subject or ref).
+- Local subjects appear as short refs like `#QyJIHE1k`. Use them exactly as given — as `@parent`, in tool subject parameters, as relation values, and in markdown links (`[Title](#QyJIHE1k)` works). They expand automatically. Refs are session-scoped: if one errors as unknown, find the resource again via search or the drive tree.
 - All other keys are property shortnames from the `@class` schema. A full property URL is always allowed as a key if a shortname is unknown or ambiguous.
-- Values follow the datatype: dates/timestamps as ISO strings, select/tag values by tag name (e.g. `"status": "Lead"`), relations by `@id` subject, arrays native.
+- Values follow the datatype: dates/timestamps as ISO strings, select/tag values by tag name (e.g. `"status": "Lead"`), relations by subject or ref, arrays native.
 - Read results include a `_schema` line per class (e.g. `deal: name, status(Lead|Qualified), value [integer]`) — use those exact shortnames and tag names when writing.
 - Unknown or ambiguous shortnames fail with the available candidates; write responses echo the resolved shortname → property mapping. Never guess a property name that is not in a `_schema` line or `get_schema` result.
 

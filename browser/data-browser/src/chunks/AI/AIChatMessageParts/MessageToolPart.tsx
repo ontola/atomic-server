@@ -20,6 +20,7 @@ import { InlineFormattedResourceList } from '@components/InlineFormattedResource
 import { useResource } from '@tomic/react';
 import { MCP_TOOL_NAMES } from '../defaultMCPServers';
 import { core, Client } from '@tomic/lib';
+import { tryExpandRef } from '@helpers/subjectRefs';
 
 interface ToolMessageProps {
   part: ToolUIPart | DynamicToolUIPart;
@@ -196,7 +197,10 @@ const FetchResourceTitle = ({ subjects }: { subjects: string[] }) => {
   );
 };
 
-const ResourceTitle = ({ subject }: { subject: string }) => {
+const ResourceTitle = ({ subject: subjectOrRef }: { subject: string }) => {
+  // Tool args may carry short `#refs` instead of full subjects.
+  const subject = tryExpandRef(subjectOrRef) ?? subjectOrRef;
+
   // Some models stream tool inputs, that means that the subject is often not valid at the start.
   return Client.isValidSubject(subject) ? (
     <ResourceTitleInner subject={subject} />
@@ -253,7 +257,7 @@ const EditTitle = ({
   property: string;
   subject: string;
 }) => {
-  const propertyResource = useResource(property);
+  const propertyResource = useResource(tryExpandRef(property) ?? property);
 
   return (
     <span>

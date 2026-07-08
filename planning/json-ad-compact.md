@@ -53,11 +53,18 @@ can't contain `@`); every other key is a property shortname.
    (coerced to ms on write); select/tag values by tag shortname (coerced to
    tag subjects, single value wrapped into the required array); relations by
    `@id`; arrays native.
-4. **Identity is never compact.** `@id` is always a full DID. Names address
-   *schema* (stable, human-scale, class-scoped); DIDs address *data*. Letting
-   the model reference arbitrary resources by name would make references
+4. **Identity is never name-based — but it may be prefix-shortened.** Names
+   address *schema* (stable, human-scale, class-scoped); letting the model
+   reference arbitrary resources by title would make references
    rename-fragile. Tag names are the one carve-out: `allowsOnly` makes that
-   namespace tiny and closed.
+   namespace tiny and closed. Full DIDs, however, are ~35 tokens of noise the
+   model only ever echoes back, so tool I/O shortens `did:ad:` subjects to
+   derived refs: `#<first 8 DID chars>` (`helpers/subjectRefs.ts`). Derived,
+   not allocated — no counter table to persist; a session registry (re-seeded
+   every turn by the drive tree and every shorten call) expands them at the
+   tool boundary and in markdown-link rendering. Unknown refs (e.g. from an
+   older session) fail loudly with a "find it again" hint. Refs never reach
+   storage.
 5. **Reads are forgiving, writes are strict.** Emitting compact is always
    safe (subject→shortname is unambiguous; collisions emit the full URL key).
    Accepting compact must never misresolve silently: unknown or ambiguous
@@ -101,6 +108,7 @@ section); tool descriptions just say "compact form".
 | 1 | Writes accept compact: `create_resource` (incl. batch), `edit_atomic_resource` property-by-shortname + tag-name values | **this round** |
 | 1 | `query` gains `class` param: shortname `where` keys, tag-name values, implied `isA` filter | **this round** |
 | 1 | System-prompt grammar section; slim per-tool JSON-AD explanations | **this round** |
+| 1 | Short subject refs (`#xxxxxxxx`) at the tool boundary + drive-tree/custom-classes seeding + markdown-link and tool-bubble expansion | **this round** |
 | 2 | Context items (`processAtomicResources`) emit compact; per-class context providers (table → row-class schema + tag map + first N rows + count in transient context) | next |
 | 3 | `create_table.rows` / `rowToPropVals` re-based on `fromCompact` | next |
 | 4 | Server-side `format=compact` so MCP server & other clients share it instead of reimplementing resolution | later |
@@ -112,8 +120,13 @@ section); tool descriptions just say "compact form".
 - **Collision handling v1**: on read, colliding shortnames fall back to full
   URL keys (deterministic, lossless); qualified keys (`crm.status`) can come
   later if collisions prove common. On write, ambiguity is a hard error.
-- **`@id` never compacted; relations by subject only** (v1). Title-based
-  relation lookup rejected for now: mutable addressing.
+- **Refs are derived prefixes, not counters** — `#<8 DID chars>` is
+  recomputable, debuggable (visibly the same identifier everywhere), and
+  needs no per-conversation table persisted with the chat. Rejected: `r1`/
+  `r2`-style allocation (state to persist, breaks on restore) and truncated
+  `did:ad:…` forms (mistakable for real subjects and storable by accident).
+- **Relations by subject/ref only** (v1). Title-based relation lookup
+  rejected: mutable addressing.
 - **Timestamps ISO on the wire**, ms in storage; date props pass through
   (`YYYY-MM-DD` already).
 - **Not stored, ever.**
