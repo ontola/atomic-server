@@ -561,7 +561,9 @@ export class WSClient {
           return;
         }
 
-        this.ws.send('PRESENCE_SUBSCRIBE ' + JSON.stringify({ subject: drive }));
+        this.ws.send(
+          'PRESENCE_SUBSCRIBE ' + JSON.stringify({ subject: drive }),
+        );
       });
   }
 
@@ -1207,6 +1209,7 @@ export class WSClient {
       // Version vectors for the differing subjects the client actually holds
       // (only-remote subjects it doesn't have — the server pushes those).
       const reducedResources: Record<string, number[]> = {};
+
       for (const subject of [...diff.onlyLocal, ...diff.differ]) {
         if (syncState.resources[subject]) {
           reducedResources[subject] = syncState.resources[subject];
@@ -1253,6 +1256,7 @@ export class WSClient {
         if (i >= 0) this._rbsrFpQueue.splice(i, 1);
         reject(new Error('RBSR_FP timed out'));
       }, 10000);
+
       const settle = (fps: string[]) => {
         clearTimeout(timer);
         resolve(fps);
@@ -1264,11 +1268,7 @@ export class WSClient {
   }
 
   /** Send an RBSR range-items query and await the server's items. */
-  private rbsrItems(
-    drive: string,
-    lo: string,
-    hi?: string,
-  ): Promise<Item[]> {
+  private rbsrItems(drive: string, lo: string, hi?: string): Promise<Item[]> {
     return new Promise<Item[]>((resolve, reject) => {
       if (this.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket is not open'));
@@ -1282,6 +1282,7 @@ export class WSClient {
         if (i >= 0) this._rbsrItemsQueue.splice(i, 1);
         reject(new Error('RBSR_ITEMS timed out'));
       }, 10000);
+
       const settle = (items: Item[]) => {
         clearTimeout(timer);
         resolve(items);

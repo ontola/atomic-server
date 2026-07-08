@@ -49,7 +49,8 @@ function xorHex(a: Fingerprint, b: Fingerprint): Fingerprint {
   let out = '';
 
   for (let i = 0; i < 64; i += 2) {
-    const byte = parseInt(a.slice(i, i + 2), 16) ^ parseInt(b.slice(i, i + 2), 16);
+    const byte =
+      parseInt(a.slice(i, i + 2), 16) ^ parseInt(b.slice(i, i + 2), 16);
     out += byte.toString(16).padStart(2, '0');
   }
 
@@ -101,7 +102,15 @@ export async function reconcile(
   leaf = 4,
 ): Promise<Diff> {
   const out: Diff = { onlyLocal: [], onlyRemote: [], differ: [] };
-  await reconcileRange(local, '', undefined, remote, Math.max(2, split), Math.max(1, leaf), out);
+  await reconcileRange(
+    local,
+    '',
+    undefined,
+    remote,
+    Math.max(2, split),
+    Math.max(1, leaf),
+    out,
+  );
 
   return out;
 }

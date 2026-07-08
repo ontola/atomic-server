@@ -11,7 +11,10 @@ const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
  * `fetchResourceFromClientDb`). Give it a moment before giving up, rather
  * than losing the adoption to a race every single time.
  */
-function waitForServerConnected(store: Store, timeoutMs: number): Promise<boolean> {
+function waitForServerConnected(
+  store: Store,
+  timeoutMs: number,
+): Promise<boolean> {
   if (store.serverConnected) {
     return Promise.resolve(true);
   }

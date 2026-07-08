@@ -76,8 +76,10 @@ describe('RBSR (TS mirror of lib/src/sync/rbsr.rs)', () => {
         vv: { p1: i },
       })),
     );
-    const remoteItems = base.map(it =>
-      it.subject === 'subject-0123' ? { subject: it.subject, vv: { p1: 9999 } } : it,
+    const remoteItems = base.map(item =>
+      item.subject === 'subject-0123'
+        ? { subject: item.subject, vv: { p1: 9999 } }
+        : item,
     );
     const diff = await reconcile(base, new MemRemote(remoteItems));
     expect(diff.differ).toEqual(['subject-0123']);

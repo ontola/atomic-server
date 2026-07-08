@@ -1943,9 +1943,9 @@ export class Store {
   ): Promise<void> {
     try {
       const agentResource = await this.getResource(agentSubject);
-      const personalDrive = agentResource.get(
-        core.properties.personalDrive,
-      ) as string | undefined;
+      const personalDrive = agentResource.get(core.properties.personalDrive) as
+        | string
+        | undefined;
 
       if (personalDrive) {
         const personalDriveResource = await this.getResource(personalDrive);
