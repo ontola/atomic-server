@@ -15,7 +15,7 @@ import {
   describeClassCompact,
   toCompact,
 } from './jsonAdCompact';
-import { getTableContextForAgent } from './tableContextProvider';
+import { getClassContextForAgent } from './resourceContextProviders';
 import {
   appendTransientContextToLastUser,
   buildIndexingWarningContext,
@@ -145,12 +145,10 @@ const processAtomicResources = async (
       '```',
     ];
 
-    if (resource.hasClasses(dataBrowser.classes.table)) {
-      const tableContext = await getTableContextForAgent(store, resource);
+    const classContext = await getClassContextForAgent(store, resource);
 
-      if (tableContext) {
-        lines.push(tableContext);
-      }
+    if (classContext) {
+      lines.push(classContext);
     }
 
     blocks.push(lines.join('\n'));
