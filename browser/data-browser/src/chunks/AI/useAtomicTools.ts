@@ -24,7 +24,7 @@ import {
 } from '@helpers/subjectRefs';
 import { getClassesOnDrive, toClassObject } from './atomicSchemaHelpers';
 import { useDocumentEditAgent } from './documentEditAgent';
-import { getDocumentContentForAgent } from './getDocumentContentForAgent';
+import { getClassContextForAgent } from './resourceContextProviders';
 import {
   buildClassContext,
   coerceValueIn,
@@ -338,28 +338,21 @@ export function useAtomicMCPTools({
               });
 
               const entry: Record<string, unknown> = compact;
+              entry._schema = classes.map(c => describeClassCompact(ctx, c));
 
-              if (res.hasClasses(dataBrowser.classes.documentV2)) {
-                // The raw document body is Loro state; replace it with the
-                // agent-readable text, same as the old result shape did.
-                const contentInfo = ctx.bySubject.get(
-                  dataBrowser.properties.documentContent,
-                );
-                delete entry[dataBrowser.properties.documentContent];
+              // Class-specific view context: documents get _documentContent,
+              // tables/chatrooms/folders/ontologies get a _view block — the
+              // same expansion attached-resource context uses.
+              const classContext = await getClassContextForAgent(
+                store,
+                res,
+                entry,
+              );
 
-                if (contentInfo) {
-                  delete entry[contentInfo.shortname];
-                }
-
-                const content = getDocumentContentForAgent(res, store);
-                entry._documentContent = content.ok ? content.text : null;
-
-                if (!content.ok) {
-                  entry._documentContentError = content.error;
-                }
+              if (classContext) {
+                entry._view = classContext;
               }
 
-              entry._schema = classes.map(c => describeClassCompact(ctx, c));
               result[subject] = entry;
             }
 

@@ -1,5 +1,5 @@
 // @wc-ignore-file
-import { dataBrowser, useStore, type Store } from '@tomic/react';
+import { useStore, type Store } from '@tomic/react';
 import { type AIMessageContext, type AtomicUIMessage } from './types';
 import {
   useMcpServers,
@@ -9,7 +9,6 @@ import { findSkillByName } from './skills/skill';
 import { useSettings } from '@helpers/AppSettings';
 import { shortenRefsDeep } from '@helpers/subjectRefs';
 import { getDriveInstructionsContext } from './driveInstructionsContext';
-import { getDocumentContentForAgent } from './getDocumentContentForAgent';
 import {
   buildClassContext,
   describeClassCompact,
@@ -122,34 +121,21 @@ const processAtomicResources = async (
       context: ctx,
     });
 
-    if (resource.hasClasses(dataBrowser.classes.documentV2)) {
-      const contentInfo = ctx.bySubject.get(
-        dataBrowser.properties.documentContent,
-      );
-      delete compact[dataBrowser.properties.documentContent];
-
-      if (contentInfo) {
-        delete compact[contentInfo.shortname];
-      }
-
-      const content = getDocumentContentForAgent(resource, store);
-      compact._documentContent = content.ok ? content.text : null;
-    }
-
     compact._schema = classes.map(c => describeClassCompact(ctx, c));
+
+    const classContext = await getClassContextForAgent(
+      store,
+      resource,
+      compact,
+    );
 
     const lines = [
       `An atomicdata resource called ${resource.title}. Data:`,
       '```json',
       JSON.stringify(shortenRefsDeep(compact)),
       '```',
+      ...(classContext ? [classContext] : []),
     ];
-
-    const classContext = await getClassContextForAgent(store, resource);
-
-    if (classContext) {
-      lines.push(classContext);
-    }
 
     blocks.push(lines.join('\n'));
   }
