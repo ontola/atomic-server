@@ -285,6 +285,9 @@ the work is hardening and consolidation the codebase needs anyway.
 3. **Key transport** — same-agent pairing assumes the agent secret already
    exists on both devices (today: paste/QR the secret). Does secret
    provisioning ride the same QR flow as NodeID exchange, and if so, how is
-   it protected in transit?
+   it protected in transit? **Resolved in
+   [`device-pairing.md`](./device-pairing.md):** one envelope, two kinds —
+   `onboard` (secret in QR, v1) and `pair` (routing only); v2 moves the
+   secret onto the authenticated Iroh channel behind an on-screen confirm.
 4. **Drive enrollment on pairing** — pair grants which drives? All of the
    agent's, or picked at pair time (`KnownPeer.drives`)?
