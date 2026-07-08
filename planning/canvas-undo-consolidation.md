@@ -7,10 +7,16 @@
 > restore; branches persist in `localStorage` alongside the undo/redo
 > stacks — see `data-browser/src/views/Canvas/history-helpers.ts`).
 > Along the way the browser scrub was rebased from `getLoroHistory()`
-> onto the local snapshot timeline: purely local (undrained) edits all
-> collapse into the `''` message bucket and same-timestamp changes
-> tie-break arbitrarily across peers, so the Loro version list is only
-> used as a defensive bootstrap on first open (`bootstrapUndoSteps`).
+> onto the local snapshot timeline, and the underlying lib defects were
+> fixed: list/undo mutations used to commit unmessaged (so every edit
+> between drains collapsed into the `''` bucket — the drain's `c-` token
+> tags only ops still pending at export) and versions were sorted by
+> wall-clock timestamp with a cross-peer counter tiebreak (arbitrary
+> order on ties). `Resource.commitLoroEdit` now tags each logical edit
+> with a unique `e-` token and `getLoroHistory` sorts by Lamport, giving
+> one causally-ordered version per edit. The Loro version list is still
+> only a defensive bootstrap on first open (`bootstrapUndoSteps`) —
+> pre-fix docs carry legacy unmessaged oplogs.
 > Phase B (Flutter action-stack removal) remains open.
 
 ## Where we are after Phase A

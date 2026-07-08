@@ -74,6 +74,31 @@ export type SaveResult = 'persisted' | 'offline' | 'noop';
  */
 export const SYSTEM_COMMIT_ORIGIN = 'atomic:system';
 
+/**
+ * True for the runtime's internal Loro change-message tokens: `c-<ulid>`
+ * (per-Atomic-commit, written at drain-time export) and `e-<ulid>`
+ * (per-logical-edit, written by the list/undo mutation methods). These
+ * exist purely so `getLoroHistory` can bucket ops into versions — they
+ * must never be surfaced as human-facing metadata (e.g. `getCreatedBy`
+ * reads the genesis change message as the creator-agent carrier).
+ */
+export function isInternalCommitToken(message: string): boolean {
+  return /^[ce]-/.test(message);
+}
+
+let editTokenCounter = 0;
+
+/**
+ * Unique-within-oplog token for a locally-authored logical edit. Wall-clock
+ * base36 plus a monotonic counter: unique across reloads (a rehydrated doc
+ * carries its old tokens) without pulling in a ulid dependency here.
+ */
+function nextEditToken(): string {
+  editTokenCounter += 1;
+
+  return `e-${Date.now().toString(36)}-${editTokenCounter.toString(36)}`;
+}
+
 export enum ResourceEvents {
   LocalChange = 'local-change',
   LoadingChange = 'loading-change',
@@ -1637,7 +1662,12 @@ export class Resource<C extends OptionalClass = any> {
 
     const message = this.getGenesisChange()?.message;
 
-    return message && message.length > 0 ? message : undefined;
+    // An internal bucketing token (`c-`/`e-`) means the earliest change was
+    // a runtime-tagged edit, not the signed genesis — there's no creator
+    // metadata to read.
+    return message && message.length > 0 && !isInternalCommitToken(message)
+      ? message
+      : undefined;
   }
 
   /**
@@ -1667,13 +1697,13 @@ export class Resource<C extends OptionalClass = any> {
     // `length` is the operation count. Iterating only over Changes therefore
     // collapses every edit between commits into one version. To recover one
     // version per *commit* we walk every op counter inside each Change and
-    // group by `lastCommit` — the property the runtime writes when a commit
-    // applies. The state captured for each lastCommit is the **last** op
-    // counter that carried it, i.e. the state right before the next commit
-    // overwrote `lastCommit`. That's the snapshot that was actually saved.
+    // group by the change message (see the bucketing below). The state
+    // captured for each bucket is the **last** op counter that carried its
+    // message — the snapshot that was actually saved under that commit.
     type Step = {
       peer: string;
       counter: number;
+      lamport: number;
       timestamp: number;
       message: string | undefined;
     };
@@ -1685,6 +1715,7 @@ export class Resource<C extends OptionalClass = any> {
           steps.push({
             peer,
             counter: change.counter + i,
+            lamport: change.lamport + i,
             timestamp: change.timestamp,
             message: change.message,
           });
@@ -1692,15 +1723,19 @@ export class Resource<C extends OptionalClass = any> {
       }
     }
 
-    // Sort by timestamp (oldest first), then by counter. Normalise first so a
-    // mixed-unit oplog (ms-stamped commits alongside legacy second-resolution
-    // changes) orders correctly. Loro often reports timestamp=0 for offline
-    // edits, so the counter tiebreaker keeps things monotonic per peer — but
-    // cross-peer order is best-effort.
+    // Sort by Lamport clock: causal order, unlike wall-clock timestamps.
+    // Loro often reports timestamp=0 for offline edits, second-resolution
+    // stamps tie for every edit within the same second, and cross-peer
+    // counter comparison is meaningless — sorting on (timestamp, counter)
+    // used to interleave peers arbitrarily, which could even place the
+    // genesis state *after* the latest one. Lamport order is guaranteed to
+    // respect happened-before; genuinely concurrent ops tie and get a
+    // stable peer-id tiebreak.
     steps.sort(
       (a, b) =>
-        normalizeLoroChangeTimestampMs(a.timestamp) -
-          normalizeLoroChangeTimestampMs(b.timestamp) || a.counter - b.counter,
+        a.lamport - b.lamport ||
+        (a.peer < b.peer ? -1 : a.peer > b.peer ? 1 : 0) ||
+        a.counter - b.counter,
     );
 
     const lastCommitProp = 'https://atomicdata.dev/properties/lastCommit';
@@ -1774,12 +1809,17 @@ export class Resource<C extends OptionalClass = any> {
         }
       }
 
-      // Bucket by the Loro Change message — the drain tags each Atomic
-      // commit's change with a unique token (see `exportLoroDeltaForDrain`),
-      // so all ops of one commit share a message and form one version. Ops
-      // with no message (the genesis/base change, and body edits made
-      // outside the drain) bucket under '' as the base version. The latest
-      // entry per bucket wins — the final saved state under that commit.
+      // Bucket by the Loro Change message. Two token families exist:
+      // `e-<token>` written by the logical-edit mutation methods
+      // (pushListItem / replaceListItems / removeListItem / undo / redo —
+      // see `commitLoroEdit`), and `c-<ulid>` written by the drain for
+      // ops that were still pending at export time (property `set()`s).
+      // All ops of one edit/commit share a message and form one version.
+      // Ops with no message (the genesis/base change, and body edits made
+      // outside the runtime, e.g. loro-prosemirror) bucket under '' as the
+      // base version — intentionally collapsed so document typing doesn't
+      // spam a version per keystroke batch. The latest entry per bucket
+      // wins — the final saved state under that commit.
       //
       // (Earlier this bucketed by the `lastCommit` propval, but under
       // sign-at-drain `lastCommit` is server-assigned and never written into
@@ -2028,6 +2068,26 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
+   * Commit the pending Loro transaction as ONE logical edit, tagged with a
+   * unique `e-<token>` message and a millisecond timestamp.
+   *
+   * The message is load-bearing for history: Loro merges consecutive
+   * same-peer commits into a single Change unless the message (or
+   * timestamp) differs, and `getLoroHistory` buckets ops by message. A
+   * bare `commit()` here would fold every list edit between drains into
+   * the unmessaged base bucket, so history and the canvas scrub gesture
+   * would only ever see the latest state. (The drain's own `c-<ulid>`
+   * token can't help — it tags the transaction pending at export time,
+   * and these methods have already committed theirs by then.)
+   */
+  private commitLoroEdit(): void {
+    this._loroDoc?.commit({
+      timestamp: Date.now(),
+      message: nextEditToken(),
+    });
+  }
+
+  /**
    * Append one item to a JSON array property using the native Loro list (CRDT-friendly).
    * Used for canvas strokes and other list fields that merge per element across peers.
    */
@@ -2061,7 +2121,7 @@ export class Resource<C extends OptionalClass = any> {
       list.push(item);
     }
 
-    this._loroDoc?.commit();
+    this.commitLoroEdit();
     this.eventManager.emit(
       ResourceEvents.LocalChange,
       propUrl,
@@ -2123,7 +2183,7 @@ export class Resource<C extends OptionalClass = any> {
 
     // Single commit at end → single UndoManager checkpoint for the whole
     // replacement.
-    this._loroDoc?.commit();
+    this.commitLoroEdit();
     this.eventManager.emit(
       ResourceEvents.LocalChange,
       propUrl,
@@ -2144,7 +2204,7 @@ export class Resource<C extends OptionalClass = any> {
 
     const list = existing as LoroList;
     list.delete(index, 1);
-    this._loroDoc?.commit();
+    this.commitLoroEdit();
     this.rebuildCacheFromLoro();
     this.#cacheDirty = false;
     this._dirty = true;
@@ -2228,7 +2288,7 @@ export class Resource<C extends OptionalClass = any> {
     if (!this._loroUndoManager) return false;
     if (!this._loroUndoManager.canUndo()) return false;
     this._loroUndoManager.undo();
-    this._loroDoc?.commit();
+    this.commitLoroEdit();
     this.rebuildCacheFromLoro();
     this.#cacheDirty = false;
     this._dirty = true;
@@ -2249,7 +2309,7 @@ export class Resource<C extends OptionalClass = any> {
     if (!this._loroUndoManager) return false;
     if (!this._loroUndoManager.canRedo()) return false;
     this._loroUndoManager.redo();
-    this._loroDoc?.commit();
+    this.commitLoroEdit();
     this.rebuildCacheFromLoro();
     this.#cacheDirty = false;
     this._dirty = true;

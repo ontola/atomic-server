@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
 import { normalizeLoroChangeTimestampMs, Resource } from './resource.js';
 import type { JSONValue } from './value.js';
 
@@ -464,5 +464,93 @@ describe('Resource.merge Loro options', () => {
     local.merge(remote, { omitKeysFromMerge: [name] });
 
     expect(local.get(name)).toBe('baseline');
+  });
+});
+
+describe('getLoroHistory', () => {
+  const name = 'https://atomicdata.dev/properties/name';
+  const strokeData = 'https://atomicdata.dev/ontology/canvas/strokeData';
+
+  const strokeCountOf = (v: { propvals: Map<string, JSONValue> }): number => {
+    const sd = v.propvals.get(strokeData);
+
+    return Array.isArray(sd) ? sd.length : 0;
+  };
+
+  /**
+   * Regression: list edits commit without a message, so every edit between
+   * drains collapsed into the unmessaged base bucket — history (and the
+   * canvas scrub gesture built on it) only ever saw the latest state.
+   * `commitLoroEdit` now tags each list mutation with a unique `e-` token,
+   * so each one forms its own version.
+   */
+  it('keeps one version per local list edit', async ({ expect }) => {
+    const r = new Resource('https://example.com/history-per-edit');
+    await r.set(name, 'Canvas', false);
+    r.getLoroDoc()!.commit();
+
+    r.pushListItem(strokeData, { color: 1, width: 2, path: [[0, 0]] });
+    r.pushListItem(strokeData, { color: 2, width: 2, path: [[1, 1]] });
+    r.pushListItem(strokeData, { color: 3, width: 2, path: [[2, 2]] });
+    r.replaceListItems(strokeData, [{ color: 9, width: 9, path: [[9, 9]] }]);
+
+    const history = r.getLoroHistory();
+
+    // Base state (no strokes), one version per push, then the replacement —
+    // oldest first, ending at the current state.
+    expect(history.map(strokeCountOf)).toEqual([0, 1, 2, 3, 1]);
+    expect(history[history.length - 1].propvals.get(strokeData)).toEqual(
+      r.get(strokeData),
+    );
+  });
+
+  /**
+   * Regression: versions were sorted by (wall-clock timestamp, counter).
+   * Second-resolution stamps tie for every edit in the same second and
+   * counters are per-peer, so cross-peer order was arbitrary — a canvas
+   * synced to a second device could show the genesis state *after* the
+   * newest one, making scrub previews match the current screen. Lamport
+   * order respects happened-before regardless of clocks.
+   */
+  it('orders versions causally even when timestamps tie across peers', async ({
+    expect,
+  }) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_700_000_000_000);
+
+    try {
+      const subject = 'https://example.com/history-cross-peer';
+      const first = new Resource(subject);
+      await first.set(name, 'Original', false);
+      first.getLoroDoc()!.commit({ timestamp: 1_700_000_000_000 });
+      const snapshot = first.getLoroDoc()!.export({ mode: 'snapshot' });
+
+      // A second device: fresh doc (different Loro peer id), same content.
+      const second = new Resource(subject);
+      second.importLoroUpdate(snapshot);
+      second.pushListItem(strokeData, { color: 1, width: 2, path: [[0, 0]] });
+
+      const history = second.getLoroHistory();
+      expect(history.length).toBeGreaterThanOrEqual(2);
+
+      // The base version comes first, the pushed-stroke state last — the
+      // newest version must always be the current state.
+      expect(strokeCountOf(history[0])).toBe(0);
+      expect(history[0].propvals.get(name)).toBe('Original');
+      expect(strokeCountOf(history[history.length - 1])).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('getCreatedBy ignores internal edit tokens on message-less docs', async ({
+    expect,
+  }) => {
+    const r = new Resource('https://example.com/created-by-token-guard');
+    // First-ever change is a tagged list edit (no signed genesis) — the
+    // `e-` token must not leak out as the creator.
+    r.pushListItem(strokeData, { color: 1, width: 2, path: [[0, 0]] });
+
+    expect(r.getCreatedBy()).toBeUndefined();
   });
 });

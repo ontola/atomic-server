@@ -164,13 +164,13 @@ export function archiveBranch(
 
 /**
  * Reconstruct undo steps for a canvas that has Loro history but no local
- * snapshot state (first open on this device). The version list from
- * `getLoroHistory()` can be coarse and even mis-ordered for purely local
- * edits (unmessaged changes collapse into one bucket and same-timestamp
- * changes tie-break arbitrarily across peers), so this is defensive: parse
- * every version's strokeData, drop states identical to the current one,
- * and dedupe consecutive repeats. The result may be coarse, but every
- * entry is a real, distinct prior state.
+ * snapshot state (first open on this device). `getLoroHistory()` now
+ * yields one causally-ordered version per list edit (each mutation
+ * commits with a unique `e-` token), but docs written before that fix —
+ * and unmessaged ops in general — still collapse into one bucket, so
+ * stay defensive: parse every version's strokeData, drop states
+ * identical to the current one, and dedupe consecutive repeats. Every
+ * surviving entry is a real, distinct prior state.
  */
 export function bootstrapUndoSteps(
   versionStrokeData: (JSONValue | undefined)[],
