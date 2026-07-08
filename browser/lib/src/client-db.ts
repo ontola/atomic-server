@@ -601,6 +601,16 @@ export class ClientDbWorker {
     return (r as Record<string, Record<string, number>>) ?? {};
   }
 
+  /** Version vectors for one drive's resources only (parent-index walk),
+   *  instead of every resource in every drive. */
+  async getVersionVectorsForDrive(
+    drive: string,
+  ): Promise<Record<string, Record<string, number>>> {
+    const r = await this.send({ type: 'getVersionVectorsForDrive', drive });
+
+    return (r as Record<string, Record<string, number>>) ?? {};
+  }
+
   get isReady(): boolean {
     return this.ready && this.seeded;
   }

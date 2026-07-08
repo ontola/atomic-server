@@ -1178,12 +1178,14 @@ export class Store {
 
     if (this.clientDb) {
       try {
-        // NB: this pulls the version vector of EVERY resource in OPFS (all
-        // drives), and the worker is single-threaded — so a large DB makes this
-        // hog the worker and delays the sidebar's own OPFS queries. Scope-to-
-        // drive is the fix; see the `drive` arg we already have.
-        const endVV = perfSpan('clientdb.getAllVersionVectors');
-        allVVs = await this.clientDb.getAllVersionVectors();
+        // Scoped to THIS drive via the same parent-index walk the server uses
+        // (`collect_drive_subjects`): O(this drive) instead of O(every resource
+        // in every drive). It also keeps foreign-drive subjects out of the VV
+        // we send — the server treats a client-known subject it doesn't have in
+        // the drive as a pull/remove candidate, so an unscoped VV made every
+        // single-drive sync reason about unrelated drives' resources.
+        const endVV = perfSpan('clientdb.getVersionVectorsForDrive');
+        allVVs = await this.clientDb.getVersionVectorsForDrive(drive);
         endVV({ count: Object.keys(allVVs).length });
       } catch {
         // WASM DB may not be ready yet

@@ -48,7 +48,8 @@ export type WorkerRequest =
   | { id: number; type: 'putBlob'; hash: Uint8Array; data: Uint8Array }
   | { id: number; type: 'getBlob'; hash: Uint8Array }
   | { id: number; type: 'blake3Hash'; data: Uint8Array }
-  | { id: number; type: 'getAllVersionVectors' };
+  | { id: number; type: 'getAllVersionVectors' }
+  | { id: number; type: 'getVersionVectorsForDrive'; drive: string };
 
 /** Message types sent from worker back to main thread */
 export type WorkerResponse =
@@ -235,6 +236,12 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return db!.getAllVersionVectors();
+    }
+
+    case 'getVersionVectorsForDrive': {
+      await ensureInit();
+
+      return db!.getVersionVectorsForDrive(msg.drive);
     }
 
     default:

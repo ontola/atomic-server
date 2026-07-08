@@ -317,6 +317,59 @@ impl ClientDb {
         serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
     }
 
+    /// Version vectors for just ONE drive's resources, instead of every
+    /// resource in every drive (`getAllVersionVectors`). Uses the same
+    /// parent-index walk (`collect_drive_subjects`) the server uses, so the
+    /// cost is O(this drive) rather than O(entire local DB) — and the VV set
+    /// sent to the server no longer includes foreign-drive subjects it would
+    /// otherwise treat as pull/remove candidates.
+    #[wasm_bindgen(js_name = "getVersionVectorsForDrive")]
+    pub async fn get_version_vectors_for_drive(
+        &self,
+        drive: String,
+    ) -> Result<JsValue, JsError> {
+        use atomic_lib::db::trees::Tree;
+        use atomic_lib::loro::AtomicLoroDoc;
+        use std::collections::HashMap;
+
+        let drive_subject =
+            atomic_lib::Subject::from_raw(&drive, self.db.get_base_domain().as_deref());
+        let subjects =
+            atomic_lib::sync::engine::collect_drive_subjects(&self.db, &drive_subject).await;
+
+        let mut result: HashMap<String, HashMap<String, i32>> = HashMap::new();
+
+        for subject in subjects {
+            // `collect_drive_subjects` yields `pure_id()` strings, which are
+            // exactly the `LoroSnapshots` keys.
+            match self.db.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
+                Ok(Some(snapshot_bytes)) => {
+                    match AtomicLoroDoc::vv_map_from_snapshot(&snapshot_bytes) {
+                        Ok(vv) => {
+                            result.insert(subject, vv);
+                        }
+                        Err(e) => {
+                            web_sys::console::warn_1(
+                                &format!("[ClientDb] Failed to read VV for {}: {e}", &subject)
+                                    .into(),
+                            );
+                        }
+                    }
+                }
+                // No snapshot for this subject yet (metadata-only / not
+                // materialized) — nothing to diff, skip it.
+                Ok(None) => {}
+                Err(e) => {
+                    web_sys::console::warn_1(
+                        &format!("[ClientDb] VV read error for {}: {e}", &subject).into(),
+                    );
+                }
+            }
+        }
+
+        serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+    }
+
     /// Get all subjects in the database.
     #[wasm_bindgen(js_name = "allSubjects")]
     pub fn all_subjects(&self) -> Result<JsValue, JsError> {
