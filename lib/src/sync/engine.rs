@@ -608,20 +608,18 @@ pub fn compute_drive_hash(
         .collect::<Vec<_>>()
         .join("|");
 
-    // Use SHA-256 via ring when available, otherwise a simple deterministic hash
-    #[cfg(feature = "ring")]
-    {
-        let d = ring::digest::digest(&ring::digest::SHA256, hash_input.as_bytes());
-        return hex::encode(d.as_ref());
-    }
-
-    #[allow(unreachable_code)]
-    {
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        hash_input.hash(&mut hasher);
-        format!("{:016x}", hasher.finish())
-    }
+    // Canonical cross-implementation hash (planning/drive-reconciliation.md
+    // Phase 1): SHA-256 of `hash_input`, unconditionally. The browser computes
+    // the byte-identical string in JS and hashes it with `crypto.subtle`
+    // SHA-256 — see `canonicalDriveHash` in `browser/lib/src/store.ts`. A
+    // golden test vector on both sides pins them together. There is no
+    // non-crypto fallback: the old `DefaultHasher` path (a non-`ring` build)
+    // produced a value the client could never match, silently disabling the
+    // reconcile fast path on every sync.
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(hash_input.as_bytes());
+    hex::encode(hasher.finalize())
 }
 
 /// Build server-side version vector map for a drive.

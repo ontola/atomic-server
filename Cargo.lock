@@ -1261,6 +1261,7 @@ dependencies = [
  "serde",
  "serde_jcs",
  "serde_json",
+ "sha2 0.10.9",
  "sled",
  "tokio",
  "tokio-tungstenite",

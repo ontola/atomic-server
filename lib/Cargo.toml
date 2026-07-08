@@ -49,6 +49,7 @@ urlencoding = "2"
 ulid = "1.2.1"
 loro = "1.12.0"
 blake3 = "1.8.5"
+sha2 = "0.10"
 tokio = { version = "1.52.3", features = ["rt", "macros", "sync"] }
 async-trait = "0.1.89"
 tokio-tungstenite = { version = "0.29.0", features = ["rustls-tls-native-roots"], optional = true }

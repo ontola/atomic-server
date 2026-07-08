@@ -1935,4 +1935,29 @@ mod peer_sync_tests {
             "adding a resource to the drive must change its sync hash"
         );
     }
+
+    /// Golden cross-implementation vector for the canonical drive hash
+    /// (planning/drive-reconciliation.md Phase 1). The JS client
+    /// (`canonicalDriveHash` in `browser/lib/src/store.ts`) asserts the SAME
+    /// hex against the SAME logical input. If either side's subject/peer sort,
+    /// counter encoding, string format, or hash function drifts, one of the two
+    /// golden tests fails — this is what makes the two implementations provably
+    /// byte-identical rather than "probably the same".
+    #[test]
+    fn compute_drive_hash_matches_golden_vector() {
+        use crate::sync::engine::compute_drive_hash;
+        use std::collections::HashMap;
+
+        // Two subjects, two peers. Canonical string is
+        // "s1:2,0|s2:0,3" (subjects sorted; counters indexed by sorted peers
+        // [p1, p2]); its SHA-256 is the golden hex below.
+        let mut vvs: HashMap<String, HashMap<String, i32>> = HashMap::new();
+        vvs.insert("s1".into(), HashMap::from([("p1".to_string(), 2)]));
+        vvs.insert("s2".into(), HashMap::from([("p2".to_string(), 3)]));
+
+        assert_eq!(
+            compute_drive_hash(&vvs),
+            "de5fa2ae25000adf0d47d40b795e133c763328398301079ab56971d11862fbac",
+        );
+    }
 }

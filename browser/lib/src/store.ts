@@ -1,5 +1,6 @@
 import { ulid } from 'ulidx';
 import type { Agent } from './agent.js';
+import { canonicalDriveHash } from './canonical-drive-hash.js';
 import {
   removeCookieAuthentication,
   setCookieAuthentication,
@@ -1280,20 +1281,9 @@ export class Store {
       resources[subject] = counters;
     }
 
-    // Compute drive hash: SHA-256 of sorted (subject + VV bytes)
-    const sortedEntries = Object.entries(resources).sort(([a], [b]) =>
-      a.localeCompare(b),
-    );
-    const hashInput = sortedEntries
-      .map(([s, c]) => `${s}:${c.join(',')}`)
-      .join('|');
-    const hashBuffer = await crypto.subtle.digest(
-      'SHA-256',
-      new TextEncoder().encode(hashInput),
-    );
-    const driveHash = Array.from(new Uint8Array(hashBuffer))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    // Canonical hash, byte-identical to the Rust server (see
+    // `canonicalDriveHash` / planning/drive-reconciliation.md Phase 1).
+    const driveHash = await canonicalDriveHash(resources);
 
     return { drive, driveHash, peers, resources };
   }
