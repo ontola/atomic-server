@@ -3910,9 +3910,8 @@ msgstr "Platz"
 msgid "Redo (Ctrl+Shift+Z)"
 msgstr "Wiederherstellen (Strg+Umschalt+Z)"
 
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Undo (Ctrl+Z) — drag horizontally to scrub history"
-msgstr "Rückgängig (Strg+Z) — horizontal ziehen, um den Verlauf zu durchsuchen"
+#~ msgid "Undo (Ctrl+Z) — drag horizontally to scrub history"
+#~ msgstr "Rückgängig (Strg+Z) — horizontal ziehen, um den Verlauf zu durchsuchen"
 
 #. placeholder {0}: saveError
 #: src/views/Canvas/CanvasPage.tsx
@@ -5158,4 +5157,35 @@ msgstr ""
 
 #: src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "Follow session"
+msgstr ""
+
+#. placeholder {0}: step + 1
+#. placeholder {1}: totalSteps
+#: src/views/Canvas/HistoryScrubOverlay.tsx
+msgid "Version {0} / {1}"
+msgstr ""
+
+#: src/views/Canvas/HistoryScrubOverlay.tsx
+msgid "Discarded versions"
+msgstr ""
+
+#. placeholder {0}: i + 1
+#: src/views/Canvas/HistoryScrubOverlay.tsx
+msgid "Restore discarded version {0}"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Undo (Ctrl+Z) — drag horizontally to scrub history, hold to see discarded versions"
+msgstr ""
+
+#~ msgid ""
+#~ "Hold the undo button to see versions you abandoned by\n"
+#~ "drawing after an undo; drag over one and release to restore\n"
+#~ "it"
+#~ msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid ""
+"Hold the undo button to see versions you abandoned by drawing\n"
+"after an undo; drag over one and release to restore it"
 msgstr ""

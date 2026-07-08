@@ -9,7 +9,6 @@ import {
   strokeToJson,
   type CanvasStroke,
   type Resource,
-  type Version,
 } from '@tomic/lib';
 import { useStore } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
@@ -39,63 +38,28 @@ import {
   hoveredWidth as resolveHoveredWidth,
 } from './fan-helpers';
 import { currentWheelSessionStartedAt } from '@helpers/wheelSession';
-
-/**
- * Pixels of horizontal pointer travel that map to scrubbing through the
- * entire Loro history. Matches Flutter's `_onUndoPanDelta`.
- */
-const SCRUB_PIXELS_PER_HISTORY = 300;
-const SCRUB_DRAG_THRESHOLD = 5;
+import {
+  archiveBranch,
+  BRANCH_GRACE_MS,
+  bootstrapUndoSteps,
+  cloneStrokes,
+  loadCanvasHistory,
+  saveCanvasHistory,
+  scrubIndexFor,
+  SCRUB_DRAG_THRESHOLD,
+  stacksAt,
+  strokesEqual,
+  timelineOf,
+  UNDO_STACK_LIMIT,
+  type DiscardedBranch,
+} from './history-helpers';
+import { HistoryScrubOverlay } from './HistoryScrubOverlay';
 
 /**
  * Pixels of horizontal drag on the zoom button that double (or halve) the
  * canvas scale. Matches Flutter's `_onZoomScrubDelta` ratio.
  */
 const ZOOM_SCRUB_PX_PER_2X = 150;
-
-/**
- * Maximum number of undo / redo snapshots retained per canvas. Each entry
- * is a JSON-serialised stroke list (a `CanvasStroke[]`), so the cap also
- * bounds `localStorage` use.
- */
-const UNDO_STACK_LIMIT = 200;
-
-type UndoState = { undo: CanvasStroke[][]; redo: CanvasStroke[][] };
-
-const undoStorageKey = (subject: string) => `canvas-undo:${subject}`;
-
-function loadUndoState(subject: string): UndoState {
-  try {
-    const raw = localStorage.getItem(undoStorageKey(subject));
-    if (!raw) return { undo: [], redo: [] };
-    const parsed = JSON.parse(raw) as UndoState;
-
-    return {
-      undo: Array.isArray(parsed.undo) ? parsed.undo : [],
-      redo: Array.isArray(parsed.redo) ? parsed.redo : [],
-    };
-  } catch {
-    return { undo: [], redo: [] };
-  }
-}
-
-function saveUndoState(subject: string, state: UndoState): void {
-  try {
-    localStorage.setItem(undoStorageKey(subject), JSON.stringify(state));
-  } catch {
-    // Disabled / quota exceeded — undo simply doesn't persist this session.
-  }
-}
-
-/** Shallow clone of a stroke list — paths copied so future mutations of
- *  the live array don't bleed into the snapshot. */
-function cloneStrokes(strokes: CanvasStroke[]): CanvasStroke[] {
-  return strokes.map(s => ({
-    color: s.color,
-    width: s.width,
-    path: s.path.map(p => [p[0], p[1]] as [number, number]),
-  }));
-}
 
 /**
  * Pen-color swatches and stroke widths — match Flutter `fan_helpers.dart` so
@@ -116,13 +80,28 @@ const PARENT_PROP = 'https://atomicdata.dev/properties/parent';
 type ScrubState = {
   pointerId: number;
   startX: number;
-  versions: Version[];
-  /** index the scrub started at — always `versions.length - 1` (current) */
+  /** Snapshot of the full history timeline, captured at gesture start:
+   *  `[...undoStack, currentStrokes, ...redoStack (oldest-first)]`. */
+  timeline: CanvasStroke[][];
+  /** Index the scrub started at — the current state's timeline position. */
   startIndex: number;
   /** most recent index resolved during the gesture */
   currentIndex: number;
   dragged: boolean;
 };
+
+/** The branch tile under the given screen point, if any. Used while the
+ *  undo button owns the pointer capture — the tiles never receive the
+ *  events themselves, so hit-test by coordinates. */
+function branchIdAtPoint(x: number, y: number): string | null {
+  for (const el of document.elementsFromPoint(x, y)) {
+    const id = (el as HTMLElement).dataset?.branchId;
+
+    if (id) return id;
+  }
+
+  return null;
+}
 
 /** True when the keyboard event originated from a text field or editor. */
 function isEditableKeyboardTarget(target: EventTarget | null): boolean {
@@ -178,6 +157,12 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const undoStackRef = useRef<CanvasStroke[][]>([]);
   const redoStackRef = useRef<CanvasStroke[][]>([]);
 
+  // Discarded branch leaves — versions abandoned by editing after an undo,
+  // recoverable from the overlay while holding the undo button. Kept in a
+  // ref (gesture handlers) and mirrored to state (overlay rendering).
+  const branchesRef = useRef<DiscardedBranch[]>([]);
+  const [branches, setBranches] = useState<DiscardedBranch[]>([]);
+
   // Fan state — populated while the user holds + drags the colour or
   // width button. `fanType` null means no fan is open. The overlay reads
   // these refs through React state to render previews.
@@ -214,6 +199,21 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     null,
   );
   const scrubRef = useRef<ScrubState | null>(null);
+
+  // Version overlay lifecycle: 'held' while the pointer is down on the
+  // undo button, 'grace' for a few seconds after a scrub release (branch
+  // tiles stay hoverable / clickable), 'closed' otherwise.
+  const [overlayMode, setOverlayMode] = useState<'closed' | 'held' | 'grace'>(
+    'closed',
+  );
+  const graceTimerRef = useRef<number | undefined>(undefined);
+  // Timeline position shown in the overlay's progress bar.
+  const [scrubStep, setScrubStep] = useState(0);
+  const [scrubTotal, setScrubTotal] = useState(1);
+  // Branch tile currently under the pointer. Ref mirrors state so the
+  // pointer-up handler reads the value set during the same gesture.
+  const [hoveredBranchId, setHoveredBranchId] = useState<string | null>(null);
+  const hoveredBranchIdRef = useRef<string | null>(null);
 
   // Eraser drag state: indices of strokes the current drag has marked for
   // deletion. Materialized as one atomic `replaceListItems` on release so the
@@ -277,11 +277,12 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     setStrokes(parseCanvasStrokes(res.get(canvas.properties.strokeData)));
   }, []);
 
-  /** Persist the current undo / redo stacks under the canvas subject. */
-  const persistUndoState = useCallback(() => {
-    saveUndoState(resource.subject, {
+  /** Persist the undo / redo stacks + branches under the canvas subject. */
+  const persistHistory = useCallback(() => {
+    saveCanvasHistory(resource.subject, {
       undo: undoStackRef.current,
       redo: redoStackRef.current,
+      branches: branchesRef.current,
     });
   }, [resource.subject]);
 
@@ -293,33 +294,54 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
     reloadStrokesFromResource(resource);
 
-    // Load (or bootstrap) the persistent undo state for THIS canvas. The
-    // bootstrap walks `getLoroHistory()` — every prior version except the
-    // latest becomes an undo step, so a freshly-loaded canvas with N
-    // historical commits exposes N-1 undo steps immediately.
-    const stored = loadUndoState(resource.subject);
+    // Load the persistent undo state for THIS canvas.
+    const stored = loadCanvasHistory(resource.subject);
+    undoStackRef.current = stored.undo;
+    redoStackRef.current = stored.redo;
+    branchesRef.current = stored.branches;
+    setBranches(stored.branches);
+    setCanUndo(stored.undo.length > 0);
+    setCanRedo(stored.redo.length > 0);
+
+    let cancelled = false;
 
     if (stored.undo.length === 0 && stored.redo.length === 0) {
-      const versions = resource.getLoroHistory();
-      const reconstructed: CanvasStroke[][] = [];
+      // First open on this device: bootstrap undo steps from the Loro
+      // history. `getLoroHistory()` returns [] until the Loro WASM has
+      // loaded, so await it — reading synchronously here left the undo
+      // button permanently disabled on a cold page load.
+      (async () => {
+        try {
+          await enableLoro();
+        } catch {
+          return;
+        }
 
-      for (let i = 0; i < versions.length - 1; i++) {
-        reconstructed.push(
-          parseCanvasStrokes(
-            versions[i].propvals.get(canvas.properties.strokeData),
-          ),
+        if (cancelled) return;
+
+        // Don't clobber steps the user created while the WASM loaded.
+        if (
+          undoStackRef.current.length > 0 ||
+          redoStackRef.current.length > 0
+        ) {
+          return;
+        }
+
+        const versions = resource.getLoroHistory();
+        const current = parseCanvasStrokes(
+          resource.get(canvas.properties.strokeData),
         );
-      }
+        const steps = bootstrapUndoSteps(
+          versions.map(v => v.propvals.get(canvas.properties.strokeData)),
+          current,
+        );
 
-      undoStackRef.current = reconstructed.slice(-UNDO_STACK_LIMIT);
-      redoStackRef.current = [];
-    } else {
-      undoStackRef.current = stored.undo;
-      redoStackRef.current = stored.redo;
+        if (cancelled || steps.length === 0) return;
+
+        undoStackRef.current = steps;
+        setCanUndo(true);
+      })();
     }
-
-    setCanUndo(undoStackRef.current.length > 0);
-    setCanRedo(redoStackRef.current.length > 0);
 
     const unsub = resource.on(ResourceEvents.LocalChange, prop => {
       if (
@@ -331,7 +353,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       }
     });
 
-    return unsub;
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [resource, reloadStrokesFromResource]);
 
   const paint = useCallback(() => {
@@ -394,28 +419,47 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
   // ──────────────── Undo / Redo / scrub-history (Flutter parity) ───────────
   //
-  // Tap = `resource.undo()`, drag = scrub through `getLoroHistory()` with
-  // live preview, release = `replaceListItems` to the scrubbed-to version
-  // (one undo checkpoint). See `planning/canvas-undo-consolidation.md` for
-  // the design.
+  // The undo button is a three-in-one gesture, mirroring Flutter's canvas:
+  //
+  // * tap → single-step undo;
+  // * press + horizontal drag → scrub the local history timeline
+  //   (`[...undoStack, current, ...redoStack]`) with live preview; release
+  //   rebalances the stacks around the landed index, so the future stays
+  //   redoable;
+  // * press, drag over a version thumbnail in the overlay, release →
+  //   restore that discarded branch (the current tip is archived as a new
+  //   branch first, so nothing is ever lost).
+  //
+  // See `planning/canvas-undo-consolidation.md` for the design history.
 
   /** Snapshot the current strokes onto the undo stack. Called before every
-   *  user-visible edit (push stroke, erase). Truncates the redo stack
-   *  since the user is on a new forward branch. */
+   *  user-visible edit (push stroke, erase). The user is diverging from
+   *  any redo future, so the abandoned future's furthest state is archived
+   *  as a recoverable branch leaf before the redo stack is cleared. */
   const pushUndoSnapshot = useCallback(
     (preEditStrokes: CanvasStroke[]) => {
+      if (redoStackRef.current.length > 0) {
+        // The bottom of the redo stack is the furthest-forward state — the
+        // tip the user originally walked back from.
+        branchesRef.current = archiveBranch(
+          branchesRef.current,
+          redoStackRef.current[0],
+        );
+        setBranches(branchesRef.current);
+        redoStackRef.current = [];
+      }
+
       undoStackRef.current.push(cloneStrokes(preEditStrokes));
 
       if (undoStackRef.current.length > UNDO_STACK_LIMIT) {
         undoStackRef.current.shift();
       }
 
-      redoStackRef.current = [];
-      persistUndoState();
+      persistHistory();
       setCanUndo(true);
       setCanRedo(false);
     },
-    [persistUndoState],
+    [persistHistory],
   );
 
   const applyHistoricalStrokes = useCallback(
@@ -449,12 +493,12 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       redoStackRef.current.shift();
     }
 
-    persistUndoState();
+    persistHistory();
     setCanUndo(undoStackRef.current.length > 0);
     setCanRedo(true);
 
     await applyHistoricalStrokes(target);
-  }, [applyHistoricalStrokes, persistUndoState]);
+  }, [applyHistoricalStrokes, persistHistory]);
 
   const handleRedo = useCallback(async () => {
     if (redoStackRef.current.length === 0) return;
@@ -466,51 +510,155 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       undoStackRef.current.shift();
     }
 
-    persistUndoState();
+    persistHistory();
     setCanUndo(true);
     setCanRedo(redoStackRef.current.length > 0);
 
     await applyHistoricalStrokes(target);
-  }, [applyHistoricalStrokes, persistUndoState]);
+  }, [applyHistoricalStrokes, persistHistory]);
+
+  const closeOverlay = useCallback(() => {
+    if (graceTimerRef.current !== undefined) {
+      window.clearTimeout(graceTimerRef.current);
+      graceTimerRef.current = undefined;
+    }
+
+    setOverlayMode('closed');
+    hoveredBranchIdRef.current = null;
+    setHoveredBranchId(null);
+  }, []);
+
+  /** Keep the overlay interactive for a moment after a scrub release so
+   *  branch thumbnails can still be hovered / clicked (Flutter parity). */
+  const openGraceWindow = useCallback(() => {
+    if (graceTimerRef.current !== undefined) {
+      window.clearTimeout(graceTimerRef.current);
+    }
+
+    setOverlayMode('grace');
+    graceTimerRef.current = window.setTimeout(() => {
+      graceTimerRef.current = undefined;
+      setOverlayMode('closed');
+      hoveredBranchIdRef.current = null;
+      setHoveredBranchId(null);
+      setPreviewStrokes(null);
+    }, BRANCH_GRACE_MS);
+  }, []);
+
+  // Clear a pending grace timer on unmount / canvas navigation.
+  useEffect(() => closeOverlay, [closeOverlay, resource.subject]);
+
+  /** Restore a discarded branch leaf: archive the current timeline tip as
+   *  a new branch (so switching is itself recoverable), make the restore
+   *  undoable, and write the branch's strokes to the resource. */
+  const restoreBranch = useCallback(
+    async (branchId: string) => {
+      const branch = branchesRef.current.find(b => b.id === branchId);
+
+      if (!branch) return;
+
+      const current = strokesRef.current;
+      // The timeline tip is the furthest-forward state: the bottom of the
+      // redo stack if the user has undone, otherwise the current strokes.
+      const tip =
+        redoStackRef.current.length > 0 ? redoStackRef.current[0] : current;
+
+      let nextBranches = branchesRef.current.filter(b => b.id !== branchId);
+
+      if (!strokesEqual(tip, branch.strokes)) {
+        nextBranches = archiveBranch(nextBranches, tip);
+      }
+
+      branchesRef.current = nextBranches;
+      setBranches(nextBranches);
+
+      redoStackRef.current = [];
+      undoStackRef.current.push(cloneStrokes(current));
+
+      if (undoStackRef.current.length > UNDO_STACK_LIMIT) {
+        undoStackRef.current.shift();
+      }
+
+      persistHistory();
+      setCanUndo(true);
+      setCanRedo(false);
+
+      await applyHistoricalStrokes(branch.strokes);
+    },
+    [applyHistoricalStrokes, persistHistory],
+  );
 
   const onUndoPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!canUndo) return;
+      if (!canUndo && !canRedo && branchesRef.current.length === 0) return;
+
       e.preventDefault();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
-      const versions = resource.getLoroHistory();
+      const timeline = timelineOf(
+        { undo: undoStackRef.current, redo: redoStackRef.current },
+        strokesRef.current,
+      );
+      const startIndex = undoStackRef.current.length;
+
       scrubRef.current = {
         pointerId: e.pointerId,
         startX: e.clientX,
-        versions,
-        startIndex: versions.length - 1,
-        currentIndex: versions.length - 1,
+        timeline,
+        startIndex,
+        currentIndex: startIndex,
         dragged: false,
       };
+
+      // Press-and-hold immediately shows the version overlay (peek).
+      if (graceTimerRef.current !== undefined) {
+        window.clearTimeout(graceTimerRef.current);
+        graceTimerRef.current = undefined;
+      }
+
+      setScrubStep(startIndex);
+      setScrubTotal(timeline.length);
+      setOverlayMode('held');
     },
-    [canUndo, resource],
+    [canUndo, canRedo],
   );
 
   const onUndoPointerMove = useCallback((e: React.PointerEvent) => {
     const s = scrubRef.current;
     if (!s || s.pointerId !== e.pointerId) return;
 
+    // Dragging over a version thumbnail previews that branch and takes
+    // precedence over the scrub position.
+    const branchId = branchIdAtPoint(e.clientX, e.clientY);
+
+    if (branchId !== hoveredBranchIdRef.current) {
+      hoveredBranchIdRef.current = branchId;
+      setHoveredBranchId(branchId);
+    }
+
+    if (branchId) {
+      const branch = branchesRef.current.find(b => b.id === branchId);
+
+      if (branch) {
+        s.dragged = true;
+        setPreviewStrokes(branch.strokes);
+
+        return;
+      }
+    }
+
     const dx = e.clientX - s.startX;
     if (!s.dragged && Math.abs(dx) < SCRUB_DRAG_THRESHOLD) return;
     s.dragged = true;
 
-    const total = s.versions.length;
-    if (total === 0) return;
+    const idx = scrubIndexFor(s.startIndex, dx, s.timeline.length);
 
-    const stepsBack = Math.round((-dx / SCRUB_PIXELS_PER_HISTORY) * total);
-    const idx = Math.max(0, Math.min(total - 1, s.startIndex - stepsBack));
-    if (idx === s.currentIndex) return;
-    s.currentIndex = idx;
+    if (idx !== s.currentIndex) {
+      s.currentIndex = idx;
+      setScrubStep(idx);
+    }
 
-    const propvals = s.versions[idx]?.propvals;
-    const raw = propvals?.get(canvas.properties.strokeData);
-    setPreviewStrokes(parseCanvasStrokes(raw));
+    setPreviewStrokes(idx === s.startIndex ? null : (s.timeline[idx] ?? null));
   }, []);
 
   const onUndoPointerUp = useCallback(
@@ -520,39 +668,85 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
       scrubRef.current = null;
 
+      const pickedBranch = hoveredBranchIdRef.current;
+      hoveredBranchIdRef.current = null;
+      setHoveredBranchId(null);
+      setPreviewStrokes(null);
+
+      // Released on a version thumbnail → restore that branch.
+      if (pickedBranch) {
+        closeOverlay();
+        await restoreBranch(pickedBranch);
+
+        return;
+      }
+
       // No drag → tap = single-step undo.
       if (!s.dragged) {
+        closeOverlay();
         await handleUndo();
 
         return;
       }
 
-      setPreviewStrokes(null);
+      if (s.currentIndex !== s.startIndex) {
+        // Land on the scrubbed-to state: rebalance the stacks around the
+        // new position. The rest of the timeline stays reachable — undo
+        // and redo keep walking it, nothing is truncated.
+        const next = stacksAt(s.timeline, s.currentIndex);
+        undoStackRef.current = next.undo;
+        redoStackRef.current = next.redo;
+        persistHistory();
+        setCanUndo(next.undo.length > 0);
+        setCanRedo(next.redo.length > 0);
 
-      if (s.currentIndex === s.startIndex) {
-        return;
+        await applyHistoricalStrokes(s.timeline[s.currentIndex]);
       }
 
-      const target = s.versions[s.currentIndex];
-      const historicalStrokes = parseCanvasStrokes(
-        target?.propvals.get(canvas.properties.strokeData),
-      );
-
-      // Scrub-release commits a historical state — record the pre-scrub
-      // strokes as an undoable step so a plain undo press unwinds it.
-      pushUndoSnapshot(strokesRef.current);
-
-      await applyHistoricalStrokes(historicalStrokes);
+      // Keep the overlay around briefly if there are branches to pick.
+      if (branchesRef.current.length > 0) {
+        openGraceWindow();
+      } else {
+        closeOverlay();
+      }
     },
-    [applyHistoricalStrokes, handleUndo, pushUndoSnapshot],
+    [
+      applyHistoricalStrokes,
+      closeOverlay,
+      handleUndo,
+      openGraceWindow,
+      persistHistory,
+      restoreBranch,
+    ],
   );
 
-  const onUndoPointerCancel = useCallback((e: React.PointerEvent) => {
-    const s = scrubRef.current;
-    if (!s || s.pointerId !== e.pointerId) return;
-    scrubRef.current = null;
-    setPreviewStrokes(null);
+  const onUndoPointerCancel = useCallback(
+    (e: React.PointerEvent) => {
+      const s = scrubRef.current;
+      if (!s || s.pointerId !== e.pointerId) return;
+      scrubRef.current = null;
+      setPreviewStrokes(null);
+      closeOverlay();
+    },
+    [closeOverlay],
+  );
+
+  /** Hover / click on branch tiles during the post-release grace window. */
+  const onBranchHover = useCallback((id: string | null) => {
+    hoveredBranchIdRef.current = id;
+    setHoveredBranchId(id);
+    const branch = id ? branchesRef.current.find(b => b.id === id) : undefined;
+    setPreviewStrokes(branch ? branch.strokes : null);
   }, []);
+
+  const onBranchPick = useCallback(
+    async (id: string) => {
+      setPreviewStrokes(null);
+      closeOverlay();
+      await restoreBranch(id);
+    },
+    [closeOverlay, restoreBranch],
+  );
 
   // ──────────────── Save / draw the actual stroke ──────────────────────────
 
@@ -1338,12 +1532,12 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           </WidthCircleButton>
           <CircleButton
             type='button'
-            title='Undo (Ctrl+Z) — drag horizontally to scrub history'
+            title='Undo (Ctrl+Z) — drag horizontally to scrub history, hold to see discarded versions'
             onPointerDown={onUndoPointerDown}
             onPointerMove={onUndoPointerMove}
             onPointerUp={onUndoPointerUp}
             onPointerCancel={onUndoPointerCancel}
-            disabled={!canUndo}
+            disabled={!canUndo && !canRedo && branches.length === 0}
             aria-pressed={previewStrokes !== null}
           >
             <FaRotateLeft />
@@ -1367,6 +1561,18 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             <FaExpand />
           </CircleButton>
         </BottomToolbar>
+        {overlayMode !== 'closed' && (
+          <HistoryScrubOverlay
+            step={scrubStep}
+            totalSteps={scrubTotal}
+            branches={branches}
+            hoveredBranchId={hoveredBranchId}
+            interactive={overlayMode === 'grace'}
+            darkMode={darkMode}
+            onBranchHover={onBranchHover}
+            onBranchPick={onBranchPick}
+          />
+        )}
       </CanvasArea>
       {fanType && fanButtonCenter && (
         <FanOverlay
@@ -1408,6 +1614,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
                 <li>
                   Tap <kbd>Undo</kbd> / <kbd>Redo</kbd> to step through edits;
                   drag the undo button left/right to scrub the full history
+                </li>
+                <li>
+                  Hold the undo button to see versions you abandoned by drawing
+                  after an undo; drag over one and release to restore it
                 </li>
                 <li>
                   Tap the zoom button to fit all strokes; drag left/right to

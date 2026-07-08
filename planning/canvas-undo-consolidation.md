@@ -2,7 +2,16 @@
 
 > **Status:** Phase A landed (browser scrub gesture, `replaceListItems`,
 > `strokeData` datatype = `jsonArray`, legacy string parser dropped).
-> Phases B and C are the path to full browser ↔ Flutter parity.
+> **Phase C landed** (browser discarded-branches: hold the undo button →
+> version overlay + thumbnail panel; drag over a thumbnail and release to
+> restore; branches persist in `localStorage` alongside the undo/redo
+> stacks — see `data-browser/src/views/Canvas/history-helpers.ts`).
+> Along the way the browser scrub was rebased from `getLoroHistory()`
+> onto the local snapshot timeline: purely local (undrained) edits all
+> collapse into the `''` message bucket and same-timestamp changes
+> tie-break arbitrarily across peers, so the Loro version list is only
+> used as a defensive bootstrap on first open (`bootstrapUndoSteps`).
+> Phase B (Flutter action-stack removal) remains open.
 
 ## Where we are after Phase A
 
