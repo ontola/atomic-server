@@ -81,6 +81,7 @@ Remaining work, not "this file exists."
 | [`tours.md`](./tours.md) | Design, not built. |
 | [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Landing.** Playwright light on feature branches; full on `develop` / tags / opt-in. Steps 1–3 shipped. Remaining: grow vitest + `jsTestIntegration` before shrinking heavy. |
 | [`atomic-forms.md`](./atomic-forms.md) | **Planned.** Forms/Survey feature — schema, builder UI, agent-less submission endpoint, `/form/:id` runtime, results in Tables. Research: [`atomic-forms-research.md`](./atomic-forms-research.md). |
+| [`outbox-drain-data-loss-race.md`](./outbox-drain-data-loss-race.md) | **Confirmed bug, not yet root-caused.** A resource save can report success while the outbox drain silently drops the write — reproduced independent of React/Forms. `forms.spec.ts`'s reload-persistence assertions are deliberately kept strict as regression signal. |
 
 ## Slices and companions
 
