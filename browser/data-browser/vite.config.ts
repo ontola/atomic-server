@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import webfontDownload from 'vite-plugin-webfont-dl';
 import prismjs from 'vite-plugin-prismjs';
 import wasm from 'vite-plugin-wasm';
-import { wuchale } from '@wuchale/vite-plugin';
+import { wuchale } from 'wuchale/vite';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execSync } from 'node:child_process';
@@ -77,7 +77,10 @@ export default defineConfig({
       // the two WASM memories diverge. Exact-match regex so the
       // `loro-crdt/web` subpath import in `LoroLoader` is left alone.
       { find: /^loro-crdt$/, replacement: 'loro-crdt/web' },
-      { find: '@components', replacement: path.resolve(__dirname, 'src/components') },
+      {
+        find: '@components',
+        replacement: path.resolve(__dirname, 'src/components'),
+      },
       { find: '@views', replacement: path.resolve(__dirname, 'src/views') },
       { find: '@hooks', replacement: path.resolve(__dirname, 'src/hooks') },
       { find: '@helpers', replacement: path.resolve(__dirname, 'src/helpers') },
@@ -426,7 +429,7 @@ export default defineConfig({
   },
   server: {
     // Fixed, uncommon port so the atomicbrowser dev server never collides with
-    // vite's default 5173 (used by other local apps — e.g. the SaaS portal).
+    // vite's default 5173 (used by other local apps).
     // strictPort makes a collision fail loudly instead of silently shifting.
     port: 6747,
     strictPort: true,
