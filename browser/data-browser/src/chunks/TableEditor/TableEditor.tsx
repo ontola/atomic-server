@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useId,
   useLayoutEffect,
   useMemo,
@@ -59,6 +60,13 @@ interface FancyTableProps<T> {
   onRowExpand?: (index: number) => void;
   /** See {@link TableCommands.insertRowBelow}. */
   onInsertRowBelow?: (index: number) => boolean;
+  /** Fires when the active cell moves (both indexes `undefined` when the
+   * selection clears or the table unmounts). Column index 0 is the row
+   * header; data columns start at 1. Used for e.g. presence announcing. */
+  onSelectedCellChange?: (
+    row: number | undefined,
+    column: number | undefined,
+  ) => void;
   itemKey?: (index: number) => string;
   HeadingComponent: TableHeadingComponent<T>;
   NewColumnButtonComponent: React.ComponentType;
@@ -104,6 +112,7 @@ function FancyTableInner<T>({
   onColumnReorder,
   onRowExpand = () => undefined,
   onInsertRowBelow,
+  onSelectedCellChange,
   HeadingComponent,
   NewColumnButtonComponent,
 }: FancyTableProps<T>): JSX.Element {
@@ -199,6 +208,19 @@ function FancyTableInner<T>({
   }, [cursorMode, selectedColumn, selectedRow, tableRef]);
 
   useClearCommands(columns, onClearRow, onClearCells);
+
+  const emitSelectedCellChange = useEffectEvent(
+    (row: number | undefined, column: number | undefined) =>
+      onSelectedCellChange?.(row, column),
+  );
+
+  useEffect(() => {
+    emitSelectedCellChange(selectedRow, selectedColumn);
+  }, [selectedRow, selectedColumn]);
+
+  // Retract the selection announcement when the grid unmounts (e.g. a
+  // switch to the kanban/calendar view) — there's no cell to sit on.
+  useEffect(() => () => emitSelectedCellChange(undefined, undefined), []);
 
   const Row = useCallback(
     ({ index, style, ariaAttributes }: RowProps) => {

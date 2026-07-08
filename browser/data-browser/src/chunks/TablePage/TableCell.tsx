@@ -22,6 +22,11 @@ import { StringCell } from './EditorCells/StringCell';
 import { TablePageContext } from './tablePageContext';
 import { createValueChangedHistoryItem } from './helpers/useTableHistory';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
+import {
+  cellPresenceKey,
+  RemoteCellPresence,
+  TablePresenceContext,
+} from './TablePresence';
 
 interface TableCellProps {
   columnIndex: number;
@@ -73,6 +78,14 @@ export function TableCell({
     resource,
     commits.properties.createdAt,
     { commit: false, commitDebounce: 0 },
+  );
+
+  // Remote sessions whose active cell this is. Match on the RESOLVED
+  // subject (`resource.subject`, not the `subject` prop): peers announce
+  // real `did:ad:` subjects, and a materialized session row's `_new:`
+  // prop subject aliases to one.
+  const remoteAgents = useContext(TablePresenceContext).get(
+    cellPresenceKey(resource.subject, property.subject),
   );
 
   const dataType = property.datatype;
@@ -184,6 +197,7 @@ export function TableCell({
           property={property.subject}
         />
       )}
+      {remoteAgents && <RemoteCellPresence agents={remoteAgents} />}
     </Cell>
   );
 }

@@ -55,13 +55,16 @@ export function useDrivePresence<T = unknown>(): PresenceItem<T>[] {
  * Announce that this session is viewing `subject`, and get the presence of
  * other sessions viewing it (issue #1229).
  *
- * `setData` attaches a view-specific payload (canvas XY, table cell, …) to
- * our announcement; it lands in the `data` field of the `PresenceItem`
- * other clients see. To follow a user, navigate to their item's
- * `resource` whenever it changes.
+ * `setData` attaches a view-specific payload (canvas pointer XY, table
+ * cell, …) to our announcement; it lands in the `data` field of the
+ * `PresenceItem` other clients see. To follow a user, navigate to their
+ * item's `resource` whenever it changes.
  *
- * There should be at most one announcing caller at a time (the resource
- * page); pass `announce: false` for additional read-only consumers.
+ * Announcing callers must agree on the subject: the NavBar announces the
+ * currently viewed resource, and a view of that same resource may call
+ * this hook again to attach `data` (see the canvas + table views in
+ * data-browser) — same-subject announcers compose harmlessly. Pass
+ * `announce: false` for read-only consumers.
  */
 export function useResourcePresence<T = unknown>(
   subject: string | undefined,

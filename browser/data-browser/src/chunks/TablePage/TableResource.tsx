@@ -40,6 +40,7 @@ import { TableViewTabs } from './TableViewTabs';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
 import { KanbanView } from './Kanban/KanbanView';
 import { CalendarView } from './Calendar/CalendarView';
+import { TablePresenceContext, useTablePresence } from './TablePresence';
 
 interface TableResourceProps {
   resource: Resource<DataBrowser.Table>;
@@ -463,6 +464,13 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     ],
   );
 
+  // Presence: announce which cell we're on, learn which cells remote
+  // sessions are on (rendered by the cells via TablePresenceContext).
+  const { cellPresence, handleSelectedCellChange } = useTablePresence(
+    resource.subject,
+    { collection, columns, memberCount, newRowSubjects },
+  );
+
   const handleClearCells = useHandleClearCells(
     collection,
     addItemsToHistoryStack,
@@ -512,81 +520,84 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
 
   return (
     <TablePageContext value={tablePageContext}>
-      <TableViewTabs
-        views={views}
-        activeView={activeView}
-        setActiveView={setActiveView}
-        createView={createView}
-        setViewKind={setViewKind}
-        duplicateView={duplicateView}
-        deleteView={deleteView}
-        viewName={viewName}
-        renameView={renameView}
-        allColumns={allColumns}
-        columns={columns}
-        showColumn={showColumn}
-        hideColumn={hideColumn}
-        canWrite={canWrite}
-      />
-      {viewKind === 'kanban' ? (
-        <KanbanView
-          tableSubject={resource.subject}
-          tableClass={tableClass}
+      <TablePresenceContext value={cellPresence}>
+        <TableViewTabs
+          views={views}
+          activeView={activeView}
+          setActiveView={setActiveView}
+          createView={createView}
+          setViewKind={setViewKind}
+          duplicateView={duplicateView}
+          deleteView={deleteView}
+          viewName={viewName}
+          renameView={renameView}
           allColumns={allColumns}
           columns={columns}
-          collection={collection}
-          ready={ready}
-          viewGroupBy={viewGroupBy}
-          setViewGroupBy={setViewGroupBy}
-          readOnly={!canWrite}
+          showColumn={showColumn}
+          hideColumn={hideColumn}
+          canWrite={canWrite}
         />
-      ) : viewKind === 'calendar' ? (
-        <CalendarView
-          tableSubject={resource.subject}
-          tableClass={tableClass}
-          allColumns={allColumns}
-          collection={collection}
-          ready={ready}
-          viewGroupBy={viewGroupBy}
-          setViewGroupBy={setViewGroupBy}
-          readOnly={!canWrite}
-        />
-      ) : (
-        <>
-          <TableFilterBar columns={columns} />
-          <FancyTable
-            readOnly={!canWrite}
+        {viewKind === 'kanban' ? (
+          <KanbanView
+            tableSubject={resource.subject}
+            tableClass={tableClass}
+            allColumns={allColumns}
             columns={columns}
-            columnSizes={columnSizes}
-            itemCount={
-              ready
-                ? memberCount + newRowSubjects.length
-                : collection.totalMembers
-            }
-            itemKey={itemKey}
-            columnToKey={columnToKey}
-            labelledBy={titleId}
-            onClearRow={handleDeleteRow}
-            onCellResize={handleColumnResize}
-            onClearCells={handleClearCells}
-            onCopyCommand={handleCopyCommand}
-            onPasteCommand={handlePaste}
-            onUndoCommand={undoLastItem}
-            onColumnReorder={reorderColumns}
-            onRowExpand={handleRowExpand}
-            onInsertRowBelow={handleInsertRowBelow}
-            HeadingComponent={TableHeading}
-            NewColumnButtonComponent={NewColumnButton}
-          >
-            {Row}
-          </FancyTable>
-        </>
-      )}
-      <ExpandedRowDialog
-        subject={expandedRowSubject ?? unknownSubject}
-        open={showExpandedRowDialog}
-        bindOpen={setShowExpandedRowDialog}
-      />
+            collection={collection}
+            ready={ready}
+            viewGroupBy={viewGroupBy}
+            setViewGroupBy={setViewGroupBy}
+            readOnly={!canWrite}
+          />
+        ) : viewKind === 'calendar' ? (
+          <CalendarView
+            tableSubject={resource.subject}
+            tableClass={tableClass}
+            allColumns={allColumns}
+            collection={collection}
+            ready={ready}
+            viewGroupBy={viewGroupBy}
+            setViewGroupBy={setViewGroupBy}
+            readOnly={!canWrite}
+          />
+        ) : (
+          <>
+            <TableFilterBar columns={columns} />
+            <FancyTable
+              readOnly={!canWrite}
+              columns={columns}
+              columnSizes={columnSizes}
+              itemCount={
+                ready
+                  ? memberCount + newRowSubjects.length
+                  : collection.totalMembers
+              }
+              itemKey={itemKey}
+              columnToKey={columnToKey}
+              labelledBy={titleId}
+              onClearRow={handleDeleteRow}
+              onCellResize={handleColumnResize}
+              onClearCells={handleClearCells}
+              onCopyCommand={handleCopyCommand}
+              onPasteCommand={handlePaste}
+              onUndoCommand={undoLastItem}
+              onColumnReorder={reorderColumns}
+              onRowExpand={handleRowExpand}
+              onInsertRowBelow={handleInsertRowBelow}
+              onSelectedCellChange={handleSelectedCellChange}
+              HeadingComponent={TableHeading}
+              NewColumnButtonComponent={NewColumnButton}
+            >
+              {Row}
+            </FancyTable>
+          </>
+        )}
+        <ExpandedRowDialog
+          subject={expandedRowSubject ?? unknownSubject}
+          open={showExpandedRowDialog}
+          bindOpen={setShowExpandedRowDialog}
+        />
+      </TablePresenceContext>
     </TablePageContext>
   );
 };

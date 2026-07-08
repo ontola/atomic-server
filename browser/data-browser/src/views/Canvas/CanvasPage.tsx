@@ -1,7 +1,6 @@
 import { useDarkMode } from '@helpers/useDarkMode';
 import {
   canvas,
-  core,
   DEFAULT_STROKE_WIDTH,
   enableLoro,
   parseCanvasStrokes,
@@ -10,7 +9,6 @@ import {
   type CanvasStroke,
   type Resource,
 } from '@tomic/lib';
-import { useStore } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
@@ -23,8 +21,6 @@ import {
   FaRotateLeft,
   FaRotateRight,
 } from 'react-icons/fa6';
-import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { constructOpenURL } from '@helpers/navigation';
 import {
   Dialog,
   DialogContent,
@@ -53,6 +49,7 @@ import {
   type DiscardedBranch,
 } from './history-helpers';
 import { HistoryScrubOverlay } from './HistoryScrubOverlay';
+import { RemoteCursors, useCanvasPresence } from './CanvasPresence';
 
 /**
  * Pixels of horizontal drag on the zoom button that double (or halve) the
@@ -73,8 +70,6 @@ const PEN_COLORS = [
  * call site so the visual radius is constant regardless of zoom.
  */
 const ERASE_SCREEN_RADIUS = 15;
-
-const PARENT_PROP = 'https://atomicdata.dev/properties/parent';
 
 type ScrubState = {
   pointerId: number;
@@ -116,10 +111,14 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
 
 export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [darkMode] = useDarkMode();
-  const store = useStore();
-  const navigate = useNavigateWithTransition();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Live pointer sharing over the drive presence channel: broadcast our
+  // pointer's world position, render other sessions' pointers.
+  const { cursors, broadcastPointer, clearPointer } = useCanvasPresence(
+    resource.subject,
+  );
 
   const [strokes, setStrokes] = useState<CanvasStroke[]>([]);
   const [currentStroke, setCurrentStroke] = useState<CanvasStroke | null>(null);
@@ -957,6 +956,8 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       offsetRef.current.y,
     );
 
+    broadcastPointer(x, y);
+
     if (erasingPointerRef.current === e.pointerId) {
       eraseAt(x, y);
 
@@ -1447,7 +1448,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerEnter={trackCursorForPreview}
-          onPointerLeave={() => setCursorPos(null)}
+          onPointerLeave={() => {
+            setCursorPos(null);
+            clearPointer();
+          }}
           onPointerUp={finishStroke}
           onPointerCancel={finishStroke}
         />
@@ -1464,6 +1468,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             }}
           />
         )}
+        <RemoteCursors cursors={cursors} scale={scale} offset={offset} />
         <BottomToolbar>
           <CircleButton
             type='button'
