@@ -423,6 +423,17 @@ export class WSClient {
       this._onlineListener = undefined;
     }
 
+    // Flip the flag and fail in-flight requests NOW, synchronously — we
+    // initiated this close, so we don't need to wait for the `close`
+    // event to tell us the connection is gone. Relying on the event is
+    // fragile: once the transport is already blocked (offline toggle, a
+    // dropped link), Chromium can suppress or delay `close`, leaving
+    // `serverConnected` stuck at true and pending GETs/commits hanging
+    // until their own timeouts. The event handler still runs if it fires,
+    // but both calls are idempotent (flag re-set to false, empty maps).
+    this.store.setServerConnected(false);
+    this.rejectAllPending('WebSocket closed by client');
+
     this.ws.close();
   }
 

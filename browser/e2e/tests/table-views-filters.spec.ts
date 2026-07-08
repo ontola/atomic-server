@@ -266,7 +266,9 @@ test.describe('table filtering + views', () => {
 
     // Add a second view — it has its own (empty) filter set, so all three
     // rows show. This proves filters are scoped per-view, not global.
+    // "Add view" is a menu now: open it, then pick the Table kind.
     await page.getByTitle('Add view').click();
+    await page.getByRole('menuitem', { name: 'Table', exact: true }).click();
     await expect(page.getByRole('tab')).toHaveCount(2);
     await expect(page.getByRole('gridcell', { name: 'Bob' })).toBeVisible({
       timeout: 15000,

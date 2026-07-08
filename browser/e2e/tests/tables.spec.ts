@@ -74,6 +74,18 @@ test.describe('tables', async () => {
     const fillRow = async (currentRowNumber: number, row: Row) => {
       const { name, date, number, checkbox, select } = row;
       const rowIndex = currentRowNumber + 1;
+      // Position on this row's first cell before editing. The tag picker's
+      // Escape (in pickTag, below) drops the grid out of Edit into Visual
+      // mode, so we can't rely on Tab wrapping from the previous row's last
+      // cell to land here in edit mode. Click the target cell directly,
+      // mirroring the initial cell setup — the trailing empty row is always
+      // present once the previous row has gained content.
+      const rowFirstCell = page.locator(
+        `[aria-rowindex="${rowIndex}"] > [aria-colindex="2"]`,
+      );
+      await rowFirstCell.scrollIntoViewIfNeeded();
+      await rowFirstCell.click();
+      await expect(rowFirstCell).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(
         page.locator(
@@ -111,17 +123,13 @@ test.describe('tables', async () => {
 
       await tab();
       await pickTag(select);
-      await tab();
+      // pickTag ends in Visual mode (its Escape closes the picker and exits
+      // edit), so the row is complete here — the next fillRow re-positions
+      // itself by clicking. Just confirm this row's name landed.
       await expect(
         page.getByRole('gridcell', { name: row.name }),
         `${row.name} row not visible`,
       ).toBeVisible();
-      await expect(
-        page.locator(
-          `[aria-rowindex="${rowIndex + 1}"] > [aria-colindex="2"] > input`,
-        ),
-        "Next row's first cell isn't focused",
-      ).toBeFocused();
     };
 
     // --- Test Start ---
@@ -236,20 +244,17 @@ test.describe('tables', async () => {
         select: 'wtf',
       },
     ];
-    // The cell click + focus combo races with TableEditor's React state
-    // initialization (handlers bound after first render). Click without
-    // `force` so playwright auto-waits for actionability — that ensures
-    // the React handlers are bound by the time mousedown fires, which is
-    // what sets `activeCell` and `CursorMode.Visual` (the precondition
-    // for Enter → Edit mode in fillRow).
-    const firstCell = page.locator(
-      '[role="row"][aria-rowindex="2"] > [role="gridcell"][aria-colindex="2"]',
-    );
-    await firstCell.evaluate(element =>
-      element.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
-    );
-    await firstCell.click();
-    await expect(firstCell).toBeFocused();
+    // Wait for the grid to be ready before fillRow starts clicking. The cell
+    // click races with TableEditor's React state initialization (handlers
+    // bound after first render); fillRow clicks without `force` so playwright
+    // auto-waits for actionability, but give the first render a moment to
+    // settle so the very first mousedown lands on bound handlers (which set
+    // `activeCell` + `CursorMode.Visual`, the precondition for Enter → Edit).
+    // fillRow owns all positioning — clicking an already-active cell enters
+    // edit mode instead of just focusing it, so we must not pre-click here.
+    await expect(
+      page.locator('[aria-rowindex="2"] > [aria-colindex="2"]'),
+    ).toBeVisible();
     await page.waitForTimeout(1000);
 
     for (const [index, row] of rows.entries()) {
@@ -262,11 +267,16 @@ test.describe('tables', async () => {
     await expect(page.getByRole('gridcell', { name: '😤 wild' })).toBeVisible();
     await expect(page.getByRole('gridcell', { name: '🤨 wtf' })).toBeVisible();
 
-    // Edit first cell content
+    // Edit first cell content: click the first row's name cell, then type to
+    // replace it (typing in Visual mode enters edit mode from empty). Clicking
+    // is deterministic — the previous ArrowUp navigation assumed the cursor
+    // ended on the name column, which the Tab-wrap no longer guarantees.
     await page.keyboard.press('Escape');
-    await page.keyboard.press('ArrowUp');
-    await page.keyboard.press('ArrowUp');
-    await page.keyboard.press('ArrowUp');
+    const firstNameCell = page.locator(
+      '[aria-rowindex="2"] > [aria-colindex="2"]',
+    );
+    await firstNameCell.click();
+    await expect(firstNameCell).toBeFocused();
     const newName = 'Progressive Peperoni Pizza House';
     await page.keyboard.type(newName);
     await page.keyboard.press('Escape');
