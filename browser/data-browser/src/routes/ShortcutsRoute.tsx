@@ -28,7 +28,8 @@ const Shortcuts: React.FunctionComponent = () => {
           <Key shortcut={shortcuts.sidebarToggle} /> Show or hide the sidebar
         </p>
         <p>
-          <Key shortcut='?' /> Show these keyboard shortcuts
+          <Key shortcut={shortcuts.keyboardShortcuts} /> Show these keyboard
+          shortcuts
         </p>
         <p>
           <Key shortcut={shortcuts.edit} /> <b>E</b>dit resource

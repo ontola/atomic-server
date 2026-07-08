@@ -43,7 +43,7 @@ import { Tag } from './Tag/Tag';
 import { getResourcesDrive } from '@helpers/getResourcesDrive';
 import { ShareDialog } from './Share/ShareDialog';
 import { IconButton } from './IconButton/IconButton';
-import { shortcuts } from './HotKeyWrapper';
+import { displayShortcut, shortcuts } from './HotKeyWrapper';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { isRunningInTauri } from '../helpers/tauri';
 import { openSearchOverlay } from './OverlayContainer';
@@ -233,7 +233,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         color='textLight'
         type='button'
         onClick={() => setSideBarLocked(!sideBarLocked)}
-        title={`Show / hide sidebar (${shortcuts.sidebarToggle})`}
+        title={`Show / hide sidebar (${displayShortcut(shortcuts.sidebarToggle)})`}
         data-test='sidebar-toggle'
       >
         <FaBars />

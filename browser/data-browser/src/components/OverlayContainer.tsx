@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type JSX, useMemo } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
-import { shortcuts } from './HotKeyWrapper';
+import { displayShortcut, shortcuts } from './HotKeyWrapper';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
@@ -586,15 +586,6 @@ const ShortcutKey = styled.kbd`
   font-family: inherit;
 `;
 
-function displayShortcut(s: string): string {
-  return s
-    .replace('meta+', '⌘')
-    .replace('option+', '⌥')
-    .replace('shift+', '⇧')
-    .replace('ctrl+', '⌃')
-    .replace('backspace', '⌫');
-}
-
 function ShortcutsOverlay(): JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -611,41 +602,20 @@ function ShortcutsOverlay(): JSX.Element {
     }
   };
 
+  // Rendered from the central `shortcuts` registry so this overlay can't
+  // drift from the actual bindings.
   const shortcuts_list = [
-    {
-      key: navigator.platform.includes('Mac') ? '⌘K' : 'Ctrl+K',
-      label: 'Open search',
-    },
-    { key: 'Shift+/', label: 'Show keyboard shortcuts' },
-    {
-      key: navigator.platform.includes('Mac') ? '⌘E' : 'Ctrl+E',
-      label: 'Edit resource',
-    },
-    {
-      key: navigator.platform.includes('Mac') ? '⌘D' : 'Ctrl+D',
-      label: 'Show data view',
-    },
-    {
-      key: navigator.platform.includes('Mac') ? '⌘H' : 'Ctrl+H',
-      label: 'Go home',
-    },
-    {
-      key: navigator.platform.includes('Mac') ? '⌘N' : 'Ctrl+N',
-      label: 'New resource',
-    },
-    {
-      key: navigator.platform.includes('Mac') ? '⌘M' : 'Ctrl+M',
-      label: 'Open menu',
-    },
-    {
-      key: navigator.platform.includes('Mac') ? '⌘U' : 'Ctrl+U',
-      label: 'User settings',
-    },
-    {
-      key: navigator.platform.includes('Mac') ? '⌘T' : 'Ctrl+T',
-      label: 'Theme settings',
-    },
-    { key: 'Shift+/', label: 'This page' },
+    { key: shortcuts.search, label: 'Open search' },
+    { key: shortcuts.keyboardShortcuts, label: 'Show keyboard shortcuts' },
+    { key: shortcuts.edit, label: 'Edit resource' },
+    { key: shortcuts.data, label: 'Show data view' },
+    { key: shortcuts.home, label: 'Go home' },
+    { key: shortcuts.parent, label: 'Go to parent' },
+    { key: shortcuts.new, label: 'New resource' },
+    { key: shortcuts.menu, label: 'Open menu' },
+    { key: shortcuts.userSettings, label: 'User settings' },
+    { key: shortcuts.themeSettings, label: 'Theme settings' },
+    { key: shortcuts.sidebarToggle, label: 'Show or hide the sidebar' },
   ];
 
   return (
@@ -715,7 +685,7 @@ export function OverlayContainer(): JSX.Element | null {
   );
 
   useHotkeys(
-    '?',
+    shortcuts.keyboardShortcuts,
     e => {
       e.preventDefault();
       setOverlay('shortcuts');

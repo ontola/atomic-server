@@ -1256,7 +1256,6 @@ msgid "Space"
 msgstr "Space"
 
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
-#: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas"
 msgstr "Canvas"
 
@@ -1277,9 +1276,8 @@ msgstr "Canvas help"
 msgid "Show canvas help"
 msgstr "Show canvas help"
 
-#: src/views/Canvas/CanvasPage.tsx
-msgid "New canvas"
-msgstr "New canvas"
+#~ msgid "New canvas"
+#~ msgstr "New canvas"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Switch to draw"
@@ -1368,91 +1366,72 @@ msgstr "<0/> chat"
 msgid "<0>esc</0> close"
 msgstr "<0>esc</0> close"
 
-#: src/components/OverlayContainer.tsx
-#: src/components/OverlayContainer.tsx
-#: src/components/OverlayContainer.tsx
-#: src/components/OverlayContainer.tsx
-#: src/components/OverlayContainer.tsx
-#: src/components/OverlayContainer.tsx
-#: src/components/OverlayContainer.tsx
-#: src/components/OverlayContainer.tsx
-msgid "Mac"
-msgstr "Mac"
+#~ msgid "Mac"
+#~ msgstr "Mac"
 
-#: src/components/OverlayContainer.tsx
-msgid "Ctrl+K"
-msgstr "Ctrl+K"
+#~ msgid "Ctrl+K"
+#~ msgstr "Ctrl+K"
 
 #: src/components/OverlayContainer.tsx
 msgid "Open search"
 msgstr "Open search"
 
-#: src/components/OverlayContainer.tsx
-#: src/components/OverlayContainer.tsx
-msgid "Shift+/"
-msgstr "Shift+/"
+#~ msgid "Shift+/"
+#~ msgstr "Shift+/"
 
 #: src/components/OverlayContainer.tsx
 msgid "Show keyboard shortcuts"
 msgstr "Show keyboard shortcuts"
 
-#: src/components/OverlayContainer.tsx
-msgid "Ctrl+E"
-msgstr "Ctrl+E"
+#~ msgid "Ctrl+E"
+#~ msgstr "Ctrl+E"
 
 #: src/components/OverlayContainer.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 msgid "Edit resource"
 msgstr "Edit resource"
 
-#: src/components/OverlayContainer.tsx
-msgid "Ctrl+D"
-msgstr "Ctrl+D"
+#~ msgid "Ctrl+D"
+#~ msgstr "Ctrl+D"
 
 #: src/components/OverlayContainer.tsx
 msgid "Show data view"
 msgstr "Show data view"
 
-#: src/components/OverlayContainer.tsx
-msgid "Ctrl+H"
-msgstr "Ctrl+H"
+#~ msgid "Ctrl+H"
+#~ msgstr "Ctrl+H"
 
-#: src/components/OverlayContainer.tsx
-msgid "Ctrl+N"
-msgstr "Ctrl+N"
+#~ msgid "Ctrl+N"
+#~ msgstr "Ctrl+N"
 
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/components/OverlayContainer.tsx
 msgid "New resource"
 msgstr "New resource"
 
-#: src/components/OverlayContainer.tsx
-msgid "Ctrl+M"
-msgstr "Ctrl+M"
+#~ msgid "Ctrl+M"
+#~ msgstr "Ctrl+M"
 
 #: src/components/OverlayContainer.tsx
 msgid "Open menu"
 msgstr "Open menu"
 
-#: src/components/OverlayContainer.tsx
-msgid "Ctrl+U"
-msgstr "Ctrl+U"
+#~ msgid "Ctrl+U"
+#~ msgstr "Ctrl+U"
 
 #: src/components/OverlayContainer.tsx
 msgid "User settings"
 msgstr "User settings"
 
-#: src/components/OverlayContainer.tsx
-msgid "Ctrl+T"
-msgstr "Ctrl+T"
+#~ msgid "Ctrl+T"
+#~ msgstr "Ctrl+T"
 
 #: src/components/OverlayContainer.tsx
 msgid "Theme settings"
 msgstr "Theme settings"
 
-#: src/components/OverlayContainer.tsx
-msgid "This page"
-msgstr "This page"
+#~ msgid "This page"
+#~ msgstr "This page"
 
 #: src/components/OverlayContainer.tsx
 #: src/routes/ShortcutsRoute.tsx
@@ -2761,7 +2740,7 @@ msgstr "Set Drive"
 msgid "Set {0} as current drive"
 msgstr "Set {0} as current drive"
 
-#. 0: shortcuts.sidebarToggle
+#. 0: displayShortcut(shortcuts.sidebarToggle)
 #: src/components/NavBar.tsx
 msgid "Show / hide sidebar ({0})"
 msgstr "Show / hide sidebar ({0})"
@@ -5012,6 +4991,7 @@ msgid "No matching actions"
 msgstr "No matching actions"
 
 #: src/actions/resourceActions.tsx
+#: src/components/OverlayContainer.tsx
 msgid "Go to parent"
 msgstr "Go to parent"
 
@@ -5027,3 +5007,7 @@ msgstr "Are you sure you want to delete{0} <0/>"
 #: src/routes/ShortcutsRoute.tsx
 msgid "<0/> Go to parent resource"
 msgstr "<0/> Go to parent resource"
+
+#: src/components/OverlayContainer.tsx
+msgid "Show or hide the sidebar"
+msgstr "Show or hide the sidebar"

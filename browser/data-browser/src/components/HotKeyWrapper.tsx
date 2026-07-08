@@ -29,8 +29,12 @@ export const shortcuts = {
   userSettings: osCtrl('u'),
   /** Open theme settings page */
   themeSettings: osCtrl('t'),
+  // react-hotkeys-hook v5 matches on `event.code` (mapped through its key
+  // table), so punctuation must be written as code names: pressing `?` gives
+  // code "Slash", never "/". `shift+/` and `\` silently stopped matching in
+  // the v4 → v5 upgrade, like the `cmd+` alias below.
   /** Open keyboard shortcuts page */
-  keyboardShortcuts: 'shift+/',
+  keyboardShortcuts: 'shift+slash',
   /** Open command palette / search */
   search: osCtrl('k'),
   /** Open resource menu */
@@ -38,7 +42,7 @@ export const shortcuts = {
   /** Go to the parent of the current resource */
   parent: osCtrl('up'),
   /** Locks the sidebar menu */
-  sidebarToggle: '\\',
+  sidebarToggle: 'backslash',
   /** Move line up (documents) */
   moveLineUp: osAlt('up'),
   /** Move line down (documents) */
@@ -60,8 +64,13 @@ function osAlt(key: string): string {
 }
 
 export function displayShortcut(shortcut: string): string {
+  // Code names → the character users see on their keyboard.
+  const readable = shortcut
+    .replace('shift+slash', '?')
+    .replace('backslash', '\\');
+
   if (navigator.platform.includes('Mac')) {
-    return shortcut
+    return readable
       .replace('meta+', '⌘')
       .replace('option+', '⌥')
       .replace('shift+', '⇧')
@@ -70,7 +79,7 @@ export function displayShortcut(shortcut: string): string {
       .replace('down', '↓');
   }
 
-  return shortcut;
+  return readable;
 }
 
 /** App-wide keyboard events handler. */
