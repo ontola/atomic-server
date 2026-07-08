@@ -336,6 +336,20 @@ mod tests {
         );
     }
 
+    /// Golden cross-implementation vector for `item_fingerprint`. The TS client
+    /// asserts the SAME hex for the SAME item (`canonical-drive-hash.test.ts`).
+    /// The reconcile only converges if both sides fingerprint an item
+    /// identically, so a drift in the string format or hash fails one of the
+    /// two golden tests instead of silently mis-diffing.
+    #[test]
+    fn item_fingerprint_matches_golden_vector() {
+        // "s=p1:1,p2:2" → SHA-256.
+        assert_eq!(
+            hex::encode(item_fingerprint("s", &vv(&[("p1", 1), ("p2", 2)]))),
+            "8b6067440e370aeaf5e85936d9d67477224a664f8b2811a2008309b590edd5d8",
+        );
+    }
+
     #[test]
     fn item_fingerprint_is_deterministic_and_order_independent_in_vv() {
         // Two VV maps built in different insertion orders must fingerprint the

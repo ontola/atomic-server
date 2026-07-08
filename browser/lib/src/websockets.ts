@@ -8,7 +8,8 @@
 import { createAuthentication } from './authentication.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
-import { StoreEvents, type Store } from './store.js';
+import { StoreEvents, type Store, type DriveSyncState } from './store.js';
+import { reconcile, type Item, type RemoteRange } from './rbsr.js';
 import { AtomicError, ErrorType } from './error.js';
 import {
   type Commit,
@@ -184,6 +185,11 @@ export class WSClient {
     string,
     Awaited<ReturnType<Store['computeDriveSyncState']>>
   >();
+  /** Pending RBSR range-query responses. The reconcile issues these one at a
+   *  time, so at most one of each is in flight; FIFO queues stay correct even
+   *  if that changes. */
+  private _rbsrFpQueue: Array<(fps: string[]) => void> = [];
+  private _rbsrItemsQueue: Array<(items: Item[]) => void> = [];
 
   /** When true, all WS frames are logged to the console in human-readable form. */
   public debug =
@@ -1003,11 +1009,32 @@ export class WSClient {
         console.warn('Invalid INDEX_STATUS message:', json);
       }
     } else if (text.startsWith('SYNC_RESEND ')) {
-      // The hash-first probe missed: the drive isn't in sync, so the server
-      // needs our full version-vector state to compute the diff. Send the
-      // state we already computed for the probe (recompute if it aged out).
+      // The hash-first probe missed: reconcile via RBSR (find only the
+      // differing subjects) and send version vectors for just those.
       const drive = text.slice('SYNC_RESEND '.length);
-      void this.sendFullSyncState(drive);
+      void this.sendReducedSyncState(drive);
+    } else if (text.startsWith('RBSR_FP ')) {
+      try {
+        const { fps } = JSON.parse(text.slice('RBSR_FP '.length)) as {
+          fps: string[];
+        };
+        this._rbsrFpQueue.shift()?.(fps);
+      } catch (e) {
+        console.warn('Invalid RBSR_FP message:', e);
+      }
+    } else if (text.startsWith('RBSR_ITEMS ')) {
+      try {
+        const { items } = JSON.parse(text.slice('RBSR_ITEMS '.length)) as {
+          items: Array<[string, Array<[string, number]>]>;
+        };
+        const parsed: Item[] = items.map(([subject, pairs]) => ({
+          subject,
+          vv: Object.fromEntries(pairs),
+        }));
+        this._rbsrItemsQueue.shift()?.(parsed);
+      } catch (e) {
+        console.warn('Invalid RBSR_ITEMS message:', e);
+      }
     } else if (text === 'AUTHENTICATED') {
       // Legacy auth response — handled for backward compat
     }
@@ -1151,21 +1178,120 @@ export class WSClient {
     }
   }
 
-  /** Send the full version-vector state for a drive (response to SYNC_RESEND).
-   *  Uses the state stashed by the probe; recomputes if it's no longer around
-   *  (e.g. a reconnect between probe and resend). */
-  private async sendFullSyncState(drive: string): Promise<void> {
+  /** Respond to SYNC_RESEND. Instead of sending the whole drive's version
+   *  vector, run RBSR against the server (range fingerprint exchange) to find
+   *  only the differing subjects, and send version vectors for just those. On
+   *  any RBSR failure, fall back to the full VV so the drive always reconciles.
+   */
+  private async sendReducedSyncState(drive: string): Promise<void> {
     if (this.readyState !== WebSocket.OPEN) return;
 
+    const syncState =
+      this._pendingSyncState.get(drive) ??
+      (await this.store.computeDriveSyncState(drive).catch(() => undefined));
+    this._pendingSyncState.delete(drive);
+
+    if (!syncState) return;
+
     try {
-      const syncState =
-        this._pendingSyncState.get(drive) ??
-        (await this.store.computeDriveSyncState(drive));
-      this._pendingSyncState.delete(drive);
-      this.ws.send('SYNC_VV ' + JSON.stringify(syncState));
+      const local = syncStateToItems(syncState);
+      const remote: RemoteRange = {
+        fingerprint: async (lo, hi) =>
+          (await this.rbsrFingerprints(drive, [[lo, hi ?? null]]))[0],
+        items: (lo, hi) => this.rbsrItems(drive, lo, hi),
+      };
+
+      const diff = await reconcile(local, remote);
+      const differing = [...diff.onlyLocal, ...diff.onlyRemote, ...diff.differ];
+
+      // Version vectors for the differing subjects the client actually holds
+      // (only-remote subjects it doesn't have — the server pushes those).
+      const reducedResources: Record<string, number[]> = {};
+      for (const subject of [...diff.onlyLocal, ...diff.differ]) {
+        if (syncState.resources[subject]) {
+          reducedResources[subject] = syncState.resources[subject];
+        }
+      }
+
+      this.ws.send(
+        'SYNC_VV ' +
+          JSON.stringify({
+            drive,
+            driveHash: syncState.driveHash,
+            subjects: differing,
+            peers: syncState.peers,
+            resources: reducedResources,
+          }),
+      );
     } catch (e) {
-      console.warn('[WS] full VV resend failed:', e);
+      // Safety net: any RBSR failure (query timeout, socket close, parse) falls
+      // back to the full reconcile, which always converges. Never leave the
+      // drive un-reconciled because the optimization stumbled.
+      console.warn('[WS] RBSR reconcile failed, sending full VV:', e);
+
+      if (this.readyState === WebSocket.OPEN) {
+        this.ws.send('SYNC_VV ' + JSON.stringify(syncState));
+      }
     }
+  }
+
+  /** Send an RBSR range-fingerprint query and await the server's fingerprints. */
+  private rbsrFingerprints(
+    drive: string,
+    ranges: Array<[string, string | null]>,
+  ): Promise<string[]> {
+    return new Promise<string[]>((resolve, reject) => {
+      if (this.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket is not open'));
+
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        const i = this._rbsrFpQueue.indexOf(settle);
+
+        if (i >= 0) this._rbsrFpQueue.splice(i, 1);
+        reject(new Error('RBSR_FP timed out'));
+      }, 10000);
+      const settle = (fps: string[]) => {
+        clearTimeout(timer);
+        resolve(fps);
+      };
+
+      this._rbsrFpQueue.push(settle);
+      this.ws.send('RBSR_FP ' + JSON.stringify({ drive, ranges }));
+    });
+  }
+
+  /** Send an RBSR range-items query and await the server's items. */
+  private rbsrItems(
+    drive: string,
+    lo: string,
+    hi?: string,
+  ): Promise<Item[]> {
+    return new Promise<Item[]>((resolve, reject) => {
+      if (this.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket is not open'));
+
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        const i = this._rbsrItemsQueue.indexOf(settle);
+
+        if (i >= 0) this._rbsrItemsQueue.splice(i, 1);
+        reject(new Error('RBSR_ITEMS timed out'));
+      }, 10000);
+      const settle = (items: Item[]) => {
+        clearTimeout(timer);
+        resolve(items);
+      };
+
+      this._rbsrItemsQueue.push(settle);
+      this.ws.send(
+        'RBSR_ITEMS ' + JSON.stringify({ drive, lo, hi: hi ?? null }),
+      );
+    });
   }
 
   /**
@@ -1316,4 +1442,28 @@ export class WSClient {
 /** Check if a browser context supports WebSockets */
 export function supportsWebSockets(): boolean {
   return typeof WebSocket !== 'undefined';
+}
+
+/** Convert a computed drive-sync state (compact peer-indexed counters) into the
+ *  sorted `(subject, version vector)` items the RBSR reconcile runs over —
+ *  the exact set the probe hash was computed from, so the client reconciles the
+ *  same items it hashed. */
+function syncStateToItems(state: DriveSyncState): Item[] {
+  const items: Item[] = Object.entries(state.resources).map(
+    ([subject, counters]) => {
+      const vv: Record<string, number> = {};
+
+      counters.forEach((c, i) => {
+        if (c !== 0) {
+          vv[state.peers[i]] = c;
+        }
+      });
+
+      return { subject, vv };
+    },
+  );
+
+  items.sort((a, b) => (a.subject < b.subject ? -1 : 1));
+
+  return items;
 }

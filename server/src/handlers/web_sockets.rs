@@ -535,10 +535,74 @@ impl WebSocketConnection {
                     );
                 }
             }
+        } else if let Some(json) = text.strip_prefix("RBSR_FP ") {
+            // RBSR: answer range fingerprints so the client can find the
+            // differing subjects without transmitting the whole version vector.
+            // Stateless (rebuilds `drive_items` per request) — the incremental
+            // fingerprint tree that makes this cheaper is Phase 2c.
+            if let Ok(req) = serde_json::from_str::<RbsrFpRequest>(json) {
+                let store = self.store.clone();
+                ctx.spawn(
+                    async move {
+                        let items =
+                            atomic_lib::sync::engine::drive_items(&store, &req.drive).await;
+                        let fps: Vec<String> = req
+                            .ranges
+                            .iter()
+                            .map(|(lo, hi)| {
+                                hex::encode(atomic_lib::sync::rbsr::range_fingerprint(
+                                    &items,
+                                    lo,
+                                    hi.as_deref(),
+                                ))
+                            })
+                            .collect();
+                        serde_json::json!({ "drive": req.drive, "fps": fps }).to_string()
+                    }
+                    .into_actor(self)
+                    .map(|resp, _actor, ctx| ctx.text(format!("RBSR_FP {resp}"))),
+                );
+            }
+        } else if let Some(json) = text.strip_prefix("RBSR_ITEMS ") {
+            if let Ok(req) = serde_json::from_str::<RbsrItemsRequest>(json) {
+                let store = self.store.clone();
+                ctx.spawn(
+                    async move {
+                        let items =
+                            atomic_lib::sync::engine::drive_items(&store, &req.drive).await;
+                        let hi = req.hi.as_deref();
+                        let out: Vec<(String, Vec<(String, i32)>)> = items
+                            .into_iter()
+                            .filter(|(s, _)| {
+                                s.as_str() >= req.lo.as_str()
+                                    && hi.map(|h| s.as_str() < h).unwrap_or(true)
+                            })
+                            .map(|(s, vv)| (s, vv.into_iter().collect()))
+                            .collect();
+                        serde_json::json!({ "drive": req.drive, "items": out }).to_string()
+                    }
+                    .into_actor(self)
+                    .map(|resp, _actor, ctx| ctx.text(format!("RBSR_ITEMS {resp}"))),
+                );
+            }
         } else {
             tracing::debug!("Unknown text message: {}", &text[..text.len().min(50)]);
         }
     }
+}
+
+#[derive(serde::Deserialize)]
+struct RbsrFpRequest {
+    drive: String,
+    /// `[lo, hi]` ranges; `hi == null` means unbounded above.
+    ranges: Vec<(String, Option<String>)>,
+}
+
+#[derive(serde::Deserialize)]
+struct RbsrItemsRequest {
+    drive: String,
+    lo: String,
+    hi: Option<String>,
 }
 
 // ---- Outgoing message handlers (Actor → WebSocket) ----
@@ -663,15 +727,25 @@ struct SyncVVRequest {
     peers: Vec<String>,
     #[serde(default)]
     resources: std::collections::HashMap<String, Vec<i32>>,
+    /// RBSR reduced set: when present, only these subjects (the ones the client
+    /// found differing) are reconciled, and `resources` carries VVs for just
+    /// the ones the client has. Absent → full-drive reconcile.
+    #[serde(default)]
+    subjects: Option<Vec<String>>,
 }
 
 /// Delegate to atomic_lib sync engine.
 async fn handle_sync_vv(request: SyncVVRequest, store: Db, agent: ForAgent) -> Vec<Vec<u8>> {
-    atomic_lib::sync::engine::handle_sync_vv(
+    let filter = request
+        .subjects
+        .as_ref()
+        .map(|s| s.iter().cloned().collect::<std::collections::HashSet<_>>());
+    atomic_lib::sync::engine::handle_sync_vv_filtered(
         &request.drive,
         &request.drive_hash,
         &request.peers,
         &request.resources,
+        filter.as_ref(),
         &store,
         &agent,
     )
