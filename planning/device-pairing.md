@@ -217,7 +217,11 @@ for it.
 
 ### P0 — hygiene (independent, do first)
 
-- [ ] Remove `agent_secret` from first-boot log output (server).
+- [x] Remove `agent_secret` from first-boot log output (server). **Fixed
+      2026-07-09** — `set_default_agent` (`server/src/appstate.rs`) logged
+      the whole config file (secret included) via `tracing::warn!` on
+      first boot; now logs only the config path + a pointer to the
+      pairing/sign-in flow.
 - [ ] `SyncRoute`: show local node DID as QR (`pair` kind) next to the
       existing copy button — display-only, no scanner yet, no new deps
       beyond a QR renderer.
@@ -243,11 +247,27 @@ for it.
 
 ### P2.5 — SaaS device directory (parallel track, mostly atomic-saas)
 
-- [ ] `devices` table + register/list/revoke endpoints (portal-session
+- [x] `devices` table + register/list/revoke endpoints (portal-session
       auth) in atomic-saas; portal "your devices" list with remove.
-- [ ] Browser: upsert own device record on cloud sign-in; after
-      secret-restore, seed `KnownPeer`s from the directory and kick
-      reconcile (WS to managed origin, Iroh to personal devices).
+      **Built + verified live 2026-07-08** (`atomic-saas/src/devices.rs`;
+      `GET /api/devices`, `PUT`/`DELETE /api/devices/{device_id}`).
+      Cross-account `device_id` claims are rejected (409) so a session on
+      a shared machine can't hijack/revoke another account's routing
+      entry; node DIDs validated as `did:ad:node:<64 hex>`; upsert
+      preserves `created_at`, bumps `last_seen`.
+- [x] Browser: upsert own device record + seed `KnownPeer`s from the
+      directory. **Built 2026-07-09** (`helpers/managed/devices.ts`,
+      fired once per session from `IdentityReconcileGate` after
+      convergence; no-op without a managed session). Upsert is
+      Tauri-only — a plain web tab has no Iroh node of its own, so
+      `/iroh-node-id` would name the connected server, not the device.
+      On 409 (device id owned by another account — shared machine) the
+      id is rotated and retried once. Seeding merges into the same
+      `atomic-peers` localStorage records the QR flow writes (existing
+      entries win), so the sync engine can't tell the flows apart.
+      Deliberately NOT done: auto-dialing the seeded peers — they show
+      in the Sync page's peer list, one tap to sync. Auto-reconcile on
+      seed can come with P2's `SyncSession` work.
 - [ ] Later: passkey + PRF-derived encryption key for one-step restore.
 
 ### P3 — channel-provisioned secret (v2, after knock/inbox)

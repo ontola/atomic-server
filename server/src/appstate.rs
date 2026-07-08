@@ -330,8 +330,13 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
 
             cfg.save(&config.config_file_path)?;
 
-            let config_string = cfg.to_string()?;
-            tracing::warn!("No existing config found, created a new Config at {:?}. Copy this to your client machine (running atomic-cli or atomic-data-browser) to log in with these credentials. \n{}", &config.config_file_path, config_string);
+            // Never log the agent secret: on Android it would land in logcat
+            // (bug reports, `adb logcat` history), and on servers in log
+            // aggregators. The secret lives only in the config file.
+            tracing::warn!(
+                "No existing config found, created a new Config at {:?}. To sign in from another device, use the pairing/sign-in flow in the browser app, or copy the agent secret from that file.",
+                &config.config_file_path
+            );
 
             agent
         }

@@ -1,0 +1,228 @@
+// @wc-ignore-file
+// Device-directory client: the browser/app side of zero-scan pairing.
+//
+// The control plane keeps a per-account list of the user's own devices
+// (`GET /api/devices`, `PUT/DELETE /api/devices/{device_id}`) so a fresh
+// sign-in can discover where to sync from without a QR scan. The records are
+// routing hints only — a wrong node id dials a stranger that fails same-agent
+// AUTH and receives nothing — so this must never gate anything.
+//
+// FOSS guardrail: this client runs in the browser under the user's managed
+// session (like the rest of helpers/managed/*); the open-core server never
+// phones home. Without a session every function here is a no-op.
+//
+// Canonical design: planning/device-pairing.md (§ SaaS-assisted pairing).
+
+import { getManagedApiBase } from './api';
+import { getManagedAccount } from './session';
+import { isRunningInTauri } from '../tauri';
+
+const DEVICE_ID_KEY = 'atomic-device-id';
+const KNOWN_PEERS_KEY = 'atomic-peers';
+const NODE_DID_PREFIX = 'did:ad:node:';
+
+export type DeviceRecord = {
+  device_id: string;
+  name: string;
+  platform: string;
+  node_id: string;
+  relay_hint?: string | null;
+  http_origin?: string | null;
+  created_at: number;
+  last_seen: number;
+};
+
+/** Stable per-install identifier; the key of our own directory record. */
+function getOrCreateDeviceId(): string | null {
+  if (typeof localStorage === 'undefined') return null;
+
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+
+    if (existing) return existing;
+
+    const fresh = crypto.randomUUID();
+    localStorage.setItem(DEVICE_ID_KEY, fresh);
+
+    return fresh;
+  } catch {
+    return null;
+  }
+}
+
+function rotateDeviceId(): string | null {
+  try {
+    localStorage.removeItem(DEVICE_ID_KEY);
+  } catch {
+    return null;
+  }
+
+  return getOrCreateDeviceId();
+}
+
+function describeThisDevice(): { name: string; platform: string } {
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+
+  if (/android/i.test(ua)) {
+    return { name: 'Android device', platform: 'android' };
+  }
+
+  if (/iphone|ipad/i.test(ua)) {
+    return { name: 'iOS device', platform: 'ios' };
+  }
+
+  if (/mac/i.test(ua)) {
+    return { name: 'Mac', platform: 'macos' };
+  }
+
+  if (/windows/i.test(ua)) {
+    return { name: 'Windows PC', platform: 'windows' };
+  }
+
+  return { name: 'Computer', platform: 'linux' };
+}
+
+function isValidNodeDid(value: string): boolean {
+  const raw = value.startsWith(NODE_DID_PREFIX)
+    ? value.slice(NODE_DID_PREFIX.length)
+    : '';
+
+  return /^[0-9a-f]{64}$/i.test(raw);
+}
+
+/**
+ * The Iroh node identity of THIS device's embedded server. Only meaningful in
+ * the Tauri app (desktop/Android), where the app is the node — a plain web tab
+ * has no node of its own (`/iroh-node-id` there would name the connected
+ * server, not this device).
+ */
+async function fetchOwnNodeDid(): Promise<string | null> {
+  if (!isRunningInTauri()) return null;
+
+  try {
+    const response = await fetch('/iroh-node-id');
+    const data = await response.json();
+
+    return typeof data.nodeId === 'string' && isValidNodeDid(data.nodeId)
+      ? data.nodeId
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function putDeviceRecord(
+  deviceId: string,
+  body: { name: string; platform: string; node_id: string },
+): Promise<Response> {
+  return fetch(`${getManagedApiBase()}/devices/${deviceId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Register/refresh this device in the account's directory. Tauri-only (see
+ * fetchOwnNodeDid). A 409 means the stored device id belongs to another
+ * account (shared machine that switched accounts): rotate the id and retry
+ * once, so each account gets its own record instead of fighting over one.
+ */
+async function upsertOwnDeviceRecord(): Promise<void> {
+  const nodeDid = await fetchOwnNodeDid();
+
+  if (!nodeDid) return;
+
+  const deviceId = getOrCreateDeviceId();
+
+  if (!deviceId) return;
+
+  const body = { ...describeThisDevice(), node_id: nodeDid };
+  const response = await putDeviceRecord(deviceId, body);
+
+  if (response.status === 409) {
+    const freshId = rotateDeviceId();
+
+    if (freshId) {
+      await putDeviceRecord(freshId, body);
+    }
+  }
+}
+
+type KnownPeer = { nodeId: string; label: string; lastSync?: string };
+
+/**
+ * Merge the account's other devices into the local `KnownPeer` list (the same
+ * localStorage records the QR pairing flow writes — the sync engine can't tell
+ * the two flows apart). Existing entries win: never overwrite a label or
+ * lastSync the user already has.
+ */
+async function seedKnownPeersFromDirectory(): Promise<void> {
+  if (typeof localStorage === 'undefined') return;
+
+  const response = await fetch(`${getManagedApiBase()}/devices`, {
+    credentials: 'include',
+  });
+
+  if (!response.ok) return;
+
+  const devices = (await response.json()) as DeviceRecord[];
+  const ownDeviceId = getOrCreateDeviceId();
+  const ownNodeDid = await fetchOwnNodeDid();
+
+  let peers: KnownPeer[] = [];
+
+  try {
+    peers = JSON.parse(
+      localStorage.getItem(KNOWN_PEERS_KEY) ?? '[]',
+    ) as KnownPeer[];
+  } catch {
+    peers = [];
+  }
+
+  const known = new Set(peers.map(peer => peer.nodeId.toLowerCase()));
+  let added = false;
+
+  for (const device of devices) {
+    if (device.device_id === ownDeviceId) continue;
+    if (!isValidNodeDid(device.node_id)) continue;
+    if (device.node_id === ownNodeDid) continue;
+    if (known.has(device.node_id.toLowerCase())) continue;
+
+    peers.push({ nodeId: device.node_id, label: device.name });
+    known.add(device.node_id.toLowerCase());
+    added = true;
+  }
+
+  if (added) {
+    try {
+      localStorage.setItem(KNOWN_PEERS_KEY, JSON.stringify(peers));
+    } catch {
+      // Quota / private mode — the seed is an optimization.
+    }
+  }
+}
+
+let syncedThisSession = false;
+
+/**
+ * Best-effort, once per app session (per session that actually has a managed
+ * account): announce this device to the directory and seed `KnownPeer`s from
+ * it. Safe to call repeatedly — no-ops without a session so a later sign-in
+ * still gets picked up by the next call.
+ */
+export async function syncDeviceDirectory(): Promise<void> {
+  if (syncedThisSession) return;
+
+  const account = await getManagedAccount().catch(() => null);
+
+  if (!account) return;
+
+  syncedThisSession = true;
+
+  await Promise.allSettled([
+    upsertOwnDeviceRecord(),
+    seedKnownPeersFromDirectory(),
+  ]);
+}

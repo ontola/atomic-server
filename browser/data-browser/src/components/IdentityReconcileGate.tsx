@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useSettings } from '../helpers/AppSettings';
 import {
   evaluateIdentityReconciliation,
+  syncDeviceDirectory,
   writeManagedAccountBinding,
 } from '../helpers/managed';
 import { paths } from '../routes/paths';
@@ -81,6 +82,11 @@ export function IdentityReconcileGate({
         result.issue.localAgentSubject,
       );
     }
+
+    // Announce this device to the account's device directory and seed
+    // KnownPeers from it (zero-scan pairing). Fire-and-forget: routing
+    // hints only, must never delay or gate the app.
+    void syncDeviceDirectory();
 
     setChecking(false);
     hasCheckedOnceRef.current = true;

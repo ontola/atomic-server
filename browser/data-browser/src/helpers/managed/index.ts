@@ -4,6 +4,7 @@
 // writeManagedAccountBinding } from '../helpers/managed').
 export * from './api';
 export * from './binding';
+export * from './devices';
 export * from './session';
 export * from './enrollmentApi';
 export * from './enrollment';
