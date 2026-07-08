@@ -14,8 +14,14 @@ test.describe('keyboard shortcuts', () => {
     await page.keyboard.press('Shift+Slash');
     await expect(page.getByText('Show keyboard shortcuts')).toBeVisible();
     await expect(page.getByText('Go to parent')).toBeVisible();
-    await page.keyboard.press('Escape');
+
+    // The overlay's input filters the list.
+    await page.getByPlaceholder(/Filter shortcuts/).fill('parent');
+    await expect(page.getByText('Go to parent')).toBeVisible();
     await expect(page.getByText('Show keyboard shortcuts')).toHaveCount(0);
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByText('Go to parent')).toHaveCount(0);
 
     // Backslash toggles the sidebar lock. The sidebar slides out via a
     // transform (still "visible" to Playwright), so assert on the persisted

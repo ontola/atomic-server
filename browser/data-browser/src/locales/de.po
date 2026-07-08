@@ -1438,9 +1438,8 @@ msgstr "Themaeinstellungen"
 msgid "Keyboard shortcuts"
 msgstr "Tastenkombinationen"
 
-#: src/components/OverlayContainer.tsx
-msgid "Press esc to close..."
-msgstr "Esc drücken zum Schließen..."
+#~ msgid "Press esc to close..."
+#~ msgstr "Esc drücken zum Schließen..."
 
 #. 0: metadata.author
 #. 0: resource.props.pluginAuthor
@@ -4976,4 +4975,12 @@ msgstr ""
 
 #: src/components/OverlayContainer.tsx
 msgid "Show or hide the sidebar"
+msgstr ""
+
+#: src/components/OverlayContainer.tsx
+msgid "Filter shortcuts…"
+msgstr ""
+
+#: src/components/OverlayContainer.tsx
+msgid "No matching shortcuts"
 msgstr ""

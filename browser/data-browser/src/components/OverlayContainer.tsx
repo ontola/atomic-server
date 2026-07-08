@@ -595,6 +595,8 @@ function ShortcutsOverlay(): JSX.Element {
     return () => clearTimeout(timer);
   }, []);
 
+  const [query, setQuery] = useState('');
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -618,6 +620,13 @@ function ShortcutsOverlay(): JSX.Element {
     { key: shortcuts.sidebarToggle, label: 'Show or hide the sidebar' },
   ];
 
+  const search = query.trim().toLowerCase();
+  const visibleShortcuts = shortcuts_list.filter(
+    ({ key, label }) =>
+      label.toLowerCase().includes(search) ||
+      displayShortcut(key).toLowerCase().includes(search),
+  );
+
   return (
     <>
       <OverlayInputWrapper>
@@ -627,23 +636,40 @@ function ShortcutsOverlay(): JSX.Element {
         <OverlayInput
           ref={inputRef}
           onKeyDown={handleKeyDown}
-          placeholder='Press esc to close...'
-          readOnly
-          style={{ cursor: 'default', fontSize: '0.875rem' }}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder='Filter shortcuts…'
+          style={{ fontSize: '0.875rem' }}
         />
         <ShortcutHint onClick={closeOverlay}>esc</ShortcutHint>
       </OverlayInputWrapper>
-      <div>
-        {shortcuts_list.map(({ key, label }) => (
+      <ShortcutsList>
+        {visibleShortcuts.map(({ key, label }) => (
           <ShortcutRow key={key}>
             <ShortcutLabel>{label}</ShortcutLabel>
             <ShortcutKey>{displayShortcut(key)}</ShortcutKey>
           </ShortcutRow>
         ))}
-      </div>
+        {visibleShortcuts.length === 0 && (
+          <NoShortcutsFound>No matching shortcuts</NoShortcutsFound>
+        )}
+      </ShortcutsList>
     </>
   );
 }
+
+/** Scrolls inside the fixed-height overlay panel instead of spilling out. */
+const ShortcutsList = styled.div`
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+`;
+
+const NoShortcutsFound = styled.div`
+  padding: 1rem;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.875rem;
+`;
 
 // ─── OverlayContainer ──────────────────────────────────────────────────────────
 
