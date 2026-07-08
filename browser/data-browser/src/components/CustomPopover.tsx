@@ -7,8 +7,7 @@ import {
   type RefObject,
 } from 'react';
 import { styled } from 'styled-components';
-import { transparentize } from 'polished';
-import { fadeIn } from '@helpers/commonAnimations';
+import { floatingSurface, floatingSurfaceAppear } from './floatingSurface';
 import { useControlLock } from '@hooks/useControlLock';
 import { useDialogTreeInfo } from './Dialog/dialogContext';
 import { useOnValueChange } from '@helpers/useOnValueChange';
@@ -182,12 +181,9 @@ const Popover = styled.div<{ anchorName: string }>`
     position-area: bottom span-left;
   }
 
-  border: none;
-  background-color: ${p => transparentize(0.2, p.theme.colors.bgBody)};
-  backdrop-filter: blur(10px);
-  box-shadow: ${p => p.theme.boxShadowSoft};
-  border-radius: ${p => p.theme.radius};
-  animation: ${fadeIn} 0.1s ease-in-out;
+  ${floatingSurface}
+  animation: ${floatingSurfaceAppear} ${p => p.theme.animation.duration}
+    ease-in-out;
   margin: 0;
   padding: 0;
   inset: auto;

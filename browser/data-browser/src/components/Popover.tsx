@@ -12,10 +12,10 @@ import {
   type JSX,
 } from 'react';
 import * as RadixPopover from '@radix-ui/react-popover';
-import { styled, keyframes } from 'styled-components';
-import { transparentize } from 'polished';
+import { styled } from 'styled-components';
 import { useDialogTreeInfo } from './Dialog/dialogContext';
 import { useControlLock } from '../hooks/useControlLock';
+import { floatingSurface, floatingSurfaceAppear } from './floatingSurface';
 
 export interface PopoverProps {
   Trigger: ReactNode;
@@ -83,17 +83,6 @@ export function Popover({
   );
 }
 
-const fadeIn = keyframes`
-  from {
-    opacity: 0;
-    transform: scale(0);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-`;
-
 const Content = styled(RadixPopover.Content)`
   --popover-close-offset: ${p => p.theme.size()};
   --popover-close-size: 25px;
@@ -101,15 +90,15 @@ const Content = styled(RadixPopover.Content)`
     var(--popover-close-size) + (var(--popover-close-offset) * 2) -
       ${p => p.theme.size()}
   );
-  background-color: ${p => transparentize(0.2, p.theme.colors.bgBody)};
-  backdrop-filter: blur(10px);
-  box-shadow: ${p => p.theme.boxShadowSoft};
-  border-radius: ${p => p.theme.radius};
+  ${floatingSurface}
   z-index: 10000000;
-  animation: ${fadeIn} 0.1s ease-in-out;
+  transform-origin: var(--radix-popover-content-transform-origin);
+  animation: ${floatingSurfaceAppear} ${p => p.theme.animation.duration}
+    ease-in-out;
 
   &[data-state='closed'] {
-    animation: ${fadeIn} 0.1s ease-in-out reverse;
+    animation: ${floatingSurfaceAppear} ${p => p.theme.animation.duration}
+      ease-in-out reverse;
   }
 `;
 

@@ -222,7 +222,6 @@ const AutoscrollListItem: React.FC<
 
 const StyledPopover = styled(Popover)`
   margin-top: ${p => p.theme.size(2)};
-  background-color: ${p => p.theme.colors.bg};
 `;
 
 const TagPopoverContentWrapper = styled.div`

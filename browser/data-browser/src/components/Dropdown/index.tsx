@@ -23,6 +23,7 @@ import { DropdownPortalContext } from './dropdownContext';
 import { loopingIndex } from '../../helpers/loopingIndex';
 import { useControlLock } from '../../hooks/useControlLock';
 import { useDialogTreeInfo } from '../Dialog/dialogContext';
+import { floatingSurface } from '../floatingSurface';
 
 export const DIVIDER = 'divider' as const;
 
@@ -599,8 +600,9 @@ interface MenuItemStyledProps {
 }
 
 const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
+  /* Transparent so the menu's frosted surface shows through. */
   --menu-item-bg: ${p =>
-    p.selected ? p.theme.colors.mainSelectedBg : p.theme.colors.bg};
+    p.selected ? p.theme.colors.mainSelectedBg : 'transparent'};
   --menu-item-fg: ${p =>
     p.selected ? p.theme.colors.mainSelectedFg : p.theme.colors.text};
   align-items: center;
@@ -633,7 +635,7 @@ const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
   &:disabled {
     color: ${p => p.theme.colors.textLight2};
     cursor: default;
-    background-color: ${p => p.theme.colors.bg};
+    background-color: transparent;
 
     & svg {
       color: ${p => p.theme.colors.textLight2};
@@ -680,27 +682,21 @@ const Menu = styled.div<{
   font-size: 0.9rem;
   overflow: auto;
   max-height: 80vh;
-  background: ${p => p.theme.colors.bg};
-  border: ${p =>
-    p.theme.darkMode ? `solid 1px ${p.theme.colors.bg2}` : 'none'};
+  ${floatingSurface}
   padding-top: 0.4rem;
   padding-bottom: 0.4rem;
-  border-radius: 8px;
   /* Focused programmatically on open for keyboard nav; items show selection. */
   outline: none;
   position: ${p => p.position || 'fixed'};
   z-index: ${p => p.theme.zIndex.dropdown};
   width: auto;
   min-width: ${p => (p.searchable ? '15rem' : 'auto')};
-  box-shadow: ${p => p.theme.boxShadowSoft};
   opacity: ${p => (p.isActive ? 1 : 0)};
-  ${transition('opacity')};
+  scale: 1;
+  ${transition('opacity', 'scale')};
 
   @starting-style {
     opacity: 0;
-  }
-
-  @media (prefers-contrast: more) {
-    border: solid 1px ${p => p.theme.colors.bg2};
+    scale: 0.95;
   }
 `;
