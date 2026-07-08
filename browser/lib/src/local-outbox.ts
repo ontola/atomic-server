@@ -12,7 +12,10 @@
  *   subject). That envelope is stored here and POSTed verbatim before
  *   any incremental delta sign for the same subject.
  *
- * Drain is idempotent — concurrent calls share the in-flight promise.
+ * Drain is idempotent — a call that arrives while a pass is in flight
+ * chains ONE follow-up pass (with a fresh entry snapshot) instead of
+ * merely sharing the in-flight promise, so `await drain()` always means
+ * "every entry that was dirty when I called has been attempted".
  */
 
 import type { Commit } from './commit.js';
@@ -268,6 +271,11 @@ interface PersistedEntry {
 export class LocalOutbox {
   private entries = new Map<string, OutboxEntry>();
   private drainInFlight: Promise<void> | undefined;
+  /** True while a follow-up drain pass is chained behind the in-flight one
+   *  but hasn't started yet. At most one follow-up is queued at a time; it
+   *  resets when the follow-up starts, so a still-later `drain()` call can
+   *  chain the next one. See {@link drain}. */
+  private drainFollowUpQueued = false;
   private onChange: () => void = () => undefined;
   private persistScheduled = false;
   /** localStorage key for the CURRENTLY-bound agent's queue. Switched by
@@ -479,14 +487,53 @@ export class LocalOutbox {
     return this.drainInFlight !== undefined;
   }
 
-  /** Idempotent drain: concurrent calls share the in-flight promise. */
+  /**
+   * Idempotent drain. A pass iterates a snapshot of the entries taken when
+   * IT started — entries dirtied after that snapshot are invisible to it.
+   * So when a call arrives while a pass is in flight, just returning the
+   * in-flight promise would resolve the caller's await while its subject is
+   * still dirty and un-POSTed: `Resource.save()` (markDirty → await drain)
+   * would report `'persisted'` for a write the server never received —
+   * silent data loss from the caller's perspective (see
+   * `planning/outbox-drain-data-loss-race.md`). Instead, chain ONE
+   * follow-up pass that takes a fresh snapshot after the current pass
+   * ends; the promise returned to late callers resolves only after that
+   * follow-up, guaranteeing their at-call-time dirty entries were
+   * attempted.
+   */
   async drain(ctx: OutboxDrainContext): Promise<void> {
-    if (this.drainInFlight) return this.drainInFlight;
-    this.drainInFlight = this.doDrain(ctx).finally(() => {
-      this.drainInFlight = undefined;
-    });
+    if (this.drainInFlight) {
+      if (!this.drainFollowUpQueued) {
+        this.drainFollowUpQueued = true;
+        this.trackDrain(
+          this.drainInFlight
+            .catch(() => undefined)
+            .then(() => {
+              // Reset BEFORE the pass runs: a `drain()` arriving during the
+              // follow-up itself missed its snapshot too and must be able to
+              // chain the next follow-up.
+              this.drainFollowUpQueued = false;
+
+              return this.doDrain(ctx);
+            }),
+        );
+      }
+
+      return this.drainInFlight;
+    }
+
+    this.trackDrain(this.doDrain(ctx));
 
     return this.drainInFlight;
+  }
+
+  /** Point `drainInFlight` at `pass`, clearing it on settle — but only if a
+   *  later follow-up hasn't replaced it (owner check). */
+  private trackDrain(pass: Promise<void>): void {
+    const tracked = pass.finally(() => {
+      if (this.drainInFlight === tracked) this.drainInFlight = undefined;
+    });
+    this.drainInFlight = tracked;
   }
 
   private async doDrain(ctx: OutboxDrainContext): Promise<void> {

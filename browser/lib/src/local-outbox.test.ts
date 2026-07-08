@@ -161,6 +161,138 @@ describe('LocalOutbox.drain', () => {
   });
 });
 
+describe('LocalOutbox drain re-entrancy (planning/outbox-drain-data-loss-race.md)', () => {
+  beforeEach(() => {
+    if (typeof localStorage !== 'undefined') localStorage.clear();
+  });
+
+  it('drains a subject marked dirty mid-drain before a late caller’s await resolves', async ({
+    expect,
+  }) => {
+    // The data-loss race: a drain pass is in flight (snapshotted [r1]);
+    // `save()` marks r2 dirty and awaits drain(). Sharing the in-flight
+    // promise alone resolves that await with r2 still un-POSTed — save()
+    // reports 'persisted' for a write the server never saw.
+    const outbox = new LocalOutbox();
+    const drained: string[] = [];
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>(r => (releaseFirst = r));
+
+    const ctx = {
+      sort: (e: readonly OutboxEntry[]) => [...e],
+      drainSubject: async (subject: string) => {
+        // Hold r1's "POST" open so the second caller arrives mid-flight.
+        if (subject === 'did:ad:r1') await firstGate;
+        drained.push(subject);
+        outbox.clearDirty(subject);
+      },
+    };
+
+    outbox.markDirty('did:ad:r1');
+    const first = outbox.drain(ctx);
+
+    // While r1's POST is in flight: a save() on r2.
+    outbox.markDirty('did:ad:r2');
+    const second = outbox.drain(ctx);
+
+    releaseFirst();
+    await second;
+
+    expect(drained).toContain('did:ad:r2');
+    expect(outbox.hasPending('did:ad:r2')).toBe(false);
+    await first;
+  });
+
+  it('keeps awaiting when the SAME subject is re-dirtied during its own POST', async ({
+    expect,
+  }) => {
+    // Variant: r1's V1 delta is mid-POST when a new edit (V2) lands on r1.
+    // The store's drainSubject leaves the entry dirty (caughtUp=false →
+    // markDirty). A caller that awaited drain() after the V2 edit must not
+    // resolve until a follow-up pass re-drains r1.
+    const outbox = new LocalOutbox();
+    let attempts = 0;
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>(r => (releaseFirst = r));
+
+    const ctx = {
+      sort: (e: readonly OutboxEntry[]) => [...e],
+      drainSubject: async (subject: string) => {
+        attempts++;
+
+        if (attempts === 1) {
+          // First attempt: POST in flight while V2 lands; entry stays dirty.
+          await firstGate;
+          outbox.markDirty(subject);
+        } else {
+          outbox.clearDirty(subject);
+        }
+      },
+    };
+
+    outbox.markDirty(SUBJECT);
+    const first = outbox.drain(ctx);
+
+    // V2 edit mid-POST, then a save() awaits the drain.
+    const second = outbox.drain(ctx);
+
+    releaseFirst();
+    await second;
+
+    expect(attempts).toBe(2);
+    expect(outbox.hasPending(SUBJECT)).toBe(false);
+    await first;
+  });
+
+  it('a drain() call during the follow-up pass chains another follow-up', async ({
+    expect,
+  }) => {
+    const outbox = new LocalOutbox();
+    const drained: string[] = [];
+    const gates = new Map<string, () => void>();
+    const gatePromise = (subject: string) =>
+      new Promise<void>(r => gates.set(subject, r));
+    const held = new Map([
+      ['did:ad:r1', gatePromise('did:ad:r1')],
+      ['did:ad:r2', gatePromise('did:ad:r2')],
+    ]);
+
+    const ctx = {
+      sort: (e: readonly OutboxEntry[]) => [...e],
+      drainSubject: async (subject: string) => {
+        const gate = held.get(subject);
+        if (gate) await gate;
+        drained.push(subject);
+        outbox.clearDirty(subject);
+      },
+    };
+
+    outbox.markDirty('did:ad:r1');
+    void outbox.drain(ctx);
+
+    // Mid-pass-1: dirty r2, join → chains follow-up (pass 2).
+    outbox.markDirty('did:ad:r2');
+    void outbox.drain(ctx);
+    gates.get('did:ad:r1')!();
+
+    // Wait until pass 2 has started (it's holding r2's gate now).
+    await new Promise<void>(resolve => {
+      const poll = () =>
+        drained.includes('did:ad:r1') ? resolve() : setTimeout(poll, 0);
+      poll();
+    });
+
+    // Mid-pass-2: dirty r3, join → must chain pass 3 (flag was reset).
+    outbox.markDirty('did:ad:r3');
+    const third = outbox.drain(ctx);
+    gates.get('did:ad:r2')!();
+
+    await third;
+    expect(drained).toEqual(['did:ad:r1', 'did:ad:r2', 'did:ad:r3']);
+    expect(outbox.size).toBe(0);
+  });
+});
+
 describe('isUnrecoverableCommitErrorMessage', () => {
   it('flags the server "no write right" 401', ({ expect }) => {
     expect(

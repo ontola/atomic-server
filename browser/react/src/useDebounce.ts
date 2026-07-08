@@ -1,6 +1,8 @@
 import { Resource } from '@tomic/lib';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useStore } from './hooks.js';
+
 // T is a generic type for value parameter, our case this will be string
 export function useDebounce<T>(value: T, delay: number): T {
   // State and setters for debounced value
@@ -33,13 +35,20 @@ export function useDebouncedSave(
 ): [save: () => void, savePending: boolean] {
   const timeoutId = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [savePending, setSavePending] = useState(false);
+  const store = useStore();
 
   const save = useCallback(() => {
-    if (timeoutId.current) {
+    // Report the debounce window to the store so sync status counts the
+    // not-yet-executed save (see Store.startScheduledSave).
+    if (timeoutId.current !== undefined) {
       clearTimeout(timeoutId.current);
+    } else {
+      store.startScheduledSave();
     }
 
     timeoutId.current = setTimeout(async () => {
+      timeoutId.current = undefined;
+
       try {
         await resource.__internalObject.save();
         setSavePending(false);
@@ -49,11 +58,13 @@ export function useDebouncedSave(
         } else {
           throw e;
         }
+      } finally {
+        store.finishScheduledSave();
       }
     }, timeout);
 
     setSavePending(true);
-  }, [resource.__internalObject, timeout, onError]);
+  }, [resource.__internalObject, timeout, onError, store]);
 
   return [save, savePending];
 }

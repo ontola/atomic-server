@@ -103,6 +103,10 @@ export interface StoreSyncStatus {
   /** True iff EITHER the WS-driven drive sync is mid-handshake OR
    * the outbox is currently draining. */
   syncInProgress: boolean;
+  /** Everything locally edited but not yet acked by the server: outbox
+   *  entries (minus blocked), in-flight `save()`s, AND saves still parked
+   *  in a UI debounce timer (`startScheduledSave`). `0` means "safe to
+   *  reload/navigate — nothing will be lost". */
   pendingDirtyCount: number;
   /** Entries parked on an unrecoverable error (e.g. `401 Unauthorized`): kept
    *  for visibility but no longer retried. Excluded from `pendingDirtyCount`
@@ -469,6 +473,15 @@ export class Store {
   private _serverConnected = false;
   private _serverConnectionError: string | undefined;
   private _driveSyncInProgress = false;
+  /**
+   * Saves that a UI layer has scheduled (e.g. `useValue`'s commit
+   * debounce) but whose `save()` hasn't run yet. During that window the
+   * edit is only in memory — not in the outbox, not `isSaving` — so
+   * without this counter `getSyncStatus()` reports fully-synced while a
+   * write is still pending in a timer, and a reload loses it. See
+   * `planning/outbox-drain-data-loss-race.md`.
+   */
+  private _scheduledSaves = 0;
   private _lastDriveSync?: {
     drive: string;
     count: number;
@@ -954,9 +967,10 @@ export class Store {
    *     success: clear dirty, `setLastCommitValue`, advance cursor.
    *
    *  Resource must be loaded in the store; cold drains for unloaded
-   *  subjects fall through to a `fetchResourceFromServer` that
-   *  rehydrates the Loro state before signing. (If both fail, the
-   *  entry stays dirty and the next drain trigger retries.)
+   *  subjects fall through to a `getResource` (OPFS-first, then server)
+   *  that rehydrates the Loro state before signing — but only once
+   *  clientDb is ready. (On failure the entry stays dirty and the
+   *  next drain trigger retries.)
    *
    *  Re-posting a server-applied commit is safe thanks to idempotent
    *  replay accept.
@@ -1026,22 +1040,33 @@ export class Store {
     }
 
     // Step 2: sign and POST the accumulated Loro delta, if any.
-    const resource = this.resources.get(subject);
+    let resource = this.resources.get(subject);
 
     if (!resource) {
-      // Cold drain: resource not in memory. Without the Loro doc we
-      // can't sign the delta. Critical: do NOT clear the dirty bit
-      // here — on page reload, the outbox is restored from
-      // localStorage BEFORE clientDb hydration finishes, so the
-      // drain races ahead of resource hydration. Clearing here would
-      // permanently drop offline edits that haven't been replayed
-      // into the in-memory store yet. Leave the entry dirty; the
-      // hydration path will re-trigger the drain once the resource
-      // is in place (via `markDirty` from the post-hydrate Loro
-      // subscriber, or via the next user action).
-      this.emitSyncStatus();
+      // Cold drain: resource not in memory. Typical shape: the entry was
+      // restored from localStorage after a page load, and nothing on the
+      // current page renders this subject — so no view will EVER load it,
+      // and waiting for "the hydration path" would strand the entry (and
+      // `pendingDirtyCount`) forever. Load it ourselves and drain on top.
+      //
+      // Critical ordering: do NOT load before clientDb (OPFS) is ready.
+      // The OPFS snapshot is where unsynced local edits live; loading
+      // server state instead would export an empty delta and clear the
+      // dirty bit, silently dropping them. Until it's ready, leave the
+      // entry dirty — the next drain pass retries.
+      if (this.clientDb && !this.clientDb.isReady) {
+        this.emitSyncStatus();
 
-      return;
+        return;
+      }
+
+      // OPFS-first, then server. Throws on hard failure (offline DID,
+      // network error) — the outbox failure/backoff machinery takes over.
+      resource = await this.getResource(subject);
+
+      if (resource.error) {
+        throw resource.error;
+      }
     }
 
     // Cold-drain extension: even if there's a Resource object in
@@ -2912,6 +2937,25 @@ export class Store {
     this.emitSyncStatus();
   }
 
+  /**
+   * Register a save that is scheduled (debounced) but not yet executed, so
+   * sync status keeps reporting pending work during the debounce window.
+   * MUST be balanced with exactly one `finishScheduledSave()` once the
+   * save has settled (success or failure) or been superseded.
+   */
+  public startScheduledSave(): void {
+    this._scheduledSaves++;
+    this.emitSyncStatus();
+  }
+
+  /** Balance a `startScheduledSave()`. Call after the scheduled `save()`
+   *  settles — not when the timer fires — so the counter overlaps the
+   *  outbox/`isSaving` window instead of leaving a gap. */
+  public finishScheduledSave(): void {
+    this._scheduledSaves = Math.max(0, this._scheduledSaves - 1);
+    this.emitSyncStatus();
+  }
+
   public finishDriveSync(
     drive: string,
     count: number,
@@ -2949,9 +2993,16 @@ export class Store {
       syncInProgress:
         this._driveSyncInProgress ||
         this.outbox.isDraining ||
-        inFlightSaves > 0,
+        inFlightSaves > 0 ||
+        this._scheduledSaves > 0,
+      // `_scheduledSaves` may briefly double-count a resource that is both
+      // scheduled and already saving/outboxed — harmless for the "=== 0
+      // means synced" contract this number exists for.
       pendingDirtyCount:
-        this.outbox.size - this.outbox.blockedCount + inFlightSaves,
+        this.outbox.size -
+        this.outbox.blockedCount +
+        inFlightSaves +
+        this._scheduledSaves,
       blockedCount: this.outbox.blockedCount,
       serverUrl: this.serverUrl,
       drive: this.drive,

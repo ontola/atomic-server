@@ -273,4 +273,77 @@ describe('Store', () => {
     expect(syncState.resources[clean.subject]).toBeDefined();
     expect(syncState.resources[dirty.subject]).toBeUndefined();
   });
+
+  it('cold-drains outbox entries for subjects no longer in memory', async ({
+    expect,
+  }) => {
+    // Reload-stranded entry (planning/outbox-drain-data-loss-race.md, root
+    // cause 3): an outbox entry restored from localStorage after a page load,
+    // for a subject nothing on the current page renders. The drain must load
+    // the resource itself and POST the pending delta — returning silently
+    // would leave `pendingDirtyCount` stuck > 0 forever and never deliver
+    // the write.
+    const { store, posted } = await testStore();
+
+    const resource = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Folder',
+      propVals: { [core.properties.name]: 'Before' },
+      parent: 'https://example.com/drive',
+    });
+    await resource.save();
+    const subject = resource.subject;
+    const postedBefore = posted.length;
+
+    // Edit, then simulate the reload: the dirty bit is in the outbox (as if
+    // hydrated from localStorage) but the resource is gone from memory.
+    await resource.set(core.properties.name, 'After', false);
+    store.outbox.markDirty(subject);
+    store.resources.delete(subject);
+
+    // The cold drain "loads" it — stub the fetch to hand the hydrated
+    // resource back, like the OPFS/server path would.
+    const getResourceSpy = vi
+      .spyOn(store, 'getResource')
+      .mockImplementation(async (s: string) => {
+        expect(s).toBe(subject);
+        store.resources.set(subject, resource);
+
+        return resource;
+      });
+
+    await store.syncDirtyResources();
+
+    expect(getResourceSpy).toHaveBeenCalled();
+    expect(posted.length).toBe(postedBefore + 1);
+    expect(store.outbox.hasPending(subject)).toBe(false);
+    expect(store.getSyncStatus().pendingDirtyCount).toBe(0);
+  });
+
+  it('counts scheduled (debounce-pending) saves in sync status', ({
+    expect,
+  }) => {
+    // UI layers (useValue's commitDebounce) park a save() in a timer; until
+    // it fires the edit is only in memory. Sync status must not report
+    // "fully synced" during that window (planning/outbox-drain-data-loss-race.md).
+    const store = new Store({ serverUrl: 'https://example.com' });
+
+    expect(store.getSyncStatus().pendingDirtyCount).toBe(0);
+    expect(store.getSyncStatus().syncInProgress).toBe(false);
+
+    store.startScheduledSave();
+    store.startScheduledSave();
+    expect(store.getSyncStatus().pendingDirtyCount).toBe(2);
+    expect(store.getSyncStatus().syncInProgress).toBe(true);
+
+    store.finishScheduledSave();
+    expect(store.getSyncStatus().pendingDirtyCount).toBe(1);
+
+    store.finishScheduledSave();
+    expect(store.getSyncStatus().pendingDirtyCount).toBe(0);
+    expect(store.getSyncStatus().syncInProgress).toBe(false);
+
+    // Unbalanced finish must not go negative and mask real dirty state.
+    store.finishScheduledSave();
+    expect(store.getSyncStatus().pendingDirtyCount).toBe(0);
+  });
 });

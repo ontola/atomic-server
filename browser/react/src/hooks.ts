@@ -268,15 +268,25 @@ export function useValue(
       return;
     }
 
+    // While the debounce timer is armed, the edit exists only in memory —
+    // report it to the store so `getSyncStatus().pendingDirtyCount` stays
+    // > 0 until the save settles (otherwise "synced" is a lie during the
+    // debounce window and a reload drops the write).
     if (timeoutId.current !== undefined) {
       clearTimeout(timeoutId.current);
+    } else {
+      store.startScheduledSave();
     }
 
     timeoutId.current = setTimeout(async () => {
+      timeoutId.current = undefined;
+
       try {
         await resource.__internalObject.save();
       } catch (e) {
         store.notifyError(asError(e));
+      } finally {
+        store.finishScheduledSave();
       }
     }, commitDebounce);
   }, [resource.__internalObject, store, commitDebounce, commit]);
