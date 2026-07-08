@@ -286,6 +286,7 @@ const DEFAULT_FILES: &[(&str, &str)] = &[
         "ontologies.json",
         include_str!("../defaults/ontologies.json"),
     ),
+    ("forms.json", include_str!("../defaults/forms.json")),
     ("ai.json", include_str!("../defaults/ai.json")),
     ("plugins.json", include_str!("../defaults/plugins.json")),
     ("tasks.json", include_str!("../defaults/tasks.json")),
