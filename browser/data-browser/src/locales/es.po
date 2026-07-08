@@ -692,7 +692,6 @@ msgid "Thinking..."
 msgstr "Pensando..."
 
 #: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
-#: src/chunks/AI/AIChatMessageParts/ReasoningMessage.tsx
 msgid "Thinking"
 msgstr "Pensando"
 
@@ -4936,3 +4935,12 @@ msgstr "Una ontología es una colección de clases y propiedades que juntas desc
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 msgid "Title is used to construct the subject, keep in mind that the subject cannot be changed later."
 msgstr "El título se utiliza para construir el sujeto, tenga en cuenta que el sujeto no se puede cambiar más adelante."
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Creating table <0/>"
+msgstr ""
+
+#. 0.0: data.length
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Creating <0>{0} resources</0>"
+msgstr ""

@@ -1,6 +1,5 @@
 import { getToolName, type DynamicToolUIPart, type ToolUIPart } from 'ai';
 import { styled } from 'styled-components';
-import { Row } from '@components/Row';
 import {
   FaBook,
   FaDatabase,
@@ -14,6 +13,7 @@ import {
 } from 'react-icons/fa6';
 import { Details } from '@components/Details';
 import { Shimmer } from '@components/Shimmer';
+import { PartSummary } from './PartSummary';
 import { SearchToolMessageContent } from './SearchToolMessageContent';
 import { TOOL_NAMES } from '../useAtomicTools';
 import { InlineFormattedResourceList } from '@components/InlineFormattedResourceList';
@@ -33,12 +33,10 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
   if (part.state === 'input-streaming' || part.state === 'input-available') {
     return (
       <Shimmer>
-        <ToolUseMessage>
-          <TitleRow center gap='0.5ch'>
-            <Icon />
-            <ToolTitle toolName={toolName} part={part} />
-          </TitleRow>
-        </ToolUseMessage>
+        <PartSummary>
+          <Icon />
+          <ToolTitle toolName={toolName} part={part} />
+        </PartSummary>
       </Shimmer>
     );
   }
@@ -48,12 +46,10 @@ export const MessageToolPart: React.FC<ToolMessageProps> = ({ part }) => {
       <Details
         noIndent
         titleButton={
-          <ToolUseMessage>
-            <TitleRow center gap='0.5ch'>
-              <Icon />
-              <ToolTitle toolName={toolName} part={part} />
-            </TitleRow>
-          </ToolUseMessage>
+          <PartSummary $interactive>
+            <Icon />
+            <ToolTitle toolName={toolName} part={part} />
+          </PartSummary>
         }
       >
         {toolName === TOOL_NAMES.SEMANTIC_SEARCH ? (
@@ -93,6 +89,7 @@ const getIcon = (toolName: string) => {
     case TOOL_NAMES.EDIT_DOCUMENT_RESOURCE:
       return FaPencil;
     case TOOL_NAMES.CREATE_RESOURCE:
+    case TOOL_NAMES.CREATE_TABLE:
       return FaPlus;
     default:
       return FaWrench;
@@ -153,6 +150,14 @@ const ToolTitle = ({
 
   if (toolName === TOOL_NAMES.CREATE_RESOURCE && isCreateResourceArgs(args)) {
     return <CreateResourceTitle jsonAD={args.jsonAD} />;
+  }
+
+  if (toolName === TOOL_NAMES.CREATE_TABLE && isCreateTableArgs(args)) {
+    return (
+      <span>
+        Creating table <Name>{args.name}</Name>
+      </span>
+    );
   }
 
   if (toolName === TOOL_NAMES.READ_SKILL && isReadSkillArgs(args)) {
@@ -217,6 +222,14 @@ const CreateResourceTitle = ({ jsonAD }: { jsonAD: string }) => {
 
   try {
     const data = JSON.parse(jsonAD);
+
+    if (Array.isArray(data)) {
+      return (
+        <span>
+          Creating <Name>{data.length} resources</Name>
+        </span>
+      );
+    }
 
     name =
       data[core.properties.name] ??
@@ -317,6 +330,15 @@ function isCreateResourceArgs(args: unknown): args is { jsonAD: string } {
   return typeof args === 'object' && args !== null && 'jsonAD' in args;
 }
 
+function isCreateTableArgs(args: unknown): args is { name: string } {
+  return (
+    typeof args === 'object' &&
+    args !== null &&
+    'name' in args &&
+    typeof (args as { name: unknown }).name === 'string'
+  );
+}
+
 function isReadSkillArgs(args: unknown): args is { name: string } {
   return (
     typeof args === 'object' &&
@@ -339,15 +361,6 @@ function isReadSkillReferenceArgs(
   );
 }
 
-const ToolUseMessage = styled.div`
-  background-color: var(--mainSelectedBg);
-  padding: 0.5em;
-  border-radius: var(--radius);
-  font-size: 0.7rem;
-  width: fit-content;
-  color: var(--textLight);
-`;
-
 const StyledPre = styled.pre`
   background-color: ${p => p.theme.colors.bg};
   padding: ${p => p.theme.size()};
@@ -356,13 +369,6 @@ const StyledPre = styled.pre`
   code {
     font-family: Monaco, monospace;
     font-size: 0.8em;
-  }
-`;
-
-const TitleRow = styled(Row)`
-  & svg {
-    flex-basis: 1em;
-    min-width: 1em;
   }
 `;
 
