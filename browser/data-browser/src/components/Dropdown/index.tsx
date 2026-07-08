@@ -27,6 +27,9 @@ import { floatingSurface } from '../floatingSurface';
 
 export const DIVIDER = 'divider' as const;
 
+/** Space between a menu and its trigger, so the trigger stays clickable. */
+const MENU_TRIGGER_GAP = 4;
+
 export type MenuItemMinimial = {
   onClick: () => unknown;
   label: string;
@@ -208,6 +211,16 @@ export function DropdownMenu({
 
       const menuRect = dropdownRef.current.getBoundingClientRect();
 
+      // The menu is positioned while visibility:hidden, so the entrance
+      // transition must start AFTER it becomes visible — one frame later —
+      // or it plays unseen and the menu appears to pop in.
+      const reveal = () => {
+        dropdownRef.current!.style.visibility = 'visible';
+        requestAnimationFrame(() => {
+          dropdownRef.current?.setAttribute('data-positioned', 'true');
+        });
+      };
+
       // A right-click / context menu: position at the cursor point with the
       // usual convention (below-right, flipping left/up when it would overflow
       // the viewport, clamped to stay on-screen).
@@ -223,7 +236,7 @@ export function DropdownMenu({
 
         dropdownRef.current.style.left = `${Math.max(0, left)}px`;
         dropdownRef.current.style.top = `${Math.max(0, top)}px`;
-        dropdownRef.current.style.visibility = 'visible';
+        reveal();
 
         return;
       }
@@ -258,14 +271,15 @@ export function DropdownMenu({
           dropdownRef.current.style.left = `${relativeLeft - menuRect.width + triggerRect.width}px`;
         }
       } else {
-        // Original logic for non-dialog contexts
-        const topPos = triggerRect.y - menuRect.height;
+        // Prefer opening above the trigger, below when there's no room. A
+        // small gap instead of overlapping the trigger — covering it half-way
+        // made it unclickable for toggling the menu closed.
+        const topPos = triggerRect.y - menuRect.height - MENU_TRIGGER_GAP;
 
-        // If the top is outside of the screen, render it below
         if (topPos < 0) {
-          dropdownRef.current.style.top = `${triggerRect.y + triggerRect.height / 2}px`;
+          dropdownRef.current.style.top = `${triggerRect.bottom + MENU_TRIGGER_GAP}px`;
         } else {
-          dropdownRef.current.style.top = `${topPos + triggerRect.height / 2}px`;
+          dropdownRef.current.style.top = `${topPos}px`;
         }
 
         const leftPos = triggerRect.x - menuRect.width;
@@ -278,7 +292,7 @@ export function DropdownMenu({
         }
       }
 
-      dropdownRef.current.style.visibility = 'visible';
+      reveal();
     });
   }, [isActive, setIsActive, anchorPoint]);
 
@@ -388,10 +402,41 @@ export function DropdownMenu({
     return () => cancelAnimationFrame(raf);
   }, [isActive, searchable]);
 
+  // A pointerdown on the trigger while the menu is open must NOT close the
+  // menu via the blur handler below — the same click's toggle would then
+  // REopen it, making the trigger appear unable to close the menu.
+  const pointerDownOnTrigger = useRef(false);
+
+  useEffect(() => {
+    if (!isActive) {
+      pointerDownOnTrigger.current = false;
+
+      return;
+    }
+
+    const onPointerDown = (e: PointerEvent) => {
+      pointerDownOnTrigger.current = !!triggerRef.current?.contains(
+        e.target as Node,
+      );
+    };
+
+    document.addEventListener('pointerdown', onPointerDown, true);
+
+    return () =>
+      document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [isActive]);
+
   const handleBlur = useCallback(() => {
     // Doesn't work without delay, maybe the browser sets document.activeElement after firering the blur event?
     requestAnimationFrame(() => {
       if (!dropdownRef.current) return;
+
+      if (
+        pointerDownOnTrigger.current ||
+        document.activeElement === triggerRef.current
+      ) {
+        return;
+      }
 
       if (!dropdownRef.current.contains(document.activeElement)) {
         handleClose();
@@ -412,7 +457,6 @@ export function DropdownMenu({
         <DropdownPortal>
           <Menu
             ref={dropdownRef}
-            isActive={isActive}
             position={inDialog ? 'absolute' : 'fixed'}
             id={menuId}
             tabIndex={-1}
@@ -674,7 +718,6 @@ const NoResults = styled.div`
 `;
 
 const Menu = styled.div<{
-  isActive: boolean;
   position?: 'fixed' | 'absolute';
   searchable?: boolean;
 }>`
@@ -691,12 +734,14 @@ const Menu = styled.div<{
   z-index: ${p => p.theme.zIndex.dropdown};
   width: auto;
   min-width: ${p => (p.searchable ? '15rem' : 'auto')};
-  opacity: ${p => (p.isActive ? 1 : 0)};
-  scale: 1;
+  /* Entrance runs when data-positioned is set — one frame after the menu is
+     positioned and made visible — so the transition is actually seen. */
+  opacity: 0;
+  scale: 0.95;
   ${transition('opacity', 'scale')};
 
-  @starting-style {
-    opacity: 0;
-    scale: 0.95;
+  &[data-positioned='true'] {
+    opacity: 1;
+    scale: 1;
   }
 `;

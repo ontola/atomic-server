@@ -90,6 +90,19 @@ test.describe('resource context menu', () => {
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/history/);
 
+    // Clicking the trigger while the menu is open closes it (no blur-then-
+    // reopen race), and the menu must not cover its trigger.
+    const moreButton = page.getByRole('button', { name: 'More' });
+    await moreButton.click();
+    await expect(menu).toBeVisible();
+    const menuBox = await menu.boundingBox();
+    const triggerBox = await moreButton.boundingBox();
+    expect(menuBox!.y).toBeGreaterThanOrEqual(
+      triggerBox!.y + triggerBox!.height,
+    );
+    await moreButton.click();
+    await expect(menu).toHaveCount(0);
+
     // Back on the table, cmd+up navigates to the parent (the drive root).
     await page.goBack();
     await expect(page.getByRole('columnheader').nth(1)).toBeVisible();
