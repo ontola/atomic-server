@@ -574,41 +574,38 @@ const MessageActions = styled.div`
   color: ${p => p.theme.colors.textLight};
 `;
 
-const MessageComponent = styled.div`
-  /* Avatar + body row. The avatar sits at the panel edge (the negative inline
-   * margin lets the hover band bleed into the panel padding); the body lines
-   * up just past it. */
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  margin-inline: -0.5rem;
-  border-radius: ${p => p.theme.radius};
-
-  &:hover {
-    background: ${p => p.theme.colors.bg1};
-
-    & ${MessageActions} {
-      opacity: 1;
-    }
-  }
-
-  /* Keep the actions visible while a keyboard user tabs through them. */
-  &:focus-within ${MessageActions} {
-    opacity: 1;
-  }
-`;
-
-/** Everything to the right of the avatar: meta row + message body. */
+/** Everything to the right of the avatar: meta row + message body. The hover
+ *  highlight lives HERE — a rounded chip around the text only — so it never
+ *  covers, clips, or crowds the avatar sitting to its left. */
 const MessageBody = styled.div`
   flex: 1;
   min-width: 0;
+  padding: 0.3rem 0.5rem;
+  border-radius: ${p => p.theme.radius};
+  /* Bleed a little into the panel's right padding so the chip isn't cramped. */
+  margin-right: -0.5rem;
 `;
 
 /** Keeps authorless messages aligned with the avatared ones. */
 const AvatarSpacer = styled.div`
   width: 1.8rem;
   flex-shrink: 0;
+`;
+
+const MessageComponent = styled.div`
+  display: flex;
+  align-items: flex-start;
+  /* Enough room that the avatar's hover ring never touches the body chip. */
+  gap: 0.75rem;
+  padding-block: 0.1rem;
+
+  &:hover ${MessageBody} {
+    background: ${p => p.theme.colors.bg1};
+  }
+
+  &:hover ${MessageActions}, &:focus-within ${MessageActions} {
+    opacity: 1;
+  }
 `;
 
 const SendButton = styled(Button)`

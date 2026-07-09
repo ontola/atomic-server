@@ -197,15 +197,17 @@ export function FollowProvider({
     [presence, agentSubject],
   );
 
-  const lastTrailRef = useRef<string>(undefined);
+  // Resources already logged into the current meeting's trail, so a resource
+  // the leader revisits (or that re-fires on a render) never posts a duplicate
+  // "Viewing …" entry. Keyed by meeting so a new meeting starts fresh.
+  const trailedRef = useRef<Set<string>>(new Set());
+  const trailMeetingRef = useRef<string>(undefined);
 
   // Restore the meeting we're leading on this drive from sessionStorage: it
   // survives a page refresh (so a refreshed leader keeps their meeting going)
   // but clears when the tab closes. Switching drives swaps to that drive's own
   // meeting, or none.
   useEffect(() => {
-    lastTrailRef.current = undefined;
-
     if (!drive) {
       setActiveMeeting(undefined);
 
@@ -217,18 +219,24 @@ export function FollowProvider({
     );
   }, [drive]);
 
-  // While leading a meeting, log each resource visited into it — the
-  // meeting is the shared trail, and late joiners read it back.
+  // While leading a meeting, log each NEW resource visited into it — the
+  // meeting is the shared trail, and late joiners read it back. Each resource
+  // is logged at most once per meeting.
   useEffect(() => {
     if (!activeMeeting || !currentSubject) {
       return;
     }
 
-    if (lastTrailRef.current === currentSubject) {
+    if (trailMeetingRef.current !== activeMeeting) {
+      trailMeetingRef.current = activeMeeting;
+      trailedRef.current = new Set();
+    }
+
+    if (trailedRef.current.has(currentSubject)) {
       return;
     }
 
-    lastTrailRef.current = currentSubject;
+    trailedRef.current.add(currentSubject);
     postTrailMessage(store, activeMeeting, currentSubject).catch(
       () => undefined,
     );
