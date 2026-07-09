@@ -4,17 +4,25 @@
 // a link that launched the app (system camera scanning a pairing QR) is
 // queued rather than lost. `PairingLinkHandler` installs the sink and drains
 // the queue once the UI is ready.
+//
+// Delivery from the shell is at-least-once: an eval into a page that hasn't
+// loaded yet is silently lost (and Android has no reliable page-ready
+// callback), so the shell re-dispatches pending links for a while. The
+// seen-set makes each link handled exactly once per page.
 
 const queue: string[] = [];
+const seen = new Set<string>();
 let sink: ((uri: string) => void) | undefined;
 
 if (typeof window !== 'undefined') {
   window.addEventListener('atomic-deep-link', event => {
     const uri = (event as CustomEvent).detail;
 
-    if (typeof uri !== 'string') {
+    if (typeof uri !== 'string' || seen.has(uri)) {
       return;
     }
+
+    seen.add(uri);
 
     if (sink) {
       sink(uri);

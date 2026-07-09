@@ -240,18 +240,25 @@ for it.
       SubtleCrypto keypair is non-extractable, the plaintext fallback
       record is the source). The Sync page's peer input also accepts a
       pasted `atomic://pair` link (routing only).
-- [~] Phone: `atomic://` deep link **wired 2026-07-09**, needs on-device
-      verification. `tauri-plugin-deep-link` + VIEW/BROWSABLE intent
-      filter for scheme `atomic` in `gen/android` (+ desktop scheme in
-      `tauri.conf.json`). The shell forwards links to the webview as
-      `atomic-deep-link` DOM events (`desktop/src/lib.rs`) — queued
-      Rust-side and flushed on page load with a delivered-set, so the
-      cold-start link (system camera scan launches the app) isn't lost;
-      the frontend queues from module scope (`helpers/deepLinkQueue.ts`)
-      before React mounts. **No in-app scanner needed for v1**: the QR
-      encodes the `atomic://` URI, so the system camera IS the scanner —
-      the in-app scan path (OQ1) is only for devices whose camera app
-      won't open custom schemes; spike it on the device.
+- [x] Phone: `atomic://` deep link — **verified on-device 2026-07-09**
+      (Xiaomi Pad): a cold-start `pair` VIEW intent lands as a persisted
+      `KnownPeer` carrying the Mac's node DID. **No in-app scanner needed
+      for v1**: the QR encodes the `atomic://` URI, so the system camera
+      IS the scanner — the in-app scan path (OQ1) is only for devices
+      whose camera app won't open custom schemes.
+      Two hard-won Android findings:
+      1. `tauri-plugin-deep-link`'s Kotlin side **drops every intent when
+         `deep-link.mobile` is missing from tauri.conf.json** (its
+         `isDeepLink()` returns false on empty config) — a manual
+         manifest intent filter alone opens the app but the link never
+         reaches the plugin. `mobile: [{ "scheme": ["atomic"] }]` fixes
+         it AND auto-generates the manifest filter at build time.
+      2. `Builder::on_page_load` **never fires on Android**, and a
+         `webview.eval` into a not-yet-loaded page is silently lost — so
+         "flush on page load" cannot work. Delivery is at-least-once
+         instead: the shell re-dispatches pending links every 3s for
+         2 min (`desktop/src/lib.rs`), and `helpers/deepLinkQueue.ts`
+         dedupes by URI so each link is handled once per page.
 - [x] Import (**built 2026-07-09**, `components/PairingLinkHandler.tsx`):
       `pair` → KnownPeer + Sync page; `onboard` → import secret via the
       sign-in primitives (`Agent.fromSecret` → `setAgent` →

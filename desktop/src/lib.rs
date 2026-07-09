@@ -22,40 +22,43 @@ fn init_tls_verifier(raw_vm: *mut std::ffi::c_void, raw_activity: *mut std::ffi:
 
 /// Deep links (`atomic://pair?p=…`, see `planning/device-pairing.md`) are
 /// forwarded to the webview as `atomic-deep-link` DOM events; the frontend
-/// queues them from module scope (`helpers/deepLinkQueue.ts`). A link can
-/// arrive before the page is ready — the cold start from the system camera
-/// scanning a pairing QR — so links are queued here and flushed on every
-/// finished page load, with a delivered-set so each link is handed to the
-/// frontend exactly once.
+/// captures them from module scope (`helpers/deepLinkQueue.ts`). A link can
+/// arrive before the page has loaded — the cold start from the system camera
+/// scanning a pairing QR — and an eval into a not-yet-loaded page is silently
+/// lost (and `on_page_load` never fires on Android, so there is no reliable
+/// "page ready" callback). So delivery is at-least-once: pending links are
+/// re-dispatched every few seconds for a couple of minutes, and the frontend
+/// dedupes by URI, handling each link exactly once.
 #[derive(Default)]
 struct PairLinks {
   pending: std::sync::Mutex<Vec<String>>,
-  delivered: std::sync::Mutex<std::collections::HashSet<String>>,
 }
 
 fn queue_pair_links(state: &PairLinks, urls: impl IntoIterator<Item = String>) {
-  let delivered = state.delivered.lock().unwrap();
   let mut pending = state.pending.lock().unwrap();
   for url in urls {
-    if url.starts_with("atomic://") && !delivered.contains(&url) && !pending.contains(&url) {
+    if url.starts_with("atomic://") && !pending.contains(&url) {
+      println!("[pairing] queued deep link");
       pending.push(url);
     }
   }
 }
 
-fn flush_pair_links(eval: impl Fn(&str) -> tauri::Result<()>, state: &PairLinks) {
-  let links: Vec<String> = state.pending.lock().unwrap().drain(..).collect();
-  let mut delivered = state.delivered.lock().unwrap();
+fn dispatch_pair_links(eval: impl Fn(&str) -> tauri::Result<()>, state: &PairLinks) {
+  let links: Vec<String> = state.pending.lock().unwrap().clone();
   for link in links {
     let js = format!(
       "window.dispatchEvent(new CustomEvent('atomic-deep-link', {{ detail: {} }}));",
       serde_json::to_string(&link).expect("a string always serializes")
     );
-    if eval(&js).is_ok() {
-      delivered.insert(link);
-    }
+    let _ = eval(&js);
   }
 }
+
+/// How long a link keeps being re-dispatched. Generous so a slow cold start
+/// (first boot builds the store) still gets its link; the frontend's dedupe
+/// makes the repeats free.
+const PAIR_LINK_RETRY_WINDOW: std::time::Duration = std::time::Duration::from_secs(120);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -64,30 +67,39 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_process::init())
     .manage(PairLinks::default())
-    .on_page_load(|webview, payload| {
-      if payload.event() == tauri::webview::PageLoadEvent::Finished {
-        use tauri::Manager;
-        use tauri_plugin_deep_link::DeepLinkExt;
-        let state = webview.state::<PairLinks>();
-        // Cold start: the launching intent's link (get_current) predates the
-        // on_open_url registration; the delivered-set dedupes it on reloads.
-        if let Ok(Some(urls)) = webview.app_handle().deep_link().get_current() {
-          queue_pair_links(&state, urls.iter().map(|u| u.to_string()));
-        }
-        flush_pair_links(|js| webview.eval(js), &state);
-      }
-    })
     .setup(move |app| {
       {
         use tauri::Manager;
         use tauri_plugin_deep_link::DeepLinkExt;
         let handle = app.handle().clone();
         app.deep_link().on_open_url(move |event| {
+          println!("[pairing] deep link received");
           let state = handle.state::<PairLinks>();
           queue_pair_links(&state, event.urls().iter().map(|u| u.to_string()));
+          // Warm case: page is loaded, deliver right away. The retry loop
+          // below covers the cold start.
           if let Some(webview) = handle.get_webview_window("main") {
-            flush_pair_links(|js| webview.eval(js), &state);
+            dispatch_pair_links(|js| webview.eval(js), &state);
           }
+        });
+
+        // At-least-once delivery loop (see PairLinks doc-comment).
+        let retry_handle = app.handle().clone();
+        std::thread::spawn(move || {
+          let started = std::time::Instant::now();
+          while started.elapsed() < PAIR_LINK_RETRY_WINDOW {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            let state = retry_handle.state::<PairLinks>();
+            // Cold start: the launching intent may predate the on_open_url
+            // registration; get_current recovers it.
+            if let Ok(Some(urls)) = retry_handle.deep_link().get_current() {
+              queue_pair_links(&state, urls.iter().map(|u| u.to_string()));
+            }
+            if let Some(webview) = retry_handle.get_webview_window("main") {
+              dispatch_pair_links(|js| webview.eval(js), &state);
+            }
+          }
+          retry_handle.state::<PairLinks>().pending.lock().unwrap().clear();
         });
       }
 

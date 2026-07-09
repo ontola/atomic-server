@@ -63,6 +63,7 @@
       "open": true
     },
     "deep-link": {
+      "mobile": [{ "scheme": ["atomic"] }],
       "desktop": {
         "schemes": ["atomic"]
       }
