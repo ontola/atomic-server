@@ -28,12 +28,13 @@ import {
 import { styled } from 'styled-components';
 import { AtomicLink } from '../../components/AtomicLink';
 import { Button } from '../../components/Button';
+import { IconButton } from '../../components/IconButton/IconButton';
 import { ChatMessagesContainer } from '../../components/ChatMessagesContainer';
-import { CommitDetail } from '../../components/CommitDetail';
 import Markdown from '../../components/datatypes/Markdown';
 import { Detail } from '../../components/Detail';
 import { LoaderInline } from '../../components/Loader';
 import { editURL } from '../../helpers/navigation';
+import { formatCompactDateTime } from '../../helpers/dates/compactDateTime';
 import { ResourceInline } from '../ResourceInline';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
@@ -326,43 +327,29 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   return (
     <MessageComponent about={subject}>
       <MessageDetails>
-        <CommitDetail createdAt={createdAt} createdBy={createdBy} />
+        <MessageMeta createdAt={createdAt} createdBy={createdBy} />
         {replyTo && <MessageLine subject={replyTo} />}
         <MessageActions>
           {canWrite && (
-            <Button
-              icon
-              subtle
+            <IconButton
               onClick={() => navigate(editURL(subject))}
               title='Edit message'
             >
               <FaPencil />
-            </Button>
+            </IconButton>
           )}
-          <Button
-            icon
-            subtle
+          <IconButton
             onClick={() => setReplyTo(subject)}
             title='Reply to this message'
           >
             <FaReply />
-          </Button>
-          <Button
-            icon
-            subtle
-            onClick={handleCopyUrl}
-            title='Copy link to this message'
-          >
+          </IconButton>
+          <IconButton onClick={handleCopyUrl} title='Copy link to this message'>
             <FaLink />
-          </Button>
-          <Button
-            icon
-            subtle
-            onClick={handleCopyText}
-            title='Copy message text'
-          >
+          </IconButton>
+          <IconButton onClick={handleCopyText} title='Copy message text'>
             <FaCopy />
-          </Button>
+          </IconButton>
         </MessageActions>
       </MessageDetails>
       {/* markExternalLinks routes links through AtomicLink: subject links
@@ -375,6 +362,34 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
     </MessageComponent>
   );
 });
+
+/** Compact message header: the author (truncated when the name/DID is long,
+ *  so it never shoves the date off-row) and a short human timestamp. */
+function MessageMeta({
+  createdAt,
+  createdBy,
+}: {
+  createdAt: Date | undefined;
+  createdBy: string | undefined;
+}) {
+  return (
+    <MessageMetaRow>
+      {createdBy && (
+        <MessageAuthor>
+          <ResourceInline subject={createdBy} />
+        </MessageAuthor>
+      )}
+      {createdAt && (
+        <MessageTime
+          dateTime={createdAt.toISOString()}
+          title={createdAt.toLocaleString()}
+        >
+          {formatCompactDateTime(createdAt)}
+        </MessageTime>
+      )}
+    </MessageMetaRow>
+  );
+}
 
 /** Matches the trail text written by the meeting/follow logger:
  *  `Viewing [title](subject)`. The markdown is kept as a fallback for
@@ -481,42 +496,67 @@ const MessageLineStyled = styled.span`
   flex: 1;
 `;
 
-/** Small row on top of Message for details such as date and creator */
+/** Small row on top of Message for author, date and the hover actions. */
 const MessageDetails = styled.div`
-  font-size: 0.7rem;
-  margin-bottom: 0;
-  opacity: 0.4;
+  font-size: 0.75rem;
   display: flex;
+  align-items: center;
   gap: 1ch;
-  flex: 1;
+  width: 100%;
+  min-width: 0;
+  color: ${p => p.theme.colors.textLight};
 `;
 
-/** Part of MessageDetails which is aligned to the right */
+const MessageMetaRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 0.6ch;
+  /* Let the author truncate rather than push the time out of view. */
+  min-width: 0;
+`;
+
+const MessageAuthor = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const MessageTime = styled.time`
+  flex-shrink: 0;
+  white-space: nowrap;
+`;
+
+/** The hover actions, pushed to the right of the meta row. */
 const MessageActions = styled.div`
   display: flex;
-  align-self: flex-end;
-  justify-content: flex-end;
-  flex: 1;
+  align-items: center;
+  gap: 0.25ch;
+  margin-left: auto;
+  flex-shrink: 0;
   opacity: 0;
-  gap: 0.5ch;
-  margin-right: 1rem;
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const MessageComponent = styled.div`
-  min-height: 1.5rem;
-  padding-bottom: 0.5rem;
-  padding-left: 1rem;
+  /* No extra horizontal padding: the text lines up with the panel title and
+   * the composer. The subtle hover band bleeds a little into the panel
+   * padding via the negative inline margin. */
+  padding: 0.35rem 0.5rem;
+  margin-inline: -0.5rem;
+  border-radius: ${p => p.theme.radius};
 
   &:hover {
-    background: ${p => p.theme.colors.bg};
-
-    & ${MessageDetails} {
-      opacity: 1;
-    }
+    background: ${p => p.theme.colors.bg1};
 
     & ${MessageActions} {
       opacity: 1;
     }
+  }
+
+  /* Keep the actions visible while a keyboard user tabs through them. */
+  &:focus-within ${MessageActions} {
+    opacity: 1;
   }
 `;
 
