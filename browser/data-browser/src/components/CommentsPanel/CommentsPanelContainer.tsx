@@ -84,6 +84,7 @@ function Comments({ subject }: { subject: string }) {
       loading={loading}
       onSend={handleSend}
       noContainerPadding
+      threadSubject={subject}
     />
   );
 }

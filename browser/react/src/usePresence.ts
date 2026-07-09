@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from 'react';
 import type { DrivePresenceManager, PresenceItem } from '@tomic/lib';
 import { useStore } from './index.js';
 import { useDrive } from './useDrive.js';
@@ -111,4 +117,98 @@ export function useResourcePresence<T = unknown>(
   );
 
   return { presence, setData };
+}
+
+/** How long after the last keystroke we consider the user to have stopped
+ *  typing, if they don't send or blur first. Well under the presence TTL. */
+const TYPING_IDLE_MS = 4000;
+
+/**
+ * Announce that this session is typing a message in the thread `subject` (a
+ * comment thread or a chatroom), and read the other sessions doing the same —
+ * a shared "who is typing here" channel for any {@link PresenceItem}-backed
+ * surface.
+ *
+ * Call `notifyTyping()` on every keystroke: it announces once and keeps the
+ * announcement fresh, auto-clearing after {@link TYPING_IDLE_MS} of silence.
+ * Call `stopTyping()` when the composer sends, blurs, empties or unmounts.
+ * (Clearing matters: the presence heartbeat would otherwise keep a stale
+ * `typing` alive for the whole session — the 30s TTL is only a backstop.)
+ *
+ * `typers` excludes our own session and collapses an agent's multiple tabs to
+ * one entry.
+ */
+export function useTypingPresence(subject: string | undefined): {
+  /** Other agents currently typing in `subject` (deduped by agent). */
+  typers: PresenceItem[];
+  /** Mark this session as typing in `subject`; safe to call every keystroke. */
+  notifyTyping: () => void;
+  /** Clear this session's typing announcement immediately. */
+  stopTyping: () => void;
+} {
+  const { manager, snapshot } = usePresenceSnapshot();
+  const [agent] = useCurrentAgent();
+  const agentSubject = agent?.subject;
+
+  // Whether we currently advertise `typing`, so keystrokes after the first
+  // don't re-broadcast — the idle timer alone keeps it fresh.
+  const activeRef = useRef(false);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+
+  const stopTyping = useCallback(() => {
+    if (idleTimer.current) {
+      clearTimeout(idleTimer.current);
+      idleTimer.current = undefined;
+    }
+
+    if (activeRef.current) {
+      activeRef.current = false;
+      manager?.patchLocal({ typing: undefined });
+    }
+  }, [manager]);
+
+  const notifyTyping = useCallback(() => {
+    if (!manager || !subject || !agentSubject) {
+      return;
+    }
+
+    if (!activeRef.current) {
+      activeRef.current = true;
+      manager.patchLocal({ typing: subject });
+    }
+
+    if (idleTimer.current) {
+      clearTimeout(idleTimer.current);
+    }
+
+    idleTimer.current = setTimeout(stopTyping, TYPING_IDLE_MS);
+  }, [manager, subject, agentSubject, stopTyping]);
+
+  // Stop announcing when the thread changes or the composer unmounts — the
+  // previous `typing` value would otherwise linger via the heartbeat.
+  useEffect(() => stopTyping, [subject, stopTyping]);
+
+  const typers = useMemo(() => {
+    const seen = new Set<string>();
+
+    return snapshot.filter(item => {
+      if (item.typing !== subject || item.sessionId === manager?.sessionId) {
+        return false;
+      }
+
+      // One entry per agent (a person with two tabs isn't "two typers"), and
+      // never surface ourselves from another tab.
+      if (item.agent === agentSubject || seen.has(item.agent)) {
+        return false;
+      }
+
+      seen.add(item.agent);
+
+      return true;
+    });
+  }, [snapshot, subject, manager, agentSubject]);
+
+  return { typers, notifyTyping, stopTyping };
 }

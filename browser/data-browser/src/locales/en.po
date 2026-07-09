@@ -5168,3 +5168,20 @@ msgstr "Paste a pairing code from your other device to start syncing. (Or scan i
 #: src/routes/SyncRoute.tsx
 msgid "Sync a device"
 msgstr "Sync a device"
+
+#: src/components/Presence/TypingIndicator.tsx
+msgid "<0/> is typing"
+msgstr "<0/> is typing"
+
+#~ msgid "<0/> and <1/>{0} are typing"
+#~ msgstr "<0/> and <1/>{0} are typing"
+
+#. 0: typers.length - 1
+#: src/components/Presence/TypingIndicator.tsx
+msgid "<0/> and {0} others are typing"
+msgstr "<0/> and {0} others are typing"
+
+#. 0: ' '
+#: src/components/Presence/TypingIndicator.tsx
+msgid "<0/> and{0} <1/> are typing"
+msgstr "<0/> and{0} <1/> are typing"

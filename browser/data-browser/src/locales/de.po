@@ -5134,3 +5134,20 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Sync a device"
 msgstr ""
+
+#: src/components/Presence/TypingIndicator.tsx
+msgid "<0/> is typing"
+msgstr ""
+
+#~ msgid "<0/> and <1/>{0} are typing"
+#~ msgstr ""
+
+#. 0: typers.length - 1
+#: src/components/Presence/TypingIndicator.tsx
+msgid "<0/> and {0} others are typing"
+msgstr ""
+
+#. 0: ' '
+#: src/components/Presence/TypingIndicator.tsx
+msgid "<0/> and{0} <1/> are typing"
+msgstr ""

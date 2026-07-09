@@ -18,6 +18,12 @@ export interface PresenceEntry<T = unknown> {
   allowFollow?: boolean;
   /** View-specific payload (e.g. canvas XY, table cell, document cursor). */
   data?: T;
+  /** Subject of the comment thread / chatroom this session is currently
+   *  composing a message in, if any. Consumers show a "typing…" hint to the
+   *  other sessions keyed on the same subject. Cleared when the composer goes
+   *  idle, blurs, sends, or unmounts. Its own dedicated field (not `data`) so
+   *  it never clobbers a view's cursor payload. */
+  typing?: string;
   /** Milliseconds since epoch of this entry's last local write. Lets
    *  consumers prefer an agent's freshest session when several linger
    *  (e.g. a stale pre-reload session that hasn't hit its TTL yet). */

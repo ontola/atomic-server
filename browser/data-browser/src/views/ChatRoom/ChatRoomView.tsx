@@ -13,6 +13,7 @@ import {
   useStore,
   useString,
   useSubject,
+  useTypingPresence,
 } from '@tomic/react';
 import { memo, useCallback, useRef, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
@@ -38,6 +39,7 @@ import { editURL } from '../../helpers/navigation';
 import { formatCompactDateTime } from '../../helpers/dates/compactDateTime';
 import { ResourceInline } from '../ResourceInline';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { TypingIndicator } from '../../components/Presence/TypingIndicator';
 
 const CHAT_PAGE_SIZE = 50;
 
@@ -55,6 +57,9 @@ export interface ChatViewProps {
   /** Drop the message container's own padding — for hosts (panels) whose
    *  chrome already pads; message rows keep their inline padding. */
   noContainerPadding?: boolean;
+  /** Subject keying "who is typing" presence: the resource for a comment
+   *  thread, or the chatroom for a meeting/chat. Omit to disable the hint. */
+  threadSubject?: string;
 }
 
 /**
@@ -69,6 +74,7 @@ export function ChatView({
   inputRef: inputRefProp,
   viewTransition = false,
   noContainerPadding = false,
+  threadSubject,
 }: ChatViewProps) {
   const [newMessageVal, setNewMessage] = useState('');
   const [isReplyTo, setReplyTo] = useState<string | undefined>(undefined);
@@ -76,6 +82,8 @@ export function ChatView({
   const inputRef = inputRefProp ?? internalInputRef;
   const [textAreaHight, setTextAreaHight] = useState(1);
   const [scrollToBottomTrigger, setScrollToBottomTrigger] = useState(0);
+
+  const { typers, notifyTyping, stopTyping } = useTypingPresence(threadSubject);
 
   const disableSend = newMessageVal.length === 0;
 
@@ -91,6 +99,7 @@ export function ChatView({
     try {
       setScrollToBottomTrigger(prev => prev + 1);
       setNewMessage('');
+      stopTyping();
       await onSend(messageBackup, isReplyTo);
       setReplyTo(undefined);
     } catch (err) {
@@ -124,9 +133,12 @@ export function ChatView({
     if (e.target.value === '') {
       // Make the textarea small again when the user removed their message
       setTextAreaHight(1);
+      stopTyping();
 
       return;
     }
+
+    notifyTyping();
 
     // Auto-grow the textarea
     const overflowStyle = e.target.style.overflow;
@@ -177,6 +189,7 @@ export function ChatView({
           </Button>
         </Detail>
       )}
+      <TypingIndicator typers={typers} />
       <MessageForm onSubmit={sendMessage} $viewTransition={viewTransition}>
         <MessageInput
           aria-label='Chat input'
@@ -186,6 +199,7 @@ export function ChatView({
           value={newMessageVal}
           onChange={handleChangeMessageText}
           onKeyDown={handleKeyDown}
+          onBlur={stopTyping}
           placeholder={'type a message'}
         />
         <SendButton
@@ -237,6 +251,7 @@ export function ChatRoomView({
       inputRef={inputRef}
       viewTransition={viewTransition}
       noContainerPadding={noContainerPadding}
+      threadSubject={resource.subject}
     />
   );
 }
