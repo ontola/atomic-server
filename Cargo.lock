@@ -1192,6 +1192,7 @@ name = "atomic-server-tauri"
 version = "0.41.0-beta.0"
 dependencies = [
  "actix-rt",
+ "android_system_properties",
  "atomic-server",
  "atomic_lib",
  "clap",

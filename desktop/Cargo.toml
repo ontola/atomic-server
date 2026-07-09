@@ -45,6 +45,9 @@ version = "1.0"
 [target.'cfg(target_os = "android")'.dependencies]
 jni = { version = "0.22", default-features = false }
 rustls-platform-verifier = "0.7"
+# Android reports its hostname as "localhost"; the real device name lives in
+# the system properties (see `android_device_name` in lib.rs).
+android_system_properties = "0.1"
 
 [lib]
 name = "atomic_server_tauri"

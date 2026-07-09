@@ -20,6 +20,24 @@ fn init_tls_verifier(raw_vm: *mut std::ffi::c_void, raw_activity: *mut std::ffi:
   .expect("failed to initialize rustls-platform-verifier");
 }
 
+/// A name for this phone/tablet to introduce itself with when it syncs.
+///
+/// Android's hostname is always `localhost`, which is what `effective_device_name`
+/// falls back to — so without this, every paired Android shows up in the other
+/// device's Sync page as "localhost". `ro.product.marketname` is the name a
+/// vendor gives the retail device ("Xiaomi Pad 6"); stock Android doesn't set
+/// it, so fall back to the model ("Pixel 8").
+#[cfg(target_os = "android")]
+fn android_device_name() -> Option<String> {
+  let props = android_system_properties::AndroidSystemProperties::new();
+
+  ["ro.product.marketname", "ro.product.model"]
+    .iter()
+    .find_map(|key| props.get(key))
+    .map(|name| name.trim().to_string())
+    .filter(|name| !name.is_empty())
+}
+
 /// Deep links (`atomic://pair?p=…`, see `planning/device-pairing.md`) are
 /// forwarded to the webview as `atomic-deep-link` DOM events; the frontend
 /// captures them from module scope (`helpers/deepLinkQueue.ts`). A link can
@@ -141,7 +159,7 @@ pub fn run() {
         let config_dir = paths.app_config_dir().expect("no app config dir");
         let cache_dir = paths.app_cache_dir().expect("no app cache dir");
         use clap::Parser;
-        let opts = atomic_server_lib::config::Opts::parse_from([
+        let mut opts = atomic_server_lib::config::Opts::parse_from([
           "atomic-server",
           "--data-dir",
           data_dir.to_str().unwrap(),
@@ -150,6 +168,10 @@ pub fn run() {
           "--cache-dir",
           cache_dir.to_str().unwrap(),
         ]);
+        // `serve` persists this, so peers see the device rather than "localhost".
+        if opts.device_name.is_none() {
+          opts.device_name = android_device_name();
+        }
         atomic_server_lib::config::build_config(opts)
           .map_err(|e| format!("Initialization failed: {}", e))
           .expect("failed init config")
