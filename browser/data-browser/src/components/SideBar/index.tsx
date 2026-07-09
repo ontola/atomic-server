@@ -13,6 +13,7 @@ import { OverlapSpacer } from './OverlapSpacer';
 import { AppMenu } from './AppMenu';
 import { SideBarHomePanels } from './SideBarHomePanels';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useSidebarSwipe } from '../../hooks/useSidebarSwipe';
 import { Column } from '../Row';
 import { OntologiesPanel } from './OntologySideBar/OntologiesPanel';
 import { SideBarPanel } from './SideBarPanel';
@@ -44,6 +45,17 @@ export function SideBar(): JSX.Element {
     minSize: 200,
     maxSize: 2000,
     targetRef,
+  });
+
+  // Touch: swipe right (from the left part of the content, past the OS
+  // back-gesture edge) opens/locks the sidebar; swipe left closes it. Not
+  // gated on screen width — tablets are wide AND touch-first. Mouse/trackpad
+  // input never emits touch events, so desktops are unaffected.
+  useSidebarSwipe({
+    enabled: true,
+    open: sideBarLocked,
+    onOpen: () => setSideBarLocked(true),
+    onClose: () => setSideBarLocked(false),
   });
 
   const { enabledPanels } = usePanelList();
