@@ -10,6 +10,7 @@ import { pathNames, paths } from './paths';
 // import { TanStackRouterDevtools } from '@tanstack/router-devtools';
 import { Providers } from '../Providers';
 import { IdentityReconcileGate } from '../components/IdentityReconcileGate';
+import { PairingLinkHandler } from '../components/PairingLinkHandler';
 import ResourcePage from '../views/ResourcePage';
 import { useSettings } from '../helpers/AppSettings';
 import { isDev } from '../config';
@@ -33,6 +34,8 @@ export const rootRoute = createRootRoute({
       <IdentityReconcileGate>
         <Outlet />
       </IdentityReconcileGate>
+      {/* Consumes scanned/tapped atomic://pair deep links (QR pairing). */}
+      <PairingLinkHandler />
       {/* Uncomment to get Tanstack Router Devtools */}
       {/* <TanStackRouterDevtools position='bottom-right' /> */}
     </Providers>

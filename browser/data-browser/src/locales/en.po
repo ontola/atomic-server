@@ -5083,3 +5083,32 @@ msgstr "New device setup"
 #: src/components/PairDeviceDialog.tsx
 msgid "This code contains your account secret. Anyone who scans it becomes you — reveal it only when the new device is ready to scan."
 msgstr "This code contains your account secret. Anyone who scans it becomes you — reveal it only when the new device is ready to scan."
+
+#: src/components/PairingLinkHandler.tsx
+msgid "Device paired — you are signed in."
+msgstr "Device paired — you are signed in."
+
+#: src/components/PairingLinkHandler.tsx
+msgid "Could not read the pairing link."
+msgstr "Could not read the pairing link."
+
+#: src/components/PairingLinkHandler.tsx
+msgid "Device paired — find it under Sync → Peers."
+msgstr "Device paired — find it under Sync → Peers."
+
+#: src/components/PairingLinkHandler.tsx
+#: src/components/PairingLinkHandler.tsx
+msgid "Could not read the identity in the pairing code."
+msgstr "Could not read the identity in the pairing code."
+
+#: src/components/PairingLinkHandler.tsx
+msgid "This device is already signed in. The pairing code you scanned belongs to a different account — switching signs this device out of the current one. Make sure its passphrase is saved somewhere before you continue, or you lose access to that account."
+msgstr "This device is already signed in. The pairing code you scanned belongs to a different account — switching signs this device out of the current one. Make sure its passphrase is saved somewhere before you continue, or you lose access to that account."
+
+#: src/components/PairingLinkHandler.tsx
+msgid "Switch account?"
+msgstr "Switch account?"
+
+#: src/components/PairingLinkHandler.tsx
+msgid "Switch account"
+msgstr "Switch account"

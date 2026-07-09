@@ -16,6 +16,7 @@ actix-rt = "2.6.0"
 clap = "4"
 serde_json = "1.0"
 tauri = { version = "2", features = ["tray-icon", "image-png", "devtools"] }
+tauri-plugin-deep-link = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-process = "2"
 

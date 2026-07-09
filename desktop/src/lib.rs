@@ -20,12 +20,77 @@ fn init_tls_verifier(raw_vm: *mut std::ffi::c_void, raw_activity: *mut std::ffi:
   .expect("failed to initialize rustls-platform-verifier");
 }
 
+/// Deep links (`atomic://pair?p=…`, see `planning/device-pairing.md`) are
+/// forwarded to the webview as `atomic-deep-link` DOM events; the frontend
+/// queues them from module scope (`helpers/deepLinkQueue.ts`). A link can
+/// arrive before the page is ready — the cold start from the system camera
+/// scanning a pairing QR — so links are queued here and flushed on every
+/// finished page load, with a delivered-set so each link is handed to the
+/// frontend exactly once.
+#[derive(Default)]
+struct PairLinks {
+  pending: std::sync::Mutex<Vec<String>>,
+  delivered: std::sync::Mutex<std::collections::HashSet<String>>,
+}
+
+fn queue_pair_links(state: &PairLinks, urls: impl IntoIterator<Item = String>) {
+  let delivered = state.delivered.lock().unwrap();
+  let mut pending = state.pending.lock().unwrap();
+  for url in urls {
+    if url.starts_with("atomic://") && !delivered.contains(&url) && !pending.contains(&url) {
+      pending.push(url);
+    }
+  }
+}
+
+fn flush_pair_links(eval: impl Fn(&str) -> tauri::Result<()>, state: &PairLinks) {
+  let links: Vec<String> = state.pending.lock().unwrap().drain(..).collect();
+  let mut delivered = state.delivered.lock().unwrap();
+  for link in links {
+    let js = format!(
+      "window.dispatchEvent(new CustomEvent('atomic-deep-link', {{ detail: {} }}));",
+      serde_json::to_string(&link).expect("a string always serializes")
+    );
+    if eval(&js).is_ok() {
+      delivered.insert(link);
+    }
+  }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_process::init())
+    .manage(PairLinks::default())
+    .on_page_load(|webview, payload| {
+      if payload.event() == tauri::webview::PageLoadEvent::Finished {
+        use tauri::Manager;
+        use tauri_plugin_deep_link::DeepLinkExt;
+        let state = webview.state::<PairLinks>();
+        // Cold start: the launching intent's link (get_current) predates the
+        // on_open_url registration; the delivered-set dedupes it on reloads.
+        if let Ok(Some(urls)) = webview.app_handle().deep_link().get_current() {
+          queue_pair_links(&state, urls.iter().map(|u| u.to_string()));
+        }
+        flush_pair_links(|js| webview.eval(js), &state);
+      }
+    })
     .setup(move |app| {
+      {
+        use tauri::Manager;
+        use tauri_plugin_deep_link::DeepLinkExt;
+        let handle = app.handle().clone();
+        app.deep_link().on_open_url(move |event| {
+          let state = handle.state::<PairLinks>();
+          queue_pair_links(&state, event.urls().iter().map(|u| u.to_string()));
+          if let Some(webview) = handle.get_webview_window("main") {
+            flush_pair_links(|js| webview.eval(js), &state);
+          }
+        });
+      }
+
       // The verifier init must run on the Android context thread (via wry's
       // JNI dispatch); the server thread below waits for it so no HTTPS
       // request can hit an uninitialized verifier.

@@ -22,6 +22,16 @@
                 <!-- AndroidTV support -->
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+            <!-- atomic:// deep links: device pairing QR codes scanned with the
+                 system camera open the app directly (tauri-plugin-deep-link
+                 receives the intent; launchMode singleTask keeps one instance).
+                 See planning/device-pairing.md. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="atomic" />
+            </intent-filter>
         </activity>
 
         <provider

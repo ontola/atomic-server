@@ -240,12 +240,29 @@ for it.
       SubtleCrypto keypair is non-extractable, the plaintext fallback
       record is the source). The Sync page's peer input also accepts a
       pasted `atomic://pair` link (routing only).
-- [ ] Phone: scan path (webview `getUserMedia` + JS detector, or
-      `tauri-plugin-barcode-scanner`) + `atomic://` deep link
-      (`tauri-plugin-deep-link`, intent filter in `gen/android`).
-      Needs the scanner-dependency spike on a real device (OQ1).
-- [ ] Import: secret → `agentStorage`, `KnownPeer` persisted, WS-first /
-      Iroh-fallback initial reconcile, "Paired with <name>" confirmation.
+- [~] Phone: `atomic://` deep link **wired 2026-07-09**, needs on-device
+      verification. `tauri-plugin-deep-link` + VIEW/BROWSABLE intent
+      filter for scheme `atomic` in `gen/android` (+ desktop scheme in
+      `tauri.conf.json`). The shell forwards links to the webview as
+      `atomic-deep-link` DOM events (`desktop/src/lib.rs`) — queued
+      Rust-side and flushed on page load with a delivered-set, so the
+      cold-start link (system camera scan launches the app) isn't lost;
+      the frontend queues from module scope (`helpers/deepLinkQueue.ts`)
+      before React mounts. **No in-app scanner needed for v1**: the QR
+      encodes the `atomic://` URI, so the system camera IS the scanner —
+      the in-app scan path (OQ1) is only for devices whose camera app
+      won't open custom schemes; spike it on the device.
+- [x] Import (**built 2026-07-09**, `components/PairingLinkHandler.tsx`):
+      `pair` → KnownPeer + Sync page; `onboard` → import secret via the
+      sign-in primitives (`Agent.fromSecret` → `setAgent` →
+      `saveAgentToIDB`), KnownPeer, navigate to the personal drive.
+      Already-signed-in devices get an explicit "Switch account?"
+      confirmation (never a silent key replacement); an onboard code for
+      the agent already held degrades to routing-only. Unsupported
+      version → "update this app" toast. Receiver paths verified live in
+      the web app by dispatching the DOM events. Still to do: kick an
+      initial reconcile automatically after import (today the seeded
+      peer is one tap away on the Sync page).
 
 ### P2 — pair flow + discovery sugar
 
