@@ -42,27 +42,41 @@ export function DemoExitMenuItem({
     setLeaving(true);
     onItemClick?.();
 
+    // Nothing in here may leave the user stranded in the demo with a stuck
+    // "Leaving…" button: `finally` always resets, a `catch` always navigates
+    // out, and the personal-drive lookup is time-boxed (a guest's DID isn't
+    // on the server, so that fetch can stall indefinitely).
     try {
-      const { stopDemoDirector } = await import('../chunks/Demo/startDemo');
-      stopDemoDirector();
+      try {
+        const { stopDemoDirector } = await import('../chunks/Demo/startDemo');
+        stopDemoDirector();
+      } catch {
+        // The demo chunk failing to load must not trap the user here.
+      }
+
+      const agent = store.getAgent();
+      const home = agent
+        ? await withTimeout(
+            fetchPersonalDriveSubject(store, agent).catch(() => undefined),
+            2500,
+          )
+        : undefined;
+
+      // `home === demoDrive` would navigate straight back into the demo
+      // ("nothing happened"): a guest whose initialDrive is the demo itself.
+      // Treat that as "no home" and send them to sign-up.
+      if (home && home !== demoDrive) {
+        store.setDrive(home);
+        navigate(constructOpenURL(home));
+      } else {
+        navigate(paths.onboarding);
+      }
     } catch {
-      // The demo chunk failing to load must not trap the user here.
-    }
-
-    const agent = store.getAgent();
-    const home = agent
-      ? await fetchPersonalDriveSubject(store, agent).catch(() => undefined)
-      : undefined;
-
-    if (home) {
-      store.setDrive(home);
-      navigate(constructOpenURL(home));
-    } else {
-      // A demo guest has no personal drive: the way out is sign-up.
+      // Last resort — never strand the user in the demo.
       navigate(paths.onboarding);
+    } finally {
+      setLeaving(false);
     }
-
-    setLeaving(false);
   }
 
   return (
@@ -80,6 +94,15 @@ export function DemoExitMenuItem({
       </SideBarMenuRowLabel>
     </ExitRow>
   );
+}
+
+/** Resolve `p`, but give up with `undefined` after `ms` — so a hung fetch
+ *  can't freeze the caller. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
+  return Promise.race([
+    p,
+    new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), ms)),
+  ]);
 }
 
 function readDemoDrive(): string | undefined {
