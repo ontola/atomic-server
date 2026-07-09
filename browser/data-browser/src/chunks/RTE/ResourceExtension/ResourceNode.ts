@@ -80,6 +80,15 @@ export const ResourceNode = Node.create<ResourceNodeOptions>({
     ];
   },
 
+  // Copy-to-plain-text: an atom node has no text content, so without this
+  // the resource's (visible) name is dropped from the clipboard. Feeds
+  // ProseMirror's `clipboardTextSerializer` via the schema's `toText`.
+  renderText({ node }) {
+    return (
+      this.options.store?.getResourceLoading(node.attrs.subject).title ?? ''
+    );
+  },
+
   addCommands() {
     return {
       setResource:
@@ -152,6 +161,13 @@ export const ResourceNodeInline = ResourceNode.extend<ResourceNodeOptions>({
       },
       title,
     ];
+  },
+
+  // See the block node: make the resource's name survive a plain-text copy.
+  renderText({ node }) {
+    return (
+      this.options.store?.getResourceLoading(node.attrs.subject).title ?? ''
+    );
   },
 
   addCommands() {

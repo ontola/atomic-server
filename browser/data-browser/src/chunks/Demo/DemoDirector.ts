@@ -185,13 +185,10 @@ export class DemoDirector {
     // 0:05 — the welcome doc is being written, and it reacts to the
     // user's arrival.
     await this.type('mara', manifest.welcomeDoc, [
-      'Welcome to the Atomic Demo 👋',
-      'This workspace is the demo: an onboarding board, a moodboard, team chat, docs and files — all real, all live, all editable.',
-      'Oh — you’re here! 🎉 I’m about to start a tour to show you around.',
+      'This workspace is a demo of AtomicServer.',
+      'Feel free to edit, remove or create anything you like!',
+      'I’m about to start a tour to show you around.',
     ]);
-
-    // The doc's feature tour: a todo list of onboarding steps.
-    await this.appendWelcomeExtras();
 
     await this.sleep(2_000);
 
@@ -345,67 +342,6 @@ export class DemoDirector {
     ]);
     await this.sleep(2_000);
     this.leave('mara');
-  }
-
-  /** The welcome doc's feature tour: a live todo list and inline
-   *  references to the board and the team table. */
-  private async appendWelcomeExtras(): Promise<void> {
-    const resource = await this.getBeatResource(this.manifest.welcomeDoc);
-
-    if (!resource || this.stopped) return;
-
-    const typist = new SimulatedTypist(
-      this.store,
-      resource,
-      this.manifest.personas.mara,
-      this.cursorUser('mara'),
-    );
-
-    const doc = this.manifest.welcomeDoc;
-
-    const typeWords = (text: string) => this.typeText(typist, doc, text);
-
-    const mention = (subject: string) => {
-      this.touch(doc);
-      typist.appendInline({
-        type: 'atomic-data-resource-inline',
-        attrs: { subject },
-      });
-    };
-
-    try {
-      await typist.start();
-
-      // A todo list of onboarding steps, typed item by item — with live
-      // references to the places each step happens.
-      this.touch(doc);
-      typist.appendContent({
-        type: 'taskList',
-        content: [
-          {
-            type: 'taskItem',
-            attrs: { checked: false },
-            content: [{ type: 'paragraph' }],
-          },
-        ],
-      });
-      await typeWords('Explore the ');
-      mention(this.manifest.checklist.table);
-      await this.sleep(400);
-
-      this.touch(doc);
-      typist.appendTaskItem(false);
-      await typeWords('Doodle on the ');
-      mention(this.manifest.moodboard);
-      await this.sleep(400);
-
-      this.touch(doc);
-      typist.appendTaskItem(false);
-      await typeWords('Meet the ');
-      mention(this.manifest.team.table);
-    } finally {
-      typist.stop();
-    }
   }
 
   /** Close the welcome doc with a link to the tour meeting — the single
