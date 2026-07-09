@@ -1886,15 +1886,6 @@ msgid "Error"
 msgstr "Erreur"
 
 #: src/routes/SyncRoute.tsx
-msgid "Last sync"
-msgstr "Dernière synchronisation"
-
-#. 0: status.lastDriveSync.count; 1: ' '; 2: formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ?? 'just now'
-#: src/routes/SyncRoute.tsx
-msgid "{0} resources,{1} {2}"
-msgstr "{0} ressources,{1} {2}"
-
-#: src/routes/SyncRoute.tsx
 msgid "WS debug"
 msgstr "Débogage WS"
 
@@ -4949,10 +4940,6 @@ msgstr ""
 msgid "Setting up your demo team…"
 msgstr ""
 
-#: src/routes/DemoRoute.tsx
-msgid "The demo needs the local database, which is disabled in this environment."
-msgstr ""
-
 #: src/chunks/Demo/SimulatedTypist.ts
 msgid "Map"
 msgstr ""
@@ -4977,10 +4964,6 @@ msgid "Chat and the log of resources visited during the meeting."
 msgstr ""
 
 #: src/components/Presence/FollowSessionPanelContainer.tsx
-msgid "No meeting yet. Join a meeting, or start one from the drive menu."
-msgstr ""
-
-#: src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "End"
 msgstr ""
 
@@ -4998,14 +4981,12 @@ msgid "Ending…"
 msgstr ""
 
 #: src/components/Presence/MeetingBanner.tsx
+#: src/components/Presence/MeetingBanner.tsx
 msgid "Meet"
 msgstr ""
 
 #: src/components/Presence/MeetingBanner.tsx
-msgid "Start a meeting — invite everyone in this drive to follow you live"
-msgstr ""
-
-#: src/components/Presence/MeetingBanner.tsx
+#: src/components/Presence/MeetingMessageToaster.tsx
 msgid "Open the meeting chat"
 msgstr ""
 
@@ -5077,4 +5058,21 @@ msgstr ""
 
 #: src/components/PairingLinkHandler.tsx
 msgid "Switch account"
+msgstr ""
+
+#: src/routes/DemoRoute.tsx
+msgid "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Local DB"
+msgstr ""
+
+#. 0: name
+#: src/components/Presence/AgentAvatar.tsx
+msgid "{0} is online"
+msgstr ""
+
+#: src/components/Presence/MeetingBanner.tsx
+msgid "Close the meeting chat"
 msgstr ""

@@ -1886,15 +1886,6 @@ msgid "Error"
 msgstr "Error"
 
 #: src/routes/SyncRoute.tsx
-msgid "Last sync"
-msgstr "Last sync"
-
-#. 0: status.lastDriveSync.count; 1: ' '; 2: formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ?? 'just now'
-#: src/routes/SyncRoute.tsx
-msgid "{0} resources,{1} {2}"
-msgstr "{0} resources,{1} {2}"
-
-#: src/routes/SyncRoute.tsx
 msgid "WS debug"
 msgstr "WS debug"
 
@@ -4983,10 +4974,6 @@ msgstr "The demo could not start"
 msgid "Setting up your demo team…"
 msgstr "Setting up your demo team…"
 
-#: src/routes/DemoRoute.tsx
-msgid "The demo needs the local database, which is disabled in this environment."
-msgstr "The demo needs the local database, which is disabled in this environment."
-
 #: src/chunks/Demo/SimulatedTypist.ts
 msgid "Map"
 msgstr "Map"
@@ -5011,10 +4998,6 @@ msgid "Chat and the log of resources visited during the meeting."
 msgstr "Chat and the log of resources visited during the meeting."
 
 #: src/components/Presence/FollowSessionPanelContainer.tsx
-msgid "No meeting yet. Join a meeting, or start one from the drive menu."
-msgstr "No meeting yet. Join a meeting, or start one from the drive menu."
-
-#: src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "End"
 msgstr "End"
 
@@ -5032,14 +5015,12 @@ msgid "Ending…"
 msgstr "Ending…"
 
 #: src/components/Presence/MeetingBanner.tsx
+#: src/components/Presence/MeetingBanner.tsx
 msgid "Meet"
 msgstr "Meet"
 
 #: src/components/Presence/MeetingBanner.tsx
-msgid "Start a meeting — invite everyone in this drive to follow you live"
-msgstr "Start a meeting — invite everyone in this drive to follow you live"
-
-#: src/components/Presence/MeetingBanner.tsx
+#: src/components/Presence/MeetingMessageToaster.tsx
 msgid "Open the meeting chat"
 msgstr "Open the meeting chat"
 
@@ -5112,3 +5093,20 @@ msgstr "Switch account?"
 #: src/components/PairingLinkHandler.tsx
 msgid "Switch account"
 msgstr "Switch account"
+
+#: src/routes/DemoRoute.tsx
+msgid "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
+msgstr "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
+
+#: src/routes/SyncRoute.tsx
+msgid "Local DB"
+msgstr "Local DB"
+
+#. 0: name
+#: src/components/Presence/AgentAvatar.tsx
+msgid "{0} is online"
+msgstr "{0} is online"
+
+#: src/components/Presence/MeetingBanner.tsx
+msgid "Close the meeting chat"
+msgstr "Close the meeting chat"
