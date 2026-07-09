@@ -18,6 +18,9 @@ import {
   FaArrowsRotate,
   FaQuestion,
   FaCircleExclamation,
+  FaCloud,
+  FaPlus,
+  FaMobileScreenButton,
 } from 'react-icons/fa6';
 import { Button } from '../components/Button';
 import { ContainerNarrow } from '../components/Containers';
@@ -127,13 +130,13 @@ function statusLabel(status: NodeStatus): string {
     case 'synced':
       return 'In sync';
     case 'syncing':
-      return 'Syncing...';
+      return 'Syncing…';
     case 'unsynced':
       return 'Changes pending';
     case 'offline':
       return 'Offline';
     case 'unknown':
-      return 'Unknown';
+      return 'Connecting…';
   }
 }
 
@@ -168,10 +171,8 @@ function SyncPage() {
   const [serverInput, setServerInput] = useState('');
   const [showAddServer, setShowAddServer] = useState(false);
   const [localNodeId, setLocalNodeId] = useState<string | null>(null);
-  const [peerInput, setPeerInput] = useState('');
   const [peerSyncing, setPeerSyncing] = useState(false);
   const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
-  const [showAddPeer, setShowAddPeer] = useState(false);
   const [showPairDialog, setShowPairDialog] = useState(false);
   const [knownPeers, setKnownPeers] = useState<KnownPeer[]>(() => {
     try {
@@ -312,6 +313,46 @@ function SyncPage() {
 
   const nodes = deriveNodeStatuses(status);
 
+  // The app is itself an Iroh peer node only inside the Tauri shell (embedded
+  // server). A plain browser talks to a remote server; its `/iroh-node-id`
+  // would be that *server's* node, not "this device", so pairing is hidden.
+  const isNode = isRunningInTauri();
+  const serverHostname = status.serverUrl
+    ? new URL(status.serverUrl).hostname
+    : undefined;
+  const embeddedActive =
+    isNode &&
+    (serverHostname === 'localhost' || serverHostname === '127.0.0.1');
+  // Show a server connection card whenever the active server isn't this
+  // device's own embedded one (browser: always; Tauri: only a real remote).
+  const showServerConn = !!status.serverUrl && !embeddedActive;
+  const pairedPeers = isNode ? knownPeers : [];
+  const connectionCount = (showServerConn ? 1 : 0) + pairedPeers.length;
+
+  const usagePct =
+    nodeUsage && quotaBytes
+      ? Math.min(
+          100,
+          Math.round(
+            ((nodeUsage.blobBytes + nodeUsage.loroBytes) / quotaBytes) * 100,
+          ),
+        )
+      : null;
+
+  function summaryLine(): string {
+    if (!isNode && !clientDbOn) {
+      return 'Your data lives on the connected server.';
+    }
+
+    if (connectionCount === 0) {
+      return 'Your data lives on this device — it isn’t syncing anywhere yet.';
+    }
+
+    return `Your data lives on this device and syncs with ${connectionCount} ${
+      connectionCount === 1 ? 'place' : 'places'
+    }.`;
+  }
+
   function savePeers(peers: KnownPeer[]) {
     setKnownPeers(peers);
     localStorage.setItem('atomic-peers', JSON.stringify(peers));
@@ -390,9 +431,6 @@ function SyncPage() {
         } else {
           savePeers([...knownPeers, entry]);
         }
-
-        setPeerInput('');
-        setShowAddPeer(false);
       }
     } catch (e) {
       setPeerSyncResult(`Error: ${e}`);
@@ -409,299 +447,287 @@ function SyncPage() {
     <Main>
       <ContainerNarrow>
         <h1>Sync</h1>
-        <Lead>
-          {isRunningInTauri()
-            ? 'Your data lives on this device. Add peers or a remote server to sync.'
-            : 'Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects.'}
-        </Lead>
+        <Lead>{summaryLine()}</Lead>
 
-        {isRunningInTauri() ? (
-          <LocalDevice>
-            <NodeIcon $status='synced'>
-              <FaLaptop />
-            </NodeIcon>
-            <LocalDeviceBody>
-              <NodeLabel>This device</NodeLabel>
-              <Muted style={{ margin: 0, fontSize: '0.85rem' }}>
-                {status.lastDriveSync
-                  ? `${status.lastDriveSync.count} resources stored locally`
-                  : 'Local storage ready'}
-              </Muted>
-            </LocalDeviceBody>
-          </LocalDevice>
-        ) : (
-          /* Visual sync diagram (client-server) */
-          <SyncDiagram>
-            <SyncNode $status='synced'>
-              <NodeIcon $status='synced'>
-                <FaLaptop />
-              </NodeIcon>
-              <NodeLabel>This device</NodeLabel>
-            </SyncNode>
+        {/* This device — always the source of truth for local-first data. */}
+        <DeviceCard>
+          <ConnIcon $tone='device'>
+            <FaLaptop />
+          </ConnIcon>
+          <ConnBody>
+            <ConnTitle>This device</ConnTitle>
+            <ConnSub>
+              {isNode
+                ? status.lastDriveSync
+                  ? `${status.lastDriveSync.count.toLocaleString()} resources · stored locally`
+                  : 'Embedded server · stored locally'
+                : clientDbOn
+                  ? 'Cached locally · works offline'
+                  : 'Server-only · no local cache'}
+            </ConnSub>
+          </ConnBody>
+        </DeviceCard>
 
-            <SyncLine $status={nodes.line}>
-              <LineTrack $offline={nodes.line === 'offline'} />
-              {nodes.line === 'syncing' && <LinePulse />}
-              {(nodes.line === 'synced' || nodes.line === 'unsynced') && (
-                <HeartbeatDot $status={nodes.line} />
-              )}
-            </SyncLine>
+        <Section>
+          <SectionTitle>Connections</SectionTitle>
 
-            <SyncNode $status={nodes.server}>
-              <NodeIcon $status={nodes.server}>
-                <FaServer />
-              </NodeIcon>
-              <NodeLabel>
-                {status.serverUrl
-                  ? new URL(status.serverUrl).hostname
-                  : 'Server'}
-              </NodeLabel>
-              <NodeStatusBadge $status={nodes.server}>
-                <StatusIcon status={nodes.server} />
-                {statusLabel(nodes.server)}
-              </NodeStatusBadge>
-              {!status.serverConnected && status.serverConnectionError && (
-                <NodeError role='alert'>
-                  <FaCircleExclamation aria-hidden />
-                  <span>{status.serverConnectionError}</span>
-                </NodeError>
-              )}
-              {status.serverConnected ? (
-                <NodeAction onClick={() => store.disconnect()}>
-                  Disconnect
-                </NodeAction>
-              ) : (
-                <NodeAction
-                  onClick={() => {
-                    // Failures surface through the global
-                    // `StoreEvents.Error` toast (see
-                    // `data-browser/src/handlers/errorHandler.ts`).
-                    store.reconnect().catch(e => store.notifyError(e));
-                  }}
-                >
-                  Reconnect
-                </NodeAction>
-              )}
-              {managedInfo.managed && managedInfo.portalUrl && (
-                <ManagedLink
-                  href={managedInfo.portalUrl}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                >
-                  {'Manage account & plan →'}
-                </ManagedLink>
-              )}
-              {nodeUsage && (
-                <DriveUsageBlock>
-                  <DriveUsageLabel>
-                    {nodeUsage.driveName
-                      ? `This drive (${nodeUsage.driveName})`
-                      : 'This drive'}
-                  </DriveUsageLabel>
-                  <DriveUsageStats>
+          {connectionCount === 0 && (
+            <EmptyConnections>
+              <p>
+                Not syncing anywhere yet — your data is safe on this device.
+              </p>
+              <p>
+                {isNode
+                  ? 'Pair another device to sync peer-to-peer, or connect a server to back up and reach it from the web.'
+                  : 'Connect a server to back up your data and reach it from anywhere.'}
+              </p>
+            </EmptyConnections>
+          )}
+
+          {/* Remote / cloud server connection */}
+          {showServerConn && (
+            <ConnCard>
+              <ConnIcon $tone={managedInfo.managed ? 'cloud' : 'server'}>
+                {managedInfo.managed ? <FaCloud /> : <FaServer />}
+              </ConnIcon>
+              <ConnBody>
+                <ConnTopRow>
+                  <ConnTitle>
+                    {managedInfo.managed ? 'Cloud Sync' : serverHostname}
+                  </ConnTitle>
+                  <StatusPill $status={nodes.server}>
+                    <StatusIcon status={nodes.server} />
+                    {statusLabel(nodes.server)}
+                  </StatusPill>
+                </ConnTopRow>
+                <ConnSub>
+                  {managedInfo.managed
+                    ? serverHostname
+                    : 'Self-hosted Atomic Server'}
+                </ConnSub>
+
+                {!status.serverConnected && status.serverConnectionError && (
+                  <ConnError role='alert'>
+                    <FaCircleExclamation aria-hidden />
+                    <span>{status.serverConnectionError}</span>
+                  </ConnError>
+                )}
+
+                {usagePct !== null && (
+                  <UsageBar
+                    aria-label={`${usagePct}% of storage used`}
+                    title={`${usagePct}% used`}
+                  >
+                    <UsageFill style={{ width: `${usagePct}%` }} />
+                  </UsageBar>
+                )}
+
+                {nodeUsage && (
+                  <ConnMeta>
                     {nodeUsage.resourceCount.toLocaleString()} resources ·{' '}
                     {formatBytes(nodeUsage.blobBytes + nodeUsage.loroBytes)}
-                    {quotaBytes ? ` of ${formatBytes(quotaBytes)}` : ''} used
-                  </DriveUsageStats>
-                </DriveUsageBlock>
-              )}
-            </SyncNode>
-          </SyncDiagram>
-        )}
+                    {quotaBytes ? ` of ${formatBytes(quotaBytes)}` : ''}
+                    {status.lastDriveSync
+                      ? ` · synced ${formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ?? 'just now'}`
+                      : ''}
+                  </ConnMeta>
+                )}
+                {!nodeUsage && status.lastDriveSync && (
+                  <ConnMeta>
+                    Last synced{' '}
+                    {formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ??
+                      'just now'}
+                  </ConnMeta>
+                )}
 
-        {/* Details accordion */}
-        <Section>
-          <SectionTitle>Details</SectionTitle>
-          <DetailsGrid>
-            <DetailItem>
-              <DetailLabel>
-                {isRunningInTauri() ? 'Remote server' : 'Server'}
-              </DetailLabel>
-              <DetailValue>
-                <ServerSelect
-                  value={baseURL ?? ''}
-                  onChange={e => setServer(e.target.value)}
-                >
+                <ConnActions>
+                  {status.serverConnected ? (
+                    <NodeAction onClick={() => store.disconnect()}>
+                      Disconnect
+                    </NodeAction>
+                  ) : (
+                    <NodeAction
+                      onClick={() =>
+                        store.reconnect().catch(e => store.notifyError(e))
+                      }
+                    >
+                      Reconnect
+                    </NodeAction>
+                  )}
+                  {managedInfo.managed && managedInfo.portalUrl && (
+                    <ManagedLink
+                      href={managedInfo.portalUrl}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                    >
+                      {'Manage account & plan →'}
+                    </ManagedLink>
+                  )}
+                </ConnActions>
+              </ConnBody>
+            </ConnCard>
+          )}
+
+          {/* Paired devices (Iroh peers) */}
+          {pairedPeers.map(peer => (
+            <ConnCard key={peer.nodeId}>
+              <ConnIcon $tone='device'>
+                <FaMobileScreenButton />
+              </ConnIcon>
+              <ConnBody>
+                <ConnTopRow>
+                  <ConnTitle title={peer.nodeId}>{peer.label}</ConnTitle>
+                  <StatusPill $status='unknown'>Paired</StatusPill>
+                </ConnTopRow>
+                <ConnSub>
+                  Paired device
+                  {peer.lastSync
+                    ? ` · synced ${formatTimeAgo(new Date(peer.lastSync)) ?? 'just now'}`
+                    : ''}
+                </ConnSub>
+                <ConnActions>
+                  <NodeAction
+                    onClick={() => syncWithPeer(peer.nodeId)}
+                    disabled={peerSyncing}
+                  >
+                    {peerSyncing ? 'Syncing…' : 'Sync now'}
+                  </NodeAction>
+                  <NodeAction onClick={() => removePeer(peer.nodeId)}>
+                    Remove
+                  </NodeAction>
+                </ConnActions>
+              </ConnBody>
+            </ConnCard>
+          ))}
+
+          {peerSyncResult && (
+            <PeerSyncResult $error={peerSyncResult.startsWith('Error')}>
+              {peerSyncResult}
+            </PeerSyncResult>
+          )}
+
+          <AddRow>
+            {isNode && localNodeId && (
+              <AddButton onClick={() => setShowPairDialog(true)}>
+                <FaPlus aria-hidden /> Sync a device
+              </AddButton>
+            )}
+            <AddButton onClick={() => setShowAddServer(v => !v)}>
+              <FaPlus aria-hidden /> Connect a server
+            </AddButton>
+          </AddRow>
+
+          {showAddServer && (
+            <ConnectPanel>
+              {knownServers.length > 1 && (
+                <SwitchList>
                   {knownServers.map(s => {
                     const hostname = new URL(s).hostname;
+                    const active = s === baseURL;
+                    const label =
+                      isNode &&
+                      (hostname === 'localhost' || hostname === '127.0.0.1')
+                        ? 'Embedded (this device)'
+                        : hostname;
 
                     return (
-                      <option key={s} value={s}>
-                        {isRunningInTauri() && hostname === 'localhost'
-                          ? 'Embedded (local)'
-                          : hostname}
-                      </option>
+                      <SwitchItem
+                        key={s}
+                        type='button'
+                        $active={active}
+                        onClick={() => setServer(s)}
+                      >
+                        {label}
+                        {active && <FaCheck aria-hidden />}
+                      </SwitchItem>
                     );
                   })}
-                </ServerSelect>
-                {!showAddServer && (
-                  <NodeAction onClick={() => setShowAddServer(true)}>
-                    + Add
-                  </NodeAction>
-                )}
-              </DetailValue>
-            </DetailItem>
-            {showAddServer && (
-              <DetailItem>
-                <DetailLabel />
-                <DetailValue>
-                  <AddServerRow
-                    onSubmit={e => {
-                      e.preventDefault();
+                </SwitchList>
+              )}
+              <AddServerRow
+                onSubmit={e => {
+                  e.preventDefault();
 
-                      if (serverInput.trim()) {
-                        setServer(serverInput.trim());
-                        setServerInput('');
-                        setShowAddServer(false);
+                  if (serverInput.trim()) {
+                    setServer(serverInput.trim());
+                    setServerInput('');
+                    setShowAddServer(false);
+                  }
+                }}
+              >
+                <ServerInput
+                  autoFocus
+                  placeholder='https://your-server.example'
+                  value={serverInput}
+                  onChange={e => setServerInput(e.target.value)}
+                />
+                <Button type='submit' subtle>
+                  Connect
+                </Button>
+              </AddServerRow>
+              <DocsLink
+                href='https://docs.atomicdata.dev/atomicserver/installation.html'
+                target='_blank'
+                rel='noopener'
+              >
+                How to run your own server
+              </DocsLink>
+            </ConnectPanel>
+          )}
+
+          {isNode && localNodeId && (
+            <PairDeviceDialog
+              nodeDid={rawToNodeDid(localNodeId)}
+              show={showPairDialog}
+              bindShow={setShowPairDialog}
+            />
+          )}
+        </Section>
+
+        {/* Developer: diagnostics + advanced toggles, tucked away. */}
+        <DevDetails>
+          <DevSummary>Developer</DevSummary>
+
+          <DevGrid>
+            {localNodeId && (
+              <DevRow>
+                <DetailLabel>Node ID</DetailLabel>
+                <PeerIdRow>
+                  <PeerIdText title={`did:ad:node:${localNodeId}`}>
+                    did:ad:node:{localNodeId.slice(0, 12)}…
+                  </PeerIdText>
+                  <NodeAction
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(
+                          `did:ad:node:${localNodeId}`,
+                        );
+                        toast.success('Node DID copied to clipboard');
+                      } catch (e) {
+                        store.notifyError(e as Error);
                       }
                     }}
                   >
-                    <ServerInput
-                      autoFocus
-                      placeholder='https://... or iroh:...'
-                      value={serverInput}
-                      onChange={e => setServerInput(e.target.value)}
-                    />
-                    <Button type='submit' subtle>
-                      Add
-                    </Button>
-                  </AddServerRow>
-                  <DocsLink
-                    href='https://docs.atomicdata.dev/atomicserver/installation.html'
-                    target='_blank'
-                    rel='noopener'
-                  >
-                    How to run your own server
-                  </DocsLink>
-                </DetailValue>
-              </DetailItem>
-            )}
-            {localNodeId && (
-              <DetailItem>
-                <DetailLabel>Node DID</DetailLabel>
-                <DetailValue>
-                  <PeerIdRow>
-                    <PeerIdText title={`did:ad:node:${localNodeId}`}>
-                      did:ad:node:{localNodeId.slice(0, 12)}...
-                    </PeerIdText>
-                    <NodeAction
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(
-                            `did:ad:node:${localNodeId}`,
-                          );
-                          toast.success('Node DID copied to clipboard');
-                        } catch (e) {
-                          store.notifyError(e as Error);
-                        }
-                      }}
-                    >
-                      Copy
-                    </NodeAction>
-                    <NodeAction onClick={() => setShowPairDialog(true)}>
-                      Sync a device
-                    </NodeAction>
-                  </PeerIdRow>
-                  <PairDeviceDialog
-                    nodeDid={rawToNodeDid(localNodeId)}
-                    show={showPairDialog}
-                    bindShow={setShowPairDialog}
-                  />
-                </DetailValue>
-              </DetailItem>
-            )}
-            <DetailItem>
-              <DetailLabel>Peers</DetailLabel>
-              <DetailValue>
-                {knownPeers.length === 0 && !showAddPeer && (
-                  <Muted style={{ margin: 0, fontSize: '0.85rem' }}>
-                    No peers connected
-                  </Muted>
-                )}
-                {knownPeers.map(peer => (
-                  <PeerRow key={peer.nodeId}>
-                    <PeerIdText title={peer.nodeId}>{peer.label}</PeerIdText>
-                    {peer.lastSync && (
-                      <PeerLastSync>
-                        {formatTimeAgo(new Date(peer.lastSync)) ?? 'just now'}
-                      </PeerLastSync>
-                    )}
-                    <NodeAction
-                      onClick={() => syncWithPeer(peer.nodeId)}
-                      disabled={peerSyncing}
-                    >
-                      {peerSyncing ? '...' : 'Sync'}
-                    </NodeAction>
-                    <NodeAction onClick={() => removePeer(peer.nodeId)}>
-                      &times;
-                    </NodeAction>
-                  </PeerRow>
-                ))}
-                {showAddPeer ? (
-                  <AddServerRow
-                    onSubmit={e => {
-                      e.preventDefault();
-                      syncWithPeer(peerInput.trim());
-                    }}
-                  >
-                    <ServerInput
-                      autoFocus
-                      placeholder='Paste did:ad:node:...'
-                      value={peerInput}
-                      onChange={e => setPeerInput(e.target.value)}
-                      disabled={peerSyncing}
-                    />
-                    <Button
-                      type='submit'
-                      subtle
-                      disabled={peerSyncing || !peerInput.trim()}
-                    >
-                      {peerSyncing ? 'Syncing...' : 'Sync'}
-                    </Button>
-                  </AddServerRow>
-                ) : (
-                  <NodeAction onClick={() => setShowAddPeer(true)}>
-                    + Add
+                    Copy
                   </NodeAction>
-                )}
-                {peerSyncResult && (
-                  <PeerSyncResult $error={peerSyncResult.startsWith('Error')}>
-                    {peerSyncResult}
-                  </PeerSyncResult>
-                )}
-              </DetailValue>
-            </DetailItem>
-            {/* On Tauri the embedded server is the primary local store and
-                this stays off by default — but the demo flips it on (its
-                local-only drives live in the ClientDb), so keep it
-                controllable everywhere. */}
-            <DetailItem>
-              <DetailLabel>Local DB</DetailLabel>
-              <DetailValue>
-                <LocalDbControl
-                  enabled={clientDbOn}
-                  attached={status.clientDbAttached}
-                  ready={status.clientDbReady}
-                  error={status.clientDbError}
-                  onToggle={next => {
-                    setClientDbEnabled(next);
-                    setClientDbOn(next);
-                  }}
-                />
-              </DetailValue>
-            </DetailItem>
-            {status.lastDriveSync && (
-              <DetailItem>
-                <DetailLabel>Last sync</DetailLabel>
-                <DetailValue>
-                  {status.lastDriveSync.count} resources,{' '}
-                  {formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ??
-                    'just now'}
-                </DetailValue>
-              </DetailItem>
+                </PeerIdRow>
+              </DevRow>
             )}
-            <DetailItem>
-              <DetailLabel>WS debug</DetailLabel>
+            <DevRow>
+              <DetailLabel>Local database</DetailLabel>
+              <LocalDbControl
+                enabled={clientDbOn}
+                attached={status.clientDbAttached}
+                ready={status.clientDbReady}
+                error={status.clientDbError}
+                onToggle={next => {
+                  setClientDbEnabled(next);
+                  setClientDbOn(next);
+                }}
+              />
+            </DevRow>
+            <DevRow>
+              <DetailLabel>WebSocket debug</DetailLabel>
               <DetailValue>
                 <DebugToggle
                   type='checkbox'
@@ -713,18 +739,15 @@ function SyncPage() {
                 />
                 {wsDebug ? 'Logging to console' : 'Off'}
               </DetailValue>
-            </DetailItem>
-          </DetailsGrid>
-        </Section>
+            </DevRow>
+          </DevGrid>
 
-        {/* Commit log */}
-        <Section>
-          <SectionTitle>
-            Commit Log
+          <DevActivityTitle>
+            Recent activity
             {status.pendingDirtyCount > 0 && (
               <PendingCount>{status.pendingDirtyCount} unsynced</PendingCount>
             )}
-          </SectionTitle>
+          </DevActivityTitle>
           {commitLog.length > 0 ? (
             <LogList>
               {commitLog.map(entry => (
@@ -796,7 +819,7 @@ function SyncPage() {
           ) : (
             <Muted>No activity recorded in this session yet.</Muted>
           )}
-        </Section>
+        </DevDetails>
       </ContainerNarrow>
     </Main>
   );
@@ -994,28 +1017,9 @@ const ManagedLink = styled.a`
   }
 `;
 
-const DriveUsageBlock = styled.div`
-  margin-top: 0.6rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid ${p => p.theme.colors.bg2};
-  text-align: center;
-`;
-
-const DriveUsageLabel = styled.div`
-  font-size: 0.75rem;
-  color: ${p => p.theme.colors.textLight};
-`;
-
-const DriveUsageStats = styled.div`
-  font-size: 0.85rem;
-  color: ${p => p.theme.colors.text};
-`;
-
 const Muted = styled.p`
   color: ${p => p.theme.colors.textLight};
 `;
-
-// --- Sync diagram ---
 
 const statusColor = (status: NodeStatus, theme: DefaultTheme) => {
   switch (status) {
@@ -1032,138 +1036,9 @@ const statusColor = (status: NodeStatus, theme: DefaultTheme) => {
   }
 };
 
-const SyncDiagram = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  padding: 2rem 1rem;
-  margin-bottom: 2rem;
-`;
-
-const LocalDevice = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  padding: 2rem 1rem;
-  margin-bottom: 2rem;
-`;
-
-const LocalDeviceBody = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-`;
-
-const SyncNode = styled.div<{ $status: NodeStatus }>`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 7rem;
-`;
-
-const NodeIcon = styled.div<{ $status: NodeStatus }>`
-  font-size: 2.2rem;
-  color: ${p => statusColor(p.$status, p.theme)};
-  transition: color 0.3s ease;
-`;
-
-const NodeLabel = styled.span`
-  font-weight: 600;
-  font-size: 0.95rem;
-`;
-
-const NodeStatusBadge = styled.span<{ $status: NodeStatus }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  color: ${p => statusColor(p.$status, p.theme)};
-  padding: 0.2rem 0.6rem;
-  border-radius: 1rem;
-  background: ${p => statusColor(p.$status, p.theme)}18;
-
-  svg {
-    font-size: 0.7rem;
-    ${p =>
-      p.$status === 'syncing' &&
-      css`
-        animation: ${spin} 1s linear infinite;
-      `}
-  }
-`;
-
-const NodeError = styled.div`
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 0.35rem;
-  max-width: 14rem;
-  color: ${p => p.theme.colors.alert};
-  font-size: 0.8rem;
-  line-height: 1.25;
-  text-align: left;
-
-  svg {
-    flex-shrink: 0;
-    margin-top: 0.12rem;
-  }
-`;
-
 const spin = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-`;
-
-const SyncLine = styled.div<{ $status: NodeStatus }>`
-  flex: 1;
-  position: relative;
-  height: 2px;
-  min-width: 3rem;
-  max-width: 10rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
-
-const LineTrack = styled.div<{ $offline: boolean }>`
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 0;
-  top: 50%;
-  border-top: 2px ${p => (p.$offline ? 'dashed' : 'solid')}
-    ${p => p.theme.colors.bg2};
-`;
-
-const pulseAnim = keyframes`
-  0% { left: -30%; }
-  100% { left: 100%; }
-`;
-
-const LinePulse = styled.div`
-  position: absolute;
-  top: 0;
-  height: 100%;
-  width: 30%;
-  background: ${p => p.theme.colors.main};
-  border-radius: 1px;
-  animation: ${pulseAnim} 1.2s ease-in-out infinite;
-`;
-
-const heartbeat = keyframes`
-  0% { left: 0%; }
-  100% { left: calc(100% - 6px); }
-`;
-
-const HeartbeatDot = styled.div<{ $status: NodeStatus }>`
-  position: absolute;
-  top: calc(50% - 2px);
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: ${p => statusColor(p.$status, p.theme)};
-  animation: ${heartbeat} 2s ease-in-out infinite alternate;
 `;
 
 const PendingCount = styled.span`
@@ -1173,21 +1048,279 @@ const PendingCount = styled.span`
   margin-left: 0.5rem;
 `;
 
-// --- Details ---
+// --- Connection cards ---
 
-const DetailsGrid = styled.div`
-  display: grid;
-  gap: 0.4rem;
+const cardBase = css`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  background: ${p => p.theme.colors.bg};
+  min-width: 0;
 `;
 
-const DetailItem = styled.div`
+/** The "This device" card — the source of truth, visually distinct. */
+const DeviceCard = styled.div`
+  ${cardBase}
+  align-items: center;
+  background: ${p => p.theme.colors.bg1};
+  border-color: transparent;
+  margin-bottom: 1.5rem;
+`;
+
+const ConnCard = styled.div`
+  ${cardBase}
+  margin-bottom: 0.6rem;
+`;
+
+const ConnIcon = styled.div<{ $tone: 'device' | 'cloud' | 'server' }>`
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  color: ${p => (p.$tone === 'device' ? p.theme.colors.text : 'white')};
+  background: ${p =>
+    p.$tone === 'device'
+      ? p.theme.colors.bg2
+      : p.$tone === 'cloud'
+        ? p.theme.colors.main
+        : p.theme.colors.textLight};
+`;
+
+const ConnBody = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+`;
+
+const ConnTopRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+`;
+
+const ConnTitle = styled.span`
+  font-weight: 600;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+`;
+
+const ConnSub = styled.span`
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const ConnMeta = styled.span`
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+`;
+
+const ConnError = styled.div`
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+  color: ${p => p.theme.colors.alert};
+  font-size: 0.8rem;
+  line-height: 1.25;
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 0.12rem;
+  }
+`;
+
+const ConnActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+`;
+
+const StatusPill = styled.span<{ $status: NodeStatus }>`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: ${p => statusColor(p.$status, p.theme)};
+  padding: 0.15rem 0.55rem;
+  border-radius: 1rem;
+  background: ${p => statusColor(p.$status, p.theme)}1c;
+
+  svg {
+    font-size: 0.65rem;
+    ${p =>
+      p.$status === 'syncing' &&
+      css`
+        animation: ${spin} 1s linear infinite;
+      `}
+  }
+`;
+
+const UsageBar = styled.div`
+  margin-top: 0.5rem;
+  height: 6px;
+  border-radius: 3px;
+  background: ${p => p.theme.colors.bg2};
+  overflow: hidden;
+`;
+
+const UsageFill = styled.div`
+  height: 100%;
+  border-radius: 3px;
+  background: ${p => p.theme.colors.main};
+  transition: width 0.3s ease;
+`;
+
+const EmptyConnections = styled.div`
+  padding: 1rem 1.1rem;
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg1};
+  margin-bottom: 0.8rem;
+
+  p {
+    margin: 0;
+    color: ${p => p.theme.colors.textLight};
+    font-size: 0.88rem;
+  }
+
+  p + p {
+    margin-top: 0.4rem;
+  }
+`;
+
+const AddRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+`;
+
+const AddButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px dashed ${p => p.theme.colors.bg2};
+  background: none;
+  color: ${p => p.theme.colors.main};
+  border-radius: ${p => p.theme.radius};
+  padding: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+
+  svg {
+    font-size: 0.7rem;
+  }
+
+  &:hover {
+    border-color: ${p => p.theme.colors.main};
+    background: ${p => p.theme.colors.main}0d;
+  }
+`;
+
+const ConnectPanel = styled.div`
+  margin-top: 0.8rem;
+  padding: 0.9rem 1rem;
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg1};
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+`;
+
+const SwitchList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const SwitchItem = styled.button<{ $active: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  cursor: pointer;
+  border-radius: ${p => p.theme.radius};
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  color: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.text)};
+  font-weight: ${p => (p.$active ? 600 : 400)};
+  background: ${p => (p.$active ? `${p.theme.colors.main}14` : 'transparent')};
+
+  &:hover {
+    background: ${p => p.theme.colors.bg2};
+  }
+
+  svg {
+    font-size: 0.7rem;
+    flex-shrink: 0;
+  }
+`;
+
+// --- Developer disclosure ---
+
+const DevDetails = styled.details`
+  margin-top: 2.5rem;
+  border-top: 1px solid ${p => p.theme.colors.bg2};
+  padding-top: 1rem;
+`;
+
+const DevSummary = styled.summary`
+  cursor: pointer;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.9rem;
+  font-weight: 600;
+  user-select: none;
+
+  &:hover {
+    color: ${p => p.theme.colors.text};
+  }
+`;
+
+const DevGrid = styled.div`
   display: grid;
-  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: 0.4rem;
+  margin-top: 1rem;
+`;
+
+const DevRow = styled.div`
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
   gap: 0.8rem;
+  align-items: center;
   padding: 0.5rem 0.8rem;
   border-radius: ${p => p.theme.radius};
   background: ${p => p.theme.colors.bg1};
   min-width: 0;
+`;
+
+const DevActivityTitle = styled.h3`
+  font-size: 0.95rem;
+  margin: 1.5rem 0 0.8rem;
 `;
 
 const DetailLabel = styled.span`
@@ -1418,16 +1551,6 @@ const StatusDot = styled.span<{ $state: LocalDbStatus }>`
   flex-shrink: 0;
 `;
 
-const ServerSelect = styled.select`
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  padding: 0.3rem 0.5rem;
-  font-size: 0.9rem;
-  background: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
-  cursor: pointer;
-`;
-
 const AddServerRow = styled.form`
   display: flex;
   gap: 0.5rem;
@@ -1447,18 +1570,6 @@ const PeerIdText = styled.code`
 
 const DocsLink = styled.a`
   font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
-`;
-
-const PeerRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0;
-`;
-
-const PeerLastSync = styled.span`
-  font-size: 0.75rem;
   color: ${p => p.theme.colors.textLight};
 `;
 
