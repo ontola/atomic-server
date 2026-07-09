@@ -49,6 +49,7 @@
     "@tiptap/react": "^3.23.6",
     "@tiptap/starter-kit": "^3.23.6",
     "@tiptap/suggestion": "^3.23.6",
+    "@tomic/form-renderer": "workspace:*",
     "@tomic/lib": "workspace:*",
     "@tomic/plugin": "workspace:*",
     "@tomic/react": "workspace:*",
