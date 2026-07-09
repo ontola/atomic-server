@@ -8,7 +8,10 @@ interface StoredAgent {
   subject: string;
 }
 
-/** Also stored as fallback when SubtleCrypto is unavailable (insecure context) */
+/**
+ * A readable private key. Stored *only* where SubtleCrypto is unavailable
+ * (an insecure context), never beside a non-extractable keypair.
+ */
 interface StoredAgentFallback {
   privateKey: string;
   subject: string;
@@ -34,10 +37,19 @@ export async function getAgentFromIDB(): Promise<Agent | undefined> {
 
     if (storedAgent) {
       try {
-        return new Agent(
-          new SubtleCryptoProvider(storedAgent.keyPair),
-          storedAgent.subject,
-        );
+        const provider = new SubtleCryptoProvider(storedAgent.keyPair);
+        // Prove the stored keypair can actually sign before dropping any
+        // readable copy below — a corrupt keypair must not lock the user out.
+        await provider.sign('atomic-key-check');
+
+        const agent = new Agent(provider, storedAgent.subject);
+
+        // Heal installs written while the readable key was saved
+        // unconditionally: a plaintext copy beside a non-extractable key hands
+        // back exactly what non-extractability is meant to withhold.
+        await del(AGENT_FALLBACK_KEY);
+
+        return agent;
       } catch (e) {
         console.warn(
           'Failed to load agent with SubtleCrypto, trying fallback:',
@@ -66,23 +78,6 @@ export async function getAgentFromIDB(): Promise<Agent | undefined> {
   return undefined;
 }
 
-/**
- * The portable agent secret (base64 JSON of privateKey + subject), rebuilt
- * from the plaintext fallback record — the SubtleCrypto keypair itself is
- * non-extractable. Undefined on installs that predate the fallback record.
- */
-export async function getAgentSecretFromIDB(): Promise<string | undefined> {
-  const fallback = (await get(AGENT_FALLBACK_KEY)) as
-    | StoredAgentFallback
-    | undefined;
-
-  if (!fallback) {
-    return undefined;
-  }
-
-  return Agent.buildSecret(fallback.privateKey, fallback.subject);
-}
-
 export async function saveAgentToIDB(
   keyPair: CryptoKeyPair,
   subject: string,
@@ -100,17 +95,9 @@ export async function saveAgentToIDB(
   }
 
   if (typeof keyPairOrSecret === 'string') {
-    // Save fallback (plaintext key) always — works in insecure contexts
-    const [, newSubject] = JSCryptoProvider.fromSecret(keyPairOrSecret);
-    // The secret is a base64-encoded JSON containing { privateKey, subject }.
-    // We extract the privateKey for the JS fallback.
-    const decoded = JSON.parse(atob(keyPairOrSecret));
-    await set(AGENT_FALLBACK_KEY, {
-      privateKey: decoded.privateKey,
-      subject: newSubject,
-    } satisfies StoredAgentFallback);
-
-    // Also save SubtleCrypto version if available
+    // Prefer the non-extractable keypair. Once stored this way the private key
+    // cannot be read back out of IndexedDB by anything running on this origin,
+    // so no readable copy may be left beside it.
     if (hasSubtleCrypto()) {
       try {
         const [keyPair, resolvedSubject] =
@@ -119,10 +106,27 @@ export async function saveAgentToIDB(
           keyPair,
           subject: resolvedSubject,
         } satisfies StoredAgent);
+        await del(AGENT_FALLBACK_KEY);
+
+        return;
       } catch {
-        // SubtleCrypto not available — fallback is already saved
+        // SubtleCrypto refused the key — fall through to the readable record.
       }
     }
+
+    // Insecure context (plain-HTTP self-hosted origin): Web Crypto is absent,
+    // so a readable key is the only way to sign at all. The secret is no more
+    // exposed than the unencrypted connection already carrying it.
+    const [, newSubject] = JSCryptoProvider.fromSecret(keyPairOrSecret);
+    // The secret is a base64-encoded JSON containing { privateKey, subject }.
+    // We extract the privateKey for the JS fallback.
+    const decoded = JSON.parse(atob(keyPairOrSecret));
+    await set(AGENT_FALLBACK_KEY, {
+      privateKey: decoded.privateKey,
+      subject: newSubject,
+    } satisfies StoredAgentFallback);
+    // Drop a keypair from a previous account, so it can't be loaded instead.
+    await del(AGENT_IDB_KEY);
   } else {
     if (!subject) {
       throw new Error('Subject is required');

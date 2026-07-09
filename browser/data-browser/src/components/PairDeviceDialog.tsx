@@ -6,7 +6,6 @@ import { encodePairingEnvelope, type PairingEnvelope } from '@tomic/lib';
 import { Dialog, DialogContent, DialogTitle, useDialog } from './Dialog';
 import { Button } from './Button';
 import { useSettings } from '../helpers/AppSettings';
-import { getAgentSecretFromIDB } from '../helpers/agentStorage';
 import { deliverDeepLink } from '../helpers/deepLinkQueue';
 
 interface PairDeviceDialogProps {
@@ -21,12 +20,13 @@ interface PairDeviceDialogProps {
  * `atomic://pair` code (QR + copyable text) AND accept another device's code
  * to connect. Two outgoing kinds:
  *
- * - **pair** (default, safe): routing only. It merely tells the other device
- *   where this node lives; the peer still proves the same agent key over
- *   AUTH before it receives anything.
- * - **onboard** (opt-in, blurred until pressed): routing **plus the agent
- *   secret** — a bearer credential with the same sensitivity as the
- *   copy-secret button in agent settings. For a device not signed in yet.
+ * The code is **routing only**. It merely tells the other device where this
+ * node lives; the peer still proves it holds the same agent key over AUTH
+ * before it receives anything. So both devices must already be signed in —
+ * this dialog cannot hand an identity to a device that isn't, because the
+ * agent's private key is non-extractable and cannot be read back out
+ * (`helpers/agentStorage.ts`). Signing a new device in means entering the
+ * secret the user saved during onboarding.
  *
  * A pasted incoming code is handed to the same handler a scanned deep link
  * uses (`PairingLinkHandler`), which persists the peer and starts a sync.
@@ -38,18 +38,12 @@ export function PairDeviceDialog({
 }: PairDeviceDialogProps): JSX.Element {
   const { baseURL } = useSettings();
   const [dialogProps, showDialog] = useDialog({ bindShow });
-  const [revealOnboard, setRevealOnboard] = useState(false);
-  const [agentSecret, setAgentSecret] = useState<string>();
   const [incomingCode, setIncomingCode] = useState('');
 
   useEffect(() => {
     if (show) {
-      setRevealOnboard(false);
       setIncomingCode('');
       showDialog();
-      getAgentSecretFromIDB()
-        .then(setAgentSecret)
-        .catch(() => setAgentSecret(undefined));
     }
   }, [show]);
 
@@ -81,27 +75,6 @@ export function PairDeviceDialog({
 
   const pairSvg = useMemo(() => renderSVG(pairUri), [pairUri]);
 
-  const onboardUri = useMemo(() => {
-    if (!show || !agentSecret) {
-      return undefined;
-    }
-
-    const envelope: PairingEnvelope = {
-      v: 1,
-      kind: 'onboard',
-      secret: agentSecret,
-      node: nodeDid,
-      ...(urlHint ? { url: urlHint } : {}),
-      drives: '*',
-    };
-
-    return encodePairingEnvelope(envelope);
-  }, [show, agentSecret, nodeDid, urlHint]);
-
-  const onboardSvg = useMemo(
-    () => (onboardUri ? renderSVG(onboardUri) : undefined),
-    [onboardUri],
-  );
 
   const copyCode = async (code: string) => {
     try {
@@ -150,38 +123,10 @@ export function PairDeviceDialog({
                 Copy
               </Button>
             </CodeRow>
-
-            {onboardSvg && onboardUri && (
-              <>
-                <h2>New device (not signed in yet)</h2>
-                <Explainer>
-                  This code carries your account secret — anyone who scans it
-                  becomes you. Reveal it only with the new device ready.
-                </Explainer>
-                <QrReveal>
-                  <QrBox
-                    aria-hidden={!revealOnboard}
-                    $blurred={!revealOnboard}
-                    dangerouslySetInnerHTML={{ __html: onboardSvg }}
-                  />
-                  {!revealOnboard && (
-                    <RevealOverlay>
-                      <Button onClick={() => setRevealOnboard(true)}>
-                        Reveal setup code
-                      </Button>
-                    </RevealOverlay>
-                  )}
-                </QrReveal>
-                {revealOnboard && (
-                  <CodeRow>
-                    <CodeText title={onboardUri}>{onboardUri}</CodeText>
-                    <Button subtle onClick={() => copyCode(onboardUri)}>
-                      Copy
-                    </Button>
-                  </CodeRow>
-                )}
-              </>
-            )}
+            <Explainer>
+              Not signed in on the other device yet? Sign in there with your
+              account secret first, then pair.
+            </Explainer>
           </Column>
 
           <Column>
@@ -276,15 +221,13 @@ const CodeInput = styled.input`
   box-sizing: border-box;
 `;
 
-const QrBox = styled.div<{ $blurred?: boolean }>`
+const QrBox = styled.div`
   width: 13rem;
   height: 13rem;
   border-radius: ${p => p.theme.radius};
   overflow: hidden;
   background: white;
   padding: 0.5rem;
-  filter: ${p => (p.$blurred ? 'blur(14px)' : 'none')};
-  transition: filter 0.15s ease;
 
   svg {
     width: 100%;
@@ -293,15 +236,4 @@ const QrBox = styled.div<{ $blurred?: boolean }>`
   }
 `;
 
-const QrReveal = styled.div`
-  position: relative;
-  width: fit-content;
-`;
 
-const RevealOverlay = styled.div`
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
