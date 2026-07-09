@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@tomic/react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
-import { isClientDbEnabled } from '../helpers/clientDbMode';
+import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
+import { isRunningInTauri } from '../helpers/tauri';
 import {
   Shell,
   Card,
@@ -31,7 +32,19 @@ const DemoRoute: React.FC = () => {
   const supported = isClientDbEnabled();
 
   useEffect(() => {
-    if (!supported) return;
+    if (!supported) {
+      // Under Tauri the ClientDb is merely off by default (the embedded
+      // server covers normal persistence), but the demo's local-only drives
+      // need it. Opt in and reboot the webview — the worker only spawns at
+      // app boot, and this route re-runs with it enabled.
+      if (isRunningInTauri()) {
+        setClientDbEnabled(true);
+        window.location.reload();
+      }
+
+      return;
+    }
+
     if (startedRef.current) return;
     startedRef.current = true;
     if (inFlight) return;
@@ -57,10 +70,10 @@ const DemoRoute: React.FC = () => {
         <CardTitle>
           {error ? 'The demo could not start' : 'Setting up your demo team…'}
         </CardTitle>
-        {!supported && (
+        {!supported && !isRunningInTauri() && (
           <p>
             The demo needs the local database, which is disabled in this
-            environment.
+            browser. Enable it on the Sync page and try again.
           </p>
         )}
         {error && <p role='alert'>{error.message}</p>}

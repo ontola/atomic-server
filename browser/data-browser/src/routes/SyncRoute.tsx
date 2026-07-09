@@ -667,23 +667,25 @@ function SyncPage() {
                 )}
               </DetailValue>
             </DetailItem>
-            {!isRunningInTauri() && (
-              <DetailItem>
-                <DetailLabel>Local DB</DetailLabel>
-                <DetailValue>
-                  <LocalDbControl
-                    enabled={clientDbOn}
-                    attached={status.clientDbAttached}
-                    ready={status.clientDbReady}
-                    error={status.clientDbError}
-                    onToggle={next => {
-                      setClientDbEnabled(next);
-                      setClientDbOn(next);
-                    }}
-                  />
-                </DetailValue>
-              </DetailItem>
-            )}
+            {/* On Tauri the embedded server is the primary local store and
+                this stays off by default — but the demo flips it on (its
+                local-only drives live in the ClientDb), so keep it
+                controllable everywhere. */}
+            <DetailItem>
+              <DetailLabel>Local DB</DetailLabel>
+              <DetailValue>
+                <LocalDbControl
+                  enabled={clientDbOn}
+                  attached={status.clientDbAttached}
+                  ready={status.clientDbReady}
+                  error={status.clientDbError}
+                  onToggle={next => {
+                    setClientDbEnabled(next);
+                    setClientDbOn(next);
+                  }}
+                />
+              </DetailValue>
+            </DetailItem>
             {status.lastDriveSync && (
               <DetailItem>
                 <DetailLabel>Last sync</DetailLabel>
