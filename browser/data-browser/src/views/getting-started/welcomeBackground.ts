@@ -13,7 +13,12 @@ const welcomeBgDrift = keyframes`
 
 export const welcomeBackgroundCss = css`
   position: relative;
-  overflow: hidden;
+  /* Clip only the horizontal bleed of the scaled ::before gradient. NOT
+     'overflow: hidden' — the shorthand also sets overflow-y, and this css is
+     appended after a container's own 'overflow-y: auto' (the getting-started
+     Shell), silently killing its vertical scroll (the welcome buttons became
+     unreachable on a phone). */
+  overflow-x: hidden;
   background: ${p => p.theme.colors.bgBody};
 
   /* Animated accent layer (pink + blue), behind content */

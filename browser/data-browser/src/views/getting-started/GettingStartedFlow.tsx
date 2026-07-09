@@ -615,17 +615,33 @@ export function GettingStartedFlow({
 }
 
 export const Shell = styled.div`
-  /* height, not min-height: the parent body has overflow:hidden, so Shell
-     owns the scroll on short windows. */
-  height: ${p => p.theme.heights.fullPage};
+  /* A concrete viewport height (not 100%): nothing in the html/body/#root
+     chain sets a height, so 100% would collapse to content height and,
+     because body is overflow:hidden, tall content (the welcome pitch on a
+     phone) gets clipped with no way to scroll to the buttons. 100dvh tracks
+     the visible viewport (excludes mobile browser UI), giving overflow-y a
+     real height to scroll within. */
+  height: 100dvh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* 'safe center' keeps content centered when it fits but falls back to
-     flex-start when it overflows, so the top is reachable via scroll. */
-  justify-content: safe center;
-  padding: ${p => p.theme.size(7)} ${p => p.theme.size(5)};
+  /* Center via auto margins on the child, NOT justify-content: center — a
+     centered flex item that overflows its scroll container can't be scrolled
+     to (Chromium clips it and pins the scroll origin), which left the welcome
+     buttons unreachable on a phone. Auto margins collapse to 0 when content
+     overflows, so it top-aligns and scrolls; they center it when it fits. */
+  & > * {
+    margin-block: auto;
+  }
+  /* The Android (Tauri) webview draws edge-to-edge under the system status
+     and navigation bars — 100dvh includes those strips, so centered content
+     ends up half-hidden behind the nav bar (the welcome buttons were
+     unreachable on a phone). The safe-area insets (needs viewport-fit=cover,
+     set in index.html) pad the content back into the visible region. */
+  padding: calc(${p => p.theme.size(7)} + env(safe-area-inset-top, 0px))
+    ${p => p.theme.size(5)}
+    calc(${p => p.theme.size(7)} + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
   ${welcomeBackgroundCss}
 `;
