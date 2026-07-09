@@ -51,6 +51,7 @@
     "@tiptap/starter-kit": "^3.30.4",
     "@tiptap/suggestion": "^3.30.4",
     "@tomic/edit-mode": "workspace:*",
+    "@tomic/form-renderer": "workspace:*",
     "@tomic/lib": "workspace:*",
     "@tomic/plugin": "workspace:*",
     "@tomic/react": "workspace:*",
