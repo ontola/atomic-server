@@ -4,7 +4,7 @@ import { styled } from 'styled-components';
 import { RightPanel } from '../RightPanel/RightPanel';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { useFollow } from './FollowContext';
-import { AgentAvatar } from './AgentAvatar';
+import { PresenceAvatarMenu } from './PresenceAvatarMenu';
 import { ChatRoomView } from '../../views/ChatRoom/ChatRoomView';
 import { EditableTitle } from '../EditableTitle';
 import { Column, Row } from '../Row';
@@ -127,7 +127,11 @@ function FollowSessionChat({ subject }: { subject: string }) {
           {participants.length > 0 && (
             <Facepile title={`${participants.length} here`}>
               {participants.slice(0, 5).map(subj => (
-                <AgentAvatar key={subj} agentSubject={subj} size='1.5rem' />
+                <PresenceAvatarMenu
+                  key={subj}
+                  agentSubject={subj}
+                  size='1.5rem'
+                />
               ))}
               {participants.length > 5 && (
                 <Overflow>+{participants.length - 5}</Overflow>

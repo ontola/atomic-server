@@ -25,48 +25,83 @@ interface AgentAvatarProps {
   agentSubject: string;
   /** Diameter, any CSS size. Defaults to 1.6rem (navbar facepile). */
   size?: string;
+  /** Show a green "online" dot (agent has a live presence entry). */
+  online?: boolean;
 }
 
 /**
  * Round avatar for an agent: their profile image if they set one (the
  * `image` File property, or an external `imageUrl`), otherwise their
- * initial on a per-agent deterministic color.
+ * initial on a per-agent deterministic color. Pass `online` to overlay a
+ * green presence dot.
  */
 export function AgentAvatar({
   agentSubject,
   size = '1.6rem',
+  online = false,
 }: AgentAvatarProps): React.JSX.Element {
   const agentResource = useResource(agentSubject);
   const [name] = useTitle(agentResource);
   const [imageFile] = useString(agentResource, dataBrowser.properties.image);
   const [imageUrl] = useString(agentResource, dataBrowser.properties.imageUrl);
 
+  let circle: React.JSX.Element;
+
   if (imageFile) {
-    return (
+    circle = (
       <ImageCircle $size={size} title={name}>
         <Image subject={imageFile} alt={name} sizeIndication='2rem' />
       </ImageCircle>
     );
-  }
-
-  if (imageUrl) {
-    return (
+  } else if (imageUrl) {
+    circle = (
       <ImageCircle $size={size} title={name}>
         <img src={imageUrl} alt={name} />
       </ImageCircle>
     );
+  } else {
+    circle = (
+      <InitialCircle
+        $size={size}
+        $color={colorForAgent(agentSubject)}
+        title={name}
+      >
+        {name.charAt(0).toUpperCase()}
+      </InitialCircle>
+    );
+  }
+
+  if (!online) {
+    return circle;
   }
 
   return (
-    <InitialCircle
-      $size={size}
-      $color={colorForAgent(agentSubject)}
-      title={name}
-    >
-      {name.charAt(0).toUpperCase()}
-    </InitialCircle>
+    <AvatarWithStatus>
+      {circle}
+      <OnlineDot $size={size} title={`${name} is online`} />
+    </AvatarWithStatus>
   );
 }
+
+const AvatarWithStatus = styled.span`
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+`;
+
+const OnlineDot = styled.span<{ $size: string }>`
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: calc(${p => p.$size} / 3);
+  height: calc(${p => p.$size} / 3);
+  min-width: 0.5rem;
+  min-height: 0.5rem;
+  border-radius: 50%;
+  background: #34c759;
+  border: 2px solid ${p => p.theme.colors.bg};
+  box-sizing: border-box;
+`;
 
 const CircleBase = styled.div<{ $size: string }>`
   box-sizing: border-box;

@@ -27,7 +27,7 @@ import {
 } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { AtomicLink } from '../../components/AtomicLink';
-import { AgentAvatar } from '../../components/Presence/AgentAvatar';
+import { PresenceAvatarMenu } from '../../components/Presence/PresenceAvatarMenu';
 import { Button } from '../../components/Button';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { ChatMessagesContainer } from '../../components/ChatMessagesContainer';
@@ -328,7 +328,7 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   return (
     <MessageComponent about={subject}>
       {createdBy ? (
-        <AgentAvatar agentSubject={createdBy} size='1.8rem' />
+        <PresenceAvatarMenu agentSubject={createdBy} size='1.8rem' />
       ) : (
         <AvatarSpacer />
       )}

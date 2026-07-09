@@ -1,6 +1,11 @@
 import { useMemo } from 'react';
 import { styled } from 'styled-components';
-import { useResource, useTitle } from '@tomic/react';
+import {
+  useCurrentAgent,
+  useDrivePresence,
+  useResource,
+  useTitle,
+} from '@tomic/react';
 import { FaLocationArrow, FaUser } from 'react-icons/fa6';
 import { DropdownMenu, type DropdownItem } from '../Dropdown';
 import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
@@ -17,8 +22,11 @@ interface PresenceAvatarMenuProps {
 
 /**
  * A presence avatar that opens a context menu on click: show the agent's
- * profile, or follow them around the drive (issue #1229). Renders as a
- * focusable span so it stays valid markup inside sidebar row links.
+ * profile, or — when they're online and followable — follow them around the
+ * drive (issue #1229). An online agent gets a green presence dot. Used
+ * everywhere an agent avatar appears (facepiles, chat) so the menu is
+ * consistent. Renders as a focusable span so it stays valid markup inside
+ * sidebar row links.
  */
 export function PresenceAvatarMenu({
   agentSubject,
@@ -26,10 +34,17 @@ export function PresenceAvatarMenu({
 }: PresenceAvatarMenuProps): React.JSX.Element {
   const navigate = useNavigateWithTransition();
   const { followedAgent, follow, unfollow, isFollowDisabledFor } = useFollow();
+  const presence = useDrivePresence();
+  const [currentAgent] = useCurrentAgent();
   const agentResource = useResource(agentSubject);
   const [name] = useTitle(agentResource);
   const isFollowing = followedAgent === agentSubject;
   const followDisabled = isFollowDisabledFor(agentSubject);
+  const isSelf = currentAgent?.subject === agentSubject;
+  const online = useMemo(
+    () => presence.some(item => item.agent === agentSubject),
+    [presence, agentSubject],
+  );
 
   const items = useMemo((): DropdownItem[] => {
     const result: DropdownItem[] = [
@@ -41,6 +56,7 @@ export function PresenceAvatarMenu({
       },
     ];
 
+    // Following only makes sense for someone else who's here now.
     if (isFollowing) {
       result.push({
         id: 'follow',
@@ -48,7 +64,7 @@ export function PresenceAvatarMenu({
         icon: <FaLocationArrow />,
         onClick: unfollow,
       });
-    } else if (!followDisabled) {
+    } else if (online && !isSelf && !followDisabled) {
       result.push({
         id: 'follow',
         label: 'Follow',
@@ -58,11 +74,20 @@ export function PresenceAvatarMenu({
     }
 
     return result;
-  }, [agentSubject, isFollowing, followDisabled, navigate, follow, unfollow]);
+  }, [
+    agentSubject,
+    isFollowing,
+    online,
+    isSelf,
+    followDisabled,
+    navigate,
+    follow,
+    unfollow,
+  ]);
 
   const Trigger = useMemo(
-    () => buildAvatarTrigger(agentSubject, name, size, isFollowing),
-    [agentSubject, name, size, isFollowing],
+    () => buildAvatarTrigger(agentSubject, name, size, isFollowing, online),
+    [agentSubject, name, size, isFollowing, online],
   );
 
   return <DropdownMenu items={items} Trigger={Trigger} />;
@@ -77,6 +102,7 @@ const buildAvatarTrigger = (
   name: string,
   size: string | undefined,
   following: boolean,
+  online: boolean,
 ): React.FC<DropdownTriggerProps> => {
   const Comp = ({
     onClick,
@@ -108,7 +134,7 @@ const buildAvatarTrigger = (
         }
       }}
     >
-      <AgentAvatar agentSubject={agentSubject} size={size} />
+      <AgentAvatar agentSubject={agentSubject} size={size} online={online} />
     </AvatarButton>
   );
 
