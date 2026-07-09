@@ -7,15 +7,21 @@ import clientDbWorkerUrl from '@tomic/lib/client-db.worker.js?url';
 let currentWorker: ClientDbWorker | undefined;
 
 /**
- * Initialize the WASM ClientDb in a SharedWorker and attach it to the Store.
- * Uses OPFS for persistent storage — data survives page reloads. Singleton
- * per origin, so all tabs talk to one DB instance automatically.
+ * Initialize the WASM ClientDb (a dedicated Worker; one leader per origin via
+ * `navigator.locks` — see lib/src/client-db.ts) and attach it to the Store.
+ * Uses OPFS for persistent storage — data survives page reloads.
  */
 export function initClientDb(store: Store): void {
-  if (typeof SharedWorker === 'undefined') return;
+  // NOT `SharedWorker`: the implementation moved to a dedicated Worker long
+  // ago, and Android WebView (the Tauri mobile app) has no SharedWorker — a
+  // stale SharedWorker guard silently disabled the entire local database
+  // there, so every collection query fell back to the server and local-only
+  // drives (the demo) rendered empty. Missing locks/OPFS on insecure
+  // contexts is handled inside ClientDbWorker with a clear message.
+  if (typeof Worker === 'undefined') return;
 
-  // Disconnect the previous port on HMR. Another tab (or the post-HMR tab
-  // itself) will keep the SharedWorker alive; we just reattach a fresh port.
+  // Disconnect the previous port on HMR. The lib's leader election hands the
+  // database to another tab (or this one after reload); we just reattach.
   if (currentWorker) {
     currentWorker.destroy();
     currentWorker = undefined;
