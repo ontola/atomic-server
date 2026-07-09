@@ -1929,24 +1929,11 @@ msgstr "Prêt — WASM + OPFS"
 msgid "Enable local WASM DB"
 msgstr "Activer la base de données WASM locale"
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Drive Configuration"
-msgstr "Configuration du lecteur"
-
-#: src/routes/SettingsServer/index.tsx
-msgid "Saved Drives"
-msgstr "Lecteurs enregistrés"
-
-#: src/routes/SettingsServer/index.tsx
-msgid "Custom Drive URL"
-msgstr "URL de lecteur personnalisée"
-
-#: src/routes/SettingsServer/index.tsx
+#: src/routes/SettingsAgent.tsx
 msgid "Enter a Drive DID or URL"
 msgstr "Saisissez un DID ou une URL de lecteur"
 
 #: src/chunks/RTE/EditLinkForm.tsx
-#: src/routes/SettingsServer/index.tsx
 msgid "Set"
 msgstr "Définir"
 
@@ -1955,10 +1942,6 @@ msgstr "Définir"
 #: src/routes/History/HistoryMobileView.tsx
 msgid "History"
 msgstr "Historique"
-
-#: src/routes/SettingsServer/index.tsx
-msgid "/app/sync"
-msgstr "/app/sync"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
@@ -2239,12 +2222,12 @@ msgid "View the resource and its properties in the Data View."
 msgstr "Afficher la ressource et ses propriétés dans la Vue de Données."
 
 #: src/actions/resourceActions.tsx
-#: src/routes/SettingsServer/FavoriteButton.tsx
+#: src/components/Drives/FavoriteButton.tsx
 msgid "Remove from favorites"
 msgstr "Supprimer des favoris"
 
 #: src/actions/resourceActions.tsx
-#: src/routes/SettingsServer/FavoriteButton.tsx
+#: src/components/Drives/FavoriteButton.tsx
 msgid "Add to favorites"
 msgstr "Ajouter aux favoris"
 
@@ -2254,6 +2237,7 @@ msgstr ""
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
+#: src/routes/SettingsAgent.tsx
 msgid "Open"
 msgstr "Ouvrir"
 
@@ -2543,9 +2527,9 @@ msgstr "Nommez votre collection"
 msgid "Set a value filter (optional)"
 msgstr "Définir un filtre de valeur (facultatif)"
 
+#: src/components/Drives/DrivesCard.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-#: src/routes/SettingsServer/DrivesCard.tsx
 msgid "New Drive"
 msgstr "Nouveau lecteur"
 
@@ -2553,9 +2537,8 @@ msgstr "Nouveau lecteur"
 msgid "My Drive"
 msgstr "Mon lecteur"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Subdomain"
-msgstr "Sous-domaine"
+#~ msgid "Subdomain"
+#~ msgstr "Sous-domaine"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
@@ -2598,14 +2581,6 @@ msgstr "Basculer vers {0}"
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Create a new drive"
 msgstr "Créer un nouveau lecteur"
-
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Configure"
-msgstr "Configurer"
-
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Load drives not displayed in this list."
-msgstr "Charger les lecteurs non affichés dans cette liste."
 
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "To rearange items, press space or enter to start dragging. While dragging, use the arrow keys to move the item in any given direction. Press space or enter again to drop the item in its new position, or press escape to cancel."
@@ -2810,7 +2785,7 @@ msgstr "Ajouter une autre propriété..."
 msgid "In Atomic Data, any Resource could have any single Property. Use this field to add new property-value combinations to your resource."
 msgstr "Dans Atomic Data, toute ressource peut avoir une seule propriété. Utilisez ce champ pour ajouter de nouvelles combinaisons propriété-valeur à votre ressource."
 
-#: src/routes/SettingsServer/DrivesCard.tsx
+#: src/components/Drives/DrivesCard.tsx
 msgid "Nothing to show"
 msgstr "Rien à afficher"
 
@@ -3328,13 +3303,13 @@ msgstr "nouveau {0}"
 msgid "Toggle show Class details"
 msgstr "Afficher/masquer les détails de la classe"
 
-#: src/routes/SettingsServer/DriveRow.tsx
+#: src/components/Drives/DriveRow.tsx
 msgid "Remove drive from list"
 msgstr "Supprimer le lecteur de la liste"
 
 #: src/chunks/TablePage/NewColumnButton.tsx
+#: src/components/Drives/DriveRow.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
-#: src/routes/SettingsServer/DriveRow.tsx
 msgid "Select"
 msgstr "Sélectionner"
 
@@ -3458,19 +3433,19 @@ msgstr "Lire une propriété : <0/>"
 msgid "<0/> Typescript"
 msgstr "<0/> Typescript"
 
-#: src/routes/SettingsServer/WSIndicator.tsx
+#: src/components/Drives/WSIndicator.tsx
 msgid "Websocket Connected"
 msgstr "Websocket connecté"
 
-#: src/routes/SettingsServer/WSIndicator.tsx
+#: src/components/Drives/WSIndicator.tsx
 msgid "Websocket Closing"
 msgstr "Fermeture du websocket"
 
-#: src/routes/SettingsServer/WSIndicator.tsx
+#: src/components/Drives/WSIndicator.tsx
 msgid "Websocket Closed"
 msgstr "Websocket fermé"
 
-#: src/routes/SettingsServer/WSIndicator.tsx
+#: src/components/Drives/WSIndicator.tsx
 msgid "Websocket Connecting..."
 msgstr "Connexion au websocket..."
 
@@ -3952,10 +3927,6 @@ msgstr "Recherche..."
 #: src/routes/Search/SearchOverlay.tsx
 msgid "<0/> open"
 msgstr "<0/> ouvrir"
-
-#: src/routes/SettingsServer/ServersCard.tsx
-msgid "No known servers"
-msgstr "Aucun serveur connu"
 
 #: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 msgid "Ask me anything, / for commands, @ for context"
@@ -5006,27 +4977,9 @@ msgstr ""
 msgid "Try the live demo"
 msgstr ""
 
-#~ msgid "Pair device"
-#~ msgstr ""
-
-#~ msgid "Pair a device"
-#~ msgstr ""
-
-#~ msgid "Device with your account"
-#~ msgstr ""
-
-#~ msgid "Scan from another device that is already signed in as you. The code only says where to find this node — the other device still has to prove it holds your key."
-#~ msgstr ""
-
 #: src/components/PairDeviceDialog.tsx
 msgid "Reveal setup code"
 msgstr ""
-
-#~ msgid "New device setup"
-#~ msgstr ""
-
-#~ msgid "This code contains your account secret. Anyone who scans it becomes you — reveal it only when the new device is ready to scan."
-#~ msgstr ""
 
 #: src/components/PairingLinkHandler.tsx
 msgid "Device paired — you are signed in."
@@ -5035,9 +4988,6 @@ msgstr ""
 #: src/components/PairingLinkHandler.tsx
 msgid "Could not read the pairing link."
 msgstr ""
-
-#~ msgid "Device paired — find it under Sync → Peers."
-#~ msgstr ""
 
 #: src/components/PairingLinkHandler.tsx
 #: src/components/PairingLinkHandler.tsx
@@ -5139,9 +5089,6 @@ msgstr ""
 msgid "<0/> is typing"
 msgstr ""
 
-#~ msgid "<0/> and <1/>{0} are typing"
-#~ msgstr ""
-
 #. 0: typers.length - 1
 #: src/components/Presence/TypingIndicator.tsx
 msgid "<0/> and {0} others are typing"
@@ -5150,4 +5097,45 @@ msgstr ""
 #. 0: ' '
 #: src/components/Presence/TypingIndicator.tsx
 msgid "<0/> and{0} <1/> are typing"
+msgstr ""
+
+#: src/components/SideBar/DriveSwitcher.tsx
+#: src/routes/SettingsAgent.tsx
+msgid "Private drive"
+msgstr ""
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "Your personal space — visible only to you."
+msgstr ""
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "Manage drives"
+msgstr ""
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "View and organize all your drives."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Your personal space — only visible to you."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Unstar a drive to move it back to recently visited."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "My drives"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Only stored on this device. Star a drive to keep it in My drives."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Recently visited"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL or DID"
 msgstr ""

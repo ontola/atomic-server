@@ -29,7 +29,7 @@ export const testFilePath = (filename: string) => {
 
 export const timestamp = () => new Date().toLocaleTimeString();
 export const sideBarDriveSwitcher = (page: Page) =>
-  page.getByTitle('Open Drive Settings');
+  page.getByTitle('Switch Drive');
 export const sideBarNewResourceTestId = 'sidebar-new-resource';
 
 /** Sidebar "New" → `/app/new` (scoped so drive/folder QuickCreateRow duplicates do not match). */
@@ -469,7 +469,6 @@ export async function devDrive(page: Page): Promise<string> {
 export async function newDrive(page: Page) {
   // Create new drive to prevent polluting the main drive
   const driveTitle = `testdrive-${timestamp()}`;
-  const subdomain = `testsub-${Math.random().toString(36).substring(7)}`;
 
   await expect(sideBarDriveSwitcher(page)).toBeVisible({ timeout: 15000 });
 
@@ -481,7 +480,6 @@ export async function newDrive(page: Page) {
 
   const dialog = currentDialog(page);
   await dialog.getByLabel('Name').fill(driveTitle);
-  await dialog.getByLabel('Subdomain').fill(subdomain);
 
   const createButton = dialog.locator('button', { hasText: 'Create' });
   await createButton.waitFor({ state: 'attached' });
@@ -823,9 +821,11 @@ export async function openNewSubjectWindow(
 }
 
 export async function openConfigureDrive(page: Page) {
-  await page.goto(`${FRONTEND_URL}/app/server`);
+  // Drive management lives on the User Settings page (/app/server redirects
+  // there too, but go direct).
+  await page.goto(`${FRONTEND_URL}/app/agent`);
   await expect(
-    page.getByRole('heading', { name: 'Drive Configuration' }),
+    page.getByRole('heading', { name: 'User Settings' }),
   ).toBeVisible({
     timeout: 10000,
   });
@@ -840,9 +840,15 @@ export async function changeDrive(
     const driveLink = page.getByTestId(sidebarDriveButtonId);
     await expect(driveLink).toBeVisible();
     await openConfigureDrive(page);
+    // The open-by-URL input starts empty on the User Settings page; the Open
+    // button is disabled when the target equals the current drive.
     const currentDriveInput = page.getByTestId('drive-url-input');
+    await currentDriveInput.fill(subject);
 
-    if ((await currentDriveInput.inputValue()) === subject) {
+    const openButton = page.locator('[data-test="drive-url-save"]');
+
+    if (await openButton.isDisabled()) {
+      // Already on this drive.
       await page.keyboard.press('Escape');
 
       if (validate) {
@@ -852,8 +858,7 @@ export async function changeDrive(
       return;
     }
 
-    await currentDriveInput.fill(subject);
-    await page.locator('[data-test="drive-url-save"]').click();
+    await openButton.click();
   } catch (e) {
     console.error('Error in changeDrive:', e);
     throw e;

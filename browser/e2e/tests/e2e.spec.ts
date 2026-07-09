@@ -440,31 +440,38 @@ test.describe('data-browser', async () => {
     await expect(editableTitle(page)).toHaveRole('textbox');
   });
 
-  test('configure drive page', async ({ page }) => {
+  test('user drives page', async ({ page }) => {
     const initialDriveSubject = await getCurrentSubject(page);
     const initialDriveTitle = await currentDriveTitle(page).textContent();
 
     await openConfigureDrive(page);
     await expect(
-      page.getByRole('heading', { name: 'Saved Drives' }),
+      page.getByRole('heading', { name: 'My drives' }),
     ).toBeVisible();
-    await expect(page.getByLabel('Custom Drive URL')).toHaveValue(
-      initialDriveSubject,
-    );
-    await expect(page.getByText(initialDriveSubject)).toBeVisible();
+    // Personal and saved drives don't count as "recently visited"; with no
+    // other drives opened yet the section hides entirely.
+    await expect(
+      page.getByRole('heading', { name: 'Recently visited' }),
+    ).not.toBeVisible();
 
-    const { driveURL: secondDriveSubject, driveTitle: secondDriveTitle } =
-      await newDrive(page);
+    const { driveTitle: secondDriveTitle } = await newDrive(page);
     await expect(currentDriveTitle(page)).toHaveText(secondDriveTitle);
 
+    // Switch back through the open-by-URL input on the drives page.
     await openConfigureDrive(page);
-    await expect(page.getByLabel('Custom Drive URL')).toHaveValue(
-      secondDriveSubject,
-    );
-
-    await page.getByLabel('Custom Drive URL').fill(initialDriveSubject);
+    await page
+      .getByLabel('Open a drive by URL or DID')
+      .fill(initialDriveSubject);
     await page.locator('[data-test="drive-url-save"]').click();
     await expect(currentDriveTitle(page)).toHaveText(initialDriveTitle ?? '');
+
+    // Opening a drive that is neither personal nor saved lands it in
+    // Recently visited, which makes the section appear.
+    await changeDrive('https://atomicdata.dev', page);
+    await openConfigureDrive(page);
+    await expect(
+      page.getByRole('heading', { name: 'Recently visited' }),
+    ).toBeVisible();
   });
 
   test('form validation', async ({ page }) => {

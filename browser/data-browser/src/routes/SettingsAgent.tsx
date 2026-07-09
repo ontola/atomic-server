@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { core, urls, useCurrentAgent, useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { Button } from '../components/Button';
@@ -15,12 +15,18 @@ import { createRoute } from '@tanstack/react-router';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
 import { saveAgentToIDB } from '@helpers/agentStorage';
-import { FaUser } from 'react-icons/fa6';
+import { FaCircleInfo, FaUser } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { LabelStyled } from '../components/forms/InputStyles';
-import { DrivesCard } from './SettingsServer/DrivesCard';
+import {
+  InputStyled,
+  InputWrapper,
+  LabelStyled,
+} from '../components/forms/InputStyles';
+import { ErrorLook } from '../components/ErrorLook';
+import { DrivesCard } from '../components/Drives/DrivesCard';
 import { useSavedDrives } from '../hooks/useSavedDrives';
 import { useDriveHistory } from '../hooks/useDriveHistory';
+import { usePersonalDrive } from '../hooks/usePersonalDrive';
 import { constructOpenURL } from '../helpers/navigation';
 import { paths } from './paths';
 import { logoutManagedSession } from '../helpers/managed';
@@ -41,8 +47,18 @@ const SettingsAgent: React.FunctionComponent = () => {
   const effectiveAgent = agent ?? storeAgent ?? store.getAgent();
   const navigate = useNavigateWithTransition();
 
+  const { personalDrive } = usePersonalDrive();
   const [savedDrives] = useSavedDrives();
-  const [, addToHistory] = useDriveHistory(savedDrives);
+  const [history, addToHistory, removeFromHistory] =
+    useDriveHistory(savedDrives);
+
+  // The private drive gets its own section; keep it out of the lists.
+  const myDrives = savedDrives.filter(subject => subject !== personalDrive);
+  const recentDrives = history.filter(subject => subject !== personalDrive);
+
+  const driveUrlId = useId();
+  const [driveInput, setDriveInput] = useState('');
+  const [driveErr, setDriveErr] = useState<Error | undefined>();
 
   // Signed out → there is a single canonical sign-in / onboarding surface at
   // /app/welcome (GettingStartedFlow). Redirect there rather than rendering a
@@ -90,6 +106,14 @@ const SettingsAgent: React.FunctionComponent = () => {
     navigate(constructOpenURL(url));
   }
 
+  function handleOpenDriveInput() {
+    try {
+      handleSetDrive(driveInput);
+    } catch (e) {
+      setDriveErr(e as Error);
+    }
+  }
+
   return (
     <Main>
       <ContainerNarrow>
@@ -129,12 +153,68 @@ const SettingsAgent: React.FunctionComponent = () => {
 
               <Margin />
 
-              <Heading as='h2'>Drives</Heading>
+              {personalDrive && (
+                <>
+                  <Row center gap='1ch'>
+                    <Heading as='h2'>Private drive</Heading>
+                    <InfoHint title='Your personal space — only visible to you.' />
+                  </Row>
+                  <DrivesCard
+                    hideFavorite
+                    drives={[personalDrive]}
+                    onDriveSelect={handleSetDrive}
+                  />
+                </>
+              )}
+
+              <Row center gap='1ch'>
+                <Heading as='h2'>My drives</Heading>
+                <InfoHint title='Unstar a drive to move it back to recently visited.' />
+              </Row>
               <DrivesCard
                 showNewOption
-                drives={savedDrives}
+                drives={myDrives}
                 onDriveSelect={handleSetDrive}
               />
+
+              {recentDrives.length > 0 && (
+                <>
+                  <Row center gap='1ch'>
+                    <Heading as='h2'>Recently visited</Heading>
+                    <InfoHint title='Only stored on this device. Star a drive to keep it in My drives.' />
+                  </Row>
+                  <DrivesCard
+                    drives={recentDrives}
+                    onDriveSelect={handleSetDrive}
+                    onDriveRemove={removeFromHistory}
+                  />
+                </>
+              )}
+
+              <div>
+                <LabelStyled htmlFor={driveUrlId}>
+                  Open a drive by URL or DID
+                </LabelStyled>
+                <Row>
+                  <InputWrapper>
+                    <InputStyled
+                      id={driveUrlId}
+                      data-testid='drive-url-input'
+                      value={driveInput}
+                      onChange={e => setDriveInput(e.target.value)}
+                      placeholder='Enter a Drive DID or URL'
+                    />
+                  </InputWrapper>
+                  <Button
+                    onClick={handleOpenDriveInput}
+                    disabled={!driveInput || drive === driveInput}
+                    data-test='drive-url-save'
+                  >
+                    Open
+                  </Button>
+                </Row>
+                {driveErr && <ErrorLook>{driveErr.message}</ErrorLook>}
+              </div>
             </Column>
           </>
         ) : null}
@@ -145,4 +225,21 @@ const SettingsAgent: React.FunctionComponent = () => {
 
 const Heading = styled.h1`
   margin: 0;
+`;
+
+/** Hover-for-details icon next to a section heading, replacing hint prose. */
+function InfoHint({ title }: { title: string }) {
+  return (
+    <InfoHintIcon title={title}>
+      <FaCircleInfo aria-label={title} />
+    </InfoHintIcon>
+  );
+}
+
+const InfoHintIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  color: ${p => p.theme.colors.textLight};
+  cursor: help;
+  font-size: 0.9rem;
 `;

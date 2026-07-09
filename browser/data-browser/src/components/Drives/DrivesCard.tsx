@@ -10,6 +10,7 @@ import type { JSX } from 'react';
 export interface DriveCardProps {
   drives: string[];
   showNewOption?: boolean;
+  hideFavorite?: boolean;
   onDriveSelect: (drive: string) => void;
   onDriveRemove?: (drive: string) => void;
 }
@@ -17,6 +18,7 @@ export interface DriveCardProps {
 export function DrivesCard({
   drives,
   showNewOption,
+  hideFavorite,
   onDriveSelect,
   onDriveRemove,
 }: DriveCardProps): JSX.Element {
@@ -35,6 +37,7 @@ export function DrivesCard({
               <DriveRow
                 subject={subject}
                 disabled={subject === drive}
+                hideFavorite={hideFavorite}
                 onRemove={onDriveRemove}
                 onClick={onDriveSelect}
               />

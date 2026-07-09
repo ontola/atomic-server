@@ -1,7 +1,8 @@
 import { Resource, core, server, useResources } from '@tomic/react';
 import {
+  FaCaretDown,
   FaGear,
-  FaHardDrive,
+  FaHouse,
   FaPlus,
   FaSquareCheck,
   FaRegCircle,
@@ -10,6 +11,7 @@ import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
 import { useSavedDrives } from '../../hooks/useSavedDrives';
+import { usePersonalDrive } from '../../hooks/usePersonalDrive';
 import { paths } from '../../routes/paths';
 import { type DropdownItem, DIVIDER, DropdownMenu } from '../Dropdown';
 import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
@@ -17,19 +19,16 @@ import type { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
-const DefaultTrigger = buildDefaultTrigger(
-  <FaHardDrive />,
-  'Open Drive Settings',
-);
+const DefaultTrigger = buildDefaultTrigger(<FaCaretDown />, 'Switch Drive');
 
 function getTitle(resource: Resource): string {
   return (resource.get(core.properties.name) as string) ?? resource.subject;
 }
 
-function dedupeAFromB<K, V>(a: Map<K, V>, b: Map<K, V>): Map<K, V> {
-  return new Map([...a].filter(([key]) => !b.has(key)));
-}
-
+/**
+ * Quick-switch between the user's drives: private drive, My drives,
+ * recently visited. Managing the lists lives on the User Settings page.
+ */
 export function DriveSwitcher({
   Trigger = DefaultTrigger,
 }: {
@@ -37,13 +36,18 @@ export function DriveSwitcher({
 }) {
   const navigate = useNavigateWithTransition();
   const { drive, setDrive, agent } = useSettings();
+  const { personalDrive } = usePersonalDrive();
   const [savedDrives] = useSavedDrives();
   const [history, addToHistory] = useDriveHistory(savedDrives, 5);
 
-  const savedDrivesMap = useResources(savedDrives);
-  const historyMap = useResources(history);
+  // The private drive leads the menu; keep it out of the lists below.
+  const myDrives = savedDrives.filter(subject => subject !== personalDrive);
+  const recentDrives = history.filter(subject => subject !== personalDrive);
 
-  const buildHandleHistoryDriveClick = (subject: string) => () => {
+  const myDrivesMap = useResources(myDrives);
+  const recentDrivesMap = useResources(recentDrives);
+
+  const switchTo = (subject: string) => {
     setDrive(subject);
     addToHistory(subject);
     navigate(constructOpenURL(subject));
@@ -52,17 +56,26 @@ export function DriveSwitcher({
   const createNewResource = useNewResourceUI();
 
   const items: DropdownItem[] = [
-    ...Array.from(savedDrivesMap.entries())
+    ...(personalDrive
+      ? [
+          {
+            id: personalDrive,
+            label: 'Private drive',
+            helper: 'Your personal space — visible only to you.',
+            disabled: false,
+            onClick: (): void => switchTo(personalDrive),
+            icon: personalDrive === drive ? <FaSquareCheck /> : <FaHouse />,
+          },
+        ]
+      : []),
+    ...Array.from(myDrivesMap.entries())
       .filter(([_, resource]) => !resource.error)
       .map(([subject, resource]) => ({
         id: subject,
         label: getTitle(resource),
         helper: `Switch to ${getTitle(resource)}`,
         disabled: false,
-        onClick: (): void => {
-          setDrive(subject);
-          navigate(constructOpenURL(subject));
-        },
+        onClick: (): void => switchTo(subject),
         icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
       })),
     {
@@ -75,24 +88,22 @@ export function DriveSwitcher({
       disabled: !agent,
     },
     DIVIDER,
-    ...Array.from(dedupeAFromB(historyMap, savedDrivesMap))
-      .map(([subject, resource]) => ({
-        label: getTitle(resource),
-        id: subject,
-        helper: `Switch to ${getTitle(resource)}`,
-        icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
-        onClick: buildHandleHistoryDriveClick(subject),
-        disabled: false,
-      }))
-      .slice(0, 5),
+    ...Array.from(recentDrivesMap.entries()).map(([subject, resource]) => ({
+      label: getTitle(resource),
+      id: subject,
+      helper: `Switch to ${getTitle(resource)}`,
+      icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
+      onClick: (): void => switchTo(subject),
+      disabled: false,
+    })),
     DIVIDER,
     {
-      id: 'configure-drives',
-      label: 'Configure',
+      id: 'manage-drives',
+      label: 'Manage drives',
       icon: <FaGear />,
-      helper: 'Load drives not displayed in this list.',
+      helper: 'View and organize all your drives.',
       onClick: (): void => {
-        void navigate(paths.serverSettings);
+        void navigate(paths.agentSettings);
       },
     },
   ];

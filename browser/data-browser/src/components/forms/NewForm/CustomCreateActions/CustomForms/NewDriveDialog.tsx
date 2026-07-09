@@ -2,7 +2,6 @@ import { useStore } from '@tomic/react';
 import { useState, useCallback, FormEvent, FC, useEffect, useId } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
-import { stringToSlug } from '../../../../../helpers/stringToSlug';
 import { constructOpenURL } from '../../../../../helpers/navigation';
 import { useNavigateWithTransition } from '../../../../../hooks/useNavigateWithTransition';
 import { Button } from '../../../../Button';
@@ -25,17 +24,8 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
 }) => {
   const store = useStore();
   const nameFieldId = useId();
-  const subdomainFieldId = useId();
   const { setDrive } = useSettings();
   const [name, setName] = useState('');
-  const [subdomain, setSubdomain] = useState('');
-  const [subdomainEdited, setSubdomainEdited] = useState(false);
-
-  useEffect(() => {
-    if (!subdomainEdited) {
-      setSubdomain(stringToSlug(name));
-    }
-  }, [name, subdomainEdited]);
 
   const navigate = useNavigateWithTransition();
 
@@ -46,7 +36,6 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
       // `createDrive` owns all drive invariants (permissions, saved-drives
       // list, default ontology); this dialog only adds UI concerns.
       const resource = await store.createDrive(name, {
-        subdomain: subdomain.trim() || undefined,
         // An ADDITIONAL drive: linked into the switcher list, but it does not
         // replace the agent's personal/home drive.
         personal: false,
@@ -69,16 +58,7 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
     }
 
     onClose();
-  }, [
-    name,
-    subdomain,
-    navigate,
-    onClose,
-    setDrive,
-    store,
-    onCreated,
-    skipNavigation,
-  ]);
+  }, [name, navigate, onClose, setDrive, store, onCreated, skipNavigation]);
 
   const [dialogProps, show, hide] = useDialog({ onSuccess, onCancel: onClose });
 
@@ -106,19 +86,6 @@ export const NewDriveDialog: FC<CustomResourceDialogProps> = ({
                 value={name}
                 autoFocus={true}
                 onChange={e => setName(e.target.value)}
-              />
-            </InputWrapper>
-          </Field>
-          <Field label='Subdomain' fieldId={subdomainFieldId}>
-            <InputWrapper>
-              <InputStyled
-                id={subdomainFieldId}
-                placeholder='my-drive'
-                value={subdomain}
-                onChange={e => {
-                  setSubdomain(e.target.value);
-                  setSubdomainEdited(true);
-                }}
               />
             </InputWrapper>
           </Field>

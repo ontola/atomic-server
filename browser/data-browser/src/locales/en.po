@@ -1929,24 +1929,11 @@ msgstr "Ready — WASM + OPFS"
 msgid "Enable local WASM DB"
 msgstr "Enable local WASM DB"
 
-#: src/routes/SettingsServer/index.tsx
-msgid "Drive Configuration"
-msgstr "Drive Configuration"
-
-#: src/routes/SettingsServer/index.tsx
-msgid "Saved Drives"
-msgstr "Saved Drives"
-
-#: src/routes/SettingsServer/index.tsx
-msgid "Custom Drive URL"
-msgstr "Custom Drive URL"
-
-#: src/routes/SettingsServer/index.tsx
+#: src/routes/SettingsAgent.tsx
 msgid "Enter a Drive DID or URL"
 msgstr "Enter a Drive DID or URL"
 
 #: src/chunks/RTE/EditLinkForm.tsx
-#: src/routes/SettingsServer/index.tsx
 msgid "Set"
 msgstr "Set"
 
@@ -1955,10 +1942,6 @@ msgstr "Set"
 #: src/routes/History/HistoryMobileView.tsx
 msgid "History"
 msgstr "History"
-
-#: src/routes/SettingsServer/index.tsx
-msgid "/app/sync"
-msgstr "/app/sync"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
@@ -2239,12 +2222,12 @@ msgid "View the resource and its properties in the Data View."
 msgstr "View the resource and its properties in the Data View."
 
 #: src/actions/resourceActions.tsx
-#: src/routes/SettingsServer/FavoriteButton.tsx
+#: src/components/Drives/FavoriteButton.tsx
 msgid "Remove from favorites"
 msgstr "Remove from favorites"
 
 #: src/actions/resourceActions.tsx
-#: src/routes/SettingsServer/FavoriteButton.tsx
+#: src/components/Drives/FavoriteButton.tsx
 msgid "Add to favorites"
 msgstr "Add to favorites"
 
@@ -2254,6 +2237,7 @@ msgstr "Toggle whether this resource appears in your Favorites."
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
+#: src/routes/SettingsAgent.tsx
 msgid "Open"
 msgstr "Open"
 
@@ -2543,9 +2527,9 @@ msgstr "Name your Collection"
 msgid "Set a value filter (optional)"
 msgstr "Set a value filter (optional)"
 
+#: src/components/Drives/DrivesCard.tsx
 #: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-#: src/routes/SettingsServer/DrivesCard.tsx
 msgid "New Drive"
 msgstr "New Drive"
 
@@ -2553,9 +2537,8 @@ msgstr "New Drive"
 msgid "My Drive"
 msgstr "My Drive"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Subdomain"
-msgstr "Subdomain"
+#~ msgid "Subdomain"
+#~ msgstr "Subdomain"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
@@ -2598,14 +2581,6 @@ msgstr "Switch to {0}"
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Create a new drive"
 msgstr "Create a new drive"
-
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Configure"
-msgstr "Configure"
-
-#: src/components/SideBar/DriveSwitcher.tsx
-msgid "Load drives not displayed in this list."
-msgstr "Load drives not displayed in this list."
 
 #: src/components/SideBar/useSidebarDnd.ts
 msgid "To rearange items, press space or enter to start dragging. While dragging, use the arrow keys to move the item in any given direction. Press space or enter again to drop the item in its new position, or press escape to cancel."
@@ -2810,7 +2785,7 @@ msgstr "Add another property..."
 msgid "In Atomic Data, any Resource could have any single Property. Use this field to add new property-value combinations to your resource."
 msgstr "In Atomic Data, any Resource could have any single Property. Use this field to add new property-value combinations to your resource."
 
-#: src/routes/SettingsServer/DrivesCard.tsx
+#: src/components/Drives/DrivesCard.tsx
 msgid "Nothing to show"
 msgstr "Nothing to show"
 
@@ -3328,13 +3303,13 @@ msgstr "new {0}"
 msgid "Toggle show Class details"
 msgstr "Toggle show Class details"
 
-#: src/routes/SettingsServer/DriveRow.tsx
+#: src/components/Drives/DriveRow.tsx
 msgid "Remove drive from list"
 msgstr "Remove drive from list"
 
 #: src/chunks/TablePage/NewColumnButton.tsx
+#: src/components/Drives/DriveRow.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
-#: src/routes/SettingsServer/DriveRow.tsx
 msgid "Select"
 msgstr "Select"
 
@@ -3458,19 +3433,19 @@ msgstr "Read a property: <0/>"
 msgid "<0/> Typescript"
 msgstr "<0/> Typescript"
 
-#: src/routes/SettingsServer/WSIndicator.tsx
+#: src/components/Drives/WSIndicator.tsx
 msgid "Websocket Connected"
 msgstr "Websocket Connected"
 
-#: src/routes/SettingsServer/WSIndicator.tsx
+#: src/components/Drives/WSIndicator.tsx
 msgid "Websocket Closing"
 msgstr "Websocket Closing"
 
-#: src/routes/SettingsServer/WSIndicator.tsx
+#: src/components/Drives/WSIndicator.tsx
 msgid "Websocket Closed"
 msgstr "Websocket Closed"
 
-#: src/routes/SettingsServer/WSIndicator.tsx
+#: src/components/Drives/WSIndicator.tsx
 msgid "Websocket Connecting..."
 msgstr "Websocket Connecting..."
 
@@ -3952,10 +3927,6 @@ msgstr "Searching..."
 #: src/routes/Search/SearchOverlay.tsx
 msgid "<0/> open"
 msgstr "<0/> open"
-
-#: src/routes/SettingsServer/ServersCard.tsx
-msgid "No known servers"
-msgstr "No known servers"
 
 #: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 msgid "Ask me anything, / for commands, @ for context"
@@ -5040,27 +5011,9 @@ msgstr "Join"
 msgid "Try the live demo"
 msgstr "Try the live demo"
 
-#~ msgid "Pair device"
-#~ msgstr "Pair device"
-
-#~ msgid "Pair a device"
-#~ msgstr "Pair a device"
-
-#~ msgid "Device with your account"
-#~ msgstr "Device with your account"
-
-#~ msgid "Scan from another device that is already signed in as you. The code only says where to find this node — the other device still has to prove it holds your key."
-#~ msgstr "Scan from another device that is already signed in as you. The code only says where to find this node — the other device still has to prove it holds your key."
-
 #: src/components/PairDeviceDialog.tsx
 msgid "Reveal setup code"
 msgstr "Reveal setup code"
-
-#~ msgid "New device setup"
-#~ msgstr "New device setup"
-
-#~ msgid "This code contains your account secret. Anyone who scans it becomes you — reveal it only when the new device is ready to scan."
-#~ msgstr "This code contains your account secret. Anyone who scans it becomes you — reveal it only when the new device is ready to scan."
 
 #: src/components/PairingLinkHandler.tsx
 msgid "Device paired — you are signed in."
@@ -5069,9 +5022,6 @@ msgstr "Device paired — you are signed in."
 #: src/components/PairingLinkHandler.tsx
 msgid "Could not read the pairing link."
 msgstr "Could not read the pairing link."
-
-#~ msgid "Device paired — find it under Sync → Peers."
-#~ msgstr "Device paired — find it under Sync → Peers."
 
 #: src/components/PairingLinkHandler.tsx
 #: src/components/PairingLinkHandler.tsx
@@ -5173,9 +5123,6 @@ msgstr "Sync a device"
 msgid "<0/> is typing"
 msgstr "<0/> is typing"
 
-#~ msgid "<0/> and <1/>{0} are typing"
-#~ msgstr "<0/> and <1/>{0} are typing"
-
 #. 0: typers.length - 1
 #: src/components/Presence/TypingIndicator.tsx
 msgid "<0/> and {0} others are typing"
@@ -5185,3 +5132,44 @@ msgstr "<0/> and {0} others are typing"
 #: src/components/Presence/TypingIndicator.tsx
 msgid "<0/> and{0} <1/> are typing"
 msgstr "<0/> and{0} <1/> are typing"
+
+#: src/components/SideBar/DriveSwitcher.tsx
+#: src/routes/SettingsAgent.tsx
+msgid "Private drive"
+msgstr "Private drive"
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "Your personal space — visible only to you."
+msgstr "Your personal space — visible only to you."
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "Manage drives"
+msgstr "Manage drives"
+
+#: src/components/SideBar/DriveSwitcher.tsx
+msgid "View and organize all your drives."
+msgstr "View and organize all your drives."
+
+#: src/routes/SettingsAgent.tsx
+msgid "Your personal space — only visible to you."
+msgstr "Your personal space — only visible to you."
+
+#: src/routes/SettingsAgent.tsx
+msgid "Unstar a drive to move it back to recently visited."
+msgstr "Unstar a drive to move it back to recently visited."
+
+#: src/routes/SettingsAgent.tsx
+msgid "My drives"
+msgstr "My drives"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Only stored on this device. Star a drive to keep it in My drives."
+msgstr "Only stored on this device. Star a drive to keep it in My drives."
+
+#: src/routes/SettingsAgent.tsx
+msgid "Recently visited"
+msgstr "Recently visited"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL or DID"
+msgstr "Open a drive by URL or DID"

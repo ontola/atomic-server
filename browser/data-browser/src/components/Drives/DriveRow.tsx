@@ -10,6 +10,8 @@ import { FaXmark } from 'react-icons/fa6';
 export interface DriveRowProps {
   subject: string;
   disabled?: boolean;
+  /** The private drive can't be starred or unstarred — it's always yours. */
+  hideFavorite?: boolean;
   onClick: (subject: string) => void;
   onRemove?: (subject: string) => void;
 }
@@ -17,6 +19,7 @@ export interface DriveRowProps {
 export function DriveRow({
   subject,
   disabled,
+  hideFavorite,
   onClick,
   onRemove,
 }: DriveRowProps) {
@@ -37,7 +40,7 @@ export function DriveRow({
       <SelectButton onClick={() => onClick(subject)} disabled={disabled}>
         Select
       </SelectButton>
-      <StyledFavoriteButton subject={subject} />
+      {!hideFavorite && <StyledFavoriteButton subject={subject} />}
       <StyledWSIndicator subject={subject} />
     </DriveRowWrapper>
   );

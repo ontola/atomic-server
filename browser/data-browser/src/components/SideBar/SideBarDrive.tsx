@@ -219,7 +219,9 @@ const DriveTitle = styled.h2`
 const TitleButton = styled(Button)<{ current?: boolean }>`
   text-align: left;
   flex: 1;
-  padding: 0.5rem ${props => props.theme.margin}rem;
+  /* Left inset lines the title up with the tree rows below: ListWrapper's
+     padding-inline plus SideBarItem's own padding. */
+  padding: 0.4rem calc(${props => props.theme.margin}rem + 0.2rem);
   border-radius: ${props => props.theme.radius};
 
   ${({ current, theme }) =>
