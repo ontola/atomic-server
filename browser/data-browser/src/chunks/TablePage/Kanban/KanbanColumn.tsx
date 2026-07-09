@@ -19,6 +19,10 @@ interface KanbanColumnProps {
   cardSubjects: string[];
   fields: Property[];
   readOnly: boolean;
+  /** True when the dragged card would drop into this column — highlights the
+   *  whole column. Replaces the raw `isOver` flag, which never fired for a
+   *  column that already had cards (a card intercepts the drop target). */
+  isDropTarget?: boolean;
   /** Create a card in this column (its enum value is preset by the parent). */
   onAddCard: (name: string) => void | Promise<void>;
   /** Open a card's row in the expanded (modal) view. */
@@ -31,10 +35,11 @@ export function KanbanColumn({
   cardSubjects,
   fields,
   readOnly,
+  isDropTarget = false,
   onAddCard,
   onOpenCard,
 }: KanbanColumnProps): JSX.Element {
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef } = useDroppable({
     id: columnId,
     data: { tagSubject },
   });
@@ -78,8 +83,9 @@ export function KanbanColumn({
       </ColumnHeader>
       <CardList
         ref={setNodeRef}
-        $over={isOver}
+        $over={isDropTarget}
         data-testid='kanban-column-body'
+        data-kanban-column-id={columnId}
       >
         {cardSubjects.map(subject => (
           <KanbanCard

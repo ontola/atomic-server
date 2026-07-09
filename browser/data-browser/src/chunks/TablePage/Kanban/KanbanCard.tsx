@@ -5,7 +5,7 @@ import {
   useTitle,
   useProperty,
 } from '@tomic/react';
-import { useDndContext, useDraggable } from '@dnd-kit/core';
+import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import { styled } from 'styled-components';
 import { useCallback, useContext, useState, type JSX } from 'react';
 import { FaUpRightFromSquare } from 'react-icons/fa6';
@@ -57,6 +57,15 @@ export function KanbanCard({
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: subject,
     data: { subject },
+    disabled: readOnly,
+  });
+
+  // Also a drop target: dropping a card ONTO another card reorders it into
+  // that card's vertical slot (see KanbanView.handleDragEnd). Disabled on the
+  // read-only DragOverlay copy so it doesn't register a duplicate droppable.
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: subject,
+    data: { subject, columnId, isCard: true },
     disabled: readOnly,
   });
 
@@ -118,6 +127,7 @@ export function KanbanCard({
       ref={el => {
         flipRef.current = el;
         setNodeRef(el);
+        setDropRef(el);
       }}
       $dragging={isDragging}
       $remoteDragging={remoteDragging}
@@ -126,6 +136,7 @@ export function KanbanCard({
       onMouseEnter={() => announceHover(resource.subject)}
       onMouseLeave={() => announceHover(undefined)}
       data-testid='kanban-card'
+      data-kanban-card-subject={subject}
       {...listeners}
       {...attributes}
     >
@@ -273,7 +284,10 @@ const OpenButton = styled.button`
 `;
 
 const TitleInput = styled(InputStyled)`
-  flex: 0 0 auto;
+  /* Fill the same slot as CardTitle (flex: 1) so the field doesn't shrink to
+   * its content width the moment you start editing. */
+  flex: 1;
+  min-width: 0;
   height: auto;
   font-weight: bold;
   padding: 0.1rem 0.3rem;
