@@ -222,7 +222,7 @@ fn home_drive_script(home_drive: Option<&str>, origin: &str) -> String {
     }
 }
 
-fn generate_nonce() -> Result<String, ring::error::Unspecified> {
+pub(crate) fn generate_nonce() -> Result<String, ring::error::Unspecified> {
     use base64::{engine::general_purpose, Engine as _};
     use ring::rand::{SecureRandom, SystemRandom};
 
