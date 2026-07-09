@@ -13,6 +13,7 @@ import { saveAgentToIDB } from '../helpers/agentStorage';
 import { clearDeepLinkSink, setDeepLinkSink } from '../helpers/deepLinkQueue';
 import { upsertKnownPeer } from '../helpers/knownPeers';
 import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
+import { getLocalServerOrigin } from '../helpers/tauri';
 import { constructOpenURL } from '../helpers/navigation';
 import { paths } from '../routes/paths';
 import { ConfirmationDialog } from './ConfirmationDialog';
@@ -59,7 +60,9 @@ export function PairingLinkHandler(): JSX.Element {
     }
 
     try {
-      const response = await fetch('/iroh-sync', {
+      // Absolute origin: a bare path hits `tauri.localhost`, not the
+      // embedded server, inside the desktop/mobile webview.
+      const response = await fetch(`${getLocalServerOrigin()}/iroh-sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodeId: nodeDid, drive }),

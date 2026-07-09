@@ -33,7 +33,7 @@ import { getDriveUsage } from '../helpers/managedUsage';
 import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
-import { isRunningInTauri } from '../helpers/tauri';
+import { getLocalServerOrigin, isRunningInTauri } from '../helpers/tauri';
 import { PairDeviceDialog } from '../components/PairDeviceDialog';
 import {
   decodePairingEnvelope,
@@ -273,7 +273,11 @@ function SyncPage() {
   }, [managedInfo.portalUrl, status.drive]);
 
   useEffect(() => {
-    fetch('/iroh-node-id')
+    // Absolute origin, not a bare path: inside the Tauri webview a bare
+    // `/iroh-node-id` resolves against `tauri.localhost` (the bundled
+    // assets), not the embedded atomic-server — so the node identity (and
+    // the whole pairing UI it gates) would never load on desktop/mobile.
+    fetch(`${getLocalServerOrigin()}/iroh-node-id`)
       .then(r => r.json())
       .then(data => {
         if (typeof data.nodeId === 'string') {
@@ -347,7 +351,7 @@ function SyncPage() {
     setPeerSyncResult(null);
 
     try {
-      const res = await fetch('/iroh-sync', {
+      const res = await fetch(`${getLocalServerOrigin()}/iroh-sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodeId: canonicalNodeDid, drive: status.drive }),
