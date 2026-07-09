@@ -75,6 +75,14 @@ export class DemoDirector {
   private meeting?: string;
   private userChatted = false;
   private userChatWaiters: Array<() => void> = [];
+  /** The user's own Team-table row (guest DID or a created row), set at the
+   *  team-table tour stop — the checkbox `completeSayHi` ticks. */
+  private memberRow?: string;
+  /** The "Say hi" payoff, memoized so it runs at most once no matter whether
+   *  the linear script or the reactive chat listener triggers it first — and
+   *  so the script's `await` joins the listener's in-flight run instead of
+   *  racing ahead of it. */
+  private sayHiPromise?: Promise<void>;
   private heartbeatTimer?: ReturnType<typeof setInterval>;
   private wanderTimer?: ReturnType<typeof setInterval>;
   private unsubscribePresence?: () => void;
@@ -121,6 +129,10 @@ export class DemoDirector {
           this.userChatted = true;
           this.userChatWaiters.forEach(resolve => resolve());
           this.userChatWaiters = [];
+          // Own the "Say hi" payoff reactively — so it fires the moment the
+          // user chats, even if that's outside the script's wait window
+          // (e.g. they explored first). Idempotent via `sayHiDone`.
+          void this.completeSayHi();
         }
       },
     );
@@ -269,6 +281,7 @@ export class DemoDirector {
     await this.narrate('And that includes you. Adding you to the roster ✍️');
 
     const memberRow = await this.ensureTeamRow();
+    this.memberRow = memberRow;
 
     if (memberRow && !this.stopped) {
       // Mara's presence sits on the new member's Role cell while she
@@ -303,15 +316,16 @@ export class DemoDirector {
       'Last step 👇 say hi in this chat — that’ll tick off “Say hi in the meeting chat” for you.',
     );
 
-    // Reactive payoff: the user's first message in the meeting chat.
-    const chatted = await this.waitForUserChat(45_000);
+    // Don't wind down until the user has actually said hi — ending the
+    // meeting first leaves them chatting into a dead room and the "Say hi"
+    // card never ticks. Wait generously (they may explore first); the
+    // reactive listener also fires `completeSayHi` the moment they chat.
+    const chatted = await this.waitForUserChat(4 * 60_000);
 
     if (this.stopped) return;
 
     if (chatted) {
-      await this.narrate('there they are! welcome aboard 🎉');
-      await this.postChat('yusuf', 'the new teammate speaks 🎉');
-      await this.moveCard('mara', manifest.checklist.rows[ROW_SAY_HI], 'Done');
+      await this.completeSayHi();
     }
 
     await this.sleep(6_000);
@@ -660,6 +674,53 @@ export class DemoDirector {
     });
   }
 
+  /** The "Say hi" payoff: welcome the user, tick their onboarding checkbox,
+   *  and drag the "Say hi in the meeting chat" card to Done. Idempotent and
+   *  callable from either the linear script or the reactive chat listener —
+   *  whichever sees the user's first message first. Best-effort throughout
+   *  (a missing meeting just skips the chatter; the card still moves). */
+  private completeSayHi(): Promise<void> {
+    if (!this.sayHiPromise) {
+      this.sayHiPromise = this.runSayHi();
+    }
+
+    return this.sayHiPromise;
+  }
+
+  private async runSayHi(): Promise<void> {
+    if (this.stopped) return;
+
+    await this.narrate('there they are! welcome aboard 🎉');
+    await this.postChat('yusuf', 'the new teammate speaks 🎉');
+
+    // Tick their "Completed onboarding" checkbox — Mara flips it, the same
+    // as a real teammate marking your onboarding done.
+    if (this.memberRow) {
+      const rowResource = await this.getBeatResource(this.memberRow);
+
+      if (rowResource) {
+        try {
+          this.touch(this.memberRow);
+          await simulatePropEdit(
+            this.store,
+            rowResource,
+            this.manifest.personas.mara,
+            properties =>
+              properties.set(this.manifest.team.onboardingColumn, true),
+          );
+        } catch (e) {
+          console.warn('[Demo] could not tick onboarding checkbox:', e);
+        }
+      }
+    }
+
+    await this.moveCard(
+      'mara',
+      this.manifest.checklist.rows[ROW_SAY_HI],
+      'Done',
+    );
+  }
+
   /** Yusuf draws the second creature's face onto the moodboard, one
    *  stroke at a time (the body shipped with the template). */
   private async yusufFinishesTheFace(): Promise<void> {
@@ -714,6 +775,10 @@ export class DemoDirector {
         isA: team.rowClass,
         propVals: {
           [core.properties.name]: agent?.title ?? 'New teammate',
+          [team.roleColumn]: 'New teammate',
+          // First day — not onboarded yet; `completeSayHi` ticks this.
+          [team.onboardingColumn]: false,
+          // Latest createdAt → the ascending default sort lands it last.
           [commits.properties.createdAt]: Date.now(),
         },
       });

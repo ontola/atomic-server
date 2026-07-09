@@ -824,12 +824,14 @@ export class Resource<C extends OptionalClass = any> {
       map.set(prop, value);
     } else if (Array.isArray(value)) {
       // Use native LoroList for arrays — enables per-element CRDT merge.
+      // Object/array elements must become nested containers (LoroMap /
+      // LoroList), the same as `writeJsonToLoroList`/`pushListItem` do — a
+      // list seeded here with plain objects would later confuse the
+      // append/replace paths (they expect container elements) and, for a
+      // canvas, breaks the first `pushListItem` stroke.
       const { LoroList: LoroListClass } = LoroLoader.Loro;
       const list: LoroList = map.setContainer(prop, new LoroListClass());
-
-      for (const item of value) {
-        list.push(item);
-      }
+      this.writeJsonToLoroList(list, value);
     } else {
       // Objects: serialize to JSON string.
       map.set(prop, JSON.stringify(value));
@@ -2110,19 +2112,36 @@ export class Resource<C extends OptionalClass = any> {
     const { LoroList, LoroMap } = LoroLoader.Loro;
     const existing = map.get(propUrl);
 
-    let list: LoroList;
+    const append = (list: LoroList, value: JSONValue) => {
+      if (
+        value !== null &&
+        typeof value === 'object' &&
+        !Array.isArray(value)
+      ) {
+        const itemMap = list.pushContainer(new LoroMap());
+        this.writeJsonToLoroMap(itemMap, value as JSONObject);
+      } else {
+        list.push(value);
+      }
+    };
 
-    if (existing && typeof existing === 'object' && 'push' in existing) {
-      list = existing as LoroList;
+    // A real LoroList container exposes `pushContainer`; a plain-array VALUE
+    // (e.g. strokes seeded via `.set()` rather than appended incrementally)
+    // only has `push`. Appending to the latter as if it were a container
+    // throws "pushContainer is not a function". Promote it to a fresh
+    // container seeded with its existing items, then append.
+    if (
+      existing &&
+      typeof existing === 'object' &&
+      'pushContainer' in existing
+    ) {
+      append(existing as LoroList, item);
     } else {
-      list = map.setContainer(propUrl, new LoroList());
-    }
-
-    if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
-      const itemMap = list.pushContainer(new LoroMap());
-      this.writeJsonToLoroMap(itemMap, item as JSONObject);
-    } else {
-      list.push(item);
+      const list = map.setContainer(propUrl, new LoroList());
+      for (const el of propVal) {
+        append(list, el);
+      }
+      append(list, item);
     }
 
     this.commitLoroEdit();
@@ -2203,6 +2222,15 @@ export class Resource<C extends OptionalClass = any> {
     const existing = map.get(propUrl);
 
     if (!existing || typeof existing !== 'object' || !('delete' in existing)) {
+      // A plain-array value (seeded via `.set()`, not yet a container) has no
+      // `delete`. Promote it to a container minus the item so erasing a
+      // baked-in stroke actually persists.
+      if (Array.isArray(existing)) {
+        const next = existing.slice();
+        next.splice(index, 1);
+        this.replaceListItems(propUrl, next as JSONArray);
+      }
+
       return;
     }
 

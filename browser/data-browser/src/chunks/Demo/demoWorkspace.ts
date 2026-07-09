@@ -7,6 +7,7 @@ import {
   core,
   dataBrowser,
   canvas,
+  commits,
   server,
   classes,
   properties,
@@ -39,6 +40,9 @@ export interface DemoManifest {
     table: string;
     rowClass: string;
     roleColumn: string;
+    responsibilitiesColumn: string;
+    doingTaskColumn: string;
+    onboardingColumn: string;
   };
   checklist: {
     table: string;
@@ -74,11 +78,49 @@ export function saveDemoManifest(manifest: DemoManifest | undefined): void {
   }
 }
 
-export const PERSONAS: Record<PersonaKey, { name: string; role: string }> = {
-  mara: { name: 'Mara', role: 'Product — keeps the launch on the rails' },
-  yusuf: { name: 'Yusuf', role: 'Design — communicates primarily in emoji' },
-  pip: { name: 'Pip', role: 'Engineering — ships the actual thing' },
+export const PERSONAS: Record<
+  PersonaKey,
+  {
+    name: string;
+    role: string;
+    /** Tag options for the "Responsibilities" select column. */
+    responsibilities: string[];
+    /** Index into `CHECKLIST_ROWS` this member is currently "Doing" —
+     *  wired up as the relation column's target. */
+    doingTaskRow: number;
+  }
+> = {
+  mara: {
+    name: 'Mara',
+    role: 'Product — keeps the launch on the rails',
+    responsibilities: ['Product', 'Docs'],
+    // "Join the onboarding tour" — the card she's running the user through.
+    doingTaskRow: 0,
+  },
+  yusuf: {
+    name: 'Yusuf',
+    role: 'Design — communicates primarily in emoji',
+    responsibilities: ['Design'],
+    // "Doodle on the moodboard" — his card.
+    doingTaskRow: 3,
+  },
+  pip: {
+    name: 'Pip',
+    role: 'Engineering — ships the actual thing',
+    responsibilities: ['Engineering', 'QA'],
+    // "Explore the kanban board" — he set the board up.
+    doingTaskRow: 1,
+  },
 };
+
+/** Tag options offered by the Team table's "Responsibilities" column. */
+const RESPONSIBILITY_OPTIONS = [
+  'Product',
+  'Design',
+  'Engineering',
+  'QA',
+  'Docs',
+];
 
 /**
  * The board is META: every card is a step in the user's own onboarding
@@ -195,6 +237,11 @@ async function createGuestProfile(
   await profile.set(core.properties.isA, [core.classes.agent, team.rowClass]);
   await profile.set(core.properties.name, 'Demo User');
   await profile.set(team.roleColumn, 'New teammate', false);
+  // Their first day — onboarding not yet complete (the tour ticks it).
+  await profile.set(team.onboardingColumn, false, false);
+  // Created after the seeded members, so the createdAt-ascending default
+  // sort lands this row at the BOTTOM of the table, not the top.
+  await profile.set(commits.properties.createdAt, Date.now(), false);
   await profile.set(core.properties.parent, team.table);
   // A component may have tried to fetch this agent from the server
   // (404) before the profile existed — clear the error BEFORE the save
@@ -296,16 +343,32 @@ export async function createDemoWorkspace(
   );
 
   // The team is a table: one row per member, and the rows double as the
-  // personas' identities (presence agent + message author subjects).
+  // personas' identities (presence agent + message author subjects). It
+  // deliberately exercises several column types — text (Role), tags
+  // (Responsibilities), a relation (Doing task → a checklist card), and a
+  // checkbox (Completed onboarding) — so the demo showcases the table.
   const teamResult = await buildTableFromSpec(
     store,
     {
       name: 'Team',
       rowName: 'Member',
-      columns: [{ name: 'Role', type: 'text' }],
+      columns: [
+        { name: 'Role', type: 'text' },
+        {
+          name: 'Responsibilities',
+          type: 'select',
+          options: RESPONSIBILITY_OPTIONS,
+        },
+        { name: 'Doing task', type: 'relation' },
+        { name: 'Completed onboarding', type: 'checkbox' },
+      ],
       rows: (Object.keys(PERSONAS) as PersonaKey[]).map(key => ({
         name: PERSONAS[key].name,
         Role: PERSONAS[key].role,
+        Responsibilities: PERSONAS[key].responsibilities,
+        'Doing task': checklistResult.rowSubjects[PERSONAS[key].doingTaskRow],
+        // The scripted teammates are veterans — already onboarded.
+        'Completed onboarding': true,
       })),
     },
     {
@@ -319,6 +382,9 @@ export async function createDemoWorkspace(
     table: teamResult.tableSubject,
     rowClass: teamResult.classSubject,
     roleColumn: teamResult.columns['Role'],
+    responsibilitiesColumn: teamResult.columns['Responsibilities'],
+    doingTaskColumn: teamResult.columns['Doing task'],
+    onboardingColumn: teamResult.columns['Completed onboarding'],
   };
 
   const personas = {} as Record<PersonaKey, string>;

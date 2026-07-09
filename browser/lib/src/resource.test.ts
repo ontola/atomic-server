@@ -253,6 +253,39 @@ describe('resource.ts', () => {
   });
 
   /**
+   * Regression: drawing onto a canvas whose strokes were seeded in bulk via
+   * `set()` (template/demo content) threw "pushContainer is not a function"
+   * and the new stroke was dropped. `set()` must store an array of objects as
+   * a LoroList of container elements — same shape `pushListItem` expects — so
+   * the first freehand stroke appends cleanly onto the baked ones.
+   */
+  it('pushListItem appends onto strokes seeded in bulk via set()', async ({
+    expect,
+  }) => {
+    const prop = 'https://atomicdata.dev/ontology/canvas/strokeData';
+    const resource = new Resource('https://example.com/seeded-strokes');
+
+    // Bulk seed, exactly how demo/template canvases are created.
+    await resource.set(
+      prop,
+      [
+        { color: 1, width: 2, path: [[0, 0]] },
+        { color: 2, width: 2, path: [[1, 1]] },
+      ],
+      false,
+    );
+
+    // The first live stroke — previously threw.
+    expect(() =>
+      resource.pushListItem(prop, { color: 3, width: 4, path: [[2, 2]] }),
+    ).not.toThrow();
+
+    const items = resource.get(prop) as Array<{ color: number }>;
+    expect(items).toHaveLength(3);
+    expect(items.map(s => s.color)).toEqual([1, 2, 3]);
+  });
+
+  /**
    * Regression: tapping undo on the canvas showed "Saving…" but the strokes
    * didn't visually update. Cause: `Resource.undo()` modified the Loro doc
    * and cache but never fired `LocalChange`, so React consumers stayed on
