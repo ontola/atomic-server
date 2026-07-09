@@ -190,31 +190,36 @@ export class DemoDirector {
       'I’m about to start a tour to show you around.',
     ]);
 
-    await this.sleep(2_000);
-
     // Mara starts a meeting: the top-bar Join banner lights up, and the
     // welcome doc closes with a link into it. Nothing is said in the
     // meeting yet — the greeting waits until the user actually opens it.
     await this.startTourMeeting();
     await this.appendMeetingLink();
+    await this.narrate('Welcome to your onboarding meeting! 👋');
 
     // Wait for the user to Join (open the meeting). If they don't within
     // ~25s, greet + play anyway so the log exists for whenever they do.
     await this.waitForJoin(25_000);
+    // Now that they've (probably) opened the meeting, greet them.
 
     if (this.stopped) return;
 
-    // Now that they've (probably) opened the meeting, greet them.
-    await this.narrate('Welcome to your onboarding tour! 👋');
-    await this.sleep(1_400);
+    await this.sleep(800);
     await this.narrate(
       'I’ll walk you through everything right here — just follow along.',
     );
-    await this.sleep(1_400);
+    await this.sleep(800);
+    // Call out the Meeting feature itself while we're in one.
     await this.narrate(
-      'Every card on our board is a step in this tour. Let’s knock them out together 👇',
+      'This is a Meeting 🎥 — anyone on the team can start one to chat with colleagues and focus on the same thing at the same time.',
     );
-    await this.sleep(1_500);
+    await this.sleep(800);
+    await this.narrate(
+      'You’re following me right now, so we’re looking at the same thing.',
+    );
+    await this.sleep(800);
+    await this.narrate("I'll open the issue tracker first!");
+    await this.sleep(800);
 
     // ── Tour stop 1: the board (the long, lively, meta stop) ──
     this.announceMara(manifest.checklist.table, {
@@ -241,7 +246,6 @@ export class DemoDirector {
       'Done',
     );
     await this.narrate('✅ one down. See how it jumps to the Done column?');
-    await this.sleep(3_000);
 
     // Pip joins and adds a brand-new card, live.
     this.announce('pip', {
@@ -413,6 +417,23 @@ export class DemoDirector {
     this.store
       .getPresence(this.manifest.drive)
       .injectEntry(persona.sessionId, persona.entry);
+  }
+
+  /** Toggle Mara's "typing…" presence in the meeting chat, so the demo shows
+   *  the same live indicator a real teammate produces while composing. Keyed on
+   *  the meeting subject, which is the chat thread the panel announces. */
+  private setMaraTyping(on: boolean): void {
+    const entry = this.personas.mara.entry;
+
+    if (!entry || !this.meeting) return;
+
+    this.personas.mara.entry = {
+      ...entry,
+      typing: on ? this.meeting : undefined,
+    };
+    this.store
+      .getPresence(this.manifest.drive)
+      .injectEntry(this.personas.mara.sessionId, this.personas.mara.entry);
   }
 
   private leave(key: PersonaKey): void {
@@ -719,6 +740,10 @@ export class DemoDirector {
         },
       });
       await row.save();
+      // A local save alone doesn't refresh open collections (only a server
+      // UPDATE push or this call does), so the Team table wouldn't show the
+      // new row live — it'd appear only on re-navigation. Nudge it.
+      await this.store.notifyResourceManuallyCreated(row);
 
       return row.subject;
     } catch (e) {
@@ -751,6 +776,9 @@ export class DemoDirector {
         },
       });
       await card.save();
+      // Same as the team row: make the board pick up the card live rather
+      // than only after the collection is rebuilt on re-navigation.
+      await this.store.notifyResourceManuallyCreated(card);
 
       return card.subject;
     } catch (e) {
@@ -807,7 +835,10 @@ export class DemoDirector {
   private async narrate(text: string): Promise<void> {
     if (this.stopped || !this.meeting) return;
 
+    // Show "Mara is typing…" while she composes, then clear it as she sends.
+    this.setMaraTyping(true);
     await this.sleep(700 + text.length * 40 + Math.random() * 500);
+    this.setMaraTyping(false);
 
     if (this.stopped || !this.meeting) return;
     this.selfSaving = true;
@@ -846,7 +877,7 @@ export class DemoDirector {
       const meeting = await this.store.newResource({
         parent: meetingsFolder,
         isA: [dataBrowser.classes.chatroom, dataBrowser.classes.meeting],
-        propVals: { [core.properties.name]: 'Onboarding tour' },
+        propVals: { [core.properties.name]: 'Onboarding meeting' },
       });
       await meeting.save();
 

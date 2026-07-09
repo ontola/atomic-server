@@ -92,11 +92,7 @@ export function MeetingBanner(): React.JSX.Element | null {
     };
 
     return (
-      <LabelButton
-        type='button'
-        onClick={handleStart}
-        title='Start a meeting — invite everyone in this drive to follow you live'
-      >
+      <LabelButton type='button' onClick={handleStart} title='Meet'>
         <FaVideo />
         <span>Meet</span>
       </LabelButton>
@@ -133,7 +129,7 @@ export function MeetingBanner(): React.JSX.Element | null {
     : `Join ${title} — led by ${leaderName}`;
 
   return (
-    <LabelButton
+    <LiveMeetingButton
       type='button'
       onClick={handleClick}
       // Blue "current" cue only while I'm in the meeting AND its panel is open,
@@ -142,26 +138,55 @@ export function MeetingBanner(): React.JSX.Element | null {
       $active={active && panelOpen}
       title={hint}
     >
-      <LiveDot aria-hidden />
+      {/* Video icon + pulsing dot, both non-<span> so they survive the
+       * icon-only collapse. With the red border this stays clearly a live
+       * meeting even when the label is hidden on a narrow bar. */}
+      <LiveIndicator aria-hidden>
+        <FaVideo />
+        <LiveDot />
+      </LiveIndicator>
       <MeetingLabel>{title}</MeetingLabel>
       {!active && <JoinTag>Join</JoinTag>}
-    </LabelButton>
+    </LiveMeetingButton>
   );
 }
 
 const pulse = keyframes`
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%, 100% { background: #ff4d4d; }
+  50% { background: #ffffff; }
 `;
 
-/** An `<i>`, not a `<span>`: the navbar's icon-only rule hides label spans on
- *  narrow screens, and the live dot is this button's icon — it must stay. */
+/**
+ * A live meeting must read as live even after the label collapses on a narrow
+ * bar. The red border is the persistent "there's a meeting" cue; it survives
+ * collapse because it's on the button itself, not a hidden label.
+ */
+const LiveMeetingButton = styled(LabelButton)`
+  border: 1px solid #ff4d4d;
+  /* Compensate the 1px border so the height matches the borderless siblings. */
+  padding: calc(0.25rem - 1px) calc(0.5rem - 1px);
+`;
+
+/** Video icon with the pulsing dot as a corner badge. Both are `<i>`/svg (not
+ *  `<span>`), so the icon-only rule keeps them when it hides the label. */
+const LiveIndicator = styled.i`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-style: normal;
+`;
+
 const LiveDot = styled.i`
+  position: absolute;
+  top: -3px;
+  left: -4px;
   width: 0.5rem;
   height: 0.5rem;
-  flex-shrink: 0;
   border-radius: 50%;
   background: #ff4d4d;
+  /* Ring in the bar's colour so the dot stays legible over the icon. */
+  box-shadow: 0 0 0 2px ${p => p.theme.colors.bg};
   animation: ${pulse} 2s ease-in-out infinite;
 
   @media (prefers-reduced-motion: reduce) {
@@ -173,7 +198,6 @@ const MeetingLabel = styled.span`
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 600;
 `;
 
 /** The "Join" call-to-action for a live meeting you haven't joined yet — the

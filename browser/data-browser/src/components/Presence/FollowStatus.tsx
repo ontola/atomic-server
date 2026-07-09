@@ -146,16 +146,25 @@ export function FollowStatus(): React.JSX.Element | null {
     );
   }
 
-  if (!followedAgent && followerAgents.length === 0) {
+  // In a meeting the panel header already shows the leader and participants, and
+  // the MeetingBanner is the navbar's meeting front-door — so the navbar's own
+  // follow status would just duplicate them. Suppress the redundant parts:
+  // the "Following" avatar while following a meeting session, and the
+  // "Following you" facepile while leading. Outside a meeting both still show,
+  // since this is then the only follow affordance.
+  const showFollowing = !!FollowingTrigger && !followedSession;
+  const showFollowers = followerAgents.length > 0 && !activeMeeting;
+
+  if (!showFollowing && !showFollowers) {
     return null;
   }
 
   return (
     <Row>
-      {FollowingTrigger && (
+      {showFollowing && (
         <DropdownMenu items={followingItems} Trigger={FollowingTrigger} />
       )}
-      {followerAgents.length > 0 && (
+      {showFollowers && (
         <DropdownMenu items={followerItems} Trigger={FollowersTrigger} />
       )}
     </Row>

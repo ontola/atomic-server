@@ -68,7 +68,7 @@ const DemoRoute: React.FC = () => {
     <Shell>
       <Card>
         <CardTitle>
-          {error ? 'The demo could not start' : 'Setting up your demo team…'}
+          {error ? 'The demo could not start' : 'Setting up your demo…'}
         </CardTitle>
         {!supported && !isRunningInTauri() && (
           <p>

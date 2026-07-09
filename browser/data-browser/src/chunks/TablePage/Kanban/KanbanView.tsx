@@ -538,7 +538,12 @@ const Board = styled.div`
   /* Never scroll the board vertically; the per-column card lists do that. This
    * is what keeps the column headers visible while dragging a card downward. */
   overflow-y: hidden;
-  padding: 1rem;
+  /* Bleed past the page container's inline padding so the horizontal scroll
+   * region spans the full width — cards reach the true edge instead of being
+   * clipped inside the padding. The matching inline padding re-insets the
+   * columns so they stay aligned with the page title above. */
+  margin-inline: calc(-1 * ${p => p.theme.size()});
+  padding: 1rem ${p => p.theme.size()};
   /* Fill the viewport below the title + view tabs, capped so a tall board still
    * leaves the page chrome visible. Mirrors FancyTable's bounded-height model. */
   height: min(80vh, calc(100dvh - 13rem));

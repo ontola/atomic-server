@@ -163,5 +163,9 @@ export const ChatMessagesContainer: React.FC<
 const MessagesContainer = styled(ScrollArea)<{ $fullView?: boolean }>`
   overflow: auto;
   height: 100%;
-  padding: ${p => (p.$fullView ? '0' : p.theme.size())};
+  /* Even flush against a panel that provides its own chrome, keep a hair of
+   * inline/block room so an avatar's following/hover outline (2px + 1px offset)
+   * isn't clipped by this scroll container. Right stays 0 so message chips can
+   * still bleed into the panel's right padding. */
+  padding: ${p => (p.$fullView ? '0.25rem 0 0.25rem 0.25rem' : p.theme.size())};
 `;

@@ -332,12 +332,14 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         <FaMagnifyingGlass />
       </IconButton>
       <VerticalDivider />
-      {parent && <DirectParent subject={parent} />}
-      <EditableBreadcrumb resource={resource} fallback={title} />
+      <CrumbGroup $iconOnly={iconOnly}>
+        {parent && <DirectParent subject={parent} />}
+        <EditableBreadcrumb resource={resource} fallback={title} />
+      </CrumbGroup>
       <Spacer />
       <ButtonArea $iconOnly={iconOnly}>
-        <MeetingBanner />
         <FollowStatus />
+        <MeetingBanner />
         <ResourcePresenceRow subject={resource.subject} />
         {hasAiChanges && (
           <Row gap='0.5rem' center>
@@ -349,15 +351,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
             </SmallButton>
           </Row>
         )}
-        <ShareDialog
-          subject={resource.subject}
-          trigger={
-            <LabelButton as='button'>
-              <FaShare />
-              <span>Share</span>
-            </LabelButton>
-          }
-        />
+
         <CommentsButton subject={resource.subject} />
         {enableAI && (
           <LabelButton
@@ -369,6 +363,15 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
           </LabelButton>
         )}
         <TagSelectPopoverWrapper resource={resource} />
+        <ShareDialog
+          subject={resource.subject}
+          trigger={
+            <LabelButton as='button'>
+              <FaShare />
+              <span>Share</span>
+            </LabelButton>
+          }
+        />
         <ResourceContextMenu
           isMainMenu
           subject={resource.subject}
@@ -429,6 +432,21 @@ const VerticalDivider = styled.div`
 
 const Spacer = styled.span`
   flex: 1;
+`;
+
+/**
+ * Holds the parent + current-page breadcrumb. While labels are shown it keeps
+ * its natural width (`flex-shrink: 0`) so the bar genuinely overflows once the
+ * buttons no longer fit — that overflow is what triggers icon-only mode. Once
+ * collapsed it may shrink and truncate as a last resort, so the breadcrumb
+ * gives way only after the labels are gone.
+ */
+const CrumbGroup = styled.div<{ $iconOnly: boolean }>`
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  flex-shrink: ${p => (p.$iconOnly ? 1 : 0)};
 `;
 
 const ButtonArea = styled.div<{ $iconOnly: boolean }>`

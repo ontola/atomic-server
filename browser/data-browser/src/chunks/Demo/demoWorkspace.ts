@@ -94,7 +94,7 @@ export const PERSONAS: Record<
     name: 'Mara',
     role: 'Product — keeps the launch on the rails',
     responsibilities: ['Product', 'Docs'],
-    // "Join the onboarding tour" — the card she's running the user through.
+    // "Join the onboarding meeting" — the card she's running the user through.
     doingTaskRow: 0,
   },
   yusuf: {
@@ -135,7 +135,7 @@ export const ROW_SAY_HI = 2;
 export const ROW_DOODLE = 3;
 
 const CHECKLIST_ROWS: Array<Record<string, JSONValue>> = [
-  { name: 'Join the onboarding tour', Status: 'Done', Owner: 'Mara' },
+  { name: 'Join the onboarding meeting', Status: 'Done', Owner: 'Mara' },
   { name: 'Explore the kanban board', Status: 'Todo', Owner: 'You' },
   { name: 'Say hi in the meeting chat', Status: 'Todo', Owner: 'You' },
   { name: 'Doodle on the moodboard', Status: 'Doing', Owner: 'Yusuf' },
@@ -145,7 +145,7 @@ const CHECKLIST_ROWS: Array<Record<string, JSONValue>> = [
 const TEAM_CHAT_SEED: Array<{ author: PersonaKey; text: string }> = [
   {
     author: 'mara',
-    text: 'Morning! New teammate joins today — I’ll run them through an onboarding tour.',
+    text: 'Morning! New teammate joins today — I’ll run them through an onboarding meeting.',
   },
   { author: 'pip', text: 'nice, the onboarding board is all set up 👍' },
   {
@@ -315,11 +315,11 @@ export async function createDemoWorkspace(
   });
   await welcomeDoc.save();
 
-  // The launch checklist is a kanban board: cards grouped by Status.
+  // The Issue Tracker is a kanban board: cards grouped by Status.
   const checklistResult = await buildTableFromSpec(
     store,
     {
-      name: 'Launch checklist',
+      name: 'Issue Tracker',
       rowName: 'Task',
       columns: [
         { name: 'Status', type: 'select', options: ['Todo', 'Doing', 'Done'] },

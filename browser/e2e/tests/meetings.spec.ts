@@ -92,9 +92,9 @@ test('start a meeting, join it, follow along, and end it', async ({
   await joinBanner(pageB).click();
 
   // The meeting chat opens with the start marker.
-  await expect(
-    pageB.getByRole('heading', { name: 'Meeting' }),
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(pageB.getByRole('heading', { name: 'Meeting' })).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(pageB.getByText('Started the meeting.')).toBeVisible({
     timeout: 30_000,
   });

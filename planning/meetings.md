@@ -9,6 +9,7 @@
 > land in the meeting room (leader-attributed), End clears the banner.
 >
 > **Built:**
+>
 > - Ontology: `Meeting` class + `currentMeetings` drive property in
 >   `lib/defaults/chatroom.json` and the browser `dataBrowser` ontology.
 > - `FollowContext`: `activeMeeting` + `startMeeting`/`endMeeting`;
@@ -17,11 +18,12 @@
 > - `MeetingBanner` (top bar, in `NavBar`): Join / Chat+Leave /
 >   Chat+End states.
 > - Start/End affordance in the drive switcher menu.
-> - Demo v3: Mara starts an "Onboarding tour" meeting; join-gated tour
+> - Demo v3: Mara starts an "Onboarding meeting" meeting; join-gated tour
 >   with a fallback nudge; chat narration per stop; reactive payoff on
 >   the user's first meeting-chat message; End at wind-down.
 >
 > **Refinements since v1 (all built + verified):**
+>
 > - Follow-sessions **removed entirely** — meetings replace them. Plain
 >   follow is navigation-only; shared chat/trail lives in a meeting.
 >   `ChatRoomView`'s FollowEvent renderer now shows markers verbatim
@@ -39,6 +41,7 @@
 >   navigation-only follow. Both green.
 >
 > **Follow-ups / not yet done:**
+>
 > - Server ontology ships in `chatroom.json`; a pre-existing server
 >   needs a re-`populate`/migration to know `Meeting`/`currentMeetings`
 >   (fresh init picks it up — verified via the e2e server).
@@ -54,7 +57,7 @@
 ---
 
 > Grew out of the demo workspace: "follow Mara for a tour" is the demo's
-> hero moment, but the follow feature has no *front door* — you must
+> hero moment, but the follow feature has no _front door_ — you must
 > know to click an avatar and pick Follow from a menu. A meeting is
 > follow-mode made discoverable, joinable, and social.
 
@@ -79,12 +82,12 @@
    is an invitation. The current demo asks users to find a menu item —
    observed friction.
 2. **A meeting is addressable.** It's a resource: it has a name
-   ("Launch prep", "Onboarding tour"), a chat log that persists after
+   ("Launch prep", "Onboarding meeting"), a chat log that persists after
    the meeting ends (minutes for free), and can be linked/referenced
    like anything else.
 3. **Asymmetric join is explicit.** Follow-mode is peer-to-peer and
-   symmetric-ish; a meeting has a *leader* (whoever's presence entry
-   carries `session = meeting`) and *attendees* (everyone following
+   symmetric-ish; a meeting has a _leader_ (whoever's presence entry
+   carries `session = meeting`) and _attendees_ (everyone following
    into it). Roles clarify UX: the leader gets "End meeting", the
    attendee gets "Leave".
 4. **The demo becomes a story with a door.** "Join the tour" is a
@@ -93,12 +96,14 @@
 ## Data model (minimal delta from what exists)
 
 Today's follow sessions already have 90% of this:
+
 - `PresenceEntry.session` points at a ChatRoom; followers open it in
   the FollowSessionPanel.
 - `drive.followSessionsChatroom` is a drive-level singleton chatroom
   created on demand (`getOrCreateFollowSessionsChatroom`).
 
 Proposed:
+
 - **Class**: `Meeting` = subclass-in-spirit of ChatRoom (or just a
   ChatRoom with an extra class, like `followEvent` messages do).
   Recommended props: `name`, `leader` (agent subject), maybe
@@ -134,7 +139,7 @@ already shipped.
 ## Demo v3 restructured around the meeting
 
 1. User lands; Mara + Yusuf present. Mara types the welcome doc.
-2. Mara **starts "Onboarding tour"** → the top-bar banner appears
+2. Mara **starts "Onboarding meeting"** → the top-bar banner appears
    (the scripted director just sets drive.currentMeetings + her
    presence `session`; the banner is real UI).
 3. Beat waits for the user to click **Join** (with a fallback nudge in
