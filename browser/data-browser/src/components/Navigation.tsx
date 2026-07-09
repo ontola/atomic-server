@@ -10,6 +10,7 @@ import { AISidebarContainer } from './AI/AISidebarContainer';
 import { RightPanelProvider } from './RightPanel/RightPanelContext';
 import { CommentsPanelContainer } from './CommentsPanel/CommentsPanelContainer';
 import { FollowSessionPanelContainer } from './Presence/FollowSessionPanelContainer';
+import { MeetingMessageToaster } from './Presence/MeetingMessageToaster';
 import { ResourceContextMenuHost } from './ResourceContextMenu';
 import { HideInPrint } from './HideInPrint';
 import { MAIN_CONTAINER } from '@helpers/containers';
@@ -69,6 +70,8 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
         {/* The single app-wide resource context menu (right-click). Mounted here
          * so its actions have the AI-sidebar, dialog, and router contexts. */}
         <ResourceContextMenuHost />
+        {/* Toasts new meeting messages when the meeting panel isn't open. */}
+        {!hideGlobalChrome && <MeetingMessageToaster />}
         {!hideGlobalChrome && (
           <TopBar subject={contextualSubject} top={navbarTop} />
         )}
