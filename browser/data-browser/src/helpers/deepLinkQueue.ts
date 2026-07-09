@@ -38,6 +38,16 @@ export function setDeepLinkSink(handler: (uri: string) => void): void {
   queue.splice(0).forEach(handler);
 }
 
+/**
+ * Feed a pairing link into the same pipeline a scanned deep link takes —
+ * used by in-app entry points (the Pair dialog's paste field). Clears the
+ * seen-set first so an explicit user action always re-processes the code.
+ */
+export function deliverDeepLink(uri: string): void {
+  seen.delete(uri);
+  window.dispatchEvent(new CustomEvent('atomic-deep-link', { detail: uri }));
+}
+
 export function clearDeepLinkSink(handler: (uri: string) => void): void {
   if (sink === handler) {
     sink = undefined;

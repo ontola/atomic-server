@@ -45,6 +45,39 @@ export function PairingLinkHandler(): JSX.Element {
   const navigate = useNavigate();
   const [pendingSwitch, setPendingSwitch] = useState<PairingEnvelope>();
 
+  /**
+   * Pull the paired node's copy of the current drive right away — pairing
+   * should *sync*, not just record an address. Best-effort: the peer may be
+   * unreachable or hold a different agent (AUTH refuses), and the peer stays
+   * listed under Sync → Peers for a manual retry either way.
+   */
+  async function kickInitialSync(nodeDid: string, driveOverride?: string) {
+    const drive = driveOverride ?? store.getSyncStatus().drive;
+
+    if (!drive) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/iroh-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodeId: nodeDid, drive }),
+      });
+      const data = await response.json();
+
+      if (data.error) {
+        toast.error(`Could not sync yet: ${data.error}`);
+      } else {
+        toast.success(`Synced ${data.count} resources with the paired device.`);
+      }
+    } catch {
+      toast.error(
+        'Could not reach the paired device yet — retry under Sync → Peers.',
+      );
+    }
+  }
+
   async function applyOnboard(envelope: PairingEnvelope) {
     if (!envelope.secret) {
       return;
@@ -67,6 +100,8 @@ export function PairingLinkHandler(): JSX.Element {
     }
 
     toast.success('Device paired — you are signed in.');
+    // Pull the account's data from the device that issued the code.
+    void kickInitialSync(envelope.node, home);
   }
 
   const handleLink = useEffectEvent((uri: string) => {
@@ -94,8 +129,9 @@ export function PairingLinkHandler(): JSX.Element {
       (envelope.secret && subjectOfSecret(envelope.secret) === agent?.subject)
     ) {
       upsertKnownPeer(envelope.node);
-      toast.success('Device paired — find it under Sync → Peers.');
+      toast.success('Device paired — starting a sync…');
       navigate({ to: paths.sync });
+      void kickInitialSync(envelope.node);
 
       return;
     }

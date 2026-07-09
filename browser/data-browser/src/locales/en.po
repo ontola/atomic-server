@@ -1782,6 +1782,7 @@ msgstr "Your data lives on this device. Add peers or a remote server to sync."
 msgid "Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects."
 msgstr "Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects."
 
+#: src/components/PairDeviceDialog.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "This device"
@@ -1857,6 +1858,8 @@ msgstr "Node DID"
 msgid "did:ad:node:{0}..."
 msgstr "did:ad:node:{0}..."
 
+#: src/components/PairDeviceDialog.tsx
+#: src/components/PairDeviceDialog.tsx
 #: src/components/Toaster.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Copy"
@@ -5037,33 +5040,27 @@ msgstr "Join"
 msgid "Try the live demo"
 msgstr "Try the live demo"
 
-#: src/routes/SyncRoute.tsx
-msgid "Pair device"
-msgstr "Pair device"
+#~ msgid "Pair device"
+#~ msgstr "Pair device"
 
-#: src/components/PairDeviceDialog.tsx
-msgid "Pair a device"
-msgstr "Pair a device"
+#~ msgid "Pair a device"
+#~ msgstr "Pair a device"
 
-#: src/components/PairDeviceDialog.tsx
-msgid "Device with your account"
-msgstr "Device with your account"
+#~ msgid "Device with your account"
+#~ msgstr "Device with your account"
 
-#: src/components/PairDeviceDialog.tsx
-msgid "Scan from another device that is already signed in as you. The code only says where to find this node — the other device still has to prove it holds your key."
-msgstr "Scan from another device that is already signed in as you. The code only says where to find this node — the other device still has to prove it holds your key."
+#~ msgid "Scan from another device that is already signed in as you. The code only says where to find this node — the other device still has to prove it holds your key."
+#~ msgstr "Scan from another device that is already signed in as you. The code only says where to find this node — the other device still has to prove it holds your key."
 
 #: src/components/PairDeviceDialog.tsx
 msgid "Reveal setup code"
 msgstr "Reveal setup code"
 
-#: src/components/PairDeviceDialog.tsx
-msgid "New device setup"
-msgstr "New device setup"
+#~ msgid "New device setup"
+#~ msgstr "New device setup"
 
-#: src/components/PairDeviceDialog.tsx
-msgid "This code contains your account secret. Anyone who scans it becomes you — reveal it only when the new device is ready to scan."
-msgstr "This code contains your account secret. Anyone who scans it becomes you — reveal it only when the new device is ready to scan."
+#~ msgid "This code contains your account secret. Anyone who scans it becomes you — reveal it only when the new device is ready to scan."
+#~ msgstr "This code contains your account secret. Anyone who scans it becomes you — reveal it only when the new device is ready to scan."
 
 #: src/components/PairingLinkHandler.tsx
 msgid "Device paired — you are signed in."
@@ -5073,9 +5070,8 @@ msgstr "Device paired — you are signed in."
 msgid "Could not read the pairing link."
 msgstr "Could not read the pairing link."
 
-#: src/components/PairingLinkHandler.tsx
-msgid "Device paired — find it under Sync → Peers."
-msgstr "Device paired — find it under Sync → Peers."
+#~ msgid "Device paired — find it under Sync → Peers."
+#~ msgstr "Device paired — find it under Sync → Peers."
 
 #: src/components/PairingLinkHandler.tsx
 #: src/components/PairingLinkHandler.tsx
@@ -5110,3 +5106,65 @@ msgstr "{0} is online"
 #: src/components/Presence/MeetingBanner.tsx
 msgid "Close the meeting chat"
 msgstr "Close the meeting chat"
+
+#. 0: data.error
+#: src/components/PairingLinkHandler.tsx
+msgid "Could not sync yet: {0}"
+msgstr "Could not sync yet: {0}"
+
+#. 0: data.count
+#: src/components/PairingLinkHandler.tsx
+msgid "Synced {0} resources with the paired device."
+msgstr "Synced {0} resources with the paired device."
+
+#: src/components/PairingLinkHandler.tsx
+msgid "Could not reach the paired device yet — retry under Sync → Peers."
+msgstr "Could not reach the paired device yet — retry under Sync → Peers."
+
+#: src/components/PairingLinkHandler.tsx
+msgid "Device paired — starting a sync…"
+msgstr "Device paired — starting a sync…"
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Pairing code copied."
+msgstr "Pairing code copied."
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Could not copy — select and copy the code manually."
+msgstr "Could not copy — select and copy the code manually."
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Sync another device"
+msgstr "Sync another device"
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Scan this from a device already signed in as you, or copy the code and paste it there. It only says where to reach this device — the other side still proves it holds your key."
+msgstr "Scan this from a device already signed in as you, or copy the code and paste it there. It only says where to reach this device — the other side still proves it holds your key."
+
+#: src/components/PairDeviceDialog.tsx
+msgid "New device (not signed in yet)"
+msgstr "New device (not signed in yet)"
+
+#: src/components/PairDeviceDialog.tsx
+msgid "This code carries your account secret — anyone who scans it becomes you. Reveal it only with the new device ready."
+msgstr "This code carries your account secret — anyone who scans it becomes you. Reveal it only with the new device ready."
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Paste atomic://pair… code"
+msgstr "Paste atomic://pair… code"
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Connect"
+msgstr "Connect"
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Connect to a device"
+msgstr "Connect to a device"
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
+msgstr "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
+
+#: src/routes/SyncRoute.tsx
+msgid "Sync a device"
+msgstr "Sync a device"

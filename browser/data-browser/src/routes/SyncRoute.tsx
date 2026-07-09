@@ -595,7 +595,7 @@ function SyncPage() {
                       Copy
                     </NodeAction>
                     <NodeAction onClick={() => setShowPairDialog(true)}>
-                      Pair device
+                      Sync a device
                     </NodeAction>
                   </PeerIdRow>
                   <PairDeviceDialog
