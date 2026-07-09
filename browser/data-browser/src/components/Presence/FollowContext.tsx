@@ -73,6 +73,12 @@ const FollowContext = createContext<FollowContextValue>({
   endMeeting: async () => undefined,
 } satisfies FollowContextValue);
 
+/** sessionStorage key for the meeting a tab is leading on a given drive.
+ *  Per-tab + per-drive, so a refresh resumes the meeting but a closed tab
+ *  forgets it. */
+const meetingStorageKey = (drive: string): string =>
+  `atomic.activeMeeting:${drive}`;
+
 /** Post a trail entry: a plain chat message linking the visited resource. */
 async function postTrailMessage(
   store: Store,
@@ -193,10 +199,22 @@ export function FollowProvider({
 
   const lastTrailRef = useRef<string>(undefined);
 
-  // Reset leadership when switching drives.
+  // Restore the meeting we're leading on this drive from sessionStorage: it
+  // survives a page refresh (so a refreshed leader keeps their meeting going)
+  // but clears when the tab closes. Switching drives swaps to that drive's own
+  // meeting, or none.
   useEffect(() => {
-    setActiveMeeting(undefined);
     lastTrailRef.current = undefined;
+
+    if (!drive) {
+      setActiveMeeting(undefined);
+
+      return;
+    }
+
+    setActiveMeeting(
+      sessionStorage.getItem(meetingStorageKey(drive)) ?? undefined,
+    );
   }, [drive]);
 
   // While leading a meeting, log each resource visited into it — the
@@ -292,6 +310,7 @@ export function FollowProvider({
       }).catch(() => undefined);
 
       setActiveMeeting(meeting.subject);
+      sessionStorage.setItem(meetingStorageKey(drive), meeting.subject);
 
       return meeting.subject;
     },
@@ -323,6 +342,10 @@ export function FollowProvider({
     }
 
     setActiveMeeting(undefined);
+
+    if (drive) {
+      sessionStorage.removeItem(meetingStorageKey(drive));
+    }
   }, [activeMeeting, drive, store]);
 
   const value = useMemo(

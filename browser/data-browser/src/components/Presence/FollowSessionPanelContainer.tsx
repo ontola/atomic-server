@@ -27,6 +27,7 @@ export const FollowSessionPanelContainer: React.FC = () => {
 
 function FollowSessionPanel() {
   const { followedSession, activeMeeting } = useFollow();
+  const { setPanelOpen } = useRightPanel();
   const liveSubject = followedSession ?? activeMeeting;
 
   // Keep showing the last meeting even after it ends (leader clicked
@@ -43,12 +44,19 @@ function FollowSessionPanel() {
 
   const chatroomSubject = liveSubject ?? lastShownRef.current;
 
+  // Nothing to show — e.g. after a refresh, where the meeting state (which
+  // lives in memory, not the URL) is gone while the panel-open flag persisted.
+  // A leader's meeting is restored from sessionStorage; a follower's isn't, so
+  // rather than a dead "No meeting yet" placeholder, close the panel. The
+  // top-bar Join banner still offers any meeting that's live.
+  useEffect(() => {
+    if (!chatroomSubject) {
+      setPanelOpen('followSession', false);
+    }
+  }, [chatroomSubject, setPanelOpen]);
+
   if (!chatroomSubject) {
-    return (
-      <EmptyState>
-        No meeting yet. Join a meeting, or start one from the drive menu.
-      </EmptyState>
-    );
+    return null;
   }
 
   return <FollowSessionChat subject={chatroomSubject} />;
@@ -184,9 +192,4 @@ const Overflow = styled.span`
   margin-left: 0.15rem;
   font-size: 0.8rem;
   color: ${p => p.theme.colors.textLight};
-`;
-
-const EmptyState = styled.p`
-  color: ${p => p.theme.colors.textLight};
-  padding: ${p => p.theme.size(4)};
 `;

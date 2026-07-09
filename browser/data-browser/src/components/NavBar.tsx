@@ -35,6 +35,7 @@ import type { JSX } from 'react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
 import { useRightPanel } from './RightPanel/RightPanelContext';
+import { LabelButton } from './NavBarButton';
 import { useCommentCount } from '../hooks/useCommentCount';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
@@ -204,7 +205,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
   const [parent] = useString(resource, core.properties.parent);
   const { changes, revertResource, acceptChanges } = useAIChanges();
   const { enableAI } = useAISettings();
-  const { setIsOpen } = useAISidebar();
+  const { isOpen: aiOpen, setIsOpen } = useAISidebar();
   const hasAiChanges = changes.includes(resource.subject);
 
   const handleAcceptChanges = async () => {
@@ -296,7 +297,10 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         />
         <CommentsButton subject={resource.subject} />
         {enableAI && (
-          <LabelButton onClick={() => setIsOpen(prev => !prev)}>
+          <LabelButton
+            $active={aiOpen}
+            onClick={() => setIsOpen(prev => !prev)}
+          >
             <AIIcon />
             <span>AI</span>
           </LabelButton>
@@ -314,11 +318,12 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
 
 /** Comments panel toggle showing the live comment count at the icon. */
 function CommentsButton({ subject }: { subject: string }): JSX.Element {
-  const { togglePanel } = useRightPanel();
+  const { togglePanel, activePanel } = useRightPanel();
   const { count, hasUnseen } = useCommentCount(subject);
 
   return (
     <CommentsLabelButton
+      $active={activePanel === 'comments'}
       onClick={() => togglePanel('comments')}
       data-testid='navbar-comments-button'
       data-unseen={hasUnseen ? '' : undefined}
@@ -375,24 +380,6 @@ const ButtonArea = styled.div`
     & > * > span {
       display: none;
     }
-  }
-`;
-
-const LabelButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5ch;
-  padding: 0.25rem 0.5rem;
-  border: none;
-  border-radius: ${p => p.theme.radius};
-  background: transparent;
-  color: ${p => p.theme.colors.textLight};
-  cursor: pointer;
-  font-size: 0.875rem;
-
-  &:hover {
-    background: ${p => p.theme.colors.bg1};
-    color: ${p => p.theme.colors.text};
   }
 `;
 

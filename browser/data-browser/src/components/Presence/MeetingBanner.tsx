@@ -13,6 +13,7 @@ import {
 } from '@tomic/react';
 import { useFollow } from './FollowContext';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
+import { LabelButton } from '../NavBarButton';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 
 /**
@@ -35,7 +36,8 @@ export function MeetingBanner(): React.JSX.Element | null {
   const presence = useDrivePresence();
   const [agent] = useCurrentAgent();
   const { follow, followedAgent, activeMeeting, startMeeting } = useFollow();
-  const { setPanelOpen } = useRightPanel();
+  const { setPanelOpen, activePanel } = useRightPanel();
+  const panelOpen = activePanel === 'followSession';
   const [currentSubject] = useCurrentSubject();
 
   // The most recently announced live meeting: listed on the drive AND
@@ -90,14 +92,14 @@ export function MeetingBanner(): React.JSX.Element | null {
     };
 
     return (
-      <StartButton
+      <LabelButton
         type='button'
         onClick={handleStart}
         title='Start a meeting — invite everyone in this drive to follow you live'
       >
         <FaVideo />
         <span>Meet</span>
-      </StartButton>
+      </LabelButton>
     );
   }
 
@@ -107,12 +109,13 @@ export function MeetingBanner(): React.JSX.Element | null {
   const joined = !leading && !!live && followedAgent === live.leader;
   const active = joined || leading;
 
-  // The whole banner is one big target. Not joined → Join (follow the
-  // leader) and open the chat. Already in → just open the chat; Leave
-  // and End live in the chat panel header.
+  // The whole button is one target. Not joined → Join (follow the leader) and
+  // open the chat. Already in → toggle the chat panel (open if closed, close
+  // if open), matching the Comments / AI nav toggles. Leave and End live in
+  // the chat panel header.
   function handleClick() {
     if (active) {
-      setPanelOpen('followSession', true);
+      setPanelOpen('followSession', !panelOpen);
 
       return;
     }
@@ -124,15 +127,25 @@ export function MeetingBanner(): React.JSX.Element | null {
   }
 
   const hint = active
-    ? 'Open the meeting chat'
+    ? panelOpen
+      ? 'Close the meeting chat'
+      : 'Open the meeting chat'
     : `Join ${title} — led by ${leaderName}`;
 
   return (
-    <Banner type='button' onClick={handleClick} $active={active} title={hint}>
+    <LabelButton
+      type='button'
+      onClick={handleClick}
+      // Blue "current" cue only while I'm in the meeting AND its panel is open,
+      // like the other nav toggles. A live meeting I haven't joined keeps its
+      // own "Join" call-to-action instead.
+      $active={active && panelOpen}
+      title={hint}
+    >
       <LiveDot aria-hidden />
-      <Label>{title}</Label>
+      <MeetingLabel>{title}</MeetingLabel>
       {!active && <JoinTag>Join</JoinTag>}
-    </Banner>
+    </LabelButton>
   );
 }
 
@@ -141,28 +154,9 @@ const pulse = keyframes`
   50% { opacity: 0.4; }
 `;
 
-const Banner = styled.button<{ $active: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: ${p => p.theme.size(2)};
-  max-width: 18rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: 1rem;
-  cursor: pointer;
-  background: ${p => (p.$active ? p.theme.colors.bg1 : p.theme.colors.main)};
-  color: ${p => (p.$active ? p.theme.colors.text : 'white')};
-  border: 1px solid ${p => p.theme.colors.main};
-  font-size: 0.85rem;
-  white-space: nowrap;
-
-  &:hover,
-  &:focus-visible {
-    background: ${p =>
-      p.$active ? p.theme.colors.bg2 : p.theme.colors.mainDark};
-  }
-`;
-
-const LiveDot = styled.span`
+/** An `<i>`, not a `<span>`: the navbar's icon-only rule hides label spans on
+ *  narrow screens, and the live dot is this button's icon — it must stay. */
+const LiveDot = styled.i`
   width: 0.5rem;
   height: 0.5rem;
   flex-shrink: 0;
@@ -175,44 +169,21 @@ const LiveDot = styled.span`
   }
 `;
 
-/** "Start meeting" affordance shown when no meeting is live — styled
- *  like the other nav-bar actions (Share, Comments). Kept in sync with
- *  NavBar's `LabelButton` (a shared import would be circular: NavBar
- *  imports this component). */
-const StartButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5ch;
-  padding: 0.25rem 0.5rem;
-  border: none;
-  border-radius: ${p => p.theme.radius};
-  background: transparent;
-  color: ${p => p.theme.colors.textLight};
-  cursor: pointer;
-  font-size: 0.875rem;
-  white-space: nowrap;
-
-  &:hover,
-  &:focus-visible {
-    background: ${p => p.theme.colors.bg1};
-    color: ${p => p.theme.colors.text};
-  }
-`;
-
-const Label = styled.span`
+const MeetingLabel = styled.span`
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 600;
 `;
 
-/** A read-only "Join" affordance — the whole banner is the button. */
+/** The "Join" call-to-action for a live meeting you haven't joined yet — the
+ *  whole button is the target; this just draws the eye. */
 const JoinTag = styled.span`
   flex-shrink: 0;
   border-radius: 0.8rem;
   padding: 0.05rem 0.55rem;
   font-size: 0.8rem;
   font-weight: 700;
-  background: white;
-  color: ${p => p.theme.colors.main};
+  background: ${p => p.theme.colors.main};
+  color: white;
 `;
