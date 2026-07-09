@@ -2014,6 +2014,7 @@ mod test {
     /// required props gating it), so a version of the gate that trusted `IS_A`
     /// let any client skip drive-enrollment/quota checks entirely by tagging
     /// arbitrary data `IS_A: [Agent]`.
+    #[cfg(feature = "db")]
     #[tokio::test]
     async fn admission_gate_rejects_spoofed_agent_tag_on_unenrolled_drive() {
         use crate::sync::policy::AllowlistPolicy;
@@ -2064,6 +2065,7 @@ mod test {
     /// (the commit's own subject is `did:ad:agent:…`) must still be admitted
     /// even when its "drive" isn't enrolled — agents are legitimately outside
     /// the enrollment model.
+    #[cfg(feature = "db")]
     #[tokio::test]
     async fn admission_gate_admits_real_agent_did_on_unenrolled_node() {
         use crate::sync::policy::AllowlistPolicy;
@@ -2111,6 +2113,7 @@ mod test {
     /// the legitimate re-create is invisible to future `SYNC_PUSH`/`SYNC_VV`
     /// bulk-sync with other replicas forever, since `is_tombstoned` keeps
     /// skipping it there.
+    #[cfg(feature = "db")]
     #[tokio::test]
     async fn genesis_commit_clears_stale_tombstone_on_own_subject() {
         let db = crate::Db::init_temp("f11_clear_tombstone_test")

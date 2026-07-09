@@ -603,6 +603,19 @@ impl Db {
         clone
     }
 
+    /// Create a temporary in-memory Db. Useful for testing.
+    /// Populates the database, creates a default agent, and sets the server_url to "http://localhost/".
+    /// This variant covers `db` builds without a disk backend (e.g. `ws`
+    /// alone) by running on the same BTreeMap store WASM targets use.
+    #[cfg(all(not(feature = "db-sled"), not(feature = "db-redb")))]
+    pub async fn init_temp(_id: &str) -> AtomicResult<Db> {
+        let store = Db::init_memory(Some("https://localhost".into())).await?;
+        let agent = store.create_agent(None).await?;
+        store.set_default_agent(agent);
+        store.populate().await?;
+        Ok(store)
+    }
+
     /// Create a temporary Db in `.temp/db/{id}`. Useful for testing.
     /// Populates the database, creates a default agent, and sets the server_url to "http://localhost/".
     #[cfg(all(feature = "db-sled", not(feature = "db-redb")))]
