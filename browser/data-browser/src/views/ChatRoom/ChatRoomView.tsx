@@ -27,6 +27,7 @@ import {
 } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { AtomicLink } from '../../components/AtomicLink';
+import { AgentAvatar } from '../../components/Presence/AgentAvatar';
 import { Button } from '../../components/Button';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { ChatMessagesContainer } from '../../components/ChatMessagesContainer';
@@ -326,39 +327,49 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
 
   return (
     <MessageComponent about={subject}>
-      <MessageDetails>
-        <MessageMeta createdAt={createdAt} createdBy={createdBy} />
-        {replyTo && <MessageLine subject={replyTo} />}
-        <MessageActions>
-          {canWrite && (
+      {createdBy ? (
+        <AgentAvatar agentSubject={createdBy} size='1.8rem' />
+      ) : (
+        <AvatarSpacer />
+      )}
+      <MessageBody>
+        <MessageDetails>
+          <MessageMeta createdAt={createdAt} createdBy={createdBy} />
+          {replyTo && <MessageLine subject={replyTo} />}
+          <MessageActions>
+            {canWrite && (
+              <IconButton
+                onClick={() => navigate(editURL(subject))}
+                title='Edit message'
+              >
+                <FaPencil />
+              </IconButton>
+            )}
             <IconButton
-              onClick={() => navigate(editURL(subject))}
-              title='Edit message'
+              onClick={() => setReplyTo(subject)}
+              title='Reply to this message'
             >
-              <FaPencil />
+              <FaReply />
             </IconButton>
-          )}
-          <IconButton
-            onClick={() => setReplyTo(subject)}
-            title='Reply to this message'
-          >
-            <FaReply />
-          </IconButton>
-          <IconButton onClick={handleCopyUrl} title='Copy link to this message'>
-            <FaLink />
-          </IconButton>
-          <IconButton onClick={handleCopyText} title='Copy message text'>
-            <FaCopy />
-          </IconButton>
-        </MessageActions>
-      </MessageDetails>
-      {/* markExternalLinks routes links through AtomicLink: subject links
-          navigate in-app instead of triggering a full page load. */}
-      <Markdown
-        text={description || ''}
-        maxLength={MESSAGE_MAX_LEN}
-        markExternalLinks
-      />
+            <IconButton
+              onClick={handleCopyUrl}
+              title='Copy link to this message'
+            >
+              <FaLink />
+            </IconButton>
+            <IconButton onClick={handleCopyText} title='Copy message text'>
+              <FaCopy />
+            </IconButton>
+          </MessageActions>
+        </MessageDetails>
+        {/* markExternalLinks routes links through AtomicLink: subject links
+            navigate in-app instead of triggering a full page load. */}
+        <Markdown
+          text={description || ''}
+          maxLength={MESSAGE_MAX_LEN}
+          markExternalLinks
+        />
+      </MessageBody>
     </MessageComponent>
   );
 });
@@ -418,19 +429,25 @@ function FollowEventMessage({
       {/* Trail entries show only the visited resource — the author is the
           session's agent on every line, so repeating it is pure noise. */}
       {visited ? (
-        <ResourceInline subject={visited} />
+        <EventAuthor>
+          <ResourceInline subject={visited} />
+        </EventAuthor>
       ) : (
         <>
-          {createdBy && <ResourceInline subject={createdBy} />}
-          <span>{text}</span>
+          {createdBy && (
+            <EventAuthor>
+              <ResourceInline subject={createdBy} />
+            </EventAuthor>
+          )}
+          <EventText>{text}</EventText>
         </>
       )}
       {createdAt && (
-        <EventTime dateTime={createdAt.toISOString()}>
-          {createdAt.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
+        <EventTime
+          dateTime={createdAt.toISOString()}
+          title={createdAt.toLocaleString()}
+        >
+          {formatCompactDateTime(createdAt)}
         </EventTime>
       )}
     </FollowEventLine>
@@ -441,9 +458,11 @@ const FollowEventLine = styled.div`
   display: flex;
   align-items: center;
   gap: 0.4ch;
-  padding: 0.1rem 1rem;
+  /* Line up with the chat messages (no extra inline padding). */
+  padding: 0.1rem 0;
   color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
+  min-width: 0;
 
   & svg {
     font-size: 0.7rem;
@@ -451,8 +470,25 @@ const FollowEventLine = styled.div`
   }
 `;
 
+/** The event's author/resource — truncates so a long name/DID can't push the
+ *  time off the row. */
+const EventAuthor = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const EventText = styled.span`
+  flex-shrink: 0;
+  white-space: nowrap;
+`;
+
 const EventTime = styled.time`
-  margin-left: 0.5ch;
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding-left: 0.5ch;
   font-size: 0.7rem;
   opacity: 0.7;
 `;
@@ -539,9 +575,12 @@ const MessageActions = styled.div`
 `;
 
 const MessageComponent = styled.div`
-  /* No extra horizontal padding: the text lines up with the panel title and
-   * the composer. The subtle hover band bleeds a little into the panel
-   * padding via the negative inline margin. */
+  /* Avatar + body row. The avatar sits at the panel edge (the negative inline
+   * margin lets the hover band bleed into the panel padding); the body lines
+   * up just past it. */
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   padding: 0.35rem 0.5rem;
   margin-inline: -0.5rem;
   border-radius: ${p => p.theme.radius};
@@ -558,6 +597,18 @@ const MessageComponent = styled.div`
   &:focus-within ${MessageActions} {
     opacity: 1;
   }
+`;
+
+/** Everything to the right of the avatar: meta row + message body. */
+const MessageBody = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+/** Keeps authorless messages aligned with the avatared ones. */
+const AvatarSpacer = styled.div`
+  width: 1.8rem;
+  flex-shrink: 0;
 `;
 
 const SendButton = styled(Button)`
