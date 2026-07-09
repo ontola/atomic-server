@@ -62,10 +62,16 @@ const PAIR_LINK_RETRY_WINDOW: std::time::Duration = std::time::Duration::from_se
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  let builder = tauri::Builder::default()
     .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_shell::init())
-    .plugin(tauri_plugin_process::init())
+    .plugin(tauri_plugin_process::init());
+
+  // In-app QR scanner for device pairing (Android/iOS only).
+  #[cfg(mobile)]
+  let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+
+  builder
     .manage(PairLinks::default())
     .setup(move |app| {
       {

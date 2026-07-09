@@ -28,6 +28,7 @@
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-tabs": "^1.1.13",
     "@tanstack/react-router": "^1.170.7",
+    "@tauri-apps/plugin-barcode-scanner": "^2.4.5",
     "@tiptap/core": "^3.23.6",
     "@tiptap/extension-drag-handle": "^3.23.6",
     "@tiptap/extension-drag-handle-react": "^3.23.6",

@@ -20,6 +20,12 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-process = "2"
 
+# Mobile-only: the in-app QR scanner for device pairing. The Android WebView
+# doesn't grant getUserMedia to web content, so a web BarcodeDetector scanner
+# can't work — this native scanner owns the camera + permission instead.
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2"
+
 [dependencies.atomic-server]
 # No HTTPS for desktop, but include Iroh for p2p sync
 default-features = false

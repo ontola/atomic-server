@@ -1831,7 +1831,6 @@ msgstr "Add"
 #~ msgstr "did:ad:node:{0}..."
 
 #: src/components/PairDeviceDialog.tsx
-#: src/components/PairDeviceDialog.tsx
 #: src/components/Toaster.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Copy"
@@ -4974,9 +4973,8 @@ msgstr "Join"
 msgid "Try the live demo"
 msgstr "Try the live demo"
 
-#: src/components/PairDeviceDialog.tsx
-msgid "Reveal setup code"
-msgstr "Reveal setup code"
+#~ msgid "Reveal setup code"
+#~ msgstr "Reveal setup code"
 
 #: src/components/PairingLinkHandler.tsx
 msgid "Device paired — you are signed in."
@@ -5053,13 +5051,11 @@ msgstr "Sync another device"
 msgid "Scan this from a device already signed in as you, or copy the code and paste it there. It only says where to reach this device — the other side still proves it holds your key."
 msgstr "Scan this from a device already signed in as you, or copy the code and paste it there. It only says where to reach this device — the other side still proves it holds your key."
 
-#: src/components/PairDeviceDialog.tsx
-msgid "New device (not signed in yet)"
-msgstr "New device (not signed in yet)"
+#~ msgid "New device (not signed in yet)"
+#~ msgstr "New device (not signed in yet)"
 
-#: src/components/PairDeviceDialog.tsx
-msgid "This code carries your account secret — anyone who scans it becomes you. Reveal it only with the new device ready."
-msgstr "This code carries your account secret — anyone who scans it becomes you. Reveal it only with the new device ready."
+#~ msgid "This code carries your account secret — anyone who scans it becomes you. Reveal it only with the new device ready."
+#~ msgstr "This code carries your account secret — anyone who scans it becomes you. Reveal it only with the new device ready."
 
 #: src/components/PairDeviceDialog.tsx
 msgid "Paste atomic://pair… code"
@@ -5073,9 +5069,8 @@ msgstr "Connect"
 msgid "Connect to a device"
 msgstr "Connect to a device"
 
-#: src/components/PairDeviceDialog.tsx
-msgid "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
-msgstr "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
+#~ msgid "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
+#~ msgstr "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
 
 #~ msgid "Sync a device"
 #~ msgstr "Sync a device"
@@ -5274,3 +5269,27 @@ msgstr "Only on this device"
 #: src/routes/SyncRoute.tsx
 msgid "This workspace hasn’t been synced. It’s safe here, but not backed up and not on your other devices."
 msgstr "This workspace hasn’t been synced. It’s safe here, but not backed up and not on your other devices."
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Camera access is needed to scan a code."
+msgstr "Camera access is needed to scan a code."
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Could not open the scanner."
+msgstr "Could not open the scanner."
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Not signed in on the other device yet? Sign in there with your account secret first, then pair."
+msgstr "Not signed in on the other device yet? Sign in there with your account secret first, then pair."
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Scan the other device’s QR code, or paste its pairing code, to start syncing."
+msgstr "Scan the other device’s QR code, or paste its pairing code, to start syncing."
+
+#: src/components/PairDeviceDialog.tsx
+msgid "Paste a pairing code from your other device to start syncing."
+msgstr "Paste a pairing code from your other device to start syncing."
+
+#: src/components/PairDeviceDialog.tsx
+msgid "<0/> Scan a QR code"
+msgstr "<0/> Scan a QR code"

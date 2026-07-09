@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
+import { FaCamera } from 'react-icons/fa6';
 import { renderSVG } from 'uqr';
 import { encodePairingEnvelope, type PairingEnvelope } from '@tomic/lib';
 import { Dialog, DialogContent, DialogTitle, useDialog } from './Dialog';
 import { Button } from './Button';
 import { useSettings } from '../helpers/AppSettings';
 import { deliverDeepLink } from '../helpers/deepLinkQueue';
+import { isRunningInTauri } from '../helpers/tauri';
 
 interface PairDeviceDialogProps {
   /** This node's Iroh identity: `did:ad:node:<64 hex>`. */
@@ -18,7 +20,7 @@ interface PairDeviceDialogProps {
 /**
  * The device-sync surface (planning/device-pairing.md): show this device's
  * `atomic://pair` code (QR + copyable text) AND accept another device's code
- * to connect. Two outgoing kinds:
+ * to connect.
  *
  * The code is **routing only**. It merely tells the other device where this
  * node lives; the peer still proves it holds the same agent key over AUTH
@@ -27,9 +29,6 @@ interface PairDeviceDialogProps {
  * agent's private key is non-extractable and cannot be read back out
  * (`helpers/agentStorage.ts`). Signing a new device in means entering the
  * secret the user saved during onboarding.
- *
- * A pasted incoming code is handed to the same handler a scanned deep link
- * uses (`PairingLinkHandler`), which persists the peer and starts a sync.
  */
 export function PairDeviceDialog({
   nodeDid,
@@ -75,7 +74,6 @@ export function PairDeviceDialog({
 
   const pairSvg = useMemo(() => renderSVG(pairUri), [pairUri]);
 
-
   const copyCode = async (code: string) => {
     try {
       await navigator.clipboard.writeText(code);
@@ -96,6 +94,36 @@ export function PairDeviceDialog({
     // (PairingLinkHandler): validate, persist the peer, start a sync.
     deliverDeepLink(code);
     bindShow(false);
+  };
+
+  // Native QR scanner (Tauri mobile only). The Android WebView won't grant
+  // getUserMedia to web content, so we can't scan with the browser camera —
+  // the plugin owns the camera + permission and hands back the decoded text,
+  // which flows through the same path as a pasted/deep-linked code.
+  const scanCode = async () => {
+    try {
+      const scanner = await import('@tauri-apps/plugin-barcode-scanner');
+      let perm = await scanner.checkPermissions();
+
+      if (perm !== 'granted') {
+        perm = await scanner.requestPermissions();
+      }
+
+      if (perm !== 'granted') {
+        toast.error('Camera access is needed to scan a code.');
+
+        return;
+      }
+
+      const result = await scanner.scan({ formats: [scanner.Format.QRCode] });
+
+      if (result?.content) {
+        deliverDeepLink(result.content);
+        bindShow(false);
+      }
+    } catch {
+      toast.error('Could not open the scanner.');
+    }
   };
 
   if (!show) {
@@ -132,9 +160,17 @@ export function PairDeviceDialog({
           <Column>
             <h2>Connect to a device</h2>
             <Explainer>
-              Paste a pairing code from your other device to start syncing. (Or
-              scan its QR with your camera — that opens the app directly.)
+              {isRunningInTauri()
+                ? 'Scan the other device’s QR code, or paste its pairing code, to start syncing.'
+                : 'Paste a pairing code from your other device to start syncing.'}
             </Explainer>
+            {isRunningInTauri() && (
+              <Button onClick={scanCode}>
+                <ScanButtonInner>
+                  <FaCamera aria-hidden /> Scan a QR code
+                </ScanButtonInner>
+              </Button>
+            )}
             <ConnectForm
               onSubmit={e => {
                 e.preventDefault();
@@ -147,7 +183,7 @@ export function PairDeviceDialog({
                 value={incomingCode}
                 onChange={e => setIncomingCode(e.target.value)}
               />
-              <Button type='submit' disabled={!incomingCode.trim()}>
+              <Button type='submit' subtle disabled={!incomingCode.trim()}>
                 Connect
               </Button>
             </ConnectForm>
@@ -157,6 +193,12 @@ export function PairDeviceDialog({
     </Dialog>
   );
 }
+
+const ScanButtonInner = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
 
 const Columns = styled.div`
   display: flex;
