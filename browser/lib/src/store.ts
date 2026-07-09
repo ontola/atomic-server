@@ -13,7 +13,7 @@ import {
   type Commit,
 } from './commit.js';
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
-import { AtomicError } from './error.js';
+import { AtomicError, ErrorType } from './error.js';
 import { EventManager } from './EventManager.js';
 import { hasBrowserAPI } from './hasBrowserAPI.js';
 import { collections } from './ontologies/collections.js';
@@ -693,6 +693,43 @@ export class Store {
 
   public isLocalOnlyDrive(drive: string): boolean {
     return this.localOnlyDrives.has(drive);
+  }
+
+  /**
+   * Promote a local-only drive to a synced one: stop excluding it, then run
+   * the normal drive reconcile against the connected server, which pushes the
+   * drive's resources up (a local-only drive was never a special code path —
+   * just one the sync engine was told to skip).
+   *
+   * Server-agnostic by design: a self-hosted server accepts the drive (open
+   * admission); a managed node accepts it only if the drive is already
+   * enrolled in its control plane — that enrollment is NOT this method's job
+   * (it lives in the SaaS/managed layer). If the server rejects the pushed
+   * commits, the drive simply stays local and the caller surfaces the error.
+   *
+   * Requires an active server connection. Resolves once the reconcile has been
+   * kicked off; the actual push completes asynchronously (watch sync status).
+   */
+  public async promoteLocalDrive(drive: string): Promise<void> {
+    const normalized = this.normalizeSubject(drive);
+
+    if (!this.isLocalOnlyDrive(normalized)) return;
+
+    if (!this._serverConnected) {
+      throw new AtomicError(
+        'Connect to a server before syncing this workspace.',
+        ErrorType.Server,
+      );
+    }
+
+    // Order matters: unregister first so the subscribe/reconcile below is no
+    // longer skipped by the local-only guards.
+    this.unregisterLocalOnlyDrive(normalized);
+    this.subscribeWebSocket(normalized);
+
+    const ws =
+      this.getDefaultWebSocket() ?? this.getWebSocketForSubject(normalized);
+    await ws?.resyncDrive(normalized);
   }
 
   /**

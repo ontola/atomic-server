@@ -1195,6 +1195,16 @@ export class WSClient {
     }
   }
 
+  /** Force a fresh version-vector reconcile of a single drive with the
+   *  server. Used to promote a drive that was previously local-only: the
+   *  reconcile SYNC_PUSHes the drive's resources up (the server has none).
+   *  No-op if the socket isn't open. */
+  public async resyncDrive(drive: string): Promise<void> {
+    if (this.readyState !== WebSocket.OPEN) return;
+
+    await this.startVVSync(drive);
+  }
+
   /** Respond to SYNC_RESEND. Instead of sending the whole drive's version
    *  vector, run RBSR against the server (range fingerprint exchange) to find
    *  only the differing subjects, and send version vectors for just those. On

@@ -21,6 +21,7 @@ import {
   FaCloud,
   FaPlus,
   FaMobileScreenButton,
+  FaCloudArrowUp,
 } from 'react-icons/fa6';
 import { Button } from '../components/Button';
 import { ContainerNarrow } from '../components/Containers';
@@ -174,6 +175,7 @@ function SyncPage() {
   const [peerSyncing, setPeerSyncing] = useState(false);
   const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
   const [showPairDialog, setShowPairDialog] = useState(false);
+  const [promoting, setPromoting] = useState(false);
   const [knownPeers, setKnownPeers] = useState<KnownPeer[]>(() => {
     try {
       return (
@@ -226,7 +228,8 @@ function SyncPage() {
     const serverUrl = status.serverUrl;
     const agent = store.getAgent();
 
-    if (!drive || !serverUrl || !agent) {
+    // A local-only drive isn't on the server — asking for its usage 500s.
+    if (!drive || !serverUrl || !agent || store.isLocalOnlyDrive(drive)) {
       setNodeUsage(null);
 
       return;
@@ -253,7 +256,7 @@ function SyncPage() {
   useEffect(() => {
     const drive = status.drive;
 
-    if (!managedInfo.portalUrl || !drive) {
+    if (!managedInfo.portalUrl || !drive || store.isLocalOnlyDrive(drive)) {
       setQuotaBytes(null);
 
       return;
@@ -317,6 +320,12 @@ function SyncPage() {
   // server). A plain browser talks to a remote server; its `/iroh-node-id`
   // would be that *server's* node, not "this device", so pairing is hidden.
   const isNode = isRunningInTauri();
+  // A local-only drive (the demo, or any drive made offline) is a normal
+  // drive the sync engine was simply told to skip — not a special code path.
+  // When the active drive is local-only the "syncs with N places" story is a
+  // lie for it, so the page leads with an honest, drive-specific state + the
+  // option to start syncing it.
+  const localOnlyDrive = !!status.drive && store.isLocalOnlyDrive(status.drive);
   const serverHostname = status.serverUrl
     ? new URL(status.serverUrl).hostname
     : undefined;
@@ -340,6 +349,10 @@ function SyncPage() {
       : null;
 
   function summaryLine(): string {
+    if (localOnlyDrive) {
+      return 'This workspace is stored only on this device — it isn’t backed up or synced anywhere.';
+    }
+
     if (!isNode && !clientDbOn) {
       return 'Your data lives on the connected server.';
     }
@@ -351,6 +364,20 @@ function SyncPage() {
     return `Your data lives on this device and syncs with ${connectionCount} ${
       connectionCount === 1 ? 'place' : 'places'
     }.`;
+  }
+
+  async function promoteDrive() {
+    if (!status.drive || promoting) return;
+    setPromoting(true);
+
+    try {
+      await store.promoteLocalDrive(status.drive);
+      toast.success('Syncing this workspace to the server…');
+    } catch (e) {
+      store.notifyError(e as Error);
+    } finally {
+      setPromoting(false);
+    }
   }
 
   function savePeers(peers: KnownPeer[]) {
@@ -468,8 +495,42 @@ function SyncPage() {
           </ConnBody>
         </DeviceCard>
 
+        {/* A local-only drive (demo, or any drive made offline) isn't synced.
+            Offer to promote it to a normal synced drive on the connected
+            server — the same reconcile a regular drive uses, no special path. */}
+        {localOnlyDrive && (
+          <LocalDriveNotice>
+            <ConnIcon $tone='cloud'>
+              <FaCloudArrowUp />
+            </ConnIcon>
+            <ConnBody>
+              <ConnTitle>Only on this device</ConnTitle>
+              <ConnSub>
+                This workspace hasn’t been synced. It’s safe here, but not
+                backed up and not on your other devices.
+              </ConnSub>
+              <ConnActions>
+                <Button
+                  onClick={promoteDrive}
+                  disabled={promoting || !status.serverConnected}
+                >
+                  {promoting ? 'Syncing…' : 'Sync this workspace'}
+                </Button>
+              </ConnActions>
+              {!status.serverConnected && (
+                <ConnMeta>Connect a server below first.</ConnMeta>
+              )}
+            </ConnBody>
+          </LocalDriveNotice>
+        )}
+
         <Section>
           <SectionTitle>Connections</SectionTitle>
+          {localOnlyDrive && connectionCount > 0 && (
+            <ConnNote>
+              These sync your other drives — not this workspace.
+            </ConnNote>
+          )}
 
           {connectionCount === 0 && (
             <EmptyConnections>
@@ -750,9 +811,9 @@ function SyncPage() {
           </DevActivityTitle>
           {commitLog.length > 0 ? (
             <LogList>
-              {commitLog.map(entry => (
+              {commitLog.map((entry, i) => (
                 <CommitCard
-                  key={entry.id}
+                  key={`${entry.id}-${i}`}
                   highlight={entry.status === 'failed'}
                 >
                   <LogHeader>
@@ -794,9 +855,9 @@ function SyncPage() {
                   {entry.propertySummaries &&
                     entry.propertySummaries.length > 0 && (
                       <PropertyList>
-                        {entry.propertySummaries.map(ps => (
+                        {entry.propertySummaries.map((ps, j) => (
                           <PropertyRow
-                            key={ps.property}
+                            key={`${ps.property}-${j}`}
                             data-change-type={ps.changeType}
                           >
                             <span aria-hidden='true'>
@@ -1073,6 +1134,22 @@ const DeviceCard = styled.div`
 const ConnCard = styled.div`
   ${cardBase}
   margin-bottom: 0.6rem;
+`;
+
+/** Accent card for a local-only (unsynced) workspace — visually distinct
+ *  from the neutral connection cards, since it's a call to action. */
+const LocalDriveNotice = styled.div`
+  ${cardBase}
+  align-items: center;
+  border-color: ${p => p.theme.colors.main}55;
+  background: ${p => p.theme.colors.main}0d;
+  margin-bottom: 1.5rem;
+`;
+
+const ConnNote = styled.p`
+  margin: 0 0 0.6rem;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.82rem;
 `;
 
 const ConnIcon = styled.div<{ $tone: 'device' | 'cloud' | 'server' }>`
