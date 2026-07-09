@@ -1448,8 +1448,6 @@ msgstr "Document"
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Sync"
 msgstr "Sync"
 
@@ -1469,8 +1467,6 @@ msgid "Changes pending"
 msgstr "Changes pending"
 
 #: src/components/SideBar/SyncMenuItem.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Syncing..."
 msgstr "Syncing..."
 
@@ -1755,9 +1751,8 @@ msgstr "<0/> <1/>heme settings"
 msgid "In sync"
 msgstr "In sync"
 
-#: src/routes/SyncRoute.tsx
-msgid "Unknown"
-msgstr "Unknown"
+#~ msgid "Unknown"
+#~ msgstr "Unknown"
 
 #. 0: NODE_DID_PREFIX
 #: src/routes/SyncRoute.tsx
@@ -1774,89 +1769,66 @@ msgstr "Synced {0} resource{1} with {2}"
 msgid "Synced {0} resource{1}"
 msgstr "Synced {0} resource{1}"
 
-#: src/routes/SyncRoute.tsx
-msgid "Your data lives on this device. Add peers or a remote server to sync."
-msgstr "Your data lives on this device. Add peers or a remote server to sync."
+#~ msgid "Your data lives on this device. Add peers or a remote server to sync."
+#~ msgstr "Your data lives on this device. Add peers or a remote server to sync."
 
-#: src/routes/SyncRoute.tsx
-msgid "Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects."
-msgstr "Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects."
+#~ msgid "Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects."
+#~ msgstr "Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects."
 
 #: src/components/PairDeviceDialog.tsx
-#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "This device"
 msgstr "This device"
 
-#: src/routes/SyncRoute.tsx
-msgid "Local storage ready"
-msgstr "Local storage ready"
+#~ msgid "Local storage ready"
+#~ msgstr "Local storage ready"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Server"
-msgstr "Server"
+#~ msgid "Server"
+#~ msgstr "Server"
 
-#: src/routes/SyncRoute.tsx
-msgid "Disconnect"
-msgstr "Disconnect"
+#~ msgid "Disconnect"
+#~ msgstr "Disconnect"
 
-#: src/routes/SyncRoute.tsx
-msgid "Reconnect"
-msgstr "Reconnect"
+#~ msgid "Reconnect"
+#~ msgstr "Reconnect"
 
 #: src/routes/SyncRoute.tsx
 msgid "Manage account & plan →"
 msgstr "Manage account & plan →"
 
-#. 0: nodeUsage.driveName
-#: src/routes/SyncRoute.tsx
-msgid "This drive ({0})"
-msgstr "This drive ({0})"
+#~ msgid "This drive ({0})"
+#~ msgstr "This drive ({0})"
 
-#: src/routes/SyncRoute.tsx
-msgid "This drive"
-msgstr "This drive"
+#~ msgid "This drive"
+#~ msgstr "This drive"
 
-#. 0: nodeUsage.resourceCount.toLocaleString(); 1: ' '; 2: formatBytes(nodeUsage.blobBytes + nodeUsage.loroBytes); 3: quotaBytes ? ` of ${formatBytes(quotaBytes)}` \\: ''
-#: src/routes/SyncRoute.tsx
-msgid "{0} resources ·{1} {2} {3} used"
-msgstr "{0} resources ·{1} {2} {3} used"
+#~ msgid "{0} resources ·{1} {2} {3} used"
+#~ msgstr "{0} resources ·{1} {2} {3} used"
 
-#: src/routes/SyncRoute.tsx
-msgid "Details"
-msgstr "Details"
+#~ msgid "Details"
+#~ msgstr "Details"
 
-#: src/routes/SyncRoute.tsx
-msgid "Remote server"
-msgstr "Remote server"
+#~ msgid "Remote server"
+#~ msgstr "Remote server"
 
-#: src/routes/SyncRoute.tsx
-msgid "Embedded (local)"
-msgstr "Embedded (local)"
+#~ msgid "Embedded (local)"
+#~ msgstr "Embedded (local)"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "+ Add"
-msgstr "+ Add"
+#~ msgid "+ Add"
+#~ msgstr "+ Add"
 
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Add"
 msgstr "Add"
 
-#: src/routes/SyncRoute.tsx
-msgid "How to run your own server"
-msgstr "How to run your own server"
+#~ msgid "How to run your own server"
+#~ msgstr "How to run your own server"
 
-#: src/routes/SyncRoute.tsx
-msgid "Node DID"
-msgstr "Node DID"
+#~ msgid "Node DID"
+#~ msgstr "Node DID"
 
-#. 0: localNodeId.slice(0, 12)
-#: src/routes/SyncRoute.tsx
-msgid "did:ad:node:{0}..."
-msgstr "did:ad:node:{0}..."
+#~ msgid "did:ad:node:{0}..."
+#~ msgstr "did:ad:node:{0}..."
 
 #: src/components/PairDeviceDialog.tsx
 #: src/components/PairDeviceDialog.tsx
@@ -1869,17 +1841,14 @@ msgstr "Copy"
 msgid "Node DID copied to clipboard"
 msgstr "Node DID copied to clipboard"
 
-#: src/routes/SyncRoute.tsx
-msgid "Peers"
-msgstr "Peers"
+#~ msgid "Peers"
+#~ msgstr "Peers"
 
-#: src/routes/SyncRoute.tsx
-msgid "No peers connected"
-msgstr "No peers connected"
+#~ msgid "No peers connected"
+#~ msgstr "No peers connected"
 
-#: src/routes/SyncRoute.tsx
-msgid "Paste did:ad:node:..."
-msgstr "Paste did:ad:node:..."
+#~ msgid "Paste did:ad:node:..."
+#~ msgstr "Paste did:ad:node:..."
 
 #: src/components/forms/SearchBox/SearchBox.tsx
 #: src/routes/LinkOpenRouter.tsx
@@ -1888,9 +1857,8 @@ msgstr "Paste did:ad:node:..."
 msgid "Error"
 msgstr "Error"
 
-#: src/routes/SyncRoute.tsx
-msgid "WS debug"
-msgstr "WS debug"
+#~ msgid "WS debug"
+#~ msgstr "WS debug"
 
 #: src/routes/SyncRoute.tsx
 msgid "Logging to console"
@@ -1900,10 +1868,8 @@ msgstr "Logging to console"
 msgid "Off"
 msgstr "Off"
 
-#. 0: status.pendingDirtyCount > 0 && ( <PendingCount>{status.pendingDirtyCount} unsynced</PendingCount> )
-#: src/routes/SyncRoute.tsx
-msgid "Commit Log {0}"
-msgstr "Commit Log {0}"
+#~ msgid "Commit Log {0}"
+#~ msgstr "Commit Log {0}"
 
 #: src/routes/SyncRoute.tsx
 msgid "destroy"
@@ -4427,10 +4393,8 @@ msgstr "Atomic Data combines the ease of use of JSON, the connectivity of linked
 msgid "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 msgstr "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 
-#. 0: status.lastDriveSync.count
-#: src/routes/SyncRoute.tsx
-msgid "{0} resources stored locally"
-msgstr "{0} resources stored locally"
+#~ msgid "{0} resources stored locally"
+#~ msgstr "{0} resources stored locally"
 
 #: src/views/DocumentPage.tsx
 msgid "<0/> This document needs to be updated to the new format in order to be edited."
@@ -4944,9 +4908,8 @@ msgstr "Could not start the demo"
 msgid "The demo could not start"
 msgstr "The demo could not start"
 
-#: src/routes/DemoRoute.tsx
-msgid "Setting up your demo team…"
-msgstr "Setting up your demo team…"
+#~ msgid "Setting up your demo team…"
+#~ msgstr "Setting up your demo team…"
 
 #: src/chunks/Demo/SimulatedTypist.ts
 msgid "Map"
@@ -5044,9 +5007,8 @@ msgstr "Switch account"
 msgid "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
 msgstr "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
 
-#: src/routes/SyncRoute.tsx
-msgid "Local DB"
-msgstr "Local DB"
+#~ msgid "Local DB"
+#~ msgstr "Local DB"
 
 #. 0: name
 #: src/components/Presence/AgentAvatar.tsx
@@ -5115,9 +5077,8 @@ msgstr "Connect to a device"
 msgid "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
 msgstr "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
 
-#: src/routes/SyncRoute.tsx
-msgid "Sync a device"
-msgstr "Sync a device"
+#~ msgid "Sync a device"
+#~ msgstr "Sync a device"
 
 #: src/components/Presence/TypingIndicator.tsx
 msgid "<0/> is typing"
@@ -5173,3 +5134,143 @@ msgstr "Recently visited"
 #: src/routes/SettingsAgent.tsx
 msgid "Open a drive by URL or DID"
 msgstr "Open a drive by URL or DID"
+
+#: src/routes/DemoRoute.tsx
+msgid "Setting up your demo…"
+msgstr "Setting up your demo…"
+
+#: src/routes/SyncRoute.tsx
+msgid "Your data lives on the connected server."
+msgstr "Your data lives on the connected server."
+
+#: src/routes/SyncRoute.tsx
+msgid "Your data lives on this device — it isn’t syncing anywhere yet."
+msgstr "Your data lives on this device — it isn’t syncing anywhere yet."
+
+#. 0: connectionCount; 1: connectionCount === 1 ? 'place' \\: 'places'
+#: src/routes/SyncRoute.tsx
+msgid "Your data lives on this device and syncs with {0} {1}."
+msgstr "Your data lives on this device and syncs with {0} {1}."
+
+#. 0: status.lastDriveSync.count.toLocaleString()
+#: src/routes/SyncRoute.tsx
+msgid "{0} resources · stored locally"
+msgstr "{0} resources · stored locally"
+
+#: src/routes/SyncRoute.tsx
+msgid "Embedded server · stored locally"
+msgstr "Embedded server · stored locally"
+
+#: src/routes/SyncRoute.tsx
+msgid "Cached locally · works offline"
+msgstr "Cached locally · works offline"
+
+#: src/routes/SyncRoute.tsx
+msgid "Server-only · no local cache"
+msgstr "Server-only · no local cache"
+
+#: src/routes/SyncRoute.tsx
+msgid "Pair another device to sync peer-to-peer, or connect a server to back up and reach it from the web."
+msgstr "Pair another device to sync peer-to-peer, or connect a server to back up and reach it from the web."
+
+#: src/routes/SyncRoute.tsx
+msgid "Connect a server to back up your data and reach it from anywhere."
+msgstr "Connect a server to back up your data and reach it from anywhere."
+
+#~ msgid "Connections"
+#~ msgstr "Connections"
+
+#~ msgid "Not syncing anywhere yet — your data is safe on this device."
+#~ msgstr "Not syncing anywhere yet — your data is safe on this device."
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Sync"
+msgstr "Cloud Sync"
+
+#: src/routes/SyncRoute.tsx
+msgid "Self-hosted Atomic Server"
+msgstr "Self-hosted Atomic Server"
+
+#. 0: usagePct
+#: src/routes/SyncRoute.tsx
+msgid "{0}% of storage used"
+msgstr "{0}% of storage used"
+
+#. 0: usagePct
+#: src/routes/SyncRoute.tsx
+msgid "{0}% used"
+msgstr "{0}% used"
+
+#~ msgid "Paired"
+#~ msgstr "Paired"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Syncing…"
+msgstr "Syncing…"
+
+#: src/routes/SyncRoute.tsx
+msgid "Sync now"
+msgstr "Sync now"
+
+#~ msgid "Paired device {0}"
+#~ msgstr "Paired device {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Embedded (this device)"
+msgstr "Embedded (this device)"
+
+#. 0: localNodeId.slice(0, 12)
+#: src/routes/SyncRoute.tsx
+msgid "did:ad:node:{0}…"
+msgstr "did:ad:node:{0}…"
+
+#: src/routes/SyncRoute.tsx
+msgid "Node ID"
+msgstr "Node ID"
+
+#: src/routes/SyncRoute.tsx
+msgid "Local database"
+msgstr "Local database"
+
+#: src/routes/SyncRoute.tsx
+msgid "WebSocket debug"
+msgstr "WebSocket debug"
+
+#: src/routes/SyncRoute.tsx
+msgid "Developer"
+msgstr "Developer"
+
+#. 0: status.pendingDirtyCount > 0 && ( <PendingCount>{status.pendingDirtyCount} unsynced</PendingCount> )
+#: src/routes/SyncRoute.tsx
+msgid "Recent activity {0}"
+msgstr "Recent activity {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Connecting…"
+msgstr "Connecting…"
+
+#: src/routes/SyncRoute.tsx
+msgid "This workspace is stored only on this device — it isn’t backed up or synced anywhere."
+msgstr "This workspace is stored only on this device — it isn’t backed up or synced anywhere."
+
+#: src/routes/SyncRoute.tsx
+msgid "Syncing this workspace to the server…"
+msgstr "Syncing this workspace to the server…"
+
+#: src/routes/SyncRoute.tsx
+msgid "Sync this workspace"
+msgstr "Sync this workspace"
+
+#: src/routes/SyncRoute.tsx
+msgid "Connect a server below first."
+msgstr "Connect a server below first."
+
+#: src/routes/SyncRoute.tsx
+msgid "Only on this device"
+msgstr "Only on this device"
+
+#: src/routes/SyncRoute.tsx
+msgid "This workspace hasn’t been synced. It’s safe here, but not backed up and not on your other devices."
+msgstr "This workspace hasn’t been synced. It’s safe here, but not backed up and not on your other devices."
