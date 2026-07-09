@@ -38,6 +38,8 @@ import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
 import { getLocalServerOrigin, isRunningInTauri } from '../helpers/tauri';
+import { deviceHasDriveData } from '../helpers/driveData';
+import { ConnectServerDialog } from '../components/ConnectServerDialog';
 import { PairDeviceDialog } from '../components/PairDeviceDialog';
 import {
   decodePairingEnvelope,
@@ -169,13 +171,16 @@ function SyncPage() {
   const [clientDbOn, setClientDbOn] = useState(() => isClientDbEnabled());
   const { setServer, baseURL } = useSettings();
   const knownServers = serverURLStorage.getKnownServers();
-  const [serverInput, setServerInput] = useState('');
-  const [showAddServer, setShowAddServer] = useState(false);
+  const [showServerDialog, setShowServerDialog] = useState(false);
   const [localNodeId, setLocalNodeId] = useState<string | null>(null);
   const [peerSyncing, setPeerSyncing] = useState(false);
   const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
   const [showPairDialog, setShowPairDialog] = useState(false);
   const [promoting, setPromoting] = useState(false);
+  // Resolved in an effect rather than read off a Resource during render: the
+  // React Compiler memoizes on the proxy identity, so a resource that finishes
+  // loading would never re-render this.
+  const [driveMissing, setDriveMissing] = useState(false);
   const [knownPeers, setKnownPeers] = useState<KnownPeer[]>(() => {
     try {
       return (
@@ -222,6 +227,30 @@ function SyncPage() {
   // works on any atomic-server (self-hosted included). Signed with the agent
   // because the endpoint enforces read access to the drive.
   const [nodeUsage, setNodeUsage] = useState<NodeDriveUsage | null>(null);
+
+  // Sign in with a secret on a fresh device and you get the identity but none
+  // of the data. Detect that so the page can lead with "pair a device".
+  useEffect(() => {
+    const drive = status.drive;
+
+    if (!drive || !store.getAgent()) {
+      setDriveMissing(false);
+
+      return;
+    }
+
+    let cancelled = false;
+
+    deviceHasDriveData(store, drive).then(present => {
+      if (!cancelled) {
+        setDriveMissing(!present);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [status.drive, store]);
 
   useEffect(() => {
     const drive = status.drive;
@@ -495,10 +524,40 @@ function SyncPage() {
           </ConnBody>
         </DeviceCard>
 
+        {/* Signed in, but this device holds none of the account's data — it's
+            still on whatever device created it. Pairing is the way across, so
+            lead with it. Takes precedence over the local-only notice below:
+            there is nothing here to promote. */}
+        {driveMissing && (
+          <LocalDriveNotice>
+            <ConnIcon $tone='device'>
+              <FaMobileScreenButton />
+            </ConnIcon>
+            <ConnBody>
+              <ConnTitle>Your data is on another device</ConnTitle>
+              <ConnSub>
+                You’re signed in, but this device doesn’t have your workspace
+                yet. Sync with a device that has it to bring it over.
+              </ConnSub>
+              <ConnActions>
+                {isNode && localNodeId ? (
+                  <Button onClick={() => setShowPairDialog(true)}>
+                    Sync a device
+                  </Button>
+                ) : (
+                  <Button onClick={() => setShowServerDialog(true)}>
+                    Connect a server
+                  </Button>
+                )}
+              </ConnActions>
+            </ConnBody>
+          </LocalDriveNotice>
+        )}
+
         {/* A local-only drive (demo, or any drive made offline) isn't synced.
             Offer to promote it to a normal synced drive on the connected
             server — the same reconcile a regular drive uses, no special path. */}
-        {localOnlyDrive && (
+        {localOnlyDrive && !driveMissing && (
           <LocalDriveNotice>
             <ConnIcon $tone='cloud'>
               <FaCloudArrowUp />
@@ -673,68 +732,19 @@ function SyncPage() {
                 <FaPlus aria-hidden /> Sync a device
               </AddButton>
             )}
-            <AddButton onClick={() => setShowAddServer(v => !v)}>
+            <AddButton onClick={() => setShowServerDialog(true)}>
               <FaPlus aria-hidden /> Connect a server
             </AddButton>
           </AddRow>
 
-          {showAddServer && (
-            <ConnectPanel>
-              {knownServers.length > 1 && (
-                <SwitchList>
-                  {knownServers.map(s => {
-                    const hostname = new URL(s).hostname;
-                    const active = s === baseURL;
-                    const label =
-                      isNode &&
-                      (hostname === 'localhost' || hostname === '127.0.0.1')
-                        ? 'Embedded (this device)'
-                        : hostname;
-
-                    return (
-                      <SwitchItem
-                        key={s}
-                        type='button'
-                        $active={active}
-                        onClick={() => setServer(s)}
-                      >
-                        {label}
-                        {active && <FaCheck aria-hidden />}
-                      </SwitchItem>
-                    );
-                  })}
-                </SwitchList>
-              )}
-              <AddServerRow
-                onSubmit={e => {
-                  e.preventDefault();
-
-                  if (serverInput.trim()) {
-                    setServer(serverInput.trim());
-                    setServerInput('');
-                    setShowAddServer(false);
-                  }
-                }}
-              >
-                <ServerInput
-                  autoFocus
-                  placeholder='https://your-server.example'
-                  value={serverInput}
-                  onChange={e => setServerInput(e.target.value)}
-                />
-                <Button type='submit' subtle>
-                  Connect
-                </Button>
-              </AddServerRow>
-              <DocsLink
-                href='https://docs.atomicdata.dev/atomicserver/installation.html'
-                target='_blank'
-                rel='noopener'
-              >
-                How to run your own server
-              </DocsLink>
-            </ConnectPanel>
-          )}
+          <ConnectServerDialog
+            knownServers={knownServers}
+            activeServer={baseURL}
+            isNode={isNode}
+            setServer={setServer}
+            show={showServerDialog}
+            bindShow={setShowServerDialog}
+          />
 
           {isNode && localNodeId && (
             <PairDeviceDialog
@@ -1316,48 +1326,6 @@ const AddButton = styled.button`
   }
 `;
 
-const ConnectPanel = styled.div`
-  margin-top: 0.8rem;
-  padding: 0.9rem 1rem;
-  border-radius: ${p => p.theme.radius};
-  background: ${p => p.theme.colors.bg1};
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-`;
-
-const SwitchList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-`;
-
-const SwitchItem = styled.button<{ $active: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  width: 100%;
-  text-align: left;
-  border: none;
-  cursor: pointer;
-  border-radius: ${p => p.theme.radius};
-  padding: 0.4rem 0.6rem;
-  font-size: 0.85rem;
-  color: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.text)};
-  font-weight: ${p => (p.$active ? 600 : 400)};
-  background: ${p => (p.$active ? `${p.theme.colors.main}14` : 'transparent')};
-
-  &:hover {
-    background: ${p => p.theme.colors.bg2};
-  }
-
-  svg {
-    font-size: 0.7rem;
-    flex-shrink: 0;
-  }
-`;
-
 // --- Developer disclosure ---
 
 const DevDetails = styled.details`
@@ -1628,12 +1596,6 @@ const StatusDot = styled.span<{ $state: LocalDbStatus }>`
   flex-shrink: 0;
 `;
 
-const AddServerRow = styled.form`
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-`;
-
 const PeerIdRow = styled.span`
   display: inline-flex;
   align-items: center;
@@ -1645,24 +1607,8 @@ const PeerIdText = styled.code`
   color: ${p => p.theme.colors.textLight};
 `;
 
-const DocsLink = styled.a`
-  font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
-`;
-
 const PeerSyncResult = styled.div<{ $error: boolean }>`
   font-size: 0.8rem;
   margin-top: 0.3rem;
   color: ${p => (p.$error ? p.theme.colors.warning : p.theme.colors.main)};
-`;
-
-const ServerInput = styled.input`
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  padding: 0.3rem 0.5rem;
-  font-size: 0.85rem;
-  background: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
-  flex: 1;
-  min-width: 0;
 `;

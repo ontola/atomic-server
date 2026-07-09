@@ -8,6 +8,7 @@ import { useWelcomeLayoutEffect } from '../../hooks/useWelcomeLayoutEffect';
 import { useSettings } from '../../helpers/AppSettings';
 import { saveAgentToIDB } from '../../helpers/agentStorage';
 import { fetchPersonalDriveSubject } from '../../helpers/personalDrive';
+import { deviceHasDriveData } from '../../helpers/driveData';
 import { constructOpenURL } from '../../helpers/navigation';
 import { paths } from '../../routes/paths';
 import { Button } from '../../components/Button';
@@ -273,9 +274,15 @@ export function GettingStartedFlow({
 
       if (home) {
         setDrive(home);
+      }
+
+      // A secret restores who you are, not what you have. On a device that
+      // holds none of the account's data yet, opening the drive shows an empty
+      // shell — send them to Sync, where they can pull it off another device.
+      if (home && (await deviceHasDriveData(store, home))) {
         navigate(constructOpenURL(home));
       } else {
-        navigate(paths.agentSettings);
+        navigate(paths.sync);
       }
     } catch (err) {
       setError(

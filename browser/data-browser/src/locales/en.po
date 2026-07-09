@@ -5061,6 +5061,7 @@ msgstr "Scan this from a device already signed in as you, or copy the code and p
 msgid "Paste atomic://pair… code"
 msgstr "Paste atomic://pair… code"
 
+#: src/components/ConnectServerDialog.tsx
 #: src/components/PairDeviceDialog.tsx
 msgid "Connect"
 msgstr "Connect"
@@ -5072,8 +5073,9 @@ msgstr "Connect to a device"
 #~ msgid "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
 #~ msgstr "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
 
-#~ msgid "Sync a device"
-#~ msgstr "Sync a device"
+#: src/routes/SyncRoute.tsx
+msgid "Sync a device"
+msgstr "Sync a device"
 
 #: src/components/Presence/TypingIndicator.tsx
 msgid "<0/> is typing"
@@ -5212,7 +5214,7 @@ msgstr "Sync now"
 #~ msgid "Paired device {0}"
 #~ msgstr "Paired device {0}"
 
-#: src/routes/SyncRoute.tsx
+#: src/components/ConnectServerDialog.tsx
 msgid "Embedded (this device)"
 msgstr "Embedded (this device)"
 
@@ -5293,3 +5295,24 @@ msgstr "Paste a pairing code from your other device to start syncing."
 #: src/components/PairDeviceDialog.tsx
 msgid "<0/> Scan a QR code"
 msgstr "<0/> Scan a QR code"
+
+#: src/routes/SyncRoute.tsx
+msgid "Your data is on another device"
+msgstr "Your data is on another device"
+
+#: src/routes/SyncRoute.tsx
+msgid "You’re signed in, but this device doesn’t have your workspace yet. Sync with a device that has it to bring it over."
+msgstr "You’re signed in, but this device doesn’t have your workspace yet. Sync with a device that has it to bring it over."
+
+#: src/components/ConnectServerDialog.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Connect a server"
+msgstr "Connect a server"
+
+#: src/components/ConnectServerDialog.tsx
+msgid "A server keeps your workspaces online and backed up, and lets you share them with other people."
+msgstr "A server keeps your workspaces online and backed up, and lets you share them with other people."
+
+#: src/components/ConnectServerDialog.tsx
+msgid "Switch to"
+msgstr "Switch to"
