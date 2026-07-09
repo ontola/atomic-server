@@ -32,7 +32,14 @@ import {
 } from 'react-icons/fa6';
 import * as RadixPopover from '@radix-ui/react-popover';
 import type { JSX } from 'react';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  useLayoutEffect,
+} from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
 import { useRightPanel } from './RightPanel/RightPanelContext';
 import { LabelButton } from './NavBarButton';
@@ -229,8 +236,64 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
     [machesStandalone],
   );
 
+  // Collapse the action buttons to icons only when the bar's content no longer
+  // fits — content-aware rather than a fixed px breakpoint. `collapseWidthRef`
+  // remembers the width at which labels last overflowed and only re-expands
+  // clearly above it, so it settles instead of flip-flopping at the boundary.
+  const navRef = useRef<HTMLElement>(null);
+  const collapseWidthRef = useRef(0);
+  const [iconOnly, setIconOnly] = useState(false);
+
+  const measureNav = useCallback(() => {
+    const nav = navRef.current;
+
+    if (!nav) return;
+
+    const width = nav.clientWidth;
+    const overflowing = nav.scrollWidth > width + 1;
+
+    setIconOnly(prev => {
+      if (overflowing) {
+        collapseWidthRef.current = Math.max(collapseWidthRef.current, width);
+
+        return true;
+      }
+
+      // Room again: expand only once clearly wider than where it collapsed.
+      if (prev && width > collapseWidthRef.current + 24) {
+        return false;
+      }
+
+      return prev;
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+
+    if (!nav) return;
+
+    const observer = new ResizeObserver(() => measureNav());
+    observer.observe(nav);
+    measureNav();
+
+    return () => observer.disconnect();
+  }, [measureNav]);
+
+  // A new title may fit with labels again — forget the learned threshold so it
+  // can re-expand.
+  useLayoutEffect(() => {
+    collapseWidthRef.current = 0;
+  }, [title]);
+
+  // Re-measure after the mode flips (the label change resizes the content but
+  // not the bar, so the observer won't fire on its own) or the title changes.
+  useLayoutEffect(() => {
+    measureNav();
+  }, [iconOnly, title, measureNav]);
+
   return (
-    <NavBarWrapper aria-label='Breadcrumbs'>
+    <NavBarWrapper ref={navRef} aria-label='Breadcrumbs'>
       <IconButton
         color='textLight'
         type='button'
@@ -272,7 +335,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
       {parent && <DirectParent subject={parent} />}
       <EditableBreadcrumb resource={resource} fallback={title} />
       <Spacer />
-      <ButtonArea>
+      <ButtonArea $iconOnly={iconOnly}>
         <MeetingBanner />
         <FollowStatus />
         <ResourcePresenceRow subject={resource.subject} />
@@ -368,19 +431,23 @@ const Spacer = styled.span`
   flex: 1;
 `;
 
-const ButtonArea = styled.div`
+const ButtonArea = styled.div<{ $iconOnly: boolean }>`
   display: flex;
   margin-left: auto;
   color: ${p => p.theme.colors.textLight};
   gap: ${p => p.theme.size(1)};
   align-items: center;
+  flex-shrink: 0;
 
-  /* Icon-only mode on small screens */
-  @container breadcrumb-bar (max-width: 600px) {
-    & > * > span {
-      display: none;
-    }
-  }
+  /* Icon-only once the bar can no longer fit the labels (measured in JS, not a
+   * fixed breakpoint). */
+  ${p =>
+    p.$iconOnly &&
+    css`
+      & > * > span {
+        display: none;
+      }
+    `}
 `;
 
 const CommentsLabelButton = styled(LabelButton)`
