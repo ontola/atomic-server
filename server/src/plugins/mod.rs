@@ -45,7 +45,7 @@ pub mod plugin;
 pub mod prunetests;
 pub mod query;
 pub mod search;
-pub mod setup;
+pub mod bind_drive;
 #[cfg(feature = "vector-search")]
 pub mod vector_search;
 pub mod versioning;

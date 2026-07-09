@@ -1066,7 +1066,7 @@ impl Db {
     fn should_bypass_drive_routing(subject: &Subject, subject_string: &str) -> bool {
         subject.is_did()
             || subject_string.starts_with("/did")
-            || subject_string.starts_with("/setup")
+            || subject_string.starts_with("/bind-drive")
             || subject_string.starts_with("/search")
             || subject_string.starts_with("/upload")
             || subject_string.starts_with("/export")

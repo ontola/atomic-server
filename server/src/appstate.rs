@@ -95,7 +95,7 @@ impl AppState {
         store.add_endpoint(plugins::versioning::version_endpoint())?;
         store.add_endpoint(plugins::versioning::all_versions_endpoint())?;
         store.add_endpoint(plugins::did::did_endpoint())?;
-        store.add_endpoint(plugins::setup::setup_endpoint())?;
+        store.add_endpoint(plugins::bind_drive::bind_drive_endpoint())?;
         store.add_endpoint(plugins::bookmark::bookmark_endpoint())?;
         store.add_endpoint(plugins::files::upload_endpoint())?;
         store.add_endpoint(plugins::files::download_endpoint())?;

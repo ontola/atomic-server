@@ -238,7 +238,7 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .to(handlers::blob::put_blob),
     )
     .service(
-        web::resource("/setup")
+        web::resource("/bind-drive")
             .guard(guard::Method(Method::POST))
             .to(handlers::post_resource::handle_post_resource),
     )
