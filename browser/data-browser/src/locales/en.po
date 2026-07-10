@@ -4870,10 +4870,6 @@ msgstr "Join"
 msgid "Try the live demo"
 msgstr "Try the live demo"
 
-#: src/components/PairingLinkHandler.tsx
-msgid "Could not read the pairing link."
-msgstr "Could not read the pairing link."
-
 #: src/routes/DemoRoute.tsx
 msgid "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
 msgstr "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
@@ -4886,24 +4882,6 @@ msgstr "{0} is online"
 #: src/components/Presence/MeetingBanner.tsx
 msgid "Close the meeting chat"
 msgstr "Close the meeting chat"
-
-#. 0: e.message
-#: src/components/PairingLinkHandler.tsx
-msgid "Could not sync yet: {0}"
-msgstr "Could not sync yet: {0}"
-
-#. 0: outcome.count
-#: src/components/PairingLinkHandler.tsx
-msgid "Synced {0} resources with the paired device."
-msgstr "Synced {0} resources with the paired device."
-
-#: src/components/PairingLinkHandler.tsx
-msgid "Could not reach the paired device yet — retry under Sync → Peers."
-msgstr "Could not reach the paired device yet — retry under Sync → Peers."
-
-#: src/components/PairingLinkHandler.tsx
-msgid "Device paired — starting a sync…"
-msgstr "Device paired — starting a sync…"
 
 #: src/components/ThisDeviceCode.tsx
 msgid "Pairing code copied."
@@ -5082,7 +5060,6 @@ msgid "Recent activity {0}"
 msgstr "Recent activity {0}"
 
 #: src/routes/SyncRoute.tsx
-#: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connecting…"
 msgstr "Connecting…"
 
@@ -5154,16 +5131,8 @@ msgid "Switch to"
 msgstr "Switch to"
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Could not reach that device. Make sure both are online."
-msgstr "Could not reach that device. Make sure both are online."
-
-#: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connect to that device"
 msgstr "Connect to that device"
-
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Open <0>Sync → Sync a device</0> there to show its code, then scan or paste it here."
-msgstr "Open <0>Sync → Sync a device</0> there to show its code, then scan or paste it here."
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "You’re signed in, but this device doesn’t have your workspace yet. Signing in restores who you are — your data stays where you made it."
@@ -5189,10 +5158,6 @@ msgstr "This browser can’t sync directly with your other devices. Connect the 
 msgid "Skip for now"
 msgstr "Skip for now"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Paired. Your workspace hasn’t arrived yet — it may still be syncing."
-msgstr "Paired. Your workspace hasn’t arrived yet — it may still be syncing."
-
 #: src/routes/SyncRoute.tsx
 msgid "You’re signed in, but this device doesn’t have your workspace yet. Use the pairing code below to bring it over."
 msgstr "You’re signed in, but this device doesn’t have your workspace yet. Use the pairing code below to bring it over."
@@ -5209,3 +5174,65 @@ msgstr "Paste a pairing code or did:ad:node:…"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Open source & self-hostable ·{0} <0>Learn more</0>"
 msgstr "Open source & self-hostable ·{0} <0>Learn more</0>"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Open <0>Sync</0> there to show its code, then scan or paste it here."
+msgstr "Open <0>Sync</0> there to show its code, then scan or paste it here."
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Pairing device"
+msgstr "Pairing device"
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "The device is paired, so this can still finish on its own. If it doesn’t, check that the other device is online and signed in as you."
+msgstr "The device is paired, so this can still finish on its own. If it doesn’t, check that the other device is online and signed in as you."
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Try again"
+msgstr "Try again"
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Open workspace"
+msgstr "Open workspace"
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Close"
+msgstr "Close"
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Connecting to the device…"
+msgstr "Connecting to the device…"
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Could not connect"
+msgstr "Could not connect"
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Connect to the device"
+msgstr "Connect to the device"
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Bringing your workspace over…"
+msgstr "Bringing your workspace over…"
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Your workspace is here"
+msgstr "Your workspace is here"
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Your workspace hasn’t arrived yet"
+msgstr "Your workspace hasn’t arrived yet"
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Bring your workspace over"
+msgstr "Bring your workspace over"
+
+#. 0: device
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Paired with {0}"
+msgstr "Paired with {0}"
+
+#. 0: count; 1: resources; 2: device
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Synced {0} {1} with {2}"
+msgstr "Synced {0} {1} with {2}"

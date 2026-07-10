@@ -7,6 +7,7 @@
 // the dialed node still has to prove it holds the same agent key over AUTH
 // before a single resource crosses. See planning/device-pairing.md.
 
+import { decodePairingEnvelope, PairingEnvelopeError } from '@tomic/lib';
 import { upsertKnownPeer } from './knownPeers';
 import { getLocalServerOrigin } from './tauri';
 
@@ -62,4 +63,47 @@ export async function pairAndSync(
   }
 
   return { count: Number(data.count) || 0, peerName };
+}
+
+export type PairingRunResult =
+  | { ok: true; outcome: PeerSyncOutcome | undefined }
+  | { ok: false; message: string };
+
+/**
+ * Decode a scanned/pasted code and act on it, reporting failure as a value.
+ *
+ * The throwing version is awkward to drive a UI with: React components that
+ * `await` inside try/catch defeat the compiler's memoisation (see the
+ * data-browser CLAUDE.md), and every caller wants the same three messages
+ * anyway.
+ */
+export async function runPairing(
+  code: string,
+  drive: string | undefined,
+): Promise<PairingRunResult> {
+  let node: string;
+
+  try {
+    node = decodePairingEnvelope(code).node;
+  } catch (e) {
+    return {
+      ok: false,
+      message:
+        e instanceof PairingEnvelopeError
+          ? e.message
+          : 'Could not read that pairing code.',
+    };
+  }
+
+  try {
+    return { ok: true, outcome: await pairAndSync(node, drive) };
+  } catch (e) {
+    return {
+      ok: false,
+      message:
+        e instanceof Error
+          ? e.message
+          : 'Could not reach that device. Make sure both are online.',
+    };
+  }
 }

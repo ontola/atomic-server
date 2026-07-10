@@ -11,6 +11,7 @@ import { pathNames, paths } from './paths';
 import { Providers } from '../Providers';
 import { IdentityReconcileGate } from '../components/IdentityReconcileGate';
 import { PairingLinkHandler } from '../components/PairingLinkHandler';
+import { PairingFlowProvider } from '../components/pairing/PairingFlowProvider';
 import ResourcePage from '../views/ResourcePage';
 import { useSettings } from '../helpers/AppSettings';
 import { isDev } from '../config';
@@ -29,13 +30,18 @@ export const appRoute = createRoute({
 export const rootRoute = createRootRoute({
   component: () => (
     <Providers>
-      {/* Silently keep the device's Atomic agent aligned with the signed-in
-          Managed Sync account (no-op when there's no managed session). */}
-      <IdentityReconcileGate>
-        <Outlet />
-      </IdentityReconcileGate>
-      {/* Consumes scanned/tapped atomic://pair deep links (QR pairing). */}
-      <PairingLinkHandler />
+      {/* The one dialog every pairing entry point drives — the scanner, the
+          paste field, and deep links. Wraps both, since the routes below start
+          the flow and the link handler feeds it. */}
+      <PairingFlowProvider>
+        {/* Silently keep the device's Atomic agent aligned with the signed-in
+            Managed Sync account (no-op when there's no managed session). */}
+        <IdentityReconcileGate>
+          <Outlet />
+        </IdentityReconcileGate>
+        {/* Consumes scanned/tapped atomic://pair deep links (QR pairing). */}
+        <PairingLinkHandler />
+      </PairingFlowProvider>
       {/* Uncomment to get Tanstack Router Devtools */}
       {/* <TanStackRouterDevtools position='bottom-right' /> */}
     </Providers>

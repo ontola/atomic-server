@@ -1,21 +1,15 @@
 import { useEffect, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import toast from 'react-hot-toast';
 import { FaMobileScreenButton } from 'react-icons/fa6';
 import { useStore } from '@tomic/react';
-import {
-  decodePairingEnvelope,
-  PairingEnvelopeError,
-  type PairingEnvelope,
-} from '@tomic/lib';
 import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
 import { ThisDeviceCode } from '../../components/ThisDeviceCode';
 import { ConnectToDeviceForm } from '../../components/ConnectToDeviceForm';
 import { ConnectServerDialog } from '../../components/ConnectServerDialog';
 import { useOwnNodeDid } from '../../hooks/useOwnNodeDid';
+import { usePairingFlow } from '../../components/pairing/PairingFlowProvider';
 import { useSettings } from '../../helpers/AppSettings';
-import { pairAndSync } from '../../helpers/pairing';
 import { deviceHasDriveData } from '../../helpers/driveData';
 import { fetchPersonalDriveSubject } from '../../helpers/personalDrive';
 import { serverURLStorage } from '../../helpers/serverURLStorage';
@@ -69,7 +63,7 @@ export function ConnectDeviceStep({
   const { agent, baseURL, setServer } = useSettings();
   const nodeDid = useOwnNodeDid();
   const isNode = isRunningInTauri();
-  const [connecting, setConnecting] = useState(false);
+  const startPairing = usePairingFlow();
   const [showServerDialog, setShowServerDialog] = useState(false);
 
   /**
@@ -132,47 +126,14 @@ export function ConnectDeviceStep({
     };
   }, [baseURL]);
 
-  async function connectWithCode(code: string) {
-    setConnecting(true);
-
-    try {
-      let envelope: PairingEnvelope;
-
-      try {
-        envelope = decodePairingEnvelope(code);
-      } catch (e) {
-        throw new Error(
-          e instanceof PairingEnvelopeError
-            ? e.message
-            : 'Could not read that pairing code.',
-        );
-      }
-
-      await pairAndSync(envelope.node, drive);
-
-      const arrived = await resolveArrivedDrive(true);
-
-      if (arrived) {
-        onConnected(arrived);
-
-        return;
-      }
-
-      // Paired, and the peer is now a known one, so a later sync can still
-      // deliver. Don't claim the workspace isn't there — we only know it hasn't
-      // arrived yet.
-      toast(
-        'Paired. Your workspace hasn’t arrived yet — it may still be syncing.',
-      );
-    } catch (e) {
-      toast.error(
-        e instanceof Error
-          ? e.message
-          : 'Could not reach that device. Make sure both are online.',
-      );
-    } finally {
-      setConnecting(false);
-    }
+  function connectWithCode(code: string) {
+    // The dialog owns the progress and the outcome from here: connect, then
+    // wait for the workspace to actually land, then offer to open it.
+    startPairing(code, {
+      drive,
+      awaitWorkspace: () => resolveArrivedDrive(true),
+      onWorkspaceReady: onConnected,
+    });
   }
 
   return (
@@ -193,13 +154,10 @@ export function ConnectDeviceStep({
               <Section>
                 <SectionTitle>Connect to that device</SectionTitle>
                 <Explainer>
-                  Open <strong>Sync → Sync a device</strong> there to show its
-                  code, then scan or paste it here.
+                  Open <strong>Sync</strong> there to show its code, then scan
+                  or paste it here.
                 </Explainer>
-                <ConnectToDeviceForm
-                  onCode={connectWithCode}
-                  disabled={connecting}
-                />
+                <ConnectToDeviceForm onCode={connectWithCode} />
               </Section>
 
               {nodeDid && (
@@ -228,8 +186,6 @@ export function ConnectDeviceStep({
               </Button>
             </Section>
           )}
-
-          {connecting && <Status role='status'>Connecting…</Status>}
         </Column>
       </OnboardingCard>
 
@@ -243,7 +199,7 @@ export function ConnectDeviceStep({
       />
 
       <FooterBar>
-        <Button subtle type='button' onClick={onSkip} disabled={connecting}>
+        <Button subtle type='button' onClick={onSkip}>
           Skip for now
         </Button>
       </FooterBar>
@@ -286,10 +242,4 @@ const QrRow = styled.div`
   align-items: center;
   width: 100%;
   min-width: 0;
-`;
-
-const Status = styled.p`
-  margin: 0;
-  font-size: 0.9rem;
-  color: ${p => p.theme.colors.textLight};
 `;
