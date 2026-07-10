@@ -687,12 +687,27 @@ flow to a granted node.
 
 - **P2 — Retain the evidence.** Classify each commit's changed props
   (genesis / `read` / `write` / `append` / `parent` / destroy) from
-  `CommitResponse`; keep an authorization-critical retention class that survives
-  pruning even under `ATOMIC_COMMIT_RETENTION=none`; index subject → retained
-  auth-commit ids. *No trust/sync behavior change — pure groundwork.*
-  **Tests:** a drive with a grant + destroy + reparent, pruned to the auth
-  floor, still answers "who may read/write R at commit N" from retained commits
-  alone.
+  `CommitResponse`; index subject → retained auth-commit ids; keep an
+  authorization-critical retention class that survives pruning. *No trust/sync
+  behavior change — pure groundwork.*
+  - ✅ **Classifier done.** `hierarchy::AuthImpact` +
+    `hierarchy::classify_auth_impact(changed_props, is_genesis, is_destroy)` +
+    `CommitResponse::auth_impact()`. Pure, no store access, no rights decision.
+    Unit tests plus one real-commit test pinning the assumption it rests on
+    (editing a `read` ACL really does surface `read` in `changed_props`).
+  - ⏳ **Retention class is moot until pruning exists.** Commits are currently
+    stored as ordinary resources in `Tree::Resources` and never pruned (no
+    `Tree::Commits`, no `ATOMIC_COMMIT_RETENTION`), so "survive pruning" has
+    nothing to survive yet. The `is_critical()` label is ready for the day
+    pruning lands; build the retention wiring then.
+  - ⏳ **Subject → auth-commit index** is an *optimization*, not yet required: a
+    resource's commits are already findable via the `subject` property index
+    (`PropValSub`). Add a dedicated auth-commit index when P4's proof-fetch
+    makes the full scan too costly.
+  - **End-to-end P2 test** ("a drive with a grant + destroy + reparent, pruned
+    to the auth floor, still answers who-may-read/write") lands with the index +
+    retention, i.e. once pruning exists — not achievable against an all-retained
+    store.
 - **P3 — Verify grant chains + fix effective-write.** Remove the
   auto-insert-signer-into-`write` step; effective write = `{genesis_signer} ∪
   explicit_write`. Add the query that explains why an agent has effective

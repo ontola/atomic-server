@@ -28,6 +28,18 @@ pub struct CommitResponse {
     pub source_id: Option<String>,
 }
 
+impl CommitResponse {
+    /// The authorization relevance of this commit — which authority-defining
+    /// facts it establishes or mutates. See [`crate::hierarchy::AuthImpact`].
+    pub fn auth_impact(&self) -> crate::hierarchy::AuthImpact {
+        crate::hierarchy::classify_auth_impact(
+            &self.changed_props,
+            self.commit.is_genesis == Some(true),
+            self.commit.destroy.unwrap_or(false),
+        )
+    }
+}
+
 pub struct CommitApplied {
     /// The resource before the Commit was applied
     pub resource_old: Resource,

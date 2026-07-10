@@ -35,6 +35,59 @@ impl fmt::Display for Right {
     }
 }
 
+/// The authorization relevance of a single commit: which authority-defining
+/// facts it establishes or mutates. A cross-agent verifier (e.g. a granted
+/// replica reconstructing a drive) must retain and replay these to prove who
+/// may read or write a resource — ordinary content commits can be discarded,
+/// these cannot. See `planning/authorization-sync.md` "Node-as-granted-replica"
+/// (P2).
+///
+/// This *labels* a commit; it makes no rights decision (that is
+/// [`check_rights`]). Derived purely from the properties a commit changed plus
+/// its genesis / destroy flags — no store access.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AuthImpact {
+    /// Establishes the resource and, through its signature, its creator — the
+    /// root of write authority (see `planning/genesis-self-verifying.md`).
+    pub genesis: bool,
+    /// Mutates the `read` ACL.
+    pub read: bool,
+    /// Mutates the `write` ACL.
+    pub write: bool,
+    /// Mutates the `append` ACL.
+    pub append: bool,
+    /// Re-parents the resource, changing the rights it inherits.
+    pub parent: bool,
+    /// Destroys the resource; the tombstone is authorization-relevant.
+    pub destroy: bool,
+}
+
+impl AuthImpact {
+    /// Whether this commit carries authority-defining information a cross-agent
+    /// proof depends on — and so must survive any future content-commit pruning.
+    /// A commit that changes only ordinary content is not critical.
+    pub fn is_critical(&self) -> bool {
+        self.genesis || self.read || self.write || self.append || self.parent || self.destroy
+    }
+}
+
+/// Classify a commit's [`AuthImpact`] from the property URLs it changed plus its
+/// genesis / destroy flags. Pure: no store access, no rights decision.
+pub fn classify_auth_impact(
+    changed_props: &std::collections::HashSet<String>,
+    is_genesis: bool,
+    is_destroy: bool,
+) -> AuthImpact {
+    AuthImpact {
+        genesis: is_genesis,
+        read: changed_props.contains(urls::READ),
+        write: changed_props.contains(urls::WRITE),
+        append: changed_props.contains(urls::APPEND),
+        parent: changed_props.contains(urls::PARENT),
+        destroy: is_destroy,
+    }
+}
+
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
 pub fn check_write<'a>(
@@ -240,6 +293,76 @@ mod test {
     // - basic check_write (should be false for newly created agent)
     // - Malicious Commit (which grants itself write rights)
 
+    mod auth_impact {
+        use super::super::classify_auth_impact;
+        use crate::urls;
+        use std::collections::HashSet;
+
+        fn props(items: &[&str]) -> HashSet<String> {
+            items.iter().map(|s| s.to_string()).collect()
+        }
+
+        #[test]
+        fn ordinary_content_change_is_not_critical() {
+            // A commit that only touches description / name defines no authority.
+            let impact = classify_auth_impact(&props(&[urls::DESCRIPTION, urls::NAME]), false, false);
+            assert!(!impact.is_critical());
+            assert_eq!(impact, Default::default());
+        }
+
+        #[test]
+        fn a_read_grant_is_a_read_impact() {
+            let impact = classify_auth_impact(&props(&[urls::READ]), false, false);
+            assert!(impact.read);
+            assert!(impact.is_critical());
+            // Granting read says nothing about write/append/parent.
+            assert!(!impact.write && !impact.append && !impact.parent);
+        }
+
+        #[test]
+        fn a_write_grant_is_a_write_impact() {
+            let impact = classify_auth_impact(&props(&[urls::WRITE]), false, false);
+            assert!(impact.write && impact.is_critical());
+        }
+
+        #[test]
+        fn an_append_grant_is_an_append_impact() {
+            let impact = classify_auth_impact(&props(&[urls::APPEND]), false, false);
+            assert!(impact.append && impact.is_critical());
+        }
+
+        #[test]
+        fn a_reparent_changes_inherited_rights_and_is_critical() {
+            let impact = classify_auth_impact(&props(&[urls::PARENT]), false, false);
+            assert!(impact.parent && impact.is_critical());
+        }
+
+        #[test]
+        fn genesis_is_critical_from_the_flag_regardless_of_props() {
+            // Genesis is the authority root even if its changed props are all
+            // ordinary content — the label comes from the flag, not the props.
+            let impact = classify_auth_impact(&props(&[urls::NAME]), true, false);
+            assert!(impact.genesis && impact.is_critical());
+        }
+
+        #[test]
+        fn destroy_is_critical_from_the_flag() {
+            // A destroy commit carries no changed props but is auth-relevant.
+            let impact = classify_auth_impact(&props(&[]), false, true);
+            assert!(impact.destroy && impact.is_critical());
+        }
+
+        #[test]
+        fn a_commit_can_carry_several_impacts_at_once() {
+            // e.g. a genesis that also seeds read + write ACLs.
+            let impact =
+                classify_auth_impact(&props(&[urls::READ, urls::WRITE]), true, false);
+            assert!(impact.genesis && impact.read && impact.write);
+            assert!(!impact.parent && !impact.destroy);
+            assert!(impact.is_critical());
+        }
+    }
+
     #[tokio::test]
     async fn authorization() {
         let store = crate::Store::init().await.unwrap();
@@ -301,5 +424,65 @@ mod test {
             source_id: None,
         };
         store.apply_commit(commit, &opts).await.unwrap();
+    }
+
+    /// The classifier reads `changed_props`; this pins the assumption it rests
+    /// on — that editing a resource's `read` ACL really does surface `read` in
+    /// a real commit's changed props (and that a later edit is not genesis).
+    #[tokio::test]
+    async fn a_real_read_grant_commit_is_labelled_read_critical() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
+        let agent = store.create_agent(Some("granter")).await.unwrap();
+        store.set_default_agent(agent.clone());
+        let drive_did = crate::test_utils::create_test_drive(&store).await.unwrap();
+
+        let opts = crate::commit::CommitOpts {
+            validate_schema: false,
+            validate_signature: false,
+            validate_timestamp: true,
+            validate_rights: true,
+            validate_previous_commit: false,
+            validate_loro_causality: false,
+            update_index: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            source_id: None,
+        };
+
+        // Genesis: create a resource under the drive.
+        let subject = "https://localhost/granted-thing";
+        let mut genesis = crate::commit::CommitBuilder::new(subject.into());
+        genesis.set(
+            crate::urls::PARENT.into(),
+            Value::AtomicUrl(drive_did.clone()),
+        );
+        genesis.set(
+            crate::urls::DESCRIPTION.into(),
+            Value::new("x", &DataType::Markdown).unwrap(),
+        );
+        let commit = genesis
+            .sign(&agent, &store, &crate::Resource::new(subject.into()))
+            .await
+            .unwrap();
+        store.apply_commit(commit, &opts).await.unwrap();
+
+        // A later, non-genesis commit that edits the `read` ACL.
+        let current = store.get_resource(&subject.into()).await.unwrap();
+        let mut grant = crate::commit::CommitBuilder::new(subject.into());
+        grant.set(
+            crate::urls::READ.into(),
+            Value::ResourceArray(vec![crate::urls::PUBLIC_AGENT.into()]),
+        );
+        let commit = grant.sign(&agent, &store, &current).await.unwrap();
+        let response = store.apply_commit(commit, &opts).await.unwrap();
+
+        let impact = response.auth_impact();
+        assert!(
+            impact.read,
+            "editing the read ACL must be labelled a read impact; changed_props={:?}",
+            response.changed_props
+        );
+        assert!(impact.is_critical());
+        assert!(!impact.genesis, "a later edit is not genesis");
     }
 }
