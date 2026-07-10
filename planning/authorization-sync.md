@@ -714,6 +714,36 @@ flow to a granted node.
   read/write at a commit boundary. **Tests (revert-proven):** a commit by an
   agent not in the effective set is rejected; a commit by a genesis-signer with
   no explicit `write` is accepted; a grant signed by a non-writer is rejected.
+  - ⚠️ **Needs a forge-resistant genesis-signer source, not `createdBy`.**
+    `{genesis_signer}` must be derivable *without* trusting a mutable propval.
+    `createdBy` is explicitly forgeable — `commit.rs:591`: commits carrying it
+    are not rejected, "forge-resistance is the job of the genesis certificate,
+    not a settable propval." The correct source is the self-verifying genesis
+    certificate. *Correction to an earlier note here:* the cert **is** minted,
+    DID-bound (`did:ad:` = signature over the cert), and verified at apply — for
+    **server-minted** resources (`commit.rs::create_did` + the genesis-commit
+    validation). The `GenesisCert` primitive is real and used in production, not
+    just tested.
+  - ✅ **Done: `Resource::genesis_signer()`** (`resources.rs`) — returns the
+    creator proven by the inline cert, verifying the cert against the subject
+    DID so a forged/overwritten cert (which cannot sign to the same DID) is
+    rejected. `None` for resources with no cert. Tests: a real cert-minted
+    resource reports its creating agent; a plain resource has no signer; a
+    tampered cert is rejected. This is the sound source P3 will consume.
+  - ⏳ **Remaining before P3 can rely on it universally:**
+    - **Browser-minted resources are still legacy** (Path 2, DID = commit
+      signature, no cert) — and onboarding *drives* are browser-minted, so the
+      SaaS use case needs the browser to mint certs too (cross-language: a TS
+      `GenesisCert` byte-identical to the Rust binary layout, DID = sig over
+      cert). This is the big remaining piece.
+    - **`genesis` propval immutability isn't enforced** (the doc claims it, but
+      the cited `createdAt`/`createdBy` mechanism deliberately does *not*
+      reject). Not required for `genesis_signer()` soundness (it re-verifies),
+      but worth closing so the stored cert can be trusted without re-verifying
+      on every rights check.
+  - **Decision stands: finish minting + verifying certs everywhere** (browser
+    included) before removing the auto-insert; then P3 reads `genesis_signer()`
+    universally, and P4 gets its offline-verification basis for free.
 - **P4 — Commit-backed ingest for granted replicas.** A peer path that sends
   signed commits (genesis + grants + content) and applies them via
   `Db::apply_commit`, verifying each, instead of importing raw state. Then flip

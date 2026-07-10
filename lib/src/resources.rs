@@ -129,6 +129,38 @@ impl Resource {
         propvals.get(urls::GENESIS).map(|v| v.to_string())
     }
 
+    /// The resource's creator, proven by its inline self-verifying genesis
+    /// certificate — the forge-resistant authority root (see
+    /// `planning/authorization-sync.md` "Node-as-granted-replica" and
+    /// `planning/genesis-self-verifying.md`).
+    ///
+    /// This is NOT the `createdBy` propval, which is client-settable and not
+    /// forge-resistant (`commit.rs`: commits carrying it are not rejected).
+    /// Returns `None` for a resource with no cert (legacy / still-browser-minted
+    /// on the commit-signature DID path, or a plain URL resource) or whose cert
+    /// does not verify against the subject DID.
+    ///
+    /// Sound without relying on `genesis`-propval immutability: the cert is
+    /// verified against the subject here, so an overwritten or forged cert —
+    /// which cannot produce a signature equal to this DID — is rejected rather
+    /// than trusted. Callers that check this per rights-decision should cache
+    /// the result per subject (the cert never changes for a resource).
+    pub fn genesis_signer(&self) -> Option<String> {
+        let subject = self.get_subject().to_string();
+        // Agent DIDs are identity-based (`did:ad:agent:<pubkey>`), not
+        // cert-based; plain URL resources have no cert-DID binding at all.
+        let signature = subject.strip_prefix("did:ad:")?;
+        if subject.starts_with("did:ad:agent:") {
+            return None;
+        }
+        let cert_b64 = self.get(urls::GENESIS).ok()?.to_string();
+        let cert_bytes = crate::agents::decode_base64(&cert_b64).ok()?;
+        let cert = crate::genesis::GenesisCert::decode(&cert_bytes).ok()?;
+        // Binds the cert (and thus its signer) to this exact subject.
+        cert.verify(signature).ok()?;
+        Some(cert.signer_did())
+    }
+
     /// Derive `createdAt` / `createdBy` from the genesis oplog change and write
     /// them into the materialized projection. This is the single chokepoint
     /// feeding both the index (so collections can sort by `createdAt`) and
@@ -1486,6 +1518,78 @@ impl From<&Resource> for crate::storelike::ResourceResponse {
 mod test {
     use super::*;
     use crate::{test_utils::init_store, urls};
+
+    mod genesis_signer {
+        use super::*;
+        use crate::datatype::DataType;
+
+        async fn mint_resource_and_agent() -> (crate::Db, crate::agents::Agent, String) {
+            let store = init_store().await;
+            let agent = store.create_agent(Some("creator")).await.unwrap();
+            store.set_default_agent(agent.clone());
+            let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+
+            let mut cb = crate::commit::CommitBuilder::new("placeholder".into());
+            cb.set(
+                urls::PARENT.into(),
+                Value::AtomicUrl(drive.as_str().into()),
+            );
+            cb.set(
+                urls::DESCRIPTION.into(),
+                Value::new("x", &DataType::Markdown).unwrap(),
+            );
+            let commit = crate::commit::Commit::create_did(cb, &agent, &store)
+                .await
+                .unwrap();
+            let subject = commit.subject.to_string();
+            let opts = crate::commit::CommitOpts {
+                validate_schema: false,
+                validate_signature: true,
+                validate_timestamp: false,
+                validate_rights: false,
+                validate_previous_commit: false,
+                validate_loro_causality: false,
+                update_index: true,
+                validate_for_agent: None,
+                source_id: None,
+            };
+            store.apply_commit(commit, &opts).await.unwrap();
+            (store, agent, subject)
+        }
+
+        #[tokio::test]
+        async fn a_cert_minted_resource_reports_its_creator() {
+            let (store, agent, subject) = mint_resource_and_agent().await;
+            let resource = store.get_resource(&subject.as_str().into()).await.unwrap();
+            assert_eq!(
+                resource.genesis_signer().as_deref(),
+                Some(agent.subject.to_string().as_str()),
+                "the verified cert signer must be the creating agent"
+            );
+        }
+
+        #[test]
+        fn a_resource_without_a_cert_has_no_signer() {
+            // A plain URL resource carries no genesis cert.
+            let resource = Resource::new("https://localhost/plain".into());
+            assert_eq!(resource.genesis_signer(), None);
+        }
+
+        #[tokio::test]
+        async fn a_tampered_cert_is_rejected_not_trusted() {
+            let (store, _agent, subject) = mint_resource_and_agent().await;
+            let mut resource = store.get_resource(&subject.as_str().into()).await.unwrap();
+            // Overwrite the cert with bytes that no longer sign to this DID.
+            resource
+                .set_unsafe(urls::GENESIS.into(), Value::String("not-a-real-cert".into()))
+                .unwrap();
+            assert_eq!(
+                resource.genesis_signer(),
+                None,
+                "a cert that does not verify against the subject must not be trusted"
+            );
+        }
+    }
 
     #[tokio::test]
     async fn get_and_set_resource_props() {
