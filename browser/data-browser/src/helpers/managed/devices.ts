@@ -16,6 +16,7 @@
 import { getManagedApiBase } from './api';
 import { getManagedAccount } from './session';
 import { getLocalServerOrigin, isRunningInTauri } from '../tauri';
+import { pairAndSync } from '../pairing';
 
 const DEVICE_ID_KEY = 'atomic-device-id';
 const KNOWN_PEERS_KEY = 'atomic-peers';
@@ -160,14 +161,14 @@ type KnownPeer = { nodeId: string; label: string; lastSync?: string };
  * the two flows apart). Existing entries win: never overwrite a label or
  * lastSync the user already has.
  */
-async function seedKnownPeersFromDirectory(): Promise<void> {
-  if (typeof localStorage === 'undefined') return;
+async function seedKnownPeersFromDirectory(): Promise<string[]> {
+  if (typeof localStorage === 'undefined') return [];
 
   const response = await fetch(`${getManagedApiBase()}/devices`, {
     credentials: 'include',
   });
 
-  if (!response.ok) return;
+  if (!response.ok) return [];
 
   const devices = (await response.json()) as DeviceRecord[];
   const ownDeviceId = getOrCreateDeviceId();
@@ -184,12 +185,18 @@ async function seedKnownPeersFromDirectory(): Promise<void> {
   }
 
   const known = new Set(peers.map(peer => peer.nodeId.toLowerCase()));
+  const otherDevices: string[] = [];
   let added = false;
 
   for (const device of devices) {
     if (device.device_id === ownDeviceId) continue;
     if (!isValidNodeDid(device.node_id)) continue;
     if (device.node_id === ownNodeDid) continue;
+
+    // Every other device in the account is a candidate to auto-connect to —
+    // including ones already in the local list (they may not be connected yet).
+    otherDevices.push(device.node_id);
+
     if (known.has(device.node_id.toLowerCase())) continue;
 
     peers.push({ nodeId: device.node_id, label: device.name });
@@ -204,17 +211,40 @@ async function seedKnownPeersFromDirectory(): Promise<void> {
       // Quota / private mode — the seed is an optimization.
     }
   }
+
+  return otherDevices;
+}
+
+/**
+ * Dial the account's other devices so a fresh sign-in syncs WITHOUT a manual
+ * "Sync now" (the last mile of zero-scan pairing). Each `/iroh-sync` reconciles
+ * the drive AND registers the peer in the node's known-peers table, after which
+ * the reconnect loop (`sync::peer::start`) keeps it live. Tauri-only — a web tab
+ * has no node to dial from. Best-effort: an offline peer just throws and is
+ * retried by the reconnect loop / the next sign-in. Same-agent only, which the
+ * directory guarantees (it lists this account's devices) and AUTH enforces.
+ */
+async function autoConnectPeers(
+  nodeIds: string[],
+  drive: string | undefined,
+): Promise<void> {
+  if (!isRunningInTauri() || !drive || nodeIds.length === 0) return;
+
+  await Promise.allSettled(
+    nodeIds.map(nodeId => pairAndSync(nodeId, drive).catch(() => undefined)),
+  );
 }
 
 let syncedThisSession = false;
 
 /**
  * Best-effort, once per app session (per session that actually has a managed
- * account): announce this device to the directory and seed `KnownPeer`s from
- * it. Safe to call repeatedly — no-ops without a session so a later sign-in
- * still gets picked up by the next call.
+ * account): announce this device to the directory, seed `KnownPeer`s from it,
+ * and auto-connect the account's other devices with `drive`. Safe to call
+ * repeatedly — no-ops without a session so a later sign-in still gets picked up
+ * by the next call.
  */
-export async function syncDeviceDirectory(): Promise<void> {
+export async function syncDeviceDirectory(drive?: string): Promise<void> {
   if (syncedThisSession) return;
 
   const account = await getManagedAccount().catch(() => null);
@@ -223,8 +253,9 @@ export async function syncDeviceDirectory(): Promise<void> {
 
   syncedThisSession = true;
 
-  await Promise.allSettled([
-    upsertOwnDeviceRecord(),
-    seedKnownPeersFromDirectory(),
-  ]);
+  await upsertOwnDeviceRecord().catch(() => undefined);
+  const peerNodeIds = await seedKnownPeersFromDirectory().catch(
+    () => [] as string[],
+  );
+  await autoConnectPeers(peerNodeIds, drive);
 }

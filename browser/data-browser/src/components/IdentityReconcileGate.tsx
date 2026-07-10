@@ -83,10 +83,11 @@ export function IdentityReconcileGate({
       );
     }
 
-    // Announce this device to the account's device directory and seed
-    // KnownPeers from it (zero-scan pairing). Fire-and-forget: routing
-    // hints only, must never delay or gate the app.
-    void syncDeviceDirectory();
+    // Announce this device to the account's device directory, seed KnownPeers
+    // from it, and auto-connect the account's other devices with the active
+    // drive (zero-scan pairing — no manual "Sync now"). Fire-and-forget:
+    // routing hints only, must never delay or gate the app.
+    void syncDeviceDirectory(store.getDrive());
 
     setChecking(false);
     hasCheckedOnceRef.current = true;
