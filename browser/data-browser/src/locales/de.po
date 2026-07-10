@@ -1766,7 +1766,7 @@ msgstr "{0} Ressource{1} mit {2} synchronisiert"
 msgid "Synced {0} resource{1}"
 msgstr "{0} Ressource{1} synchronisiert"
 
-#: src/components/PairDeviceDialog.tsx
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "This device"
 msgstr "Dieses Gerät"
@@ -4928,11 +4928,7 @@ msgstr ""
 msgid "Could not copy — select and copy the code manually."
 msgstr ""
 
-#: src/components/PairDeviceDialog.tsx
-msgid "Sync another device"
-msgstr ""
-
-#: src/components/PairDeviceDialog.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Scan this from a device already signed in as you, or copy the code and paste it there. It only says where to reach this device — the other side still proves it holds your key."
 msgstr ""
 
@@ -4945,12 +4941,8 @@ msgstr ""
 msgid "Connect"
 msgstr ""
 
-#: src/components/PairDeviceDialog.tsx
-msgid "Connect to a device"
-msgstr ""
-
 #: src/routes/SyncRoute.tsx
-msgid "Sync a device"
+msgid "Connect to a device"
 msgstr ""
 
 #: src/components/Presence/TypingIndicator.tsx
@@ -5145,15 +5137,15 @@ msgstr ""
 msgid "Could not open the scanner."
 msgstr ""
 
-#: src/components/PairDeviceDialog.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Not signed in on the other device yet? Sign in there with your account secret first, then pair."
 msgstr ""
 
-#: src/components/PairDeviceDialog.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Scan the other device’s QR code, or paste its pairing code, to start syncing."
 msgstr ""
 
-#: src/components/PairDeviceDialog.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Paste a pairing code from your other device to start syncing."
 msgstr ""
 
@@ -5164,10 +5156,6 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Your data is on another device"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "You’re signed in, but this device doesn’t have your workspace yet. Sync with a device that has it to bring it over."
 msgstr ""
 
 #: src/components/ConnectServerDialog.tsx
@@ -5182,10 +5170,6 @@ msgstr ""
 
 #: src/components/ConnectServerDialog.tsx
 msgid "Switch to"
-msgstr ""
-
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Connected to that device, but your workspace wasn’t there. Make sure it’s signed in as you and has your data."
 msgstr ""
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
@@ -5222,4 +5206,16 @@ msgstr ""
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Skip for now"
+msgstr ""
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Paired. Your workspace hasn’t arrived yet — it may still be syncing."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "You’re signed in, but this device doesn’t have your workspace yet. Use the pairing code below to bring it over."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect the server that has it."
 msgstr ""

@@ -37,10 +37,16 @@ import { getDriveUsage } from '../helpers/managedUsage';
 import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
-import { getLocalServerOrigin, isRunningInTauri } from '../helpers/tauri';
+import {
+  getLocalServerOrigin,
+  isMobileTauri,
+  isRunningInTauri,
+} from '../helpers/tauri';
 import { deviceHasDriveData } from '../helpers/driveData';
+import { deliverDeepLink } from '../helpers/deepLinkQueue';
 import { ConnectServerDialog } from '../components/ConnectServerDialog';
-import { PairDeviceDialog } from '../components/PairDeviceDialog';
+import { ThisDeviceCode } from '../components/ThisDeviceCode';
+import { ConnectToDeviceForm } from '../components/ConnectToDeviceForm';
 import {
   decodePairingEnvelope,
   PairingEnvelopeError,
@@ -175,7 +181,6 @@ function SyncPage() {
   const [localNodeId, setLocalNodeId] = useState<string | null>(null);
   const [peerSyncing, setPeerSyncing] = useState(false);
   const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
-  const [showPairDialog, setShowPairDialog] = useState(false);
   const [promoting, setPromoting] = useState(false);
   // Resolved in an effect rather than read off a Resource during render: the
   // React Compiler memoizes on the proxy identity, so a resource that finishes
@@ -536,15 +541,12 @@ function SyncPage() {
             <ConnBody>
               <ConnTitle>Your data is on another device</ConnTitle>
               <ConnSub>
-                You’re signed in, but this device doesn’t have your workspace
-                yet. Sync with a device that has it to bring it over.
+                {isNode && localNodeId
+                  ? 'You’re signed in, but this device doesn’t have your workspace yet. Use the pairing code below to bring it over.'
+                  : 'You’re signed in, but this device doesn’t have your workspace yet. Connect the server that has it.'}
               </ConnSub>
               <ConnActions>
-                {isNode && localNodeId ? (
-                  <Button onClick={() => setShowPairDialog(true)}>
-                    Sync a device
-                  </Button>
-                ) : (
+                {!(isNode && localNodeId) && (
                   <Button onClick={() => setShowServerDialog(true)}>
                     Connect a server
                   </Button>
@@ -727,11 +729,6 @@ function SyncPage() {
           )}
 
           <AddRow>
-            {isNode && localNodeId && (
-              <AddButton onClick={() => setShowPairDialog(true)}>
-                <FaPlus aria-hidden /> Sync a device
-              </AddButton>
-            )}
             <AddButton onClick={() => setShowServerDialog(true)}>
               <FaPlus aria-hidden /> Connect a server
             </AddButton>
@@ -745,15 +742,43 @@ function SyncPage() {
             show={showServerDialog}
             bindShow={setShowServerDialog}
           />
-
-          {isNode && localNodeId && (
-            <PairDeviceDialog
-              nodeDid={rawToNodeDid(localNodeId)}
-              show={showPairDialog}
-              bindShow={setShowPairDialog}
-            />
-          )}
         </Section>
+
+        {/* Pairing is the point of this page on a peer node, so it's shown
+            outright rather than hidden behind a button: the code is routing
+            only, and safe to leave on screen. */}
+        {isNode && localNodeId && (
+          <Section>
+            <SectionTitle>Sync a device</SectionTitle>
+            <PairColumns>
+              <PairColumn>
+                <PairHeading>This device</PairHeading>
+                <ConnNote>
+                  Scan this from a device already signed in as you, or copy the
+                  code and paste it there. It only says where to reach this
+                  device — the other side still proves it holds your key.
+                </ConnNote>
+                <ThisDeviceCode nodeDid={rawToNodeDid(localNodeId)} />
+              </PairColumn>
+
+              <PairColumn>
+                <PairHeading>Connect to a device</PairHeading>
+                <ConnNote>
+                  {isMobileTauri()
+                    ? 'Scan the other device’s QR code, or paste its pairing code, to start syncing.'
+                    : 'Paste a pairing code from your other device to start syncing.'}
+                </ConnNote>
+                {/* Same path a scanned deep link takes (PairingLinkHandler):
+                    validate, persist the peer, start a sync. */}
+                <ConnectToDeviceForm onCode={deliverDeepLink} />
+                <ConnNote>
+                  Not signed in on the other device yet? Sign in there with your
+                  account secret first, then pair.
+                </ConnNote>
+              </PairColumn>
+            </PairColumns>
+          </Section>
+        )}
 
         {/* Developer: diagnostics + advanced toggles, tucked away. */}
         <DevDetails>
@@ -1160,6 +1185,25 @@ const ConnNote = styled.p`
   margin: 0 0 0.6rem;
   color: ${p => p.theme.colors.textLight};
   font-size: 0.82rem;
+`;
+
+const PairColumns = styled.div`
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+`;
+
+const PairColumn = styled.div`
+  flex: 1;
+  min-width: 15rem;
+  max-width: 20rem;
+  display: flex;
+  flex-direction: column;
+`;
+
+const PairHeading = styled.h3`
+  font-size: 1rem;
+  margin: 0 0 0.3rem;
 `;
 
 const ConnIcon = styled.div<{ $tone: 'device' | 'cloud' | 'server' }>`

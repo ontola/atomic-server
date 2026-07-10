@@ -1,5 +1,6 @@
 import { useEffect, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
+import toast from 'react-hot-toast';
 import { FaMobileScreenButton } from 'react-icons/fa6';
 import { useStore } from '@tomic/react';
 import {
@@ -22,11 +23,19 @@ import { isRunningInTauri } from '../../helpers/tauri';
 import {
   CardSubtitle,
   CardTitle,
-  CardError,
   OnboardingCard,
   OnboardingWrap,
   FooterBar,
 } from './chrome';
+
+/**
+ * `/iroh-sync` answers as soon as the peer's push is imported, which is not the
+ * same moment the drive becomes fetchable — and a paired peer may also deliver
+ * it a beat later over the live connection. Checking once raced that and told
+ * people their workspace wasn't there while it was landing. Poll instead.
+ */
+const DRIVE_WAIT_ATTEMPTS = 6;
+const DRIVE_WAIT_STEP_MS = 500;
 
 interface ConnectDeviceStepProps {
   /** The drive that should be here but isn't. Absent if none resolved. */
@@ -61,15 +70,18 @@ export function ConnectDeviceStep({
   const nodeDid = useOwnNodeDid();
   const isNode = isRunningInTauri();
   const [connecting, setConnecting] = useState(false);
-  const [error, setError] = useState<string>();
   const [showServerDialog, setShowServerDialog] = useState(false);
 
   /**
    * The drive we should open once data lands. Re-resolved after the sync: on a
    * device that had nothing, the agent's personal drive may only become
    * knowable once the agent resource itself has been pulled across.
+   *
+   * `wait` gives the data a few seconds to show up (see DRIVE_WAIT_ATTEMPTS).
    */
-  async function resolveArrivedDrive(): Promise<string | undefined> {
+  async function resolveArrivedDrive(
+    wait: boolean,
+  ): Promise<string | undefined> {
     const candidate =
       drive ??
       (agent
@@ -80,11 +92,23 @@ export function ConnectDeviceStep({
       return undefined;
     }
 
-    // The store cached a failed fetch of this drive a moment ago (that's how
-    // we got here); ask the server again now that the sync has filled it in.
-    return (await deviceHasDriveData(store, candidate, { refresh: true }))
-      ? candidate
-      : undefined;
+    const attempts = wait ? DRIVE_WAIT_ATTEMPTS : 1;
+
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      // The store cached a failed fetch of this drive a moment ago (that's how
+      // we got here); ask the server again now that the sync has filled it in.
+      if (await deviceHasDriveData(store, candidate, { refresh: true })) {
+        return candidate;
+      }
+
+      if (attempt < attempts - 1) {
+        await new Promise(resolve =>
+          setTimeout(resolve, DRIVE_WAIT_STEP_MS * (attempt + 1)),
+        );
+      }
+    }
+
+    return undefined;
   }
 
   // Connecting a server is the browser's route out of here, and it can put the
@@ -97,7 +121,7 @@ export function ConnectDeviceStep({
 
     let cancelled = false;
 
-    void resolveArrivedDrive().then(arrived => {
+    void resolveArrivedDrive(false).then(arrived => {
       if (!cancelled && arrived) {
         onConnected(arrived);
       }
@@ -110,7 +134,6 @@ export function ConnectDeviceStep({
 
   async function connectWithCode(code: string) {
     setConnecting(true);
-    setError(undefined);
 
     try {
       let envelope: PairingEnvelope;
@@ -127,7 +150,7 @@ export function ConnectDeviceStep({
 
       await pairAndSync(envelope.node, drive);
 
-      const arrived = await resolveArrivedDrive();
+      const arrived = await resolveArrivedDrive(true);
 
       if (arrived) {
         onConnected(arrived);
@@ -135,14 +158,14 @@ export function ConnectDeviceStep({
         return;
       }
 
-      // Paired, but nothing came across: the peer holds a different agent (AUTH
-      // refused it), or it doesn't have this drive either. Say so rather than
-      // dropping the user into an empty workspace.
-      setError(
-        'Connected to that device, but your workspace wasn’t there. Make sure it’s signed in as you and has your data.',
+      // Paired, and the peer is now a known one, so a later sync can still
+      // deliver. Don't claim the workspace isn't there — we only know it hasn't
+      // arrived yet.
+      toast(
+        'Paired. Your workspace hasn’t arrived yet — it may still be syncing.',
       );
     } catch (e) {
-      setError(
+      toast.error(
         e instanceof Error
           ? e.message
           : 'Could not reach that device. Make sure both are online.',
@@ -207,7 +230,6 @@ export function ConnectDeviceStep({
           )}
 
           {connecting && <Status role='status'>Connecting…</Status>}
-          {error && <CardError role='alert'>{error}</CardError>}
         </Column>
       </OnboardingCard>
 
@@ -262,6 +284,8 @@ const QrRow = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 100%;
+  min-width: 0;
 `;
 
 const Status = styled.p`

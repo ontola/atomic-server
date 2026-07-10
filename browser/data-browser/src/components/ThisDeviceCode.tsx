@@ -72,12 +72,16 @@ export function ThisDeviceCode({ nodeDid }: ThisDeviceCodeProps): JSX.Element {
   );
 }
 
+/* `width: 100%` matters: inside a centered column the row would otherwise size
+   to its content, and the code — one long unbroken token — would push past the
+   card instead of ellipsing. */
 const CodeRow = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.6rem;
   margin-bottom: 0.4rem;
+  width: 100%;
   min-width: 0;
 `;
 

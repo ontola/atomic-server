@@ -17,8 +17,8 @@ interface ConnectServerDialogProps {
 
 /**
  * Connecting a server is the same kind of act as pairing a device — pick a
- * place your data lives — so it gets the same kind of surface
- * (`PairDeviceDialog`) rather than an inline panel.
+ * place your data lives. Pairing is shown outright on the Sync page (its code
+ * is routing-only); a server URL needs typing, so it gets a dialog.
  */
 export function ConnectServerDialog({
   knownServers,
