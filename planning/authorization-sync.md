@@ -629,6 +629,101 @@ trusting B's snapshot.
   commits, B's change commits, and optionally a final snapshot. C verifies and
   applies the commits before accepting the snapshot as a cache optimization.
 
+## Node-as-granted-replica: making autonomous replication work
+
+Concrete application of the phases above to the one thing they unblock for the
+SaaS product: a managed node acquiring and holding a user's **private** drive
+**on its own initiative**, with no key-holder online, without the node ever
+signing as a principal it isn't. This is the deferred item in
+[`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) "Resolution" — the
+node relays and serves today; this is how it earns the right to *pull*.
+
+### The shape
+
+Three roles, all already in the model: **Owner** (write-authority, holds the
+key), **Node** (granted read, always-on, holds the key to *nothing*), **Device**
+(the owner's other clients).
+
+1. **The grant is an ordinary signed commit.** The owner commits a change adding
+   the node's agent DID to the drive's `read` (§[Grant proof model](#grant-proof-model)).
+   No capability format, no new frame — "the client signs" is literally a commit
+   the owner already knows how to make. The control plane can *surface* the
+   node's agent DID to the client at enrollment (so the client knows whom to
+   grant), but it never mints or holds the grant.
+2. **The node authenticates as itself, honestly.** It does not impersonate. Its
+   `AUTH` is its own agent; it is served because `check_read` for *its* agent
+   passes now that it is in `read`. This is why the fix is a *rights* check, not
+   a *same-agent* check.
+3. **The node ingests verifiable commits, not trusted state.** It receives the
+   genesis + content commits (all owner-signed) and verifies each signature. A
+   malicious relay cannot forge the owner's data. Raw `SYNC_PUSH` is accepted
+   only as a catch-up optimization *from a genesis-verified write-authority*.
+
+### What has to change, in order
+
+**Admission generalizes from same-agent to rights-based.** The refusal shipped
+in `peer.rs::is_same_agent_as_ours` (and the dial-side auth-back arm) is the
+right *fail-closed* instinct but the wrong *predicate*. Same-agent is the
+special case where the peer has both read and write. Generalize:
+
+- **Accept side (serving):** serve iff the authenticated peer has `read` on the
+  session drive. Owner devices pass (owner). A granted node passes (in `read`).
+  A stranger is refused loudly — same UX the same-agent refusal gives today,
+  just keyed on rights instead of identity.
+- **Dial side (ingesting):** accept **signed commits** from any peer and verify
+  them (authenticity is in the signature, not the connection). Accept raw
+  `SYNC_PUSH` state **only** from a peer proven to be a write-authority for the
+  drive — verified via the drive's self-verifying genesis signer
+  ([`genesis-self-verifying.md`](./genesis-self-verifying.md)), not via a
+  local ACL lookup (which is circular when pulling a drive you don't yet have).
+  Same-agent stays a valid fast path (the owner's own devices are
+  write-authorities by definition).
+
+Keep the same-agent-only guard for the **agent-resource push**
+(`own_agent_update_frame`) — that is identity, not drive content, and must never
+flow to a granted node.
+
+### Phase order (each independently reviewable, tests gate the next)
+
+- **P2 — Retain the evidence.** Classify each commit's changed props
+  (genesis / `read` / `write` / `append` / `parent` / destroy) from
+  `CommitResponse`; keep an authorization-critical retention class that survives
+  pruning even under `ATOMIC_COMMIT_RETENTION=none`; index subject → retained
+  auth-commit ids. *No trust/sync behavior change — pure groundwork.*
+  **Tests:** a drive with a grant + destroy + reparent, pruned to the auth
+  floor, still answers "who may read/write R at commit N" from retained commits
+  alone.
+- **P3 — Verify grant chains + fix effective-write.** Remove the
+  auto-insert-signer-into-`write` step; effective write = `{genesis_signer} ∪
+  explicit_write`. Add the query that explains why an agent has effective
+  read/write at a commit boundary. **Tests (revert-proven):** a commit by an
+  agent not in the effective set is rejected; a commit by a genesis-signer with
+  no explicit `write` is accepted; a grant signed by a non-writer is rejected.
+- **P4 — Commit-backed ingest for granted replicas.** A peer path that sends
+  signed commits (genesis + grants + content) and applies them via
+  `Db::apply_commit`, verifying each, instead of importing raw state. Then flip
+  the admission to rights-based (accept: has-read; dial: verified commits, raw
+  state only from a genesis-verified write-authority). **Tests:** a node granted
+  read pulls a private drive and hosts it, having verified every commit; a node
+  *not* granted read gets nothing (loud refusal); a relay that alters one commit
+  is rejected at that commit; revoking-by-reparent stops future content
+  reaching the node.
+- **P5 — Re-enable the node pull.** Restore `managed-node`'s pull loop as a
+  *capability-presenting* pull (it authenticates as itself; it is served because
+  it was granted). Discovery stays pkarr (drive DID → NodeIDs); the source is
+  any write-authority replica. Removes the "push-only" limitation for the
+  offline-owner and node-to-node cases.
+
+### Boundary this keeps
+
+Even fully built, the node never signs *as the user* and never holds the user's
+key. It holds a grant the user signed and content the user signed; it verifies
+both. A user who wants the node to hold nothing readable stays on the Cloud
+Vault (blind-relay) tier and simply doesn't issue the read grant — the same
+mechanism, declined. Revocation is by re-parent under narrower ACLs (the v1
+model's known limitation, §[Open questions](#open-questions)); good enough for
+"stop hosting on cancel," not yet a cryptographic claw-back.
+
 ## Open questions
 
 - **Creator availability.** Under the
@@ -720,3 +815,20 @@ trusting B's snapshot.
   collaborators can't compact. For v1, "any current writer" is the
   simplest workable rule; richer schemes can layer on later by extending
   `AuthCheckpoint.signed_by` from a single signature to a signature set.
+
+- **Node grant lifecycle (see [Node-as-granted-replica](#node-as-granted-replica-making-autonomous-replication-work)).**
+  When does the read grant to a node's agent get issued and withdrawn? Options:
+  the client issues it during enrollment (needs the node's agent DID surfaced by
+  the control plane) and withdraws it on cancel (re-parent, per the revocation
+  limitation above). Open: whether the *node's* agent DID is stable enough to
+  grant against long-term, and whether a per-drive node sub-agent (rotatable)
+  is worth the extra key management vs. granting the node's single server agent.
+
+- **Cold-node write-authority trust.** A node pulling a drive it has never held
+  cannot check the server's write rights against a local ACL. The plan grounds
+  this in the self-verifying genesis (the drive DID *is* the genesis hash; its
+  signer is the creator/write-authority). Open: is genesis-signer alone
+  sufficient, or must the node also replay `write`-granting commits before
+  trusting a *delegated* writer's raw state (vs. only the original creator's)?
+  Safe v1: trust raw `SYNC_PUSH` only from the genesis signer; require
+  commit-backed transfer for everyone else.

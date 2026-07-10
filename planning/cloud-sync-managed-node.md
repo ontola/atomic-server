@@ -260,9 +260,13 @@ That in turn requires generalizing peer-sync admission from **same-agent** to
   — this is the delicate part, and why the dial-side refusal stays same-agent
   for now.
 
-This is the `authorization-sync.md` grant model. **Not built**, and not needed
-for the push+relay path. Until it exists, "enroll a drive and the node backfills
-it by itself" does **not** work for private drives and must not be promised;
+This is the `authorization-sync.md` grant model — sequenced concretely for this
+use case in its
+[Node-as-granted-replica](./authorization-sync.md#node-as-granted-replica-making-autonomous-replication-work)
+section (grant = signed `read` commit; rights-based admission; commit-backed
+verify-don't-trust ingest; phase order P2→P5). **Not built**, and not needed for
+the push+relay path. Until it exists, "enroll a drive and the node backfills it
+by itself" does **not** work for private drives and must not be promised;
 push-on-enroll (already the primary path) covers real onboarding.
 
 ### Change made now
