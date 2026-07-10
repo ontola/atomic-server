@@ -1478,6 +1478,24 @@ pub async fn sync_drive_with_peer_using_outcome(
     }
     register_live_peer(remote_key.clone(), send, recv, store.clone(), remote_agent);
 
+    // Remember which drive this node syncs, so it can rebuild this link on its
+    // own after a restart. The auto-connect loop above reads `get_active_drive`
+    // and sleeps while it is `None` — and `None` is exactly what a device that
+    // *received* its drive by pairing has: only `create_drive` and a secret
+    // carrying an `initial_drive` ever set it, and the browser's secret carries
+    // just a key. Such a pair reconnects only when a human presses "Sync now".
+    //
+    // Recorded here, after a completed exchange, rather than on the way in: by
+    // this point the peer has proved it holds our agent key and the drive has
+    // survived the reconcile, so the value is one we're willing to dial again
+    // unattended. Last drive synced wins, matching `create_drive` and
+    // `load_agent_from_secret`.
+    if store.get_active_drive().as_deref() != Some(drive) {
+        if let Err(e) = store.set_active_drive(drive) {
+            tracing::warn!("[sync] could not remember the drive to reconnect to: {e}");
+        }
+    }
+
     Ok(PeerSyncOutcome {
         count: total_imported,
         peer_name: peer_display_name,

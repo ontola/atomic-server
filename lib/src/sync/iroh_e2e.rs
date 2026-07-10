@@ -537,3 +537,48 @@ async fn peer_sync_refuses_a_different_agent() {
         "nothing may cross to a device signed in as somebody else"
     );
 }
+
+/// A device that gets its drive by pairing has no active drive of its own: the
+/// browser's secret carries a key and nothing else, so neither `create_drive`
+/// nor `load_agent_from_secret` ever names one. The auto-connect loop reads the
+/// active drive and sleeps while it is `None`, which left two paired phones
+/// talking only when a human pressed "Sync now" — never on their own, and never
+/// again after a restart.
+#[tokio::test]
+async fn a_completed_peer_sync_names_the_drive_to_reconnect_to() {
+    use crate::sync::peer;
+
+    let db_a = Db::init_temp("active_drive_a").await.unwrap();
+    let (agent_a, drive) = db_a.setup("Alice").await.unwrap();
+
+    // Alice's other device: her key, and no idea which drive it belongs to.
+    let db_b = Db::init_temp("active_drive_b").await.unwrap();
+    let mut agent_b = agent_a.clone();
+    agent_b.initial_drive = None;
+    db_b.set_default_agent(agent_b);
+    assert_eq!(
+        db_b.get_active_drive(),
+        None,
+        "the second device starts out not knowing which drive is hers"
+    );
+
+    let (node_id_a, router_a) = peer::start(db_a.clone()).await.unwrap();
+    let ep_b = iroh::Endpoint::builder()
+        .discovery_n0()
+        .discovery_local_network()
+        .bind()
+        .await
+        .unwrap();
+    ep_b.add_node_addr(router_a.endpoint().node_addr().await.unwrap())
+        .unwrap();
+
+    peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive, &db_b, true)
+        .await
+        .expect("Alice's two devices should sync");
+
+    assert_eq!(
+        db_b.get_active_drive().as_deref(),
+        Some(drive.as_str()),
+        "after syncing a drive, the device must know to dial back for it"
+    );
+}
