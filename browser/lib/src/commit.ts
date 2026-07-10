@@ -364,6 +364,16 @@ function serializeCommitValue<K extends keyof Commit>(
  */
 export function serializeDeterministically(
   commit: UnsignedCommit | Commit,
+  /**
+   * Keep the genesis `subject` in the output. Off for SIGNING (the subject is
+   * derived from the signature, so it can't be in the signed bytes). On for the
+   * NETWORK body: a cert-minted DID (`did:ad:<cert-signature>`) is NOT the
+   * commit signature, so the server can't re-derive it — it must be told. The
+   * server still verifies the content signature over the subject-less bytes, so
+   * including it here is safe (and, for a legacy DID, it equals the signature
+   * the server would derive anyway).
+   */
+  includeGenesisSubject = false,
 ): string {
   // Remove empty arrays, objects, false values from root
   if (commit.remove && Object.keys(commit.remove).length === 0) {
@@ -388,10 +398,12 @@ export function serializeDeterministically(
 
   const jsonadCommit = commitToJsonADObject(commit);
 
-  // For DID genesis commits only the subject is excluded — it is derived from
-  // the signature so it cannot be part of the signed bytes (circular dep).
-  // isGenesis stays in the bytes so the server can read and verify it.
-  if (commit.isGenesis === true) {
+  // For DID genesis commits the subject is excluded from the SIGNED bytes — it
+  // is derived from the signature so it cannot be part of them (circular dep).
+  // The network body keeps it (see `includeGenesisSubject`) so the server can
+  // use the real cert DID instead of re-deriving `did:ad:<commit-signature>`.
+  // isGenesis always stays so the server can read and verify it.
+  if (commit.isGenesis === true && !includeGenesisSubject) {
     delete jsonadCommit[commits.properties.subject];
   }
 

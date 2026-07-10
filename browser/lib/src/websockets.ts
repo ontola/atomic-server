@@ -667,7 +667,9 @@ export class WSClient {
       );
     }
 
-    const serialized = serializeDeterministically({ ...commit });
+    // `true`: keep the genesis subject in the network body so the server uses
+    // the real (cert-minted) DID instead of re-deriving it from the signature.
+    const serialized = serializeDeterministically({ ...commit }, true);
     const requestId = this.nextRequestId++;
 
     if (this.nextRequestId > 0xffff) {

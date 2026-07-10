@@ -279,7 +279,9 @@ export class Client {
     /** URL to post to, e.g. https://atomicdata.dev/commit */
     endpoint: string,
   ): Promise<Commit> {
-    const serialized = serializeDeterministically({ ...commit });
+    // `true`: keep the genesis subject in the network body so the server uses
+    // the real (cert-minted) DID instead of re-deriving it from the signature.
+    const serialized = serializeDeterministically({ ...commit }, true);
     const requestHeaders = new Headers();
     requestHeaders.set('Content-Type', 'application/ad+json');
     let response: Response;
