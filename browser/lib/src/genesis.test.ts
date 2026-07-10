@@ -1,13 +1,23 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, it } from 'vitest';
 import { getPublicKey } from '@noble/ed25519';
+import { decodeB64 } from './base64.js';
 import {
   encodeGenesisCert,
   decodeGenesisCert,
   signGenesisCert,
   verifyGenesisCert,
   subjectForSignature,
+  genesisSignerDid,
   type GenesisCert,
 } from './genesis.js';
+
+const hex = (bytes: Uint8Array): string =>
+  Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+
+const unhex = (s: string): Uint8Array =>
+  new Uint8Array(s.match(/../g)?.map(byte => parseInt(byte, 16)) ?? []);
 
 describe('GenesisCert', () => {
   // This exact vector is pinned identically in `lib/src/genesis.rs`
@@ -129,4 +139,63 @@ describe('GenesisCert', () => {
     trailing.set(bytes);
     expect(() => decodeGenesisCert(trailing)).toThrow();
   });
+});
+
+// The single cross-language source of truth. The SAME file is asserted by the
+// Rust side (`lib/src/genesis.rs::matches_the_golden_vectors`), so Rust and TS
+// can only ever agree or both fail — no duplicated, drift-prone hand-copied
+// vectors. If this fails after an intentional layout change, regenerate the
+// fixture (the Rust generator) AND bump the version; a signed layout can never
+// change silently.
+describe('GenesisCert golden vectors (shared fixture)', () => {
+  const fixture = JSON.parse(
+    readFileSync(
+      fileURLToPath(
+        new URL('../../../lib/src/genesis_test_vectors.json', import.meta.url),
+      ),
+      'utf8',
+    ),
+  ) as {
+    vectors: Array<{
+      seedByte: number;
+      privateKeyBase64: string;
+      pubKeyHex: string;
+      createdAt: number;
+      nonceHex: string;
+      stateHashHex: string | null;
+      parent: string;
+      drive: string;
+      certBytesHex: string;
+      signature: string;
+      did: string;
+      signerDid: string;
+    }>;
+  };
+
+  for (const v of fixture.vectors) {
+    it(`reproduces vector for seed ${v.seedByte}`, async ({ expect }) => {
+      const cert: GenesisCert = {
+        signerPubkey: unhex(v.pubKeyHex),
+        createdAt: v.createdAt,
+        nonce: unhex(v.nonceHex),
+        stateHash: v.stateHashHex ? unhex(v.stateHashHex) : undefined,
+        parent: v.parent,
+        drive: v.drive,
+      };
+
+      // Byte-identical encoding is the load-bearing contract.
+      expect(hex(encodeGenesisCert(cert))).toBe(v.certBytesHex);
+
+      // Same key + cert → the exact same signature, DID, and signer DID.
+      const signature = await signGenesisCert(cert, decodeB64(v.privateKeyBase64));
+      expect(signature).toBe(v.signature);
+      expect(subjectForSignature(signature)).toBe(v.did);
+      expect(genesisSignerDid(cert)).toBe(v.signerDid);
+
+      // The fixture bytes decode back to the same cert.
+      expect(hex(encodeGenesisCert(decodeGenesisCert(unhex(v.certBytesHex))))).toBe(
+        v.certBytesHex,
+      );
+    });
+  }
 });
