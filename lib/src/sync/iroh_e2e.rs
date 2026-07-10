@@ -538,6 +538,56 @@ async fn peer_sync_refuses_a_different_agent() {
     );
 }
 
+/// The agent resource (`did:ad:agent:…`) is owned by itself and lives outside
+/// every drive's subtree, so drive sync never carries it: a device restored
+/// from a secret has the key but a nameless stub agent, and can't see the drives
+/// its other devices know about. Same-agent peers now hand each other the agent
+/// resource on connect and merge its Loro state.
+#[tokio::test]
+async fn same_agent_peers_reconcile_the_agent_resource() {
+    let pair = setup_pair("agent_reconcile").await;
+
+    // B restored from the secret: it holds the key and the drive DID, but the
+    // name only ever existed on A's copy of the agent resource.
+    let agent_subject = pair
+        .db_b
+        .get_default_agent()
+        .unwrap()
+        .subject
+        .to_string();
+    let before = pair
+        .db_b
+        .get_resource(&agent_subject.as_str().into())
+        .await
+        .unwrap();
+    assert!(
+        before.get(crate::urls::NAME).is_err(),
+        "B starts with a nameless stub agent"
+    );
+
+    // Establish the live link (B dials A). Both push their agent on connect.
+    sync_b_from_a(&pair).await;
+
+    let db_b = pair.db_b.clone();
+    let subject = agent_subject.clone();
+    let got_name = wait_until(std::time::Duration::from_secs(10), || {
+        let db_b = db_b.clone();
+        let subject = subject.clone();
+        async move {
+            db_b.get_resource(&subject.as_str().into())
+                .await
+                .ok()
+                .and_then(|r| r.get(crate::urls::NAME).ok().map(|v| v.to_string()))
+                == Some("Alice".to_string())
+        }
+    })
+    .await;
+    assert!(
+        got_name,
+        "B's agent resource should gain the name A holds, over the live link"
+    );
+}
+
 /// A device that gets its drive by pairing has no active drive of its own: the
 /// browser's secret carries a key and nothing else, so neither `create_drive`
 /// nor `load_agent_from_secret` ever names one. The auto-connect loop reads the

@@ -384,6 +384,53 @@ fn encode_live_update_wire_msg(subject_key: &str, loro_bytes: &[u8]) -> Vec<u8> 
     msg
 }
 
+/// This device's own agent resource as a live UPDATE wire message, or `None`
+/// when there's no default agent or it has no stored snapshot yet.
+///
+/// The agent resource (`did:ad:agent:…`) is owned by itself and sits outside
+/// every drive's subtree, so drive sync — which walks the `parent` index down
+/// from a drive root — never carries it. That left a freshly signed-in device
+/// with a nameless stub agent and an empty `drives` list (you couldn't switch
+/// back to a drive you'd just synced, because the switcher reads
+/// `agent.drives`). Two same-agent devices are mutually authenticated and each
+/// may write the shared agent resource (`hierarchy::check_write`: "Agents can
+/// always edit themselves"), so handing it over as an ordinary UPDATE lets both
+/// merge its Loro state — `name` converges last-writer-wins, `drives` unions.
+fn own_agent_update_frame(store: &Db) -> Option<Vec<u8>> {
+    let agent = store.get_default_agent().ok()?;
+    let key = crate::Subject::from_raw(
+        &agent.subject.to_string(),
+        store.get_base_domain().as_deref(),
+    )
+    .pure_id();
+    let snapshot = store
+        .kv
+        .get(crate::db::trees::Tree::LoroSnapshots, key.as_bytes())
+        .ok()
+        .flatten()
+        .filter(|b| !b.is_empty())?;
+    Some(encode_live_update_wire_msg(&key, &snapshot))
+}
+
+/// Whether `subject` is this device's own agent — the only agent resource a
+/// peer is allowed to reconcile with us (a same-agent link authenticated as
+/// exactly this agent), and the one whose live UPDATE must be applied without
+/// echoing back out (see the read loop).
+fn is_our_agent_subject(store: &Db, subject: &str) -> bool {
+    if !subject.starts_with("did:ad:agent:") {
+        return false;
+    }
+    let Ok(agent) = store.get_default_agent() else {
+        return false;
+    };
+    let ours = crate::Subject::from_raw(
+        &agent.subject.to_string(),
+        store.get_base_domain().as_deref(),
+    )
+    .pure_id();
+    crate::Subject::from_raw(subject, store.get_base_domain().as_deref()).pure_id() == ours
+}
+
 fn send_live_update_wire_msg(msg: Vec<u8>) {
     let mut dead_peers = Vec::new();
     let peers = LIVE_PEERS.lock().unwrap();
@@ -705,6 +752,18 @@ fn register_live_peer(
     // Always notify so both sides refresh UI (replacing a dead channel still counts).
     push_event(&key, 0, "connected");
 
+    // Hand a same-agent peer our own agent resource on connect. It lives
+    // outside any drive's subtree, so drive sync never carries it (see
+    // `own_agent_update_frame`). Both sides do this; the merge is idempotent.
+    // Guarded on same-agent so we never push our identity to a stranger — the
+    // dial/accept paths already refuse a different agent before reaching here,
+    // this is defence in depth.
+    if is_same_agent_as_ours(&store, &agent) {
+        if let Some(frame) = own_agent_update_frame(&store) {
+            let _ = tx_for_read.try_send(frame);
+        }
+    }
+
     // Write loop: sends queued UPDATE frames to the peer
     let write_peer_id = key.clone();
     tokio::spawn(async move {
@@ -849,12 +908,29 @@ fn register_live_peer(
                             )
                             .await
                             {
+                                // Our own agent resource is account state that
+                                // both same-agent devices push on connect. Apply
+                                // it with the importing flag held so the live
+                                // push loop doesn't re-broadcast it back — an
+                                // unconditional re-send of an identical snapshot
+                                // would ping-pong between the two. Same
+                                // suppression bulk SYNC_PUSH imports use; the
+                                // WS announcer ignores the flag, so the local
+                                // browser still sees the merged name / drives.
+                                let own_agent =
+                                    is_our_agent_subject(&store, &decoded.subject);
+                                if own_agent {
+                                    super::ws_apply::set_importing(true);
+                                }
                                 let _ = super::ws_apply::persist_update(
                                     &store,
                                     &decoded.subject,
                                     resolved,
                                 )
                                 .await;
+                                if own_agent {
+                                    super::ws_apply::set_importing(false);
+                                }
                                 tracing::trace!(
                                     "[live] imported update for {} from {}",
                                     &decoded.subject[..decoded.subject.len().min(20)],

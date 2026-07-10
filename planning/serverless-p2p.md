@@ -96,6 +96,46 @@ Android A                          Android B
 connect → mutual AUTH → VV reconcile → live mode → outbox drain on dirty.
 One state machine replaces today's handshake/live duality in `peer.rs`.
 
+## Account state: the agent resource syncs too
+
+**Shipped (2026-07-10).** Same-agent sync must carry more than drives. The
+agent resource itself — `did:ad:agent:<pubkey>`, holding the account `name`,
+its `drives` list, `publicKey` — is owned by itself and sits **outside every
+drive's subtree**. Drive sync walks the `parent` index down from a drive root
+(`collect_drive_subjects`), so it structurally never reaches the agent. The
+symptom: a device signed in from a secret gets only what `Agent::from_secret`
+→ `to_resource` builds — `publicKey` and a `drives` list seeded from the
+secret's `initial_drive`, but **no name**. Create a new drive on that device
+and the switcher (which reads `agent.drives`) can no longer show the drive you
+paired in, because a pairing-pull sets `active_drive` without appending to
+`agent.drives`. Two symptoms, one cause: the agent resource never crossed.
+
+The fix follows directly from the principles. Both devices are mutually
+authenticated as the **same agent** (Principle 1), and an agent may always
+write its own resource (`hierarchy::check_write`: "Agents can always edit
+themselves"). So on connect each side hands the other its agent resource as an
+ordinary `UPDATE` (Principle 3's same-agent raw-state exception — no new frame,
+no signature ceremony), and Loro merges the two independent docs: `name` is a
+last-writer-wins register, `drives` is a CRDT list that **unions**, so every
+drive any device knows becomes visible on all of them.
+
+Guarded and echo-safe:
+- Pushed only when the peer is same-agent (`is_same_agent_as_ours`) — the agent
+  resource is your identity root; it must never be sent to, or accepted from, a
+  stranger. A peer may only reconcile *its own authenticated* agent subject
+  (`is_our_agent_subject`), never an arbitrary one.
+- Applied under the importing flag so the live push loop doesn't re-broadcast
+  it (two sides pushing identical snapshots would otherwise ping-pong). The WS
+  announcer ignores that flag, so the on-device browser still repaints with the
+  merged name / drives.
+
+Implementation lives in `peer.rs` (`own_agent_update_frame`,
+`is_our_agent_subject`, the `register_live_peer` push, the read-loop
+suppression); e2e test `same_agent_peers_reconcile_the_agent_resource`.
+This is a targeted fix on today's `peer.rs`; it folds into `SyncSession`'s
+post-AUTH reconcile when P2 lands (the agent subject is just another entry in
+the VV set, alongside the drive roots).
+
 ## Phases
 
 ### P0 — Trust prerequisites (harden what exists)
