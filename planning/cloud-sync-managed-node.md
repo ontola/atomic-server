@@ -187,3 +187,87 @@ control plane). The pkarr discovery hop isn't exercised locally.
    a grace) is the leading design. Not built.
 5. **atomic-saas unpushed:** ~17 commits on `main` (incl. `from_cloud` portal
    redirect) + the managed-node ports, all committed locally, not pushed.
+
+## Resolution: the node relays and serves, it never signs as a principal
+
+**Decision (2026-07-10).** The core design rule, prompted by the same-agent
+refusal (`peer.rs::is_same_agent_as_ours`) exposing that a managed node was
+trying to be a peer principal it isn't:
+
+> The client holds the key and signs. The node stores, forwards, and serves —
+> it never authenticates to another peer *as itself* to obtain a user's private
+> data.
+
+Most of the stack already obeys this, which is why the fix is narrow:
+
+- **Writes are already client-signed, node-forwarded.** A signed `COMMIT` is
+  self-authorizing; the node applies it by verifying the signature + signer
+  rights, never by signing. The WS commit monitor is exactly "client signs,
+  server forwards": it stores a pushed commit and fans it to subscribers as
+  `UPDATE` frames.
+- **Serving is already per-request, no impersonation.** The node holds the
+  drive in plaintext (received via push) and serves it by evaluating **the
+  requester's** rights (`check_read` for the *caller's* agent), not its own. An
+  unauthenticated GET gets "not found"; a request signed by the user gets the
+  data. So the node holding plaintext is *not* the violation — indexing/search
+  keep working — as long as the node never acts as a principal toward peers.
+
+**The single violation: `managed-node`'s Iroh pull.** `pull_allowed_drives`
+called `sync_drive_with_peer_outcome`, which signs `AUTH` as the node's *own*
+server agent (`peer.rs:1238` `encode_auth(&get_default_agent(), drive)`) and
+dials a peer to pull a drive. That is the node pretending to be a principal
+entitled to read a private drive it isn't. The same-agent refusal correctly
+rejects it — the answer is to remove the impersonating pull, not to loosen the
+refusal.
+
+### The boundary this draws
+
+| Path | Transport | Auth | Who signs |
+| --- | --- | --- | --- |
+| A user's own devices | Iroh peer sync | same-agent `AUTH` | each device (the user) |
+| A device ⇄ its managed node | authenticated WS/HTTP | per-request user signature | the client, per request |
+| Node → other peers (pull) | — | — | **nobody — the node does not pull** |
+
+Iroh peer sync is the **personal-device mesh** (same-agent). The node is **not
+an Iroh peer**; it is reached over WS/HTTP and populated by client push +
+WS relay. Node population therefore no longer depends on the node being able to
+read a private drive it doesn't hold.
+
+### Tier mapping (aligns with `atomic-saas/planning/TIER_SWITCHING_FLOWS.md`)
+
+- **Local** — device mesh, same-agent Iroh. No node in the path.
+- **Hosted** — node holds plaintext, serves per-request, indexes/searches. The
+  node reads what it was *pushed*; it never impersonates to *pull*.
+- **Cloud Vault (blind)** — node stores opaque encrypted commits and forwards
+  them; it can't read, only relay. Greenfield; the purest form of the rule.
+
+### Deferred: autonomous replication needs a client-signed capability, not a node signature
+
+The one thing push+relay can't do: a fresh/empty node acquiring an
+already-existing **private** drive with **no key-holder online**. That can't be
+"forwarding" — someone holding the key must authorize the read. The principled
+form is a **client-signed, scoped, revocable read grant** for the node's agent
+(ordinary Atomic `read`-ACL: a signed commit adding the node's agent DID to the
+drive's `read`), which the node *presents* rather than a signature it *mints*.
+That in turn requires generalizing peer-sync admission from **same-agent** to
+**rights-based** on *both* sides:
+
+- **Accept (serving):** serve iff the authenticated peer has `read` on the drive
+  (same-agent is the current special case).
+- **Dial (pulling raw state):** trust a peer's raw `SYNC_PUSH` state iff that
+  peer has **write** on the drive (an authoritative replica). A read-only node
+  may relay *signed commits* (verifiable) but its raw state is not authoritative
+  — this is the delicate part, and why the dial-side refusal stays same-agent
+  for now.
+
+This is the `authorization-sync.md` grant model. **Not built**, and not needed
+for the push+relay path. Until it exists, "enroll a drive and the node backfills
+it by itself" does **not** work for private drives and must not be promised;
+push-on-enroll (already the primary path) covers real onboarding.
+
+### Change made now
+
+`managed-node`'s impersonating Iroh pull is removed: the node no longer signs
+`AUTH` as itself to pull drives. Population is push (WS `COMMIT`) + WS relay.
+The `pull_allowed_drives` scaffold is retained behind the grant model above as
+the future home of a *capability-presenting* (non-impersonating) pull.
