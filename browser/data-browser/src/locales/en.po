@@ -1767,7 +1767,6 @@ msgid "Synced {0} resource{1}"
 msgstr "Synced {0} resource{1}"
 
 #: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "This device"
 msgstr "This device"
 
@@ -4891,18 +4890,10 @@ msgstr "Pairing code copied."
 msgid "Could not copy — select and copy the code manually."
 msgstr "Could not copy — select and copy the code manually."
 
-#: src/routes/SyncRoute.tsx
-msgid "Scan this from a device already signed in as you, or copy the code and paste it there. It only says where to reach this device — the other side still proves it holds your key."
-msgstr "Scan this from a device already signed in as you, or copy the code and paste it there. It only says where to reach this device — the other side still proves it holds your key."
-
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
 msgid "Connect"
 msgstr "Connect"
-
-#: src/routes/SyncRoute.tsx
-msgid "Connect to a device"
-msgstr "Connect to a device"
 
 #: src/components/Presence/TypingIndicator.tsx
 msgid "<0/> is typing"
@@ -5095,18 +5086,6 @@ msgstr "Camera access is needed to scan a code."
 msgid "Could not open the scanner."
 msgstr "Could not open the scanner."
 
-#: src/routes/SyncRoute.tsx
-msgid "Not signed in on the other device yet? Sign in there with your account secret first, then pair."
-msgstr "Not signed in on the other device yet? Sign in there with your account secret first, then pair."
-
-#: src/routes/SyncRoute.tsx
-msgid "Scan the other device’s QR code, or paste its pairing code, to start syncing."
-msgstr "Scan the other device’s QR code, or paste its pairing code, to start syncing."
-
-#: src/routes/SyncRoute.tsx
-msgid "Paste a pairing code from your other device to start syncing."
-msgstr "Paste a pairing code from your other device to start syncing."
-
 #: src/components/ConnectToDeviceForm.tsx
 msgid "<0/> Scan a QR code"
 msgstr "<0/> Scan a QR code"
@@ -5184,10 +5163,6 @@ msgid "Pairing device"
 msgstr "Pairing device"
 
 #: src/components/pairing/PairingFlowProvider.tsx
-msgid "The device is paired, so this can still finish on its own. If it doesn’t, check that the other device is online and signed in as you."
-msgstr "The device is paired, so this can still finish on its own. If it doesn’t, check that the other device is online and signed in as you."
-
-#: src/components/pairing/PairingFlowProvider.tsx
 msgid "Try again"
 msgstr "Try again"
 
@@ -5220,10 +5195,6 @@ msgid "Your workspace is here"
 msgstr "Your workspace is here"
 
 #: src/components/pairing/PairingFlowProvider.tsx
-msgid "Your workspace hasn’t arrived yet"
-msgstr "Your workspace hasn’t arrived yet"
-
-#: src/components/pairing/PairingFlowProvider.tsx
 msgid "Bring your workspace over"
 msgstr "Bring your workspace over"
 
@@ -5232,7 +5203,45 @@ msgstr "Bring your workspace over"
 msgid "Paired with {0}"
 msgstr "Paired with {0}"
 
-#. 0: count; 1: resources; 2: device
+#. 0: count; 1: count === 1 ? 'resource' \\: 'resources'; 2: device
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Synced {0} {1} with {2}"
 msgstr "Synced {0} {1} with {2}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Show this code"
+msgstr "Show this code"
+
+#: src/routes/SyncRoute.tsx
+msgid "Or scan the other device’s"
+msgstr "Or scan the other device’s"
+
+#: src/routes/SyncRoute.tsx
+msgid "Or paste the other device’s"
+msgstr "Or paste the other device’s"
+
+#: src/routes/SyncRoute.tsx
+msgid "Not signed in over there yet? Sign in with your account secret first, then pair."
+msgstr "Not signed in over there yet? Sign in with your account secret first, then pair."
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "That device"
+msgstr "That device"
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "This device can’t tell which workspace to open. Open the app on your other device, then pair again."
+msgstr "This device can’t tell which workspace to open. Open the app on your other device, then pair again."
+
+#. 0: device
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "{0} doesn’t have your workspace to send. Check that it’s signed in as you and holds your data."
+msgstr "{0} doesn’t have your workspace to send. Check that it’s signed in as you and holds your data."
+
+#. 0: device
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "{0} sent your data, but the workspace still isn’t readable here. It may finish on its own — reopen this page in a moment."
+msgstr "{0} sent your data, but the workspace still isn’t readable here. It may finish on its own — reopen this page in a moment."
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Your workspace didn’t arrive"
+msgstr "Your workspace didn’t arrive"

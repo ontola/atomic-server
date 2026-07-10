@@ -8,7 +8,10 @@ import { ThisDeviceCode } from '../../components/ThisDeviceCode';
 import { ConnectToDeviceForm } from '../../components/ConnectToDeviceForm';
 import { ConnectServerDialog } from '../../components/ConnectServerDialog';
 import { useOwnNodeDid } from '../../hooks/useOwnNodeDid';
-import { usePairingFlow } from '../../components/pairing/PairingFlowProvider';
+import {
+  usePairingFlow,
+  type WorkspaceResult,
+} from '../../components/pairing/PairingFlowProvider';
 import { useSettings } from '../../helpers/AppSettings';
 import { deviceHasDriveData } from '../../helpers/driveData';
 import { fetchPersonalDriveSubject } from '../../helpers/personalDrive';
@@ -26,10 +29,13 @@ import {
  * `/iroh-sync` answers as soon as the peer's push is imported, which is not the
  * same moment the drive becomes fetchable — and a paired peer may also deliver
  * it a beat later over the live connection. Checking once raced that and told
- * people their workspace wasn't there while it was landing. Poll instead.
+ * people their workspace wasn't there while it was landing.
+ *
+ * So poll, and poll long enough that giving up means something. The dialog
+ * shows a spinner throughout, and a stated reason after.
  */
-const DRIVE_WAIT_ATTEMPTS = 6;
-const DRIVE_WAIT_STEP_MS = 500;
+const DRIVE_WAIT_MS = 30_000;
+const DRIVE_POLL_INTERVAL_MS = 1_000;
 
 interface ConnectDeviceStepProps {
   /** The drive that should be here but isn't. Absent if none resolved. */
@@ -67,42 +73,55 @@ export function ConnectDeviceStep({
   const [showServerDialog, setShowServerDialog] = useState(false);
 
   /**
-   * The drive we should open once data lands. Re-resolved after the sync: on a
-   * device that had nothing, the agent's personal drive may only become
-   * knowable once the agent resource itself has been pulled across.
-   *
-   * `wait` gives the data a few seconds to show up (see DRIVE_WAIT_ATTEMPTS).
+   * The drive we should open. Re-resolved rather than trusted: on a device that
+   * held nothing, the agent's personal drive may only become knowable once the
+   * agent resource itself has been pulled across.
    */
-  async function resolveArrivedDrive(
-    wait: boolean,
-  ): Promise<string | undefined> {
-    const candidate =
+  async function resolveDriveSubject(): Promise<string | undefined> {
+    return (
       drive ??
       (agent
         ? await fetchPersonalDriveSubject(store, agent).catch(() => undefined)
-        : undefined);
+        : undefined)
+    );
+  }
+
+  /** One look — for the "did connecting a server fix this?" check below. */
+  async function driveIsHere(): Promise<string | undefined> {
+    const candidate = await resolveDriveSubject();
 
     if (!candidate) {
       return undefined;
     }
 
-    const attempts = wait ? DRIVE_WAIT_ATTEMPTS : 1;
+    return (await deviceHasDriveData(store, candidate, { refresh: true }))
+      ? candidate
+      : undefined;
+  }
 
-    for (let attempt = 0; attempt < attempts; attempt++) {
+  /** Wait for the drive to land, and say why when it doesn't. */
+  async function awaitWorkspace(): Promise<WorkspaceResult> {
+    const candidate = await resolveDriveSubject();
+
+    if (!candidate) {
+      return { ok: false, reason: 'unknown-drive' };
+    }
+
+    const deadline = Date.now() + DRIVE_WAIT_MS;
+
+    for (;;) {
       // The store cached a failed fetch of this drive a moment ago (that's how
       // we got here); ask the server again now that the sync has filled it in.
       if (await deviceHasDriveData(store, candidate, { refresh: true })) {
-        return candidate;
+        return { ok: true, drive: candidate };
       }
 
-      if (attempt < attempts - 1) {
-        await new Promise(resolve =>
-          setTimeout(resolve, DRIVE_WAIT_STEP_MS * (attempt + 1)),
-        );
+      if (Date.now() >= deadline) {
+        return { ok: false, reason: 'timeout' };
       }
+
+      await new Promise(resolve => setTimeout(resolve, DRIVE_POLL_INTERVAL_MS));
     }
-
-    return undefined;
   }
 
   // Connecting a server is the browser's route out of here, and it can put the
@@ -115,7 +134,7 @@ export function ConnectDeviceStep({
 
     let cancelled = false;
 
-    void resolveArrivedDrive(false).then(arrived => {
+    void driveIsHere().then(arrived => {
       if (!cancelled && arrived) {
         onConnected(arrived);
       }
@@ -131,7 +150,7 @@ export function ConnectDeviceStep({
     // wait for the workspace to actually land, then offer to open it.
     startPairing(code, {
       drive,
-      awaitWorkspace: () => resolveArrivedDrive(true),
+      awaitWorkspace,
       onWorkspaceReady: onConnected,
     });
   }

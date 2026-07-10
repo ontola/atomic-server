@@ -749,33 +749,36 @@ function SyncPage() {
         {isNode && localNodeId && (
           <Section>
             <SectionTitle>Sync a device</SectionTitle>
-            <PairColumns>
-              <PairColumn>
-                <PairHeading>This device</PairHeading>
-                <ConnNote>
-                  Scan this from a device already signed in as you, or copy the
-                  code and paste it there. It only says where to reach this
-                  device — the other side still proves it holds your key.
-                </ConnNote>
-                <ThisDeviceCode nodeDid={rawToNodeDid(localNodeId)} />
-              </PairColumn>
+            <ConnNote>
+              A pairing code only says where to reach a device — the other side
+              still proves it holds your key. Both directions work: show yours,
+              or take theirs.
+            </ConnNote>
+            <PairCard>
+              <PairSide>
+                <PairLabel>Show this code</PairLabel>
+                <QrCentered>
+                  <ThisDeviceCode nodeDid={rawToNodeDid(localNodeId)} />
+                </QrCentered>
+              </PairSide>
 
-              <PairColumn>
-                <PairHeading>Connect to a device</PairHeading>
-                <ConnNote>
+              <PairDivider aria-hidden />
+
+              <PairSide>
+                <PairLabel>
                   {isMobileTauri()
-                    ? 'Scan the other device’s QR code, or paste its pairing code, to start syncing.'
-                    : 'Paste a pairing code from your other device to start syncing.'}
-                </ConnNote>
+                    ? 'Or scan the other device’s'
+                    : 'Or paste the other device’s'}
+                </PairLabel>
                 {/* Same path a scanned deep link takes (PairingLinkHandler):
                     validate, persist the peer, start a sync. */}
                 <ConnectToDeviceForm onCode={deliverDeepLink} />
-                <ConnNote>
-                  Not signed in on the other device yet? Sign in there with your
-                  account secret first, then pair.
-                </ConnNote>
-              </PairColumn>
-            </PairColumns>
+                <PairHint>
+                  Not signed in over there yet? Sign in with your account secret
+                  first, then pair.
+                </PairHint>
+              </PairSide>
+            </PairCard>
           </Section>
         )}
 
@@ -1186,23 +1189,61 @@ const ConnNote = styled.p`
   font-size: 0.82rem;
 `;
 
-const PairColumns = styled.div`
-  display: flex;
-  gap: 2rem;
-  flex-wrap: wrap;
+/** The two halves of pairing, side by side — one card, not two columns. */
+const PairCard = styled.div`
+  ${cardBase}
+  align-items: stretch;
+  gap: 1.5rem;
+
+  /* Below this the two halves read better stacked; the divider turns with
+     them. A container query would be truer, but the page has a single column
+     whose width tracks the viewport. */
+  @media (max-width: 40rem) {
+    flex-direction: column;
+    gap: 1.1rem;
+  }
 `;
 
-const PairColumn = styled.div`
+const PairSide = styled.div`
   flex: 1;
-  min-width: 15rem;
-  max-width: 20rem;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 0.6rem;
 `;
 
-const PairHeading = styled.h3`
-  font-size: 1rem;
-  margin: 0 0 0.3rem;
+/** The QR is a fixed square; centre it rather than letting it hug the edge. */
+const QrCentered = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+`;
+
+const PairDivider = styled.div`
+  flex-shrink: 0;
+  align-self: stretch;
+  width: 1px;
+  background: ${p => p.theme.colors.bg2};
+
+  @media (max-width: 40rem) {
+    width: auto;
+    height: 1px;
+  }
+`;
+
+const PairLabel = styled.span`
+  align-self: flex-start;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const PairHint = styled.p`
+  margin: 0.2rem 0 0;
+  align-self: flex-start;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.78rem;
 `;
 
 const ConnIcon = styled.div<{ $tone: 'device' | 'cloud' | 'server' }>`

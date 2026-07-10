@@ -21,16 +21,26 @@ import { Button } from '../Button';
 import { Spinner } from '../Spinner';
 import { runPairing } from '../../helpers/pairing';
 
+/**
+ * Why a workspace didn't turn up. The dialog must land on success or on a
+ * stated reason — never on "hasn't arrived yet", which tells nobody what to do.
+ */
+export type WorkspaceResult =
+  | { ok: true; drive: string }
+  /** This device can't tell which drive it should be opening. */
+  | { ok: false; reason: 'unknown-drive' }
+  /** It never became readable within the wait. */
+  | { ok: false; reason: 'timeout' };
+
 export interface StartPairingOptions {
   /** The drive to pull. Defaults to whatever this device is currently on. */
   drive?: string;
   /**
-   * Resolves the drive once it has actually landed on this device, or
-   * `undefined` if it hasn't. Supplying it adds the second step to the dialog:
-   * a peer sync answers as soon as the push is imported, which is a moment
-   * before the drive becomes readable.
+   * Waits for the drive to actually land on this device. Supplying it adds the
+   * second step to the dialog: a peer sync answers as soon as the push is
+   * imported, which is a moment before the drive becomes readable.
    */
-  awaitWorkspace?: () => Promise<string | undefined>;
+  awaitWorkspace?: () => Promise<WorkspaceResult>;
   /** Called when the user chooses to open the workspace that just arrived. */
   onWorkspaceReady?: (drive: string) => void;
 }
@@ -46,11 +56,17 @@ type Phase =
       peerName?: string;
       /** Absent when there was no drive to sync — the peer is just remembered. */
       count?: number;
-      /** Absent when a workspace was expected but hasn't landed yet. */
+      /** Present iff a workspace was awaited, and it arrived. */
       drive?: string;
-      workspaceExpected: boolean;
     }
-  | { kind: 'error'; message: string };
+  | {
+      kind: 'error';
+      /** Which step to mark failed; the earlier one stays ticked. */
+      step: 'connect' | 'workspace';
+      message: string;
+      peerName?: string;
+      count?: number;
+    };
 
 type StartPairing = (code: string, options?: StartPairingOptions) => void;
 
@@ -111,7 +127,7 @@ export function PairingFlowProvider({
       if (stale()) return;
 
       if (!result.ok) {
-        setPhase({ kind: 'error', message: result.message });
+        setPhase({ kind: 'error', step: 'connect', message: result.message });
 
         return;
       }
@@ -122,22 +138,28 @@ export function PairingFlowProvider({
       const count = result.outcome?.count;
 
       if (!options?.awaitWorkspace) {
-        setPhase({ kind: 'done', peerName, count, workspaceExpected: false });
+        setPhase({ kind: 'done', peerName, count });
 
         return;
       }
 
       setPhase({ kind: 'awaiting-workspace', peerName, count: count ?? 0 });
-      const arrived = await options.awaitWorkspace();
+      const workspace = await options.awaitWorkspace();
 
       if (stale()) return;
 
+      if (workspace.ok) {
+        setPhase({ kind: 'done', peerName, count, drive: workspace.drive });
+
+        return;
+      }
+
       setPhase({
-        kind: 'done',
+        kind: 'error',
+        step: 'workspace',
         peerName,
         count,
-        drive: arrived,
-        workspaceExpected: true,
+        message: workspaceError(workspace.reason, peerName, count),
       });
     },
     [store],
@@ -178,13 +200,6 @@ export function PairingFlowProvider({
           {phase.kind === 'error' && (
             <Explainer role='alert'>{phase.message}</Explainer>
           )}
-          {phase.kind === 'done' && phase.workspaceExpected && !phase.drive && (
-            <Explainer role='status'>
-              The device is paired, so this can still finish on its own. If it
-              doesn’t, check that the other device is online and signed in as
-              you.
-            </Explainer>
-          )}
         </DialogContent>
         <DialogActions>
           {phase.kind === 'error' && lastAttempt && (
@@ -213,16 +228,41 @@ export function PairingFlowProvider({
   );
 }
 
+/**
+ * A sync that moved nothing is the informative case: AUTH passed (or the call
+ * would have thrown), so the peer simply had no copy of this workspace to send.
+ * Saying that is worth far more than "hasn't arrived yet".
+ */
+function workspaceError(
+  reason: 'unknown-drive' | 'timeout',
+  peerName: string | undefined,
+  count: number | undefined,
+): string {
+  const device = peerName ?? 'That device';
+
+  if (reason === 'unknown-drive') {
+    return 'This device can’t tell which workspace to open. Open the app on your other device, then pair again.';
+  }
+
+  if (count === 0) {
+    return `${device} doesn’t have your workspace to send. Check that it’s signed in as you and holds your data.`;
+  }
+
+  return `${device} sent your data, but the workspace still isn’t readable here. It may finish on its own — reopen this page in a moment.`;
+}
+
 function expectsWorkspace(phase: Phase): boolean {
   return (
     phase.kind === 'awaiting-workspace' ||
-    (phase.kind === 'done' && phase.workspaceExpected)
+    (phase.kind === 'done' && phase.drive !== undefined) ||
+    (phase.kind === 'error' && phase.step === 'workspace')
   );
 }
 
 function connectStatus(phase: Phase): StepStatus {
   if (phase.kind === 'connecting') return 'active';
-  if (phase.kind === 'error') return 'failed';
+  if (phase.kind === 'error')
+    return phase.step === 'connect' ? 'failed' : 'done';
   if (phase.kind === 'closed') return 'pending';
 
   return 'done';
@@ -233,30 +273,29 @@ function connectLabel(phase: Phase): string {
     return 'Connecting to the device…';
   }
 
-  if (phase.kind === 'error') {
+  if (phase.kind === 'error' && phase.step === 'connect') {
     return 'Could not connect';
   }
 
-  if (phase.kind === 'awaiting-workspace' || phase.kind === 'done') {
-    const device = phase.peerName ?? 'the device';
-
-    // No count means there was no drive to sync — we only recorded the peer.
-    if (phase.kind === 'done' && phase.count === undefined) {
-      return `Paired with ${device}`;
-    }
-
-    const count = phase.kind === 'done' ? phase.count! : phase.count;
-    const resources = count === 1 ? 'resource' : 'resources';
-
-    return `Synced ${count} ${resources} with ${device}`;
+  if (phase.kind === 'closed') {
+    return 'Connect to the device';
   }
 
-  return 'Connect to the device';
+  const device = phase.peerName ?? 'the device';
+  const { count } = phase;
+
+  // No count means there was no drive to sync — we only recorded the peer.
+  if (count === undefined) {
+    return `Paired with ${device}`;
+  }
+
+  return `Synced ${count} ${count === 1 ? 'resource' : 'resources'} with ${device}`;
 }
 
 function workspaceStatus(phase: Phase): StepStatus {
   if (phase.kind === 'awaiting-workspace') return 'active';
-  if (phase.kind === 'done') return phase.drive ? 'done' : 'failed';
+  if (phase.kind === 'done') return 'done';
+  if (phase.kind === 'error' && phase.step === 'workspace') return 'failed';
 
   return 'pending';
 }
@@ -267,9 +306,11 @@ function workspaceLabel(phase: Phase): string {
   }
 
   if (phase.kind === 'done') {
-    return phase.drive
-      ? 'Your workspace is here'
-      : 'Your workspace hasn’t arrived yet';
+    return 'Your workspace is here';
+  }
+
+  if (phase.kind === 'error') {
+    return 'Your workspace didn’t arrive';
   }
 
   return 'Bring your workspace over';
