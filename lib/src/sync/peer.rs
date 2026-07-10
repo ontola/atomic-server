@@ -633,6 +633,30 @@ fn invalidate_drive_cache_on_identity_change(
     }
 }
 
+/// Whether a peer that just proved an identity is *us* — the same agent, on
+/// another device.
+///
+/// Peer sync is same-agent only (serverless-p2p Principle 1: two devices trust
+/// each other iff each proves possession of the same agent key). Cross-agent
+/// replication is a separate product, gated behind grants.
+///
+/// This must be checked explicitly rather than left to `check_read`. A stranger
+/// who authenticates as *some* valid agent is not rejected by the rights checks;
+/// every subject is simply denied and skipped, so the sync completes reporting
+/// `count: 0, status: ok`. That is an authorization failure wearing a success's
+/// clothes — Principle 5 says fail closed on identity, not fail quiet.
+fn is_same_agent_as_ours(store: &Db, remote: &ForAgent) -> bool {
+    let ForAgent::AgentSubject(remote_subject) = remote else {
+        return false;
+    };
+
+    let Ok(ours) = store.get_default_agent() else {
+        return false;
+    };
+
+    store.normalize_subject(remote_subject) == store.normalize_subject(&ours.subject)
+}
+
 fn register_live_peer(
     peer_id: String,
     mut send: iroh::endpoint::SendStream,
@@ -1401,6 +1425,16 @@ pub async fn sync_drive_with_peer_using_outcome(
                                         "[sync] peer {} authenticated back as {a:?}",
                                         &remote_key[..remote_key.len().min(12)]
                                     );
+                                    // Fail closed: a peer signed in as somebody
+                                    // else would deny us every subject and leave
+                                    // us reporting an empty, "successful" sync.
+                                    if !is_same_agent_as_ours(store, &a) {
+                                        return Err(format!(
+                                            "That device is signed in as a different account ({a}). \
+                                             Peer sync only works between devices signed in as the same account."
+                                        )
+                                        .into());
+                                    }
                                     invalidate_drive_cache_on_identity_change(
                                         &a,
                                         &remote_agent,
@@ -1597,6 +1631,31 @@ async fn handle_stream(
             && responses
                 .iter()
                 .any(|r| !r.is_empty() && r[0] == super::protocol::tag::AUTH_OK);
+
+        // Fail closed on identity. A peer signed in as a different agent proves
+        // a valid key, so `handle_frame` happily answers AUTH_OK — and then
+        // every `check_read` denies it and the sync "succeeds" with nothing
+        // transferred. Say no here instead, while we can say why.
+        if just_authed && !is_same_agent_as_ours(&store, &agent) {
+            tracing::warn!(
+                "[accept] refusing {}: authenticated as {agent}, which is not this device's account",
+                &remote_key[..remote_key.len().min(12)]
+            );
+            let error = super::protocol::encode_error(
+                0,
+                super::protocol::error_code::UNKNOWN,
+                "This device is signed in as a different account. Peer sync only works between devices signed in as the same account.",
+            );
+            let _ = send.write_u32(error.len() as u32).await;
+            let _ = send.write_all(&error).await;
+            let _ = send.finish();
+            // Returning drops the connection, which would abort the frame in
+            // flight and leave the dialer reporting "connection lost" instead
+            // of the reason. Wait (briefly) for it to read the refusal.
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(2), send.stopped()).await;
+
+            return Ok(0);
+        }
 
         // Check if the client sent us a SYNC_PUSH (bidirectional data exchange complete)
         let client_pushed = !buf.is_empty() && buf[0] == super::protocol::tag::SYNC_PUSH;

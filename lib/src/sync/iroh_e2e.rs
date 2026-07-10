@@ -493,3 +493,47 @@ async fn e2e_managed_node_replicates_missing_drive() {
         "B should host the drive after replicating"
     );
 }
+
+/// Two devices, two different accounts. The dialer proves a valid agent key, so
+/// AUTH itself succeeds — but it is not the acceptor's agent, and peer sync is
+/// same-agent only (serverless-p2p Principle 1).
+///
+/// Before this was enforced, the acceptor admitted the stranger and then denied
+/// it every subject in `check_read`, so the sync reported `count: 0` with status
+/// ok. Two real devices sat there "synced" and empty. Fail closed, and say why.
+#[tokio::test]
+async fn peer_sync_refuses_a_different_agent() {
+    use crate::sync::peer;
+
+    let db_a = Db::init_temp("xagent_a").await.unwrap();
+    let (_agent_a, drive) = db_a.setup("Alice").await.unwrap();
+
+    // Bob holds his own key: a perfectly valid agent, just not Alice.
+    let db_b = Db::init_temp("xagent_b").await.unwrap();
+    db_b.setup("Bob").await.unwrap();
+
+    let (node_id_a, router_a) = peer::start(db_a.clone()).await.unwrap();
+    let ep_b = iroh::Endpoint::builder()
+        .discovery_n0()
+        .discovery_local_network()
+        .bind()
+        .await
+        .unwrap();
+    ep_b.add_node_addr(router_a.endpoint().node_addr().await.unwrap())
+        .unwrap();
+
+    let result =
+        peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive, &db_b, true).await;
+
+    let error = result.expect_err("a different agent must not be able to sync");
+    let message = error.to_string();
+    assert!(
+        message.contains("different account"),
+        "the refusal must say why, got: {message}"
+    );
+
+    assert!(
+        !db_b.has_resource_locally(&drive),
+        "nothing may cross to a device signed in as somebody else"
+    );
+}
