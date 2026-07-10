@@ -11,6 +11,7 @@ import { NetworkIndicator } from './components/NetworkIndicator';
 import { PopoverContainer } from './components/Popover';
 import { SkipNav } from './components/SkipNav';
 import { ControlLockProvider } from './hooks/useControlLock';
+import { useKeyboardInset } from './hooks/useKeyboardInset';
 import { ThemeWrapper, GlobalStyle } from './styling';
 import isPropValid from '@emotion/is-prop-valid';
 import { initBugsnag } from './helpers/loggingHandlers';
@@ -55,6 +56,10 @@ const shouldForwardProp: ShouldForwardProp<'web'> = (propName, target) => {
 };
 
 export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
+  // Every screen with a text field needs the layout to shrink for the on-screen
+  // keyboard, not just the onboarding ones — see useKeyboardInset.
+  useKeyboardInset();
+
   return (
     <NavStateProvider>
       <LocaleProvider>

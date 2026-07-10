@@ -3,30 +3,28 @@
 // "connect a device" screen. Lives apart from GettingStartedFlow so a step it
 // renders can use the chrome without importing its parent.
 
-import type { JSX, ReactNode } from 'react';
 import { styled, css } from 'styled-components';
 import { Button } from '../../components/Button';
-import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { welcomeBackgroundCss } from './welcomeBackground';
 
-/**
- * The full-height frame every onboarding surface sits in. Owns the keyboard
- * measurement, because these are the screens with the text fields.
- */
-export function Shell({ children }: { children: ReactNode }): JSX.Element {
-  useKeyboardInset();
-
-  return <ShellRoot>{children}</ShellRoot>;
-}
-
-const ShellRoot = styled.div`
+export const Shell = styled.div`
   /* A concrete viewport height (not 100%): nothing in the html/body/#root
      chain sets a height, so 100% would collapse to content height and,
      because body is overflow:hidden, tall content (the welcome pitch on a
      phone) gets clipped with no way to scroll to the buttons. 100dvh tracks
      the visible viewport (excludes mobile browser UI), giving overflow-y a
-     real height to scroll within. */
-  height: 100dvh;
+     real height to scroll within.
+
+     Minus the on-screen keyboard (see useKeyboardInset), which Android lets
+     cover the webview rather than resizing it for. Shrinking the box means the
+     content re-flows into what's still visible — and overflow-y takes over
+     once it no longer fits — instead of sitting behind the keys. */
+  height: calc(100dvh - var(--keyboard-inset, 0px));
+  transition: height 150ms ease-out;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -43,26 +41,11 @@ const ShellRoot = styled.div`
      and navigation bars — 100dvh includes those strips, so centered content
      ends up half-hidden behind the nav bar (the welcome buttons were
      unreachable on a phone). The safe-area insets (needs viewport-fit=cover,
-     set in index.html) pad the content back into the visible region.
-
-     The --keyboard-inset variable (see useKeyboardInset) does the same for the
-     on-screen keyboard, which edge-to-edge likewise lets overlap us rather
-     than resize us. Reserving it as padding shrinks the box the auto margins
-     centre within, so the card re-centres in what's still visible instead of
-     sitting behind the keys — and overflow-y takes over when it no longer
-     fits. Transitioned because the keyboard slides in. */
+     set in index.html) pad the content back into the visible region. */
   padding: calc(${p => p.theme.size(7)} + env(safe-area-inset-top, 0px))
     ${p => p.theme.size(5)}
-    calc(
-      ${p => p.theme.size(7)} + env(safe-area-inset-bottom, 0px) +
-        var(--keyboard-inset, 0px)
-    );
+    calc(${p => p.theme.size(7)} + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
-  transition: padding-bottom 150ms ease-out;
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
   ${welcomeBackgroundCss}
 `;
 

@@ -143,11 +143,17 @@ const SideBarWrapper = styled.div<{
   top: boolean;
   fullViewportContent?: boolean;
 }>`
+  /* Subtract the on-screen keyboard (see useKeyboardInset). On Android the
+     webview is covered by the keyboard rather than resized for it, so 100dvh
+     stays full-screen; the browser then reveals a focused field by scrolling
+     the visual viewport, which drags this fixed element — and the top bar
+     above it — off the top of the screen. Shrinking instead means the field is
+     already visible and nothing scrolls. */
   ${p =>
     p.fullViewportContent
-      ? CalculatedPageHeight.define(`100dvh`)
+      ? CalculatedPageHeight.define(`calc(100dvh - var(--keyboard-inset, 0px))`)
       : CalculatedPageHeight.define(
-          `calc(100dvh - ${p.theme.heights.breadCrumbBar})`,
+          `calc(100dvh - ${p.theme.heights.breadCrumbBar} - var(--keyboard-inset, 0px))`,
         )}
   display: flex;
   height: ${CalculatedPageHeight.var()};
