@@ -792,8 +792,15 @@ impl Db {
             // Check if the drive resource actually exists locally.
             // Without the genesis commit, the DID is just a string — the device
             // can't create resources under it.
+            //
+            // `has_stored_resource`, not `get_resource`: the latter falls back to
+            // fetching the subject over the network, so asking whether a drive is
+            // *here* would go looking for it *there* — a DID resolution that can
+            // hang for half a minute while it holds up everything waiting on this
+            // call. Signing in on a device that doesn't have the drive yet is the
+            // normal case, not the exception.
             let drive_subject = Subject::from_raw(&drive_str, self.get_base_domain().as_deref());
-            if self.get_resource(&drive_subject).await.is_err() {
+            if !self.has_stored_resource(&drive_subject) {
                 tracing::warn!(
                     "Drive {} from secret does not exist locally — needs sync from another device",
                     &drive_str[..drive_str.len().min(30)]

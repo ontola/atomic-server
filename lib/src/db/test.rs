@@ -1525,3 +1525,44 @@ async fn add_resource_opts_always_writes_loro_snapshot() {
         "snapshot must be rewritten even when propvals already carry loroUpdate"
     );
 }
+
+/// Signing in on a device that doesn't have the drive yet is the normal case for
+/// a second device: it must be told it needs a sync, and asking the question
+/// must not drag the drive here.
+///
+/// The predicate is the point. `load_agent_from_secret` used to ask with
+/// `get_resource`, which falls back to *fetching* the subject — resolving a
+/// `did:ad:` drive that lives on another phone hung for ~25s on-device while
+/// everything waiting on the store queued behind it, including the webview
+/// re-authenticating its WebSocket. `has_stored_resource` answers the question
+/// that was actually being asked.
+///
+/// Note this test would pass against the old code too: with no DID resolver
+/// reachable, the fetch fails fast instead of hanging. It pins the predicate,
+/// not the latency — the hang only reproduces where resolution can stall.
+#[tokio::test]
+#[timeout(10000)]
+async fn load_agent_from_secret_reports_a_missing_drive_without_materialising_it() {
+    let db_a = Db::init_temp("agent_secret_local_drive_a").await.unwrap();
+    let (agent_a, drive) = db_a.setup("Alice").await.unwrap();
+    let secret = agent_a.build_secret().unwrap();
+
+    // A fresh device: same agent, none of the data.
+    let db_b = Db::init_temp("agent_secret_local_drive_b").await.unwrap();
+    let result = db_b.load_agent_from_secret(&secret).await.unwrap();
+
+    assert!(
+        result.drive_needs_sync,
+        "a device without the drive must be told it needs a sync"
+    );
+
+    let drive_subject = Subject::from_raw(&drive, None);
+    assert!(
+        !db_b.has_stored_resource(&drive_subject),
+        "asking whether the drive is here must not bring it here"
+    );
+    assert!(
+        db_a.has_stored_resource(&drive_subject),
+        "the device that made the drive still has it"
+    );
+}

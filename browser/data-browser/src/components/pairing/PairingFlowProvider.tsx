@@ -159,7 +159,7 @@ export function PairingFlowProvider({
         step: 'workspace',
         peerName,
         count,
-        message: workspaceError(workspace.reason, peerName, count),
+        message: workspaceError(workspace.reason),
       });
     },
     [store],
@@ -229,26 +229,21 @@ export function PairingFlowProvider({
 }
 
 /**
- * A sync that moved nothing is the informative case: AUTH passed (or the call
- * would have thrown), so the peer simply had no copy of this workspace to send.
- * Saying that is worth far more than "hasn't arrived yet".
+ * Say what happened, and no more.
+ *
+ * A count of zero used to be read as "the peer has no copy to send". It doesn't
+ * mean that: a sync between two replicas that already agree also moves zero
+ * resources. Retrying a pairing that already worked reports zero, and the old
+ * wording then accused the other device of not having data it had just sent.
+ * The peer's own agent is no longer in doubt either — a stranger is refused
+ * outright now, with its own error.
  */
-function workspaceError(
-  reason: 'unknown-drive' | 'timeout',
-  peerName: string | undefined,
-  count: number | undefined,
-): string {
-  const device = peerName ?? 'That device';
-
+function workspaceError(reason: 'unknown-drive' | 'timeout'): string {
   if (reason === 'unknown-drive') {
     return 'This device can’t tell which workspace to open. Open the app on your other device, then pair again.';
   }
 
-  if (count === 0) {
-    return `${device} doesn’t have your workspace to send. Check that it’s signed in as you and holds your data.`;
-  }
-
-  return `${device} sent your data, but the workspace still isn’t readable here. It may finish on its own — reopen this page in a moment.`;
+  return 'Your workspace hasn’t opened here yet. It may still be settling — reopen this page in a moment. If it stays empty, check that the other device holds your data.';
 }
 
 function expectsWorkspace(phase: Phase): boolean {
