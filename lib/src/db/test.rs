@@ -1566,3 +1566,80 @@ async fn load_agent_from_secret_reports_a_missing_drive_without_materialising_it
         "the device that made the drive still has it"
     );
 }
+
+/// `handle_commit` — the hook `atomic-server` uses to tell subscribed clients
+/// that something moved — only runs for applied commits. Writes that arrive as
+/// raw CRDT state (a peer's `SYNC_PUSH` import) have no commit, so a listener
+/// has to recognise them and fan them out itself. `from_commit` is that
+/// discriminator; if it ever lies, a device holds new data and renders the old.
+#[tokio::test]
+#[timeout(20000)]
+async fn db_events_say_whether_a_commit_produced_the_change() {
+    use crate::DbEvent;
+
+    let store = Db::init_temp("db_event_from_commit").await.unwrap();
+    let (agent, _drive) = store.setup("Alice").await.unwrap();
+    store.set_default_agent(agent);
+
+    let mut events = store.subscribe_events();
+
+    // A commit: the hook fires, so listeners must NOT fan this out again.
+    let mut committed = Resource::new_instance(urls::CLASS, &store).await.unwrap();
+    committed
+        .set(
+            urls::SHORTNAME.into(),
+            Value::Slug("committed".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+    committed
+        .set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown("via a commit".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+    committed.save_locally(&store).await.unwrap();
+
+    let from_commit = loop {
+        match events.recv().await.unwrap() {
+            DbEvent::Changed { from_commit, .. } => break from_commit,
+            _ => continue,
+        }
+    };
+    assert!(from_commit, "an applied commit must say so");
+
+    // A raw write, as a peer import performs: no commit, no hook, and nothing
+    // would reach the UI unless a listener notices.
+    let mut imported = Resource::new_instance(urls::CLASS, &store).await.unwrap();
+    imported
+        .set(
+            urls::SHORTNAME.into(),
+            Value::Slug("imported".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+    imported
+        .set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown("straight into the store".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+    store.add_resource(&imported).await.unwrap();
+
+    let from_commit = loop {
+        match events.recv().await.unwrap() {
+            DbEvent::Changed { from_commit, .. } => break from_commit,
+            _ => continue,
+        }
+    };
+    assert!(
+        !from_commit,
+        "a write with no commit must be recognisable, or nothing announces it"
+    );
+}

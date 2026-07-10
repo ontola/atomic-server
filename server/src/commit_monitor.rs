@@ -4,8 +4,8 @@
 
 use crate::{
     actor_messages::{
-        CommitMessage, MembershipNotification, SendFrame, Subscribe, SubscribeDrive,
-        SubscribeQuery, UnsubscribeAll, UnsubscribeQuery,
+        CommitMessage, ExternalChange, MembershipNotification, SendFrame, Subscribe,
+        SubscribeDrive, SubscribeQuery, UnsubscribeAll, UnsubscribeQuery,
     },
     handlers::{web_sockets::WebSocketConnection, ws_v2},
     search::SearchState,
@@ -164,6 +164,44 @@ impl Actor for CommitMonitor {
             let store_for_listener = self.store.clone();
             tokio::spawn(async move {
                 while let Ok(event) = events_rx.recv().await {
+                    // Changes that no commit produced. `handle_commit` — the
+                    // usual route from "the store moved" to "tell the clients"
+                    // — never runs for these, so without this arm a device that
+                    // receives a peer's data holds it on disk and keeps
+                    // rendering what it had before.
+                    match &event {
+                        DbEvent::Changed {
+                            subject,
+                            source_id,
+                            from_commit: false,
+                            ..
+                        } => {
+                            if let Some(msg) =
+                                external_change(&store_for_listener, subject, source_id.clone())
+                                    .await
+                            {
+                                addr.do_send(msg);
+                            }
+                            continue;
+                        }
+                        DbEvent::Destroyed {
+                            subject,
+                            source_id,
+                            from_commit: false,
+                        } => {
+                            addr.do_send(ExternalChange {
+                                subject: subject.to_string(),
+                                drive: None,
+                                loro_snapshot: None,
+                                commit_id: None,
+                                destroyed: true,
+                                source_id: source_id.clone(),
+                            });
+                            continue;
+                        }
+                        _ => {}
+                    }
+
                     if let DbEvent::QueryMembershipChanged {
                         filter_bytes,
                         subject,
@@ -458,6 +496,115 @@ impl Handler<UnsubscribeAll> for CommitMonitor {
         }
         self.query_subscriptions
             .retain(|_, conns| !conns.is_empty());
+    }
+}
+
+/// Gather what a subscriber needs to render a change that arrived without a
+/// commit: the resource's full Loro state (there is no delta to send — the
+/// writer had none), its `lastCommit`, and the drive it belongs to.
+///
+/// Returns `None` when there is no state worth sending; the client can still
+/// GET the subject explicitly.
+async fn external_change(
+    store: &Db,
+    subject: &atomic_lib::Subject,
+    source_id: Option<String>,
+) -> Option<ExternalChange> {
+    let snapshot = store
+        .kv
+        .get(
+            atomic_lib::db::trees::Tree::LoroSnapshots,
+            subject.pure_id().as_bytes(),
+        )
+        .ok()
+        .flatten()
+        .filter(|bytes| !bytes.is_empty())?;
+
+    // Present locally by construction — this event fired because it was just
+    // written — so this reads the store rather than reaching for the network.
+    let resource = store.get_resource(subject).await.ok();
+    let commit_id = resource
+        .as_ref()
+        .and_then(|r| r.get(atomic_lib::urls::LAST_COMMIT).ok())
+        .map(|v| v.to_string())
+        .filter(|s| !s.is_empty());
+
+    Some(ExternalChange {
+        subject: subject.to_string(),
+        drive: resource.as_ref().and_then(|r| r.get_drive()),
+        loro_snapshot: Some(Arc::from(snapshot.into_boxed_slice())),
+        commit_id,
+        destroyed: false,
+        source_id,
+    })
+}
+
+impl Handler<ExternalChange> for CommitMonitor {
+    type Result = ();
+
+    /// Fan a commit-less change out to the subject's subscribers and to the
+    /// subscribers of its drive — the same two audiences, and the same
+    /// drive-boundary check, that `Handler<CommitMessage>` serves.
+    fn handle(&mut self, msg: ExternalChange, _ctx: &mut Context<Self>) {
+        let base_domain = self.store.get_base_domain();
+        let subject = atomic_lib::Subject::from_raw(&msg.subject, base_domain.as_deref());
+        let resolved = subject.resolve(
+            &base_domain
+                .clone()
+                .unwrap_or_else(|| "http://localhost".to_string()),
+        );
+
+        let frame: Arc<[u8]> = if msg.destroyed {
+            Arc::from(ws_v2::encode_destroy(0, &resolved).into_boxed_slice())
+        } else {
+            let Some(snapshot) = msg.loro_snapshot.as_ref() else {
+                return;
+            };
+            let flags = if msg.commit_id.is_some() {
+                ws_v2::flags::HAS_COMMIT_ID | ws_v2::flags::PUSH
+            } else {
+                ws_v2::flags::PUSH
+            };
+            Arc::from(
+                ws_v2::encode_update(flags, 0, &resolved, msg.commit_id.as_deref(), snapshot)
+                    .into_boxed_slice(),
+            )
+        };
+
+        let source = msg.source_id.as_deref();
+
+        if let Some(subscribers) = self.subscriptions.get(&subject) {
+            for (connection, sub_source) in subscribers {
+                if skip_same_source(source, sub_source) {
+                    continue;
+                }
+                connection.do_send(SendFrame {
+                    frame: frame.clone(),
+                });
+            }
+        }
+
+        // A resource belongs to exactly one drive; a change must only reach
+        // that drive's subscribers. No drive, no drive-wide fanout — never a
+        // blind broadcast (see `Handler<CommitMessage>`).
+        let Some(owner) = msg.drive.as_ref() else {
+            return;
+        };
+
+        for (drive, subscribers) in &self.drive_subscriptions {
+            let drive_subject = atomic_lib::Subject::from_raw(drive, base_domain.as_deref());
+            if !owner.is_within_drive(&drive_subject) {
+                continue;
+            }
+            for (connection, sub_source) in subscribers {
+                if skip_same_source(source, sub_source) {
+                    continue;
+                }
+                connection.do_send(SendFrame {
+                    frame: frame.clone(),
+                });
+            }
+        }
     }
 }
 

@@ -81,12 +81,23 @@ pub enum DbEvent {
         source_id: Option<String>,
         /// True when this change created the resource (no prior version).
         is_new: bool,
+        /// Whether an applied commit produced this change.
+        ///
+        /// A commit also runs `handle_commit`, which is how `atomic-server`
+        /// tells subscribed WebSocket clients that something moved. Writes that
+        /// arrive as raw CRDT state — a peer's live `UPDATE` frame, a bulk
+        /// `SYNC_PUSH` import — have no commit, so nothing announces them and
+        /// the local UI renders a store it no longer matches. Listeners use
+        /// this to fan out exactly the changes the commit hook won't.
+        from_commit: bool,
     },
     /// Resource destroyed.
     Destroyed {
         subject: Subject,
         /// Optional transport/source identity for echo suppression.
         source_id: Option<String>,
+        /// See [`DbEvent::Changed::from_commit`].
+        from_commit: bool,
     },
     /// A resource entered or left the result set of a watched query. Emitted
     /// from `apply_transaction` after a successful write that touches
@@ -1840,6 +1851,7 @@ impl Db {
                 let _ = self.db_events.send(DbEvent::Destroyed {
                     subject: child.get_subject().without_params(),
                     source_id: None,
+                    from_commit: false,
                 });
                 // Because the function is async we need to box it to use recursion.
                 Box::pin(self.recursive_remove(child.get_subject(), transaction, removed)).await?;
@@ -2116,6 +2128,7 @@ impl Storelike for Db {
             delta: None,
             source_id: None,
             is_new: false,
+            from_commit: false,
         });
         Ok(())
     }
@@ -2255,6 +2268,7 @@ impl Storelike for Db {
             DbEvent::Destroyed {
                 subject,
                 source_id: commit_response.source_id.clone(),
+                from_commit: true,
             }
         } else {
             DbEvent::Changed {
@@ -2262,6 +2276,7 @@ impl Storelike for Db {
                 delta: commit_response.commit.loro_update.clone(),
                 source_id: commit_response.source_id.clone(),
                 is_new: commit_response.resource_old.is_none(),
+                from_commit: true,
             }
         };
         let _ = store.db_events.send(event);

@@ -216,3 +216,32 @@ pub struct MembershipNotification {
     /// Source connection id for echo suppression.
     pub source_id: Option<String>,
 }
+
+/// Forwarded into `CommitMonitor` by the `DbEvent` listener task: a resource
+/// changed *without* an applied commit, so `handle_commit` never ran and
+/// nothing has told the subscribed clients.
+///
+/// That is how a peer's data arrives — a live `UPDATE` frame or a bulk
+/// `SYNC_PUSH` import writes raw CRDT state straight into the store. Before
+/// this existed, the second device held the new data on disk and went on
+/// rendering the old, until it was restarted.
+///
+/// The snapshot and `commit_id` are pre-fetched off-actor, as
+/// `MembershipNotification` does, so the fanout loop stays O(1) per subscriber.
+#[derive(Message, Clone)]
+#[rtype(result = "()")]
+pub struct ExternalChange {
+    /// Subject that changed, resolved against the base domain.
+    pub subject: String,
+    /// The subject's drive, used to route drive-wide subscribers. `None` keeps
+    /// the change away from every drive subscriber rather than fanning blindly.
+    pub drive: Option<atomic_lib::Subject>,
+    /// Full Loro state. `None` for a destroy.
+    pub loro_snapshot: Option<Arc<[u8]>>,
+    /// The resource's `lastCommit`, when it has one.
+    pub commit_id: Option<String>,
+    /// True when the resource was destroyed rather than updated.
+    pub destroyed: bool,
+    /// Source connection id for echo suppression.
+    pub source_id: Option<String>,
+}

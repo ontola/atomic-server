@@ -1,4 +1,4 @@
-import type { Agent } from '@tomic/react';
+import { signRequest, type Agent } from '@tomic/react';
 
 /**
  * Node info. Every Atomic node exposes `GET /node-info` with read-only
@@ -101,19 +101,14 @@ export async function fetchNodeDriveUsage(
   url.searchParams.set('subject', driveSubject);
 
   try {
-    const timestamp = Date.now();
-    const res = await fetch(url.toString(), {
-      headers: {
-        Accept: 'application/json',
-        'x-atomic-public-key': await agent.getPublicKey(),
-        'x-atomic-signature': await agent.createSignature(
-          driveSubject,
-          timestamp,
-        ),
-        'x-atomic-timestamp': timestamp.toString(),
-        'x-atomic-agent': agent.subject,
-      },
+    // Sign the URL being fetched, not the drive. The server rebuilds the
+    // signed message from the request it received — query string and all — so
+    // signing anything else fails the auth check before routing, and the
+    // endpoint answers 500 rather than the usage it holds.
+    const headers = await signRequest(url.toString(), agent, {
+      Accept: 'application/json',
     });
+    const res = await fetch(url.toString(), { headers });
 
     if (!res.ok) return null;
 
