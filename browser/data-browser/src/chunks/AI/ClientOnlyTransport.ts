@@ -176,7 +176,7 @@ function trimToLastSummary(messages: AtomicUIMessage[]): AtomicUIMessage[] {
 
 export const useClientOnlyTransport = (options: ClientOnlyTransportOptions) => {
   const store = useStore();
-  const generateId = () => store.createSubject();
+  const generateId = () => store.newLocalId();
   const { drive } = useSettings();
   const getDriveTree = useGetDriveStructure();
 

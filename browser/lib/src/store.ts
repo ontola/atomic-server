@@ -1913,24 +1913,12 @@ export class Store {
     if (subject) {
       newSubject = subject;
     } else if (shouldUseDid) {
-      const agent = this.getAgent();
-
-      if (!agent) {
-        throw new Error(
-          'Cannot create a DID resource without an agent. Set an agent on the store first.',
-        );
-      }
-
-      const cert: GenesisCert = {
-        signerPubkey: decodeB64(await agent.getPublicKey()),
-        createdAt: Date.now(),
-        nonce: crypto.getRandomValues(new Uint8Array(16)),
-        parent: noParent ? '' : normalizedParent,
-        drive: resolvedDrive ?? '',
-      };
-      const certBytes = encodeGenesisCert(cert);
-      newSubject = subjectForSignature(await agent.signBytes(certBytes));
-      genesisCertB64 = encodeB64Url(certBytes);
+      const minted = await this.mintCertDid(
+        noParent ? '' : normalizedParent,
+        resolvedDrive ?? '',
+      );
+      newSubject = minted.did;
+      genesisCertB64 = minted.certB64;
     } else {
       newSubject = this.createHTTPSubject(normalizedParent);
     }
@@ -2318,6 +2306,50 @@ export class Store {
     }
 
     return this.createHTTPSubject(parent ?? this.serverUrl);
+  }
+
+  /**
+   * A unique, non-resource identifier — a plain unique string for callers that
+   * need one but are NOT creating an Atomic resource (e.g. AI SDK message ids).
+   * Never a `_new:` or `did:ad:` subject, so it can't be mistaken for one.
+   */
+  public newLocalId(): string {
+    return ulid();
+  }
+
+  /**
+   * Mint a resource's identity from a self-verifying genesis certificate
+   * (mirrors `lib/src/commit.rs::create_did`). The DID is the agent's signature
+   * over the cert, so the resource carries its real `did:ad:` from creation —
+   * no `_new:` placeholder, no post-sign rename. `parent`/`drive` are the
+   * immutable birth context (empty string when absent). Returns the DID and the
+   * base64url cert to store inline as the `genesis` propval.
+   */
+  private async mintCertDid(
+    parent: string,
+    drive: string,
+  ): Promise<{ did: string; certB64: string }> {
+    const agent = this.getAgent();
+
+    if (!agent) {
+      throw new Error(
+        'Cannot create a DID resource without an agent. Set an agent on the store first.',
+      );
+    }
+
+    const cert: GenesisCert = {
+      signerPubkey: decodeB64(await agent.getPublicKey()),
+      createdAt: Date.now(),
+      nonce: crypto.getRandomValues(new Uint8Array(16)),
+      parent,
+      drive,
+    };
+    const certBytes = encodeGenesisCert(cert);
+
+    return {
+      did: subjectForSignature(await agent.signBytes(certBytes)),
+      certB64: encodeB64Url(certBytes),
+    };
   }
 
   /**
@@ -4221,13 +4253,36 @@ export class Store {
 
       await this.clientDb!.putBlob(hashBytes, data);
 
-      const newSubject = useDid
-        ? `_new:${this.randomPart()}`
-        : this.createHTTPSubject(parent);
+      const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
+      const driveVal =
+        (this.resources.get(parent)?.get(DRIVE_PROP) as string | undefined) ??
+        parent;
+
+      // Mint the cert-based DID up front (like `newResource`), so the upload
+      // carries its real `did:ad:` from creation — no `_new:` placeholder.
+      let genesisCertB64: string | undefined;
+      let newSubject: string;
+
+      if (useDid) {
+        const minted = await this.mintCertDid(parent, driveVal);
+        newSubject = minted.did;
+        genesisCertB64 = minted.certB64;
+      } else {
+        newSubject = this.createHTTPSubject(parent);
+      }
 
       const resource = this.getResourceLoading(newSubject, {
         newResource: true,
       });
+
+      if (genesisCertB64) {
+        await resource.set(
+          'https://atomicdata.dev/properties/genesis',
+          genesisCertB64,
+          false,
+        );
+        await resource.set(DRIVE_PROP, driveVal, false);
+      }
 
       // All values are produced from trusted code (hashes, fixed property
       // URLs). Skip validation — it would otherwise fetch each property's
@@ -4246,18 +4301,15 @@ export class Store {
         false,
       );
 
-      // For DID resources, sign the genesis commit locally so the placeholder
-      // `_new:` subject is replaced with the real `did:ad:` subject derived
-      // from the signature, then STASH it on the resource — mirrors
-      // `Store.newResource`. `save()` below moves the stashed genesis into
-      // the outbox and drains it. (Stashing on the resource rather than
-      // enqueuing here means a never-saved upload is never POSTed; here we
-      // always `save()`, but the genesis MUST be stashed or `save()` has
-      // nothing to POST — `signChanges` resets `commitBuilder.isGenesis`,
-      // so the genesis would otherwise be silently dropped.)
+      // Sign the genesis commit locally (its subject is already the cert DID,
+      // so `signChanges` derives nothing), then STASH it on the resource —
+      // mirrors `Store.newResource`. `save()` below moves the stashed genesis
+      // into the outbox and drains it. (Stashing rather than enqueuing here
+      // means a never-saved upload is never POSTed; here we always `save()`,
+      // but the genesis MUST be stashed or `save()` has nothing to POST —
+      // `signChanges` resets `commitBuilder.isGenesis`, so the genesis would
+      // otherwise be silently dropped.)
       if (useDid) {
-        // `signChanges` auto-detects genesis (DID-eligible `_new:` subject,
-        // no previousCommit) and derives the `did:ad:` subject.
         const genesis = await resource.signChanges(this.getAgent()!);
         resource.stashGenesis(genesis);
       }

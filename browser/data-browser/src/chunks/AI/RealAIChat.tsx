@@ -336,7 +336,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     useChat({
       transport,
       messages: initialMessages,
-      generateId: () => store.createSubject(),
+      generateId: () => store.newLocalId(),
       onFinish: ({ message, isError, messages: _messages }) => {
         if (isError) {
           message.metadata = {
@@ -391,7 +391,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     }
 
     const summaryMessage: AtomicUIMessage = {
-      id: store.createSubject(),
+      id: store.newLocalId(),
       role: 'user',
       parts: [
         {
@@ -491,7 +491,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
     const context = [...externalContextItems, ...userSelectedContextItems];
     const message: AtomicUIMessage = {
-      id: store.createSubject(),
+      id: store.newLocalId(),
       role: 'user',
       parts: [
         {
