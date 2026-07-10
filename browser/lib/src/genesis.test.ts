@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it } from 'vitest';
 import { getPublicKey } from '@noble/ed25519';
 import { decodeB64 } from './base64.js';
+import { JSCryptoProvider } from './CryptoProvider.js';
 import {
   encodeGenesisCert,
   decodeGenesisCert,
@@ -189,6 +190,11 @@ describe('GenesisCert golden vectors (shared fixture)', () => {
       // Same key + cert → the exact same signature, DID, and signer DID.
       const signature = await signGenesisCert(cert, decodeB64(v.privateKeyBase64));
       expect(signature).toBe(v.signature);
+
+      // The production signing path (a CryptoProvider signing raw bytes) must
+      // produce the same signature — this is what actually mints the DID.
+      const provider = new JSCryptoProvider(v.privateKeyBase64);
+      expect(await provider.signBytes(encodeGenesisCert(cert))).toBe(v.signature);
       expect(subjectForSignature(signature)).toBe(v.did);
       expect(genesisSignerDid(cert)).toBe(v.signerDid);
 

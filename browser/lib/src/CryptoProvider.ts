@@ -7,6 +7,11 @@ hashes.sha512 = sha512;
 export interface CryptoProvider {
   type: string;
   sign(data: string): Promise<string>;
+  /** Sign raw bytes (not a UTF-8 string). Needed for the binary genesis
+   * certificate, whose signature mints a resource's DID. Works even with a
+   * non-extractable SubtleCrypto key — it signs the bytes, it doesn't expose
+   * the key. Returns the signature as base64url-no-pad. */
+  signBytes(data: Uint8Array): Promise<string>;
   getPublicKey(): Promise<string>;
 }
 
@@ -39,12 +44,11 @@ export class JSCryptoProvider implements CryptoProvider {
   }
 
   async sign(message: string): Promise<string> {
-    const utf8Encode = new TextEncoder();
-    const messageBytes: Uint8Array = utf8Encode.encode(message);
-    const signatureHex = await sign(messageBytes, this.#privateKey);
-    const signatureBase64 = encodeB64Url(signatureHex);
+    return this.signBytes(new TextEncoder().encode(message));
+  }
 
-    return signatureBase64;
+  async signBytes(data: Uint8Array): Promise<string> {
+    return encodeB64Url(await sign(data, this.#privateKey));
   }
 
   async getPublicKey(): Promise<string> {
@@ -145,15 +149,19 @@ export class SubtleCryptoProvider implements CryptoProvider {
   }
 
   public async sign(message: string): Promise<string> {
-    const utf8Encode = new TextEncoder();
+    return this.signBytes(new TextEncoder().encode(message));
+  }
+
+  public async signBytes(data: Uint8Array): Promise<string> {
     const signature = await globalThis.crypto.subtle.sign(
       { name: 'Ed25519' },
       this.#privateKey,
-      utf8Encode.encode(message),
+      // Copy into a fresh ArrayBuffer-backed view: SubtleCrypto's `BufferSource`
+      // rejects a possibly-SharedArrayBuffer-backed `Uint8Array`.
+      new Uint8Array(data),
     );
-    const signatureBase64 = encodeB64Url(new Uint8Array(signature));
 
-    return signatureBase64;
+    return encodeB64Url(new Uint8Array(signature));
   }
 
   public async getPublicKey(): Promise<string> {

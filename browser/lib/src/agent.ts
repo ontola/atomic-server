@@ -130,6 +130,12 @@ export class Agent implements AgentInterface {
     return this.#cryptoProvider.sign(message);
   }
 
+  /** Sign raw bytes (base64url signature). Used to mint a resource's DID from
+   * its binary genesis certificate. */
+  public async signBytes(data: Uint8Array): Promise<string> {
+    return this.#cryptoProvider.signBytes(data);
+  }
+
   public createSignature(subject: string, timestamp: number): Promise<string> {
     const message = `${subject} ${timestamp}`;
 
