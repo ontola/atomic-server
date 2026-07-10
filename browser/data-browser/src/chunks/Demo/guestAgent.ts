@@ -25,7 +25,11 @@ export async function ensureAgentForDemo(store: Store): Promise<boolean> {
   const agent = new Agent(new JSCryptoProvider(keys.privateKey), subject);
 
   store.setAgent(agent);
-  await saveAgentToIDB(Agent.buildSecret(keys.privateKey, subject));
+  // A throwaway guest must not become the identity this device's node signs
+  // peer AUTH with — that survives the demo, and the agent doesn't.
+  await saveAgentToIDB(Agent.buildSecret(keys.privateKey, subject), {
+    adoptOnDevice: false,
+  });
 
   return true;
 }

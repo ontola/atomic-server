@@ -78,6 +78,68 @@ fn dispatch_pair_links(eval: impl Fn(&str) -> tauri::Result<()>, state: &PairLin
 /// makes the repeats free.
 const PAIR_LINK_RETRY_WINDOW: std::time::Duration = std::time::Duration::from_secs(120);
 
+/// A handle on the embedded node, captured once it has booted.
+#[derive(Default)]
+struct EmbeddedNode {
+  store: std::sync::OnceLock<atomic_lib::Db>,
+  config_file: std::sync::OnceLock<std::path::PathBuf>,
+}
+
+/// Make this device's node act as the signed-in user, rather than as the
+/// identity `atomic-server` mints for itself on first boot.
+///
+/// On a hosted server, the server is a principal: it has an agent, it signs,
+/// and it is root over its own store (`hierarchy.rs`, "Server agent has root
+/// access"). On a personal device that is simply false — the user is the
+/// principal. Left alone, the embedded server signs peer AUTH as a stranger,
+/// every remote `check_read` denies it, and sync moves nothing.
+///
+/// This is a Tauri command and deliberately **not** an HTTP endpoint. The
+/// embedded server listens on `localhost`, which on Android any other app can
+/// reach; an endpoint that sets the node's root identity would be a handover of
+/// the device. Tauri IPC is callable only from our own webview.
+///
+/// Persisted, because the browser cannot supply it twice: the agent's private
+/// key is stored non-extractable (`helpers/agentStorage.ts`), so sign-in is the
+/// one moment the secret exists outside the keystore.
+#[tauri::command]
+async fn adopt_agent(
+  secret: String,
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+) -> Result<(), String> {
+  let store = node
+    .store
+    .get()
+    .ok_or("The local node has not finished starting up.")?
+    .clone();
+  let config_file = node
+    .config_file
+    .get()
+    .ok_or("The local node has no config path.")?
+    .clone();
+
+  use atomic_lib::Storelike;
+  store
+    .load_agent_from_secret(&secret)
+    .await
+    .map_err(|e| format!("Could not adopt that agent: {e}"))?;
+
+  let mut config = atomic_lib::config::read_config(Some(&config_file))
+    .map_err(|e| format!("Could not read the node config: {e}"))?;
+  config.shared.agent_secret = secret;
+  config.shared.initial_drive = store
+    .get_default_agent()
+    .ok()
+    .and_then(|agent| agent.initial_drive.map(|d| d.to_string()));
+  config
+    .save(&config_file)
+    .map_err(|e| format!("Could not persist the node agent: {e}"))?;
+
+  println!("[identity] the local node now acts as the signed-in agent");
+
+  Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let builder = tauri::Builder::default()
@@ -89,8 +151,13 @@ pub fn run() {
   #[cfg(mobile)]
   let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
 
+  let node = std::sync::Arc::new(EmbeddedNode::default());
+  let node_for_server = node.clone();
+
   builder
     .manage(PairLinks::default())
+    .manage(node)
+    .invoke_handler(tauri::generate_handler![adopt_agent])
     .setup(move |app| {
       {
         use tauri::Manager;
@@ -186,6 +253,9 @@ pub fn run() {
       };
 
       let config_clone = config.clone();
+      let _ = node_for_server
+        .config_file
+        .set(config.config_file_path.clone());
       // This is not the cleanest solution, but running actix inside the tauri / tokio runtime is not
       std::thread::spawn(move || {
         #[cfg(target_os = "android")]
@@ -194,8 +264,15 @@ pub fn run() {
           .expect("TLS verifier initialization did not complete");
 
         let rt = actix_rt::Runtime::new().unwrap();
-        rt.block_on(atomic_server_lib::serve::serve(config_clone))
-          .unwrap();
+        // The hook hands us the store once it's up, so `adopt_agent` can point
+        // the node's identity at the signed-in user.
+        rt.block_on(atomic_server_lib::serve::serve_with_hook(
+          config_clone,
+          |appstate| {
+            let _ = node_for_server.store.set(appstate.store.clone());
+          },
+        ))
+        .unwrap();
       });
 
       #[cfg(not(target_os = "android"))]

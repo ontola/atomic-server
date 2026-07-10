@@ -147,6 +147,9 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.170.7
         version: 1.170.7(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@tauri-apps/api':
+        specifier: ^2.11.1
+        version: 2.11.1
       '@tauri-apps/plugin-barcode-scanner':
         specifier: ^2.4.5
         version: 2.4.5

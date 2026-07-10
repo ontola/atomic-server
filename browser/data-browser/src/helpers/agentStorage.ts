@@ -1,5 +1,6 @@
 import { Agent, SubtleCryptoProvider, JSCryptoProvider } from '@tomic/react';
 import { del, get, set } from 'idb-keyval';
+import { adoptAgentOnDevice } from './adoptAgent';
 
 const AGENT_IDB_KEY = 'atomic.agent';
 
@@ -78,15 +79,33 @@ export async function getAgentFromIDB(): Promise<Agent | undefined> {
   return undefined;
 }
 
+export interface SaveAgentOptions {
+  /**
+   * Also make this device's embedded node act as this agent (see
+   * `helpers/adoptAgent.ts`). Default true — signing in *is* the moment the
+   * device takes on an identity. Pass false for throwaway agents (the demo
+   * guest) that must not become the node's identity.
+   */
+  adoptOnDevice?: boolean;
+}
+
 export async function saveAgentToIDB(
   keyPair: CryptoKeyPair,
   subject: string,
 ): Promise<void>;
-export async function saveAgentToIDB(secret: string | undefined): Promise<void>;
+export async function saveAgentToIDB(
+  secret: string | undefined,
+  options?: SaveAgentOptions,
+): Promise<void>;
 export async function saveAgentToIDB(
   keyPairOrSecret: CryptoKeyPair | string | undefined,
-  subject?: string,
+  subjectOrOptions?: string | SaveAgentOptions,
 ): Promise<void> {
+  const subject =
+    typeof subjectOrOptions === 'string' ? subjectOrOptions : undefined;
+  const options =
+    typeof subjectOrOptions === 'object' ? subjectOrOptions : undefined;
+
   if (keyPairOrSecret === undefined) {
     await del(AGENT_IDB_KEY);
     await del(AGENT_FALLBACK_KEY);
@@ -95,13 +114,37 @@ export async function saveAgentToIDB(
   }
 
   if (typeof keyPairOrSecret === 'string') {
+    await storeSecret(keyPairOrSecret);
+
+    // The device now holds this agent; its node should sign as this agent too.
+    // Best-effort and last, so a node that isn't up yet can't block sign-in.
+    if (options?.adoptOnDevice !== false) {
+      await adoptAgentOnDevice(keyPairOrSecret);
+    }
+
+    return;
+  }
+
+  if (!subject) {
+    throw new Error('Subject is required');
+  }
+
+  await set(AGENT_IDB_KEY, {
+    keyPair: keyPairOrSecret,
+    subject,
+  } satisfies StoredAgent);
+}
+
+/** Persist the agent's key, preferring a non-extractable keypair. */
+async function storeSecret(secret: string): Promise<void> {
+  {
     // Prefer the non-extractable keypair. Once stored this way the private key
     // cannot be read back out of IndexedDB by anything running on this origin,
     // so no readable copy may be left beside it.
     if (hasSubtleCrypto()) {
       try {
         const [keyPair, resolvedSubject] =
-          await SubtleCryptoProvider.createKeysFromSecret(keyPairOrSecret);
+          await SubtleCryptoProvider.createKeysFromSecret(secret);
         await set(AGENT_IDB_KEY, {
           keyPair,
           subject: resolvedSubject,
@@ -117,24 +160,15 @@ export async function saveAgentToIDB(
     // Insecure context (plain-HTTP self-hosted origin): Web Crypto is absent,
     // so a readable key is the only way to sign at all. The secret is no more
     // exposed than the unencrypted connection already carrying it.
-    const [, newSubject] = JSCryptoProvider.fromSecret(keyPairOrSecret);
+    const [, newSubject] = JSCryptoProvider.fromSecret(secret);
     // The secret is a base64-encoded JSON containing { privateKey, subject }.
     // We extract the privateKey for the JS fallback.
-    const decoded = JSON.parse(atob(keyPairOrSecret));
+    const decoded = JSON.parse(atob(secret));
     await set(AGENT_FALLBACK_KEY, {
       privateKey: decoded.privateKey,
       subject: newSubject,
     } satisfies StoredAgentFallback);
     // Drop a keypair from a previous account, so it can't be loaded instead.
     await del(AGENT_IDB_KEY);
-  } else {
-    if (!subject) {
-      throw new Error('Subject is required');
-    }
-
-    await set(AGENT_IDB_KEY, {
-      keyPair: keyPairOrSecret,
-      subject,
-    } satisfies StoredAgent);
   }
 }
