@@ -59,7 +59,7 @@ export function ConnectToDeviceForm({
       >
         <CodeInput
           autoComplete='off'
-          placeholder='Paste atomic://pair… code'
+          placeholder='Paste a pairing code or did:ad:node:…'
           value={typedCode}
           onChange={e => setTypedCode(e.target.value)}
         />

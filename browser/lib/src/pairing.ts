@@ -1,5 +1,3 @@
-import { decodeB64, encodeB64Url } from './base64.js';
-
 /**
  * Device-pairing envelope: the payload behind the `atomic://pair` QR code /
  * deep link (see `planning/device-pairing.md`). One format, two kinds:
@@ -11,8 +9,19 @@ import { decodeB64, encodeB64Url } from './base64.js';
  *   scanned `pair` envelope grants nothing by itself: the dialed peer still
  *   has to prove the same agent key over AUTH.
  *
- * Wire form: `atomic://pair?p=<base64url(json)>`. The same string renders as
- * a QR and works as a tap/paste deep link.
+ * Wire form is a plain, readable URI:
+ *
+ *     atomic://pair?v=1&kind=pair&node=did:ad:node:<64 hex>&drives=*
+ *
+ * `atomic://` is the transport and `did:ad:node:` is the identity — they nest
+ * rather than compete, so a node is written the same way here as everywhere
+ * else. The scheme has to be one the app registers, because a QR scanned by
+ * the system camera must launch it; `did:` can't serve that role (iOS
+ * registers bare schemes, so claiming `did` would claim `did:key` and
+ * `did:web` too). And a bare DID has nowhere to carry `drives` — the field
+ * that tells a freshly signed-in device *which* drive to pull.
+ *
+ * Multi-drive envelopes repeat the parameter: `&drives=a&drives=b`.
  */
 export type PairingEnvelope = {
   v: 1;
@@ -27,7 +36,9 @@ export type PairingEnvelope = {
   drives: '*' | string[];
 };
 
-export const PAIRING_URI_PREFIX = 'atomic://pair?p=';
+export const PAIRING_URI_PREFIX = 'atomic://pair?';
+
+const NODE_DID_PREFIX = 'did:ad:node:';
 
 /**
  * Why decoding failed. `unsupported-version` deserves its own UI ("update the
@@ -42,8 +53,6 @@ export class PairingEnvelopeError extends Error {
     this.name = 'PairingEnvelopeError';
   }
 }
-
-const NODE_DID_PREFIX = 'did:ad:node:';
 
 function isValidNodeDid(value: unknown): value is string {
   if (typeof value !== 'string' || !value.startsWith(NODE_DID_PREFIX)) {
@@ -77,79 +86,35 @@ function isValidDrives(value: unknown): value is '*' | string[] {
   return (
     Array.isArray(value) &&
     value.length > 0 &&
-    value.every(entry => typeof entry === 'string' && entry.length > 0)
+    // `*` means *all* drives; listing it alongside named ones is a
+    // contradiction, not a drive whose subject happens to be an asterisk.
+    value.every(
+      entry => typeof entry === 'string' && entry.length > 0 && entry !== '*',
+    )
   );
 }
 
-/** Serialize an envelope into its `atomic://pair?p=…` QR / deep-link form. */
-export function encodePairingEnvelope(envelope: PairingEnvelope): string {
-  // Round-trip through the validator so we can never mint a QR this module
-  // would refuse to scan.
-  const json = JSON.stringify(envelope);
-  validateEnvelope(JSON.parse(json));
-
-  return `${PAIRING_URI_PREFIX}${encodeB64Url(new TextEncoder().encode(json))}`;
-}
-
-/**
- * Parse and strictly validate a scanned/pasted pairing payload. Accepts the
- * full `atomic://pair?p=…` URI or the bare base64url payload. Throws
- * {@link PairingEnvelopeError} — check `code === 'unsupported-version'` to
- * show an "update the app" message instead of a generic scan error.
- */
-export function decodePairingEnvelope(input: string): PairingEnvelope {
-  const trimmed = input.trim();
-  const payload = trimmed.startsWith(PAIRING_URI_PREFIX)
-    ? trimmed.slice(PAIRING_URI_PREFIX.length)
-    : trimmed;
-
-  if (!payload || /[^A-Za-z0-9_-]/.test(payload)) {
-    throw new PairingEnvelopeError(
-      'malformed',
-      'Not a pairing code: expected an atomic://pair link.',
-    );
-  }
-
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(new TextDecoder().decode(decodeB64(payload)));
-  } catch {
-    throw new PairingEnvelopeError(
-      'malformed',
-      'Could not read the pairing code — it may be damaged or truncated.',
-    );
-  }
-
-  return validateEnvelope(parsed);
-}
-
-function validateEnvelope(parsed: unknown): PairingEnvelope {
-  if (typeof parsed !== 'object' || parsed === null) {
-    throw new PairingEnvelopeError('malformed', 'Pairing payload is not an object.');
-  }
-
-  const candidate = parsed as Record<string, unknown>;
-
-  if (candidate.v !== 1) {
+/** Throws {@link PairingEnvelopeError} unless every field is well-formed. */
+function assertValid(envelope: PairingEnvelope): PairingEnvelope {
+  if (envelope.v !== 1) {
     throw new PairingEnvelopeError(
       'unsupported-version',
       'This pairing code was made by a newer version of Atomic — update this app to use it.',
     );
   }
 
-  if (candidate.kind !== 'onboard' && candidate.kind !== 'pair') {
+  if (envelope.kind !== 'onboard' && envelope.kind !== 'pair') {
     throw new PairingEnvelopeError('malformed', 'Unknown pairing kind.');
   }
 
-  if (candidate.kind === 'onboard') {
-    if (typeof candidate.secret !== 'string' || candidate.secret.length === 0) {
+  if (envelope.kind === 'onboard') {
+    if (typeof envelope.secret !== 'string' || envelope.secret.length === 0) {
       throw new PairingEnvelopeError(
         'malformed',
         'Onboarding code is missing the identity it should carry.',
       );
     }
-  } else if (candidate.secret !== undefined) {
+  } else if (envelope.secret !== undefined) {
     // A routing-only envelope must never smuggle a secret: fail loudly
     // rather than silently importing an identity the user didn't ask for.
     throw new PairingEnvelopeError(
@@ -158,33 +123,122 @@ function validateEnvelope(parsed: unknown): PairingEnvelope {
     );
   }
 
-  if (!isValidNodeDid(candidate.node)) {
+  if (!isValidNodeDid(envelope.node)) {
     throw new PairingEnvelopeError(
       'malformed',
       'Pairing code carries an invalid node identity.',
     );
   }
 
-  if (candidate.url !== undefined && !isValidUrl(candidate.url)) {
+  if (envelope.url !== undefined && !isValidUrl(envelope.url)) {
     throw new PairingEnvelopeError(
       'malformed',
       'Pairing code carries an invalid server URL.',
     );
   }
 
-  if (!isValidDrives(candidate.drives)) {
+  if (!isValidDrives(envelope.drives)) {
     throw new PairingEnvelopeError(
       'malformed',
       'Pairing code does not say which drives to sync.',
     );
   }
 
-  return {
+  return envelope;
+}
+
+/**
+ * Percent-encode a query value, but leave `:` and `*` alone. Both are legal in
+ * a query per RFC 3986, and keeping them literal is the whole point: an
+ * escaped `did%3Aad%3Anode%3A…` would be no more readable than the base64 blob
+ * this format replaced.
+ */
+function encodeValue(value: string): string {
+  return encodeURIComponent(value).replace(/%3A/gi, ':').replace(/%2A/gi, '*');
+}
+
+/** Serialize an envelope into its `atomic://pair?…` QR / deep-link form. */
+export function encodePairingEnvelope(envelope: PairingEnvelope): string {
+  // Round-trip through the validator so we can never mint a QR this module
+  // would refuse to scan.
+  assertValid(envelope);
+
+  const params = [
+    `v=${envelope.v}`,
+    `kind=${envelope.kind}`,
+    `node=${encodeValue(envelope.node)}`,
+  ];
+
+  if (envelope.url !== undefined) {
+    params.push(`url=${encodeURIComponent(envelope.url)}`);
+  }
+
+  if (envelope.secret !== undefined) {
+    params.push(`secret=${encodeURIComponent(envelope.secret)}`);
+  }
+
+  if (envelope.drives === '*') {
+    params.push('drives=*');
+  } else {
+    for (const drive of envelope.drives) {
+      params.push(`drives=${encodeValue(drive)}`);
+    }
+  }
+
+  return `${PAIRING_URI_PREFIX}${params.join('&')}`;
+}
+
+/**
+ * Parse and strictly validate a scanned/pasted pairing code. Accepts the full
+ * `atomic://pair?…` URI, or a bare `did:ad:node:…` (routing-only, all drives)
+ * for someone who copied just the node identity. Throws
+ * {@link PairingEnvelopeError} — check `code === 'unsupported-version'` to
+ * show an "update the app" message instead of a generic scan error.
+ */
+export function decodePairingEnvelope(input: string): PairingEnvelope {
+  const trimmed = input.trim();
+
+  if (trimmed.startsWith(NODE_DID_PREFIX)) {
+    return assertValid({ v: 1, kind: 'pair', node: trimmed, drives: '*' });
+  }
+
+  if (!trimmed.startsWith(PAIRING_URI_PREFIX)) {
+    throw new PairingEnvelopeError(
+      'malformed',
+      'Not a pairing code: expected an atomic://pair link.',
+    );
+  }
+
+  const params = new URLSearchParams(trimmed.slice(PAIRING_URI_PREFIX.length));
+
+  const version = params.get('v');
+
+  // An unknown version must never be best-effort parsed. A missing one is
+  // simply not our format.
+  if (version !== null && version !== '1') {
+    throw new PairingEnvelopeError(
+      'unsupported-version',
+      'This pairing code was made by a newer version of Atomic — update this app to use it.',
+    );
+  }
+
+  if (version === null) {
+    throw new PairingEnvelopeError('malformed', 'Pairing code has no version.');
+  }
+
+  const drives = params.getAll('drives');
+  const secret = params.get('secret');
+  const url = params.get('url');
+
+  return assertValid({
     v: 1,
-    kind: candidate.kind,
-    ...(candidate.kind === 'onboard' ? { secret: candidate.secret as string } : {}),
-    node: candidate.node as string,
-    ...(candidate.url !== undefined ? { url: candidate.url as string } : {}),
-    drives: candidate.drives as '*' | string[],
-  };
+    kind: params.get('kind') as PairingEnvelope['kind'],
+    ...(secret !== null ? { secret } : {}),
+    node: params.get('node') as string,
+    ...(url !== null ? { url } : {}),
+    drives:
+      drives.length === 1 && drives[0] === '*'
+        ? '*'
+        : (drives as string[] | '*'),
+  });
 }

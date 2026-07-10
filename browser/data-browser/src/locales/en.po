@@ -4966,10 +4966,6 @@ msgstr "Could not copy — select and copy the code manually."
 msgid "Scan this from a device already signed in as you, or copy the code and paste it there. It only says where to reach this device — the other side still proves it holds your key."
 msgstr "Scan this from a device already signed in as you, or copy the code and paste it there. It only says where to reach this device — the other side still proves it holds your key."
 
-#: src/components/ConnectToDeviceForm.tsx
-msgid "Paste atomic://pair… code"
-msgstr "Paste atomic://pair… code"
-
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
 msgid "Connect"
@@ -5253,3 +5249,7 @@ msgstr "You’re signed in, but this device doesn’t have your workspace yet. U
 #: src/routes/SyncRoute.tsx
 msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect the server that has it."
 msgstr "You’re signed in, but this device doesn’t have your workspace yet. Connect the server that has it."
+
+#: src/components/ConnectToDeviceForm.tsx
+msgid "Paste a pairing code or did:ad:node:…"
+msgstr "Paste a pairing code or did:ad:node:…"

@@ -6,7 +6,6 @@ import {
   PAIRING_URI_PREFIX,
   type PairingEnvelope,
 } from './pairing.js';
-import { encodeB64Url } from './base64.js';
 
 const NODE = `did:ad:node:${'ab'.repeat(32)}`;
 
@@ -26,10 +25,19 @@ const pair: PairingEnvelope = {
   drives: ['did:ad:drive1', 'did:ad:drive2'],
 };
 
-function encodeRaw(payload: unknown): string {
-  return `${PAIRING_URI_PREFIX}${encodeB64Url(
-    new TextEncoder().encode(JSON.stringify(payload)),
-  )}`;
+/** Build a URI from raw query params, bypassing the encoder's validation. */
+function uriOf(params: Record<string, string | string[] | undefined>): string {
+  const parts: string[] = [];
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue;
+
+    for (const entry of Array.isArray(value) ? value : [value]) {
+      parts.push(`${key}=${entry}`);
+    }
+  }
+
+  return `${PAIRING_URI_PREFIX}${parts.join('&')}`;
 }
 
 function codeOf(fn: () => unknown): string {
@@ -57,37 +65,91 @@ describe('pairing envelope', () => {
     expect(decodePairingEnvelope(encodePairingEnvelope(pair))).toEqual(pair);
   });
 
-  it('accepts the bare payload without the uri prefix', () => {
-    const uri = encodePairingEnvelope(pair);
-    const bare = uri.slice(PAIRING_URI_PREFIX.length);
-    expect(decodePairingEnvelope(bare)).toEqual(pair);
+  it('writes the node identity the way the rest of the app writes it', () => {
+    // The whole point of the readable form: no base64, no percent-escaped
+    // colons. A human reading the copied code sees a did:ad:node: identity.
+    expect(encodePairingEnvelope(pair)).toContain(`node=${NODE}`);
+  });
+
+  it('repeats the parameter for a multi-drive envelope', () => {
+    expect(encodePairingEnvelope(pair)).toContain(
+      'drives=did:ad:drive1&drives=did:ad:drive2',
+    );
+  });
+
+  it('accepts a bare node DID as a routing-only code for every drive', () => {
+    expect(decodePairingEnvelope(`  ${NODE}  `)).toEqual({
+      v: 1,
+      kind: 'pair',
+      node: NODE,
+      drives: '*',
+    });
+  });
+
+  it('round-trips a url hint through percent-encoding', () => {
+    const decoded = decodePairingEnvelope(encodePairingEnvelope(onboard));
+    expect(decoded.url).toBe('http://192.168.0.153:9883');
+  });
+
+  it('round-trips a secret containing base64 padding and plus signs', () => {
+    const secret = 'a+b/c=='; // would break an unescaped query value
+    const uri = encodePairingEnvelope({ ...onboard, secret });
+    expect(decodePairingEnvelope(uri).secret).toBe(secret);
   });
 
   it('rejects an unknown version with its own error code', () => {
-    expect(codeOf(() => decodePairingEnvelope(encodeRaw({ ...pair, v: 2 })))).toBe(
-      'unsupported-version',
-    );
+    expect(
+      codeOf(() => decodePairingEnvelope(uriOf({ ...pair, v: '2' } as never))),
+    ).toBe('unsupported-version');
+  });
+
+  it('rejects a missing version as malformed', () => {
+    expect(
+      codeOf(() =>
+        decodePairingEnvelope(uriOf({ kind: 'pair', node: NODE, drives: '*' })),
+      ),
+    ).toBe('malformed');
   });
 
   it('rejects garbage and truncated payloads as malformed', () => {
     expect(codeOf(() => decodePairingEnvelope('not a code'))).toBe('malformed');
-    const uri = encodePairingEnvelope(pair);
-    expect(codeOf(() => decodePairingEnvelope(uri.slice(0, -10)))).toBe(
+    expect(codeOf(() => decodePairingEnvelope('https://example.com'))).toBe(
       'malformed',
     );
   });
 
   it('rejects an onboard envelope without a secret', () => {
-    const { secret: _secret, ...withoutSecret } = onboard;
-    expect(codeOf(() => decodePairingEnvelope(encodeRaw(withoutSecret)))).toBe(
-      'malformed',
-    );
+    expect(
+      codeOf(() =>
+        decodePairingEnvelope(
+          uriOf({ v: '1', kind: 'onboard', node: NODE, drives: '*' }),
+        ),
+      ),
+    ).toBe('malformed');
   });
 
   it('rejects a pair envelope that smuggles a secret', () => {
     expect(
       codeOf(() =>
-        decodePairingEnvelope(encodeRaw({ ...pair, secret: 'sneaky' })),
+        decodePairingEnvelope(
+          uriOf({
+            v: '1',
+            kind: 'pair',
+            node: NODE,
+            drives: '*',
+            secret: 'sneaky',
+          }),
+        ),
+      ),
+    ).toBe('malformed');
+  });
+
+  it('rejects an unknown kind', () => {
+    expect(
+      codeOf(() =>
+        decodePairingEnvelope(
+          uriOf({ v: '1', kind: 'takeover', node: NODE, drives: '*' }),
+        ),
       ),
     ).toBe('malformed');
   });
@@ -99,24 +161,40 @@ describe('pairing envelope', () => {
       'did:ad:node:abcdef',
       undefined,
     ]) {
-      expect(codeOf(() => decodePairingEnvelope(encodeRaw({ ...pair, node })))).toBe(
-        'malformed',
-      );
+      expect(
+        codeOf(() =>
+          decodePairingEnvelope(
+            uriOf({ v: '1', kind: 'pair', node, drives: '*' }),
+          ),
+        ),
+      ).toBe('malformed');
     }
   });
 
   it('rejects non-http urls', () => {
     expect(
       codeOf(() =>
-        decodePairingEnvelope(encodeRaw({ ...pair, url: 'ftp://x.example' })),
+        decodePairingEnvelope(
+          uriOf({
+            v: '1',
+            kind: 'pair',
+            node: NODE,
+            drives: '*',
+            url: encodeURIComponent('ftp://x.example'),
+          }),
+        ),
       ),
     ).toBe('malformed');
   });
 
-  it('rejects empty or invalid drive lists', () => {
-    for (const drives of [[], ['ok', 7], 'all', undefined]) {
+  it('rejects empty or contradictory drive lists', () => {
+    for (const drives of [undefined, ['*', 'did:ad:drive1']]) {
       expect(
-        codeOf(() => decodePairingEnvelope(encodeRaw({ ...pair, drives }))),
+        codeOf(() =>
+          decodePairingEnvelope(
+            uriOf({ v: '1', kind: 'pair', node: NODE, drives }),
+          ),
+        ),
       ).toBe('malformed');
     }
   });

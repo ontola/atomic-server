@@ -99,7 +99,10 @@ export function PairingLinkHandler(): JSX.Element {
   }
 
   const handleLink = useEffectEvent((uri: string) => {
-    if (!uri.startsWith('atomic://')) {
+    // Deep links from the OS always arrive as `atomic://…`. The Sync page's
+    // paste field feeds this same pipeline, and there a bare node DID is a
+    // legitimate (routing-only) code.
+    if (!uri.startsWith('atomic://') && !uri.startsWith('did:ad:node:')) {
       return;
     }
 

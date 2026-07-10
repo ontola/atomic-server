@@ -83,22 +83,38 @@ Deep-link URI so the system camera opens the app directly
 (`tauri-plugin-deep-link`; intent filter in `desktop/gen/android`):
 
 ```
-atomic://pair?p=<base64url(json)>
-
-{
-  "v": 1,
-  "kind": "onboard" | "pair",
-  "secret": "<agent secret b64>",     // onboard only
-  "node": "did:ad:node:…",            // issuing node
-  "url": "http://192.168.0.153:9883", // optional LAN/WS fast path
-  "drives": "*" | ["<drive subject>", …]
-}
+atomic://pair?v=1
+             &kind=onboard|pair
+             &node=did:ad:node:…            # issuing node
+             &secret=<agent secret b64>     # onboard only
+             &url=http://192.168.0.153:9883 # optional LAN/WS fast path
+             &drives=*                      # or repeated: &drives=<subject>&drives=…
 ```
+
+`atomic://` is the transport, `did:ad:node:` is the identity; they nest rather
+than compete, so a node is written the same way here as everywhere else in the
+system. Two constraints forced the wrapper, and both are worth recording:
+
+- **A QR scanned by the system camera has to launch the app**, which needs a
+  scheme the app registers. `did:` can't serve: iOS `CFBundleURLSchemes`
+  registers a bare scheme, so claiming `did` claims `did:key` and `did:web`
+  too. (Android alone *could* scope it — `<data android:scheme="did"
+  android:sspPrefix="ad:"/>` — but a platform-specific pairing code is a worse
+  inconsistency than the one it fixes.)
+- **A bare DID has nowhere to carry `drives`**, which is what tells a freshly
+  signed-in device *which* drive to pull.
 
 Rules:
 
+- The query is plain and readable — no base64 blob. `:` and `*` stay literal
+  (both legal in a query per RFC 3986); only `url` and `secret` are
+  percent-encoded. An escaped `node=did%3Aad%3Anode%3A…` would be no more
+  legible than the blob this replaced.
+- A bare `did:ad:node:…` is also accepted on input, as a routing-only code for
+  all drives — for someone who copied just the node identity.
 - `v` is mandatory; unknown `v` → "update the app" error, never best-effort
   parsing.
+- `drives=*` means all drives, and may not be combined with named ones.
 - `url` is a hint, not identity: after connecting, the same-agent AUTH gate
   decides everything. A tampered `url`/`node` can at worst make the device
   dial a stranger who then fails AUTH (for `pair`) — for `onboard` the QR
@@ -106,6 +122,12 @@ Rules:
   against in-band.
 - The same payload renders as a QR *and* works as a tap/paste link
   (desktop → desktop pairing without a camera).
+- An `onboard` code now shows its `secret=` in the clear rather than inside a
+  base64 blob. Nothing is lost: base64 is not encryption, and the QR was always
+  a bearer credential. It does make the exposure legible — an `onboard` deep
+  link lands in OS logs with the secret readable — which is one more reason to
+  finish P3 and move the secret onto the authenticated Iroh channel, after
+  which the field disappears entirely.
 
 ## Flows
 
