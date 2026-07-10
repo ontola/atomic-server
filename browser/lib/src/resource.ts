@@ -523,12 +523,13 @@ export class Resource<C extends OptionalClass = any> {
       this._loroDoc.subscribeLocalUpdates(() => {
         if (!this._store) return;
         if (this.subject.startsWith('did:ad:commit:')) return;
-        // `_new:` is the transient client-side subject used between
-        // `getResourceLoading` and the DID-derive in `signChanges`.
-        // If `set()` runs before sign, the subscriber would mark the
-        // soon-to-be-replaced subject dirty and that entry would
-        // strand in the outbox after the subject mutates.
-        if (this.subject.startsWith('_new:')) return;
+        // A resource still under construction (created, not yet `save()`d):
+        // its property writes belong to the genesis commit, which is signed and
+        // stashed at creation and drained by `save()`. Marking it dirty here
+        // would enqueue a phantom incremental commit alongside the genesis.
+        // Keyed on `new` (cleared once the genesis is signed), NOT on a subject
+        // scheme — the resource carries its real `did:ad:` from birth.
+        if (this.new) return;
         if (!this._store.isOwnedSubject(this.subject)) return;
         // Local-only drives never drain — their saves persist to
         // clientDb directly (see `saveLocalOnly`). Marking dirty here
@@ -706,6 +707,10 @@ export class Resource<C extends OptionalClass = any> {
       properties.commit.lastCommit,
       commits.properties.createdAt,
       'https://atomicdata.dev/properties/drive',
+      // The inline genesis certificate: set once at creation, immutable, and
+      // must not be dropped when the cache is rebuilt from a delta-only doc —
+      // it's what verifies the resource's DID.
+      'https://atomicdata.dev/properties/genesis',
       core.properties.parent,
     ];
 

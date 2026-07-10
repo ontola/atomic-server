@@ -34,7 +34,12 @@ import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { initOntologies } from './ontologies/index.js';
-import { decodeB64, encodeB64 } from './base64.js';
+import { decodeB64, encodeB64, encodeB64Url } from './base64.js';
+import {
+  encodeGenesisCert,
+  subjectForSignature,
+  type GenesisCert,
+} from './genesis.js';
 import type {
   ClientDbWorker,
   ClientDbQueryOpts,
@@ -1884,54 +1889,30 @@ export class Store {
 
     const normalizedIsA = Array.isArray(isA) ? isA : [isA];
 
-    // When the caller supplies an explicit subject, use it as-is.
-    // For HTTP subjects use the parent-based path.
-    // For DID subjects a temporary internal key is used; the real DID is
-    // derived below after signing.
-    const newSubject =
-      subject ??
-      (shouldUseDid
-        ? `_new:${this.randomPart()}`
-        : this.createHTTPSubject(normalizedParent));
+    const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
+    const GENESIS_PROP = 'https://atomicdata.dev/properties/genesis';
 
-    const resource = this.getResourceLoading(newSubject, { newResource: true });
+    // The immutable `drive` this resource lives in — its parent's drive, or the
+    // parent itself when the parent is a drive root. Resolved from the local
+    // cache (sync, no network). Undefined for a top-level (noParent) resource.
+    const resolvedDrive = noParent
+      ? undefined
+      : ((this.resources.get(normalizedParent)?.get(DRIVE_PROP) as
+          | string
+          | undefined) ?? normalizedParent);
 
-    if (normalizedIsA[0]) {
-      await resource.addClasses(...(normalizedIsA as string[]));
-    }
+    // Mint the DID up front from a self-verifying genesis certificate (mirrors
+    // `lib/src/commit.rs::create_did`): the cert's fields — signer, createdAt,
+    // nonce, parent, drive — are all known at creation, so the resource carries
+    // its real `did:ad:<cert-signature>` from birth. No `_new:` placeholder, no
+    // post-sign rename. A caller-supplied subject (incl. `did:ad:agent:`, whose
+    // identity is its public key, not a cert) is used verbatim.
+    let newSubject: string;
+    let genesisCertB64: string | undefined;
 
-    if (!noParent) {
-      await resource.set(core.properties.parent, normalizedParent);
-
-      // Stamp the resource's `drive` at genesis (mirrors
-      // `lib/src/commit.rs::create_did`) so the server's rights check can
-      // consult the stable drive grant directly instead of walking a parent
-      // that may not be materialized yet under concurrent creation — the fix
-      // for the parent-before-child 401 cascade. Drive = the parent's drive,
-      // or the parent itself when the parent is a drive root. `validate:false`
-      // skips the ontology fetch (the property is server-recognised).
-      const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
-      const parentResource = this.resources.get(normalizedParent);
-      const parentDrive = parentResource?.get(DRIVE_PROP) as string | undefined;
-      await resource.set(DRIVE_PROP, parentDrive ?? normalizedParent, false);
-    }
-
-    if (propVals) {
-      for (const [key, value] of Object.entries(propVals)) {
-        await resource.set(key, value);
-      }
-    }
-
-    // For DID resources: sign the genesis commit locally to derive the
-    // real DID from the signature, then STASH it ON THE RESOURCE (not
-    // the outbox). Creating a resource must not persist it — only
-    // `save()` does. Holding the genesis off the outbox means a
-    // created-but-never-saved resource (e.g. a `TableNewRow` placeholder
-    // mounted but never filled) is never POSTed; it's discarded with the
-    // component. `save()` moves the stashed genesis into the outbox to
-    // drain. This is the ONLY remaining call site for `signChanges` —
-    // every other path signs from the Loro delta at drain time.
-    if (shouldUseDid && !subject) {
+    if (subject) {
+      newSubject = subject;
+    } else if (shouldUseDid) {
       const agent = this.getAgent();
 
       if (!agent) {
@@ -1940,11 +1921,55 @@ export class Store {
         );
       }
 
-      // `signChanges` auto-detects genesis for a `_new:` subject with no
-      // previousCommit, deriving the real `did:ad:<sig>` subject from the
-      // signature — no explicit "mark genesis" step needed.
-      const genesisCommit = await resource.signChanges(agent);
-      // resource.subject is now did:ad:<signature>
+      const cert: GenesisCert = {
+        signerPubkey: decodeB64(await agent.getPublicKey()),
+        createdAt: Date.now(),
+        nonce: crypto.getRandomValues(new Uint8Array(16)),
+        parent: noParent ? '' : normalizedParent,
+        drive: resolvedDrive ?? '',
+      };
+      const certBytes = encodeGenesisCert(cert);
+      newSubject = subjectForSignature(await agent.signBytes(certBytes));
+      genesisCertB64 = encodeB64Url(certBytes);
+    } else {
+      newSubject = this.createHTTPSubject(normalizedParent);
+    }
+
+    const resource = this.getResourceLoading(newSubject, { newResource: true });
+
+    // Carry the inline cert (mirrors `commit.rs:299`): the server verifies the
+    // DID against it and materializes createdBy/createdAt/parent/drive from it.
+    if (genesisCertB64) {
+      await resource.set(GENESIS_PROP, genesisCertB64, false);
+    }
+
+    if (normalizedIsA[0]) {
+      await resource.addClasses(...(normalizedIsA as string[]));
+    }
+
+    if (!noParent) {
+      await resource.set(core.properties.parent, normalizedParent);
+      // The same value that seeded the cert's immutable `drive` above; the
+      // server's rights check consults this stable grant instead of walking a
+      // parent that may not be materialized yet (the parent-before-child 401
+      // cascade). `validate:false` skips the ontology fetch.
+      await resource.set(DRIVE_PROP, resolvedDrive ?? normalizedParent, false);
+    }
+
+    if (propVals) {
+      for (const [key, value] of Object.entries(propVals)) {
+        await resource.set(key, value);
+      }
+    }
+
+    // Sign the genesis commit locally now — its subject is already the cert DID,
+    // so `signChanges` derives nothing and renames nothing — then STASH it ON
+    // THE RESOURCE (not the outbox). Creating a resource must not persist it;
+    // only `save()` does (it moves the stash into the outbox). So a
+    // created-but-never-saved resource (e.g. an unfilled `TableNewRow`) is never
+    // POSTed. This is the only remaining `signChanges` call site.
+    if (shouldUseDid && !subject) {
+      const genesisCommit = await resource.signChanges(this.getAgent()!);
       resource.stashGenesis(genesisCommit);
     }
 
