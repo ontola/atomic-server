@@ -1751,9 +1751,6 @@ msgstr "<0/> <1/>heme settings"
 msgid "In sync"
 msgstr "In sync"
 
-#~ msgid "Unknown"
-#~ msgstr "Unknown"
-
 #. 0: NODE_DID_PREFIX
 #: src/routes/SyncRoute.tsx
 msgid "Error: Expected {0}<node-id>"
@@ -1769,68 +1766,20 @@ msgstr "Synced {0} resource{1} with {2}"
 msgid "Synced {0} resource{1}"
 msgstr "Synced {0} resource{1}"
 
-#~ msgid "Your data lives on this device. Add peers or a remote server to sync."
-#~ msgstr "Your data lives on this device. Add peers or a remote server to sync."
-
-#~ msgid "Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects."
-#~ msgstr "Your data lives on this device, in a local-first database. A connected server keeps a synced copy and can serve it to the web — it is a replica, not the source of truth, so you keep working even if it disconnects."
-
 #: src/components/PairDeviceDialog.tsx
 #: src/routes/SyncRoute.tsx
 msgid "This device"
 msgstr "This device"
 
-#~ msgid "Local storage ready"
-#~ msgstr "Local storage ready"
-
-#~ msgid "Server"
-#~ msgstr "Server"
-
-#~ msgid "Disconnect"
-#~ msgstr "Disconnect"
-
-#~ msgid "Reconnect"
-#~ msgstr "Reconnect"
-
 #: src/routes/SyncRoute.tsx
 msgid "Manage account & plan →"
 msgstr "Manage account & plan →"
-
-#~ msgid "This drive ({0})"
-#~ msgstr "This drive ({0})"
-
-#~ msgid "This drive"
-#~ msgstr "This drive"
-
-#~ msgid "{0} resources ·{1} {2} {3} used"
-#~ msgstr "{0} resources ·{1} {2} {3} used"
-
-#~ msgid "Details"
-#~ msgstr "Details"
-
-#~ msgid "Remote server"
-#~ msgstr "Remote server"
-
-#~ msgid "Embedded (local)"
-#~ msgstr "Embedded (local)"
-
-#~ msgid "+ Add"
-#~ msgstr "+ Add"
 
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 msgid "Add"
 msgstr "Add"
 
-#~ msgid "How to run your own server"
-#~ msgstr "How to run your own server"
-
-#~ msgid "Node DID"
-#~ msgstr "Node DID"
-
-#~ msgid "did:ad:node:{0}..."
-#~ msgstr "did:ad:node:{0}..."
-
-#: src/components/PairDeviceDialog.tsx
+#: src/components/ThisDeviceCode.tsx
 #: src/components/Toaster.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Copy"
@@ -1840,24 +1789,12 @@ msgstr "Copy"
 msgid "Node DID copied to clipboard"
 msgstr "Node DID copied to clipboard"
 
-#~ msgid "Peers"
-#~ msgstr "Peers"
-
-#~ msgid "No peers connected"
-#~ msgstr "No peers connected"
-
-#~ msgid "Paste did:ad:node:..."
-#~ msgstr "Paste did:ad:node:..."
-
 #: src/components/forms/SearchBox/SearchBox.tsx
 #: src/routes/LinkOpenRouter.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Error"
 msgstr "Error"
-
-#~ msgid "WS debug"
-#~ msgstr "WS debug"
 
 #: src/routes/SyncRoute.tsx
 msgid "Logging to console"
@@ -1866,9 +1803,6 @@ msgstr "Logging to console"
 #: src/routes/SyncRoute.tsx
 msgid "Off"
 msgstr "Off"
-
-#~ msgid "Commit Log {0}"
-#~ msgstr "Commit Log {0}"
 
 #: src/routes/SyncRoute.tsx
 msgid "destroy"
@@ -2501,9 +2435,6 @@ msgstr "New Drive"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My Drive"
 msgstr "My Drive"
-
-#~ msgid "Subdomain"
-#~ msgstr "Subdomain"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
@@ -4392,9 +4323,6 @@ msgstr "Atomic Data combines the ease of use of JSON, the connectivity of linked
 msgid "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 msgstr "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 
-#~ msgid "{0} resources stored locally"
-#~ msgstr "{0} resources stored locally"
-
 #: src/views/DocumentPage.tsx
 msgid "<0/> This document needs to be updated to the new format in order to be edited."
 msgstr "<0/> This document needs to be updated to the new format in order to be edited."
@@ -4907,9 +4835,6 @@ msgstr "Could not start the demo"
 msgid "The demo could not start"
 msgstr "The demo could not start"
 
-#~ msgid "Setting up your demo team…"
-#~ msgstr "Setting up your demo team…"
-
 #: src/chunks/Demo/SimulatedTypist.ts
 msgid "Map"
 msgstr "Map"
@@ -4973,9 +4898,6 @@ msgstr "Join"
 msgid "Try the live demo"
 msgstr "Try the live demo"
 
-#~ msgid "Reveal setup code"
-#~ msgstr "Reveal setup code"
-
 #: src/components/PairingLinkHandler.tsx
 msgid "Device paired — you are signed in."
 msgstr "Device paired — you are signed in."
@@ -5005,9 +4927,6 @@ msgstr "Switch account"
 msgid "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
 msgstr "The demo needs the local database, which is disabled in this browser. Enable it on the Sync page and try again."
 
-#~ msgid "Local DB"
-#~ msgstr "Local DB"
-
 #. 0: name
 #: src/components/Presence/AgentAvatar.tsx
 msgid "{0} is online"
@@ -5017,12 +4936,12 @@ msgstr "{0} is online"
 msgid "Close the meeting chat"
 msgstr "Close the meeting chat"
 
-#. 0: data.error
+#. 0: e.message
 #: src/components/PairingLinkHandler.tsx
 msgid "Could not sync yet: {0}"
 msgstr "Could not sync yet: {0}"
 
-#. 0: data.count
+#. 0: outcome.count
 #: src/components/PairingLinkHandler.tsx
 msgid "Synced {0} resources with the paired device."
 msgstr "Synced {0} resources with the paired device."
@@ -5035,11 +4954,11 @@ msgstr "Could not reach the paired device yet — retry under Sync → Peers."
 msgid "Device paired — starting a sync…"
 msgstr "Device paired — starting a sync…"
 
-#: src/components/PairDeviceDialog.tsx
+#: src/components/ThisDeviceCode.tsx
 msgid "Pairing code copied."
 msgstr "Pairing code copied."
 
-#: src/components/PairDeviceDialog.tsx
+#: src/components/ThisDeviceCode.tsx
 msgid "Could not copy — select and copy the code manually."
 msgstr "Could not copy — select and copy the code manually."
 
@@ -5051,27 +4970,18 @@ msgstr "Sync another device"
 msgid "Scan this from a device already signed in as you, or copy the code and paste it there. It only says where to reach this device — the other side still proves it holds your key."
 msgstr "Scan this from a device already signed in as you, or copy the code and paste it there. It only says where to reach this device — the other side still proves it holds your key."
 
-#~ msgid "New device (not signed in yet)"
-#~ msgstr "New device (not signed in yet)"
-
-#~ msgid "This code carries your account secret — anyone who scans it becomes you. Reveal it only with the new device ready."
-#~ msgstr "This code carries your account secret — anyone who scans it becomes you. Reveal it only with the new device ready."
-
-#: src/components/PairDeviceDialog.tsx
+#: src/components/ConnectToDeviceForm.tsx
 msgid "Paste atomic://pair… code"
 msgstr "Paste atomic://pair… code"
 
 #: src/components/ConnectServerDialog.tsx
-#: src/components/PairDeviceDialog.tsx
+#: src/components/ConnectToDeviceForm.tsx
 msgid "Connect"
 msgstr "Connect"
 
 #: src/components/PairDeviceDialog.tsx
 msgid "Connect to a device"
 msgstr "Connect to a device"
-
-#~ msgid "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
-#~ msgstr "Paste a pairing code from your other device to start syncing. (Or scan its QR with your camera — that opens the app directly.)"
 
 #: src/routes/SyncRoute.tsx
 msgid "Sync a device"
@@ -5174,12 +5084,6 @@ msgstr "Pair another device to sync peer-to-peer, or connect a server to back up
 msgid "Connect a server to back up your data and reach it from anywhere."
 msgstr "Connect a server to back up your data and reach it from anywhere."
 
-#~ msgid "Connections"
-#~ msgstr "Connections"
-
-#~ msgid "Not syncing anywhere yet — your data is safe on this device."
-#~ msgstr "Not syncing anywhere yet — your data is safe on this device."
-
 #: src/routes/SyncRoute.tsx
 msgid "Cloud Sync"
 msgstr "Cloud Sync"
@@ -5198,9 +5102,6 @@ msgstr "{0}% of storage used"
 msgid "{0}% used"
 msgstr "{0}% used"
 
-#~ msgid "Paired"
-#~ msgstr "Paired"
-
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -5210,9 +5111,6 @@ msgstr "Syncing…"
 #: src/routes/SyncRoute.tsx
 msgid "Sync now"
 msgstr "Sync now"
-
-#~ msgid "Paired device {0}"
-#~ msgstr "Paired device {0}"
 
 #: src/components/ConnectServerDialog.tsx
 msgid "Embedded (this device)"
@@ -5245,6 +5143,7 @@ msgid "Recent activity {0}"
 msgstr "Recent activity {0}"
 
 #: src/routes/SyncRoute.tsx
+#: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connecting…"
 msgstr "Connecting…"
 
@@ -5272,11 +5171,11 @@ msgstr "Only on this device"
 msgid "This workspace hasn’t been synced. It’s safe here, but not backed up and not on your other devices."
 msgstr "This workspace hasn’t been synced. It’s safe here, but not backed up and not on your other devices."
 
-#: src/components/PairDeviceDialog.tsx
+#: src/components/ConnectToDeviceForm.tsx
 msgid "Camera access is needed to scan a code."
 msgstr "Camera access is needed to scan a code."
 
-#: src/components/PairDeviceDialog.tsx
+#: src/components/ConnectToDeviceForm.tsx
 msgid "Could not open the scanner."
 msgstr "Could not open the scanner."
 
@@ -5292,11 +5191,12 @@ msgstr "Scan the other device’s QR code, or paste its pairing code, to start s
 msgid "Paste a pairing code from your other device to start syncing."
 msgstr "Paste a pairing code from your other device to start syncing."
 
-#: src/components/PairDeviceDialog.tsx
+#: src/components/ConnectToDeviceForm.tsx
 msgid "<0/> Scan a QR code"
 msgstr "<0/> Scan a QR code"
 
 #: src/routes/SyncRoute.tsx
+#: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Your data is on another device"
 msgstr "Your data is on another device"
 
@@ -5306,6 +5206,7 @@ msgstr "You’re signed in, but this device doesn’t have your workspace yet. S
 
 #: src/components/ConnectServerDialog.tsx
 #: src/routes/SyncRoute.tsx
+#: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connect a server"
 msgstr "Connect a server"
 
@@ -5316,3 +5217,43 @@ msgstr "A server keeps your workspaces online and backed up, and lets you share 
 #: src/components/ConnectServerDialog.tsx
 msgid "Switch to"
 msgstr "Switch to"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Connected to that device, but your workspace wasn’t there. Make sure it’s signed in as you and has your data."
+msgstr "Connected to that device, but your workspace wasn’t there. Make sure it’s signed in as you and has your data."
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Could not reach that device. Make sure both are online."
+msgstr "Could not reach that device. Make sure both are online."
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Connect to that device"
+msgstr "Connect to that device"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Open <0>Sync → Sync a device</0> there to show its code, then scan or paste it here."
+msgstr "Open <0>Sync → Sync a device</0> there to show its code, then scan or paste it here."
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "You’re signed in, but this device doesn’t have your workspace yet. Signing in restores who you are — your data stays where you made it."
+msgstr "You’re signed in, but this device doesn’t have your workspace yet. Signing in restores who you are — your data stays where you made it."
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "…or let it scan this device"
+msgstr "…or let it scan this device"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Scan this code from your other device instead. It only says where to reach this one — the other side still proves it holds your key."
+msgstr "Scan this code from your other device instead. It only says where to reach this one — the other side still proves it holds your key."
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Connect the server that has it"
+msgstr "Connect the server that has it"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "This browser can’t sync directly with your other devices. Connect the server your workspace lives on to reach it."
+msgstr "This browser can’t sync directly with your other devices. Connect the server your workspace lives on to reach it."
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Skip for now"
+msgstr "Skip for now"

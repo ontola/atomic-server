@@ -1,14 +1,10 @@
-import { useEffect, useMemo, useState, type JSX } from 'react';
+import { useEffect, type JSX } from 'react';
 import { styled } from 'styled-components';
-import toast from 'react-hot-toast';
-import { FaCamera } from 'react-icons/fa6';
-import { renderSVG } from 'uqr';
-import { encodePairingEnvelope, type PairingEnvelope } from '@tomic/lib';
 import { Dialog, DialogContent, DialogTitle, useDialog } from './Dialog';
-import { Button } from './Button';
-import { useSettings } from '../helpers/AppSettings';
+import { ThisDeviceCode } from './ThisDeviceCode';
+import { ConnectToDeviceForm } from './ConnectToDeviceForm';
 import { deliverDeepLink } from '../helpers/deepLinkQueue';
-import { isRunningInTauri } from '../helpers/tauri';
+import { isMobileTauri } from '../helpers/tauri';
 
 interface PairDeviceDialogProps {
   /** This node's Iroh identity: `did:ad:node:<64 hex>`. */
@@ -35,96 +31,13 @@ export function PairDeviceDialog({
   show,
   bindShow,
 }: PairDeviceDialogProps): JSX.Element {
-  const { baseURL } = useSettings();
   const [dialogProps, showDialog] = useDialog({ bindShow });
-  const [incomingCode, setIncomingCode] = useState('');
 
   useEffect(() => {
     if (show) {
-      setIncomingCode('');
       showDialog();
     }
   }, [show]);
-
-  // A LAN/WS fast path is only worth advertising when another device could
-  // actually reach it — localhost never resolves to this machine elsewhere.
-  const urlHint = useMemo(() => {
-    try {
-      const parsed = new URL(baseURL);
-
-      return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
-        ? undefined
-        : baseURL;
-    } catch {
-      return undefined;
-    }
-  }, [baseURL]);
-
-  const pairUri = useMemo(() => {
-    const envelope: PairingEnvelope = {
-      v: 1,
-      kind: 'pair',
-      node: nodeDid,
-      ...(urlHint ? { url: urlHint } : {}),
-      drives: '*',
-    };
-
-    return encodePairingEnvelope(envelope);
-  }, [nodeDid, urlHint]);
-
-  const pairSvg = useMemo(() => renderSVG(pairUri), [pairUri]);
-
-  const copyCode = async (code: string) => {
-    try {
-      await navigator.clipboard.writeText(code);
-      toast.success('Pairing code copied.');
-    } catch {
-      toast.error('Could not copy — select and copy the code manually.');
-    }
-  };
-
-  const connectWithCode = () => {
-    const code = incomingCode.trim();
-
-    if (!code) {
-      return;
-    }
-
-    // Routes through the same handler a scanned deep link uses
-    // (PairingLinkHandler): validate, persist the peer, start a sync.
-    deliverDeepLink(code);
-    bindShow(false);
-  };
-
-  // Native QR scanner (Tauri mobile only). The Android WebView won't grant
-  // getUserMedia to web content, so we can't scan with the browser camera —
-  // the plugin owns the camera + permission and hands back the decoded text,
-  // which flows through the same path as a pasted/deep-linked code.
-  const scanCode = async () => {
-    try {
-      const scanner = await import('@tauri-apps/plugin-barcode-scanner');
-      let perm = await scanner.checkPermissions();
-
-      if (perm !== 'granted') {
-        perm = await scanner.requestPermissions();
-      }
-
-      if (perm !== 'granted') {
-        toast.error('Camera access is needed to scan a code.');
-
-        return;
-      }
-
-      const result = await scanner.scan({ formats: [scanner.Format.QRCode] });
-
-      if (result?.content) {
-        deliverDeepLink(result.content);
-        bindShow(false);
-      }
-    } catch {
-      toast.error('Could not open the scanner.');
-    }
-  };
 
   if (!show) {
     return <></>;
@@ -144,13 +57,7 @@ export function PairDeviceDialog({
               and paste it there. It only says where to reach this device — the
               other side still proves it holds your key.
             </Explainer>
-            <QrBox dangerouslySetInnerHTML={{ __html: pairSvg }} />
-            <CodeRow>
-              <CodeText title={pairUri}>{pairUri}</CodeText>
-              <Button subtle onClick={() => copyCode(pairUri)}>
-                Copy
-              </Button>
-            </CodeRow>
+            <ThisDeviceCode nodeDid={nodeDid} />
             <Explainer>
               Not signed in on the other device yet? Sign in there with your
               account secret first, then pair.
@@ -160,45 +67,24 @@ export function PairDeviceDialog({
           <Column>
             <h2>Connect to a device</h2>
             <Explainer>
-              {isRunningInTauri()
+              {isMobileTauri()
                 ? 'Scan the other device’s QR code, or paste its pairing code, to start syncing.'
                 : 'Paste a pairing code from your other device to start syncing.'}
             </Explainer>
-            {isRunningInTauri() && (
-              <Button onClick={scanCode}>
-                <ScanButtonInner>
-                  <FaCamera aria-hidden /> Scan a QR code
-                </ScanButtonInner>
-              </Button>
-            )}
-            <ConnectForm
-              onSubmit={e => {
-                e.preventDefault();
-                connectWithCode();
+            {/* Routes through the same handler a scanned deep link uses
+                (PairingLinkHandler): validate, persist the peer, start a sync. */}
+            <ConnectToDeviceForm
+              onCode={code => {
+                deliverDeepLink(code);
+                bindShow(false);
               }}
-            >
-              <CodeInput
-                autoComplete='off'
-                placeholder='Paste atomic://pair… code'
-                value={incomingCode}
-                onChange={e => setIncomingCode(e.target.value)}
-              />
-              <Button type='submit' subtle disabled={!incomingCode.trim()}>
-                Connect
-              </Button>
-            </ConnectForm>
+            />
           </Column>
         </Columns>
       </DialogContent>
     </Dialog>
   );
 }
-
-const ScanButtonInner = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-`;
 
 const Columns = styled.div`
   display: flex;
@@ -223,59 +109,3 @@ const Explainer = styled.p`
   color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
 `;
-
-const CodeRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-  margin-bottom: 0.4rem;
-  min-width: 0;
-`;
-
-const CodeText = styled.code`
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.75rem;
-  color: ${p => p.theme.colors.textLight};
-  background: ${p => p.theme.colors.bg1};
-  padding: 0.35rem 0.5rem;
-  border-radius: ${p => p.theme.radius};
-`;
-
-const ConnectForm = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-`;
-
-const CodeInput = styled.input`
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  padding: 0.5rem 0.6rem;
-  font-size: 0.85rem;
-  background: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
-  width: 100%;
-  box-sizing: border-box;
-`;
-
-const QrBox = styled.div`
-  width: 13rem;
-  height: 13rem;
-  border-radius: ${p => p.theme.radius};
-  overflow: hidden;
-  background: white;
-  padding: 0.5rem;
-
-  svg {
-    width: 100%;
-    height: 100%;
-    display: block;
-  }
-`;
-
-

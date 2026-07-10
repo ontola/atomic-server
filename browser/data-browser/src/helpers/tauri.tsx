@@ -21,6 +21,20 @@ export function isRunningInTauri(): boolean {
 }
 
 /**
+ * Whether this is the Tauri app on a phone/tablet, where a camera and the
+ * native barcode scanner exist. The scanner plugin is compiled in for
+ * Android/iOS only (see desktop/Cargo.toml), so invoking it on the desktop
+ * app fails at runtime — gate the scan UI on this, not on `isRunningInTauri`.
+ */
+export function isMobileTauri(): boolean {
+  return (
+    isRunningInTauri() &&
+    typeof navigator !== 'undefined' &&
+    /android|iphone|ipad/i.test(navigator.userAgent)
+  );
+}
+
+/**
  * The origin of the atomic-server this app talks to.
  * - In Tauri: the embedded server on http://localhost:9883 (window.location.origin
  *   is `tauri://localhost` which isn't a fetchable HTTP URL)

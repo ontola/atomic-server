@@ -12,8 +12,8 @@ import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
 import { clearDeepLinkSink, setDeepLinkSink } from '../helpers/deepLinkQueue';
 import { upsertKnownPeer } from '../helpers/knownPeers';
+import { pairAndSync } from '../helpers/pairing';
 import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
-import { getLocalServerOrigin } from '../helpers/tauri';
 import { constructOpenURL } from '../helpers/navigation';
 import { paths } from '../routes/paths';
 import { ConfirmationDialog } from './ConfirmationDialog';
@@ -47,36 +47,27 @@ export function PairingLinkHandler(): JSX.Element {
   const [pendingSwitch, setPendingSwitch] = useState<PairingEnvelope>();
 
   /**
-   * Pull the paired node's copy of the current drive right away — pairing
-   * should *sync*, not just record an address. Best-effort: the peer may be
-   * unreachable or hold a different agent (AUTH refuses), and the peer stays
-   * listed under Sync → Peers for a manual retry either way.
+   * Record the peer, then pull its copy of the current drive right away —
+   * pairing should *sync*, not just store an address. Best-effort: the peer may
+   * be unreachable or hold a different agent (AUTH refuses). The peer is
+   * recorded either way, so Sync → Peers offers a manual retry.
    */
   async function kickInitialSync(nodeDid: string, driveOverride?: string) {
     const drive = driveOverride ?? store.getSyncStatus().drive;
 
-    if (!drive) {
-      return;
-    }
-
     try {
-      // Absolute origin: a bare path hits `tauri.localhost`, not the
-      // embedded server, inside the desktop/mobile webview.
-      const response = await fetch(`${getLocalServerOrigin()}/iroh-sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodeId: nodeDid, drive }),
-      });
-      const data = await response.json();
+      const outcome = await pairAndSync(nodeDid, drive);
 
-      if (data.error) {
-        toast.error(`Could not sync yet: ${data.error}`);
-      } else {
-        toast.success(`Synced ${data.count} resources with the paired device.`);
+      if (outcome) {
+        toast.success(
+          `Synced ${outcome.count} resources with the paired device.`,
+        );
       }
-    } catch {
+    } catch (e) {
       toast.error(
-        'Could not reach the paired device yet — retry under Sync → Peers.',
+        e instanceof Error
+          ? `Could not sync yet: ${e.message}`
+          : 'Could not reach the paired device yet — retry under Sync → Peers.',
       );
     }
   }

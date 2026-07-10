@@ -23,12 +23,7 @@ import { ResourcePageProps } from './ResourcePage';
 import { paths } from '../routes/paths';
 import { Column } from '../components/Row';
 import { useWelcomeLayoutEffect } from '../hooks/useWelcomeLayoutEffect';
-import {
-  Shell,
-  Card,
-  CardTitle,
-  CtaButton,
-} from './getting-started/GettingStartedFlow';
+import { Shell, Card, CardTitle, CtaButton } from './getting-started/chrome';
 import atomicServerLogoUrl from '../../../../logo.svg?url';
 
 import { useId, useState, type JSX } from 'react';

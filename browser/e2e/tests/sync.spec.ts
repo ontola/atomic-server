@@ -408,7 +408,7 @@ test.describe('sync', () => {
     await expect(
       page.getByRole('heading', { name: 'Sync', exact: true }),
     ).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Details', { exact: true })).toBeVisible({
+    await expect(page.getByText('Developer', { exact: true })).toBeVisible({
       timeout: 10000,
     });
   });

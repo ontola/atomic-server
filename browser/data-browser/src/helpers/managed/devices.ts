@@ -15,7 +15,7 @@
 
 import { getManagedApiBase } from './api';
 import { getManagedAccount } from './session';
-import { isRunningInTauri } from '../tauri';
+import { getLocalServerOrigin, isRunningInTauri } from '../tauri';
 
 const DEVICE_ID_KEY = 'atomic-device-id';
 const KNOWN_PEERS_KEY = 'atomic-peers';
@@ -100,7 +100,9 @@ async function fetchOwnNodeDid(): Promise<string | null> {
   if (!isRunningInTauri()) return null;
 
   try {
-    const response = await fetch('/iroh-node-id');
+    // Absolute origin: a bare path resolves against `tauri.localhost` (the
+    // bundled assets), not the embedded server that owns the node identity.
+    const response = await fetch(`${getLocalServerOrigin()}/iroh-node-id`);
     const data = await response.json();
 
     return typeof data.nodeId === 'string' && isValidNodeDid(data.nodeId)

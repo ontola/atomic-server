@@ -5,11 +5,7 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
 import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
 import { isRunningInTauri } from '../helpers/tauri';
-import {
-  Shell,
-  Card,
-  CardTitle,
-} from '../views/getting-started/GettingStartedFlow';
+import { Shell, Card, CardTitle } from '../views/getting-started/chrome';
 
 // React 19 StrictMode mounts effects twice and rapid navigation can
 // remount the route; without this module-level guard each mount would
