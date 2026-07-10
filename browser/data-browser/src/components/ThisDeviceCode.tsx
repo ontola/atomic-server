@@ -39,7 +39,6 @@ export function ThisDeviceCode({ nodeDid }: ThisDeviceCodeProps): JSX.Element {
   const pairUri = useMemo(() => {
     const envelope: PairingEnvelope = {
       v: 1,
-      kind: 'pair',
       node: nodeDid,
       ...(urlHint ? { url: urlHint } : {}),
       drives: '*',

@@ -1,17 +1,16 @@
 /**
  * Device-pairing envelope: the payload behind the `atomic://pair` QR code /
- * deep link (see `planning/device-pairing.md`). One format, two kinds:
+ * deep link (see `planning/device-pairing.md`).
  *
- * - `onboard` — routing **plus the agent secret**, for a fresh device that
- *   doesn't hold the agent yet. The QR is a bearer credential: render it only
- *   behind an explicit user action, and treat it like the copy-secret button.
- * - `pair` — routing only, for a device that already holds the agent. A
- *   scanned `pair` envelope grants nothing by itself: the dialed peer still
- *   has to prove the same agent key over AUTH.
+ * **A pairing code is routing only.** It says where to reach a node and which
+ * drives to sync; it grants nothing. The dialed peer still has to prove it
+ * holds the same agent key over AUTH before a single resource crosses. So the
+ * code is safe to show on screen, print, or paste — and a tampered one can at
+ * worst make a device dial a stranger who then fails AUTH.
  *
  * Wire form is a plain, readable URI:
  *
- *     atomic://pair?v=1&kind=pair&node=did:ad:node:<64 hex>&drives=*
+ *     atomic://pair?v=1&node=did:ad:node:<64 hex>&drives=*
  *
  * `atomic://` is the transport and `did:ad:node:` is the identity — they nest
  * rather than compete, so a node is written the same way here as everywhere
@@ -22,12 +21,18 @@
  * that tells a freshly signed-in device *which* drive to pull.
  *
  * Multi-drive envelopes repeat the parameter: `&drives=a&drives=b`.
+ *
+ * A code never carries an agent secret. It cannot: the private key is stored
+ * non-extractable (`helpers/agentStorage.ts`), so no device can read its own
+ * secret back out to put in a QR. A code that claims to carry one is refused
+ * rather than imported — otherwise any link or poster could hand a fresh
+ * install an attacker's identity, and everything written on it would sync to
+ * the attacker. Provisioning an identity to a new device belongs on the
+ * authenticated Iroh channel, behind an on-screen confirm; a new device signs
+ * in by entering its secret.
  */
 export type PairingEnvelope = {
   v: 1;
-  kind: 'onboard' | 'pair';
-  /** Agent secret (base64 secret JSON) — present iff kind is `onboard`. */
-  secret?: string;
   /** Iroh node identity of the issuing device: `did:ad:node:<64 hex>`. */
   node: string;
   /** Optional http(s) fast path (LAN/WS) — a routing hint, never identity. */
@@ -103,26 +108,6 @@ function assertValid(envelope: PairingEnvelope): PairingEnvelope {
     );
   }
 
-  if (envelope.kind !== 'onboard' && envelope.kind !== 'pair') {
-    throw new PairingEnvelopeError('malformed', 'Unknown pairing kind.');
-  }
-
-  if (envelope.kind === 'onboard') {
-    if (typeof envelope.secret !== 'string' || envelope.secret.length === 0) {
-      throw new PairingEnvelopeError(
-        'malformed',
-        'Onboarding code is missing the identity it should carry.',
-      );
-    }
-  } else if (envelope.secret !== undefined) {
-    // A routing-only envelope must never smuggle a secret: fail loudly
-    // rather than silently importing an identity the user didn't ask for.
-    throw new PairingEnvelopeError(
-      'malformed',
-      'A pair code must not carry an identity.',
-    );
-  }
-
   if (!isValidNodeDid(envelope.node)) {
     throw new PairingEnvelopeError(
       'malformed',
@@ -163,18 +148,10 @@ export function encodePairingEnvelope(envelope: PairingEnvelope): string {
   // would refuse to scan.
   assertValid(envelope);
 
-  const params = [
-    `v=${envelope.v}`,
-    `kind=${envelope.kind}`,
-    `node=${encodeValue(envelope.node)}`,
-  ];
+  const params = [`v=${envelope.v}`, `node=${encodeValue(envelope.node)}`];
 
   if (envelope.url !== undefined) {
     params.push(`url=${encodeURIComponent(envelope.url)}`);
-  }
-
-  if (envelope.secret !== undefined) {
-    params.push(`secret=${encodeURIComponent(envelope.secret)}`);
   }
 
   if (envelope.drives === '*') {
@@ -199,7 +176,7 @@ export function decodePairingEnvelope(input: string): PairingEnvelope {
   const trimmed = input.trim();
 
   if (trimmed.startsWith(NODE_DID_PREFIX)) {
-    return assertValid({ v: 1, kind: 'pair', node: trimmed, drives: '*' });
+    return assertValid({ v: 1, node: trimmed, drives: '*' });
   }
 
   if (!trimmed.startsWith(PAIRING_URI_PREFIX)) {
@@ -226,14 +203,23 @@ export function decodePairingEnvelope(input: string): PairingEnvelope {
     throw new PairingEnvelopeError('malformed', 'Pairing code has no version.');
   }
 
+  // A pairing code never carries an identity (see the type doc). Refuse the
+  // whole code rather than ignoring the field: a device that silently accepted
+  // an attacker's secret would sync everything the user then wrote to the
+  // attacker's node, and `atomic://` links can be fired by any app or web page
+  // — not only by the camera.
+  if (params.has('secret')) {
+    throw new PairingEnvelopeError(
+      'malformed',
+      'This code tries to hand over an account. Pairing codes only say where to reach a device — refusing it.',
+    );
+  }
+
   const drives = params.getAll('drives');
-  const secret = params.get('secret');
   const url = params.get('url');
 
   return assertValid({
     v: 1,
-    kind: params.get('kind') as PairingEnvelope['kind'],
-    ...(secret !== null ? { secret } : {}),
     node: params.get('node') as string,
     ...(url !== null ? { url } : {}),
     drives:

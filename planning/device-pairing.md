@@ -1,10 +1,14 @@
 # Device Pairing — sync onboarding UX between a server and a phone/tablet
 
-> **Status:** Proposal (2026-07-08). Owns the pairing/onboarding UX and the
-> QR/deep-link envelope. Resolves [`serverless-p2p.md`](./serverless-p2p.md)
-> Open Question 3 (key transport) and narrows OQ1 (LAN discovery) and OQ4
-> (drive enrollment). Trust rules are inherited from serverless-p2p
-> Principle 1 and are not renegotiated here.
+> **Status:** Proposal (2026-07-08), revised 2026-07-10. Owns the
+> pairing/onboarding UX and the QR/deep-link envelope. Resolves
+> [`serverless-p2p.md`](./serverless-p2p.md) Open Question 3 (key transport)
+> and narrows OQ1 (LAN discovery) and OQ4 (drive enrollment). Trust rules are
+> inherited from serverless-p2p Principle 1 and are not renegotiated here.
+>
+> **2026-07-10 — the `onboard` kind is gone.** A pairing code is routing only.
+> It never carries an agent secret, and one that claims to is refused. See
+> "Why the secret does *not* go in the QR".
 >
 > Context: the Android Tauri app boots and syncs as of 2026-07-08 (embedded
 > server + webview, Iroh transport ready). What's missing is any humane way
@@ -45,37 +49,48 @@ QR envelope simply bundles their answers:
   peer `COMMIT`s with full validation (serverless-p2p P1/P4 receiving half).
 - Nothing renders or scans QR codes yet; no deep-link registration; no mDNS.
 
-## Decision: one envelope, two payload kinds
+## Decision: one envelope, routing only
 
-One QR/deep-link format. The `kind` field says whether it carries identity:
+One QR/deep-link format, and it never carries identity. It says where to reach
+a node and which drives to sync; the dialed peer still has to prove the same
+agent key over AUTH before a single resource crosses. This is exactly
+serverless-p2p P3's "QR contains routing only".
 
-- **`onboard`** — routing **+ agent secret**. For a fresh device that doesn't
-  hold the agent yet. One scan does everything.
-- **`pair`** — routing only. For a device that already holds the agent
-  (Android ↔ Android after both were onboarded; this is exactly
-  serverless-p2p P3's "QR contains routing only").
+### Why the secret does *not* go in the QR
 
-### Why the secret goes in the QR (v1)
+**Superseded 2026-07-10.** This document originally chose "secret in the QR"
+for v1 (option A below). Two things killed it:
+
+- **A device can't read its own secret back out.** Since `6cdab0e3` the agent's
+  private key is stored as a non-extractable `CryptoKeyPair`
+  (`helpers/agentStorage.ts`), specifically so no plaintext copy sits beside
+  it. Nothing can mint an `onboard` code. Option A is not merely unwise, it is
+  unimplementable as written.
+- **The consuming half was an open door.** `atomic://` is a registered scheme,
+  so *any* app or web page on the device can fire that deep link — not only the
+  camera. A handler that imported an identity from a link would let a poster or
+  a phishing page silently sign a fresh install in as an attacker, after which
+  everything its owner wrote would sync to the attacker's node. The code and
+  its "switch account?" dialog were removed 2026-07-10; `secret=` is now
+  refused by the decoder rather than parsed.
 
 Options considered:
 
-- **A. Secret in QR (chosen for v1).** The QR is a bearer credential — but
-  the browser UI already exposes "copy your secret" with identical
-  sensitivity, and Principle 1 says the key *is* the consent. Honest about
-  its trust model, reuses `Agent.fromSecret` unchanged, one scan.
-  Mitigations: render only behind an explicit "Pair new device" action,
-  blur until pressed, dismiss on navigation/timeout.
-- **B. Routing-only QR + secret over the Iroh channel (target for v2).**
+- **A. Secret in QR — rejected, see above.** The argument was that the browser
+  UI already exposes "copy your secret" with identical sensitivity. It doesn't
+  hold: copying is an explicit act by the key's owner, while a scanned or
+  tapped link is an act by whoever wrote the link.
+- **B. Routing-only QR + secret over the Iroh channel (the plan).**
   QR carries `{node, relay hint, one-shot token}`. New device dials the
   node (E2E-encrypted QUIC, endpoint authenticated by the NodeID from the
   QR), presents the token; the *existing* device shows "Device 'Xiaomi Pad'
   requests your identity — allow?" and ships the secret through the channel
   once. The optical channel never carries the key; a photographed QR leaks
   routing plus a token that the on-screen confirm gates. This is a lite
-  form of the knock/inbox primitive — build it when that lands, keeping the
-  same envelope (only `kind` changes: `onboard-request`).
-- **C. Two manual steps** (paste secret, paste node DID) — status quo;
-  fine for developers, not a product. Stays available as fallback.
+  form of the knock/inbox primitive — build it when that lands.
+- **C. Two manual steps** (paste secret, paste node DID) — **the current
+  behaviour.** A new device signs in by entering its secret, then pairs. This
+  is what the post-sign-in connect-device screen assumes.
 
 ## Envelope format
 
@@ -84,9 +99,7 @@ Deep-link URI so the system camera opens the app directly
 
 ```
 atomic://pair?v=1
-             &kind=onboard|pair
              &node=did:ad:node:…            # issuing node
-             &secret=<agent secret b64>     # onboard only
              &url=http://192.168.0.153:9883 # optional LAN/WS fast path
              &drives=*                      # or repeated: &drives=<subject>&drives=…
 ```
@@ -107,38 +120,39 @@ system. Two constraints forced the wrapper, and both are worth recording:
 Rules:
 
 - The query is plain and readable — no base64 blob. `:` and `*` stay literal
-  (both legal in a query per RFC 3986); only `url` and `secret` are
-  percent-encoded. An escaped `node=did%3Aad%3Anode%3A…` would be no more
-  legible than the blob this replaced.
-- A bare `did:ad:node:…` is also accepted on input, as a routing-only code for
-  all drives — for someone who copied just the node identity.
+  (both legal in a query per RFC 3986); only `url` is percent-encoded. An
+  escaped `node=did%3Aad%3Anode%3A…` would be no more legible than the blob
+  this replaced.
+- A bare `did:ad:node:…` is also accepted on input, as a code for all drives —
+  for someone who copied just the node identity.
 - `v` is mandatory; unknown `v` → "update the app" error, never best-effort
   parsing.
 - `drives=*` means all drives, and may not be combined with named ones.
+- **`secret=` is refused, not ignored.** A code carrying an identity is a
+  malformed pairing code, and the whole code is rejected. See "Why the secret
+  does *not* go in the QR".
 - `url` is a hint, not identity: after connecting, the same-agent AUTH gate
   decides everything. A tampered `url`/`node` can at worst make the device
-  dial a stranger who then fails AUTH (for `pair`) — for `onboard` the QR
-  holder already owns the secret, so there is nothing further to protect
-  against in-band.
+  dial a stranger who then fails AUTH.
 - The same payload renders as a QR *and* works as a tap/paste link
   (desktop → desktop pairing without a camera).
-- An `onboard` code now shows its `secret=` in the clear rather than inside a
-  base64 blob. Nothing is lost: base64 is not encryption, and the QR was always
-  a bearer credential. It does make the exposure legible — an `onboard` deep
-  link lands in OS logs with the secret readable — which is one more reason to
-  finish P3 and move the secret onto the authenticated Iroh channel, after
-  which the field disappears entirely.
 
 ## Flows
 
 ### Server/desktop → phone (first device onboarding)
 
-1. Existing UI: Settings → Devices → **"Pair new device"** → renders
-   `onboard` QR (secret + node + LAN url + `drives: "*"`).
-2. Phone (fresh install): Welcome screen gains **"Scan to pair"** (plus the
-   existing manual paths). System-camera scan of the deep link also works.
-3. On scan: import secret → persist server URL + `KnownPeer{node, agent,
-   drives}` → connect WS at `url` if reachable (LAN bulk reconcile is much
+**Revised 2026-07-10** — a pairing code never carries identity, so this is two
+acts, not one. Step 1 is unavoidable until P3 lands (see "Why the secret does
+*not* go in the QR"):
+
+1. Phone (fresh install): sign in by entering the agent secret. The device now
+   holds the identity but none of the data, and the post-sign-in
+   **connect-device screen** leads with exactly that.
+2. Existing device: Sync page shows its `pair` QR + code outright (routing
+   only, safe on screen). Phone scans it, or shows its own for the existing
+   device to scan — a peer sync reconciles both ways.
+3. On scan: persist `KnownPeer{node, agent, drives}`
+   → connect WS at `url` if reachable (LAN bulk reconcile is much
    faster), else Iroh session via relay → initial reconcile → "Paired with
    \<server name\>".
 
@@ -219,14 +233,15 @@ Guardrails:
   tooling, bug reports, `adb logcat` history). Verified present 2026-07-08.
   Replace with "open Settings → Devices to pair a device". This ships with
   P0 below regardless of everything else.
-- The `onboard` QR is a bearer credential; treat the render surface like the
-  existing copy-secret button (explicit action, blur-until-press, expiry).
+- A pairing code carries no identity, and one that claims to is refused. This
+  is what lets the deep-link handler act without a prompt: `atomic://` links can
+  be fired by any app or web page, so a link must never be able to sign a device
+  in as someone else. Removed 2026-07-10 along with the `onboard` kind.
 - Scanning a malicious `pair` QR dials an attacker node that then fails
   AUTH and gets nothing (adversarial tests in serverless-p2p P4 cover the
   frame-level guarantees).
-- Deep-link handler must be idempotent and prompt before *overwriting* an
-  existing local agent (scan while already onboarded = likely mistake; offer
-  "switch identity" explicitly, never silently replace keys).
+- Deep-link handler must be idempotent: the shell re-dispatches pending links
+  (cold start), and the frontend dedupes by URI.
 
 ## Drive enrollment (narrows serverless-p2p OQ4)
 
@@ -248,20 +263,21 @@ for it.
       2026-07-09** as a "Pair device" dialog (`PairDeviceDialog.tsx`,
       QR renderer: `uqr`, zero-dep SVG).
 
-### P1 — onboard flow (server/desktop → phone)
+### P1 — pairing flow (server/desktop ↔ phone)
 
 - [x] Envelope encode/decode module in `browser/lib` (versioned, unit-tested
       against tampered/unknown payloads). **Built 2026-07-09**
-      (`browser/lib/src/pairing.ts`, 11 tests): unknown `v` gets a
-      distinct 'unsupported-version' error code; a `pair` envelope
-      carrying a secret is rejected; encode round-trips the validator.
-- [x] "Pair new device" screen rendering the `onboard` QR (explicit action,
-      blur-until-press). **Built 2026-07-09** — onboard QR sits in the
-      same dialog, blurred behind "Reveal setup code", hidden when no
-      local agent; secret rebuilt via `getAgentSecretFromIDB()` (the
-      SubtleCrypto keypair is non-extractable, the plaintext fallback
-      record is the source). The Sync page's peer input also accepts a
-      pasted `atomic://pair` link (routing only).
+      (`browser/lib/src/pairing.ts`, 16 tests): unknown `v` gets a
+      distinct 'unsupported-version' error code; an envelope carrying a
+      secret is rejected; encode round-trips the validator. **Rewritten
+      2026-07-10** as a readable URI (no base64) with the `onboard` kind
+      removed entirely.
+- [~] ~~"Pair new device" screen rendering the `onboard` QR~~ — **removed
+      2026-07-10.** It was already dead: it read the secret via
+      `getAgentSecretFromIDB()`, which `6cdab0e3` deleted along with the
+      plaintext key record. The Sync page now shows the routing-only `pair`
+      QR + code outright (no dialog, no reveal, nothing to blur), and also
+      accepts a pasted `atomic://pair` link or a bare `did:ad:node:…`.
 - [x] Phone: `atomic://` deep link — **verified on-device 2026-07-09**
       (Xiaomi Pad): a cold-start `pair` VIEW intent lands as a persisted
       `KnownPeer` carrying the Mac's node DID. **No in-app scanner needed
@@ -282,16 +298,15 @@ for it.
          2 min (`desktop/src/lib.rs`), and `helpers/deepLinkQueue.ts`
          dedupes by URI so each link is handled once per page.
 - [x] Import (**built 2026-07-09**, `components/PairingLinkHandler.tsx`):
-      `pair` → KnownPeer + Sync page; `onboard` → import secret via the
-      sign-in primitives (`Agent.fromSecret` → `setAgent` →
-      `saveAgentToIDB`), KnownPeer, navigate to the personal drive.
-      Already-signed-in devices get an explicit "Switch account?"
-      confirmation (never a silent key replacement); an onboard code for
-      the agent already held degrades to routing-only. Unsupported
-      version → "update this app" toast. Receiver paths verified live in
-      the web app by dispatching the DOM events. Still to do: kick an
-      initial reconcile automatically after import (today the seeded
-      peer is one tap away on the Sync page).
+      a link → KnownPeer + an immediate reconcile + the Sync page.
+      Unsupported version → "update this app" toast. Receiver paths
+      verified live in the web app by dispatching the DOM events.
+      **Revised 2026-07-10:** the identity-importing half (`Agent.fromSecret`
+      → `setAgent` → `saveAgentToIDB`) and its "Switch account?" dialog were
+      removed. Any app or web page can fire an `atomic://` link, so a link
+      must never be able to sign this device in as someone else; the decoder
+      now refuses a code carrying `secret=`. What remains grants nothing, so
+      it needs no prompt.
 
 ### P2 — pair flow + discovery sugar
 
@@ -325,22 +340,31 @@ for it.
       seed can come with P2's `SyncSession` work.
 - [ ] Later: passkey + PRF-derived encryption key for one-step restore.
 
-### P3 — channel-provisioned secret (v2, after knock/inbox)
+### P3 — channel-provisioned secret (after knock/inbox)
+
+The only sanctioned way an existing device may hand its identity to a new one.
+Until it lands, a new device signs in by entering its secret; there is no
+one-scan onboarding, by design.
 
 - [ ] `onboard-request` kind: routing + one-shot token in QR; secret flows
-      over the authenticated Iroh channel after on-screen confirm.
-- [ ] Deprecate (don't remove) secret-in-QR once this is solid.
+      over the authenticated Iroh channel after on-screen confirm. The QR
+      still carries no key — only routing and a token the confirm gates.
+- [ ] Requires the agent secret to be reconstructable on the *sending* device,
+      which `6cdab0e3` deliberately made impossible for the stored keypair.
+      Resolve that first: either re-derive from a user-supplied passphrase at
+      send time, or send a freshly-minted delegated key rather than the root.
 
 ## Open questions
 
-1. **QR scanner dependency** — webview `getUserMedia` + `BarcodeDetector`
-   (no native dep, but Android WebView support needs verification) vs
-   `tauri-plugin-barcode-scanner` (native, more reliable, another plugin in
-   the mobile build). Decide during P1 with a spike on the actual device.
-2. **Expiry semantics for `onboard` QRs** — static render (dies with the
-   dialog) is v1; do we want server-side one-shot tokens even for
-   secret-in-QR so a screenshot ages out? Leaning yes-later (it falls out of
-   P3's token machinery for free).
+1. ~~**QR scanner dependency**~~ — **Resolved 2026-07-09:**
+   `tauri-plugin-barcode-scanner`. The Android WebView won't grant
+   `getUserMedia` to web content, so a `BarcodeDetector` scanner can't work;
+   the native plugin owns the camera and permission. It's compiled in for
+   mobile only, so the scan affordance is gated on `isMobileTauri()`.
+2. ~~**Expiry semantics for `onboard` QRs**~~ — **Moot 2026-07-10.** A `pair`
+   code is routing only and grants nothing, so a screenshot of it ages out to
+   no consequence; there is nothing to expire. Expiry returns with P3's
+   one-shot token, where it falls out of the token machinery for free.
 3. **Multi-agent devices** — the flows assume one default agent per device.
-   If/when a device holds several agents, `onboard` needs an "add as
-   additional identity" branch instead of the overwrite prompt.
+   If/when a device holds several agents, the Sync page needs to say *which*
+   identity a pairing code belongs to, since AUTH is per-agent.

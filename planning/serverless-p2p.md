@@ -286,8 +286,10 @@ the work is hardening and consolidation the codebase needs anyway.
    exists on both devices (today: paste/QR the secret). Does secret
    provisioning ride the same QR flow as NodeID exchange, and if so, how is
    it protected in transit? **Resolved in
-   [`device-pairing.md`](./device-pairing.md):** one envelope, two kinds —
-   `onboard` (secret in QR, v1) and `pair` (routing only); v2 moves the
-   secret onto the authenticated Iroh channel behind an on-screen confirm.
+   [`device-pairing.md`](./device-pairing.md):** no. The QR is routing only,
+   and a code carrying a secret is refused — any app or web page can fire an
+   `atomic://` link, so a link must never sign a device in. A new device
+   signs in by entering its secret; channel-provisioning behind an on-screen
+   confirm is P3.
 4. **Drive enrollment on pairing** — pair grants which drives? All of the
    agent's, or picked at pair time (`KnownPeer.drives`)?

@@ -423,8 +423,7 @@ function SyncPage() {
     if (!input || !status.drive) return;
 
     // A pasted atomic://pair link is routing sugar for the same thing: pull
-    // the node identity out of the envelope. (An onboard link pasted here is
-    // used for its routing only — identity import belongs to the scan flow.)
+    // the node identity out of the envelope.
     let nodeDid = input;
 
     if (input.startsWith(PAIRING_URI_PREFIX)) {

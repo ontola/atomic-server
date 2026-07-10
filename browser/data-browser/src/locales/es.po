@@ -2241,16 +2241,8 @@ msgid "<0/> This field is calculated server-side."
 msgstr "<0/> Este campo se calcula en el servidor."
 
 #: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Make your knowledge work for you."
-msgstr "Haz que tu conocimiento trabaje para ti."
-
-#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Could not parse that secret."
 msgstr "No se pudo analizar ese secreto."
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Get started"
-msgstr "Empezar"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -4574,26 +4566,6 @@ msgid "wants to modify a resource that is not contained in the current scope."
 msgstr "quiere modificar un recurso que no está contenido en el ámbito actual."
 
 #: src/views/getting-started/GettingStartedFlow.tsx
-msgid "<0>All-in-one workspace</0>: documents, tables, files, and APIs in one place, designed to stay coherent as it grows."
-msgstr "<0>Espacio de trabajo todo en uno</0>: documentos, tablas, archivos y API en un solo lugar, diseñado para mantenerse coherente a medida que crece."
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "<0>Fast and lightweight</0>: a snappy workspace and API, small download, minimal dependencies, runs anywhere."
-msgstr "<0>Rápido y ligero</0>: un espacio de trabajo ágil y API, descarga pequeña, dependencias mínimas, se ejecuta en cualquier lugar."
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "<0>Open source</0>: inspect, fork, and self-host. Keep control of your data and avoid lock-in."
-msgstr "<0>Código abierto</0>: inspecciona, bifurca y autoaloja. Mantén el control de tus datos y evita el bloqueo."
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "<0>Future of the web</0>: decentralized by design, built for interoperability so your data and tools can work together."
-msgstr "<0>El futuro de la web</0>: descentralizado por diseño, construido para la interoperabilidad para que tus datos y herramientas puedan trabajar juntos."
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "<0>Feature complete by default</0>: rights, history, search, invites, realtime sync, collaboration, and AI chat built in."
-msgstr "<0>Funcionalidad completa por defecto</0>: derechos, historial, búsqueda, invitaciones, sincronización en tiempo real, colaboración y chat con IA integrados."
-
-#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "No recovery backup was found for"
 msgstr ""
 
@@ -4865,28 +4837,7 @@ msgid "Try the live demo"
 msgstr ""
 
 #: src/components/PairingLinkHandler.tsx
-msgid "Device paired — you are signed in."
-msgstr ""
-
-#: src/components/PairingLinkHandler.tsx
 msgid "Could not read the pairing link."
-msgstr ""
-
-#: src/components/PairingLinkHandler.tsx
-#: src/components/PairingLinkHandler.tsx
-msgid "Could not read the identity in the pairing code."
-msgstr ""
-
-#: src/components/PairingLinkHandler.tsx
-msgid "This device is already signed in. The pairing code you scanned belongs to a different account — switching signs this device out of the current one. Make sure its passphrase is saved somewhere before you continue, or you lose access to that account."
-msgstr ""
-
-#: src/components/PairingLinkHandler.tsx
-msgid "Switch account?"
-msgstr ""
-
-#: src/components/PairingLinkHandler.tsx
-msgid "Switch account"
 msgstr ""
 
 #: src/routes/DemoRoute.tsx
@@ -5218,4 +5169,9 @@ msgstr ""
 
 #: src/components/ConnectToDeviceForm.tsx
 msgid "Paste a pairing code or did:ad:node:…"
+msgstr ""
+
+#. 0: ' '
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Open source & self-hostable ·{0} <0>Learn more</0>"
 msgstr ""
