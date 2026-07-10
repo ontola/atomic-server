@@ -371,4 +371,172 @@ mod test {
         trailing.push(0);
         assert!(GenesisCert::decode(&trailing).is_err());
     }
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    fn unhex(s: &str) -> Vec<u8> {
+        (0..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+            .collect()
+    }
+
+    struct VectorInput {
+        seed: u8,
+        created_at: i64,
+        nonce: [u8; 16],
+        state_hash: Option<[u8; 32]>,
+        parent: &'static str,
+        drive: &'static str,
+    }
+
+    /// The fixed inputs that define the golden cross-language vectors. Both the
+    /// generator and the regression test below drive off this one list, so they
+    /// can never drift.
+    fn golden_inputs() -> Vec<VectorInput> {
+        let ascending = {
+            let mut n = [0u8; 16];
+            for (i, b) in n.iter_mut().enumerate() {
+                *b = i as u8;
+            }
+            n
+        };
+        vec![
+            // Typical: DID parent + drive, no stateHash.
+            VectorInput {
+                seed: 1,
+                created_at: 1_700_000_000_000,
+                nonce: [0x11; 16],
+                state_hash: None,
+                parent: "did:ad:parentAAAA",
+                drive: "did:ad:driveAAAA",
+            },
+            // Top-level: empty parent, createdAt 0, ascending nonce.
+            VectorInput {
+                seed: 2,
+                created_at: 0,
+                nonce: ascending,
+                state_hash: None,
+                parent: "",
+                drive: "did:ad:driveBBBB",
+            },
+            // Flagged stateHash present + an HTTP-URL parent (u16 length-prefix,
+            // UTF-8) — pins the optional-field layout the TS side must match.
+            VectorInput {
+                seed: 3,
+                created_at: 1_699_999_999_999,
+                nonce: [0xAB; 16],
+                state_hash: Some([0xCD; 32]),
+                parent: "https://example.com/parent",
+                drive: "did:ad:driveCCCC",
+            },
+        ]
+    }
+
+    fn cert_for(input: &VectorInput) -> (String, GenesisCert) {
+        let (private_key, pubkey) = test_key(input.seed);
+        (
+            private_key,
+            GenesisCert {
+                signer_pubkey: pubkey,
+                created_at: input.created_at,
+                nonce: input.nonce,
+                state_hash: input.state_hash,
+                parent: input.parent.into(),
+                drive: input.drive.into(),
+            },
+        )
+    }
+
+    /// Emits the golden-vector fixture to stdout. Run with `--nocapture` and
+    /// paste the block between the markers into `genesis_test_vectors.json`.
+    /// `#[ignore]` so it doesn't run in the normal suite; the regression test
+    /// below is what actually guards the format.
+    #[test]
+    #[ignore = "generator: run with --nocapture to regenerate the fixture"]
+    fn generate_golden_vectors() {
+        let vectors: Vec<_> = golden_inputs()
+            .iter()
+            .map(|input| {
+                let (private_key, cert) = cert_for(input);
+                let signature = cert.sign(&private_key).unwrap();
+                serde_json::json!({
+                    "seedByte": input.seed,
+                    "privateKeyBase64": private_key,
+                    "pubKeyHex": hex(&cert.signer_pubkey),
+                    "createdAt": cert.created_at,
+                    "nonceHex": hex(&cert.nonce),
+                    "stateHashHex": cert.state_hash.map(|h| hex(&h)),
+                    "parent": cert.parent,
+                    "drive": cert.drive,
+                    "certBytesHex": hex(&cert.encode()),
+                    "signature": signature,
+                    "did": GenesisCert::subject_for_signature(&signature),
+                    "signerDid": cert.signer_did(),
+                })
+            })
+            .collect();
+        let doc = serde_json::json!({
+            "_comment": "Golden cross-language vectors for the v1 genesis certificate. \
+                Both the Rust GenesisCert and the browser TS implementation MUST reproduce \
+                every field. Byte fields are hex; signature / did / signerDid use \
+                base64url-no-pad. Seeds are [seedByte; 32] Ed25519 seeds — TEST KEYS ONLY. \
+                Regenerate via `cargo test -p atomic_lib genesis::test::generate_golden_vectors \
+                -- --ignored --nocapture`.",
+            "version": 1,
+            "vectors": vectors,
+        });
+        println!(
+            "GOLDEN_START\n{}\nGOLDEN_END",
+            serde_json::to_string_pretty(&doc).unwrap()
+        );
+    }
+
+    /// Pins the Rust reference implementation to the committed cross-language
+    /// fixture: for every golden input, Rust must produce byte-identical cert
+    /// bytes, the same signature, DID, and signer DID. The browser TS
+    /// `GenesisCert` runs the SAME fixture (`genesis_test_vectors.json`) — this
+    /// is the contract that keeps the two byte-for-byte in agreement. If this
+    /// fails after an intentional change, regenerate with `generate_golden_vectors`
+    /// AND update the TS side; a signed layout must never change silently.
+    #[test]
+    fn matches_the_golden_vectors() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("genesis_test_vectors.json")).unwrap();
+        let vectors = fixture["vectors"].as_array().unwrap();
+        let inputs = golden_inputs();
+        assert_eq!(
+            vectors.len(),
+            inputs.len(),
+            "fixture vector count drifted from golden_inputs — regenerate the fixture"
+        );
+
+        for (input, expected) in inputs.iter().zip(vectors) {
+            let (private_key, cert) = cert_for(input);
+            let signature = cert.sign(&private_key).unwrap();
+            let did = GenesisCert::subject_for_signature(&signature);
+
+            assert_eq!(
+                hex(&cert.encode()),
+                expected["certBytesHex"].as_str().unwrap(),
+                "cert bytes differ for seed {}",
+                input.seed
+            );
+            assert_eq!(signature, expected["signature"].as_str().unwrap());
+            assert_eq!(did, expected["did"].as_str().unwrap());
+            assert_eq!(
+                cert.signer_did(),
+                expected["signerDid"].as_str().unwrap()
+            );
+
+            // The fixture must also decode back to the same cert, so the TS
+            // side has a decode target too, not just an encode one.
+            assert_eq!(
+                GenesisCert::decode(&unhex(expected["certBytesHex"].as_str().unwrap())).unwrap(),
+                cert
+            );
+        }
+    }
 }
