@@ -3,13 +3,26 @@ import { getManagedApiBase } from './api';
 import { writeManagedAccountBinding } from './binding';
 import { getManagedAccount } from './session';
 
+/**
+ * What the control plane returns from `POST /api/sync-enrollments`
+ * (`SyncEnrollmentCreated` in the backend). `http_origin` is the managed node
+ * the drive was assigned to — where the browser then points to sync it.
+ */
+export type ManagedSyncEnrollmentResult = {
+  drive: string;
+  /** Iroh node id of the assigned node, when known. */
+  node: string | null;
+  /** HTTP origin of the assigned managed node, e.g. `https://node1.example`. */
+  http_origin: string | null;
+};
+
 export async function createManagedSyncEnrollment({
   driveSubject,
   agentSubject,
 }: {
   driveSubject: string;
   agentSubject: string;
-}): Promise<unknown> {
+}): Promise<ManagedSyncEnrollmentResult> {
   // Identity convergence happens silently at app boot (IdentityReconcileGate);
   // by the time we enroll, the active agent is the account's agent. Enrolling
   // also (re)binds it below, so the account adopts the agent in use here — we
@@ -34,5 +47,5 @@ export async function createManagedSyncEnrollment({
     writeManagedAccountBinding(managedAccount.email, agentSubject);
   }
 
-  return response.json();
+  return (await response.json()) as ManagedSyncEnrollmentResult;
 }

@@ -53,6 +53,12 @@ import {
   PAIRING_URI_PREFIX,
 } from '@tomic/lib';
 import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
+import { PRODUCT_NAME } from '../helpers/managed/product';
+import {
+  enableCloudSyncForDrive,
+  driveHasCloudEnrollment,
+  isCloudSyncAvailable,
+} from '../helpers/managed/cloudSync';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
 import { useSettings } from '../helpers/AppSettings';
@@ -182,6 +188,11 @@ function SyncPage() {
   const [peerSyncing, setPeerSyncing] = useState(false);
   const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
+  // Cloud Sync (SaaS) backup state for the active drive. `null` = not yet
+  // known / not applicable; `false` = eligible but not enrolled (show the CTA);
+  // `true` = already enrolled (hide it).
+  const [cloudEnrolled, setCloudEnrolled] = useState<boolean | null>(null);
+  const [cloudBusy, setCloudBusy] = useState(false);
   // Resolved in an effect rather than read off a Resource during render: the
   // React Compiler memoizes on the proxy identity, so a resource that finishes
   // loading would never re-render this.
@@ -327,6 +338,32 @@ function SyncPage() {
       .catch(() => {});
   }, []);
 
+  // Does the active drive already have a Cloud Sync enrollment? Drives the
+  // "Back up to Cloud Sync" CTA below. Skips entirely when no control plane is
+  // reachable (pure self-hosted), so the CTA never shows there.
+  useEffect(() => {
+    const drive = status.drive;
+
+    if (!drive || !isCloudSyncAvailable(managedInfo)) {
+      setCloudEnrolled(null);
+
+      return;
+    }
+
+    let cancelled = false;
+    driveHasCloudEnrollment(drive)
+      .then(has => {
+        if (!cancelled) setCloudEnrolled(has);
+      })
+      .catch(() => {
+        if (!cancelled) setCloudEnrolled(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [status.drive, managedInfo]);
+
   useEffect(() => {
     const refresh = () => setStatus(store.getSyncStatus());
     const unsubConnection = store.on(StoreEvents.ConnectionChanged, refresh);
@@ -372,6 +409,17 @@ function SyncPage() {
   const pairedPeers = isNode ? knownPeers : [];
   const connectionCount = (showServerConn ? 1 : 0) + pairedPeers.length;
 
+  // Offer a Cloud Sync backup only for a drive that lives on this device (a
+  // local-only drive, or the embedded node with no remote server) and isn't
+  // already enrolled. A drive already homed on a remote server is a migration,
+  // not a backup — out of scope for this action.
+  const deviceLocalDrive = !!status.drive && (localOnlyDrive || !showServerConn);
+  const showCloudBackup =
+    isCloudSyncAvailable(managedInfo) &&
+    cloudEnrolled === false &&
+    deviceLocalDrive &&
+    !driveMissing;
+
   const usagePct =
     nodeUsage && quotaBytes
       ? Math.min(
@@ -411,6 +459,46 @@ function SyncPage() {
       store.notifyError(e as Error);
     } finally {
       setPromoting(false);
+    }
+  }
+
+  async function backupToCloud() {
+    const drive = status.drive;
+    const agent = store.getAgent();
+
+    if (!drive || !agent || cloudBusy) return;
+
+    setCloudBusy(true);
+
+    try {
+      const result = await enableCloudSyncForDrive({
+        store,
+        drive,
+        agentSubject: agent.subject,
+        setServer,
+        managedInfo,
+      });
+
+      if (!result.ok) {
+        // No account yet — send them to the portal to sign up, then retry here.
+        if (result.portalUrl) {
+          window.open(result.portalUrl, '_blank', 'noopener,noreferrer');
+          toast(
+            `Create your ${PRODUCT_NAME} account, then come back and enable backup.`,
+          );
+        } else {
+          toast.error(`No ${PRODUCT_NAME} portal is configured for this server.`);
+        }
+
+        return;
+      }
+
+      setCloudEnrolled(true);
+      toast.success(`Backing up this workspace to ${PRODUCT_NAME}…`);
+    } catch (e) {
+      store.notifyError(e as Error);
+    } finally {
+      setCloudBusy(false);
     }
   }
 
@@ -555,10 +643,33 @@ function SyncPage() {
           </LocalDriveNotice>
         )}
 
+        {/* This drive only exists on this device and there's a control plane to
+            back it up to. Leads over the generic "Sync this workspace" below:
+            it both enrolls the drive AND points the app at the assigned node. */}
+        {showCloudBackup && (
+          <LocalDriveNotice>
+            <ConnIcon $tone='cloud'>
+              <FaCloud />
+            </ConnIcon>
+            <ConnBody>
+              <ConnTitle>Back up to {PRODUCT_NAME}</ConnTitle>
+              <ConnSub>
+                This workspace lives only on this device. Turn on {PRODUCT_NAME}{' '}
+                to back it up and reach it from your other devices and the web.
+              </ConnSub>
+              <ConnActions>
+                <Button onClick={backupToCloud} disabled={cloudBusy}>
+                  {cloudBusy ? 'Setting up…' : `Back up to ${PRODUCT_NAME}`}
+                </Button>
+              </ConnActions>
+            </ConnBody>
+          </LocalDriveNotice>
+        )}
+
         {/* A local-only drive (demo, or any drive made offline) isn't synced.
             Offer to promote it to a normal synced drive on the connected
             server — the same reconcile a regular drive uses, no special path. */}
-        {localOnlyDrive && !driveMissing && (
+        {localOnlyDrive && !driveMissing && !showCloudBackup && (
           <LocalDriveNotice>
             <ConnIcon $tone='cloud'>
               <FaCloudArrowUp />
