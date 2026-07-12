@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../browser/data-browser/dist-tauri",
     "devUrl": "http://localhost:6747",
-    "beforeDevCommand": "TAURI=1 pnpm -C browser/data-browser dev",
+    "beforeDevCommand": "pnpm -C browser/data-browser dev:tauri",
     "beforeBuildCommand": "pnpm -C browser/data-browser build:tauri"
   },
   "app": {
