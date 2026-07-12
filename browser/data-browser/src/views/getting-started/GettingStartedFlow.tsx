@@ -1,5 +1,5 @@
 import { PRODUCT_NAME } from '../../helpers/managed';
-import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { styled, css, keyframes } from 'styled-components';
 import { useStore } from '@tomic/react';
 import { Agent } from '@tomic/lib';
@@ -34,7 +34,6 @@ import atomicServerLogoUrl from '../../../../../logo.svg?url';
 import { ConnectDeviceStep } from './ConnectDeviceStep';
 import {
   Shell,
-  Card,
   CardTitle,
   CardSubtitle,
   CardError,
@@ -263,11 +262,6 @@ export function GettingStartedFlow({
     }
   }
 
-  const slogans: string[] = useMemo(
-    () => ['Make your knowledge work for you.'],
-    [],
-  );
-
   async function handleSignInWithSecret(secret: string) {
     setLoading(true);
     setError(undefined);
@@ -338,90 +332,53 @@ export function GettingStartedFlow({
     <Shell>
       {step === 'welcome' ? (
         <Swap key='welcome'>
-          <Layout>
-            <Pitch>
-              <VisuallyHiddenH1>AtomicServer</VisuallyHiddenH1>
-              <AtomicServerLogo
-                src={atomicServerLogoUrl}
-                alt=''
-                decoding='async'
-              />
-              <Slogan>
-                {slogans[Math.floor(Math.random() * slogans.length)]}
-              </Slogan>
-              <PropList>
-                <li>
-                  <strong>All-in-one workspace</strong>: documents, tables,
-                  files, and APIs in one place, designed to stay coherent as it
-                  grows.
-                </li>
-                <li>
-                  <strong>Fast and lightweight</strong>: a snappy workspace and
-                  API, small download, minimal dependencies, runs anywhere.
-                </li>
-                <li>
-                  <strong>Open source</strong>: inspect, fork, and self-host.
-                  Keep control of your data and avoid lock-in.
-                </li>
-                <li>
-                  <strong>Future of the web</strong>: decentralized by design,
-                  built for interoperability so your data and tools can work
-                  together.
-                </li>
-                <li>
-                  <strong>Feature complete by default</strong>: rights, history,
-                  search, invites, realtime sync, collaboration, and AI chat
-                  built in.
-                </li>
-              </PropList>
-            </Pitch>
-            <CardColumn>
-              <Card>
-                <CardTitle>Get started</CardTitle>
-                <Column gap='0.75rem'>
-                  <CtaButton
-                    type='button'
-                    onClick={() => {
-                      // Managed node → create the account on the portal
-                      // (email verification). FOSS node → local identity.
-                      if (createTarget.kind === 'portal') {
-                        window.location.assign(createTarget.url);
-                      } else {
-                        setStep('create');
-                      }
-                    }}
-                  >
-                    Create account
-                  </CtaButton>
-                  <CtaButton
-                    type='button'
-                    subtle
-                    onClick={() => {
-                      setError(undefined);
-                      setSecretValue('');
-                      setStep('signin');
-                    }}
-                  >
-                    Sign in
-                  </CtaButton>
-                  <CtaButton
-                    type='button'
-                    subtle
-                    onClick={() => {
-                      // No account needed: the demo mints a throwaway
-                      // guest agent and runs entirely on this device.
-                      navigate(paths.demo);
-                    }}
-                  >
-                    Try the live demo
-                  </CtaButton>
-                </Column>
-                {error ? (
-                  <CardError role='alert'>{error.message}</CardError>
-                ) : null}
-              </Card>
-            </CardColumn>
-          </Layout>
+          <WelcomeStack>
+            <VisuallyHiddenH1>AtomicServer</VisuallyHiddenH1>
+            <AtomicServerLogo
+              src={atomicServerLogoUrl}
+              alt=''
+              decoding='async'
+            />
+            <ButtonStack>
+              <CtaButton
+                type='button'
+                onClick={() => {
+                  // Managed node → create the account on the portal
+                  // (email verification). FOSS node → local identity.
+                  if (createTarget.kind === 'portal') {
+                    window.location.assign(createTarget.url);
+                  } else {
+                    setStep('create');
+                  }
+                }}
+              >
+                Create account
+              </CtaButton>
+              <CtaButton
+                type='button'
+                subtle
+                onClick={() => {
+                  setError(undefined);
+                  setSecretValue('');
+                  setStep('signin');
+                }}
+              >
+                Sign in
+              </CtaButton>
+              <CtaButton
+                type='button'
+                subtle
+                onClick={() => {
+                  // No account needed: the demo mints a throwaway
+                  // guest agent and runs entirely on this device.
+                  navigate(paths.demo);
+                }}
+              >
+                Try the live demo
+              </CtaButton>
+            </ButtonStack>
+            {error ? <CardError role='alert'>{error.message}</CardError> : null}
+          </WelcomeStack>
         </Swap>
       ) : step === 'signin' ? (
         <Swap key='signin'>
@@ -665,39 +622,22 @@ const Swap = styled.div`
   }
 `;
 
-const Layout = styled.div`
+const WelcomeStack = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: ${p => p.theme.size(8)};
+  gap: ${p => p.theme.size(9)};
   width: 100%;
-  max-width: 64rem;
+  max-width: 22rem;
   margin-inline: auto;
-
-  @media (min-width: 56em) {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: ${p => p.theme.size(10)};
-  }
+  text-align: center;
 `;
 
-const Pitch = styled.div`
-  flex: 1;
-  min-width: 0;
-  max-width: 34rem;
+const ButtonStack = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  text-align: start;
-  gap: ${p => p.theme.size(5)};
-`;
-
-const Slogan = styled.h2`
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  gap: 0.75rem;
+  width: 100%;
 `;
 
 const VisuallyHiddenH1 = styled.h1`
@@ -728,56 +668,6 @@ const AtomicServerLogo = styled.img`
     css`
       filter: brightness(0) invert(1);
     `}
-`;
-
-const PropList = styled.ul`
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: ${p => p.theme.size(4)};
-  font-size: 0.95rem;
-  line-height: 1.5;
-  color: ${p => p.theme.colors.text};
-  width: 100%;
-  max-width: 46rem;
-
-  strong {
-    color: ${p => p.theme.colors.text};
-    font-weight: 600;
-  }
-
-  li {
-    margin: 0;
-    position: relative;
-    list-style: none;
-    padding-inline-start: ${p => p.theme.size(5)};
-  }
-
-  li::before {
-    content: '';
-    position: absolute;
-    inline-size: 0.45rem;
-    block-size: 0.45rem;
-    inset-inline-start: ${p => p.theme.size(2)};
-    inset-block-start: 0.55em;
-    border-radius: 999px;
-    background: ${p => p.theme.colors.main};
-    opacity: 0.9;
-  }
-`;
-
-const CardColumn = styled.div`
-  flex-shrink: 0;
-  display: flex;
-  justify-content: center;
-  width: 100%;
-
-  @media (min-width: 56em) {
-    width: auto;
-    align-self: center;
-  }
 `;
 
 const StepDotsSlot = styled.div`
