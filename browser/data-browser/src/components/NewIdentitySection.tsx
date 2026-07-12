@@ -623,6 +623,10 @@ function RecoveryBackupStep({
   onSkip: () => void;
 }) {
   const [password, setPassword] = useState('');
+  // Skipping is the one irreversible choice here: without a backup, a lost
+  // secret means the account (and its data) can never be recovered — by anyone.
+  // So skip is two-stage: the button arms a stark confirmation before it takes.
+  const [confirmingSkip, setConfirmingSkip] = useState(false);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -630,6 +634,32 @@ function RecoveryBackupStep({
     if (!password.trim() || loading) return;
 
     onBackup(password.trim());
+  }
+
+  if (confirmingSkip) {
+    return (
+      <Column gap='1rem'>
+        <h3>Skip the recovery backup?</h3>
+        <SkipWarning role='alert'>
+          <strong>This can’t be undone.</strong> Without a recovery backup, no
+          one can restore your account if you lose your secret — not even the
+          sync service. Your data would be permanently inaccessible. Only skip
+          if you’re certain you’ll keep your secret somewhere safe.
+        </SkipWarning>
+        <Row gap='1rem'>
+          <ContinueButton
+            type='button'
+            onClick={() => setConfirmingSkip(false)}
+            disabled={loading}
+          >
+            Back up my secret
+          </ContinueButton>
+          <Button type='button' subtle onClick={onSkip} disabled={loading}>
+            Skip anyway
+          </Button>
+        </Row>
+      </Column>
+    );
   }
 
   return (
@@ -667,7 +697,12 @@ function RecoveryBackupStep({
             >
               {loading ? 'Backing up…' : 'Back up & continue'}
             </ContinueButton>
-            <Button type='button' subtle onClick={onSkip} disabled={loading}>
+            <Button
+              type='button'
+              subtle
+              onClick={() => setConfirmingSkip(true)}
+              disabled={loading}
+            >
               Skip, I&apos;ll save it myself
             </Button>
           </Row>
@@ -678,6 +713,20 @@ function RecoveryBackupStep({
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
+
+const SkipWarning = styled.p`
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.alert};
+  background: ${p => p.theme.colors.alert}14;
+  color: ${p => p.theme.colors.text};
+  line-height: 1.5;
+
+  strong {
+    color: ${p => p.theme.colors.alert};
+  }
+`;
 
 const StyledCodeBlock = styled(CodeBlock)`
   word-break: break-word;
