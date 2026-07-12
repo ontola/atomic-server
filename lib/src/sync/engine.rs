@@ -734,8 +734,7 @@ pub async fn handle_sync_vv_filtered(
             vvs
         }
         None => {
-            let drive_subject =
-                crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+            let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
             let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
             build_drive_vvs(store, &drive_subjects)
         }
@@ -936,10 +935,12 @@ pub async fn import_sync_push(
     // FOSS), so this only bites on a managed node: it admits writes to enrolled
     // drives (within quota), plus a bootstrap grace for a drive whose enrollment
     // is still propagating to the allowlist.
-    if !store.sync_policy().admit_drive_write(&push.drive) {
+    let decision = store.sync_policy().admit_decision(&push.drive);
+    if !decision.is_admitted() {
         tracing::warn!(
-            "import_sync_push: drive {} not admitted by sync policy",
-            push.drive
+            "import_sync_push: drive {} not admitted by sync policy ({:?})",
+            push.drive,
+            decision
         );
         return (0, vec![]);
     }

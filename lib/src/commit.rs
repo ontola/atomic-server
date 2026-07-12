@@ -823,11 +823,20 @@ impl Commit {
                         .get(urls::DRIVE_PROP)
                         .map(|v| v.to_string())
                         .unwrap_or_else(|_| res.get_subject().to_string());
-                    if !store.sync_policy().admit_drive_write(&drive_subject) {
-                        return Err(format!(
-                            "Drive {drive_subject} is not enrolled for sync on this node."
-                        )
-                        .into());
+                    match store.sync_policy().admit_decision(&drive_subject) {
+                        crate::sync::policy::AdmitDecision::Admitted => {}
+                        crate::sync::policy::AdmitDecision::NotEnrolled => {
+                            return Err(format!(
+                                "Drive {drive_subject} is not enrolled for sync on this node."
+                            )
+                            .into());
+                        }
+                        crate::sync::policy::AdmitDecision::OverQuota => {
+                            return Err(format!(
+                                "Drive {drive_subject} has reached its storage quota on this node."
+                            )
+                            .into());
+                        }
                     }
                 }
             }

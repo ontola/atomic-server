@@ -15,6 +15,27 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
+/// Why a write to a drive was, or wasn't, admitted. Lets callers surface an
+/// accurate error: a drive that isn't enrolled is a different problem from one
+/// that's enrolled but over its storage quota — reporting the former as the
+/// latter ("quota exceeded" for a drive that was never enrolled) is confusing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdmitDecision {
+    /// The write is allowed.
+    Admitted,
+    /// The drive isn't enrolled/allowlisted here (and isn't within a bootstrap
+    /// grace window).
+    NotEnrolled,
+    /// The drive is enrolled but at or over its storage quota.
+    OverQuota,
+}
+
+impl AdmitDecision {
+    pub fn is_admitted(self) -> bool {
+        matches!(self, AdmitDecision::Admitted)
+    }
+}
+
 /// Admission + quota decisions for incoming drive sync. A [`crate::Db`] consults
 /// its installed policy before admitting a write to a drive (SYNC_PUSH, commit,
 /// blob, or realtime update).
@@ -26,15 +47,26 @@ pub trait SyncPolicy: Send + Sync {
     /// the drive is allowed.
     fn drive_within_quota(&self, drive_subject: &str) -> bool;
 
-    /// Whether a write to `drive_subject` should be admitted right now. The
-    /// default is a pure allowlist+quota check; a policy may additionally grant a
-    /// bootstrap grace so a freshly-created drive can sync while its enrollment
-    /// is still propagating (see [`AllowlistPolicy`]).
+    /// Classify a write to `drive_subject` so callers can report *why* it was
+    /// refused. The default composes the allowlist + quota checks; a policy with
+    /// a bootstrap grace (see [`AllowlistPolicy`]) overrides this to admit a
+    /// freshly-created drive while its enrollment propagates.
     ///
     /// Callers must only pass **drive** subjects — never agent (`did:ad:agent:…`)
     /// or other non-drive subjects, which are outside the enrollment model.
+    fn admit_decision(&self, drive_subject: &str) -> AdmitDecision {
+        if !self.drive_is_allowed(drive_subject) {
+            AdmitDecision::NotEnrolled
+        } else if !self.drive_within_quota(drive_subject) {
+            AdmitDecision::OverQuota
+        } else {
+            AdmitDecision::Admitted
+        }
+    }
+
+    /// Whether a write to `drive_subject` should be admitted right now.
     fn admit_drive_write(&self, drive_subject: &str) -> bool {
-        self.drive_is_allowed(drive_subject) && self.drive_within_quota(drive_subject)
+        self.admit_decision(drive_subject).is_admitted()
     }
 }
 
@@ -149,16 +181,20 @@ impl AllowlistPolicy {
     }
 
     /// Admission decision at a given instant (testable core of
-    /// [`SyncPolicy::admit_drive_write`]). Allowlisted drives are admitted iff
+    /// [`SyncPolicy::admit_decision`]). Allowlisted drives are admitted iff
     /// within quota; a non-allowlisted drive is admitted only while inside its
     /// bootstrap grace, measured from its first write here.
-    fn admit_at(&self, drive_subject: &str, now: Instant) -> bool {
+    fn decide_at(&self, drive_subject: &str, now: Instant) -> AdmitDecision {
         if self.drive_is_allowed(drive_subject) {
-            return self.drive_within_quota(drive_subject);
+            return if self.drive_within_quota(drive_subject) {
+                AdmitDecision::Admitted
+            } else {
+                AdmitDecision::OverQuota
+            };
         }
 
         let Ok(mut guard) = self.inner.write() else {
-            return false;
+            return AdmitDecision::NotEnrolled;
         };
         let grace = guard.grace;
         let first = *guard
@@ -166,7 +202,11 @@ impl AllowlistPolicy {
             .entry(drive_subject.to_string())
             .or_insert(now);
 
-        now.saturating_duration_since(first) < grace
+        if now.saturating_duration_since(first) < grace {
+            AdmitDecision::Admitted
+        } else {
+            AdmitDecision::NotEnrolled
+        }
     }
 }
 
@@ -191,8 +231,8 @@ impl SyncPolicy for AllowlistPolicy {
         }
     }
 
-    fn admit_drive_write(&self, drive_subject: &str) -> bool {
-        self.admit_at(drive_subject, Instant::now())
+    fn admit_decision(&self, drive_subject: &str) -> AdmitDecision {
+        self.decide_at(drive_subject, Instant::now())
     }
 }
 
@@ -254,18 +294,26 @@ mod tests {
 
         let t0 = Instant::now();
         // First write to an un-enrolled drive: admitted (records first-seen).
-        assert!(p.admit_at("did:ad:new", t0));
+        assert!(p.decide_at("did:ad:new", t0).is_admitted());
         // Still within grace 5 min later.
-        assert!(p.admit_at("did:ad:new", t0 + Duration::from_secs(300)));
-        // Past the grace window: rejected.
-        assert!(!p.admit_at("did:ad:new", t0 + Duration::from_secs(601)));
+        assert!(p
+            .decide_at("did:ad:new", t0 + Duration::from_secs(300))
+            .is_admitted());
+        // Past the grace window: rejected as not-enrolled.
+        assert_eq!(
+            p.decide_at("did:ad:new", t0 + Duration::from_secs(601)),
+            AdmitDecision::NotEnrolled
+        );
     }
 
     #[test]
     fn zero_grace_rejects_unenrolled_immediately() {
         let p = AllowlistPolicy::new();
         p.set_grace(Duration::ZERO);
-        assert!(!p.admit_at("did:ad:new", Instant::now()));
+        assert_eq!(
+            p.decide_at("did:ad:new", Instant::now()),
+            AdmitDecision::NotEnrolled
+        );
     }
 
     #[test]
@@ -274,12 +322,32 @@ mod tests {
         p.set_grace(Duration::from_secs(600));
         let t0 = Instant::now();
 
-        assert!(p.admit_at("did:ad:d", t0)); // grace
+        assert!(p.decide_at("did:ad:d", t0).is_admitted()); // grace
 
         // Enrollment lands.
         p.set_drive_policies([("did:ad:d".to_string(), None)]);
 
         // Long after grace would have expired, still admitted because allowlisted.
-        assert!(p.admit_at("did:ad:d", t0 + Duration::from_secs(10_000)));
+        assert!(p
+            .decide_at("did:ad:d", t0 + Duration::from_secs(10_000))
+            .is_admitted());
+    }
+
+    #[test]
+    fn decision_distinguishes_not_enrolled_from_over_quota() {
+        let p = AllowlistPolicy::new();
+        p.set_grace(Duration::ZERO); // no grace, so unenrolled is decisive
+        let t0 = Instant::now();
+
+        // Never enrolled → NotEnrolled (not a quota problem).
+        assert_eq!(p.decide_at("did:ad:c", t0), AdmitDecision::NotEnrolled);
+
+        // Enrolled with a 100-byte quota, under it → Admitted.
+        p.set_drive_policies([("did:ad:a".to_string(), Some(100u64))]);
+        assert_eq!(p.decide_at("did:ad:a", t0), AdmitDecision::Admitted);
+
+        // Now at/over quota → OverQuota, NOT NotEnrolled.
+        p.record_drive_usage([("did:ad:a".to_string(), 100u64)]);
+        assert_eq!(p.decide_at("did:ad:a", t0), AdmitDecision::OverQuota);
     }
 }
