@@ -5,10 +5,8 @@ import {
   enableCloudSyncForDrive,
 } from './cloudSync';
 
-// These run in the node environment (no `window`), so the localhost dev
-// fallback can't be exercised here — it's covered by the app at runtime. What's
-// asserted is the deterministic precedence: an advertised portal wins, and with
-// nothing to resolve to the answer is null (→ CTA hidden).
+// The portal URL is node-driven (or an explicit build-time override) — never
+// hardcoded — so a pure self-hosted node resolves to null and the CTA hides.
 
 describe('getManagedPortalUrl', () => {
   it('uses the connected node’s advertised portal', () => {
@@ -17,7 +15,7 @@ describe('getManagedPortalUrl', () => {
     ).toBe('https://portal.example');
   });
 
-  it('is null when no portal is known (pure self-hosted / no window)', () => {
+  it('is null when the node advertises no portal (pure self-hosted)', () => {
     expect(getManagedPortalUrl({ managed: false, portalUrl: null })).toBeNull();
   });
 });

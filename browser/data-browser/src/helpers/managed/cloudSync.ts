@@ -18,13 +18,16 @@ import { getManagedAccount } from './session';
 import { createManagedSyncEnrollment } from './enrollment';
 import { getManagedEnrollments } from './enrollmentApi';
 import type { ManagedInfo } from '../managedServer';
+import { isRunningInTauri } from '../tauri';
 import { type Store, StoreEvents } from '@tomic/react';
 
 /**
- * Where to send a user to create a Cloud Sync account, or null when no portal
- * is known (a plain self-hosted / FOSS node has none, so the CTA stays hidden).
- * Priority: build-time override → the connected managed node's advertised
- * portal → the local dev portal.
+ * Where to send a user to create a hosted-sync account, or null when no portal
+ * is known — in which case the CTA stays hidden, so a pure self-hosted / FOSS
+ * node never surfaces a hosted-product prompt. The URL is NOT hardcoded here
+ * (that would bake a specific product into the open core): it comes from the
+ * connected node's `/node-info` (`portalUrl`, set by a managed node) or an
+ * explicit build-time `VITE_MANAGED_PORTAL_URL` override for local dev.
  */
 export function getManagedPortalUrl(info?: ManagedInfo | null): string | null {
   const fromEnv =
@@ -35,14 +38,6 @@ export function getManagedPortalUrl(info?: ManagedInfo | null): string | null {
   if (fromEnv) return fromEnv.replace(/\/+$/, '');
 
   if (info?.portalUrl) return info.portalUrl;
-
-  if (typeof window !== 'undefined') {
-    const { hostname } = window.location;
-
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:49237';
-    }
-  }
 
   return null;
 }
@@ -94,6 +89,83 @@ function waitForServerConnected(store: Store, timeoutMs = 20_000): Promise<void>
       if (store.getSyncStatus().serverConnected) finish();
     });
   });
+}
+
+/** A window hosting the portal's login/signup UI, abstracted over Tauri vs web. */
+type AuthWindowHandle = {
+  close: () => Promise<void>;
+  isClosed: () => Promise<boolean>;
+};
+
+/**
+ * Open the portal in a child window that SHARES this app's cookie jar, so the
+ * session cookie the portal's login sets is visible to the app — no token ever
+ * crosses a process boundary. In Tauri that's a WebviewWindow (same WKWebView
+ * data store); in a plain browser, a popup (same browser). The portal owns all
+ * account UX; the open core only points a window at it.
+ */
+async function openAuthWindow(url: string): Promise<AuthWindowHandle> {
+  if (isRunningInTauri()) {
+    const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+    const label = 'managed-auth';
+    const existing = await WebviewWindow.getByLabel(label);
+
+    if (existing) {
+      await existing.setFocus();
+    } else {
+      // eslint-disable-next-line no-new -- constructing the window IS the effect
+      new WebviewWindow(label, { url, title: 'Sign in', width: 480, height: 760 });
+    }
+
+    return {
+      close: async () => {
+        const win = await WebviewWindow.getByLabel(label);
+
+        if (win) await win.close();
+      },
+      isClosed: async () => (await WebviewWindow.getByLabel(label)) === null,
+    };
+  }
+
+  const popup = window.open(url, 'managed-auth', 'width=480,height=760');
+
+  return {
+    close: async () => popup?.close(),
+    isClosed: async () => !popup || popup.closed,
+  };
+}
+
+const AUTH_POLL_MS = 1500;
+const AUTH_TIMEOUT_MS = 3 * 60 * 1000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Open the portal and resolve true once the user has signed in — detected by
+ * polling OUR OWN `/api/me` (the shared cookie jar means the portal's login is
+ * visible here). Resolves false if the user closes the window or it times out.
+ * The portal needs no awareness of being embedded.
+ */
+export async function ensureManagedSession(portalUrl: string): Promise<boolean> {
+  if (await getManagedAccount().catch(() => null)) return true;
+
+  const win = await openAuthWindow(portalUrl);
+  const start = Date.now();
+
+  try {
+    while (Date.now() - start < AUTH_TIMEOUT_MS) {
+      await delay(AUTH_POLL_MS);
+
+      if (await getManagedAccount().catch(() => null)) return true;
+      if (await win.isClosed()) return false;
+    }
+
+    return false;
+  } finally {
+    await win.close();
+  }
 }
 
 export type EnableCloudSyncResult =

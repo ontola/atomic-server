@@ -56,6 +56,7 @@ import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
 import { PRODUCT_NAME } from '../helpers/managed/product';
 import {
   enableCloudSyncForDrive,
+  ensureManagedSession,
   driveHasCloudEnrollment,
   isCloudSyncAvailable,
 } from '../helpers/managed/cloudSync';
@@ -471,26 +472,40 @@ function SyncPage() {
     setCloudBusy(true);
 
     try {
-      const result = await enableCloudSyncForDrive({
+      const args = {
         store,
         drive,
         agentSubject: agent.subject,
         setServer,
         managedInfo,
-      });
+      };
+      let result = await enableCloudSyncForDrive(args);
 
       if (!result.ok) {
-        // No account yet — send them to the portal to sign up, then retry here.
-        if (result.portalUrl) {
-          window.open(result.portalUrl, '_blank', 'noopener,noreferrer');
-          toast(
-            `Create your ${PRODUCT_NAME} account, then come back and enable backup.`,
-          );
-        } else {
+        // No account/session yet. Open the portal (in-app window on desktop,
+        // popup on web) so the user signs in / creates an account there; it
+        // shares our cookie jar, so once done we just retry — no token handoff.
+        if (!result.portalUrl) {
           toast.error(`No ${PRODUCT_NAME} portal is configured for this server.`);
+
+          return;
         }
 
-        return;
+        const signedIn = await ensureManagedSession(result.portalUrl);
+
+        if (!signedIn) {
+          toast(`Sign-in wasn’t completed — nothing was backed up.`);
+
+          return;
+        }
+
+        result = await enableCloudSyncForDrive(args);
+
+        if (!result.ok) {
+          toast.error(`Could not enable ${PRODUCT_NAME} backup.`);
+
+          return;
+        }
       }
 
       setCloudEnrolled(true);
