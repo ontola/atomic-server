@@ -11,6 +11,21 @@ You can run AtomicServer in different ways:
 
 If you want to run AtomicServer locally as a developer / contributor, check out [the Contributors guide](https://github.com/atomicdata-dev/atomic-server/blob/develop/CONTRIBUTING.md).
 
+## Privacy: your server never phones home
+
+A self-hosted AtomicServer talks to nobody but you. There is no telemetry, no
+analytics, and no background reporting in the open-source build. It never
+contacts any control plane, and it does not know that a hosted service
+(AtomicCloud) exists — `GET /node-info` reports `managed: false` and no portal.
+
+The optional hosted-sync integration (heartbeat, per-drive quotas, enrollment
+reporting) is **opt-in and lives outside the open core**: it only runs in the
+separate closed managed-node wrapper, and only when that wrapper is explicitly
+configured with a control-plane URL. A stock `atomic-server` binary has none of
+that code compiled into a code path that runs by default — it installs an open
+sync policy (every drive allowed, no quotas) and passes a no-op readiness hook.
+So running your own node keeps your data, and your traffic, entirely yours.
+
 ## 1. Run using docker
 
 - Run: `docker run -p 80:80 -p 443:443 -v atomic-storage:/atomic-storage joepmeneer/atomic-server`
