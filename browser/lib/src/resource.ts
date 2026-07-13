@@ -18,6 +18,7 @@ import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
 import { isUnauthorized } from './error.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
+import { forms } from './ontologies/forms.js';
 import { server } from './ontologies/server.js';
 
 import {
@@ -441,10 +442,7 @@ export class Resource<C extends OptionalClass = any> {
         this._loroDoc.import(stored);
       } else {
         for (const [key, value] of Object.entries(this.#cache)) {
-          if (
-            key !== properties.commit.lastCommit &&
-            key !== commits.properties.createdAt
-          ) {
+          if (!Resource.isCacheOnlyProp(key)) {
             this.loroSetProperty(key, value);
           }
         }
@@ -464,10 +462,7 @@ export class Resource<C extends OptionalClass = any> {
       // behaviour is unchanged.
       if (initializedFromSnapshot && this._loroMap) {
         for (const [key, value] of Object.entries(this.#cache)) {
-          if (
-            key !== properties.commit.lastCommit &&
-            key !== commits.properties.createdAt
-          ) {
+          if (!Resource.isCacheOnlyProp(key)) {
             if (this._loroMap.get(key) === undefined) {
               this.loroSetProperty(key, value);
             }
@@ -583,11 +578,24 @@ export class Resource<C extends OptionalClass = any> {
     return this._loroMap;
   }
 
-  private applyRawValue(prop: string, val: AtomicValue): void {
-    if (
+  /**
+   * Props that live in the read cache but must never be written into the
+   * local Loro doc: commit metadata the server maintains (`lastCommit`,
+   * `createdAt`), and ephemeral server-computed props (class-extender output
+   * like `form-submission-summary`). Letting an extender prop into the doc
+   * turns it into a local op that a later save exports and *signs into a
+   * commit*, persisting a stale copy of a value only the server may compute.
+   */
+  private static isCacheOnlyProp(prop: string): boolean {
+    return (
       prop === properties.commit.lastCommit ||
-      prop === commits.properties.createdAt
-    ) {
+      prop === commits.properties.createdAt ||
+      prop === forms.properties.formSubmissionSummary
+    );
+  }
+
+  private applyRawValue(prop: string, val: AtomicValue): void {
+    if (Resource.isCacheOnlyProp(prop)) {
       if (val === undefined) {
         delete this.#cache[prop];
       } else {
