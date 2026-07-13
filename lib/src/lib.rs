@@ -82,8 +82,6 @@ pub mod discovery;
 pub mod endpoints;
 pub mod errors;
 pub mod expression;
-#[cfg(feature = "db")]
-pub mod forms;
 pub mod genesis;
 pub mod hierarchy;
 pub mod history;
