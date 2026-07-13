@@ -290,6 +290,16 @@ where
         }
     };
 
+    // Catch up any drive the user asked us to replicate elsewhere. A target is
+    // standing config, not a one-shot command, so anything committed while the
+    // remote was unreachable is pushed now. This only ever contacts servers the
+    // user explicitly named — a store with no targets does nothing at all, so it
+    // is not a phone-home.
+    let replication_store = appstate.store.clone();
+    actix_web::rt::spawn(async move {
+        crate::plugins::replicate::reconcile_replication_targets(&replication_store).await;
+    });
+
     // Embedder hook: the store, indexes and transports are up, but the HTTP
     // server hasn't started accepting connections yet. A managed-node wrapper
     // (atomic-saas/managed-node) uses this to flip the `managed` flag, install

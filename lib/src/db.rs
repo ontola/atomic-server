@@ -155,6 +155,26 @@ pub struct ResolvedTarget {
 /// The String on the left represents a Property URL, and the second one is the set of subjects.
 pub type PropSubjectMap = HashMap<String, HashSet<String>>;
 
+/// A remote Atomic Server that a drive is replicated to.
+///
+/// Deliberately server-local: see [`Db::get_replication_targets`] for why this
+/// must never be stored inside the drive it describes.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ReplicationTarget {
+    /// WebSocket URL of the remote server, e.g. `wss://example.com/ws`.
+    pub url: String,
+    /// The agent that asked for this replication. Its *read* rights bound what
+    /// gets exported, so a later boot-time re-run stays scoped to what the
+    /// person who authorized it could actually see.
+    pub authorized_by: String,
+}
+
+const REPLICATION_PREFIX: &str = "replication:";
+
+fn replication_key(drive: &str) -> String {
+    format!("{REPLICATION_PREFIX}{drive}")
+}
+
 /// The Db is a persistent on-disk Atomic Data store.
 /// It's an implementation of [Storelike].
 /// It uses a [KvStore] backend for key-value storage (sled, BTreeMap, etc.).
@@ -1197,6 +1217,70 @@ impl Db {
         self.kv.remove(Tree::DriveMapping, host.as_bytes())?;
         tracing::info!("Removed drive mapping for host: {}", host);
         Ok(())
+    }
+
+    /// Where a drive is replicated to, and who authorized it.
+    ///
+    /// This is **server-local config, and must stay out of the drive**. A
+    /// drive's sync set is its root plus every child (`collect_drive_subjects`),
+    /// so a target stored inside the drive would be pushed to the target itself
+    /// — and the receiving server, running this same code, would read it and
+    /// start replicating onward to hosts it was never meant to contact.
+    pub fn get_replication_targets(&self, drive: &str) -> AtomicResult<Vec<ReplicationTarget>> {
+        let Some(bytes) = self
+            .kv
+            .get(Tree::PluginMeta, replication_key(drive).as_bytes())?
+        else {
+            return Ok(vec![]);
+        };
+
+        serde_json::from_slice(&bytes)
+            .map_err(|e| format!("Corrupt replication targets for {drive}: {e}").into())
+    }
+
+    /// Record a replication target for a drive. Idempotent: re-adding the same
+    /// target updates who authorized it rather than duplicating it.
+    pub fn add_replication_target(
+        &self,
+        drive: &str,
+        target: &ReplicationTarget,
+    ) -> AtomicResult<()> {
+        let mut targets = self.get_replication_targets(drive)?;
+        targets.retain(|t| t.url != target.url);
+        targets.push(target.clone());
+
+        let bytes = serde_json::to_vec(&targets)
+            .map_err(|e| format!("Could not encode replication targets: {e}"))?;
+        self.kv
+            .insert(Tree::PluginMeta, replication_key(drive).as_bytes(), &bytes)?;
+
+        Ok(())
+    }
+
+    /// Every drive that has at least one replication target, for the boot-time
+    /// reconcile.
+    pub fn get_all_replication_targets(
+        &self,
+    ) -> AtomicResult<Vec<(String, Vec<ReplicationTarget>)>> {
+        let mut out = Vec::new();
+
+        for (key, value) in self
+            .kv
+            .scan_prefix(Tree::PluginMeta, REPLICATION_PREFIX.as_bytes())
+            .flatten()
+        {
+            let Ok(key) = std::str::from_utf8(&key) else {
+                continue;
+            };
+            let Some(drive) = key.strip_prefix(REPLICATION_PREFIX) else {
+                continue;
+            };
+            if let Ok(targets) = serde_json::from_slice::<Vec<ReplicationTarget>>(&value) {
+                out.push((drive.to_string(), targets));
+            }
+        }
+
+        Ok(out)
     }
 
     /// Returns the full Drive DID for a given host (domain/subdomain).

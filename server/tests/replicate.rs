@@ -160,6 +160,49 @@ async fn replicating_twice_pushes_nothing_the_second_time() {
     assert!(second.in_sync, "and should still report in sync");
 }
 
+/// A replication target is standing config, not a one-shot command: on boot the
+/// server re-pushes every drive that has one, so edits made while the remote was
+/// unreachable catch up. This is what the boot reconcile buys, and it only ever
+/// contacts servers the user explicitly named.
+#[tokio::test]
+async fn a_stored_target_is_re_pushed_on_boot() {
+    let port = start_server("boot");
+    wait_for_server(port).await;
+    let ws_url = format!("ws://localhost:{}/ws", port);
+
+    let (db, agent, drive, _child) = source_node("boot").await;
+
+    db.add_replication_target(
+        &drive,
+        &atomic_lib::ReplicationTarget {
+            url: ws_url.clone(),
+            authorized_by: agent.subject.to_string(),
+        },
+    )
+    .unwrap();
+
+    // Nothing has been pushed yet — only the intent was recorded.
+    atomic_server::plugins::replicate::reconcile_replication_targets(&db).await;
+
+    // The reconcile is what pushed it, so a fresh probe must now find the target
+    // already holding the drive.
+    let after = replicate_drive_to_remote(
+        &db,
+        &drive,
+        &ws_url,
+        &ForAgent::AgentSubject(agent.subject.clone()),
+        ReplicateAuth::Agent(Box::new(agent)),
+    )
+    .await
+    .expect("probe should succeed");
+
+    assert_eq!(
+        after.pushed, 0,
+        "the boot reconcile should already have pushed the drive"
+    );
+    assert!(after.in_sync, "and the target should hold it");
+}
+
 /// The export is bounded by what the *requesting* identity may read. An
 /// anonymous request must not be able to use this server as a pump to copy a
 /// private drive somewhere else.

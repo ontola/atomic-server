@@ -44,6 +44,7 @@ pub mod path;
 pub mod plugin;
 pub mod prunetests;
 pub mod query;
+pub mod replicate;
 pub mod search;
 pub mod bind_drive;
 #[cfg(feature = "vector-search")]

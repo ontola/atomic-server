@@ -109,7 +109,7 @@ pub mod values;
 pub use atoms::Atom;
 pub use commit::Commit;
 #[cfg(feature = "db")]
-pub use db::{AgentLoadResult, Db, DbEvent, DriveInfo, DriveUsage};
+pub use db::{AgentLoadResult, Db, DbEvent, DriveInfo, DriveUsage, ReplicationTarget};
 pub use errors::AtomicError;
 pub use errors::AtomicErrorType;
 pub use resources::Resource;
