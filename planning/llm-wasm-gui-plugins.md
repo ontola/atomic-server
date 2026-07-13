@@ -152,9 +152,36 @@ only `set`, `remove`, and `destroy`. GUI writes are made through the user's
 store and signed by the user's agent, unlike WASM writes signed by the plugin
 agent.
 
+A 2026-07-13 code audit of `RPCClient` (`browser/plugin/src/rpc.ts`) and
+`RPCServer` (`views/PluginView/pluginRPC.tsx`) found further divergence:
+
+- `query`/`search` reply through the **success** path with the string
+  `'not implemented'`, so the client promise resolves with a value typed as
+  `Resource[]` instead of rejecting.
+- There is **no create operation**: no message mints a subject, and
+  `handleCommit` fetches the commit subject from the store, so creating a new
+  resource through the boundary is undefined/untested. This blocks any
+  collection-shaped app (see [`habits-app.md`](./habits-app.md)).
+- `subscribe`/`unsubscribe` never send a response: the client's request
+  promise never settles and leaks in its pending map, and a denied subscribe
+  is indistinguishable from a slow one.
+- `handleCommit` mutates the shared host store resource before `save()`; a
+  failed save reports an error but leaves the resource dirty in the host.
+- Messages are unvalidated and unversioned on both sides; the client accepts
+  messages from any source window; both sides post with target origin `'*'`.
+- `PageContext` is pull-only: the host updates it on navigation but never
+  notifies the plugin, so a plugin's view of "the page" silently goes stale.
+- No batch reads: one round-trip per `getResource`, so list views cost O(n)
+  postMessage hops with full prop-map serialization each.
+
 The host automatically permits reads and writes around the current page scope
-and checks inherited rights granted to the plugin agent. Outside that scope it
-shows a user prompt. Prompt grants are stored in browser local storage under:
+and checks inherited rights granted to the plugin agent. The scope check walks
+the full resource ancestry, so grandchildren of the page resource are in scope
+without prompts. It also treats the page's `isA` class URLs as permitted read
+roots — intended for schema reading, but it means anything parented under a
+class resource is implicitly readable, an undeclared scope widening. Outside
+that scope it shows a user prompt. Prompt grants are stored in browser local
+storage under:
 
 ```text
 atomic.plugins.ui.<namespace.name>
@@ -340,6 +367,9 @@ consumer of the same constrained application SDK.
 - [ ] Sign frontend state-profile operations as the user while recording the
   initiating release and artifact hash. Frontend applications must not receive
   a plugin-agent secret.
+- [ ] Decide whether page-class URLs belong in the implicit read scope
+  (`canPluginReadResource` permitted roots); if schema reading needs it, scope
+  it to Class/Property resources instead of everything parented under them.
 
 ### Developer/runtime API
 
@@ -355,7 +385,18 @@ consumer of the same constrained application SDK.
   validation and reactions, but not a general command/tool API callable by a
   GUI or LLM.
 - [ ] `query` and `search` in frontend RPC must either be implemented or
-  removed from the public SDK.
+  removed from the public SDK. Until then, unimplemented paths must reject
+  with `sendError`, not resolve with a placeholder string.
+- [ ] Add a create-resource RPC: subject minting, parent, and class, within
+  the granted scope. Without it plugins cannot create resources at all.
+- [ ] Add batch reads (`getResources(subjects[])` or query-with-includes) so
+  list views don't pay one round-trip per resource.
+- [ ] Acknowledge `subscribe`/`unsubscribe` (success or denial) so client
+  promises settle and denials are observable.
+- [ ] Make boundary commits atomic: a failed `save()` must not leave the host
+  store resource mutated.
+- [ ] Push a context-changed event when the page resource changes; context is
+  currently pull-only and goes stale.
 - [ ] Align the frontend Commit API with Loro-backed writes. Remove stale
   `push`/`yUpdate` promises or implement a host mutation API with explicit
   semantics.
@@ -379,6 +420,11 @@ consumer of the same constrained application SDK.
 - [ ] Make preview run the exact immutable artifact proposed for installation.
 - [ ] Keep installation an explicit user confirmation that displays code diff,
   artifact diff, permissions, tests, and provenance.
+- [ ] Provide an external-developer dev loop: today every iteration is
+  build → zip → upload → server extract → `/plugin-list` refresh. Add a local
+  dev/preview mode that serves an unpacked plugin through the production
+  iframe host (preview capability set, visibly marked), so hot iteration
+  doesn't require an install cycle.
 
 ## Proposed Model
 
@@ -654,7 +700,11 @@ the sandbox for development convenience.
 - [ ] Key GUI grants by drive + Plugin subject + artifact/package hash.
 - [ ] Make iframe CSP derive from manifest capabilities; default network to
   none.
-- [ ] Reconcile docs and implementation for query, search, push, and assets.
+- [ ] Reconcile docs and implementation for query, search, push, and assets;
+  unimplemented methods reject instead of resolving with placeholder strings.
+- [ ] Acknowledge subscribe/unsubscribe; fix the leaked pending-request
+  entries in `RPCClient`.
+- [ ] Make failed commits leave no dirty state in the host store.
 - [ ] Define deterministic custom-view selection and multiple-class behavior.
 - [ ] Audit `/plugin-ui` and `/plugin-list` authorization and path safety.
 - [ ] Use the unified authorized subscription primitive for plugin RPC
@@ -665,6 +715,10 @@ the sandbox for development convenience.
 
 ### Phase 1: Embedded application state APIs
 
+- [ ] Add create-resource, scoped query, and batch reads to the frontend RPC —
+  the minimum for collection-shaped apps; [`habits-app.md`](./habits-app.md)
+  is the first consumer and is blocked on these plus the UI-only package
+  format.
 - [ ] Define the application metadata resource and isolated Loro payload
   document protocol.
 - [ ] Add `openLoroDocument` with host-mediated sync, persistence,

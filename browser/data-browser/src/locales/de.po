@@ -2226,6 +2226,7 @@ msgid "Edit value"
 msgstr "Wert bearbeiten"
 
 #: src/components/SignInButton.tsx
+#: src/helpers/managed/cloudSync.ts
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in"
@@ -3786,6 +3787,7 @@ msgstr "Gib eine Atomare URL ein oder suche (drücke \"/\")"
 msgid "Search"
 msgstr "Suchen"
 
+#: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/reconcile.ts
 msgid "Disabled"
 msgstr ""
@@ -5115,11 +5117,6 @@ msgstr ""
 msgid "Paste a pairing code or did:ad:node:…"
 msgstr ""
 
-#. 0: ' '
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Open source & self-hostable ·{0} <0>Learn more</0>"
-msgstr ""
-
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Open <0>Sync</0> there to show its code, then scan or paste it here."
 msgstr ""
@@ -5191,23 +5188,92 @@ msgid "Not signed in over there yet? Sign in with your account secret first, the
 msgstr ""
 
 #: src/components/pairing/PairingFlowProvider.tsx
-msgid "That device"
-msgstr ""
-
-#: src/components/pairing/PairingFlowProvider.tsx
 msgid "This device can’t tell which workspace to open. Open the app on your other device, then pair again."
-msgstr ""
-
-#. 0: device
-#: src/components/pairing/PairingFlowProvider.tsx
-msgid "{0} doesn’t have your workspace to send. Check that it’s signed in as you and holds your data."
-msgstr ""
-
-#. 0: device
-#: src/components/pairing/PairingFlowProvider.tsx
-msgid "{0} sent your data, but the workspace still isn’t readable here. It may finish on its own — reopen this page in a moment."
 msgstr ""
 
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Your workspace didn’t arrive"
+msgstr ""
+
+#~ msgid "Make your knowledge work for you."
+#~ msgstr ""
+
+#~ msgid "<0>All-in-one workspace</0>: documents, tables, files, and APIs in one place, designed to stay coherent as it grows."
+#~ msgstr ""
+
+#~ msgid "<0>Fast and lightweight</0>: a snappy workspace and API, small download, minimal dependencies, runs anywhere."
+#~ msgstr ""
+
+#~ msgid "<0>Open source</0>: inspect, fork, and self-host. Keep control of your data and avoid lock-in."
+#~ msgstr ""
+
+#~ msgid "<0>Future of the web</0>: decentralized by design, built for interoperability so your data and tools can work together."
+#~ msgstr ""
+
+#~ msgid "<0>Feature complete by default</0>: rights, history, search, invites, realtime sync, collaboration, and AI chat built in."
+#~ msgstr ""
+
+#~ msgid "Get started"
+#~ msgstr ""
+
+#: src/components/pairing/PairingFlowProvider.tsx
+msgid "Your workspace hasn’t opened here yet. It may still be settling — reopen this page in a moment. If it stays empty, check that the other device holds your data."
+msgstr ""
+
+#~ msgid "Create your {0} account, then come back and enable backup."
+#~ msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "No {0} portal is configured for this server."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "Backing up this workspace to {0}…"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Setting up…"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Back up to {0}"
+msgstr ""
+
+#. 0: PRODUCT_NAME; 1: ' '
+#: src/routes/SyncRoute.tsx
+msgid "This workspace lives only on this device. Turn on {0}{1} to back it up and reach it from your other devices and the web."
+msgstr ""
+
+#: src/helpers/managed/cloudSync.ts
+msgid "Timed out connecting to the Cloud Sync node."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Sign-in wasn’t completed — nothing was backed up."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "Could not enable {0} backup."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Back up my secret"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Skip anyway"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Skip the recovery backup?"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "<0>This can’t be undone.</0> Without a recovery backup, no one can restore your account if you lose your secret — not even the sync service. Your data would be permanently inaccessible. Only skip if you’re certain you’ll keep your secret somewhere safe."
 msgstr ""

@@ -25,6 +25,7 @@ import { getOrCreateMeetingsFolder } from '../../helpers/standardLocations';
 import { simulatePropEdit } from './simulatedEdits';
 import { SimulatedTypist } from './SimulatedTypist';
 import { YUSUF_LIVE_STROKES } from './moodboardStrokes';
+import { add } from '@dnd-kit/utilities';
 
 /** Presence entries expire after 30s; refresh well inside that. */
 const HEARTBEAT_MS = 10_000;
@@ -175,14 +176,12 @@ export class DemoDirector {
   private async run(): Promise<void> {
     const { manifest } = this;
 
-    // 0:00 — Mara and Yusuf are already here when the user lands.
+    // Mara and Yusuf are already here when the user lands.
     this.announceMara(manifest.welcomeDoc);
     this.announce('yusuf', { resource: manifest.moodboard });
     this.startYusufWander();
 
-    await this.sleep(1_500);
-
-    // 0:05 — the welcome doc is being written, and it reacts to the
+    // The welcome doc is being written, and it reacts to the
     // user's arrival.
     await this.type('mara', manifest.welcomeDoc, [
       'This workspace is a demo of AtomicServer.',
@@ -194,8 +193,8 @@ export class DemoDirector {
     // welcome doc closes with a link into it. Nothing is said in the
     // meeting yet — the greeting waits until the user actually opens it.
     await this.startTourMeeting();
-    await this.appendMeetingLink();
     await this.narrate('Welcome to your onboarding meeting! 👋');
+    await this.appendMeetingLink();
 
     // Wait for the user to Join (open the meeting). If they don't within
     // ~25s, greet + play anyway so the log exists for whenever they do.
@@ -204,48 +203,46 @@ export class DemoDirector {
 
     if (this.stopped) return;
 
-    await this.sleep(800);
-    await this.narrate(
-      'I’ll walk you through everything right here — just follow along.',
-    );
-    await this.sleep(800);
+    await this.sleep(100);
     // Call out the Meeting feature itself while we're in one.
     await this.narrate(
       'This is a Meeting 🎥 — anyone on the team can start one to chat with colleagues and focus on the same thing at the same time.',
     );
-    await this.sleep(800);
+    await this.sleep(100);
+    await this.narrate(
+      'I’ll walk you through everything right here. Just follow along.',
+    );
+    await this.sleep(100);
     await this.narrate(
       'You’re following me right now, so we’re looking at the same thing.',
     );
-    await this.sleep(800);
+    await this.sleep(100);
     await this.narrate("I'll open the issue tracker first!");
-    await this.sleep(800);
+    await this.sleep(100);
 
     // ── Tour stop 1: the board (the long, lively, meta stop) ──
     this.announceMara(manifest.checklist.table, {
       row: manifest.checklist.rows[ROW_EXPLORE_BOARD],
       column: manifest.checklist.statusColumn,
     });
+    await this.narrate('First stop: the board. A tool to keep track of todos!');
+    await this.sleep(700);
     await this.narrate(
-      'First stop: the board. Meta moment — every card here is a step in YOUR tour.',
+      'Watch — I’ll move “Explore the kanban board” to doing.',
     );
-    await this.sleep(3_000);
-    await this.narrate(
-      'Watch — I’ll drag “Explore the kanban board” across as we, well, explore it.',
-    );
-    await this.sleep(1_500);
+    await this.sleep(800);
     await this.moveCard(
       'mara',
       manifest.checklist.rows[ROW_EXPLORE_BOARD],
       'Doing',
     );
-    await this.sleep(2_500);
+    await this.sleep(800);
     await this.moveCard(
       'mara',
       manifest.checklist.rows[ROW_EXPLORE_BOARD],
       'Done',
     );
-    await this.narrate('✅ one down. See how it jumps to the Done column?');
+    await this.narrate('✅ one down.');
 
     // Pip joins and adds a brand-new card, live.
     this.announce('pip', {
@@ -256,17 +253,13 @@ export class DemoDirector {
       },
     });
     await this.sleep(1_500);
-    await this.postChat('pip', 'ooh a new teammate — adding a card 👋');
+    await this.postChat('pip', "ooh a new teammate, I'll add a card👋");
     await this.addChecklistCard('Invite the rest of your team', 'Todo');
-    await this.sleep(3_000);
-    await this.narrate(
-      'Pip just dropped a new card on the board — cards, columns, everyone live. That’s the board.',
-    );
-    await this.sleep(3_000);
+    await this.narrate("Next: the moodboard, Yusuf's mid-doodle 🎨");
+    await this.sleep(1_000);
 
     // ── Tour stop 2: the moodboard, Yusuf drawing live ──
     this.announceMara(manifest.moodboard, { x: 340, y: 220 });
-    await this.narrate('Next: the moodboard — Yusuf’s mid-doodle 🎨');
     void this.yusufFinishesTheFace();
     await this.sleep(7_000);
     await this.moveCard('mara', manifest.checklist.rows[ROW_DOODLE], 'Done');
@@ -276,10 +269,15 @@ export class DemoDirector {
     // ── Tour stop 3: the team table — the user becomes a row in it ──
     this.announceMara(manifest.team.table);
     await this.narrate(
-      'One more stop: the Team table 👥 — everyone in the demo, live.',
+      'One more stop: the Team table. This is where we keep track of our members!',
+    );
+    await this.narrate(
+      'Tables in AtomicServer are pretty powerful, you can define custom columns, filters and views.',
     );
     await this.sleep(1_500);
-    await this.narrate('And that includes you. Adding you to the roster ✍️');
+    await this.narrate(
+      "But you're still missing in the Team table, adding you to the roster ✍️",
+    );
 
     const memberRow = await this.ensureTeamRow();
     this.memberRow = memberRow;

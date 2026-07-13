@@ -1,11 +1,13 @@
 import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
+import { styled } from 'styled-components';
 import { useStore } from '@tomic/react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
 import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
 import { isRunningInTauri } from '../helpers/tauri';
-import { Shell, Card, CardTitle } from '../views/getting-started/chrome';
+import { Shell } from '../views/getting-started/chrome';
+import { Spinner } from '../components/Spinner';
 
 // React 19 StrictMode mounts effects twice and rapid navigation can
 // remount the route; without this module-level guard each mount would
@@ -62,10 +64,11 @@ const DemoRoute: React.FC = () => {
 
   return (
     <Shell>
-      <Card>
-        <CardTitle>
+      <DemoStatus>
+        {!error && <Spinner size='3.5rem' />}
+        <DemoTitle>
           {error ? 'The demo could not start' : 'Setting up your demo…'}
-        </CardTitle>
+        </DemoTitle>
         {!supported && !isRunningInTauri() && (
           <p>
             The demo needs the local database, which is disabled in this
@@ -73,10 +76,31 @@ const DemoRoute: React.FC = () => {
           </p>
         )}
         {error && <p role='alert'>{error.message}</p>}
-      </Card>
+      </DemoStatus>
     </Shell>
   );
 };
+
+const DemoStatus = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: ${p => p.theme.size(5)};
+  max-width: 24rem;
+  text-align: center;
+
+  p {
+    margin: 0;
+    color: ${p => p.theme.colors.textLight};
+  }
+`;
+
+const DemoTitle = styled.h1`
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.25;
+`;
 
 export const demoRouteLazy = createLazyRoute('/app/demo')({
   component: DemoRoute,
