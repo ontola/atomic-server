@@ -466,8 +466,11 @@ function SyncPage() {
   async function backupToCloud() {
     const drive = status.drive;
     const agent = store.getAgent();
+    // Enrollment is keyed on the agent's subject: without one there is no
+    // identity to attach the backup to.
+    const agentSubject = agent?.subject;
 
-    if (!drive || !agent || cloudBusy) return;
+    if (!drive || !agentSubject || cloudBusy) return;
 
     setCloudBusy(true);
 
@@ -475,7 +478,7 @@ function SyncPage() {
       const args = {
         store,
         drive,
-        agentSubject: agent.subject,
+        agentSubject,
         setServer,
         managedInfo,
       };

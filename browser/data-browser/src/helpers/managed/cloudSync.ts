@@ -151,7 +151,10 @@ function delay(ms: number): Promise<void> {
 export async function ensureManagedSession(portalUrl: string): Promise<boolean> {
   if (await getManagedAccount().catch(() => null)) return true;
 
-  const win = await openAuthWindow(portalUrl);
+  // `embed=1` asks the portal for its sign-in form rather than its landing
+  // page: the user came here from a "back up this drive" button, so the sales
+  // pitch is a detour.
+  const win = await openAuthWindow(`${portalUrl}/?embed=1`);
   const start = Date.now();
 
   try {
