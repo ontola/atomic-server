@@ -15,6 +15,9 @@ pub mod peer;
 pub mod policy;
 pub mod protocol;
 pub mod rbsr;
+/// Pushing a whole drive to a remote server, as a client. Needs the WS client.
+#[cfg(feature = "ws")]
+pub mod replicate;
 #[cfg(all(test, feature = "iroh"))]
 mod tests;
 #[cfg(feature = "db")]

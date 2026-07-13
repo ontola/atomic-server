@@ -60,6 +60,27 @@ pub enum WsMessage {
         request_id: u16,
         commit_json: String,
     },
+    /// A `SYNC_OK` (0x31) frame: the drive matches ours, or a `SYNC_PUSH`
+    /// chunk was accepted. Note the server sends this for an accepted *and* a
+    /// rights-rejected import alike, so it is not proof the data landed.
+    SyncOk { drive: String },
+    /// A `SYNC_DIFF` (0x32) frame: the server's verdict on our version vector.
+    /// `pull` is what it wants us to send it; `push` is what it will send us.
+    SyncDiff {
+        drive: String,
+        pull: Vec<String>,
+        push: Vec<String>,
+        remove: Vec<String>,
+    },
+    /// A `SYNC_PUSH` (0x33) frame: the server is sending us resource state.
+    SyncPush {
+        drive: String,
+        entries: Vec<(String, Vec<u8>)>,
+        last: bool,
+    },
+    /// A `BLOB_REQUEST` (0x34) frame: the server imported a resource that
+    /// references a blob it doesn't have, and is asking us for the bytes.
+    BlobRequest { hash: [u8; 32] },
     /// Server sent an error.
     Error(String),
 }
@@ -140,7 +161,16 @@ impl WsClient {
     /// Sends a binary v2 AUTH (0x01) frame and waits for AUTH_OK (0x02).
     pub async fn authenticate(&self, agent: &Agent) -> AtomicResult<()> {
         let frame = protocol::encode_auth(agent, &agent.subject.to_string())?;
+        self.authenticate_with_frame(frame).await
+    }
 
+    /// Authenticate with an AUTH (0x01) frame that was signed elsewhere.
+    ///
+    /// The frame proves ownership of a private key we never see, so a server
+    /// can push on behalf of a user — carrying the user's identity to the
+    /// remote — without ever holding the user's key. The frame is
+    /// timestamp-bound, so mint it immediately before connecting.
+    pub async fn authenticate_with_frame(&self, frame: Vec<u8>) -> AtomicResult<()> {
         // Subscribe BEFORE sending so we don't miss the response
         let mut rx = self.subscribe();
 
@@ -412,6 +442,43 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
                 request_id: decoded.request_id,
                 commit_json: decoded.commit_json.to_string(),
             })
+        }
+        tag::SYNC_OK => {
+            // [tag] [drive_len: u16] [drive]
+            let data = &bin[1..];
+            if data.len() < 2 {
+                return None;
+            }
+            let drive_len = u16::from_be_bytes([data[0], data[1]]) as usize;
+            let drive = std::str::from_utf8(data.get(2..2 + drive_len)?)
+                .ok()?
+                .to_string();
+            Some(WsMessage::SyncOk { drive })
+        }
+        tag::SYNC_DIFF => {
+            let diff = protocol::decode_sync_diff(&bin[1..])?;
+            Some(WsMessage::SyncDiff {
+                drive: diff.drive,
+                pull: diff.pull,
+                push: diff.push,
+                remove: diff.remove,
+            })
+        }
+        tag::SYNC_PUSH => {
+            let push = protocol::decode_sync_push(&bin[1..])?;
+            Some(WsMessage::SyncPush {
+                drive: push.drive,
+                entries: push
+                    .entries
+                    .into_iter()
+                    .map(|e| (e.subject, e.loro_bytes))
+                    .collect(),
+                last: push.last,
+            })
+        }
+        tag::BLOB_REQUEST => {
+            let hash = protocol::decode_blob_request(&bin[1..])?;
+            Some(WsMessage::BlobRequest { hash })
         }
         _ => None,
     }

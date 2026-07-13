@@ -589,49 +589,6 @@ async fn admitted_for_drive(
     verdict
 }
 
-/// Serve a peer-supplied `pull` list from local Loro snapshots — gated per
-/// subject on `check_read` for the identity the peer proved via auth-back.
-/// This is the initiator-side mirror of the acceptor's `handle_sync_vv`,
-/// which has always done this check before pushing: the `pull` half of a
-/// `SYNC_DIFF` is chosen by the remote peer, so serving it from a raw
-/// `Tree::LoroSnapshots` read would let a dialed peer name any subject in the
-/// drive and receive it regardless of read rights. Dialing a peer never
-/// established that peer's rights. Fail closed: a subject that doesn't
-/// materialize into a resource can't be rights-checked, so it isn't served.
-async fn collect_pull_snapshots(
-    store: &Db,
-    agent: &ForAgent,
-    subjects: &[String],
-) -> Vec<(String, Vec<u8>)> {
-    let mut entries = Vec::new();
-    for subject in subjects {
-        let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
-        match store.get_resource(&subj).await {
-            Ok(resource) => {
-                if crate::hierarchy::check_read(store, &resource, agent)
-                    .await
-                    .is_err()
-                {
-                    tracing::warn!(
-                        "[sync] refusing to serve {} to peer: no read access for {:?}",
-                        &subject[..subject.len().min(30)],
-                        agent
-                    );
-                    continue;
-                }
-            }
-            Err(_) => continue,
-        }
-        if let Ok(Some(snapshot)) = store
-            .kv
-            .get(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes())
-        {
-            entries.push((subject.clone(), snapshot));
-        }
-    }
-    entries
-}
-
 /// Apply one peer-supplied `SYNC_DIFF.remove[]` entry, gated exactly like a
 /// live `DESTROY` frame: the remove list arrives unauthenticated-by-default
 /// from whatever peer we dialed, so deleting a subject we actually hold
@@ -1410,7 +1367,7 @@ pub async fn sync_drive_with_peer_using_outcome(
                     if diff.push.is_empty() {
                         if !diff.pull.is_empty() {
                             let entries =
-                                collect_pull_snapshots(store, &remote_agent, &diff.pull).await;
+                                super::engine::collect_readable_snapshots(store, &remote_agent, &diff.pull).await;
                             if !entries.is_empty() {
                                 let refs: Vec<(&str, &[u8])> = entries
                                     .iter()
@@ -1458,7 +1415,7 @@ pub async fn sync_drive_with_peer_using_outcome(
                 }
                 if !pull_subjects.is_empty() {
                     let entries =
-                        collect_pull_snapshots(store, &remote_agent, &pull_subjects).await;
+                        super::engine::collect_readable_snapshots(store, &remote_agent, &pull_subjects).await;
                     if !entries.is_empty() {
                         let refs: Vec<(&str, &[u8])> = entries
                             .iter()
@@ -2094,7 +2051,7 @@ mod initiator_trust_tests {
         let (_drive, child) = private_drive_with_child(&db, &alice).await;
 
         // Public peer asks for the secret child — must get nothing.
-        let served = collect_pull_snapshots(&db, &ForAgent::Public, &[child.clone()]).await;
+        let served = crate::sync::engine::collect_readable_snapshots(&db, &ForAgent::Public, &[child.clone()]).await;
         assert!(
             served.is_empty(),
             "a Public peer must not be served a snapshot for a subject it can't read"
@@ -2102,7 +2059,7 @@ mod initiator_trust_tests {
 
         // The rightful owner asking for the same subject IS served — proving
         // the gate rejects on rights, not on some unrelated failure.
-        let served_owner = collect_pull_snapshots(
+        let served_owner = crate::sync::engine::collect_readable_snapshots(
             &db,
             &ForAgent::AgentSubject(alice.subject.clone()),
             &[child.clone()],
@@ -2126,7 +2083,7 @@ mod initiator_trust_tests {
         let (_drive, child) = private_drive_with_child(&db, &alice).await;
         let mallory = db.create_agent(Some("Mallory")).await.unwrap();
 
-        let served = collect_pull_snapshots(
+        let served = crate::sync::engine::collect_readable_snapshots(
             &db,
             &ForAgent::AgentSubject(mallory.subject.clone()),
             &[child],

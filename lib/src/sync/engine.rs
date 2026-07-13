@@ -1070,3 +1070,46 @@ pub async fn import_sync_push(
     }
     (count, blob_requests)
 }
+
+/// Serve a remote-supplied `pull` list from local Loro snapshots — gated per
+/// subject on `check_read` for the identity the remote proved.
+/// This is the initiator-side mirror of the acceptor's `handle_sync_vv`,
+/// which has always done this check before pushing: the `pull` half of a
+/// `SYNC_DIFF` is chosen by the remote peer, so serving it from a raw
+/// `Tree::LoroSnapshots` read would let a dialed peer name any subject in the
+/// drive and receive it regardless of read rights. Dialing a peer never
+/// established that peer's rights. Fail closed: a subject that doesn't
+/// materialize into a resource can't be rights-checked, so it isn't served.
+pub async fn collect_readable_snapshots(
+    store: &Db,
+    agent: &crate::agents::ForAgent,
+    subjects: &[String],
+) -> Vec<(String, Vec<u8>)> {
+    let mut entries = Vec::new();
+    for subject in subjects {
+        let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
+        match store.get_resource(&subj).await {
+            Ok(resource) => {
+                if crate::hierarchy::check_read(store, &resource, agent)
+                    .await
+                    .is_err()
+                {
+                    tracing::warn!(
+                        "[sync] refusing to serve {} to peer: no read access for {:?}",
+                        &subject[..subject.len().min(30)],
+                        agent
+                    );
+                    continue;
+                }
+            }
+            Err(_) => continue,
+        }
+        if let Ok(Some(snapshot)) = store
+            .kv
+            .get(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes())
+        {
+            entries.push((subject.clone(), snapshot));
+        }
+    }
+    entries
+}
