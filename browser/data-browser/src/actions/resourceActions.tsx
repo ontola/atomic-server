@@ -1,9 +1,11 @@
 import toast from 'react-hot-toast';
-import { core } from '@tomic/react';
+import { core, drafts, forkResource, isDraft, mergeDraft } from '@tomic/react';
 import {
   FaArrowUpRightFromSquare,
   FaClock,
   FaCode,
+  FaCodeBranch,
+  FaCodeMerge,
   FaDownload,
   FaMagnifyingGlass,
   FaMessage,
@@ -17,6 +19,7 @@ import {
   FaVideo,
   FaVideoSlash,
 } from 'react-icons/fa6';
+import { getOrCreateDraftsFolder } from '../helpers/draftsFolder';
 import {
   constructOpenURL,
   dataURL,
@@ -51,12 +54,14 @@ export const resourceActions: ActionDefinition[] = [
         : 'Invite everyone in this drive to follow you live.',
     keywords: ['meeting', 'present', 'tour', 'follow', 'call'],
     icon: ctx => (ctx.activeMeeting ? <FaVideoSlash /> : <FaVideo />),
-    available: ctx => !!ctx.drive && !!ctx.startMeeting,
-    run: ctx => {
+    available: ctx =>
+      !!ctx.drive && !!ctx.startMeeting && !!ctx.openMeetingPanel,
+    run: async ctx => {
       if (ctx.activeMeeting) {
-        void ctx.endMeeting?.();
+        await ctx.endMeeting?.();
       } else {
-        void ctx.startMeeting?.();
+        await ctx.startMeeting?.();
+        ctx.openMeetingPanel?.();
       }
     },
   },
@@ -116,6 +121,67 @@ export const resourceActions: ActionDefinition[] = [
     shortcut: shortcuts.edit,
     available: ctx => ctx.canWrite,
     run: ctx => ctx.navigate(editURL(ctx.subject)),
+  },
+  {
+    id: 'editAsDraft',
+    scope: 'resource',
+    section: 'action',
+    label: () => 'Edit as draft',
+    helper: () =>
+      'Fork this resource into a draft. The original is untouched until you merge.',
+    keywords: ['draft', 'fork', 'suggest', 'propose', 'copy', 'branch'],
+    icon: () => <FaCodeBranch />,
+    available: ctx => ctx.canWrite && !isDraft(ctx.resource) && !!ctx.drive,
+    run: async ctx => {
+      try {
+        const draftsFolder = await getOrCreateDraftsFolder(
+          ctx.store,
+          ctx.drive!,
+        );
+        const draft = await forkResource(ctx.store, ctx.resource, draftsFolder);
+        toast.success('Draft created');
+        ctx.navigate(editURL(draft.subject));
+      } catch (error) {
+        toast.error((error as Error).message);
+      }
+    },
+  },
+  {
+    id: 'mergeDraft',
+    scope: 'resource',
+    section: 'action',
+    label: () => 'Merge draft',
+    helper: () =>
+      'Write this draft onto the resource it was forked from, as a single commit.',
+    keywords: ['merge', 'publish', 'apply', 'accept', 'draft'],
+    icon: () => <FaCodeMerge />,
+    available: ctx => isDraft(ctx.resource),
+    run: async ctx => {
+      try {
+        const original = await mergeDraft(ctx.store, ctx.resource);
+        toast.success('Draft merged');
+        ctx.navigate(constructOpenURL(original.subject));
+      } catch (error) {
+        toast.error((error as Error).message);
+      }
+    },
+  },
+  {
+    id: 'openOriginal',
+    scope: 'resource',
+    section: 'view',
+    label: () => 'Open original',
+    helper: () => 'Open the resource this draft was forked from.',
+    keywords: ['original', 'source', 'draft'],
+    icon: () => <FaTurnUp />,
+    available: ctx => isDraft(ctx.resource),
+    run: ctx => {
+      const original = ctx.resource.get(drafts.properties.originalSubject);
+
+      if (original) {
+        ctx.navigate(constructOpenURL(original));
+      }
+    },
   },
   {
     id: 'newChild',

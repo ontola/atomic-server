@@ -5195,33 +5195,9 @@ msgstr ""
 msgid "Your workspace didn’t arrive"
 msgstr ""
 
-#~ msgid "Make your knowledge work for you."
-#~ msgstr ""
-
-#~ msgid "<0>All-in-one workspace</0>: documents, tables, files, and APIs in one place, designed to stay coherent as it grows."
-#~ msgstr ""
-
-#~ msgid "<0>Fast and lightweight</0>: a snappy workspace and API, small download, minimal dependencies, runs anywhere."
-#~ msgstr ""
-
-#~ msgid "<0>Open source</0>: inspect, fork, and self-host. Keep control of your data and avoid lock-in."
-#~ msgstr ""
-
-#~ msgid "<0>Future of the web</0>: decentralized by design, built for interoperability so your data and tools can work together."
-#~ msgstr ""
-
-#~ msgid "<0>Feature complete by default</0>: rights, history, search, invites, realtime sync, collaboration, and AI chat built in."
-#~ msgstr ""
-
-#~ msgid "Get started"
-#~ msgstr ""
-
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Your workspace hasn’t opened here yet. It may still be settling — reopen this page in a moment. If it stays empty, check that the other device holds your data."
 msgstr ""
-
-#~ msgid "Create your {0} account, then come back and enable backup."
-#~ msgstr ""
 
 #. 0: PRODUCT_NAME
 #: src/routes/SyncRoute.tsx
@@ -5276,4 +5252,44 @@ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "<0>This can’t be undone.</0> Without a recovery backup, no one can restore your account if you lose your secret — not even the sync service. Your data would be permanently inaccessible. Only skip if you’re certain you’ll keep your secret somewhere safe."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Edit as draft"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Fork this resource into a draft. The original is untouched until you merge."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Draft created"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Merge draft"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Write this draft onto the resource it was forked from, as a single commit."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Draft merged"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Open original"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Open the resource this draft was forked from."
+msgstr ""
+
+#: src/helpers/draftsFolder.ts
+msgid "Drafts"
+msgstr ""
+
+#: src/helpers/draftsFolder.ts
+msgid "Work in progress. Resources here are visible to people who can write to this drive, and are published by moving them somewhere publicly readable."
 msgstr ""

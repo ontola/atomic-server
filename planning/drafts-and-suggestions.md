@@ -160,6 +160,28 @@ so each verb appears in the context menu, ⌘K, ⌘M and the AI/MCP surface for 
 - E2E: a draft is invisible to an anonymous visitor of the generated site, and visible
   after publish.
 
+## Known gap: seeding a new default ontology into existing stores
+
+`bootstrap()` is guarded by `has_stored_resource(SHORTNAME)`, so a store that was
+already populated never picks up a newly-added `lib/defaults/*.json`. That applies
+to **both** ends:
+
+- **Server:** needs `--repopulate-defaults` (or a fresh store) to learn `Draft` /
+  `originalSubject`. Without it, a commit carrying `isA: [.., Draft]` is rejected
+  with *"Failed getting class .../Draft … 404"*.
+- **Browser:** the WASM ClientDb embeds the same defaults, so it needs a rebuilt
+  wasm bundle *and* a store that repopulates. An existing client silently falls
+  back to fetching `https://atomicdata.dev/properties/originalSubject` over the
+  network, which 404s — validation is then skipped for that property.
+
+Verified in the running app: on a fresh server store + fresh browser store the
+whole fork → edit → merge loop works, and the draft is correctly *not* publicly
+readable. On stale stores it fails in the two ways above.
+
+This is not specific to drafts — it is how *any* new default ontology reaches
+existing deployments, and it needs a migration story (version the bootstrap, or
+import missing defaults idempotently on boot) before this ships.
+
 ## Open questions
 
 - **Where does a fork live by default?** The drive's `Drafts` folder when the author can

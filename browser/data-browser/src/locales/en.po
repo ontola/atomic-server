@@ -5229,33 +5229,9 @@ msgstr "This device can’t tell which workspace to open. Open the app on your o
 msgid "Your workspace didn’t arrive"
 msgstr "Your workspace didn’t arrive"
 
-#~ msgid "Make your knowledge work for you."
-#~ msgstr "Make your knowledge work for you."
-
-#~ msgid "<0>All-in-one workspace</0>: documents, tables, files, and APIs in one place, designed to stay coherent as it grows."
-#~ msgstr "<0>All-in-one workspace</0>: documents, tables, files, and APIs in one place, designed to stay coherent as it grows."
-
-#~ msgid "<0>Fast and lightweight</0>: a snappy workspace and API, small download, minimal dependencies, runs anywhere."
-#~ msgstr "<0>Fast and lightweight</0>: a snappy workspace and API, small download, minimal dependencies, runs anywhere."
-
-#~ msgid "<0>Open source</0>: inspect, fork, and self-host. Keep control of your data and avoid lock-in."
-#~ msgstr "<0>Open source</0>: inspect, fork, and self-host. Keep control of your data and avoid lock-in."
-
-#~ msgid "<0>Future of the web</0>: decentralized by design, built for interoperability so your data and tools can work together."
-#~ msgstr "<0>Future of the web</0>: decentralized by design, built for interoperability so your data and tools can work together."
-
-#~ msgid "<0>Feature complete by default</0>: rights, history, search, invites, realtime sync, collaboration, and AI chat built in."
-#~ msgstr "<0>Feature complete by default</0>: rights, history, search, invites, realtime sync, collaboration, and AI chat built in."
-
-#~ msgid "Get started"
-#~ msgstr "Get started"
-
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Your workspace hasn’t opened here yet. It may still be settling — reopen this page in a moment. If it stays empty, check that the other device holds your data."
 msgstr "Your workspace hasn’t opened here yet. It may still be settling — reopen this page in a moment. If it stays empty, check that the other device holds your data."
-
-#~ msgid "Create your {0} account, then come back and enable backup."
-#~ msgstr "Create your {0} account, then come back and enable backup."
 
 #. 0: PRODUCT_NAME
 #: src/routes/SyncRoute.tsx
@@ -5311,3 +5287,43 @@ msgstr "Skip the recovery backup?"
 #: src/components/NewIdentitySection.tsx
 msgid "<0>This can’t be undone.</0> Without a recovery backup, no one can restore your account if you lose your secret — not even the sync service. Your data would be permanently inaccessible. Only skip if you’re certain you’ll keep your secret somewhere safe."
 msgstr "<0>This can’t be undone.</0> Without a recovery backup, no one can restore your account if you lose your secret — not even the sync service. Your data would be permanently inaccessible. Only skip if you’re certain you’ll keep your secret somewhere safe."
+
+#: src/actions/resourceActions.tsx
+msgid "Edit as draft"
+msgstr "Edit as draft"
+
+#: src/actions/resourceActions.tsx
+msgid "Fork this resource into a draft. The original is untouched until you merge."
+msgstr "Fork this resource into a draft. The original is untouched until you merge."
+
+#: src/actions/resourceActions.tsx
+msgid "Draft created"
+msgstr "Draft created"
+
+#: src/actions/resourceActions.tsx
+msgid "Merge draft"
+msgstr "Merge draft"
+
+#: src/actions/resourceActions.tsx
+msgid "Write this draft onto the resource it was forked from, as a single commit."
+msgstr "Write this draft onto the resource it was forked from, as a single commit."
+
+#: src/actions/resourceActions.tsx
+msgid "Draft merged"
+msgstr "Draft merged"
+
+#: src/actions/resourceActions.tsx
+msgid "Open original"
+msgstr "Open original"
+
+#: src/actions/resourceActions.tsx
+msgid "Open the resource this draft was forked from."
+msgstr "Open the resource this draft was forked from."
+
+#: src/helpers/draftsFolder.ts
+msgid "Drafts"
+msgstr "Drafts"
+
+#: src/helpers/draftsFolder.ts
+msgid "Work in progress. Resources here are visible to people who can write to this drive, and are published by moving them somewhere publicly readable."
+msgstr "Work in progress. Resources here are visible to people who can write to this drive, and are published by moving them somewhere publicly readable."
