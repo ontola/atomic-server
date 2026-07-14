@@ -82,6 +82,52 @@ calls; above that, generate a transform. Level 0 ships value with zero new
 infrastructure and is also how the feedback loop gets bootstrapped — the
 assistant learns the target shape by doing a sample by hand first.
 
+## Trusted Importers as Skills
+
+Decision (2026-07-14): before any client-publishing story, Ontola authors,
+validates, and tests first-party importers and distributes them as **skills**.
+This flips the bootstrap order — the trusted artifacts establish the shape
+that client-created importers later inherit, instead of building review
+machinery for strangers' code first. Skills already exist in the assistant
+(`read_skill`/`create_skill`); distribution is just resources in an
+Ontola-published catalog drive.
+
+The skill is the packaging and orchestration layer; a pinned transform is the
+execution payload inside it. A skill whose endpoint is "the assistant maps
+records via tool calls" would just be Level 0 with better documentation:
+token cost per import, no determinism, and nothing concrete for "validated
+and tested" to refer to.
+
+```text
+ImporterSkill
+  instructions      how to run the flow, known pitfalls, mapping judgment
+                    (e.g. Notion: databases → tables, pages → documents,
+                     select columns → tags, relation columns → links)
+  transformSource   the tested pure transform, pinned by content hash
+  fixtures          sample inputs + expected JSON-AD outputs
+  targetOntology    classes it maps into
+  version, publisher signature
+```
+
+Semantics:
+
+- **Deterministic by default.** "Import my Notion export" runs the standard
+  pipeline with the embedded transform — no LLM in the data path, exactly
+  what was tested. The LLM writes code only when the user's data *deviates*;
+  the adapted transform goes through the same validate/preview loop.
+- **Fixtures make trust verifiable, not claimed.** Any node can re-run
+  `transform(fixture) === expected` locally before trusting a skill. Trust
+  travels with the artifact — essential once the same format carries
+  community importers.
+- **One artifact shape across the lifecycle.** A client-created importer is
+  an unverified instance of the same skill: generated for an unseen source,
+  proven on the user's data, published, and *promoted* to trusted by review
+  of transform + fixtures. Promotion to a scheduled server-side connector
+  compiles the same transform.
+- **Provenance is a signature.** "Verified by Ontola" must be a publisher
+  signature on the skill, not a string in its body — skills are
+  instruction-level supply chain, and third-party ones arrive eventually.
+
 ## Runtime Analysis
 
 Where does the generated transform run? Assessment of the candidates:
@@ -244,43 +290,79 @@ This ordering keeps the LLM feedback loop where it's cheap (browser, no
 compile step for iteration) and moves code server-side only after it's frozen,
 reviewed, and approved — consistent with "sync never activates code".
 
-## Milestones
+## Build Plan
 
-### M1: Level 0 assistant import
+Ordered by dependency; each milestone is independently shippable.
 
-- Assistant skill + flow: paste/upload small data, map conversationally,
-  create resources with existing tools, under one parent for undo.
-- First-party parsers exposed as assistant tools: CSV/JSON sampling with
-  column stats.
+### M1: Chat ingestion + Level 0
 
-### M2: Transform pipeline (one format, end to end)
+- File upload into the assistant chat, landing as a blob/handle that tools
+  can reference without dumping bytes into context.
+- First-party parser tools: zip tree, CSV (type inference + column stats),
+  JSON, Markdown/HTML. `sample_records` returns a stratified sample + stats,
+  never the full file.
+- Level 0 flow: map conversationally, create resources with existing tools
+  (`create_table` already handles dynamic classes/properties for tabular
+  data), everything under one parent for undo.
 
-- CSV/Excel → transform (TS, plugin-builder toolchain, worker-isolated) →
-  validate → preview/approve → commit with Importer/ImportRun provenance.
-- Structured validation errors fed back to the LLM; measure iterations-to-
-  clean on a corpus of real messy files.
+### M2: Deterministic transform pipeline
 
-### M3: Format breadth + reuse-biased mapping
+- **Runtime**: pure transform `(records, context) -> resources[]` executed in
+  a worker inside a null-origin iframe with `connect-src 'none'` (the iframe
+  CSP covers its workers — this is how "no network" is actually enforced),
+  time budget via `terminate()`, source pinned by content hash. Contract
+  types published as a small `@tomic/importer` package.
+- **Validation**: TS batch validator matching `lib/src/validate.rs` semantics
+  (datatype, required, classtype), producing structured per-record errors
+  that feed back to the LLM. Measure iterations-to-clean on real messy files.
+- **Preview + commit**: per-class counts, sample rendered resources (reuse
+  existing card views), skipped-row report, destination picker, approval
+  gate; batched resumable commit; `Importer`/`ImportRun` provenance ontology
+  with `externalId`. Measure ClientDb bulk-write throughput here — it decides
+  whether commits need chunking.
 
-- ICS/VCF/mbox/bookmarks/Notion-export/zip parsers (overlaps
+### M3: Importer skills + the Notion importer
+
+- `ImporterSkill` class (extending the existing skill resource): transform
+  source + hash, fixtures, target ontology, version, publisher signature.
+- Fixture runner: host verifies `transform(fixture) === expected` before
+  first use; result shown in the import UI.
+- Signed Ontola catalog drive + discovery (assistant finds the right skill by
+  source format / description search) and update flow.
+- **Notion export-zip importer as the first trusted skill** — the forcing
+  function for M1–M3: databases → tables, pages → documents, nesting →
+  folders, files → File resources. Ontola QA = a fixture corpus from real
+  exports plus a review checklist. Export-zip first; the API/token route is
+  deferred (below).
+
+### M4: Breadth + re-run
+
+- More parsers: ICS/VCF/mbox/bookmarks HTML (overlaps
   `personal-information-suite.md` Milestone 2 — same parsers, shared).
-- Vector-search-assisted property/class matching; code-first schema for
+- Vector-search-assisted class/property matching; code-first schema for the
   residue.
+- Idempotent re-import via `externalId`; diff preview for updates to
+  previously imported resources.
 
-### M4: Re-run, update, dedup
+### M5: Client-created importers + promotion
 
-- Idempotent re-import via externalId; diff preview for updates; scheduled
-  re-fetch *in the browser* (no server execution yet).
+- Assistant authors a *new* ImporterSkill for an unseen source (same artifact,
+  unverified), user proves it on their data, publishes it; review promotes it
+  to trusted. Needs the store/gallery and the plugin-platform release
+  machinery ([`llm-wasm-gui-plugins.md`](./llm-wasm-gui-plugins.md) Phases
+  2–3).
+- Promotion to scheduled server-side connectors: componentize + Wasmtime
+  (#1130), schedule + origin-allowlist capabilities. Gated on AtomicNode job
+  primitives.
 
-### M5: Promotion to server-side connectors
+### Deferred / unowned prerequisites
 
-- componentize + Wasmtime execution, schedule + origin-allowlist
-  capabilities, release/install lifecycle. Gated on the plugin-platform
-  phases and the AtomicNode job primitives.
-
-### Later / optional
-
-- Pyodide engine behind the same contract, lazy-loaded.
+- **API/token importers** (Notion API, etc.) need secret storage and
+  host-side credentialed fetch with an origin allowlist — listed as runtime
+  needs in `personal-information-suite.md` but currently designed nowhere.
+  Notion's API sends no CORS headers, so browser-side fetch is not an option;
+  internal integration tokens (paste-a-token) beat OAuth brokerage for v1.
+- Pyodide engine behind the same transform contract, lazy-loaded.
 - Opt-in cloud execution tier for hosted customers.
 
 ## Decisions
@@ -288,6 +370,10 @@ reviewed, and approved — consistent with "sync never activates code".
 - The LLM generates the mapping only; acquisition, parsing, validation,
   preview, and commit are host code. Transforms are pure functions with no
   I/O.
+- Ontola-authored **trusted importer skills** come before any client
+  publishing: skill = instructions + hash-pinned transform + verifiable
+  fixtures + publisher signature. Deterministic by default; the LLM only
+  adapts the transform when data deviates.
 - JS/TS is the first transform runtime (pinned plugin-builder toolchain,
   worker/iframe isolation, QuickJS-in-WASM as hardening path). Pyodide is a
   second engine for heavy tabular work, not the foundation.
