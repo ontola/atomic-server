@@ -29,8 +29,10 @@ pub const PLUGIN: &str = "https://atomicdata.dev/classes/Plugin";
 pub const TAG: &str = "https://atomicdata.dev/classes/Tag";
 pub const PEER: &str = "https://atomicdata.dev/classes/Peer";
 pub const PLAIN_TEXT: &str = "https://atomicdata.dev/classes/PlainText";
+pub const DRAFT: &str = "https://atomicdata.dev/classes/Draft";
 
 // Properties
+pub const ORIGINAL_SUBJECT: &str = "https://atomicdata.dev/properties/originalSubject";
 pub const SHORTNAME: &str = "https://atomicdata.dev/properties/shortname";
 pub const DESCRIPTION: &str = "https://atomicdata.dev/properties/description";
 /// Structured error classification on an `Error` resource, numeric — see

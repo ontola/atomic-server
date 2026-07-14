@@ -1455,6 +1455,23 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
+   * Every property URL this resource has a value for, mapped to that value.
+   *
+   * The returned object is a copy; mutating it does not change the resource.
+   */
+  public getPropVals(): Record<string, AtomicValue> {
+    if (this.#cacheDirty && this._loroDoc) {
+      this.rebuildCacheFromLoro();
+      this.#cacheDirty = false;
+    }
+
+    return {
+      ...this.#cache,
+      ...Object.fromEntries(this._auxValues.entries()),
+    };
+  }
+
+  /**
    * Get a Value by its property, returns as Array with subjects instead of the
    * full resource or throws error. Returns empty array if there is no value
    */

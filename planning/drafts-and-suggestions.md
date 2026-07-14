@@ -1,0 +1,178 @@
+# Drafts, publishing, and suggestions
+
+> **Status:** design agreed, 2026-07-14. Covers milestone 11 (Local-first
+> headless CMS): issue #467 (drafts / publishing / archiving) and the mechanism
+> half of #1000 (edit content from a webpage). Content i18n (#1069) is out of
+> scope for this round.
+
+## Two orthogonal things, neither of them CMS-specific
+
+The CMS ask decomposes into two generic capabilities. Neither is a Website
+feature; there is no `Website`-specific code path anywhere in this plan.
+
+1. **Visibility is location.** A resource is public because it lives somewhere
+   public. Publishing, unpublishing, and archiving are *moving a resource* —
+   an operation that already exists.
+2. **A proposed change is a fork.** A `Draft` resource names the resource it
+   proposes to change, via `originalSubject`. Merging squashes it onto the
+   original. This is the same mechanism whether you hold write rights (staging
+   your own edit) or not (suggesting one to someone else).
+
+Everything below follows from those two sentences.
+
+## 1. Visibility is location
+
+Rights in `hierarchy.rs` are additive, and the `drive` fast path consults only
+the `drive` propval — everything else resolves by walking parents. So a drive
+that is **not** blanket-public can contain:
+
+- a **public folder** carrying `read: [PUBLIC_AGENT]`, whose children inherit
+  public read through the ordinary parent walk, and
+- a **private folder** (no grant) whose children are visible to editors — who
+  hold `write` on the drive — but not to the public.
+
+Draft, published, and archived are therefore **three folders**, and publication
+state is implied by where a resource *is* rather than by a label that has to be
+kept in sync with reality. Publishing is a re-parent. So is archiving.
+
+Pinned by `hierarchy.rs::a_public_folder_in_a_private_drive_publishes_only_its_own_children`.
+
+**Prerequisite bug, fixed in `c61e1100`.** `drive` is a rights shortcut consulted
+before the parent walk, but it was client-supplied and written only at genesis.
+A resource moved between drives kept its old stamp and stayed readable under the
+old drive's grants — so moving a resource out of a public drive did not make it
+private. `commit.rs` now derives `drive` from `parent` at genesis and on every
+move. Pinned by `hierarchy.rs::moving_a_resource_to_a_private_drive_revokes_public_read`.
+
+**A `draftsOnly` marker on a folder** may later be worth adding as a **UI hint**
+— so the UI knows a folder is a staging area and can offer Publish. It must carry
+no authorization meaning. The moment a label rather than the ACL decides what is
+public, the label and the boundary can disagree; that is precisely the trap the
+original `status`-property proposal in #467 fell into.
+
+## 2. A proposed change is a fork
+
+| Term | Datatype | Meaning |
+| --- | --- | --- |
+| `Draft` (class) | — | Marker: this resource proposes a change to another. |
+| `originalSubject` | atomicURL | The resource it proposes to change. |
+
+`originalSubject` is the term already spec'd in `docs/src/commits/suggestions.md`
+("Fork", "Suggestion", "Controller", "Inbox"); we implement it rather than mint a
+competing `target`.
+
+A fork is a normal resource: it has its own subject, its own Loro doc, its own
+commit history, and it can be collaboratively edited, commented on, and shared
+like anything else. It carries the content class **alongside** `Draft`
+(`isA: [BlogPost, Draft]`) so the normal views render it — no parallel preview
+stack.
+
+**Merging is a squash.** The merger reads the fork, diffs it against the original,
+and writes the resulting propvals to the original as one ordinary commit signed by
+themselves. The original keeps its DID, history, and inbound links.
+
+Squash rather than importing the fork's Loro oplog, because an oplog import lands
+every intermediate draft revision in the original's doc — permanently and, once
+published, publicly reconstructible. Squash leaves draft history behind on the fork
+where it stays private. It also needs no new commit semantics and stays portable
+across the `Backend` seam `nextgraph-interop.md` wants.
+
+Because the merge commit is an ordinary write to the original, **authorization needs
+no changes at all**: `check_write` on the original already decides who may merge.
+
+Known limitation: squash is last-write-wins per property, so it cannot faithfully
+merge a rich-text `doc` container that changed on both sides. Classes with a `doc`
+container (DocumentV2) need oplog merge; later phase, not this one.
+
+## What we are *not* doing, and why
+
+Each was considered against the code, not on taste.
+
+- **A `status` property gating visibility.** Presentation metadata, not a boundary:
+  rights are per-resource and additive, so a label does not stop anyone `GET`ing the
+  resource. Superseded by "visibility is location".
+- **A deny / veto rule.** Would be the first subtractive rule in the model. Monotonic
+  grants are what make authority verifiable offline — you prove a right by exhibiting
+  a signed grant, whereas a deny requires proving the *absence* of something across
+  replicas that may withhold it. Turned out to be unnecessary.
+- **A `publishTo` property and draft-by-default creation.** Only needed if new content
+  starts life as a special kind of resource. It doesn't: new content is just content,
+  created wherever you create it. Creating a resource keeps behaving exactly as it does
+  today.
+- **Deferring class validation for drafts.** Only needed to let an incomplete
+  `isA: [BlogPost, Draft]` post save. With new content being ordinary content, the real
+  problem is that the website ontology marks `cover-image` and `published-at` as
+  *required*, which is over-strict regardless of drafts. Fix the ontology, not core
+  validation.
+- **A draft as a stored-but-unapplied commit.** Commits carry a 10-second
+  `validate_timestamp` window and `created_at` is inside the signed bytes, so a commit
+  awaiting review is invalid by the time it is merged. Commits are also immutable and
+  childless by design (`hierarchy.rs`: "Commits cannot be edited" / "cannot have
+  children"), so a pending commit cannot carry a mutable status or review comments.
+- **A draft as a Loro branch of the target's own doc.** A second lineage on one subject
+  is exactly the divergence bug in `loro-source-of-truth.md`, where "every later commit
+  re-merged two divergent branches as LWW — silently dropping writes at random". A fork
+  must be a separate subject with its own doc.
+- **Drafts on a separate private drive.** Unnecessary once the drive is not
+  blanket-public, and it splits authoring tooling across two drives.
+
+## Suggestions (edits without write rights)
+
+A suggestion is a fork authored on the **suggester's own drive** — the actor-side
+pattern `authorization-sync.md` prefers. No cross-drive grant is required: the
+suggester writes only where they already can.
+
+Constraints that document already fixes, which this design respects:
+
+- Public `write` is rejected as a grant basis ("muddies authorship — do not accept").
+  A suggestion is never an unapplied write on the target's ledger.
+- Grants are additive and irrevocable, so **accepting a suggestion must not mean
+  granting the suggester write**. It means the Controller signs the merge commit —
+  which is exactly what squash-merge does.
+
+Delivery/discovery is deliberately unresolved — see Open questions.
+
+## UI
+
+Lands in the actions registry (`browser/data-browser/src/actions/`, `planning/actions.md`),
+so each verb appears in the context menu, ⌘K, ⌘M and the AI/MCP surface for free.
+
+- **Edit as draft** — forks the resource. `available: canWrite`.
+- **Suggest an edit** — the same fork, authored on your own drive. `available: !canWrite`.
+  This is the "right-click any Atomic Data on the web and suggest an edit" verb from
+  `docs/src/commits/suggestions.md`.
+- **Merge / Publish draft** — squash onto `originalSubject`. `available: isDraft && canWrite(original)`.
+- **Discard draft**.
+- **Publish / Unpublish / Archive** for plain content — a *move* into or out of the public
+  folder. Generic; nothing website-specific.
+- A resource with pending drafts shows them (each draft names its `originalSubject`, so the
+  reverse lookup is a plain query — no back-reference property needed).
+
+## Website template consequences
+
+- Grant `read: [PUBLIC_AGENT]` on the **site folder**, not on the drive.
+  `makeDrivePublic()` in the e2e helpers becomes a folder-level grant.
+- Ship a `Drafts` folder (private) next to the public site folder.
+- Loosen the over-strict `requires` on `blogpost` (`cover-image`, `published-at`) so an
+  incomplete post is saveable anywhere.
+- Generated queries must exclude `Draft` and stop rendering future-dated posts. Today
+  `published-at` is used only for sorting and display, so a post dated 2099 renders now.
+- E2E: a draft is invisible to an anonymous visitor of the generated site, and visible
+  after publish.
+
+## Open questions
+
+- **Where does a fork live by default?** The drive's `Drafts` folder when the author can
+  append there, otherwise their personal drive. Needs a single predictable rule, not a
+  heuristic per surface.
+- **Suggestion delivery.** Indexer-built reverse index ("who suggested edits to X") vs. an
+  append-only inbox on the target. `authorization-sync.md` prefers the former and explicitly
+  *reserves* the inbox primitive for first-contact DMs, service notifications, and protocol
+  bridges; a suggestions inbox would be a fourth case and must argue for itself.
+- **Inbox items are editable after delivery.** `authorization-sync.md` asserts senders
+  "cannot mutate existing inbox items", but a sender is the genesis signer of their own item
+  and therefore has implicit creator-write. If suggestions ever land in an inbox, close this
+  first.
+- **Cross-agent suggestions need distributor mode**, not the hub-mediated trust mode that
+  ships today. Same-drive drafts do not — which is why drafts ship first.
+- **Rich-text merge.** Squash cannot merge a `doc` container that diverged on both sides.

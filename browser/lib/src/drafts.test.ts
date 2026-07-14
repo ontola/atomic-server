@@ -1,0 +1,149 @@
+import { describe, it } from 'vitest';
+import { core } from './index.js';
+import { drafts } from './ontologies/drafts.js';
+import { forkResource, isDraft, mergeDraft } from './drafts.js';
+import { testStore } from './test-store.js';
+
+const BLOGPOST = 'https://atomicdata.dev/classes/BlogPost';
+
+describe('drafts', () => {
+  it('forks a resource into a draft that carries the content, the classes and a link home', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+
+    const drive = await store.newResource({
+      isA: core.classes.drive,
+      noParent: true,
+    });
+    await drive.save();
+
+    const original = await store.newResource({
+      parent: drive.subject,
+      isA: BLOGPOST,
+      propVals: {
+        [core.properties.name]: 'Cheese',
+        [core.properties.description]: 'A post about cheese.',
+      },
+    });
+    await original.save();
+
+    const draft = await forkResource(store, original, drive.subject);
+
+    expect(draft.subject).not.toBe(original.subject);
+    expect(isDraft(draft)).toBe(true);
+    expect(isDraft(original)).toBe(false);
+    expect(draft.get(drafts.properties.originalSubject)).toBe(original.subject);
+
+    // Content and classes come along...
+    expect(draft.get(core.properties.name)).toBe('Cheese');
+    expect(draft.getClasses()).toContain(BLOGPOST);
+
+    // ...but the original's identity does not.
+    expect(draft.get(core.properties.parent)).toBe(drive.subject);
+  });
+
+  it('merges a draft onto the original without disturbing its identity', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+
+    const drive = await store.newResource({
+      isA: core.classes.drive,
+      noParent: true,
+    });
+    await drive.save();
+
+    const original = await store.newResource({
+      parent: drive.subject,
+      isA: BLOGPOST,
+      propVals: {
+        [core.properties.name]: 'Cheese',
+        [core.properties.description]: 'A post about cheese.',
+      },
+    });
+    await original.save();
+
+    const draftsFolder = await store.newResource({
+      parent: drive.subject,
+      isA: core.classes.class,
+    });
+    await draftsFolder.save();
+
+    const draft = await forkResource(store, original, draftsFolder.subject);
+    await draft.set(core.properties.name, 'Cheese, Revisited');
+    await draft.save();
+
+    // The original is untouched while the draft is being worked on.
+    expect(original.get(core.properties.name)).toBe('Cheese');
+
+    const merged = await mergeDraft(store, draft);
+
+    expect(merged.subject).toBe(original.subject);
+    expect(merged.get(core.properties.name)).toBe('Cheese, Revisited');
+    expect(merged.get(core.properties.description)).toBe(
+      'A post about cheese.',
+    );
+
+    // The merge must not move the original into the drafts folder, nor make it
+    // claim to be a draft.
+    expect(merged.get(core.properties.parent)).toBe(drive.subject);
+    expect(merged.getClasses()).toContain(BLOGPOST);
+    expect(merged.getClasses()).not.toContain(drafts.classes.draft);
+    expect(merged.get(drafts.properties.originalSubject)).toBe(undefined);
+  });
+
+  it('carries a property removed in the draft through the merge', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+
+    const drive = await store.newResource({
+      isA: core.classes.drive,
+      noParent: true,
+    });
+    await drive.save();
+
+    const original = await store.newResource({
+      parent: drive.subject,
+      isA: BLOGPOST,
+      propVals: {
+        [core.properties.name]: 'Cheese',
+        [core.properties.description]: 'Draft me away.',
+      },
+    });
+    await original.save();
+
+    const draft = await forkResource(store, original, drive.subject);
+    draft.remove(core.properties.description);
+    await draft.save();
+
+    const merged = await mergeDraft(store, draft);
+
+    expect(merged.get(core.properties.description)).toBe(undefined);
+    expect(merged.get(core.properties.name)).toBe('Cheese');
+  });
+
+  it('refuses to merge a resource that is not a draft of anything', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+
+    const drive = await store.newResource({
+      isA: core.classes.drive,
+      noParent: true,
+    });
+    await drive.save();
+
+    const orphan = await store.newResource({
+      parent: drive.subject,
+      isA: BLOGPOST,
+      propVals: { [core.properties.name]: 'Not a draft' },
+    });
+    await orphan.save();
+
+    await expect(mergeDraft(store, orphan)).rejects.toThrow(
+      /not a draft of anything/,
+    );
+  });
+});

@@ -10,7 +10,16 @@ import { collections } from './collections.js';
 import { dataBrowser } from './dataBrowser.js';
 import { server } from './server.js';
 import { ai } from './ai.js';
+import { drafts } from './drafts.js';
 
 export function initOntologies(): void {
-  registerOntologies(core, commits, collections, dataBrowser, server, ai);
+  registerOntologies(
+    core,
+    commits,
+    collections,
+    dataBrowser,
+    server,
+    ai,
+    drafts,
+  );
 }

@@ -293,6 +293,13 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
         )
         .await
         .map_err(|e| format!("Failed to import plugins.json: {e}"))?;
+    store
+        .import(
+            include_str!("../defaults/drafts.json"),
+            &ParseOpts::default(),
+        )
+        .await
+        .map_err(|e| format!("Failed to import drafts.json: {e}"))?;
     Ok(())
 }
 

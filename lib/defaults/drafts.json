@@ -1,0 +1,39 @@
+[
+  {
+    "@id": "https://atomicdata.dev/ontology/drafts",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
+    "https://atomicdata.dev/properties/shortname": "drafts",
+    "https://atomicdata.dev/properties/description": "Proposed changes to resources. A Draft is a fork of another resource: it carries the same classes as the resource it forked, alongside the Draft class, and names its original through `originalSubject`. Merging a Draft writes its state onto the original as an ordinary commit signed by whoever holds write rights there, so a Draft needs no special authorization. Drafts and suggestions are the same mechanism: a draft is a fork you merge yourself, a suggestion is a fork you ask someone else to merge.\n\nNote that publication is *not* modelled here. Whether a resource is public is decided by where it lives — a resource in a publicly readable folder is public, one outside it is not. Publishing and archiving are moves, not status changes.",
+    "https://atomicdata.dev/properties/classes": [
+      "https://atomicdata.dev/classes/Draft"
+    ],
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/properties/originalSubject"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Draft",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/drafts",
+    "https://atomicdata.dev/properties/shortname": "draft",
+    "https://atomicdata.dev/properties/description": "A proposed change to another resource. Added *alongside* the classes of the resource it forked (e.g. `isA: [BlogPost, Draft]`), so the normal views render it. A Draft is an ordinary resource with its own subject, history and rights: it can be edited, discussed and shared like anything else, and it is private exactly when its parent is.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/originalSubject"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/originalSubject",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/drafts",
+    "https://atomicdata.dev/properties/shortname": "original-subject",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The resource that this Draft proposes to change — the resource it was forked from. Merging the Draft writes its state onto this subject."
+  }
+]
