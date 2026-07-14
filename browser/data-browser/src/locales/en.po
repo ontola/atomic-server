@@ -5309,6 +5309,7 @@ msgid "Write this draft onto the resource it was forked from, as a single commit
 msgstr "Write this draft onto the resource it was forked from, as a single commit."
 
 #: src/actions/resourceActions.tsx
+#: src/components/DraftBar.tsx
 msgid "Draft merged"
 msgstr "Draft merged"
 
@@ -5327,3 +5328,23 @@ msgstr "Drafts"
 #: src/helpers/draftsFolder.ts
 msgid "Work in progress. Resources here are visible to people who can write to this drive, and are published by moving them somewhere publicly readable."
 msgstr "Work in progress. Resources here are visible to people who can write to this drive, and are published by moving them somewhere publicly readable."
+
+#: src/components/DraftBar.tsx
+msgid "Draft discarded"
+msgstr "Draft discarded"
+
+#: src/components/DraftBar.tsx
+msgid "Discard"
+msgstr "Discard"
+
+#: src/components/DraftBar.tsx
+msgid "<0/> Merge"
+msgstr "<0/> Merge"
+
+#: src/components/DraftBar.tsx
+msgid "Draft of"
+msgstr "Draft of"
+
+#: src/components/DraftBar.tsx
+msgid "The original is unchanged until you merge."
+msgstr "The original is unchanged until you merge."

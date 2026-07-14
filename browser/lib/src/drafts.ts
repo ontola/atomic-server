@@ -5,15 +5,26 @@ import type { Resource } from './resource.js';
 import type { Store } from './store.js';
 
 /**
- * Properties that identify a resource rather than describe it. A fork gets its
- * own, and a merge must never carry the fork's copies back onto the original —
- * writing the fork's `parent` onto the original would move it, and writing its
+ * Properties that say *who* a resource is and *who may reach it*, as opposed to
+ * what it says. Neither a fork nor a merge may carry these across.
+ *
+ * Identity: writing the fork's `parent` onto the original would move it, and its
  * `genesis` would claim the original was created by the fork's signature.
+ *
+ * Authority (`read` / `write` / `append`): a fork must inherit its privacy from
+ * the folder it lands in, never from the resource it forked. Copying them would
+ * mean a draft of a *published* page carries that page's `read: [PUBLIC_AGENT]`
+ * grant and is therefore itself public — which is exactly the thing drafts exist
+ * to prevent. For the same reason a merge must not push the fork's ACL onto the
+ * original: publishing is a move, not a copied grant.
  */
-const IDENTITY_PROPS: ReadonlySet<string> = new Set<string>([
+const NON_CONTENT_PROPS: ReadonlySet<string> = new Set<string>([
   core.properties.parent,
   core.properties.isA,
   core.properties.localId,
+  core.properties.read,
+  core.properties.write,
+  'https://atomicdata.dev/properties/append',
   'https://atomicdata.dev/properties/drive',
   'https://atomicdata.dev/properties/genesis',
   'https://atomicdata.dev/properties/lastCommit',
@@ -23,7 +34,7 @@ const IDENTITY_PROPS: ReadonlySet<string> = new Set<string>([
 const contentPropsOf = (resource: Resource): Record<string, AtomicValue> =>
   Object.fromEntries(
     Object.entries(resource.getPropVals()).filter(
-      ([prop]) => !IDENTITY_PROPS.has(prop),
+      ([prop]) => !NON_CONTENT_PROPS.has(prop),
     ),
   );
 

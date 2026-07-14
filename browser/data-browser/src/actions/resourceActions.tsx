@@ -1,5 +1,5 @@
 import toast from 'react-hot-toast';
-import { core, drafts, forkResource, isDraft, mergeDraft } from '@tomic/react';
+import { core, drafts, server } from '@tomic/react';
 import {
   FaArrowUpRightFromSquare,
   FaClock,
@@ -131,16 +131,22 @@ export const resourceActions: ActionDefinition[] = [
       'Fork this resource into a draft. The original is untouched until you merge.',
     keywords: ['draft', 'fork', 'suggest', 'propose', 'copy', 'branch'],
     icon: () => <FaCodeBranch />,
-    available: ctx => ctx.canWrite && !isDraft(ctx.resource) && !!ctx.drive,
+    // A Drive is a container, not content: forking one would copy its ACL and
+    // its whole shape, which is meaningless as a proposed change.
+    available: ctx =>
+      ctx.canWrite &&
+      !ctx.resource.isDraft &&
+      !ctx.resource.getClasses().includes(server.classes.drive) &&
+      !!ctx.drive,
     run: async ctx => {
       try {
         const draftsFolder = await getOrCreateDraftsFolder(
           ctx.store,
           ctx.drive!,
         );
-        const draft = await forkResource(ctx.store, ctx.resource, draftsFolder);
+        const draft = await ctx.resource.fork(draftsFolder);
         toast.success('Draft created');
-        ctx.navigate(editURL(draft.subject));
+        ctx.navigate(constructOpenURL(draft.subject));
       } catch (error) {
         toast.error((error as Error).message);
       }
@@ -155,10 +161,10 @@ export const resourceActions: ActionDefinition[] = [
       'Write this draft onto the resource it was forked from, as a single commit.',
     keywords: ['merge', 'publish', 'apply', 'accept', 'draft'],
     icon: () => <FaCodeMerge />,
-    available: ctx => isDraft(ctx.resource),
+    available: ctx => ctx.resource.isDraft,
     run: async ctx => {
       try {
-        const original = await mergeDraft(ctx.store, ctx.resource);
+        const original = await ctx.resource.mergeIntoOriginal();
         toast.success('Draft merged');
         ctx.navigate(constructOpenURL(original.subject));
       } catch (error) {
@@ -174,7 +180,7 @@ export const resourceActions: ActionDefinition[] = [
     helper: () => 'Open the resource this draft was forked from.',
     keywords: ['original', 'source', 'draft'],
     icon: () => <FaTurnUp />,
-    available: ctx => isDraft(ctx.resource),
+    available: ctx => ctx.resource.isDraft,
     run: ctx => {
       const original = ctx.resource.get(drafts.properties.originalSubject);
 

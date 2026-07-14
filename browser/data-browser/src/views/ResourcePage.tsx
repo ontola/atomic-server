@@ -28,6 +28,7 @@ import { BookmarkPage } from './BookmarkPage/BookmarkPage';
 import { ImporterPage } from './ImporterPage.jsx';
 import { FolderPage } from './FolderPage';
 import { ArticlePage } from './Article';
+import { DraftBar } from '../components/DraftBar';
 import { Main } from '../components/Main';
 import { OntologyPage } from './OntologyPage';
 import { TagPage } from './TagPage/TagPage';
@@ -166,6 +167,9 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
     <Main subject={subject}>
       <ErrorBoundary>
         <Suspense fallback={<Spinner />}>
+          {/* A draft renders through its content class's own view, so the bar is
+              the only thing telling you this is not the original. */}
+          <DraftBar resource={resource} />
           <ReturnComponent resource={resource} />
         </Suspense>
       </ErrorBoundary>

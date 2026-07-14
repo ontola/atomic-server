@@ -27,6 +27,7 @@ import {
   type QuickAccessPropType,
 } from './ontology.js';
 import type { ChangeSource, Store } from './store.js';
+import { forkResource, isDraft, mergeDraft } from './drafts.js';
 import { GENESIS, properties, instances } from './urls.js';
 import {
   valToArray,
@@ -2684,6 +2685,31 @@ export class Resource<C extends OptionalClass = any> {
    *  DID-derivation genesis commit. Held until the first `save()`. */
   public stashGenesis(commit: Commit): void {
     this._pendingGenesis = commit;
+  }
+
+  /**
+   * Fork this resource into a Draft under `parent`, and save it.
+   *
+   * The draft is only as private as `parent` is — see {@link forkResource}.
+   */
+  public fork(parent: string): Promise<Resource> {
+    return forkResource(this.store, this, parent);
+  }
+
+  /**
+   * Merge this Draft onto the resource it forked, as a single commit signed by
+   * the current agent. Throws if this is not a Draft. See {@link mergeDraft}.
+   *
+   * Named for its target rather than `merge`, which already means something
+   * else here: folding another Resource's propvals into this one.
+   */
+  public mergeIntoOriginal(): Promise<Resource> {
+    return mergeDraft(this.store, this);
+  }
+
+  /** Whether this resource proposes a change to another one. */
+  public get isDraft(): boolean {
+    return isDraft(this);
   }
 
   public async save(): Promise<SaveResult> {

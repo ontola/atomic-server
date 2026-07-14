@@ -5,6 +5,8 @@ import { forkResource, isDraft, mergeDraft } from './drafts.js';
 import { testStore } from './test-store.js';
 
 const BLOGPOST = 'https://atomicdata.dev/classes/BlogPost';
+const DRIVE = 'https://atomicdata.dev/classes/Drive';
+const PUBLIC_AGENT = 'https://atomicdata.dev/agents/publicAgent';
 
 describe('drafts', () => {
   it('forks a resource into a draft that carries the content, the classes and a link home', async ({
@@ -13,7 +15,7 @@ describe('drafts', () => {
     const { store } = await testStore();
 
     const drive = await store.newResource({
-      isA: core.classes.drive,
+      isA: DRIVE,
       noParent: true,
     });
     await drive.save();
@@ -49,7 +51,7 @@ describe('drafts', () => {
     const { store } = await testStore();
 
     const drive = await store.newResource({
-      isA: core.classes.drive,
+      isA: DRIVE,
       noParent: true,
     });
     await drive.save();
@@ -99,7 +101,7 @@ describe('drafts', () => {
     const { store } = await testStore();
 
     const drive = await store.newResource({
-      isA: core.classes.drive,
+      isA: DRIVE,
       noParent: true,
     });
     await drive.save();
@@ -124,13 +126,76 @@ describe('drafts', () => {
     expect(merged.get(core.properties.name)).toBe('Cheese');
   });
 
+  it('does not carry the original’s read grant onto the draft', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+
+    const drive = await store.newResource({
+      isA: DRIVE,
+      noParent: true,
+    });
+    await drive.save();
+
+    // A published page: explicitly readable by the public.
+    const published = await store.newResource({
+      parent: drive.subject,
+      isA: BLOGPOST,
+      propVals: {
+        [core.properties.name]: 'Cheese',
+        [core.properties.read]: [PUBLIC_AGENT],
+      },
+    });
+    await published.save();
+
+    const draft = await forkResource(store, published, drive.subject);
+
+    // If the draft inherited `read: [publicAgent]` it would be public the moment
+    // it was created, which is the one thing a draft must never be.
+    expect(draft.get(core.properties.read)).toBe(undefined);
+    expect(draft.get(core.properties.write)).toBe(undefined);
+    expect(draft.get(core.properties.name)).toBe('Cheese');
+  });
+
+  it('does not push the draft’s ACL onto the original when merging', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+
+    const drive = await store.newResource({
+      isA: DRIVE,
+      noParent: true,
+    });
+    await drive.save();
+
+    const original = await store.newResource({
+      parent: drive.subject,
+      isA: BLOGPOST,
+      propVals: {
+        [core.properties.name]: 'Cheese',
+        [core.properties.read]: [PUBLIC_AGENT],
+      },
+    });
+    await original.save();
+
+    const draft = await forkResource(store, original, drive.subject);
+    await draft.set(core.properties.name, 'Cheese Revisited');
+    await draft.save();
+
+    const merged = await mergeDraft(store, draft);
+
+    expect(merged.get(core.properties.name)).toBe('Cheese Revisited');
+    // The original keeps the grant it had; the merge neither strips nor grants.
+    expect(merged.get(core.properties.read)).toEqual([PUBLIC_AGENT]);
+  });
+
   it('refuses to merge a resource that is not a draft of anything', async ({
     expect,
   }) => {
     const { store } = await testStore();
 
     const drive = await store.newResource({
-      isA: core.classes.drive,
+      isA: DRIVE,
       noParent: true,
     });
     await drive.save();
