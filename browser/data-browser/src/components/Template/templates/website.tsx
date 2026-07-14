@@ -8,9 +8,9 @@ const description = (
 The website features blog posts, nested menu items and content blocks to create expressive pages from data.\n
 An \`@tomic/template\` template is also available to setup a fully working website in a variety of front-end frameworks that you can then customize to your preferences.
 \`\`\`
-npm create @tomic/template my-project -- --template sveltekit-site --server-url ${context.driveURL}
-pnpm create @tomic/template my-project --template sveltekit-site --server-url ${context.driveURL}
-yarn create @tomic/template my-project --template sveltekit-site --server-url ${context.driveURL}
+npm create @tomic/template my-project -- --template sveltekit-site --server-url ${context.serverURL} --drive ${context.driveURL}
+pnpm create @tomic/template my-project --template sveltekit-site --server-url ${context.serverURL} --drive ${context.driveURL}
+yarn create @tomic/template my-project --template sveltekit-site --server-url ${context.serverURL} --drive ${context.driveURL}
 \`\`\`
 Currently available @tomic/templates for the website template are:
 - sveltekit-site

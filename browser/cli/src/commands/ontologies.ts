@@ -25,6 +25,7 @@ export const ontologiesCommand = async (_args: string[]) => {
   if (!valid) {
     console.log(chalk.red('ERROR: Could not generate ontologies'));
     console.log(report);
+    process.exitCode = 1;
 
     return;
   }

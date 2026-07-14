@@ -16,7 +16,7 @@ export const useCurrentAgent = (): [
     [store],
   );
 
-  const agent = useSyncExternalStore(subscribe, store.getAgent);
+  const agent = useSyncExternalStore(subscribe, store.getAgent, store.getAgent);
 
   return [agent, store.setAgent];
 };

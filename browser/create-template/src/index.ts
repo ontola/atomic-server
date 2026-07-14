@@ -17,6 +17,9 @@ const args = parseArgs({
     'server-url': {
       type: 'string',
     },
+    drive: {
+      type: 'string',
+    },
   },
   allowPositionals: true,
 });
@@ -31,6 +34,13 @@ if (!args.values.template) {
 if (!args.values['server-url']) {
   console.error(
     'Missing an AtomicServer server-url argument, provide a server-url by adding --server-url <server-url> to the command',
+  );
+  process.exit(1);
+}
+
+if (!args.values.drive) {
+  console.error(
+    'Missing an Atomic drive argument, provide a drive subject by adding --drive <drive-subject> to the command',
   );
   process.exit(1);
 }
@@ -54,6 +64,7 @@ await postProcess({
   folderPath: outputDir,
   template: args.values.template,
   serverUrl: args.values['server-url'],
+  drive: args.values.drive,
 });
 
 log('');

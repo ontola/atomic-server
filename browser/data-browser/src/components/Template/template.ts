@@ -3,6 +3,7 @@ import { WebsiteTemplateImage } from './templates/websiteImage';
 
 export type TemplateContext = {
   driveURL: string;
+  serverURL: string;
 };
 
 export type Template = {

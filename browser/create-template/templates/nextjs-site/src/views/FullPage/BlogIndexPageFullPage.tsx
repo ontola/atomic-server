@@ -10,6 +10,7 @@ import { getAllBlogposts } from '@/atomic/getAllBlogposts';
 import { Suspense } from 'react';
 import Searchbar from '@/components/Searchbar';
 import { store } from '@/store';
+import { env } from '@/env';
 
 const BlogIndexPageFullPage = async ({
   resource,
@@ -24,7 +25,15 @@ const BlogIndexPageFullPage = async ({
   // We check if the searchParams have a search query. If so, we search for blogposts that match the query.
   // If there is no search query, we show all blogposts.
   if (searchParams?.search && typeof searchParams.search === 'string') {
+    const firstBlogpost = allItems[0]
+      ? await store.getResource(allItems[0])
+      : undefined;
+    const blogParent =
+      (firstBlogpost?.get(core.properties.parent) as string | undefined) ??
+      env.NEXT_PUBLIC_ATOMIC_DRIVE;
+
     results = await store.search(searchParams.search, {
+      parents: blogParent,
       filters: {
         [core.properties.isA]: website.classes.blogpost,
       },

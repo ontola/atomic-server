@@ -6,9 +6,9 @@
 	import VStack from '$lib/components/Layout/VStack.svelte';
 	import HStack from '$lib/components/Layout/HStack.svelte';
 	import Searchbar from '$lib/components/Searchbar.svelte';
-	import { throttle } from '$lib/utils';
 	import { getAllBlogposts } from '$lib/atomic/getAllBlogposts';
 	import { getStoreFromContext } from '@tomic/svelte';
+	import { PUBLIC_ATOMIC_DRIVE } from '$env/static/public';
 
 	interface Props {
 		resource: Resource<BlogIndexPage>;
@@ -20,26 +20,51 @@
 
 	let allItems = $state<string[]>([]);
 	let results = $state<string[]>([]);
+	let searchValue = $state('');
+	let searchTimeout: ReturnType<typeof setTimeout>;
+	let searchVersion = 0;
 
 	// We create a collection that collects all resources with the blogpost class. Sorted by publishedAt in descending order.
-	getAllBlogposts().then((members) => {
+	const allBlogpostsPromise = getAllBlogposts();
+
+	allBlogpostsPromise.then((members) => {
 		allItems = members;
-		results = members;
+
+		if (searchValue === '') {
+			results = members;
+		}
 	});
 
-	const search = throttle(async (searchValue: string) => {
+	$effect(() => {
+		clearTimeout(searchTimeout);
+		const version = ++searchVersion;
+
 		if (searchValue === '') {
 			results = allItems;
 
 			return;
 		}
 
-		results = await store.search(searchValue, {
-			filters: {
-				[core.properties.isA]: website.classes.blogpost
+		searchTimeout = setTimeout(async () => {
+			const blogposts = await allBlogpostsPromise;
+			const firstBlogpost = blogposts[0]
+				? await store.getResource(blogposts[0])
+				: undefined;
+			const blogParent =
+				(firstBlogpost?.get(core.properties.parent) as string | undefined) ??
+				PUBLIC_ATOMIC_DRIVE;
+			const nextResults = await store.search(searchValue, {
+				parents: blogParent,
+				filters: {
+					[core.properties.isA]: website.classes.blogpost
+				}
+			});
+
+			if (version === searchVersion) {
+				results = nextResults;
 			}
-		});
-	}, 200);
+		}, 200);
+	});
 </script>
 
 <Container>
@@ -47,7 +72,7 @@
 		<VStack>
 			<HStack wrap fullWidth align="center" justify="space-between">
 				<h1>{resource.title}</h1>
-				<Searchbar placeholder="Search blogposts..." oninput={search} />
+				<Searchbar placeholder="Search blogposts..." bind:value={searchValue} />
 			</HStack>
 			{#if results.length === 0}
 				<p>No results found</p>

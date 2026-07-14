@@ -1,5 +1,5 @@
 import { core } from '@tomic/lib';
-import { store } from './store.js';
+import { fetchResource } from './store.js';
 import chalk from 'chalk';
 
 export const validateOntologies = async (
@@ -17,7 +17,7 @@ export const validateOntologies = async (
 
   for (const subject of ontologies) {
     try {
-      const resource = await store.getResource(subject);
+      const resource = await fetchResource(subject);
 
       if (resource.error) {
         throw resource.error;
@@ -25,7 +25,7 @@ export const validateOntologies = async (
 
       if (!resource.hasClasses(core.classes.ontology)) {
         isValid = false;
-        const isA = await store.getResource(resource.getClasses()[0]);
+        const isA = await fetchResource(resource.getClasses()[0]);
         report += `Expected ${chalk.cyan(
           resource.title,
         )} to have class Ontology but found ${chalk.cyan(isA.title)}\n`;

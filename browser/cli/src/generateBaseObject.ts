@@ -1,5 +1,5 @@
 import { Resource, type Core, core } from '@tomic/lib';
-import { store } from './store.js';
+import { fetchResource } from './store.js';
 import { camelCaseify, dedupe } from './utils.js';
 import chalk from 'chalk';
 
@@ -43,7 +43,7 @@ const listToObj = async (
 ): Promise<Record<string, string>> => {
   const entries = await Promise.all(
     list.map(async subject => {
-      const resource = await store.getResource(subject);
+      const resource = await fetchResource(subject);
 
       return [camelCaseify(resource.get(core.properties.shortname)), subject];
     }),
@@ -77,9 +77,7 @@ const listToObj = async (
 const createClassDefs = async (
   classes: string[],
 ): Promise<Record<string, string[]>> => {
-  const classResources = await Promise.all(
-    classes.map(async c => await store.getResource(c)),
-  );
+  const classResources = await Promise.all(classes.map(c => fetchResource(c)));
 
   const entries = classResources.map(resource => {
     return [

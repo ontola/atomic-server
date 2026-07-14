@@ -5,10 +5,9 @@
 	interface Props {
 		value?: string;
 		placeholder: string;
-		oninput: (value: string) => void;
 	}
 
-	let { value = $bindable(''), placeholder, oninput }: Props = $props();
+	let { value = $bindable(''), placeholder }: Props = $props();
 </script>
 
 <div class="search-bar">
@@ -18,7 +17,6 @@
 			type="search"
 			bind:value
 			{placeholder}
-			oninput={(e) => oninput(e.currentTarget.value ?? '')}
 		/>
 	</HStack>
 </div>

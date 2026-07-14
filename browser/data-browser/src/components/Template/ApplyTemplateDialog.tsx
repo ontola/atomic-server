@@ -10,9 +10,9 @@ import {
   useDialog,
 } from '../Dialog';
 import { Column } from '../Row';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Markdown from '../datatypes/Markdown';
-import { useResources, useStore } from '@tomic/react';
+import { core, useStore } from '@tomic/react';
 import toast from 'react-hot-toast';
 import { InlineErrMessage } from '../forms/InputStyles';
 import { useSettings } from '../../helpers/AppSettings';
@@ -26,8 +26,6 @@ interface ApplyTemplateDialogProps {
   bindOpen: (open: boolean) => void;
 }
 
-const stableArray: string[] = [];
-
 export function ApplyTemplateDialog({
   template,
   bindOpen,
@@ -38,37 +36,31 @@ export function ApplyTemplateDialog({
   const [dialogProps, show, close, isOpen] = useDialog({ bindShow: bindOpen });
   const { drive } = useSettings();
   const [error, setError] = useState<string>();
-
-  const subjects = useMemo(
-    () =>
-      template?.rootResourceLocalIDs.map(localID => {
-        // `new URL(localID, drive + '/')` only works when `drive` is an HTTP
-        // URL. After the DID migration drives are `did:ad:...` subjects which
-        // can't act as URL bases, so we fall back to string join.
-        if (drive.startsWith('did:')) {
-          return `${drive}/${localID}`;
-        }
-
-        return new URL(localID, drive + '/').toString();
-      }) ?? stableArray,
-    [template, drive],
-  );
-
-  const resources = useResources(subjects);
+  const [existingRootSubject, setExistingRootSubject] = useState<string>();
 
   const formattedJSONAD = template
     ? JSON.stringify(template.resources, null, 2)
     : '';
 
-  const alreadyApplied = Array.from(resources.values()).some(r => !r.error);
+  const findRootSubject = useCallback(async () => {
+    const rootLocalId = template?.rootResourceLocalIDs[0];
+
+    if (!rootLocalId) return undefined;
+
+    const [subject] = await store.search('', {
+      parents: drive,
+      filters: { [core.properties.localId]: rootLocalId },
+      include: true,
+      limit: 1,
+    });
+
+    return subject;
+  }, [drive, store, template]);
+
+  const alreadyApplied = existingRootSubject !== undefined;
 
   const applyTemplate = async () => {
     if (!template) return;
-
-    for (const resource of resources.keys()) {
-      // The resources are in the store but might have errors because they don't exist. We need to remove them so they're not cached when we navigate to them later.
-      store.removeResource(resource);
-    }
 
     try {
       // The imported resources set `parent`; children are resolved via the
@@ -76,10 +68,15 @@ export function ApplyTemplateDialog({
       await store.importJsonAD(JSON.stringify(template.resources), {
         parent: drive,
       });
+      const rootSubject = await findRootSubject();
+
+      if (!rootSubject) {
+        throw new Error('The imported template root could not be found.');
+      }
 
       close();
       toast.success('Template applied!');
-      navigate(constructOpenURL(subjects[0]));
+      navigate(constructOpenURL(rootSubject));
     } catch (err) {
       setError(err.message);
     }
@@ -88,8 +85,10 @@ export function ApplyTemplateDialog({
   useEffect(() => {
     if (open) {
       show();
+      setExistingRootSubject(undefined);
+      void findRootSubject().then(setExistingRootSubject);
     }
-  }, [open]);
+  }, [findRootSubject, open, show]);
 
   return (
     <Dialog {...dialogProps} width='50rem'>

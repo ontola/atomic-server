@@ -1,6 +1,12 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { ErrorType, isAtomicError, Store } from '@tomic/lib';
+import {
+  CollectionBuilder,
+  core,
+  ErrorType,
+  isAtomicError,
+  Store,
+} from '@tomic/lib';
 import type { Resource } from '@tomic/lib';
 import {
   type ExecutionContext,
@@ -15,28 +21,33 @@ export interface PostProcessContext {
   folderPath: string;
   template: TemplateKey;
   serverUrl: string;
+  drive: string;
 }
 
 export async function postProcess(context: PostProcessContext) {
-  const { folderPath, template, serverUrl } = context;
-
-  const executionContext: ExecutionContext = { serverUrl };
+  const { folderPath, template, serverUrl, drive } = context;
 
   const store = new Store({ serverUrl });
   const baseTemplate = templates[template];
-  const ontologySubject = new URL(
-    baseTemplate.ontologyID(executionContext),
-    serverUrl,
-  ).toString();
+  const ontology = await findByLocalId(
+    store,
+    drive,
+    baseTemplate.ontologyLocalId,
+  );
+  const website = await findByLocalId(
+    store,
+    drive,
+    baseTemplate.websiteLocalId,
+  );
 
-  const ontology = await store.getResource(ontologySubject);
+  if (!ontology || ontology.error || !website || website.error) {
+    const error = ontology?.error ?? website?.error;
 
-  if (ontology.error) {
-    if (isAtomicError(ontology.error)) {
-      switch (ontology.error.type) {
+    if (error && isAtomicError(error)) {
+      switch (error.type) {
         case ErrorType.NotFound:
           console.error(
-            `\nThe '${baseTemplate.name}' template does not exist on your drive on '${ontologySubject}'. To get the template go to the Create Resource page and select the ${baseTemplate.name} template.`,
+            `\nThe '${baseTemplate.name}' template does not exist in drive '${drive}'. To get the template go to the Create Resource page and select the ${baseTemplate.name} template.`,
           );
           break;
         case ErrorType.Unauthorized:
@@ -53,23 +64,47 @@ export async function postProcess(context: PostProcessContext) {
           console.error('\nAn error occurred while fetching the template.');
       }
     } else {
-      console.error(ontology.error.message);
+      console.error(error?.message ?? 'Template resources could not be found.');
     }
 
     process.exit(1);
   }
 
-  await modifyConfig(folderPath, ontology);
+  const executionContext: ExecutionContext = {
+    serverUrl,
+    drive,
+    websiteSubject: website.subject,
+  };
+
+  await modifyConfig(folderPath, ontology, serverUrl);
   await modifyReadme(folderPath);
   await createEnvFile(folderPath, baseTemplate.generateEnv(executionContext));
 }
 
-async function modifyConfig(folderPath: string, ontology: Resource) {
+async function findByLocalId(store: Store, drive: string, localId: string) {
+  const collection = await new CollectionBuilder(store)
+    .setDrive(drive)
+    .setProperty(core.properties.localId)
+    .setValue(localId)
+    .setPageSize(1)
+    .buildAndFetch();
+  const subject = await collection.getMemberWithIndex(0);
+
+  return subject ? store.getResource(subject) : undefined;
+}
+
+async function modifyConfig(
+  folderPath: string,
+  ontology: Resource,
+  serverUrl: string,
+) {
   log(`Generating ${chalk.gray('atomic.config.json')}...`);
   const configPath = path.join(folderPath, 'atomic.config.json');
   const content = await fs.promises.readFile(configPath, { encoding: 'utf-8' });
 
-  const newContent = content.replaceAll('<ONTOLOGY>', ontology.subject);
+  const newContent = content
+    .replaceAll('<ONTOLOGY>', ontology.subject)
+    .replaceAll('<SERVER_URL>', serverUrl);
 
   await fs.promises.writeFile(configPath, newContent);
 }

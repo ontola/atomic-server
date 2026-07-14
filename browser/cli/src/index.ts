@@ -19,8 +19,10 @@ commands.set('init', () =>
 );
 
 if (commands.has(command)) {
-  commands.get(command)?.();
+  await commands.get(command)!();
+  process.exit(process.exitCode ?? 0);
 } else {
   console.error(chalk.red('Unknown command'), chalk.cyan(command ?? ''));
   console.log(usage);
+  process.exit(1);
 }

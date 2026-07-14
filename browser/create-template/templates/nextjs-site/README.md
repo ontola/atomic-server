@@ -1,6 +1,6 @@
 # Atomic Next.js Template
 
-This repository is a [Next.js](https://nextjs.org/) 15 website starter template to be used with [AtomicServer](https://github.com/atomicdata-dev/atomic-server). For specific steps on how to deploy this template, see [DEPLOYING](./README/deploying.md).
+This repository is a [Next.js](https://nextjs.org/) 16 website starter template to be used with [AtomicServer](https://github.com/atomicdata-dev/atomic-server). For specific steps on how to deploy this template, see [DEPLOYING](./README/deploying.md).
 
 ## Getting started
 
@@ -9,9 +9,9 @@ This guide assumes you have AtomicServer running on your local machine. If you d
 ### 1. Create a new project
 
 ```bash
-$ npm create @tomic/template my-project -- --template nextjs-site --server-url http://localhost:9883
-$ pnpm create @tomic/template my-project --template nextjs-site --server-url http://localhost:9883
-$ yarn create @tomic/template my-project --template nextjs-site --server-url http://localhost:9883
+$ npm create @tomic/template my-project -- --template nextjs-site --server-url http://localhost:9883 --drive did:ad:YOUR_DRIVE
+$ pnpm create @tomic/template my-project --template nextjs-site --server-url http://localhost:9883 --drive did:ad:YOUR_DRIVE
+$ yarn create @tomic/template my-project --template nextjs-site --server-url http://localhost:9883 --drive did:ad:YOUR_DRIVE
 ```
 
 ### 2. Generate ontologies

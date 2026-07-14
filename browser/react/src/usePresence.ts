@@ -32,6 +32,7 @@ function usePresenceSnapshot(): {
   const snapshot = useSyncExternalStore(
     subscribe,
     () => manager?.getSnapshot() ?? EMPTY,
+    () => EMPTY,
   );
 
   return { manager, snapshot };

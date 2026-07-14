@@ -1,6 +1,7 @@
 import { CollectionBuilder, type Resource } from '@tomic/lib';
 import { website } from '@/ontologies/website';
 import { store } from '@/store';
+import { env } from '@/env';
 
 /**
  * Queries the server for a resource with a href property that matches the given url pathname.
@@ -12,6 +13,7 @@ export async function getCurrentResource(
 ): Promise<Resource | undefined> {
   // Find the resource with the current path as href.
   const collection = await new CollectionBuilder(store)
+    .setDrive(env.NEXT_PUBLIC_ATOMIC_DRIVE)
     .setProperty(website.properties.href)
     .setValue(path)
     .buildAndFetch();
@@ -26,5 +28,7 @@ export async function getCurrentResource(
     return undefined;
   }
 
-  return await store.getResource(currentResourceSubject);
+  return await store.fetchResourceFromServer(currentResourceSubject, {
+    noWebSocket: true,
+  });
 }

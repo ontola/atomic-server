@@ -56,7 +56,9 @@ export function getResource<T extends OptionalClass = never>(
   // One state cell per call. `store.subscribe` fires for every resource
   // change (local edits + WS pushes); we re-read the snapshot on each
   // event, and Svelte's reactivity follows the `.resource` re-assignment.
-  let snap = $state(store.getResourceSnapshot(subject, opts));
+  // Resource uses JavaScript private fields, so it must not be wrapped in a
+  // deep Svelte proxy. We only need reactivity when the snapshot is replaced.
+  let snap = $state.raw(store.getResourceSnapshot(subject, opts));
 
   $effect(() =>
     store.subscribe(subject, () => {
@@ -69,7 +71,12 @@ export function getResource<T extends OptionalClass = never>(
   // snapshot replacements.
   return new Proxy({} as Resource, {
     get(_, prop) {
-      return snap.resource[prop as keyof Resource];
+      const resource = snap.resource;
+      const value = Reflect.get(resource, prop, resource);
+
+      // Class methods must run with the actual Resource as their receiver;
+      // using this outer proxy as `this` breaks Resource's private fields.
+      return typeof value === 'function' ? value.bind(resource) : value;
     },
   }) as Resource<T>;
 }

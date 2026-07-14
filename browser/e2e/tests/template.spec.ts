@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { exec } from 'child_process';
 import {
   before,
@@ -6,7 +6,7 @@ import {
   newDrive,
   signIn,
   sidebarNewResourceButton,
-  inDialog,
+  SERVER_URL,
 } from './test-utils';
 import fs from 'node:fs';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -16,6 +16,16 @@ import { log } from 'node:console';
 import os from 'node:os';
 
 const EXEC_DIR = path.join(os.tmpdir(), 'atomic-data-template-tests');
+const TEMPLATE_IMPORT_TIMEOUT = 60_000;
+
+async function applyWebsiteTemplate(page: Page) {
+  const dialog = page.locator('dialog[open][data-top-level="true"]');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Apply template' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'website', level: 1 }),
+  ).toBeVisible({ timeout: TEMPLATE_IMPORT_TIMEOUT });
+}
 
 const pathToPackage = (
   libName: 'lib' | 'cli' | 'react' | 'svelte' | 'create-template',
@@ -41,18 +51,16 @@ const execAsync = async (command: Parameters<typeof exec>[0], cwd?: string) => {
         reject(new Error(err.message));
       }
 
-      if (stderr) {
-        reject(new Error(stderr.toString()));
-      }
-
       resolve(stdout.toString());
     });
   });
 };
 
-// test.describe.configure({ mode: 'serial' });
-
-async function setupTemplateSite(serverUrl: string, siteType: string) {
+async function setupTemplateSite(
+  serverUrl: string,
+  drive: string,
+  siteType: string,
+) {
   if (!fs.existsSync(EXEC_DIR)) {
     fs.mkdirSync(EXEC_DIR);
     await execAsync('pnpm init');
@@ -60,7 +68,7 @@ async function setupTemplateSite(serverUrl: string, siteType: string) {
   }
 
   await execAsync(
-    `pnpm exec create-template ${siteType} --template ${siteType} --server-url ${serverUrl}`,
+    `pnpm exec create-template ${siteType} --template ${siteType} --server-url ${serverUrl} --drive ${drive}`,
   );
 
   // We don't want a frozen lockfile because it would cause issues in the ci.
@@ -81,8 +89,8 @@ function startServer(siteType: string) {
   // Adjust runtime commands per template
   const command =
     siteType === 'nextjs-site'
-      ? 'pnpm build && pnpm start'
-      : 'pnpm run build && NO_COLOR=1 pnpm preview';
+      ? 'pnpm build && pnpm start --port 3000'
+      : 'pnpm run build && NO_COLOR=1 pnpm preview --port 4174';
 
   return spawn(command, {
     cwd: path.join(EXEC_DIR, siteType),
@@ -92,7 +100,7 @@ function startServer(siteType: string) {
 
 const waitForServer = (
   childProcess: ChildProcess,
-  timeout = 30000,
+  timeout = 120000,
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
@@ -111,15 +119,7 @@ const waitForServer = (
       }
     });
 
-    childProcess.stderr?.on('data', data => {
-      const errorMessage = data.toString();
-      console.error(`stderr: ${errorMessage}`);
-
-      if (errorMessage.includes('error')) {
-        clearTimeout(timeoutId); // Clear the timeout when rejecting
-        reject(new Error(`Server encountered an error: ${errorMessage}`));
-      }
-    });
+    childProcess.stderr?.on('data', data => console.error(data.toString()));
 
     childProcess.on('exit', code => {
       clearTimeout(timeoutId); // Clear the timeout when the process exits
@@ -131,20 +131,11 @@ const waitForServer = (
   });
 };
 
-// Skipped until create-template CLI works with did: drive subjects. The
-// scaffolder currently passes the drive subject as `--server-url`, and
-// that URL is later used by clients expecting ws:// or http:// — a did:
-// URI throws `Expected a ws: or wss: protocol, got did:`. Requires a
-// design fix in create-template (accept an HTTP origin separately from
-// the drive subject) before these e2e tests can run.
-test.describe.skip('Test create-template package', () => {
+test.describe('Test create-template package', () => {
+  test.describe.configure({ mode: 'serial' });
   test.beforeEach(before);
 
   test('apply next-js template', async ({ page }) => {
-    test.fixme(
-      true,
-      'Template needs to be updated to Next.js 16 because we require React 19.2.0 or above.',
-    );
     test.slow();
     await signIn(page);
     const drive = await newDrive(page);
@@ -156,19 +147,9 @@ test.describe.skip('Test create-template package', () => {
 
     await page.getByTestId('template-button').click();
 
-    const navigationPromise = page.waitForNavigation();
-    await inDialog(page, async (_, closeDialogWith) => {
-      await closeDialogWith('Apply template');
-    });
+    await applyWebsiteTemplate(page);
 
-    await navigationPromise;
-
-    // Check if the template was applied
-    await expect(
-      page.getByRole('heading', { name: 'website', level: 1 }),
-    ).toBeVisible();
-
-    await setupTemplateSite(drive.driveURL, 'nextjs-site');
+    await setupTemplateSite(SERVER_URL, drive.driveURL, 'nextjs-site');
 
     try {
       //start server
@@ -215,12 +196,9 @@ test.describe.skip('Test create-template package', () => {
     const button = page.getByTestId('template-button');
     await button.click();
 
-    const applyTemplateButton = page.getByRole('button', {
-      name: 'Apply template',
-    });
-    await applyTemplateButton.click();
+    await applyWebsiteTemplate(page);
 
-    await setupTemplateSite(drive.driveURL, 'sveltekit-site');
+    await setupTemplateSite(SERVER_URL, drive.driveURL, 'sveltekit-site');
 
     try {
       const child = startServer('sveltekit-site');

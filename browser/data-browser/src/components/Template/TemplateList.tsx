@@ -4,13 +4,16 @@ import { templates, type Template } from './template';
 import { useState } from 'react';
 import { ApplyTemplateDialog } from './ApplyTemplateDialog';
 import { useSettings } from '../../helpers/AppSettings';
+import { useStore } from '@tomic/react';
 
 export function TemplateList(): React.JSX.Element {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template>();
   const { drive } = useSettings();
+  const store = useStore();
   const context = {
     driveURL: drive,
+    serverURL: store.getServerUrl(),
   };
 
   return (

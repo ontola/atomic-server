@@ -19,6 +19,7 @@ pub fn parse_json_array(string: &str) -> AtomicResult<Vec<String>> {
 }
 
 use serde_json::Map;
+use std::collections::HashMap;
 
 /// Options for parsing (JSON-AD) resources.
 /// Many of these are related to rights, as parsing often implies overwriting / setting resources.
@@ -169,6 +170,14 @@ pub async fn parse_json_ad_string(
     let mut vec = Vec::new();
     match parsed {
         serde_json::Value::Array(mut arr) => {
+            // HTTP imports can derive every subject from `<parent>/<localId>`.
+            // DID imports cannot: every imported resource needs its own
+            // signature-derived subject. Reserve those subjects first so the
+            // real import can resolve forward references and cycles between
+            // local IDs (ontologies are a common example).
+            let reserved_subjects = reserve_did_import_subjects(&arr, store, parse_opts).await?;
+            resolve_reserved_local_id_references(&mut arr, &reserved_subjects);
+
             // Move all properties to the front of the array because some of the other resouces might use these properties.
             arr.sort_by(|a, b| {
                 let a_is_prop = object_is_property(a);
@@ -182,15 +191,25 @@ pub async fn parse_json_ad_string(
             for item in arr {
                 match item {
                     serde_json::Value::Object(obj) => {
-                        let resource = parse_json_ad_map_to_resource(obj, store, None, parse_opts)
-                            .await
-                            .map_err(|e| format!("Unable to process resource in array. {}", e))?;
+                        let overwrite_subject = obj
+                            .get(urls::LOCAL_ID)
+                            .and_then(serde_json::Value::as_str)
+                            .and_then(|local_id| reserved_subjects.get(local_id))
+                            .cloned();
+                        let resource = parse_json_ad_map_to_resource(
+                            obj,
+                            store,
+                            overwrite_subject,
+                            parse_opts,
+                        )
+                        .await
+                        .map_err(|e| format!("Unable to process resource in array. {}", e))?;
                         vec.push(resource);
                     }
                     wrong => {
                         return Err(
                             format!("Wrong datatype, expected object, got: {:?}", wrong).into()
-                        )
+                        );
                     }
                 }
             }
@@ -204,6 +223,85 @@ pub async fn parse_json_ad_string(
     }
 
     Ok(vec)
+}
+
+async fn reserve_did_import_subjects(
+    values: &[serde_json::Value],
+    store: &impl Storelike,
+    parse_opts: &ParseOpts,
+) -> AtomicResult<HashMap<String, String>> {
+    let mut subjects = HashMap::new();
+    let Some(importer) = &parse_opts.importer else {
+        return Ok(subjects);
+    };
+
+    if !importer.is_did() || parse_opts.save != SaveOpts::Commit {
+        return Ok(subjects);
+    }
+
+    for value in values {
+        let serde_json::Value::Object(object) = value else {
+            continue;
+        };
+        let Some(serde_json::Value::String(local_id)) = object.get(urls::LOCAL_ID) else {
+            continue;
+        };
+
+        if let Some(subject) = find_existing_by_local_id(store, importer, local_id).await? {
+            subjects.insert(local_id.clone(), subject);
+            continue;
+        }
+
+        let mut reservation = Map::new();
+        reservation.insert(
+            urls::LOCAL_ID.to_string(),
+            serde_json::Value::String(local_id.clone()),
+        );
+        let resource = parse_json_ad_map_to_resource(reservation, store, None, parse_opts)
+            .await
+            .map_err(|e| format!("Unable to reserve DID for localId {local_id:?}: {e}"))?;
+        subjects.insert(local_id.clone(), resource.get_subject().to_string());
+    }
+
+    Ok(subjects)
+}
+
+fn resolve_reserved_local_id_references(
+    values: &mut [serde_json::Value],
+    subjects: &HashMap<String, String>,
+) {
+    fn resolve(value: &mut serde_json::Value, subjects: &HashMap<String, String>) {
+        match value {
+            serde_json::Value::String(string) => {
+                if let Some(subject) = subjects.get(string) {
+                    *string = subject.clone();
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    resolve(value, subjects);
+                }
+            }
+            serde_json::Value::Object(object) => {
+                let old = std::mem::take(object);
+
+                for (key, mut value) in old {
+                    let resolved_key = subjects.get(&key).cloned().unwrap_or(key);
+
+                    if resolved_key != urls::LOCAL_ID {
+                        resolve(&mut value, subjects);
+                    }
+
+                    object.insert(resolved_key, value);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    for value in values {
+        resolve(value, subjects);
+    }
 }
 
 /// Parse a single Json AD string that represents an incoming Commit.
@@ -306,16 +404,9 @@ async fn find_existing_by_local_id(
     let mut query = crate::storelike::Query::new_prop_val(urls::LOCAL_ID, local_id);
     query.for_agent = crate::agents::ForAgent::Sudo;
     let result = store.query(&query).await?;
-    let parent_str = parent.as_str();
     for resource in result.resources {
-        match resource.get(urls::PARENT) {
-            Ok(crate::Value::AtomicUrl(p)) if p.as_str() == parent_str => {
-                return Ok(Some(resource.get_subject().to_string()));
-            }
-            Ok(crate::Value::String(p)) if p == parent_str => {
-                return Ok(Some(resource.get_subject().to_string()));
-            }
-            _ => {}
+        if resource.has_parent(store, parent.as_str()).await {
+            return Ok(Some(resource.get_subject().to_string()));
         }
     }
     Ok(None)
@@ -408,7 +499,7 @@ pub fn parse_propval<'a>(
                                 &format!("Found non-string item in resource array: {err}."),
                                 subject,
                                 Some(&prop),
-                            ))
+                            ));
                         }
                     }
                 }
@@ -579,11 +670,15 @@ async fn parse_json_ad_map_to_resource(
             continue;
         } else if prop == urls::LOCAL_ID && parse_opts.importer.is_some() {
             if overwrite_subject.is_some() {
-                return Err(AtomicError::parse_error(
-                    "`@id` is not allowed in a resource with server generated subject.",
-                    subject.as_deref(),
-                    Some(&prop),
-                ));
+                let serde_json::Value::String(local_id) = val else {
+                    return Err(AtomicError::parse_error(
+                        "`localId` must be a string",
+                        Some(&val.to_string()),
+                        Some(&prop),
+                    ));
+                };
+                propvals.insert(urls::LOCAL_ID.into(), Value::String(local_id));
+                continue;
             }
 
             // If the property is a localId we need to set to generate a subject and update the subject value.
@@ -715,9 +810,9 @@ async fn parse_json_ad_map_to_resource(
                 if !parse_opts.overwrite_outside {
                     let importer = parse_opts.importer.as_ref().unwrap();
                     if !orig.has_parent(store, importer.as_str()).await {
-                        Err(
-                            format!("Cannot overwrite {subj} outside of importer! Enable `overwrite_outside`"),
-                        )?
+                        Err(format!(
+                            "Cannot overwrite {subj} outside of importer! Enable `overwrite_outside`"
+                        ))?
                     }
                 };
                 orig
@@ -1059,6 +1154,70 @@ mod test {
                 .first()
                 .unwrap(),
             &reference_subject
+        );
+    }
+
+    #[tokio::test]
+    async fn did_import_resolves_forward_local_id_references() {
+        let (store, _) = create_store_and_importer().await;
+        let importer = crate::test_utils::create_test_drive(&store).await.unwrap();
+        let parse_opts = ParseOpts {
+            save: SaveOpts::Commit,
+            for_agent: ForAgent::Sudo,
+            signer: Some(store.get_default_agent().unwrap()),
+            overwrite_outside: false,
+            importer: Some(importer.clone()),
+            ..Default::default()
+        };
+        let json = format!(
+            r#"[
+              {{
+                "{local_id}": "child",
+                "{name}": "Child",
+                "{parent}": "folder"
+              }},
+              {{
+                "{local_id}": "folder",
+                "{name}": "Folder"
+              }}
+            ]"#,
+            local_id = urls::LOCAL_ID,
+            name = urls::NAME,
+            parent = urls::PARENT,
+        );
+
+        store.import(&json, &parse_opts).await.unwrap();
+
+        let child = find_existing_by_local_id(&store, &importer, "child")
+            .await
+            .unwrap()
+            .unwrap();
+        let folder = find_existing_by_local_id(&store, &importer, "folder")
+            .await
+            .unwrap()
+            .unwrap();
+        let child_resource = store.get_resource(&child.clone().into()).await.unwrap();
+
+        assert_eq!(
+            child_resource.get(urls::PARENT).unwrap().to_string(),
+            folder
+        );
+
+        store.import(&json, &parse_opts).await.unwrap();
+
+        assert_eq!(
+            find_existing_by_local_id(&store, &importer, "child")
+                .await
+                .unwrap()
+                .unwrap(),
+            child
+        );
+        assert_eq!(
+            find_existing_by_local_id(&store, &importer, "folder")
+                .await
+                .unwrap()
+                .unwrap(),
+            folder
         );
     }
 

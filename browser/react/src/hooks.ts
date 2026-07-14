@@ -62,7 +62,8 @@ export function useResource<C extends OptionalClass = never>(
     [store, subject, memoizedOpts],
   );
 
-  return useSyncExternalStore(subscribe, getSnapshot).resource as Resource<C>;
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+    .resource as Resource<C>;
 }
 
 const stableEmptyArray: string[] = [];
@@ -117,7 +118,7 @@ export function useResources(
     return map;
   }, [store, subjects, memoizedOpts]);
 
-  return useSyncExternalStore(subscribe, getSnapshot);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /**
@@ -261,7 +262,8 @@ export function useValue(
     },
     [store, subject, stable, propertyURL],
   );
-  const val = useSyncExternalStore(subscribe, () => resource.get(propertyURL));
+  const getSnapshot = () => resource.get(propertyURL);
+  const val = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   const saveResource = useCallback(() => {
     if (!commit) {
@@ -546,9 +548,8 @@ export function useDate(
 
 /**
  * Reactive creation timestamp (a `Date`) derived from the resource's genesis
- * Loro change — no commit fetch, and it survives a refresh. Returns undefined
- * until the doc has history, or for an offline-authored genesis with no
- * recorded time. See {@link Resource.getCreatedAt}.
+ * certificate, with legacy fallbacks handled by {@link Resource.getCreatedAt}.
+ * No commit fetch is required, and it survives a refresh.
  */
 export function useCreatedAt(resource: Resource): Date | undefined {
   const stable = resource.stable;
@@ -572,16 +573,15 @@ export function useCreatedAt(resource: Resource): Date | undefined {
 
   // getSnapshot returns a stable primitive (ms number) — the genesis change is
   // immutable, so successive calls are referentially equal and don't loop.
-  const ms = useSyncExternalStore(subscribe, () => stable.getCreatedAt());
+  const getSnapshot = () => stable.getCreatedAt();
+  const ms = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   return useMemo(() => (ms === undefined ? undefined : new Date(ms)), [ms]);
 }
 
 /**
- * Reactive creator — the signing agent's subject — derived from the
- * resource's genesis Loro change. No commit fetch. Returns undefined for
- * resources created before this metadata was embedded. See
- * {@link Resource.getCreatedBy}.
+ * Reactive creator derived from the resource's genesis certificate, with
+ * legacy fallbacks handled by {@link Resource.getCreatedBy}. No commit fetch.
  */
 export function useCreatedBy(resource: Resource): string | undefined {
   const stable = resource.stable;
@@ -600,7 +600,9 @@ export function useCreatedBy(resource: Resource): string | undefined {
     [store, subject],
   );
 
-  return useSyncExternalStore(subscribe, () => stable.getCreatedBy());
+  const getSnapshot = () => stable.getCreatedBy();
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /**
@@ -632,9 +634,9 @@ export function useLoroDoc(resource: Resource): LoroDoc | undefined {
     [store, subject],
   );
 
-  return useSyncExternalStore(subscribe, () =>
-    stable.loading ? undefined : stable.getLoroDoc(),
-  );
+  const getSnapshot = () => (stable.loading ? undefined : stable.getLoroDoc());
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /**
@@ -650,6 +652,7 @@ export function useLoroDoc(resource: Resource): LoroDoc | undefined {
 export function useLoroReady(): boolean {
   return useSyncExternalStore(
     cb => LoroLoader.onReady(cb),
+    () => LoroLoader.isLoaded(),
     () => LoroLoader.isLoaded(),
   );
 }
