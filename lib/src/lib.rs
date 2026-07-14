@@ -115,5 +115,5 @@ pub use errors::AtomicErrorType;
 pub use resources::Resource;
 pub use store::Store;
 pub use storelike::Storelike;
-pub use subject::Subject;
+pub use subject::{DidKind, Subject};
 pub use values::Value;

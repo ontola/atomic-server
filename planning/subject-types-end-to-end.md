@@ -7,12 +7,18 @@
 > no consumer signatures have been migrated yet — that's the next
 > phase. Correctness. Invasive (migration phase).
 
+> Rust update 2026-07-13: `atomic_lib::Subject` now exposes a central
+> `DidKind` classifier plus `is_resource_did` / `is_node_did` helpers. DID
+> equality and hashing use the query-free core identifier, while HTTP query
+> parameters remain identity-bearing. Consumer migration away from raw prefix
+> checks remains open.
+
 ## Problem
 
 The codebase has two notions of "subject":
 
-- Rust: `atomic_lib::Subject` — a newtype wrapper that validates
-  shape (must be `did:ad:...` or `http(s)://...`).
+- Rust: `atomic_lib::Subject` — an enum that parses URI schemes permissively
+  and now classifies the five supported `did:ad` forms centrally.
 - TS: `string` everywhere.
 
 This caused real bugs in this session:

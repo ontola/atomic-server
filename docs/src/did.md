@@ -16,7 +16,7 @@ This makes resources portable, self-authenticating, and resolvable over both the
 
 ## The `did:ad` method
 
-Atomic Data defines the `did:ad` method with four forms, distinguished by an explicit type prefix (or its absence, for Resources):
+Atomic Data defines the `did:ad` method with five forms, distinguished by an explicit type prefix (or its absence, for Resources):
 
 ### Encoding
 
@@ -25,6 +25,26 @@ All binary parts of a `did:ad` identifier — public keys and signatures — are
 This matters because identifiers travel inside URLs (`/app/show?subject=did:ad:…`, the `?drive=` routing hint, deep links). The *standard* base64 alphabet contains `+` and `/`: a `+` is turned into a space by form-decoders (`application/x-www-form-urlencoded`), and `/` and the `=` padding are path/query-significant — any of them silently corrupts a subject on a URL round-trip. The URL-safe alphabet avoids all three, so a `did:ad:` subject can be dropped into a URL verbatim and survive parsing.
 
 Decoders accept the legacy standard alphabet (`+` `/`, padded) as well, so data written before this convention still resolves.
+
+### Node identifiers
+
+Atomic nodes are identified by the `node` prefix followed by the transport's
+stable node identifier:
+
+```text
+did:ad:node:{nodeId}
+```
+
+`did:ad:node:` is the canonical user-facing and HTTP API form. A transport may
+use a raw binary or hex value internally (for example, Iroh's `NodeId`), but
+that transport-specific representation is not an alternative public
+identifier.
+
+A Node DID identifies a replication endpoint for discovery and routing. It is
+**not a Resource**, does not have Atomic properties or commit history, and does
+not grant read or write authority. Transport authentication can prove which
+node is connected; authorization still comes from Agent identities, grants,
+and signed mutations.
 
 ### Agent identifiers
 
@@ -223,7 +243,7 @@ The three variants map to different resolution strategies:
 | `Subject` variant | Format | Use case |
 |---|---|---|
 | `Internal` | `internal:/path` | Local resources on this server. Resolved to an absolute URL using the server's origin for serialization. |
-| `Did` | `did:ad:...` | Agents (by public key), Commits (by signature), Blobs (by BLAKE3 hash), and Resources in Drives (by genesis commit signature). Routing hints (`?drive=did:ad:...`) are used for peer discovery via Reticulum or Mainline DHT. |
+| `Did` | `did:ad:...` | Agents (by public key), Commits (by signature), Blobs (by BLAKE3 hash), Nodes (as routing identities), and Resources in Drives (by genesis commit signature). Routing hints (`?drive=did:ad:...`) are used for peer discovery via Reticulum or Mainline DHT. |
 | `External` | `https://...` | Resources on other servers. Resolved via HTTP. Used for backward compatibility and external linked data. |
 
 When serializing to [JSON-AD](core/json-ad.md), `Internal` subjects are resolved to absolute URLs using the server's configured origin.

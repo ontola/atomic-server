@@ -11,16 +11,38 @@ pub const DID_AD_COMMIT_PREFIX: &str = "did:ad:commit:";
 /// 32-byte BLAKE3 hash of the bytes, hex-encoded (64 chars).
 pub const DID_AD_BLOB_PREFIX: &str = "did:ad:blob:";
 
+/// The prefix for Node DIDs: `did:ad:node:`.
+pub const DID_AD_NODE_PREFIX: &str = "did:ad:node:";
+
+/// The prefix shared by all identifiers defined by the `did:ad` method.
+pub const DID_AD_PREFIX: &str = "did:ad:";
+
+/// The semantic form of a parsed `did:ad` identifier.
+///
+/// This keeps callers from repeating string-prefix checks while the broader
+/// end-to-end subject typing migration remains incremental. `Other` covers
+/// malformed or future `did:ad` forms without changing `Subject::from_raw`'s
+/// intentionally permissive parsing.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DidKind {
+    Resource,
+    Agent,
+    Commit,
+    Blob,
+    Node,
+    Other,
+}
+
 /// The Subject of a Resource.
 ///
 /// In Atomic Data, every subject is a URI.
 /// They are differentiated by their scheme:
 /// - `internal:` for resources hosted on this server.
 /// - `http:` or `https:` for resources on other servers.
-/// - `did:` for Decentralized Identifiers. Four `did:ad:` forms exist:
+/// - `did:` for Decentralized Identifiers. Five `did:ad:` forms exist:
 ///   `did:ad:agent:{publicKey}`, `did:ad:commit:{signature}`,
-///   `did:ad:blob:{blake3-hex}`, and the default `did:ad:{genesis}` for
-///   Resources. See `docs/src/did.md`.
+///   `did:ad:blob:{blake3-hex}`, `did:ad:node:{nodeId}`, and the default
+///   `did:ad:{genesis}` for Resources. See `docs/src/did.md`.
 #[derive(Clone, Debug)]
 pub enum Subject {
     /// Internal representation for local data.
@@ -32,19 +54,23 @@ pub enum Subject {
     },
     /// External resource identifier (usually over HTTP).
     External(Url),
-    /// Decentralized Identifier (any `did:ad:*` form: agent, commit, blob,
-    /// or genesis-resource). Contains an optional drive routing hint.
+    /// Decentralized Identifier (including `did:ad` resources, agents,
+    /// commits, blobs, and nodes). Contains an optional drive routing hint.
     Did {
         url: Url,
         drive_hint: Option<String>,
     },
 }
 
-/// Equality is based on the URL string only — `drive_hint` and `subdomain` are routing
-/// metadata and do not affect identity.
+/// DID equality is based on the core identifier, without routing query
+/// parameters or fragments. For internal and external URLs, the full URL is
+/// significant because its query can identify a distinct resource.
 impl PartialEq for Subject {
     fn eq(&self, other: &Self) -> bool {
-        self.as_str() == other.as_str()
+        match (self, other) {
+            (Subject::Did { .. }, Subject::Did { .. }) => self.pure_id() == other.pure_id(),
+            _ => self.as_str() == other.as_str(),
+        }
     }
 }
 
@@ -52,7 +78,10 @@ impl Eq for Subject {}
 
 impl std::hash::Hash for Subject {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.as_str().hash(state);
+        match self {
+            Subject::Did { .. } => self.pure_id().hash(state),
+            _ => self.as_str().hash(state),
+        }
     }
 }
 
@@ -176,28 +205,72 @@ impl Subject {
         matches!(self, Subject::Did { .. })
     }
 
+    /// Classifies identifiers defined by the `did:ad` method.
+    pub fn did_kind(&self) -> Option<DidKind> {
+        let Subject::Did { url, .. } = self else {
+            return None;
+        };
+
+        let mut identifier = url.as_str();
+        if let Some(end) = identifier.find(['?', '#']) {
+            identifier = &identifier[..end];
+        }
+
+        if identifier
+            .strip_prefix(DID_AD_AGENT_PREFIX)
+            .is_some_and(|value| !value.is_empty())
+        {
+            Some(DidKind::Agent)
+        } else if identifier
+            .strip_prefix(DID_AD_COMMIT_PREFIX)
+            .is_some_and(|value| !value.is_empty())
+        {
+            Some(DidKind::Commit)
+        } else if identifier
+            .strip_prefix(DID_AD_BLOB_PREFIX)
+            .is_some_and(|value| !value.is_empty())
+        {
+            Some(DidKind::Blob)
+        } else if identifier
+            .strip_prefix(DID_AD_NODE_PREFIX)
+            .is_some_and(|value| !value.is_empty())
+        {
+            Some(DidKind::Node)
+        } else if identifier
+            .strip_prefix(DID_AD_PREFIX)
+            .is_some_and(|value| !value.is_empty() && !value.contains(':'))
+        {
+            Some(DidKind::Resource)
+        } else if identifier.starts_with(DID_AD_PREFIX) {
+            Some(DidKind::Other)
+        } else {
+            None
+        }
+    }
+
+    /// Returns true if this is an unprefixed `did:ad:{genesis}` resource.
+    pub fn is_resource_did(&self) -> bool {
+        self.did_kind() == Some(DidKind::Resource)
+    }
+
     /// Returns true if this is a DID Agent subject (did:ad:agent:).
     pub fn is_agent_did(&self) -> bool {
-        match self {
-            Subject::Did { url, .. } => url.as_str().starts_with(DID_AD_AGENT_PREFIX),
-            _ => false,
-        }
+        self.did_kind() == Some(DidKind::Agent)
     }
 
     /// Returns true if this is a DID Commit subject (did:ad:commit:).
     pub fn is_commit_did(&self) -> bool {
-        match self {
-            Subject::Did { url, .. } => url.as_str().starts_with(DID_AD_COMMIT_PREFIX),
-            _ => false,
-        }
+        self.did_kind() == Some(DidKind::Commit)
     }
 
     /// Returns true if this is a DID Blob subject (did:ad:blob:).
     pub fn is_blob_did(&self) -> bool {
-        match self {
-            Subject::Did { url, .. } => url.as_str().starts_with(DID_AD_BLOB_PREFIX),
-            _ => false,
-        }
+        self.did_kind() == Some(DidKind::Blob)
+    }
+
+    /// Returns true if this is a DID Node subject (`did:ad:node:`).
+    pub fn is_node_did(&self) -> bool {
+        self.did_kind() == Some(DidKind::Node)
     }
 
     /// If this is a `did:ad:blob:` subject, returns the hex-encoded BLAKE3
@@ -543,6 +616,7 @@ impl<'de> Deserialize<'de> for Subject {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn test_did_parsing_and_resolution() {
@@ -576,6 +650,58 @@ mod tests {
             "as_str() must preserve + and = without percent-encoding"
         );
         assert!(subject.is_agent_did());
+    }
+
+    #[test]
+    fn test_did_kind_distinguishes_identifier_forms() {
+        let cases = [
+            ("did:ad:resource", DidKind::Resource),
+            ("did:ad:agent:key", DidKind::Agent),
+            ("did:ad:commit:signature", DidKind::Commit),
+            ("did:ad:blob:hash", DidKind::Blob),
+            ("did:ad:node:node-id", DidKind::Node),
+            ("did:ad:future:value", DidKind::Other),
+        ];
+
+        for (raw, expected) in cases {
+            assert_eq!(Subject::from_raw(raw, None).did_kind(), Some(expected));
+        }
+        assert_eq!(
+            Subject::from_raw("did:key:abc", None).did_kind(),
+            None,
+            "non-Atomic DID methods are not classified as did:ad forms"
+        );
+        assert_eq!(
+            Subject::from_raw("https://example.com", None).did_kind(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_did_routing_hint_does_not_affect_equality_or_hash() {
+        let pure = Subject::from_raw("did:ad:resource", None);
+        let routed = Subject::from_raw(
+            "did:ad:resource?drive=did:ad:drive&transport=iroh#peer",
+            None,
+        );
+
+        assert_eq!(pure, routed);
+
+        let mut subjects = HashSet::new();
+        subjects.insert(pure);
+        subjects.insert(routed);
+        assert_eq!(
+            subjects.len(),
+            1,
+            "equal DID subjects must hash identically"
+        );
+    }
+
+    #[test]
+    fn test_http_query_remains_part_of_identity() {
+        let first = Subject::from_raw("https://example.com/query?page=1", None);
+        let second = Subject::from_raw("https://example.com/query?page=2", None);
+        assert_ne!(first, second);
     }
 
     #[test]
