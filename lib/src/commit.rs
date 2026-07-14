@@ -767,37 +767,44 @@ impl Commit {
                                 .resource_new
                                 .set_unsafe(urls::WRITE.into(), writers.into())?;
                         }
-
-                        // Safety net: ensure a new DID resource carries its
-                        // `drive`. Clients stamp this at genesis (create_did /
-                        // browser newResource), but some creation paths miss it
-                        // — notably a guest replying in a drive shared with them,
-                        // whose local parent isn't fully materialized. Without a
-                        // drive the commit fan-out can't route to the owning
-                        // drive's subscribers (the owner never sees it). Resolve
-                        // it authoritatively from the parent's drive, which the
-                        // server always has. See
-                        // planning/commit-fanout-drive-isolation.md.
-                        if applied.resource_new.get(urls::DRIVE_PROP).is_err() {
-                            if let Ok(parent_val) = applied.resource_new.get(urls::PARENT) {
-                                let parent_subject = crate::Subject::from(parent_val.to_string());
-                                if let Ok(parent_res) = store.get_resource(&parent_subject).await {
-                                    let drive = match parent_res.get(urls::DRIVE_PROP) {
-                                        Ok(d) => d.to_string(),
-                                        Err(_) => parent_subject.to_string(),
-                                    };
-                                    applied.resource_new.set_unsafe(
-                                        urls::DRIVE_PROP.into(),
-                                        crate::values::Value::AtomicUrl(drive.into()),
-                                    )?;
-                                }
-                            }
-                        }
                     }
                 }
             } else {
                 // This should use the _old_ resource, not the new one, as the new one might maliciously give itself write rights.
                 crate::hierarchy::check_write(store, &resource_old, &validate_for.into()).await?;
+            }
+
+            // `drive` is a rights shortcut: `check_rights` consults it *before* it
+            // walks the parent chain. It must therefore always agree with the
+            // current parent, and must be derived here rather than trusted from
+            // the client. Re-derive it at genesis and on any commit that moves the
+            // resource — otherwise a resource moved out of a publicly readable
+            // drive keeps that drive's grants and stays publicly readable from its
+            // new, private home.
+            //
+            // Deriving it also covers creation paths that never stamped it — a
+            // guest replying in a drive shared with them — which the commit fan-out
+            // needs in order to route to the owning drive's subscribers. See
+            // planning/commit-fanout-drive-isolation.md.
+            let parent_changed = applied.changed_props.iter().any(|p| p == urls::PARENT);
+
+            if is_new || parent_changed {
+                if let Ok(parent_val) = applied.resource_new.get(urls::PARENT) {
+                    let parent_subject = crate::Subject::from(parent_val.to_string());
+
+                    // If the parent isn't materialized here we cannot derive the
+                    // drive. Leave whatever was stamped rather than clearing it.
+                    if let Ok(parent_res) = store.get_resource(&parent_subject).await {
+                        let drive = match parent_res.get(urls::DRIVE_PROP) {
+                            Ok(d) => d.to_string(),
+                            Err(_) => parent_subject.to_string(),
+                        };
+                        applied.resource_new.set_unsafe(
+                            urls::DRIVE_PROP.into(),
+                            crate::values::Value::AtomicUrl(drive.into()),
+                        )?;
+                    }
+                }
             }
 
             // Managed admission gate. No-op under the default OpenPolicy, so

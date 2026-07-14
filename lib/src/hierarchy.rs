@@ -485,4 +485,225 @@ mod test {
         assert!(impact.is_critical());
         assert!(!impact.genesis, "a later edit is not genesis");
     }
+
+    /// Moving a resource out of a publicly readable drive and into a private
+    /// one must revoke public read. The `drive` propval is a rights shortcut,
+    /// so it has to track the resource's current parent, not the one it had at
+    /// genesis.
+    #[tokio::test]
+    async fn moving_a_resource_to_a_private_drive_revokes_public_read() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
+        let agent = store.create_agent(Some("mover")).await.unwrap();
+        store.set_default_agent(agent.clone());
+
+        let opts = crate::commit::CommitOpts {
+            validate_schema: false,
+            validate_signature: false,
+            validate_timestamp: true,
+            validate_rights: true,
+            validate_previous_commit: false,
+            validate_loro_causality: false,
+            update_index: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            source_id: None,
+        };
+
+        // A public drive (anyone may read) and a private one (only the agent).
+        let public_drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+        let mut drive_res = store.get_resource(&public_drive).await.unwrap();
+        drive_res
+            .push(crate::urls::READ, crate::urls::PUBLIC_AGENT.into(), true)
+            .unwrap();
+        drive_res.save_locally(&store).await.unwrap();
+
+        let private_drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+
+        // Genesis a DID resource under the public drive. It must be a DID, since
+        // that is what gets the `drive` rights-shortcut stamp.
+        let mut post = crate::Resource::new("did:ad:placeholder".into());
+        post.set(
+            crate::urls::PARENT.into(),
+            Value::AtomicUrl(public_drive.clone()),
+            &store,
+        )
+        .await
+        .unwrap();
+        post.set(
+            crate::urls::DESCRIPTION.into(),
+            Value::new("a draft", &DataType::Markdown).unwrap(),
+            &store,
+        )
+        .await
+        .unwrap();
+        // Clients stamp `drive` at genesis (create_did / browser newResource).
+        post.set(
+            crate::urls::DRIVE_PROP.into(),
+            Value::AtomicUrl(public_drive.clone()),
+            &store,
+        )
+        .await
+        .unwrap();
+        let subject = post
+            .save_as_genesis(&store)
+            .await
+            .unwrap()
+            .resource_new
+            .unwrap()
+            .get_subject()
+            .clone();
+
+        let resource = store.get_resource(&subject).await.unwrap();
+        assert_eq!(
+            resource.get(crate::urls::DRIVE_PROP).unwrap().to_string(),
+            public_drive.to_string(),
+            "sanity: genesis stamps the drive"
+        );
+        assert!(
+            super::check_read(&store, &resource, &crate::agents::ForAgent::Public)
+                .await
+                .is_ok(),
+            "sanity: a resource on a public drive is publicly readable"
+        );
+
+        // Move it to the private drive.
+        let current = store.get_resource(&subject).await.unwrap();
+        let mut move_commit = crate::commit::CommitBuilder::new(subject.clone());
+        move_commit.set(
+            crate::urls::PARENT.into(),
+            Value::AtomicUrl(private_drive.clone()),
+        );
+        let commit = move_commit.sign(&agent, &store, &current).await.unwrap();
+        store.apply_commit(commit, &opts).await.unwrap();
+
+        let moved = store.get_resource(&subject).await.unwrap();
+        assert_eq!(
+            moved.get(crate::urls::PARENT).unwrap().to_string(),
+            private_drive.to_string(),
+            "sanity: the move landed"
+        );
+
+        let public_read = super::check_read(&store, &moved, &crate::agents::ForAgent::Public).await;
+        assert!(
+            public_read.is_err(),
+            "a resource moved to a private drive must not stay publicly readable. \
+             drive stamp is still {:?}; check_read said: {:?}",
+            moved.get(crate::urls::DRIVE_PROP).map(|v| v.to_string()),
+            public_read
+        );
+    }
+
+    /// The CMS publication model: one drive that is *not* publicly readable,
+    /// holding a public folder and a private drafts folder. Publishing and
+    /// unpublishing are re-parenting between the two, so the public/private
+    /// boundary is a real authorization boundary rather than a status label.
+    #[tokio::test]
+    async fn a_public_folder_in_a_private_drive_publishes_only_its_own_children() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
+        let agent = store.create_agent(Some("editor")).await.unwrap();
+        store.set_default_agent(agent.clone());
+
+        let opts = crate::commit::CommitOpts {
+            validate_schema: false,
+            validate_signature: false,
+            validate_timestamp: true,
+            validate_rights: true,
+            validate_previous_commit: false,
+            validate_loro_causality: false,
+            update_index: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            source_id: None,
+        };
+
+        // The drive itself is NOT publicly readable.
+        let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+
+        let make_child = |parent: crate::Subject, public: bool| {
+            let store = &store;
+            async move {
+                let mut res = crate::Resource::new("did:ad:placeholder".into());
+                res.set(crate::urls::PARENT.into(), Value::AtomicUrl(parent), store)
+                    .await
+                    .unwrap();
+                if public {
+                    res.set(
+                        crate::urls::READ.into(),
+                        Value::ResourceArray(vec![crate::urls::PUBLIC_AGENT.into()]),
+                        store,
+                    )
+                    .await
+                    .unwrap();
+                }
+
+                res.save_as_genesis(store)
+                    .await
+                    .unwrap()
+                    .resource_new
+                    .unwrap()
+                    .get_subject()
+                    .clone()
+            }
+        };
+
+        // A public site folder and a private drafts folder, both on that drive.
+        let site_folder = make_child(drive.clone(), true).await;
+        let drafts_folder = make_child(drive.clone(), false).await;
+
+        let published = make_child(site_folder.clone(), false).await;
+        let draft = make_child(drafts_folder.clone(), false).await;
+
+        let can_read = |subject: crate::Subject| {
+            let store = &store;
+            async move {
+                let res = store.get_resource(&subject).await.unwrap();
+                super::check_read(store, &res, &crate::agents::ForAgent::Public)
+                    .await
+                    .is_ok()
+            }
+        };
+
+        assert!(
+            !can_read(drive.clone()).await,
+            "the drive itself must stay private"
+        );
+        assert!(
+            can_read(published.clone()).await,
+            "a child of the public folder inherits public read"
+        );
+        assert!(
+            !can_read(draft.clone()).await,
+            "a draft in the same drive, outside the public folder, must NOT be publicly readable"
+        );
+
+        // Publish: re-parent the draft into the public folder.
+        let current = store.get_resource(&draft).await.unwrap();
+        let mut publish = crate::commit::CommitBuilder::new(draft.clone());
+        publish.set(
+            crate::urls::PARENT.into(),
+            Value::AtomicUrl(site_folder.clone()),
+        );
+        let commit = publish.sign(&agent, &store, &current).await.unwrap();
+        store.apply_commit(commit, &opts).await.unwrap();
+
+        assert!(
+            can_read(draft.clone()).await,
+            "publishing by re-parenting into the public folder must grant public read"
+        );
+
+        // Unpublish: move it back out.
+        let current = store.get_resource(&draft).await.unwrap();
+        let mut unpublish = crate::commit::CommitBuilder::new(draft.clone());
+        unpublish.set(
+            crate::urls::PARENT.into(),
+            Value::AtomicUrl(drafts_folder.clone()),
+        );
+        let commit = unpublish.sign(&agent, &store, &current).await.unwrap();
+        store.apply_commit(commit, &opts).await.unwrap();
+
+        assert!(
+            !can_read(draft.clone()).await,
+            "unpublishing by re-parenting out of the public folder must revoke public read"
+        );
+    }
 }
