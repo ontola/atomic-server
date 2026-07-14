@@ -624,14 +624,15 @@ stops the pattern; the rest are instances of it.
 6. **Three peer-event APIs, all FRB-exported**: `poll_sync_events` (legacy polling),
    `wait_for_sync_event`, `wait_for_peer_count_change`. The `NodeEvent` stream
    (Unified API sketch) replaces all three; drop the polling one first.
-7. **ws-v2.ts mirrors server-only frame directions**: `encodeUpdate`,
-   `encodeCommitOk`, `encodeSyncOk`, `encodeDestroy`, `encodeUnsub`, `decodeGet`,
-   `decodeAuth`, `decodeSub` — zero uses outside ws-v2.ts + tests; the browser never
-   sends an `UPDATE` or receives a `GET`. Trim from the bundle or move to a
-   test-only module.
-8. Micro: the browser `DESTROY` handler inline-decodes the subject
-   (`websockets.ts:831`) instead of using the `decodeSubject` helper ws-v2 exports
-   for exactly this.
+7. ✅ **Done (2026-07-13): ws-v2.ts server-only mirrors removed.** Deleted the
+   zero-caller `encodeUpdate` and `encodeCommitOk` server-to-client encoders. The
+   older inventory names `encodeSyncOk`, `encodeDestroy`, `encodeUnsub`,
+   `decodeAuth`, and `decodeSub` had already disappeared. `decodeGet` remains
+   because the browser sends GET and both debug-frame formatters use it to
+   inspect outbound frames.
+8. ✅ **Done (2026-07-13):** the browser `DESTROY` handler now decodes the
+   request-id-stripped subject with the shared `decodeSubject` helper instead of
+   constructing a new `TextDecoder` inline.
 
 ### More dead code (third pass)
 

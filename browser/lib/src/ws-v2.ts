@@ -146,52 +146,6 @@ export function encodeCommit(
   return buf;
 }
 
-export function encodeCommitOk(
-  requestId: number,
-  commitJson: string,
-): Uint8Array {
-  const payload = encoder.encode(commitJson);
-  const buf = new Uint8Array(3 + payload.length);
-  buf[0] = Tag.COMMIT_OK;
-  writeU16(buf, 1, requestId);
-  buf.set(payload, 3);
-
-  return buf;
-}
-
-export function encodeUpdate(
-  flags: number,
-  requestId: number,
-  subject: string,
-  commitId: string | undefined,
-  loroBytes: Uint8Array,
-): Uint8Array {
-  const subjectBytes = encoder.encode(subject);
-  const commitIdBytes = commitId ? encoder.encode(commitId) : undefined;
-  const commitIdLen = commitIdBytes ? 2 + commitIdBytes.length : 0;
-
-  const buffer = new Uint8Array(
-    1 + 1 + 2 + 2 + subjectBytes.length + commitIdLen + loroBytes.length,
-  );
-  let offset = 0;
-  buffer[offset++] = Tag.UPDATE;
-  buffer[offset++] = flags;
-  offset = writeU16(buffer, offset, requestId);
-  offset = writeU16(buffer, offset, subjectBytes.length);
-  buffer.set(subjectBytes, offset);
-  offset += subjectBytes.length;
-
-  if (commitIdBytes) {
-    offset = writeU16(buffer, offset, commitIdBytes.length);
-    buffer.set(commitIdBytes, offset);
-    offset += commitIdBytes.length;
-  }
-
-  buffer.set(loroBytes, offset);
-
-  return buffer;
-}
-
 export function encodeSub(driveSubject: string): Uint8Array {
   const payload = encoder.encode(driveSubject);
   const buf = new Uint8Array(1 + payload.length);

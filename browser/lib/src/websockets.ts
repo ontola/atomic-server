@@ -31,6 +31,7 @@ import {
   decodeSyncPush,
   decodeBlobRequest,
   decodeBlobResponse,
+  decodeSubject,
   encodeBlobResponse,
   encodeBlobRequest,
   encodeSyncPushChunks,
@@ -888,7 +889,7 @@ export class WSClient {
       }
 
       case Tag.DESTROY: {
-        const subject = new TextDecoder().decode(payload.subarray(2));
+        const subject = decodeSubject(payload.subarray(2));
 
         if (subject) {
           this.store.removeResource(subject);
