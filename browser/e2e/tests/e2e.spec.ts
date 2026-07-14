@@ -205,22 +205,20 @@ test.describe('data-browser', async () => {
       messageLocator,
       'Message author "Dev User" missing — commit author not stored/retrievable',
     ).toContainText('Dev User');
-    // Date format from `DateTime`: locale-aware. Assert the year is shown
-    // — it's the most stable substring across locales without coupling
-    // to wall-clock minutes.
+    // The visible label is intentionally relative ("now", "1 minute ago").
+    // Assert the semantic timestamp instead so the test proves `createdAt`
+    // exists without coupling to presentation text.
     const year = new Date().getFullYear().toString();
     await expect(
-      messageLocator,
+      messageLocator.locator('time'),
       'Message date missing — commit createdAt not stored/retrievable',
-    ).toContainText(year);
+    ).toHaveAttribute('datetime', new RegExp(`^${year}-`));
 
     // Regression: author + date must SURVIVE A REFRESH. They are derived from
-    // the message's genesis Loro change (createdBy = signing agent, createdAt =
-    // change timestamp), materialized server-side into propvals and served in
-    // JSON-AD — NOT refetched from a `did:ad:commit:<sig>` resource (which no
-    // longer resolves under sign-at-drain). Before the fix both vanished on
-    // reload because `<CommitDetail>` fetched the commit. A hard reload drops
-    // the in-memory store, so this proves the metadata round-trips from the DB.
+    // the message's genesis certificate, materialized server-side into
+    // propvals and served in JSON-AD — NOT refetched from a
+    // `did:ad:commit:<sig>` resource. A hard reload drops the in-memory store,
+    // so this proves the metadata round-trips from the DB.
     await page.reload();
     const messageAfterReload = page
       .getByText(teststring)
@@ -231,9 +229,9 @@ test.describe('data-browser', async () => {
       'Message author "Dev User" missing after refresh — creation metadata did not survive the round-trip',
     ).toContainText('Dev User');
     await expect(
-      messageAfterReload,
+      messageAfterReload.locator('time'),
       'Message date missing after refresh — createdAt did not survive the round-trip',
-    ).toContainText(year);
+    ).toHaveAttribute('datetime', new RegExp(`^${year}-`));
 
     // Build the chatroom fallback URL on the SERVER's origin (same as the
     // invite URL the guest opens), not the frontend dev server. The guest

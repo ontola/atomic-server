@@ -7,6 +7,7 @@ import type {
 import { enableLoro, LoroLoader } from './loro-loader.js';
 import { decodeB64, encodeB64 } from './base64.js';
 import { EventManager } from './EventManager.js';
+import { decodeGenesisCert, genesisSignerDid } from './genesis.js';
 import type { Agent } from './agent.js';
 import { Client } from './client.js';
 import type { Collection } from './collection.js';
@@ -26,7 +27,7 @@ import {
   type QuickAccessPropType,
 } from './ontology.js';
 import type { ChangeSource, Store } from './store.js';
-import { properties, instances } from './urls.js';
+import { GENESIS, properties, instances } from './urls.js';
 import {
   valToArray,
   type JSONValue,
@@ -1626,18 +1627,20 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * Creation timestamp (Unix **ms**) from the genesis change in the Loro
-   * oplog, or undefined when the doc has no history yet or the genesis was
-   * authored offline (timestamp 0, not yet known). Read this instead of
-   * fetching the genesis commit just to show *when* — it travels in the doc
-   * and survives a refresh. See `planning/commit-retention-and-state-certificates.md`.
+   * Creation timestamp (Unix **ms**) from the inline genesis certificate.
+   * Materialized propvals and the founding Loro change remain fallbacks for
+   * resources created before certificates. No commit fetch is required.
    */
   public getCreatedAt(): number | undefined {
-    // Prefer the materialized `createdAt` propval: the server (and the local
-    // WASM DB) derive it from the genesis change and serialise it in JSON-AD,
-    // so it's the authoritative value that survives every round-trip and
-    // re-fetch. Fall back to the genesis oplog change for a freshly-created
-    // local resource that hasn't been materialised yet.
+    // The inline certificate is the source of truth for DID resources. The
+    // materialized propval exists for queries / JSON-AD compatibility; the
+    // Loro change remains a fallback for resources created before certs.
+    const cert = this.getGenesisCertificate();
+
+    if (cert && cert.createdAt > 0) {
+      return cert.createdAt;
+    }
+
     const fromPropval = this.get(properties.commit.createdAt);
 
     if (typeof fromPropval === 'number') {
@@ -1654,17 +1657,18 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * Creator — the signing agent's subject — from the genesis change's commit
-   * message in the Loro oplog, or undefined for resources created before this
-   * metadata was embedded. The oplog itself only records a random Loro peer
-   * id, never the agent, so `signChanges` writes the agent subject into the
-   * genesis change message as the carrier. Read this instead of fetching the
-   * genesis commit just to show *who*.
+   * Creator from the inline genesis certificate's signing key. Materialized
+   * propvals and the founding Loro change message remain legacy fallbacks.
    */
   public getCreatedBy(): string | undefined {
-    // Prefer the materialized `createdBy` propval (server / WASM DB, serialised
-    // in JSON-AD); fall back to the genesis change message for a freshly-created
-    // local resource that hasn't been materialised yet.
+    const cert = this.getGenesisCertificate();
+
+    if (cert) {
+      return genesisSignerDid(cert);
+    }
+
+    // Materialized propvals and the Loro message are compatibility paths for
+    // legacy resources without a genesis certificate.
     const fromPropval = this.get(properties.createdBy);
 
     if (typeof fromPropval === 'string' && fromPropval.length > 0) {
@@ -1679,6 +1683,22 @@ export class Resource<C extends OptionalClass = any> {
     return message && message.length > 0 && !isInternalCommitToken(message)
       ? message
       : undefined;
+  }
+
+  private getGenesisCertificate():
+    | ReturnType<typeof decodeGenesisCert>
+    | undefined {
+    const encoded = this.get(GENESIS);
+
+    if (typeof encoded !== 'string' || encoded.length === 0) {
+      return undefined;
+    }
+
+    try {
+      return decodeGenesisCert(decodeB64(encoded));
+    } catch {
+      return undefined;
+    }
   }
 
   /**

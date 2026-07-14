@@ -147,10 +147,9 @@ test.describe('offline chatroom', () => {
     // Author + date must survive the reload here too. These were created
     // OFFLINE and only materialized on sync, so this guards the
     // offline → reconnect → reload path: createdBy (= signing agent, "Dev
-    // User" via `devDrive`) and createdAt come from the genesis Loro change
+    // User" via `devDrive`) and createdAt come from the genesis certificate
     // materialized into propvals — not from a refetched commit. Walk up from
-    // the message text to its `[about]` wrapper, which contains the
-    // `<CommitDetail>` row.
+    // the message text to its `[about]` wrapper.
     const firstMessage = page
       .getByText(MESSAGES[0], { exact: true })
       .first()
@@ -159,10 +158,11 @@ test.describe('offline chatroom', () => {
       firstMessage,
       'Message author missing after offline→sync→reload',
     ).toContainText('Dev User');
+    const year = new Date().getFullYear().toString();
     await expect(
-      firstMessage,
+      firstMessage.locator('time'),
       'Message date missing after offline→sync→reload',
-    ).toContainText(new Date().getFullYear().toString());
+    ).toHaveAttribute('datetime', new RegExp(`^${year}-`));
 
     // No duplicates: each message must appear exactly once. `getByText` with
     // `exact: true` ensures we don't accidentally match substrings of a

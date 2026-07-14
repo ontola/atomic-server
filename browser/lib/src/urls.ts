@@ -45,6 +45,7 @@ export const classes = {
 
 export const BLOB = 'https://atomicdata.dev/properties/blob';
 export const INTERNAL_ID = 'https://atomicdata.dev/properties/internalId';
+export const GENESIS = 'https://atomicdata.dev/properties/genesis';
 
 /**
  *  @deprecated These have been move to their respective onotlogies e.g. core, server, collections, etc.

@@ -1,4 +1,6 @@
 import { describe, it, vi } from 'vitest';
+import { encodeB64Url } from './base64.js';
+import { encodeGenesisCert, genesisSignerDid } from './genesis.js';
 import { normalizeLoroChangeTimestampMs, Resource } from './resource.js';
 import type { JSONValue } from './value.js';
 
@@ -89,10 +91,17 @@ describe('resource.ts', () => {
     expect(resource.getCreatedBy()).toBeUndefined();
   });
 
-  it('getCreatedAt / getCreatedBy prefer the materialized propval over the oplog', async ({
+  it('getCreatedAt / getCreatedBy prefer the genesis certificate over projections', async ({
     expect,
   }) => {
     const resource = new Resource('https://example.com/propval-wins');
+    const cert = {
+      signerPubkey: new Uint8Array(32).fill(7),
+      createdAt: 1_700_001_234_567,
+      nonce: new Uint8Array(16).fill(9),
+      parent: '',
+      drive: '',
+    };
     await resource.set(
       'https://atomicdata.dev/properties/description',
       'hi',
@@ -114,9 +123,21 @@ describe('resource.ts', () => {
       'did:ad:agent:materialized',
       false,
     );
+    await resource.set(
+      'https://atomicdata.dev/properties/genesis',
+      encodeB64Url(encodeGenesisCert(cert)),
+      false,
+    );
 
-    expect(resource.getCreatedAt()).toBe(1_700_000_999_999);
-    expect(resource.getCreatedBy()).toBe('did:ad:agent:materialized');
+    expect(resource.getCreatedAt()).toBe(cert.createdAt);
+    expect(resource.getCreatedBy()).toBe(genesisSignerDid(cert));
+
+    const snapshot = resource.getLoroDoc()!.export({ mode: 'snapshot' });
+    const reloaded = new Resource('did:ad:cert-resource');
+    reloaded.importLoroUpdate(snapshot);
+
+    expect(reloaded.getCreatedAt()).toBe(cert.createdAt);
+    expect(reloaded.getCreatedBy()).toBe(genesisSignerDid(cert));
   });
 
   it('merges remote state without dropping local unsaved loro edits', async ({
