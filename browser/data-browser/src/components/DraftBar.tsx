@@ -76,10 +76,10 @@ const Subtle = styled.span`
   color: ${p => p.theme.colors.textLight};
 `;
 
+/** A bar, not a card: it spans the view it sits above rather than floating in it. */
 const Wrapper = styled.aside`
   background-color: ${p => p.theme.colors.bg1};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  padding: ${p => p.theme.size(2)};
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  padding: ${p => p.theme.size(2)} 0;
   margin-bottom: ${p => p.theme.size(2)};
 `;
