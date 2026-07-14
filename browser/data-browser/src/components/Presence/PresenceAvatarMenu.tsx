@@ -1,11 +1,6 @@
 import { useMemo } from 'react';
 import { styled } from 'styled-components';
-import {
-  useCurrentAgent,
-  useDrivePresence,
-  useResource,
-  useTitle,
-} from '@tomic/react';
+import { useDrivePresence, useResource, useTitle } from '@tomic/react';
 import { FaLocationArrow, FaUser } from 'react-icons/fa6';
 import { DropdownMenu, type DropdownItem } from '../Dropdown';
 import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
@@ -35,12 +30,10 @@ export function PresenceAvatarMenu({
   const navigate = useNavigateWithTransition();
   const { followedAgent, follow, unfollow, isFollowDisabledFor } = useFollow();
   const presence = useDrivePresence();
-  const [currentAgent] = useCurrentAgent();
   const agentResource = useResource(agentSubject);
   const [name] = useTitle(agentResource);
   const isFollowing = followedAgent === agentSubject;
   const followDisabled = isFollowDisabledFor(agentSubject);
-  const isSelf = currentAgent?.subject === agentSubject;
   const online = useMemo(
     () => presence.some(item => item.agent === agentSubject),
     [presence, agentSubject],
@@ -56,7 +49,8 @@ export function PresenceAvatarMenu({
       },
     ];
 
-    // Following only makes sense for someone else who's here now.
+    // Presence excludes this tab's own session, so even the same agent subject
+    // represents another live tab or device that can be followed.
     if (isFollowing) {
       result.push({
         id: 'follow',
@@ -64,7 +58,7 @@ export function PresenceAvatarMenu({
         icon: <FaLocationArrow />,
         onClick: unfollow,
       });
-    } else if (online && !isSelf && !followDisabled) {
+    } else if (online && !followDisabled) {
       result.push({
         id: 'follow',
         label: 'Follow',
@@ -78,7 +72,6 @@ export function PresenceAvatarMenu({
     agentSubject,
     isFollowing,
     online,
-    isSelf,
     followDisabled,
     navigate,
     follow,

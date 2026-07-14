@@ -113,10 +113,11 @@ test('start a meeting, join it, follow along, and end it', async ({
       .getByRole('link', { name: 'MeetingTarget' }),
   ).toBeVisible({ timeout: 30_000 });
 
-  // 4. A ends the meeting: open its own meeting chat (active banner),
-  // then End from the panel header.
-  await pageA.getByTitle('Open the meeting chat').click();
-  await pageA.getByRole('button', { name: 'End', exact: true }).click();
+  // 4. A ends the meeting from its panel header. Starting a meeting opens the
+  // panel, and it stays open while navigating.
+  const endButton = pageA.getByRole('button', { name: 'End', exact: true });
+  await expect(endButton).toBeVisible({ timeout: 30_000 });
+  await endButton.click();
 
   // The chat shows the end marker and B's meeting banner is gone.
   await expect(pageB.getByText('The meeting has ended.')).toBeVisible({

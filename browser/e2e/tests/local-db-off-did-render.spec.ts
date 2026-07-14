@@ -104,6 +104,12 @@ test('a DID drive renders (not bare subject) with Local DB off, server-only', as
   await applyCpuThrottle(page, 8);
   await page.reload();
 
+  // Under CPU throttling, page.reload() can resolve before App.tsx exposes the
+  // store. Start sampling as soon as the store exists, not before bootstrapping.
+  await page.waitForFunction(() => !!window.store, undefined, {
+    timeout: 15000,
+  });
+
   // Sample as fast as possible after the navigation for the broken window.
   const samples = await page.evaluate(async f => {
     const s = window.store;

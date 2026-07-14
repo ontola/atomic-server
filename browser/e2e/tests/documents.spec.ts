@@ -101,21 +101,14 @@ test.describe('documents', async () => {
       'New paragraph not found in first window. Sync might not be working.',
     ).toBeVisible();
 
-    // Test if page1 can see the cursor of page2
-    await page2.getByText(syncText).selectText();
-
-    // Not sure what this is supposed to do, but this text does not show up.
-    // Perhaps I need 2 differetn agents?
-    // await expect(
-    //   page.getByLabel('Rich Text Editor').getByText('Test user edited'),
-    // ).toBeVisible();
-
     // Delete the typed text. `Alt+Backspace` only deletes-word on macOS;
     // headless chromium on Linux (dagger CI) treats it as a no-op, so the
     // paragraph stayed and the cross-tab "not visible" assertion timed
     // out. Re-select-then-Backspace deletes the selection deterministically
-    // on every platform.
-    await page2.getByText(syncText).selectText();
+    // on every platform. Select the paragraph node instead of locating it by
+    // text: a remote cursor decoration can split "New paragraph" across text
+    // nodes and make Playwright's text locator miss visibly rendered content.
+    await page2.getByLabel('Rich Text Editor').locator('p').last().selectText();
     await page2.keyboard.press('Backspace');
 
     // Loro CRDT sync between two browser contexts goes through the server's
