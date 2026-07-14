@@ -5311,6 +5311,20 @@ msgstr ""
 msgid "Draft of"
 msgstr ""
 
+#. 0: conflicts.length; 1: conflicts.length === 1 ? 'y was' \\: 'ies were'; 2: conflicts .map(c => c.property.split('/').pop()) .join(', '); 3: conflicts.length === 1 ? 'it' \\: 'them'
 #: src/components/DraftBar.tsx
-msgid "The original is unchanged until you merge."
+msgid "{0} propert{1} also changed on the original since this draft was made ({2}). Merging will overwrite {3} with this draft's version. Continue?"
+msgstr ""
+
+#: src/components/DraftBar.tsx
+msgid "No changes yet."
+msgstr ""
+
+#. 0: changes.length; 1: changes.length === 1 ? 'y' \\: 'ies'
+#: src/components/DraftBar.tsx
+msgid "{0} changed propert{1}."
+msgstr ""
+
+#: src/components/DraftBar.tsx
+msgid "conflict"
 msgstr ""

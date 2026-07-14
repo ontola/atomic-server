@@ -27,7 +27,12 @@ import {
   type QuickAccessPropType,
 } from './ontology.js';
 import type { ChangeSource, Store } from './store.js';
-import { forkResource, isDraft, mergeDraft } from './drafts.js';
+import {
+  forkResource,
+  isDraft,
+  mergeDraft,
+  type MergeDraftOptions,
+} from './drafts.js';
 import { GENESIS, properties, instances } from './urls.js';
 import {
   valToArray,
@@ -2703,8 +2708,8 @@ export class Resource<C extends OptionalClass = any> {
    * Named for its target rather than `merge`, which already means something
    * else here: folding another Resource's propvals into this one.
    */
-  public mergeIntoOriginal(): Promise<Resource> {
-    return mergeDraft(this.store, this);
+  public mergeIntoOriginal(options?: MergeDraftOptions): Promise<Resource> {
+    return mergeDraft(this.store, this, options);
   }
 
   /** Whether this resource proposes a change to another one. */

@@ -7,7 +7,7 @@
  * `lib/defaults/drafts.json` by hand until the ontology is published.
  * -------------------------------- */
 
-import type { OntologyBaseObject, BaseProps } from '../index.js';
+import type { OntologyBaseObject, BaseProps, JSONValue } from '../index.js';
 
 export const drafts = {
   classes: {
@@ -15,6 +15,7 @@ export const drafts = {
   },
   properties: {
     originalSubject: 'https://atomicdata.dev/properties/originalSubject',
+    forkBase: 'https://atomicdata.dev/properties/forkBase',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Draft']: [
@@ -32,15 +33,17 @@ declare module '../index.js' {
   interface Classes {
     [drafts.classes.draft]: {
       requires: BaseProps | typeof drafts.properties.originalSubject;
-      recommends: never;
+      recommends: typeof drafts.properties.forkBase;
     };
   }
 
   interface PropTypeMapping {
     [drafts.properties.originalSubject]: string;
+    [drafts.properties.forkBase]: JSONValue;
   }
 
   interface PropSubjectToNameMapping {
     [drafts.properties.originalSubject]: 'originalSubject';
+    [drafts.properties.forkBase]: 'forkBase';
   }
 }

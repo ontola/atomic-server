@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest';
 import { core } from './index.js';
 import { drafts } from './ontologies/drafts.js';
-import { forkResource, isDraft, mergeDraft } from './drafts.js';
+import { diffDraft, forkResource, isDraft, mergeDraft } from './drafts.js';
 import { testStore } from './test-store.js';
 
 const BLOGPOST = 'https://atomicdata.dev/classes/BlogPost';
@@ -210,5 +210,103 @@ describe('drafts', () => {
     await expect(mergeDraft(store, orphan)).rejects.toThrow(
       /not a draft of anything/,
     );
+  });
+
+  it('merging a draft does not revert a concurrent edit to an untouched property', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+
+    const drive = await store.newResource({ isA: DRIVE, noParent: true });
+    await drive.save();
+
+    const original = await store.newResource({
+      parent: drive.subject,
+      isA: BLOGPOST,
+      propVals: {
+        [core.properties.name]: 'Cheese',
+        [core.properties.description]: 'First version.',
+      },
+    });
+    await original.save();
+
+    // Alice forks and changes only the name.
+    const draft = await forkResource(store, original, drive.subject);
+    await draft.set(core.properties.name, 'Cheese, Revisited');
+    await draft.save();
+
+    // Bob concurrently rewrites the description on the original.
+    await original.set(core.properties.description, 'Bob rewrote this.');
+    await original.save();
+
+    const merged = await mergeDraft(store, draft);
+
+    expect(merged.get(core.properties.name)).toBe('Cheese, Revisited');
+    // The property the draft never touched keeps Bob's concurrent edit.
+    expect(merged.get(core.properties.description)).toBe('Bob rewrote this.');
+  });
+
+  it('reports a conflict when both sides changed the same property, and can refuse to merge', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+
+    const drive = await store.newResource({ isA: DRIVE, noParent: true });
+    await drive.save();
+
+    const original = await store.newResource({
+      parent: drive.subject,
+      isA: BLOGPOST,
+      propVals: { [core.properties.name]: 'Cheese' },
+    });
+    await original.save();
+
+    const draft = await forkResource(store, original, drive.subject);
+    await draft.set(core.properties.name, 'Alice’s name');
+    await draft.save();
+
+    await original.set(core.properties.name, 'Bob’s name');
+    await original.save();
+
+    const changes = diffDraft(draft, original);
+    const nameChange = changes.find(c => c.property === core.properties.name);
+    expect(nameChange?.conflict).toBe(true);
+
+    await expect(
+      mergeDraft(store, draft, { onConflict: 'throw' }),
+    ).rejects.toThrow(/changed on both/);
+
+    // Nothing was written: the original still holds Bob's value.
+    expect(original.get(core.properties.name)).toBe('Bob’s name');
+
+    // Default resolution lets the draft win.
+    const merged = await mergeDraft(store, draft);
+    expect(merged.get(core.properties.name)).toBe('Alice’s name');
+  });
+
+  it('a property untouched by the draft is not reported as a change', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+
+    const drive = await store.newResource({ isA: DRIVE, noParent: true });
+    await drive.save();
+
+    const original = await store.newResource({
+      parent: drive.subject,
+      isA: BLOGPOST,
+      propVals: {
+        [core.properties.name]: 'Cheese',
+        [core.properties.description]: 'Untouched.',
+      },
+    });
+    await original.save();
+
+    const draft = await forkResource(store, original, drive.subject);
+    await draft.set(core.properties.name, 'Renamed');
+    await draft.save();
+
+    const changes = diffDraft(draft, original);
+    expect(changes.map(c => c.property)).toEqual([core.properties.name]);
   });
 });

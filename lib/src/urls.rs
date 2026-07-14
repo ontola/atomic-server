@@ -33,6 +33,7 @@ pub const DRAFT: &str = "https://atomicdata.dev/classes/Draft";
 
 // Properties
 pub const ORIGINAL_SUBJECT: &str = "https://atomicdata.dev/properties/originalSubject";
+pub const FORK_BASE: &str = "https://atomicdata.dev/properties/forkBase";
 pub const SHORTNAME: &str = "https://atomicdata.dev/properties/shortname";
 pub const DESCRIPTION: &str = "https://atomicdata.dev/properties/description";
 /// Structured error classification on an `Error` resource, numeric — see

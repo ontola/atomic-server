@@ -67,9 +67,18 @@ like anything else. It carries the content class **alongside** `Draft`
 (`isA: [BlogPost, Draft]`) so the normal views render it — no parallel preview
 stack.
 
-**Merging is a squash.** The merger reads the fork, diffs it against the original,
-and writes the resulting propvals to the original as one ordinary commit signed by
-themselves. The original keeps its DID, history, and inbound links.
+**Merging is a three-way squash.** A plain squash (write every draft propval onto
+the original) has a silent data-loss bug: a property the draft never touched still
+carries its fork-time value, so merging reverts any concurrent edit the original
+received in the meantime. To avoid that, a fork records `forkBase` — the original's
+content propvals at fork time, as a self-contained JSON snapshot (chosen over
+replaying the forked-from commit, because commit retention is optional node policy
+per `commit-retention-and-state-certificates.md` and a snapshot works on a pruned
+or offline node). Merging (`diffDraft` / `mergeDraft` in `browser/lib/src/drafts.ts`)
+writes **only** the properties the draft changed relative to `forkBase`; a property
+untouched by the draft is left alone. Where both sides changed the same property it
+is a **conflict**, surfaced (`DraftChange.conflict`, count shown in the DraftBar,
+`onConflict: 'throw'` to abort) rather than silently resolved.
 
 Squash rather than importing the fork's Loro oplog, because an oplog import lands
 every intermediate draft revision in the original's doc — permanently and, once
@@ -79,6 +88,21 @@ across the `Backend` seam `nextgraph-interop.md` wants.
 
 Because the merge commit is an ordinary write to the original, **authorization needs
 no changes at all**: `check_write` on the original already decides who may merge.
+
+**Flow gaps still open** (the mechanism is safe, but the review flow is not complete):
+- **Discovery.** Nothing on the original surfaces its pending drafts. `originalSubject`
+  makes the reverse query trivial (an indexer or a collection), but no UI shows "N
+  drafts propose changes to this". Without it, a reviewer must already know to browse
+  the Drafts folder.
+- **Review/diff UI.** `diffDraft` returns per-property base/draft/original + conflict;
+  reuse the existing `components/ResourceDiff` to render it. The DraftBar only shows
+  counts today.
+- **Suggest-an-edit for non-writers.** `Edit as draft` is gated on `canWrite`, so the
+  actor-side "propose a change to a resource you can't write" half of
+  `docs/src/commits/suggestions.md` is unimplemented. Needs distributor mode (see
+  Open questions) — scope separately.
+- **Reject with reason.** Declining someone else's proposal is only `Discard` (destroy).
+  A record/notification is missing.
 
 Known limitation: squash is last-write-wins per property, so it cannot faithfully
 merge a rich-text `doc` container that changed on both sides. Classes with a `doc`

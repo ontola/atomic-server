@@ -1,6 +1,6 @@
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
-import { drafts, type Resource } from '@tomic/react';
+import { diffDraft, drafts, useResource, type Resource } from '@tomic/react';
 import { FaCodeBranch, FaCodeMerge } from 'react-icons/fa6';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
@@ -21,13 +21,36 @@ export function DraftBar({
   resource,
 }: DraftBarProps): React.JSX.Element | null {
   const navigate = useNavigateWithTransition();
-  const original = resource.get(drafts.properties.originalSubject);
+  const original = resource.get(drafts.properties.originalSubject) as
+    | string
+    | undefined;
+  const originalResource = useResource(original ?? '');
 
   if (!resource.isDraft || !original) {
     return null;
   }
 
+  const changes = diffDraft(resource, originalResource);
+  const conflicts = changes.filter(c => c.conflict);
+
   const merge = async () => {
+    // Never let a merge silently overwrite a property that was also edited on
+    // the original since the fork — make the reviewer choose.
+    if (
+      conflicts.length > 0 &&
+      !window.confirm(
+        `${conflicts.length} propert${
+          conflicts.length === 1 ? 'y was' : 'ies were'
+        } also changed on the original since this draft was made (${conflicts
+          .map(c => c.property.split('/').pop())
+          .join(', ')}). Merging will overwrite ${
+          conflicts.length === 1 ? 'it' : 'them'
+        } with this draft's version. Continue?`,
+      )
+    ) {
+      return;
+    }
+
     try {
       const merged = await resource.mergeIntoOriginal();
       toast.success('Draft merged');
@@ -57,13 +80,24 @@ export function DraftBar({
           <FaCodeBranch />
           <span>Draft of</span>
           <ResourceInline subject={original} />
-          <Subtle>The original is unchanged until you merge.</Subtle>
+          <Subtle>
+            {changes.length === 0
+              ? 'No changes yet.'
+              : `${changes.length} changed propert${
+                  changes.length === 1 ? 'y' : 'ies'
+                }.`}
+          </Subtle>
+          {conflicts.length > 0 && (
+            <Conflict>
+              {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'}
+            </Conflict>
+          )}
         </Row>
         <Row center gap='1ch'>
           <Button subtle onClick={discard}>
             Discard
           </Button>
-          <Button onClick={merge}>
+          <Button onClick={merge} disabled={changes.length === 0}>
             <FaCodeMerge /> Merge
           </Button>
         </Row>
@@ -74,6 +108,11 @@ export function DraftBar({
 
 const Subtle = styled.span`
   color: ${p => p.theme.colors.textLight};
+`;
+
+const Conflict = styled.span`
+  color: ${p => p.theme.colors.alert};
+  font-weight: bold;
 `;
 
 /** A bar, not a card: it spans the view it sits above rather than floating in it. */
