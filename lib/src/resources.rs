@@ -1530,10 +1530,7 @@ mod test {
             let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
 
             let mut cb = crate::commit::CommitBuilder::new("placeholder".into());
-            cb.set(
-                urls::PARENT.into(),
-                Value::AtomicUrl(drive.as_str().into()),
-            );
+            cb.set(urls::PARENT.into(), Value::AtomicUrl(drive.as_str().into()));
             cb.set(
                 urls::DESCRIPTION.into(),
                 Value::new("x", &DataType::Markdown).unwrap(),
@@ -1581,7 +1578,10 @@ mod test {
             let mut resource = store.get_resource(&subject.as_str().into()).await.unwrap();
             // Overwrite the cert with bytes that no longer sign to this DID.
             resource
-                .set_unsafe(urls::GENESIS.into(), Value::String("not-a-real-cert".into()))
+                .set_unsafe(
+                    urls::GENESIS.into(),
+                    Value::String("not-a-real-cert".into()),
+                )
                 .unwrap();
             assert_eq!(
                 resource.genesis_signer(),

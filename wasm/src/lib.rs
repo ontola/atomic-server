@@ -324,10 +324,7 @@ impl ClientDb {
     /// sent to the server no longer includes foreign-drive subjects it would
     /// otherwise treat as pull/remove candidates.
     #[wasm_bindgen(js_name = "getVersionVectorsForDrive")]
-    pub async fn get_version_vectors_for_drive(
-        &self,
-        drive: String,
-    ) -> Result<JsValue, JsError> {
+    pub async fn get_version_vectors_for_drive(&self, drive: String) -> Result<JsValue, JsError> {
         use atomic_lib::db::trees::Tree;
         use atomic_lib::loro::AtomicLoroDoc;
         use std::collections::HashMap;

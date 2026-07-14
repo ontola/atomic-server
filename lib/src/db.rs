@@ -2115,7 +2115,9 @@ impl Storelike for Db {
         // However, we don't have a Mutex for base_domain in Db.
         // Let's just say it's not supported for Db yet if it's not a clone.
         // Actually, for CLI it's usually just initialized once.
-        tracing::warn!("set_base_url called on Db, but it is not supported to change it after initialization. Use clone_with_url instead.");
+        tracing::warn!(
+            "set_base_url called on Db, but it is not supported to change it after initialization. Use clone_with_url instead."
+        );
     }
 
     #[instrument(skip_all)]
@@ -2787,7 +2789,10 @@ impl Storelike for Db {
 }
 
 fn corrupt_db_message(subject: &str) -> String {
-    format!("Could not deserialize item {} from database. DB is possibly corrupt, could be due to an update or a lack of migrations. Restore to a previous version, export your data and import your data again.", subject)
+    format!(
+        "Could not deserialize item {} from database. DB is possibly corrupt, could be due to an update or a lack of migrations. Restore to a previous version, export your data and import your data again.",
+        subject
+    )
 }
 
 const DB_CORRUPT_MSG: &str = "Could not deserialize item from database. DB is possibly corrupt, could be due to an update or a lack of migrations. Restore to a previous version, export your data and import your data again.";

@@ -125,11 +125,7 @@ mod tests {
         )
         .await;
         assert!(denied.is_err());
-        assert!(store
-            .get_drive_did("example.com")
-            .await
-            .unwrap()
-            .is_none());
+        assert!(store.get_drive_did("example.com").await.unwrap().is_none());
 
         // An agent with write access on the drive binds the host.
         call(
@@ -164,10 +160,6 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(store
-            .get_drive_did("example.com")
-            .await
-            .unwrap()
-            .is_none());
+        assert!(store.get_drive_did("example.com").await.unwrap().is_none());
     }
 }

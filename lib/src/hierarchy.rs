@@ -305,7 +305,8 @@ mod test {
         #[test]
         fn ordinary_content_change_is_not_critical() {
             // A commit that only touches description / name defines no authority.
-            let impact = classify_auth_impact(&props(&[urls::DESCRIPTION, urls::NAME]), false, false);
+            let impact =
+                classify_auth_impact(&props(&[urls::DESCRIPTION, urls::NAME]), false, false);
             assert!(!impact.is_critical());
             assert_eq!(impact, Default::default());
         }
@@ -355,8 +356,7 @@ mod test {
         #[test]
         fn a_commit_can_carry_several_impacts_at_once() {
             // e.g. a genesis that also seeds read + write ACLs.
-            let impact =
-                classify_auth_impact(&props(&[urls::READ, urls::WRITE]), true, false);
+            let impact = classify_auth_impact(&props(&[urls::READ, urls::WRITE]), true, false);
             assert!(impact.genesis && impact.read && impact.write);
             assert!(!impact.parent && !impact.destroy);
             assert!(impact.is_critical());

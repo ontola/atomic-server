@@ -190,7 +190,12 @@ pub fn run() {
               dispatch_pair_links(|js| webview.eval(js), &state);
             }
           }
-          retry_handle.state::<PairLinks>().pending.lock().unwrap().clear();
+          retry_handle
+            .state::<PairLinks>()
+            .pending
+            .lock()
+            .unwrap()
+            .clear();
         });
       }
 

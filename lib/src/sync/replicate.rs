@@ -228,7 +228,7 @@ async fn drive_exchange(
             WsMessage::Error(e) => {
                 return Err(AtomicError::from(format!(
                     "Remote refused to sync {drive}: {e}"
-                )))
+                )));
             }
             _ => {}
         }

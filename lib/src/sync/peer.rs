@@ -874,8 +874,7 @@ fn register_live_peer(
                                 // suppression bulk SYNC_PUSH imports use; the
                                 // WS announcer ignores the flag, so the local
                                 // browser still sees the merged name / drives.
-                                let own_agent =
-                                    is_our_agent_subject(&store, &decoded.subject);
+                                let own_agent = is_our_agent_subject(&store, &decoded.subject);
                                 if own_agent {
                                     super::ws_apply::set_importing(true);
                                 }
@@ -1366,8 +1365,12 @@ pub async fn sync_drive_with_peer_using_outcome(
                     // Send our data now and break.
                     if diff.push.is_empty() {
                         if !diff.pull.is_empty() {
-                            let entries =
-                                super::engine::collect_readable_snapshots(store, &remote_agent, &diff.pull).await;
+                            let entries = super::engine::collect_readable_snapshots(
+                                store,
+                                &remote_agent,
+                                &diff.pull,
+                            )
+                            .await;
                             if !entries.is_empty() {
                                 let refs: Vec<(&str, &[u8])> = entries
                                     .iter()
@@ -1414,8 +1417,12 @@ pub async fn sync_drive_with_peer_using_outcome(
                     continue;
                 }
                 if !pull_subjects.is_empty() {
-                    let entries =
-                        super::engine::collect_readable_snapshots(store, &remote_agent, &pull_subjects).await;
+                    let entries = super::engine::collect_readable_snapshots(
+                        store,
+                        &remote_agent,
+                        &pull_subjects,
+                    )
+                    .await;
                     if !entries.is_empty() {
                         let refs: Vec<(&str, &[u8])> = entries
                             .iter()
@@ -2051,7 +2058,12 @@ mod initiator_trust_tests {
         let (_drive, child) = private_drive_with_child(&db, &alice).await;
 
         // Public peer asks for the secret child — must get nothing.
-        let served = crate::sync::engine::collect_readable_snapshots(&db, &ForAgent::Public, &[child.clone()]).await;
+        let served = crate::sync::engine::collect_readable_snapshots(
+            &db,
+            &ForAgent::Public,
+            &[child.clone()],
+        )
+        .await;
         assert!(
             served.is_empty(),
             "a Public peer must not be served a snapshot for a subject it can't read"

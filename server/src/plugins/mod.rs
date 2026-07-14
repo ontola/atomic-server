@@ -33,6 +33,7 @@ Contrary to Endpoints, these can be any type of Class.
 They are used for performing custom queries, or calculating dynamic attributes.
 */
 
+pub mod bind_drive;
 pub mod bookmark;
 pub mod chatroom;
 pub mod did;
@@ -46,7 +47,6 @@ pub mod prunetests;
 pub mod query;
 pub mod replicate;
 pub mod search;
-pub mod bind_drive;
 #[cfg(feature = "vector-search")]
 pub mod vector_search;
 pub mod versioning;

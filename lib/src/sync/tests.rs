@@ -1415,7 +1415,10 @@ mod peer_sync_tests {
                     if arr.len() == 3 {
                         println!("TEST PASSED: live sync pushed edits!");
                     } else {
-                        println!("Note: got {} strokes, expected 3 (live push may not work in single-process)", arr.len());
+                        println!(
+                            "Note: got {} strokes, expected 3 (live push may not work in single-process)",
+                            arr.len()
+                        );
                     }
                 }
                 _ => println!("Note: strokes unchanged (expected in single-process test)"),
@@ -1505,7 +1508,9 @@ mod peer_sync_tests {
         if b_result.is_err() {
             println!("TEST PASSED: deletion synced to B");
         } else {
-            println!("Note: deletion not synced (expected in single-process test — live stream may not be active)");
+            println!(
+                "Note: deletion not synced (expected in single-process test — live stream may not be active)"
+            );
         }
 
         println!("TEST PASSED: live sync deletion test completed");
@@ -1854,8 +1859,7 @@ mod peer_sync_tests {
         let commit = builder.sign(&alice, &db, &empty).await.unwrap();
         let commit_json = commit_to_wire_json(&commit, &db).await.unwrap();
 
-        const OWNERSHIP_ERR: &str =
-            "Subject of commit should be sent to other domain - this store can not own this resource.";
+        const OWNERSHIP_ERR: &str = "Subject of commit should be sent to other domain - this store can not own this resource.";
 
         let hub_opts = CommitIngestOpts {
             source_id: None,
@@ -1953,9 +1957,18 @@ mod peer_sync_tests {
         let db = Db::init_temp("rbsr_differential").await.unwrap();
         let (_alice, drive) = db.setup("Alice").await.unwrap();
         const CANVAS: &str = "https://atomicdata.dev/ontology/canvas/Canvas";
-        let _r1 = db.create_resource(CANVAS, &drive, "R1", None).await.unwrap();
-        let r2 = db.create_resource(CANVAS, &drive, "R2", None).await.unwrap();
-        let r3 = db.create_resource(CANVAS, &drive, "R3", None).await.unwrap();
+        let _r1 = db
+            .create_resource(CANVAS, &drive, "R1", None)
+            .await
+            .unwrap();
+        let r2 = db
+            .create_resource(CANVAS, &drive, "R2", None)
+            .await
+            .unwrap();
+        let r3 = db
+            .create_resource(CANVAS, &drive, "R3", None)
+            .await
+            .unwrap();
         let r2p = crate::Subject::from_raw(&r2, db.get_base_domain().as_deref()).pure_id();
         let r3p = crate::Subject::from_raw(&r3, db.get_base_domain().as_deref()).pure_id();
 
@@ -1979,7 +1992,10 @@ mod peer_sync_tests {
         let (peers, resources) = to_compact(&client_vvs);
 
         // D = the differing set RBSR would find (client vs server).
-        let client_items: Vec<Item> = client_vvs.iter().map(|(s, v)| (s.clone(), v.clone())).collect();
+        let client_items: Vec<Item> = client_vvs
+            .iter()
+            .map(|(s, v)| (s.clone(), v.clone()))
+            .collect();
         let mut client_sorted = client_items.clone();
         client_sorted.sort_by(|a, b| a.0.cmp(&b.0));
         struct Mem(Vec<Item>);
@@ -2045,8 +2061,11 @@ mod peer_sync_tests {
             }
         }
         let peers: Vec<String> = peer_set.into_iter().collect();
-        let index: std::collections::HashMap<&str, usize> =
-            peers.iter().enumerate().map(|(i, p)| (p.as_str(), i)).collect();
+        let index: std::collections::HashMap<&str, usize> = peers
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (p.as_str(), i))
+            .collect();
         let resources = vvs
             .iter()
             .map(|(subject, vv)| {
@@ -2087,7 +2106,9 @@ mod peer_sync_tests {
     #[tokio::test]
     async fn reconcile_over_real_store_finds_the_lagging_resource() {
         use crate::sync::engine::drive_items;
-        use crate::sync::rbsr::{item_fingerprint, range_fingerprint, reconcile, Item, RemoteRange};
+        use crate::sync::rbsr::{
+            item_fingerprint, range_fingerprint, reconcile, Item, RemoteRange,
+        };
 
         let db = Db::init_temp("rbsr_real_store").await.unwrap();
         let (_alice, drive) = db.setup("Alice").await.unwrap();
@@ -2145,9 +2166,7 @@ mod peer_sync_tests {
             fn items(&mut self, lo: &str, hi: Option<&str>) -> Vec<Item> {
                 self.items
                     .iter()
-                    .filter(|(s, _)| {
-                        s.as_str() >= lo && hi.map(|h| s.as_str() < h).unwrap_or(true)
-                    })
+                    .filter(|(s, _)| s.as_str() >= lo && hi.map(|h| s.as_str() < h).unwrap_or(true))
                     .cloned()
                     .collect()
             }

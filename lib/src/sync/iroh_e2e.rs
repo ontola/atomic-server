@@ -549,12 +549,7 @@ async fn same_agent_peers_reconcile_the_agent_resource() {
 
     // B restored from the secret: it holds the key and the drive DID, but the
     // name only ever existed on A's copy of the agent resource.
-    let agent_subject = pair
-        .db_b
-        .get_default_agent()
-        .unwrap()
-        .subject
-        .to_string();
+    let agent_subject = pair.db_b.get_default_agent().unwrap().subject.to_string();
     let before = pair
         .db_b
         .get_resource(&agent_subject.as_str().into())

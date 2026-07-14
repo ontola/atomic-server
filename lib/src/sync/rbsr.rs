@@ -114,12 +114,7 @@ pub trait RemoteRange {
 /// the subjects that differ. `split` is the branching factor for a mismatched
 /// range; `leaf` is the item count at or below which a range's items are
 /// fetched and diffed directly instead of split further.
-pub fn reconcile(
-    local: &[Item],
-    remote: &mut impl RemoteRange,
-    split: usize,
-    leaf: usize,
-) -> Diff {
+pub fn reconcile(local: &[Item], remote: &mut impl RemoteRange, split: usize, leaf: usize) -> Diff {
     let split = split.max(2);
     let leaf = leaf.max(1);
     let mut diff = Diff::default();
@@ -233,10 +228,7 @@ mod tests {
     impl MemRemote {
         fn new(mut items: Vec<Item>) -> Self {
             items.sort_by(|a, b| a.0.cmp(&b.0));
-            Self {
-                items,
-                fp_calls: 0,
-            }
+            Self { items, fp_calls: 0 }
         }
     }
 
@@ -264,7 +256,10 @@ mod tests {
         ]);
         let mut remote = MemRemote::new(items.clone());
         let diff = reconcile(&items, &mut remote, 4, 2);
-        assert!(diff.is_empty(), "identical sets must produce no diff: {diff:?}");
+        assert!(
+            diff.is_empty(),
+            "identical sets must produce no diff: {diff:?}"
+        );
         assert_eq!(
             remote.fp_calls, 1,
             "a matching root fingerprint must end the reconcile in one comparison"
@@ -275,8 +270,7 @@ mod tests {
     fn detects_a_single_changed_version_vector() {
         let local = sorted(vec![item("a", &[("p1", 1)]), item("b", &[("p1", 2)])]);
         // Same subjects; b's counter advanced remotely.
-        let mut remote =
-            MemRemote::new(vec![item("a", &[("p1", 1)]), item("b", &[("p1", 5)])]);
+        let mut remote = MemRemote::new(vec![item("a", &[("p1", 1)]), item("b", &[("p1", 5)])]);
         let diff = reconcile(&local, &mut remote, 4, 2);
         assert_eq!(diff.differ, vec!["b".to_string()]);
         assert!(diff.only_local.is_empty() && diff.only_remote.is_empty());

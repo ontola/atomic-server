@@ -544,8 +544,7 @@ impl WebSocketConnection {
                 let store = self.store.clone();
                 ctx.spawn(
                     async move {
-                        let items =
-                            atomic_lib::sync::engine::drive_items(&store, &req.drive).await;
+                        let items = atomic_lib::sync::engine::drive_items(&store, &req.drive).await;
                         let fps: Vec<String> = req
                             .ranges
                             .iter()
@@ -568,8 +567,7 @@ impl WebSocketConnection {
                 let store = self.store.clone();
                 ctx.spawn(
                     async move {
-                        let items =
-                            atomic_lib::sync::engine::drive_items(&store, &req.drive).await;
+                        let items = atomic_lib::sync::engine::drive_items(&store, &req.drive).await;
                         let hi = req.hi.as_deref();
                         let out: Vec<(String, Vec<(String, i32)>)> = items
                             .into_iter()

@@ -526,10 +526,7 @@ mod test {
             );
             assert_eq!(signature, expected["signature"].as_str().unwrap());
             assert_eq!(did, expected["did"].as_str().unwrap());
-            assert_eq!(
-                cert.signer_did(),
-                expected["signerDid"].as_str().unwrap()
-            );
+            assert_eq!(cert.signer_did(), expected["signerDid"].as_str().unwrap());
 
             // The fixture must also decode back to the same cert, so the TS
             // side has a decode target too, not just an encode one.

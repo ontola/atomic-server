@@ -180,7 +180,7 @@ impl WsClient {
                 match msg {
                     WsMessage::Authenticated => return Ok(()),
                     WsMessage::Error(e) => {
-                        return Err(AtomicError::from(format!("Auth failed: {}", e)))
+                        return Err(AtomicError::from(format!("Auth failed: {}", e)));
                     }
                     _ => continue,
                 }
@@ -275,7 +275,7 @@ impl WsClient {
                         bytes,
                     } if rcv_hash == *hash => return Ok(bytes),
                     WsMessage::Error(e) => {
-                        return Err(AtomicError::from(format!("Blob fetch error: {}", e)))
+                        return Err(AtomicError::from(format!("Blob fetch error: {}", e)));
                     }
                     _ => continue,
                 }
@@ -338,7 +338,7 @@ impl WsClient {
                         commit_json,
                     } if rid == request_id => return Ok(commit_json),
                     WsMessage::Error(e) => {
-                        return Err(AtomicError::from(format!("COMMIT failed: {}", e)))
+                        return Err(AtomicError::from(format!("COMMIT failed: {}", e)));
                     }
                     _ => continue,
                 }
