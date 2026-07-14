@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import {
   before,
   editTitle,
@@ -7,12 +7,92 @@ import {
   contextMenuClick,
   timestamp,
   newResource,
-  waitForSearchIndex,
   typeInSearch,
   searchAndOpen,
   getCurrentSubject,
   openSubject,
 } from './test-utils';
+
+const SEARCH_RESULTS = 'https://atomicdata.dev/properties/search/results';
+const TAGS = 'https://atomicdata.dev/properties/tags';
+
+async function waitForServerSearch(
+  page: Page,
+  query: string,
+  parents: string,
+  expectedSubjects: string[],
+) {
+  await page.waitForFunction(
+    async args => {
+      const store = (
+        window as {
+          store?: {
+            getServerUrl(): string;
+            fetchResourceFromServer(
+              subject: string,
+              opts: { noWebSocket: boolean },
+            ): Promise<{ get(property: string): unknown }>;
+          };
+        }
+      ).store;
+
+      if (!store) return false;
+
+      const url = new URL('/search', store.getServerUrl());
+      url.searchParams.set('q', args.query);
+      url.searchParams.set('parents', args.parents);
+      url.searchParams.set('include', 'true');
+      url.searchParams.set('limit', '10');
+
+      try {
+        const resource = await store.fetchResourceFromServer(url.toString(), {
+          noWebSocket: true,
+        });
+        const results = resource.get(args.resultsProperty);
+
+        return (
+          Array.isArray(results) &&
+          args.expectedSubjects.every(subject => results.includes(subject))
+        );
+      } catch {
+        return false;
+      }
+    },
+    {
+      query,
+      parents,
+      expectedSubjects,
+      resultsProperty: SEARCH_RESULTS,
+    },
+    { timeout: 30000, polling: 1000 },
+  );
+}
+
+async function waitForFilteredServerSearch(
+  page: Page,
+  parents: string,
+  tagSubjects: string[],
+  expectedSubject: string,
+) {
+  for (const tagSubject of tagSubjects) {
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            async args =>
+              window.store.search('', {
+                parents: args.parents,
+                filters: { [args.tagsProperty]: [args.tagSubject] },
+                include: true,
+                limit: 10,
+              }),
+            { parents, tagsProperty: TAGS, tagSubject },
+          ),
+        { timeout: 30000, intervals: [1000] },
+      )
+      .toContain(expectedSubject);
+  }
+}
 
 // Tests rewritten for the modal search overlay. Old behavior (inline address
 // bar auto-navigating to /app/search?query=...) no longer exists. New flow:
@@ -35,37 +115,9 @@ test.describe('search', async () => {
 
     // Don't rely on a fixed 6.5s sleep — under parallel load the index can
     // lag noticeably longer. Poll the real search endpoint until the new
-    // folder appears. Pass `parents: drive` so we hit the same server path
-    // the overlay uses (without it, `store.search` short-circuits to the
-    // local MiniSearch index, which can be stale relative to the server).
-    await page.waitForFunction(
-      async (args: { query: string; subject: string; drive: string }) => {
-        const store = (
-          window as {
-            store?: { search(q: string, o: object): Promise<string[]> };
-          }
-        ).store;
-
-        if (!store) return false;
-
-        try {
-          // Match the overlay's exact params (include/limit) so the
-          // server's response is built from the same Tantivy query —
-          // a different URL serves a different cache key.
-          const results = await store.search(args.query, {
-            parents: args.drive,
-            include: true,
-            limit: 10,
-          });
-
-          return results.includes(args.subject);
-        } catch {
-          return false;
-        }
-      },
-      { query: unique, subject: folderSubject, drive: driveSubject },
-      { timeout: 30000, polling: 1000 },
-    );
+    // folder appears. Probe the server resource directly so local MiniSearch
+    // hits don't make this readiness check pass before Tantivy is committed.
+    await waitForServerSearch(page, unique, driveSubject, [folderSubject]);
 
     // Go somewhere else so navigation via search is observable.
     await openSubject(page, driveSubject);
@@ -112,29 +164,9 @@ test.describe('search', async () => {
     // Wait until the server's scoped search index actually contains the
     // doc. A fixed sleep races the ~5s index-commit throttle; poll the
     // real scoped query (`parents` forces the server path) instead.
-    await page.waitForFunction(
-      async (args: { subject: string; parent: string }) => {
-        const store = (
-          window as {
-            store?: { search(q: string, o: object): Promise<string[]> };
-          }
-        ).store;
-
-        if (!store) return false;
-
-        try {
-          const results = await store.search('Avocado', {
-            parents: args.parent,
-          });
-
-          return results.includes(args.subject);
-        } catch {
-          return false;
-        }
-      },
-      { subject: avocadoCakeSubject, parent: cakeFolderSubject },
-      { timeout: 30000, polling: 1000 },
-    );
+    await waitForServerSearch(page, 'Avocado', cakeFolderSubject, [
+      avocadoCakeSubject,
+    ]);
 
     // Set search scope to 'Cake folder'
     await page.reload();
@@ -168,40 +200,10 @@ test.describe('search', async () => {
     // Poll the drive-scoped search (matching the overlay's `parents: drive`
     // default) until both docs are returned — without this, a slow indexer
     // under parallel load races the assertion.
-    await page.waitForFunction(
-      async (args: {
-        cakeSubject: string;
-        saladSubject: string;
-        drive: string;
-      }) => {
-        const store = (
-          window as {
-            store?: { search(q: string, o: object): Promise<string[]> };
-          }
-        ).store;
-
-        if (!store) return false;
-
-        try {
-          const results = await store.search('Avocado', {
-            parents: args.drive,
-          });
-
-          return (
-            results.includes(args.cakeSubject) &&
-            results.includes(args.saladSubject)
-          );
-        } catch {
-          return false;
-        }
-      },
-      {
-        cakeSubject: avocadoCakeSubject,
-        saladSubject: avocadoSaladSubject,
-        drive: driveSubject,
-      },
-      { timeout: 30000, polling: 1000 },
-    );
+    await waitForServerSearch(page, 'Avocado', driveSubject, [
+      avocadoCakeSubject,
+      avocadoSaladSubject,
+    ]);
 
     await typeInSearch(page, 'Avocado');
     await expect(
@@ -217,6 +219,8 @@ test.describe('search', async () => {
     await sidebarNewResourceButton(page).click();
     await page.locator('button:has-text("folder")').click();
     await setTitle(page, folderName);
+    const driveSubject = await page.evaluate(() => window.store.getDrive());
+    const folderSubject = await getCurrentSubject(page);
 
     // Add tags via the TagBar
     const firstTagName = `first-tag`;
@@ -245,7 +249,24 @@ test.describe('search', async () => {
       page.getByTestId('sidebar').getByRole('button', { name: secondTagName }),
     ).toBeVisible();
 
-    await waitForSearchIndex(page);
+    const tagSubjects = await page.evaluate(
+      async ({ subject, tagsProperty }) => {
+        const folder = await window.store.getResource(subject);
+
+        return folder.get(tagsProperty) as string[];
+      },
+      { subject: folderSubject, tagsProperty: TAGS },
+    );
+    expect(tagSubjects).toHaveLength(2);
+
+    // Tag filters are Tantivy-only, so wait for the exact filtered server
+    // query instead of sleeping for an assumed index interval.
+    await waitForFilteredServerSearch(
+      page,
+      driveSubject ?? '',
+      tagSubjects,
+      folderSubject,
+    );
 
     // Search by first tag — result should include our folder.
     await searchAndOpen(page, `tag:${firstTagName}`, folderName);

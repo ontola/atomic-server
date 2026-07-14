@@ -2148,32 +2148,33 @@ export class Store {
       ? opts.parents[0]
       : opts.parents;
     const searchDrive = this.driveOf(parentScope ?? this.getDrive() ?? '');
+    const hasFilters = Object.keys(opts.filters ?? {}).length > 0;
     console.debug('[search] search()', {
       query,
-      hasFilters: !!opts.filters,
+      hasFilters,
       parents: opts.parents,
       searchDrive,
       driveIndexSize: this.localSearch.sizeForDrive(searchDrive),
       serverConnected: this._serverConnected,
     });
 
-    // Try local search first if the index has content and no filters are set.
-    // Filters (property-value constraints) require server-side Tantivy for now.
-    if (
-      this.localSearch.sizeForDrive(searchDrive) > 0 &&
-      !opts.filters &&
-      !opts.parents
-    ) {
-      const local = this.localSearch.search(
-        query,
-        searchDrive,
-        opts.limit ?? 30,
-      );
-      console.debug('[search] local (unscoped) →', local.subjects.length);
+    // Include live local matches while the server's batched Tantivy writer is
+    // still catching up. The local index can be partial after a reload, so an
+    // online search merges these with the server response below instead of
+    // returning early. Property-value filters still require Tantivy, but
+    // parent scoping can be applied locally using the indexed parent chain.
+    const localResults =
+      this.localSearch.sizeForDrive(searchDrive) > 0 && !hasFilters
+        ? this.localSearch.search(
+            query,
+            searchDrive,
+            opts.limit ?? 30,
+            parentScope,
+          ).subjects
+        : [];
 
-      if (local.subjects.length > 0) {
-        return local.subjects;
-      }
+    if (localResults.length > 0) {
+      console.debug('[search] local →', localResults.length);
     }
 
     // When offline, the server's filtered Tantivy search is unreachable.
@@ -2191,6 +2192,7 @@ export class Store {
         query,
         searchDrive,
         opts.limit ?? 30,
+        parentScope,
       );
       console.debug(
         '[search] OFFLINE local fallback →',
@@ -2204,13 +2206,22 @@ export class Store {
     // Fall back to server search (Tantivy)
     const searchSubject = buildSearchSubject(this.serverUrl, query, opts);
     console.debug('[search] server search →', searchSubject);
+    // Search URLs are dynamic query resources without commit identities. Keeping
+    // one in the normal resource cache makes a later retry merge against the
+    // previous response and discard it as "unchanged", even when Tantivy now
+    // returns new matches. Evict only the in-memory synthetic resource so every
+    // retry observes the server's current result set.
+    this._resources.delete(this.resolveSubject(searchSubject));
     const searchResource = await this.fetchResourceFromServer(searchSubject, {
       noWebSocket: true,
     });
     const results = searchResource.get(server.properties.results) ?? [];
     console.debug('[search] server search returned', results.length);
 
-    return results;
+    return [...new Set([...localResults, ...results])].slice(
+      0,
+      opts.limit ?? 30,
+    );
   }
 
   public async semanticSearch(

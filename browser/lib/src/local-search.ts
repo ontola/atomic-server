@@ -38,6 +38,8 @@ function isCommitSubject(subject: string): boolean {
 export class LocalSearch {
   /** One MiniSearch index per drive subject. */
   private indexes = new Map<string, MiniSearch>();
+  /** Parent lookup per drive, including resources without searchable text. */
+  private parents = new Map<string, Map<string, string>>();
 
   private createIndex(): MiniSearch {
     return new MiniSearch({
@@ -77,6 +79,19 @@ export class LocalSearch {
       return;
     }
 
+    const parent = resource.get(core.properties.parent);
+
+    if (typeof parent === 'string') {
+      let driveParents = this.parents.get(drive);
+
+      if (!driveParents) {
+        driveParents = new Map();
+        this.parents.set(drive, driveParents);
+      }
+
+      driveParents.set(resource.subject, parent);
+    }
+
     const doc = this.resourceToDoc(resource);
 
     if (!doc) {
@@ -103,13 +118,22 @@ export class LocalSearch {
         index.discard(subject);
       }
     }
+
+    for (const parents of this.parents.values()) {
+      parents.delete(subject);
+    }
   }
 
   /**
    * Search one drive's index. Returns matching subject URLs ordered by
    * relevance. An unknown drive yields no results.
    */
-  search(query: string, drive: string, limit = 30): LocalSearchResult {
+  search(
+    query: string,
+    drive: string,
+    limit = 30,
+    parentScope?: string,
+  ): LocalSearchResult {
     const index = this.indexes.get(drive);
 
     if (!index || !query.trim()) {
@@ -117,10 +141,36 @@ export class LocalSearch {
     }
 
     const results: SearchResult[] = index.search(query);
+    const scopedResults = parentScope
+      ? results.filter(result =>
+          this.isWithinParent(result.id, parentScope, drive),
+        )
+      : results;
 
     return {
-      subjects: results.slice(0, limit).map(r => r.id),
+      subjects: scopedResults.slice(0, limit).map(r => r.id),
     };
+  }
+
+  private isWithinParent(subject: string, scope: string, drive: string) {
+    if (scope === drive) return true;
+
+    const parents = this.parents.get(drive);
+    const seen = new Set<string>();
+    let current = subject;
+
+    for (let i = 0; i < 64; i++) {
+      if (current === scope) return true;
+      if (seen.has(current)) return false;
+
+      seen.add(current);
+      const parent = parents?.get(current);
+
+      if (!parent) return false;
+      current = parent;
+    }
+
+    return false;
   }
 
   /** Number of documents indexed for a specific drive. */
