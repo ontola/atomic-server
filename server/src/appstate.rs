@@ -29,6 +29,8 @@ pub struct AppState {
     pub config: Config,
     /// The Actix Address of the CommitMonitor, which should receive updates when a commit is applied
     pub commit_monitor: actix::Addr<CommitMonitor>,
+    /// Verifies published-form submission captchas (`crate::captcha`).
+    pub captcha: Arc<dyn crate::captcha::CaptchaVerifier>,
     pub loro_sync_broadcaster: actix::Addr<LoroSyncBroadcaster>,
     pub search_state: SearchState,
     pub vector_search_state: crate::vector_search::VectorSearchState,
@@ -225,10 +227,13 @@ impl AppState {
                 tracing::error!("Failed to add all resources to vector search index: {}", e);
             }
         }
+        let captcha = Arc::new(crate::captcha::AltchaVerifier::from_store(&store));
+
         Ok(AppState {
             store,
             config,
             commit_monitor,
+            captcha,
             loro_sync_broadcaster,
             search_state,
             vector_search_state,
