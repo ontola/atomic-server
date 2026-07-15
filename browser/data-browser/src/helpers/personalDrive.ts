@@ -13,8 +13,7 @@ export async function fetchPersonalDriveSubject(
   }
 
   try {
-    await store.fetchResourceFromServer(agent.subject);
-    const r = store.getResourceLoading(agent.subject);
+    const r = await store.getResource(agent.subject);
 
     if (r.error) {
       return agent.initialDrive;
