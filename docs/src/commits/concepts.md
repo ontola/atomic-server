@@ -24,7 +24,7 @@ The **optional fields** are:
 - `loroUpdate` - A [Loro CRDT](https://loro.dev) binary update, encoded as a base64 string. This is the primary way to carry property changes. The server imports this update into the resource's Loro document, materializes the properties, and computes index diffs.
 - `destroy` - If true, the entire Resource will be removed.
 - `previousCommit` - The `did:ad:commit:{signature}` of the last commit applied to this resource. Used for ordering and audit trails.
-- `isGenesis` - If true, this is the first commit for a DID resource. The subject is derived from the signature: `did:ad:{signature}`.
+- `isGenesis` - If true, this is the first commit for a DID resource. The subject DID is derived from either the self-verifying genesis certificate signature (`did:ad:<sig_of_cert>`) or, in legacy mode, the signature of the genesis commit itself.
 
 ### Loro CRDT updates
 
@@ -95,7 +95,7 @@ This means that the process will always end in the exact same string.
 - If `destroy` is false or absent, do not include it.
 - All keys are sorted alphabetically.
 - The JSON-AD is minified: no newlines, no spaces.
-- For DID genesis commits (`isGenesis: true`), exclude the `subject` field (it is derived from the signature).
+- For legacy DID genesis commits (`isGenesis: true` without an inline genesis certificate), exclude the `subject` field (since it is derived from the commit signature). For certificate-backed genesis commits, the `subject` DID is derived from the genesis certificate and included in the serialized commit body.
 
 This will result in a string.
 The next step is to sign this string using the Ed25519 private key from the Author.

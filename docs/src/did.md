@@ -126,20 +126,34 @@ The HTTP form `<origin>/download/files/{blake3}` is a deployment-specific alias 
 ### Resource identifiers
 
 Resources live inside [Drives](hierarchy.md).
-The **Core Identity** of a resource is mathematically pure—it is simply the signature of its first commit (the genesis commit):
+The **Core Identity** of a resource is derived from its **Self-Verifying Genesis Certificate**:
 
 ```text
 did:ad:{genesis}
 ```
 
-#### Genesis commit signing
+#### Genesis Certificate Derivation (v2)
 
-A genesis commit is a regular commit with `isGenesis: true` and no `previousCommit`.
-When signing, the `subject` field is **excluded** from the canonical bytes because the subject is the signature itself (a circular dependency).
-All other fields — including `isGenesis` — are part of the signed bytes.
-The server verifies this by applying the same exclusion before checking the signature.
+To ensure authorship and identity are verifiable offline without fetching previous commits, a new DID resource carries its own inline, binary **Genesis Certificate** (`GenesisCert`), stored as an immutable property `genesis` (`https://atomicdata.dev/properties/genesis`) on the resource.
 
-This means the subject is derived post-signing as `did:ad:{signature}`, and `isGenesis: true` must be explicitly present in the commit sent to the server so that it can reconstruct the correct canonical bytes for verification.
+The `did:ad:{genesis}` subject is the URL-safe base64-encoded Ed25519 signature over the binary layout of the certificate:
+1. `version`: `0x01` (1 byte)
+2. `flags`: `u8` (bit0 = has `stateHash`) (1 byte)
+3. `signerPubKey`: Ed25519 public key of the creating agent (32 bytes)
+4. `createdAt`: UNIX timestamp in milliseconds (8 bytes i64)
+5. `nonce`: CSPRNG random unique bytes (16 bytes)
+6. `stateHash` (Optional): Blake3 hash of the canonical genesis projection (32 bytes)
+7. `parent`: Subject of the parent resource (variable length)
+8. `drive`: Subject of the owning drive (variable length)
+
+The DID of the resource is `did:ad:<base64url(signature_of_cert)>`. This enables instant offline verification of authorship, parentage, and drive membership from the resource payload alone.
+
+#### Legacy Genesis Commit Derivation (v1)
+
+For backward compatibility (including legacy or browser-minted resources), resources can be derived using the legacy path:
+- A genesis commit is signed with `isGenesis: true` and no `previousCommit`.
+- The `subject` field is **excluded** from the canonical bytes during signing to prevent a circular dependency.
+- The subject is derived as `did:ad:{signature}` of the first commit.
 
 However, to discover this resource over a decentralized network, a client needs to know *which* Drive theoretically hosts it. This is done by appending a standard W3C DID query parameter containing the Drive's DID as a routing hint:
 

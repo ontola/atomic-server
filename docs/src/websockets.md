@@ -105,9 +105,7 @@ state only over WS has no way to know which commit produced the state and may
 incorrectly mark its next save as a genesis commit (the resource exists, so
 the server rejects it).
 
-> Implementation note: subscription pushes (`PUSH` flag) carry the commit id
-> today; direct GET responses currently omit it. Tracked in
-> [`planning/fix-canvas-genesis-save.md`](../../planning/fix-canvas-genesis-save.md).
+> Implementation note: Both subscription pushes (`PUSH` flag) and direct GET responses carry the `lastCommit` identifier as `commit_id` when available, enabling the recipient to maintain the correct version history.
 
 ## Persisted Commits
 
@@ -176,12 +174,7 @@ All three require authorization at registration time — `check_read` on
 the drive (for `SUB` and `SUBSCRIBE_QUERY`) or on the resource (for
 `SUBSCRIBE`).
 
-> Historical: an earlier protocol revision included a dedicated
-> `QUERY_UPDATE (0x36)` membership-notification frame carrying just the
-> subject string, requiring the client to follow up with a `GET`. Retired
-> in `planning/drop-query-update.md` because the same information arrives
-> with one fewer round-trip as a regular `UPDATE` carrying the snapshot.
-> Tag `0x36` is reserved.
+> Historical: an earlier protocol revision included a dedicated `QUERY_UPDATE (0x36)` membership-notification frame carrying just the subject string, requiring the client to follow up with a `GET`. This was retired because the same information arrives with one fewer round-trip as a regular `UPDATE` carrying the snapshot. Tag `0x36` is reserved.
 
 ## Drive Synchronization
 

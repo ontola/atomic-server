@@ -76,9 +76,14 @@ In Data Browser, you can find the `token` tab in `/app/token` to create a token.
 
 ## Authenticating Websockets
 
-After [opening a WebSocket connection](websockets.md), create an Authentication Resource.
-Send a message like so: `AUTHENTICATE {authenticationResource}`.
-The server will only respond if there is something wrong.
+WebSockets use the binary-first protocol version 2 for authentication:
+1. The client creates an Authentication Resource.
+2. The client sends a binary frame with tag `0x01` (`AUTH`) containing the UTF-8 serialized JSON of the credentials.
+3. The server responds with binary frame tag `0x02` (`AUTH_OK`) if successful, or `0x03` (`ERROR`) if validation fails.
+
+For backward compatibility, the legacy text-based protocol uses the following format:
+- Send a text frame starting with `AUTHENTICATE {authenticationResource}` (JSON).
+- The server will only respond if there is an authentication error.
 
 ## Per-Request Signing
 
@@ -136,5 +141,5 @@ Atomic Data uses [Hierarchies](hierarchy.md) to describe who gets to access some
 ## Limitations / considerations
 
 - Since we need the Private Key to sign Commits and requests, the client should have this available. This means the client software as well as the user should deal with key management, and that can be a security risk in some contexts (such as a web browser). [See issue #49](https://github.com/ontola/atomic-data-docs/issues/49).
-- When using the Agent's subject to authenticate somewehere, the authorizer must be able to check what the public key of the agent is. This means the agent must be publicly resolvable. This is one of the reasons we should work towards a server-independent identifier, probably as base64 string that contains the public key (and, optionally, also the https identifier). See [issue #59 on DIDs](https://github.com/ontola/atomic-data-docs/issues/59).
+- Decentralized Identifiers (DIDs) are now fully implemented. Agents are represented as `did:ad:agent:{publicKey}` (URL-safe base64 encoded Ed25519 public key), making identities completely server-independent and self-sovereign. The public key is embedded directly in the DID, enabling local verification of signatures without any network calls.
 - We'll probably also introduce some form of token-based-authentication created server side in the future. [See #87](https://github.com/ontola/atomic-data-docs/issues/87)
