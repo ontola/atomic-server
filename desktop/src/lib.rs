@@ -2,6 +2,9 @@
 mod menu;
 #[cfg(not(target_os = "android"))]
 mod system_tray;
+// The NFS virtual drive is desktop-only (mobile can't mount NFS).
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod vfs;
 
 /// Hand the Android system certificate verifier the app's JVM context.
 /// reqwest's rustls backend panics on any outbound HTTPS request until this
@@ -275,6 +278,10 @@ pub fn run() {
           config_clone,
           |appstate| {
             let _ = node_for_server.store.set(appstate.store.clone());
+            // Store, indexes and transports are up: expose the drives as a
+            // read-only NFS mount (desktop only — mobile can't mount NFS).
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            crate::vfs::spawn(appstate.store.clone());
           },
         ))
         .unwrap();
