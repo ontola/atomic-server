@@ -79,6 +79,39 @@ const FollowContext = createContext<FollowContextValue>({
 const meetingStorageKey = (drive: string): string =>
   `atomic.activeMeeting:${drive}`;
 
+/** sessionStorage key marking that this tab already announced joining a given
+ *  meeting. Per-tab + per-meeting, so a refresh mid-meeting doesn't re-post
+ *  "Joined", but a closed/reopened tab announces again. */
+const joinAnnounceKey = (meeting: string): string =>
+  `atomic.joinedMeeting:${meeting}`;
+
+/** Record that this agent joined a live meeting — the same follow-event trail
+ *  as Start/End, authored by the joiner so the chat shows who arrived. */
+async function postMeetingJoin(store: Store, meeting: string): Promise<void> {
+  await sendChatMessage(store, {
+    parent: meeting,
+    text: /* @wc-ignore */ 'Joined the meeting.',
+    extraClasses: [dataBrowser.classes.followEvent],
+  });
+}
+
+/** Record a departure — but only while the meeting is still live. Once it has
+ *  ended, "The meeting has ended." already closes the log, and every
+ *  follower's auto-unfollow would otherwise post a redundant "Left". */
+async function postMeetingLeave(store: Store, meeting: string): Promise<void> {
+  const resource = await store.getResource(meeting);
+
+  if (resource.get(dataBrowser.properties.meetingEndedAt)) {
+    return;
+  }
+
+  await sendChatMessage(store, {
+    parent: meeting,
+    text: /* @wc-ignore */ 'Left the meeting.',
+    extraClasses: [dataBrowser.classes.followEvent],
+  });
+}
+
 /** Post a trail entry: a plain chat message linking the visited resource. */
 async function postTrailMessage(
   store: Store,
@@ -252,6 +285,34 @@ export function FollowProvider({
     return presence.find(item => item.agent === followedAgent && item.session)
       ?.session;
   }, [presence, followedAgent]);
+
+  // Record join/leave in the meeting chat, mirroring Start/End. The leader is
+  // already recorded by the Start marker, so only a *joiner* announces here —
+  // and the meeting a joiner is in is exactly `followedSession`. Announce when
+  // it appears, and a departure when we explicitly leave (unfollow); a meeting
+  // that simply ended is filtered out by `postMeetingLeave` so it doesn't spam
+  // "Left" for every follower on top of "The meeting has ended.".
+  const announcedJoinRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const joined = activeMeeting ? undefined : followedSession;
+    const previous = announcedJoinRef.current;
+
+    if (joined === previous || !agentSubject) {
+      return;
+    }
+
+    announcedJoinRef.current = joined;
+
+    if (previous && sessionStorage.getItem(joinAnnounceKey(previous))) {
+      sessionStorage.removeItem(joinAnnounceKey(previous));
+      void postMeetingLeave(store, previous).catch(() => undefined);
+    }
+
+    if (joined && !sessionStorage.getItem(joinAnnounceKey(joined))) {
+      sessionStorage.setItem(joinAnnounceKey(joined), '1');
+      void postMeetingJoin(store, joined).catch(() => undefined);
+    }
+  }, [activeMeeting, followedSession, agentSubject, store]);
 
   const follow = useCallback((subject: string) => {
     setFollowedAgent(subject);

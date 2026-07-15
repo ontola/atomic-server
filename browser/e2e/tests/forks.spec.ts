@@ -42,7 +42,9 @@ test.describe('forks', () => {
     await page.getByRole('button', { name: 'Merge' }).click();
 
     // Back on the original, now carrying the fork's title, with no fork bar.
-    await expect(page).toHaveURL(new RegExp(encodeURIComponent(originalSubject)));
+    await expect(page).toHaveURL(
+      new RegExp(encodeURIComponent(originalSubject)),
+    );
     await expect(editableTitle(page)).toHaveText('Revised Cheese');
     await expect(page.getByText('Fork of')).toBeHidden();
   });
@@ -83,7 +85,9 @@ test.describe('forks', () => {
     await page.getByRole('button', { name: 'Discard' }).click();
 
     // Back on the original, unchanged, and the fork is gone.
-    await expect(page).toHaveURL(new RegExp(encodeURIComponent(originalSubject)));
+    await expect(page).toHaveURL(
+      new RegExp(encodeURIComponent(originalSubject)),
+    );
     await expect(editableTitle(page)).toHaveText('Keep Me');
     await expect(page.getByText('Fork of')).toBeHidden();
     expect(forkSubject).not.toBe(originalSubject);
@@ -135,7 +139,9 @@ test.describe('forks', () => {
     await mergeButton.click();
 
     // Back on the original, now carrying the fork's body edit, no fork bar.
-    await expect(page).toHaveURL(new RegExp(encodeURIComponent(originalSubject)));
+    await expect(page).toHaveURL(
+      new RegExp(encodeURIComponent(originalSubject)),
+    );
     await expect(page.getByText('Fork of')).toBeHidden();
     await expect(page.getByText('The seed line.')).toBeVisible();
     await expect(page.getByText('Added on the fork.')).toBeVisible();

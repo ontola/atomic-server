@@ -51,7 +51,9 @@ test('top-bar Meet starts a meeting and opens its panel', async ({ page }) => {
   expect(firstMeeting).not.toBe(initialSubject);
 
   await page.getByRole('button', { name: 'End meeting' }).click();
-  await expect(page.getByText('minutes', { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText('minutes', { exact: true }).first(),
+  ).toBeVisible();
   await page
     .getByRole('button', { name: 'Meet', exact: true })
     .click({ timeout: 30_000 });
@@ -103,7 +105,9 @@ test('prepare an agenda, start it, and preserve minutes', async ({ page }) => {
   await expect(page.getByText(agendaText)).toBeVisible();
 
   await page.getByRole('button', { name: 'End meeting' }).click();
-  await expect(page.getByText('minutes', { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText('minutes', { exact: true }).first(),
+  ).toBeVisible();
   await expect(page.getByText(agendaText)).toBeVisible();
 });
 
@@ -217,10 +221,73 @@ test('start a meeting, join it, follow along, and end it', async ({
     .getByTestId('follow-session-panel')
     .getByRole('link', { name: 'Open notes' })
     .click();
-  await expect(pageA.getByText('minutes', { exact: true }).first()).toBeVisible({
+  await expect(pageA.getByText('minutes', { exact: true }).first()).toBeVisible(
+    {
+      timeout: 30_000,
+    },
+  );
+  await expect(meetingBanner(pageB)).toHaveCount(0, { timeout: 30_000 });
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+test('records join and leave in the meeting chat', async ({ browser }) => {
+  test.setTimeout(120_000);
+
+  // Leader A on the dev drive.
+  const ctxA = await browser.newContext();
+  const pageA = await ctxA.newPage();
+  await before({ page: pageA });
+  await pageA.waitForLoadState('load');
+  const drive = await pageA.evaluate(() => window.store.getDrive());
+  const secret = await getDevDriveSecret(pageA);
+  await pageA.goto(
+    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive!)}`,
+  );
+
+  // Follower B: same agent, fresh context (no leader state of its own).
+  const ctxB = await browser.newContext();
+  const pageB = await ctxB.newPage();
+  await pageB.goto(FRONTEND_URL);
+  await signIn(pageB, secret);
+  await pageB.goto(
+    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive!)}`,
+  );
+
+  // Presence is live between the two sessions.
+  await expect(facepile(pageB).getByRole('button').first()).toBeVisible({
     timeout: 30_000,
   });
-  await expect(meetingBanner(pageB)).toHaveCount(0, { timeout: 30_000 });
+
+  // A starts a meeting; its chat panel opens.
+  await pageA.getByRole('button', { name: 'More' }).click();
+  await pageA.getByTestId('menu-item-meeting').click();
+  const leaderPanel = pageA.getByTestId('follow-session-panel');
+  await expect(leaderPanel).toHaveAttribute('data-open', '', {
+    timeout: 30_000,
+  });
+
+  // B joins from the top-bar banner.
+  await expect(joinBanner(pageB)).toBeVisible({ timeout: 30_000 });
+  await joinBanner(pageB).click();
+  const followerPanel = pageB.getByTestId('follow-session-panel');
+  await expect(followerPanel.getByText('Started the meeting.')).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // Joining is recorded as a follow-event, and syncs to the leader's chat.
+  await expect(leaderPanel.getByText('Joined the meeting.')).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // B leaves from the panel header while the meeting is still live.
+  await pageB.getByRole('button', { name: 'Leave', exact: true }).click();
+
+  // Leaving is recorded too (it is filtered only when the meeting has ended).
+  await expect(leaderPanel.getByText('Left the meeting.')).toBeVisible({
+    timeout: 30_000,
+  });
 
   await ctxA.close();
   await ctxB.close();
