@@ -5,6 +5,8 @@ import tableDefaults from '@repo-lib-defaults/table.json';
 import chatroomDefaults from '@repo-lib-defaults/chatroom.json';
 import ontologiesDefaults from '@repo-lib-defaults/ontologies.json';
 import aiDefaults from '@repo-lib-defaults/ai.json';
+import meetingDefaults from '@repo-lib-defaults/meeting.json';
+import forksDefaults from '@repo-lib-defaults/forks.json';
 
 /**
  * Injects base models and default store resources into the store.
@@ -37,6 +39,8 @@ export function bootstrap(store: Store): void {
     addBootstrapped(chatroomDefaults);
     addBootstrapped(ontologiesDefaults);
     addBootstrapped(aiDefaults);
+    addBootstrapped(meetingDefaults);
+    addBootstrapped(forksDefaults);
   } catch (e) {
     console.error('Failed to bootstrap store:', e);
   }
