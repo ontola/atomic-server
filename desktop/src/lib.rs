@@ -143,6 +143,39 @@ async fn adopt_agent(
   Ok(())
 }
 
+/// Start the read-only NFS virtual drive (desktop only — mobile can't mount
+/// NFS). Returns the current status, including the `mount` command to run.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn virtual_drive_start(
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+  vfs: tauri::State<'_, std::sync::Arc<vfs::VfsController>>,
+) -> Result<vfs::VfsStatus, String> {
+  let store = node
+    .store
+    .get()
+    .ok_or("The local node has not finished starting up.")?
+    .clone();
+  vfs.start(store);
+
+  Ok(vfs.status())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn virtual_drive_stop(vfs: tauri::State<'_, std::sync::Arc<vfs::VfsController>>) -> vfs::VfsStatus {
+  vfs.stop();
+  vfs.status()
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn virtual_drive_status(
+  vfs: tauri::State<'_, std::sync::Arc<vfs::VfsController>>,
+) -> vfs::VfsStatus {
+  vfs.status()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let builder = tauri::Builder::default()
@@ -157,10 +190,23 @@ pub fn run() {
   let node = std::sync::Arc::new(EmbeddedNode::default());
   let node_for_server = node.clone();
 
+  let builder = builder.manage(PairLinks::default()).manage(node);
+
+  // The virtual-drive NFS mount is desktop-only; register its state + commands
+  // only there (mobile can't mount NFS).
+  #[cfg(not(any(target_os = "android", target_os = "ios")))]
+  let builder = builder
+    .manage(std::sync::Arc::new(vfs::VfsController::default()))
+    .invoke_handler(tauri::generate_handler![
+      adopt_agent,
+      virtual_drive_start,
+      virtual_drive_stop,
+      virtual_drive_status
+    ]);
+  #[cfg(any(target_os = "android", target_os = "ios"))]
+  let builder = builder.invoke_handler(tauri::generate_handler![adopt_agent]);
+
   builder
-    .manage(PairLinks::default())
-    .manage(node)
-    .invoke_handler(tauri::generate_handler![adopt_agent])
     .setup(move |app| {
       {
         use tauri::Manager;
@@ -278,10 +324,6 @@ pub fn run() {
           config_clone,
           |appstate| {
             let _ = node_for_server.store.set(appstate.store.clone());
-            // Store, indexes and transports are up: expose the drives as a
-            // read-only NFS mount (desktop only — mobile can't mount NFS).
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
-            crate::vfs::spawn(appstate.store.clone());
           },
         ))
         .unwrap();

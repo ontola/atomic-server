@@ -506,45 +506,99 @@ fn sanitize_name(name: &str) -> String {
   sanitized
 }
 
-/// Run the NFS server until it stops. Bound to loopback; the OS mounts it with
-/// the port flags printed by `spawn`.
-pub async fn serve(store: Db) -> std::io::Result<()> {
-  let listener = NFSTcpListener::bind(NFS_ADDR, AtomicNfsFs::new(store)).await?;
-  listener.handle_forever().await
+/// The `mount` command a user runs to attach the virtual drive read-only. The
+/// non-privileged port needs no sudo, but the `mount` call itself may still
+/// require elevated rights depending on the OS.
+pub fn mount_command() -> String {
+  let port = NFS_ADDR.rsplit(':').next().unwrap_or("11111");
+  format!(
+    "mkdir -p ~/AtomicDrive && mount -t nfs -o \
+     nolocks,vers=3,tcp,port={port},mountport={port},soft,ro 127.0.0.1:/ ~/AtomicDrive"
+  )
 }
 
-/// Start the virtual-drive NFS server on its own thread + runtime, so it runs
-/// independently of the embedded server's actix reactor. Logs the exact `mount`
-/// command; auto-mounting is a follow-up (it is OS-specific and may need
-/// elevated privileges).
-pub fn spawn(store: Db) {
-  std::thread::Builder::new()
-    .name("atomic-vfs-nfs".to_string())
-    .spawn(move || {
-      let runtime = match tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-      {
-        Ok(runtime) => runtime,
-        Err(error) => {
-          eprintln!("[vfs] could not start the NFS runtime: {error}");
-          return;
+/// Status of the virtual-drive NFS server, surfaced to the desktop UI.
+#[derive(serde::Serialize)]
+pub struct VfsStatus {
+  pub running: bool,
+  pub addr: String,
+  pub mount_command: String,
+}
+
+/// Serve the NFS filesystem until `shutdown` resolves (fired, or its sender
+/// dropped). Bound to loopback.
+async fn serve_until(
+  store: Db,
+  shutdown: tokio::sync::oneshot::Receiver<()>,
+) -> std::io::Result<()> {
+  let listener = NFSTcpListener::bind(NFS_ADDR, AtomicNfsFs::new(store)).await?;
+
+  tokio::select! {
+    result = listener.handle_forever() => result,
+    _ = shutdown => Ok(()),
+  }
+}
+
+/// Owns the virtual-drive NFS server's lifecycle, so the app (via a Tauri
+/// command) starts and stops the mount rather than it being always-on.
+#[derive(Default)]
+pub struct VfsController {
+  running: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+}
+
+impl VfsController {
+  /// Start the NFS server if it isn't already running, on its own thread +
+  /// runtime (independent of the embedded server's actix reactor).
+  pub fn start(&self, store: Db) {
+    let mut running = self.running.lock().unwrap();
+
+    if running.is_some() {
+      return;
+    }
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+
+    std::thread::Builder::new()
+      .name("atomic-vfs-nfs".to_string())
+      .spawn(move || {
+        let runtime = match tokio::runtime::Builder::new_multi_thread()
+          .enable_all()
+          .build()
+        {
+          Ok(runtime) => runtime,
+          Err(error) => {
+            eprintln!("[vfs] could not start the NFS runtime: {error}");
+            return;
+          }
+        };
+
+        if let Err(error) = runtime.block_on(serve_until(store, shutdown_rx)) {
+          eprintln!("[vfs] NFS server stopped: {error}");
         }
-      };
+      })
+      .expect("failed to spawn the atomic-vfs-nfs thread");
 
-      let port = NFS_ADDR.rsplit(':').next().unwrap_or("11111");
-      println!(
-        "[vfs] virtual drive listening on {NFS_ADDR}. Mount it read-only with:\n  \
-                 mkdir -p ~/AtomicDrive && mount -t nfs -o \
-                 nolocks,vers=3,tcp,port={port},mountport={port},soft,ro \
-                 127.0.0.1:/ ~/AtomicDrive"
-      );
+    *running = Some(shutdown_tx);
+    println!("[vfs] virtual drive listening on {NFS_ADDR}");
+  }
 
-      if let Err(error) = runtime.block_on(serve(store)) {
-        eprintln!("[vfs] NFS server stopped: {error}");
-      }
-    })
-    .expect("failed to spawn the atomic-vfs-nfs thread");
+  /// Stop the server if running. Dropping the shutdown sender ends the accept
+  /// loop, and the worker thread then exits on its own.
+  pub fn stop(&self) {
+    self.running.lock().unwrap().take();
+  }
+
+  pub fn is_running(&self) -> bool {
+    self.running.lock().unwrap().is_some()
+  }
+
+  pub fn status(&self) -> VfsStatus {
+    VfsStatus {
+      running: self.is_running(),
+      addr: NFS_ADDR.to_string(),
+      mount_command: mount_command(),
+    }
+  }
 }
 
 #[cfg(test)]

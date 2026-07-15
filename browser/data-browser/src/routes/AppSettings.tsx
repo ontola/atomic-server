@@ -13,6 +13,8 @@ import { Panel, usePanelList } from '../components/SideBar/usePanelList';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
 import AISettings from '@components/AI/AISettings';
+import { VirtualDriveSettings } from '@components/Settings/VirtualDriveSettings';
+import { isVirtualDriveAvailable } from '../helpers/virtualDrive';
 import { SUPPORTED_LOCALES, useLocale } from '@components/LocaleContext';
 import { BasicSelect } from '@components/forms/BasicSelect';
 import { styled } from 'styled-components';
@@ -199,6 +201,11 @@ const AppSettings: React.FunctionComponent = () => {
                 </CheckboxLabel>
               </Column>
             </SettingsSection>
+            {isVirtualDriveAvailable() && (
+              <SettingsSection label='Virtual drive'>
+                <VirtualDriveSettings />
+              </SettingsSection>
+            )}
             <AISettings />
           </SettingsGroup>
         </SettingsSearchProvider>

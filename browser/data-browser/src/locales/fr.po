@@ -5384,3 +5384,41 @@ msgstr ""
 #: src/helpers/draftsFolder.ts
 msgid "Unpublished new content. Resources here are visible to people who can write to this drive; publish one by moving it somewhere publicly readable."
 msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Virtual drive"
+msgstr ""
+
+#. 0: error
+#: src/components/Settings/VirtualDriveSettings.tsx
+msgid "Virtual drive: {0}"
+msgstr ""
+
+#: src/components/Settings/VirtualDriveSettings.tsx
+msgid "Mount command copied"
+msgstr ""
+
+#: src/components/Settings/VirtualDriveSettings.tsx
+msgid "Stop virtual drive"
+msgstr ""
+
+#: src/components/Settings/VirtualDriveSettings.tsx
+msgid "Start virtual drive"
+msgstr ""
+
+#. 0: status.addr
+#: src/components/Settings/VirtualDriveSettings.tsx
+msgid "Running on {0}"
+msgstr ""
+
+#: src/components/Settings/VirtualDriveSettings.tsx
+msgid "Stopped"
+msgstr ""
+
+#: src/components/Settings/VirtualDriveSettings.tsx
+msgid "Copy mount command"
+msgstr ""
+
+#: src/components/Settings/VirtualDriveSettings.tsx
+msgid "Mount your Atomic drives as a read-only folder on this computer, served over local NFS. Turn it on, then run the mount command in a terminal."
+msgstr ""

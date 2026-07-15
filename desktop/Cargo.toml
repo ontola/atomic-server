@@ -33,7 +33,7 @@ tauri-plugin-barcode-scanner = "2"
 nfsserve = "0.10"
 hex = "0.4"
 async-trait = "0.1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 
 [dependencies.atomic-server]
 # No HTTPS for desktop, but include Iroh for p2p sync
