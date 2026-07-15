@@ -1,6 +1,14 @@
+import { useMemo } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
-import { diffDraft, drafts, useResource, type Resource } from '@tomic/react';
+import {
+  commits,
+  diffDraft,
+  drafts,
+  useResource,
+  useValue,
+  type Resource,
+} from '@tomic/react';
 import { FaCodeBranch, FaCodeMerge } from 'react-icons/fa6';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
@@ -26,11 +34,29 @@ export function DraftBar({
     | undefined;
   const originalResource = useResource(original ?? '');
 
+  // Subscribe to each resource's latest commit so the component re-renders when
+  // either changes — and so `diffDraft` is recomputed then, rather than being
+  // memoized on the (stable) resource proxy references, which never change when
+  // a resource mutates internally. See the React-Compiler / Resource-proxy note.
+  const [draftCommit] = useValue(resource, commits.properties.lastCommit);
+  const [originalCommit] = useValue(
+    originalResource,
+    commits.properties.lastCommit,
+  );
+
+  const changes = useMemo(
+    () => diffDraft(resource, originalResource),
+    // The commit ids are deliberate invalidation keys, not syntactic inputs:
+    // `diffDraft` reads the resources' internals, which mutate without changing
+    // the proxy reference. Re-run when either resource commits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [resource, originalResource, draftCommit, originalCommit],
+  );
+
   if (!resource.isDraft || !original) {
     return null;
   }
 
-  const changes = diffDraft(resource, originalResource);
   const conflicts = changes.filter(c => c.conflict);
 
   const merge = async () => {
