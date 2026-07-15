@@ -1059,16 +1059,30 @@ async fn serve_until(
 /// resource's `internalId` + `filesize`. Signed by the store's default agent.
 async fn commit_file(store: &Db, subject: &str, data: &[u8]) {
   let hash = blake3::hash(data);
-
-  if store.kv.insert(Tree::Blobs, hash.as_bytes(), data).is_err() {
-    return;
-  }
+  let hash_hex = hash.to_hex().to_string();
 
   let Ok(mut resource) = store.get_resource(&Subject::from(subject)).await else {
     return;
   };
 
-  for (prop, value) in hash_props(store, &hash.to_hex().to_string(), data.len()) {
+  // Content-addressed no-op skip: if the bytes are unchanged, there's nothing to
+  // commit — avoids a redundant blob write + commit when an editor saves a file
+  // it didn't actually change.
+  if resource
+    .get(urls::INTERNAL_ID)
+    .ok()
+    .and_then(value_string)
+    .as_deref()
+    == Some(hash_hex.as_str())
+  {
+    return;
+  }
+
+  if store.kv.insert(Tree::Blobs, hash.as_bytes(), data).is_err() {
+    return;
+  }
+
+  for (prop, value) in hash_props(store, &hash_hex, data.len()) {
     if let Err(error) = resource.set(prop.into(), value, store).await {
       eprintln!("[vfs] flush set {prop} failed for {subject}: {error}");
 
