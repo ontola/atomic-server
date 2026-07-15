@@ -60,7 +60,7 @@ const filtersKey = (filters: QueryFilter['filters']): string =>
 const buildCollection = (
   store: Store,
   server: string | undefined,
-  { property, value, filters, sort_by, sort_desc }: QueryFilter,
+  { property, value, filters, sort_by, sort_desc, drive }: QueryFilter,
   pageSize?: number,
   includeNested?: boolean,
 ) => {
@@ -73,6 +73,10 @@ const buildCollection = (
   if (sort_desc !== undefined) builder.setSortDesc(sort_desc);
   if (pageSize) builder.setPageSize(pageSize);
   if (includeNested) builder.setIncludeNested(includeNested);
+  // The local ClientDb index requires a drive scope; pass it through when the
+  // caller provides one so the same query works offline, not only against the
+  // server.
+  if (drive) builder.setDrive(drive);
 
   return builder.build();
 };
@@ -265,6 +269,7 @@ function useQueryFilterMemo(queryFilter: QueryFilter) {
       filtersDep,
       queryFilter.sort_by,
       queryFilter.sort_desc,
+      queryFilter.drive,
     ],
   );
 }

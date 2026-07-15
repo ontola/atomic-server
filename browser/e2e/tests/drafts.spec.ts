@@ -5,6 +5,7 @@ import {
   editableTitle,
   editTitle,
   getCurrentSubject,
+  openSubject,
   newResource,
 } from './test-utils';
 
@@ -44,6 +45,28 @@ test.describe('drafts', () => {
     await expect(page).toHaveURL(new RegExp(encodeURIComponent(originalSubject)));
     await expect(editableTitle(page)).toHaveText('Revised Cheese');
     await expect(page.getByText('Draft of')).toBeHidden();
+  });
+
+  test('the original shows the drafts that propose changes to it', async ({
+    page,
+  }) => {
+    await newResource('folder', page);
+    await editTitle('Reviewable', page);
+    const originalSubject = await getCurrentSubject(page);
+
+    await contextMenuClick('editAsDraft', page);
+    await expect(page.getByText('Draft of')).toBeVisible();
+    await editTitle('Proposed rename', page);
+
+    // A reviewer opening the original discovers the draft with no inbox — a
+    // reverse query over the drive, surfaced above the resource.
+    await openSubject(page, originalSubject);
+    await expect(
+      page.getByText('1 draft proposes a change to this'),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Proposed rename' }),
+    ).toBeVisible();
   });
 
   test('discard removes the draft and returns to the original', async ({

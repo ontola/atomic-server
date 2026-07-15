@@ -90,10 +90,13 @@ Because the merge commit is an ordinary write to the original, **authorization n
 no changes at all**: `check_write` on the original already decides who may merge.
 
 **Flow gaps still open** (the mechanism is safe, but the review flow is not complete):
-- **Discovery.** Nothing on the original surfaces its pending drafts. `originalSubject`
-  makes the reverse query trivial (an indexer or a collection), but no UI shows "N
-  drafts propose changes to this". Without it, a reviewer must already know to browse
-  the Drafts folder.
+- **Discovery — done for same-drive.** A `PendingDrafts` bar on the original runs a
+  reverse query (`originalSubject == thisResource`, drive-scoped) and lists the drafts
+  proposing changes to it. This works because a same-drive draft rides ordinary drive
+  sync into the reviewer's own replica, where a local query finds it — no inbox, no
+  push. It only surfaces drafts the reviewer can already read; a proposal on someone
+  else's drive is invisible here **by design** and needs the cross-agent delivery
+  primitive below.
 - **Review/diff UI.** `diffDraft` returns per-property base/draft/original + conflict;
   reuse the existing `components/ResourceDiff` to render it. The DraftBar only shows
   counts today.
