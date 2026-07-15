@@ -103,6 +103,12 @@ no changes at all**: `check_write` on the original already decides who may merge
   Open questions) — scope separately.
 - **Reject with reason.** Declining someone else's proposal is only `Discard` (destroy).
   A record/notification is missing.
+- **Loro-container classes (DocumentV2, Canvas) are not supported.** Their content
+  lives in a `doc` / stroke Loro container, invisible to the propval-based fork and
+  three-way diff: forking one copies no body, and the diff reports zero changes so
+  Merge is disabled. `Edit as draft` should be hidden for these classes until an
+  oplog-based fork/merge exists (the `doc`-container oplog merge already noted above).
+  The draft e2e uses a Folder for this reason.
 
 Known limitation: squash is last-write-wins per property, so it cannot faithfully
 merge a rich-text `doc` container that changed on both sides. Classes with a `doc`
