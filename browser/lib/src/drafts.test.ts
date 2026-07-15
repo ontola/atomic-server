@@ -6,6 +6,7 @@ import { testStore } from './test-store.js';
 
 const BLOGPOST = 'https://atomicdata.dev/classes/BlogPost';
 const DRIVE = 'https://atomicdata.dev/classes/Drive';
+const DOCUMENT_V2 = 'https://atomicdata.dev/classes/DocumentV2';
 const PUBLIC_AGENT = 'https://atomicdata.dev/agents/publicAgent';
 
 describe('drafts', () => {
@@ -187,6 +188,54 @@ describe('drafts', () => {
     expect(merged.get(core.properties.name)).toBe('Cheese Revisited');
     // The original keeps the grant it had; the merge neither strips nor grants.
     expect(merged.get(core.properties.read)).toEqual([PUBLIC_AGENT]);
+  });
+
+  it('forks a document body and merges concurrent body edits as a CRDT', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+
+    const drive = await store.newResource({ isA: DRIVE, noParent: true });
+    await drive.save();
+
+    // A document whose body lives in the Loro `doc` container, not in propvals.
+    const original = await store.newResource({
+      parent: drive.subject,
+      isA: DOCUMENT_V2,
+      propVals: { [core.properties.name]: 'Original Doc' },
+    });
+    original.getLoroDoc()!.getMap('doc').set('intro', 'shared intro');
+    original.markDirty();
+    await original.save();
+
+    // Fork: the draft's body must be seeded from the original (not empty), and
+    // it must record a fork version for the CRDT merge.
+    const draft = await forkResource(store, original, drive.subject);
+    expect(draft.getLoroDoc()!.getMap('doc').get('intro')).toBe('shared intro');
+    expect(draft.get(drafts.properties.forkVersion)).toBeTruthy();
+
+    // Concurrent body edits: the draft adds one key, the original another.
+    draft.getLoroDoc()!.getMap('doc').set('fromDraft', 'DRAFT');
+    draft.markDirty();
+    await draft.save();
+
+    original.getLoroDoc()!.getMap('doc').set('fromOriginal', 'ORIGINAL');
+    original.markDirty();
+    await original.save();
+
+    const merged = await mergeDraft(store, draft);
+    const body = merged.getLoroDoc()!.getMap('doc');
+
+    // Both concurrent body edits survive — a true merge, not an overwrite.
+    expect(body.get('fromDraft')).toBe('DRAFT');
+    expect(body.get('fromOriginal')).toBe('ORIGINAL');
+    expect(body.get('intro')).toBe('shared intro');
+
+    // The original keeps its identity.
+    expect(merged.get(core.properties.name)).toBe('Original Doc');
+    expect(merged.getClasses()).not.toContain(drafts.classes.draft);
+    expect(merged.get(drafts.properties.originalSubject)).toBe(undefined);
+    expect(merged.get(drafts.properties.forkVersion)).toBe(undefined);
   });
 
   it('refuses to merge a resource that is not a draft of anything', async ({

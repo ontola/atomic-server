@@ -2186,9 +2186,11 @@ export class Resource<C extends OptionalClass = any> {
       append(existing as LoroList, item);
     } else {
       const list = map.setContainer(propUrl, new LoroList());
+
       for (const el of propVal) {
         append(list, el);
       }
+
       append(list, item);
     }
 
@@ -2715,6 +2717,73 @@ export class Resource<C extends OptionalClass = any> {
   /** Whether this resource proposes a change to another one. */
   public get isDraft(): boolean {
     return isDraft(this);
+  }
+
+  /**
+   * Whether this resource carries Loro-container content — a rich-text `doc`
+   * body (DocumentV2) — beyond its plain propvals. Such content can't be forked
+   * or merged by copying propvals; it needs the CRDT body path below.
+   */
+  public hasLoroBody(): boolean {
+    const doc = this.getLoroDoc();
+
+    if (!doc) return false;
+
+    try {
+      return doc.getMap('doc').keys().length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Seed this resource's Loro body from `source` by importing its snapshot, so
+   * the two bodies share causal history and can later merge as a CRDT. Returns
+   * `source`'s Loro version at this point, base64-encoded — persist it (as
+   * `forkVersion`) and pass it to {@link mergeLoroBodyFrom} at merge time.
+   *
+   * The import also overwrites this resource's propvals with `source`'s; the
+   * caller MUST re-assert this resource's own identity/propvals afterward.
+   * @internal drafts fork/merge only.
+   */
+  public seedLoroBodyFrom(source: Resource): string | undefined {
+    const src = source.getLoroDoc();
+    const dst = this.getLoroDoc();
+
+    if (!src || !dst) return undefined;
+
+    const forkVersion = src.oplogVersion();
+    dst.import(src.export({ mode: 'snapshot' }));
+    dst.commit();
+
+    return encodeB64(forkVersion.encode());
+  }
+
+  /**
+   * Merge `draft`'s body edits since `forkVersionB64` into this resource's live
+   * Loro doc. Because the draft's body shares this resource's pre-fork history
+   * (see {@link seedLoroBodyFrom}), only the draft's new body ops are imported,
+   * and they merge with any concurrent edits to this resource as a CRDT — no
+   * side loses its work.
+   *
+   * The import also overwrites this resource's propvals with the draft's; the
+   * caller MUST restore this resource's own propvals afterward.
+   * @internal drafts fork/merge only.
+   */
+  public mergeLoroBodyFrom(draft: Resource, forkVersionB64: string): void {
+    const src = draft.getLoroDoc();
+    const dst = this.getLoroDoc();
+
+    if (!src || !dst) return;
+
+    const { VersionVector } = LoroLoader.Loro;
+    const from = VersionVector.decode(decodeB64(forkVersionB64));
+    const delta = src.export({ mode: 'update', from });
+
+    if (delta.length === 0) return;
+
+    dst.import(delta);
+    dst.commit();
   }
 
   public async save(): Promise<SaveResult> {

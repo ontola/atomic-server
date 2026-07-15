@@ -56,6 +56,8 @@ original `status`-property proposal in #467 fell into.
 | --- | --- | --- |
 | `Draft` (class) | — | Marker: this resource proposes a change to another. |
 | `originalSubject` | atomicURL | The resource it proposes to change. |
+| `forkBase` | json | The original's content propvals at fork time, for the three-way propval merge. |
+| `forkVersion` | string | Base64 Loro version vector at fork time, for the CRDT body merge (only on drafts of Loro-body classes). |
 
 `originalSubject` is the term already spec'd in `docs/src/commits/suggestions.md`
 ("Fork", "Suggestion", "Controller", "Inbox"); we implement it rather than mint a
@@ -80,11 +82,25 @@ untouched by the draft is left alone. Where both sides changed the same property
 is a **conflict**, surfaced (`DraftChange.conflict`, count shown in the DraftBar,
 `onConflict: 'throw'` to abort) rather than silently resolved.
 
-Squash rather than importing the fork's Loro oplog, because an oplog import lands
-every intermediate draft revision in the original's doc — permanently and, once
-published, publicly reconstructible. Squash leaves draft history behind on the fork
-where it stays private. It also needs no new commit semantics and stays portable
-across the `Backend` seam `nextgraph-interop.md` wants.
+Squash rather than importing the fork's Loro oplog *for propvals*, because an oplog
+import lands every intermediate draft revision in the original's doc — permanently
+and, once published, publicly reconstructible. Squash leaves draft history behind on
+the fork where it stays private. It also needs no new commit semantics and stays
+portable across the `Backend` seam `nextgraph-interop.md` wants.
+
+**The body of a Loro-body class (DocumentV2) is a genuine CRDT merge, not a squash.**
+A document's text lives in a Loro `doc` container that the propval diff cannot see, so
+propval squash alone would lose every body edit. The fork therefore *seeds* the draft's
+Loro doc from the original's (`seedLoroBodyFrom` — a snapshot import, so the draft's body
+shares the original's causal history) and records `forkVersion`, the version vector at
+fork time. Merging (`mergeLoroBodyFrom`) exports only the draft's ops *since* `forkVersion`
+and imports that delta into the original — a real op-level merge, so a concurrent body edit
+on the original and one on the draft both survive. This is scoped to the `doc` container:
+seeding/merging a snapshot would clobber the original's propvals, so the merge snapshots
+the original's propvals around the import and restores them, keeping the body merge (Loro)
+and the propval merge (three-way) independent. Pinned by
+`browser/lib/src/drafts.test.ts` ("forks a document body and merges concurrent body edits
+as a CRDT") and the `edit a document body as a draft` e2e.
 
 Because the merge commit is an ordinary write to the original, **authorization needs
 no changes at all**: `check_write` on the original already decides who may merge.
@@ -106,16 +122,13 @@ no changes at all**: `check_write` on the original already decides who may merge
   Open questions) — scope separately.
 - **Reject with reason.** Declining someone else's proposal is only `Discard` (destroy).
   A record/notification is missing.
-- **Loro-container classes (DocumentV2, Canvas) are not supported.** Their content
-  lives in a `doc` / stroke Loro container, invisible to the propval-based fork and
-  three-way diff: forking one copies no body, and the diff reports zero changes so
-  Merge is disabled. `Edit as draft` should be hidden for these classes until an
-  oplog-based fork/merge exists (the `doc`-container oplog merge already noted above).
-  The draft e2e uses a Folder for this reason.
-
-Known limitation: squash is last-write-wins per property, so it cannot faithfully
-merge a rich-text `doc` container that changed on both sides. Classes with a `doc`
-container (DocumentV2) need oplog merge; later phase, not this one.
+- **DocumentV2 is supported; Canvas is not.** A document's body is a Loro `doc`
+  container, now seeded on fork and CRDT-merged on merge (see "The body of a Loro-body
+  class" above), so `Edit as draft` works on documents and the draft bar offers Merge on
+  the strength of a body edit alone (`hasBody`, no changed propval). A Canvas keeps its
+  content in Loro *stroke lists*, not the `doc` container the fork seeds, so forking one
+  would silently lose the body — `Edit as draft` is gated off Canvas (and off Drive)
+  until canvas grows its own fork/merge.
 
 ## What we are *not* doing, and why
 
@@ -230,4 +243,6 @@ import missing defaults idempotently on boot) before this ships.
   first.
 - **Cross-agent suggestions need distributor mode**, not the hub-mediated trust mode that
   ships today. Same-drive drafts do not — which is why drafts ship first.
-- **Rich-text merge.** Squash cannot merge a `doc` container that diverged on both sides.
+- **Canvas body merge.** DocumentV2's `doc` container is CRDT-merged; Canvas's stroke lists
+  are not yet forked/merged, so `Edit as draft` is gated off Canvas. Extending the
+  seed/merge to stroke containers is the remaining Loro-body case.

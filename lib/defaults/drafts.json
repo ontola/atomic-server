@@ -12,7 +12,8 @@
     ],
     "https://atomicdata.dev/properties/properties": [
       "https://atomicdata.dev/properties/originalSubject",
-      "https://atomicdata.dev/properties/forkBase"
+      "https://atomicdata.dev/properties/forkBase",
+      "https://atomicdata.dev/properties/forkVersion"
     ]
   },
   {
@@ -46,5 +47,15 @@
     "https://atomicdata.dev/properties/shortname": "fork-base",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
     "https://atomicdata.dev/properties/description": "The content properties of the original at the moment this Draft was forked, as a JSON object keyed by property URL. Merging diffs the Draft against this base so only the properties the Draft actually changed are written onto the original — a property the Draft left untouched does not revert a concurrent edit to the original. A self-contained base: it needs no retained commit history to reconstruct the forked-from version."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/forkVersion",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/drafts",
+    "https://atomicdata.dev/properties/shortname": "fork-version",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "For a Draft of a resource with a Loro-backed body (a document, a canvas), the original's Loro version vector at the moment of the fork, base64-encoded. Merging exports the Draft's body operations since this point and imports them into the original, so the two bodies merge as a CRDT — concurrent edits on both sides are preserved, not overwritten."
   }
 ]

@@ -5328,3 +5328,12 @@ msgstr ""
 #: src/components/DraftBar.tsx
 msgid "conflict"
 msgstr ""
+
+#. 0: draftSubjects.length
+#: src/components/PendingDrafts.tsx
+msgid "{0} drafts propose changes to this:"
+msgstr ""
+
+#: src/components/DraftBar.tsx
+msgid "Edit the body, then merge."
+msgstr ""

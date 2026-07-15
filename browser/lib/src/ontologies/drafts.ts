@@ -16,6 +16,7 @@ export const drafts = {
   properties: {
     originalSubject: 'https://atomicdata.dev/properties/originalSubject',
     forkBase: 'https://atomicdata.dev/properties/forkBase',
+    forkVersion: 'https://atomicdata.dev/properties/forkVersion',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Draft']: [
@@ -40,10 +41,12 @@ declare module '../index.js' {
   interface PropTypeMapping {
     [drafts.properties.originalSubject]: string;
     [drafts.properties.forkBase]: JSONValue;
+    [drafts.properties.forkVersion]: string;
   }
 
   interface PropSubjectToNameMapping {
     [drafts.properties.originalSubject]: 'originalSubject';
     [drafts.properties.forkBase]: 'forkBase';
+    [drafts.properties.forkVersion]: 'forkVersion';
   }
 }

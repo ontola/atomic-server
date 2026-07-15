@@ -34,6 +34,7 @@ const NON_CONTENT_PROPS: ReadonlySet<string> = new Set<string>([
   'https://atomicdata.dev/properties/lastCommit',
   drafts.properties.originalSubject,
   drafts.properties.forkBase,
+  drafts.properties.forkVersion,
 ]);
 
 const contentPropsOf = (resource: Resource): Record<string, AtomicValue> =>
@@ -153,6 +154,25 @@ export async function forkResource(
     },
   });
 
+  // A document/canvas body lives in a Loro container, not in propvals, so
+  // `newResource` above gave the draft an empty body. Seed it from the original
+  // so the draft's body shares the original's causal history — that is what lets
+  // the merge be a real CRDT merge rather than an overwrite.
+  if (original.hasLoroBody()) {
+    // Seeding overwrites the draft's propvals with the original's, so snapshot
+    // the draft's own propvals first and re-assert them afterward.
+    const identity = draft.getPropVals();
+    const forkVersion = draft.seedLoroBodyFrom(original);
+
+    for (const [prop, value] of Object.entries(identity)) {
+      await draft.set(prop, value as AtomicValue, false);
+    }
+
+    if (forkVersion) {
+      await draft.set(drafts.properties.forkVersion, forkVersion, false);
+    }
+  }
+
   await draft.save();
 
   return draft;
@@ -173,16 +193,16 @@ export interface MergeDraftOptions {
  * current agent — so merging needs no special authorization: it succeeds exactly
  * when the agent may write to the original.
  *
- * This is a squash, but a *three-way* one: it writes only the properties the
- * draft changed relative to the version it forked (its `forkBase`), so a
- * property the draft never touched is left alone and a concurrent edit to the
- * original survives. Where both sides changed the same property, `onConflict`
- * decides. The draft's revision history stays behind on the fork rather than
- * becoming part of the original's (and, once published, public) doc.
+ * Propvals are a *three-way* squash: it writes only the properties the draft
+ * changed relative to the version it forked (its `forkBase`), so a property the
+ * draft never touched is left alone and a concurrent edit to the original
+ * survives. Where both sides changed the same property, `onConflict` decides.
+ * The draft's revision history stays behind on the fork rather than becoming
+ * part of the original's (and, once published, public) doc.
  *
- * It still cannot faithfully merge a rich-text `doc` container that changed on
- * both sides — that is last-write-wins within the container. Classes with such a
- * container need an oplog merge instead.
+ * A Loro body (DocumentV2's `doc` container) is instead a true CRDT merge: the
+ * draft's ops since `forkVersion` are exported and imported into the original,
+ * so a body edit on each side both survive. See {@link Resource.mergeLoroBodyFrom}.
  *
  * Returns the updated original. The draft is left alone — discard it separately
  * if you want it gone.
@@ -202,6 +222,8 @@ export async function mergeDraft(
   }
 
   const original = await store.getResource(originalSubject);
+  // Three-way propval diff must be computed against the original's *current*
+  // state, before any of the mutations below touch it.
   const changes = diffDraft(draft, original);
 
   if (onConflict === 'throw') {
@@ -218,6 +240,35 @@ export async function mergeDraft(
     }
   }
 
+  // For a document/canvas draft, CRDT-merge the body first. Importing the draft's
+  // body delta also overwrites the original's propvals with the draft's, so
+  // snapshot the original's propvals beforehand and restore them below — that
+  // keeps the body merge (Loro) and the propval merge (three-way) independent.
+  const forkVersion = draft.get(drafts.properties.forkVersion);
+
+  if (forkVersion) {
+    const originalPropvals = original.getPropVals();
+
+    original.mergeLoroBodyFrom(draft, forkVersion);
+
+    // Restore all of the original's own propvals — this undoes the propval
+    // clobber from the delta import, so a concurrent propval edit on the
+    // original is preserved, not reverted.
+    for (const [prop, value] of Object.entries(originalPropvals)) {
+      await original.set(prop, value as AtomicValue, false);
+    }
+
+    // The import also dragged the draft's own bookkeeping onto the original.
+    for (const prop of [
+      drafts.properties.originalSubject,
+      drafts.properties.forkBase,
+      drafts.properties.forkVersion,
+    ]) {
+      original.remove(prop);
+    }
+  }
+
+  // Propvals: apply exactly what the draft changed relative to its fork base.
   for (const change of changes) {
     if (change.draft === undefined) {
       original.remove(change.property); // the draft dropped this property

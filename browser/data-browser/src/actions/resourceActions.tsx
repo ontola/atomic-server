@@ -1,5 +1,5 @@
 import toast from 'react-hot-toast';
-import { core, drafts, server } from '@tomic/react';
+import { canvas, core, drafts, server } from '@tomic/react';
 import {
   FaArrowUpRightFromSquare,
   FaClock,
@@ -132,11 +132,15 @@ export const resourceActions: ActionDefinition[] = [
     keywords: ['draft', 'fork', 'suggest', 'propose', 'copy', 'branch'],
     icon: () => <FaCodeBranch />,
     // A Drive is a container, not content: forking one would copy its ACL and
-    // its whole shape, which is meaningless as a proposed change.
+    // its whole shape, which is meaningless as a proposed change. A Canvas keeps
+    // its content in Loro stroke lists (not the `doc` container the fork seeds),
+    // so forking one would lose the body — gate it off until canvas gets its own
+    // fork/merge.
     available: ctx =>
       ctx.canWrite &&
       !ctx.resource.isDraft &&
       !ctx.resource.getClasses().includes(server.classes.drive) &&
+      !ctx.resource.getClasses().includes(canvas.classes.canvas) &&
       !!ctx.drive,
     run: async ctx => {
       try {

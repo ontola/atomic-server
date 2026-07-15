@@ -58,6 +58,12 @@ export function DraftBar({
   }
 
   const conflicts = changes.filter(c => c.conflict);
+  // A document/canvas draft carries its edits in a Loro body, not in propvals,
+  // so `diffDraft` (propvals only) can't see them. Presence of a fork version
+  // marks such a draft; treat it as always mergeable rather than showing "no
+  // changes" and disabling merge. The body itself is CRDT-merged.
+  const hasBody = !!resource.get(drafts.properties.forkVersion);
+  const mergeable = changes.length > 0 || hasBody;
 
   const merge = async () => {
     // Never let a merge silently overwrite a property that was also edited on
@@ -108,7 +114,9 @@ export function DraftBar({
           <ResourceInline subject={original} />
           <Subtle>
             {changes.length === 0
-              ? 'No changes yet.'
+              ? hasBody
+                ? 'Edit the body, then merge.'
+                : 'No changes yet.'
               : `${changes.length} changed propert${
                   changes.length === 1 ? 'y' : 'ies'
                 }.`}
@@ -123,7 +131,7 @@ export function DraftBar({
           <Button subtle onClick={discard}>
             Discard
           </Button>
-          <Button onClick={merge} disabled={changes.length === 0}>
+          <Button onClick={merge} disabled={!mergeable}>
             <FaCodeMerge /> Merge
           </Button>
         </Row>

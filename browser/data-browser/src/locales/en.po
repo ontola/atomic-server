@@ -5362,3 +5362,12 @@ msgstr "{0} changed propert{1}."
 #: src/components/DraftBar.tsx
 msgid "conflict"
 msgstr "conflict"
+
+#. 0: draftSubjects.length
+#: src/components/PendingDrafts.tsx
+msgid "{0} drafts propose changes to this:"
+msgstr "{0} drafts propose changes to this:"
+
+#: src/components/DraftBar.tsx
+msgid "Edit the body, then merge."
+msgstr "Edit the body, then merge."

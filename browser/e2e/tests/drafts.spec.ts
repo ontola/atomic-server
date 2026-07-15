@@ -88,4 +88,56 @@ test.describe('drafts', () => {
     await expect(page.getByText('Draft of')).toBeHidden();
     expect(draftSubject).not.toBe(originalSubject);
   });
+
+  // A document's text lives in a Loro `doc` container, not in propvals, so its
+  // draft carries a `forkVersion` and the merge is a CRDT body merge — not the
+  // three-way propval squash the other tests exercise. The draft bar must offer
+  // Merge on the strength of the body alone (no changed property), and the
+  // body edit must land on the original.
+  test('edit a document body as a draft, then merge, applies the body edit', async ({
+    page,
+  }) => {
+    test.slow();
+
+    await newResource('document', page);
+    await editTitle('Manifesto', page);
+    const originalSubject = await getCurrentSubject(page);
+
+    await expect(page.getByText('loading...')).not.toBeVisible();
+    const editor = page.getByLabel('Rich Text Editor');
+    await expect(editor).toBeVisible({ timeout: 30000 });
+    await editor.click();
+    await page.keyboard.type('The seed line.');
+    await expect(page.getByText('The seed line.')).toBeVisible();
+
+    // Fork the document. The draft renders through the same document view, its
+    // body seeded from the original, with the draft bar above it.
+    await contextMenuClick('editAsDraft', page);
+    await expect(page.getByText('Draft of')).toBeVisible();
+    const draftSubject = await getCurrentSubject(page);
+    expect(draftSubject).not.toBe(originalSubject);
+
+    // The seeded body came along.
+    const draftEditor = page.getByLabel('Rich Text Editor');
+    await expect(draftEditor).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText('The seed line.')).toBeVisible();
+
+    // Add a paragraph on the draft only.
+    await draftEditor.click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Added on the draft.');
+    await expect(page.getByText('Added on the draft.')).toBeVisible();
+
+    // No propval changed — Merge is offered purely because the body did.
+    const mergeButton = page.getByRole('button', { name: 'Merge' });
+    await expect(mergeButton).toBeEnabled();
+    await mergeButton.click();
+
+    // Back on the original, now carrying the draft's body edit, no draft bar.
+    await expect(page).toHaveURL(new RegExp(encodeURIComponent(originalSubject)));
+    await expect(page.getByText('Draft of')).toBeHidden();
+    await expect(page.getByText('The seed line.')).toBeVisible();
+    await expect(page.getByText('Added on the draft.')).toBeVisible();
+  });
 });
