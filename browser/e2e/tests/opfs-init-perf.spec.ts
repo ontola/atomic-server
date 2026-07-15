@@ -108,7 +108,6 @@ test.describe('init performance (OPFS / WASM ClientDb)', () => {
       try {
         const root = await navigator.storage.getDirectory();
 
-        // @ts-expect-error - entries() is available on OPFS dirs in Chromium
         for await (const [name] of root.entries()) {
           await root
             .removeEntry(name, { recursive: true })

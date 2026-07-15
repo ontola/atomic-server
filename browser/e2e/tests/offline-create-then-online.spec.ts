@@ -65,10 +65,9 @@ test.describe('offline create → online sync → disable localDB', () => {
     // 3. Create a drive while offline.
     const offlineDriveSubject = await page.evaluate(async () => {
       const store = window.store;
-      const drive = await store.createDrive(
-        'Offline-Created Drive',
-        'Created while offline — must survive disabling localDB.',
-      );
+      const drive = await store.createDrive('Offline-Created Drive', {
+        description: 'Created while offline — must survive disabling localDB.',
+      });
 
       return drive.subject as string;
     });

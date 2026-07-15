@@ -104,7 +104,7 @@ test.describe('multi-property (AND) filtering', () => {
 
         return res?.subjects ?? [];
       },
-      { nameProp: NAME, descProp: DESCRIPTION, drive: created.drive },
+      { nameProp: NAME, descProp: DESCRIPTION, drive: created.drive! },
     );
 
     expect(
@@ -133,7 +133,7 @@ test.describe('multi-property (AND) filtering', () => {
 
         return Array.isArray(members) ? (members as string[]) : [];
       },
-      { nameProp: NAME, descProp: DESCRIPTION, drive: created.drive },
+      { nameProp: NAME, descProp: DESCRIPTION, drive: created.drive! },
     );
 
     expect(
@@ -217,7 +217,7 @@ test.describe('multi-property (AND) filtering', () => {
 
         return res?.subjects ?? [];
       },
-      { parent: PARENT, nameProp: NAME, drive: created.drive },
+      { parent: PARENT, nameProp: NAME, drive: created.drive! },
     );
 
     expect(sorted(localStarts), 'local starts_with "Ap"').toEqual(
@@ -246,7 +246,7 @@ test.describe('multi-property (AND) filtering', () => {
 
         return Array.isArray(members) ? (members as string[]) : [];
       },
-      { parent: PARENT, nameProp: NAME, drive: created.drive },
+      { parent: PARENT, nameProp: NAME, drive: created.drive! },
     );
 
     expect(serverContains, 'server contains "an"').toEqual([created.banana]);

@@ -14,19 +14,28 @@ test('edit persists to local ClientDb across the drain', async ({ page }) => {
     const NAME = 'https://atomicdata.dev/properties/name';
     const FOLDER = 'https://atomicdata.dev/classes/Folder';
 
+    // `fetchResourceFromClientDb` is a private Store method reached here only
+    // to probe local persistence from inside the page; cast to bypass TS's
+    // visibility check (this runs as plain JS in the browser).
+    const asAny = s as unknown as {
+      fetchResourceFromClientDb: (
+        subject: string,
+      ) => Promise<{ get?: (prop: string) => unknown } | undefined>;
+    };
+
     const tmp = await s.createSubject('persist-test');
     const r = await s.newResource({ subject: tmp, parent: drive, isA: FOLDER });
-    await r.set(NAME, 'PersistProbe-A', s);
-    await r.save(s);
+    await r.set(NAME, 'PersistProbe-A');
+    await r.save();
     const realSubject = r.subject;
     await new Promise(res => setTimeout(res, 1500));
-    const afterCreate = await s.fetchResourceFromClientDb(realSubject);
+    const afterCreate = await asAny.fetchResourceFromClientDb(realSubject);
 
     const r2 = await s.getResource(realSubject);
-    await r2.set(NAME, 'PersistProbe-B-EDITED', s);
-    await r2.save(s);
+    await r2.set(NAME, 'PersistProbe-B-EDITED');
+    await r2.save();
     await new Promise(res => setTimeout(res, 2500));
-    const afterEdit = await s.fetchResourceFromClientDb(realSubject);
+    const afterEdit = await asAny.fetchResourceFromClientDb(realSubject);
     const srv = await s.fetchResourceFromServer(realSubject);
 
     return {

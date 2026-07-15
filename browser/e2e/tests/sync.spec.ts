@@ -45,15 +45,13 @@ async function waitForSynced(page: import('@playwright/test').Page) {
       .evaluate(() => {
         const store = window.store;
         const status = store.getSyncStatus();
+        // The outbox is Loro-delta based now (a pre-signed genesis + a save
+        // cursor), not a list of commits — surface those fields instead.
         const entries = store.outbox.pending().map(entry => ({
           subject: entry.subject,
-          commitCount: entry.commits?.length,
-          commits: (entry.commits ?? []).map(c => ({
-            signature: c.signature,
-            previousCommit: c.previousCommit,
-            setKeys: c.set ? Object.keys(c.set) : undefined,
-            destroy: c.destroy,
-          })),
+          enqueuedAt: entry.enqueuedAt,
+          hasSignedGenesis: !!entry.signedGenesis,
+          baseVersion: entry.baseVersion,
           lastAttemptError: entry.lastAttemptError,
         }));
 
@@ -207,9 +205,9 @@ test.describe('sync', () => {
     // `store.ts` `waitForServerConnected`) has resolved — under a
     // contended runner that can outlast a bare `toBeVisible` poll.
     await page.waitForFunction(
-      (subject: string) =>
+      ({ subject }) =>
         window.store.getResourceLoading(subject).title === 'Edited Offline',
-      resourceSubject,
+      { subject: resourceSubject! },
       { timeout: 20000 },
     );
 
