@@ -79,53 +79,159 @@ struct Staging {
   files: Mutex<HashMap<fileid3, StagedFile>>,
 }
 
-/// Bidirectional `fileid3 <-> Subject` map. NFS needs small stable `u64` file
-/// ids; Atomic subjects are long strings. v1 keeps this in memory and rebuilds
-/// it per mount — `planning/virtual-drive.md` calls for a disk-backed map before
-/// fileid stability becomes a wire guarantee, but for a single mount session an
-/// in-memory map is correct. `get_or_alloc` also mints the id for a freshly
+// Persistent-map key namespaces inside `Tree::PluginMeta`.
+const ID_SUBJECT_TO_ID: &[u8] = b"vfs:s2i:";
+const ID_ID_TO_SUBJECT: &[u8] = b"vfs:i2s:";
+const ID_NEXT: &[u8] = b"vfs:next";
+
+/// Bidirectional `fileid3 <-> Subject` map. NFS needs small `u64` file ids that
+/// are **stable across restarts** (the OS and NFS clients cache them and assume
+/// they never change for a given file); Atomic subjects are long strings. The
+/// mapping is persisted in the store's `PluginMeta` tree so a file keeps its id
+/// across remounts, with an in-memory cache in front so getattr/read don't hit
+/// the kv store on every call. `get_or_alloc` also mints the id for a freshly
 /// created resource (`create`/`mkdir`).
 struct IdMap {
-  inner: Mutex<IdMapInner>,
+  store: Db,
+  cache: Mutex<IdCache>,
 }
 
-struct IdMapInner {
+#[derive(Default)]
+struct IdCache {
   to_subject: HashMap<fileid3, String>,
   to_id: HashMap<String, fileid3>,
-  next: fileid3,
+  /// Next id to hand out; lazily loaded from `ID_NEXT` on first allocation.
+  next: Option<fileid3>,
 }
 
 impl IdMap {
-  fn new() -> Self {
+  fn new(store: Db) -> Self {
     IdMap {
-      inner: Mutex::new(IdMapInner {
-        to_subject: HashMap::new(),
-        to_id: HashMap::new(),
-        // 1 is the synthetic root; real resources start at 2.
-        next: ROOT_ID + 1,
-      }),
+      store,
+      cache: Mutex::new(IdCache::default()),
     }
   }
 
-  /// Return the existing id for a subject, or mint a new stable one.
+  /// Return the stable id for a subject, minting (and persisting) one if this is
+  /// the first time we've seen it.
   fn get_or_alloc(&self, subject: &str) -> fileid3 {
-    let mut inner = self.inner.lock().unwrap();
+    let mut cache = self.cache.lock().unwrap();
 
-    if let Some(id) = inner.to_id.get(subject) {
+    if let Some(id) = cache.to_id.get(subject) {
       return *id;
     }
 
-    let id = inner.next;
-    inner.next += 1;
-    inner.to_id.insert(subject.to_string(), id);
-    inner.to_subject.insert(id, subject.to_string());
+    // Reuse the persisted id if this subject was seen in a previous session.
+    if let Some(id) = self.read_persisted_id(subject) {
+      cache.remember(id, subject);
+
+      return id;
+    }
+
+    // Mint the next id and persist both directions + the counter.
+    let next = cache.next.unwrap_or_else(|| {
+      self
+        .read_u64(ID_NEXT)
+        // 1 is the synthetic root; real resources start at 2.
+        .unwrap_or(ROOT_ID + 1)
+    });
+    let id = next;
+    cache.next = Some(next + 1);
+
+    let _ = self
+      .store
+      .kv
+      .insert(Tree::PluginMeta, ID_NEXT, &(next + 1).to_be_bytes());
+    let _ = self.store.kv.insert(
+      Tree::PluginMeta,
+      &subject_to_id_key(subject),
+      &id.to_be_bytes(),
+    );
+    let _ = self
+      .store
+      .kv
+      .insert(Tree::PluginMeta, &id_to_subject_key(id), subject.as_bytes());
+
+    cache.remember(id, subject);
 
     id
   }
 
   fn subject(&self, id: fileid3) -> Option<String> {
-    self.inner.lock().unwrap().to_subject.get(&id).cloned()
+    let mut cache = self.cache.lock().unwrap();
+
+    if let Some(subject) = cache.to_subject.get(&id) {
+      return Some(subject.clone());
+    }
+
+    let bytes = self
+      .store
+      .kv
+      .get(Tree::PluginMeta, &id_to_subject_key(id))
+      .ok()
+      .flatten()?;
+    let subject = String::from_utf8_lossy(&bytes).to_string();
+    cache.remember(id, &subject);
+
+    Some(subject)
   }
+
+  /// Forget a subject's id (both directions + cache), for a resource that was
+  /// removed, so the persistent map doesn't accumulate dead entries.
+  fn forget(&self, id: fileid3, subject: &str) {
+    let _ = self
+      .store
+      .kv
+      .remove(Tree::PluginMeta, &subject_to_id_key(subject));
+    let _ = self
+      .store
+      .kv
+      .remove(Tree::PluginMeta, &id_to_subject_key(id));
+
+    let mut cache = self.cache.lock().unwrap();
+    cache.to_subject.remove(&id);
+    cache.to_id.remove(subject);
+  }
+
+  fn read_persisted_id(&self, subject: &str) -> Option<fileid3> {
+    let bytes = self
+      .store
+      .kv
+      .get(Tree::PluginMeta, &subject_to_id_key(subject))
+      .ok()
+      .flatten()?;
+
+    read_u64_bytes(&bytes)
+  }
+
+  fn read_u64(&self, key: &[u8]) -> Option<fileid3> {
+    self
+      .store
+      .kv
+      .get(Tree::PluginMeta, key)
+      .ok()
+      .flatten()
+      .and_then(|bytes| read_u64_bytes(&bytes))
+  }
+}
+
+impl IdCache {
+  fn remember(&mut self, id: fileid3, subject: &str) {
+    self.to_id.insert(subject.to_string(), id);
+    self.to_subject.insert(id, subject.to_string());
+  }
+}
+
+fn subject_to_id_key(subject: &str) -> Vec<u8> {
+  [ID_SUBJECT_TO_ID, subject.as_bytes()].concat()
+}
+
+fn id_to_subject_key(id: fileid3) -> Vec<u8> {
+  [ID_ID_TO_SUBJECT, &id.to_be_bytes()].concat()
+}
+
+fn read_u64_bytes(bytes: &[u8]) -> Option<fileid3> {
+  bytes.try_into().ok().map(u64::from_be_bytes)
 }
 
 pub struct AtomicNfsFs {
@@ -142,8 +248,8 @@ pub struct AtomicNfsFs {
 impl AtomicNfsFs {
   pub fn new(store: Db) -> Self {
     AtomicNfsFs {
+      ids: IdMap::new(store.clone()),
       store,
-      ids: IdMap::new(),
       staging: Arc::new(Staging::default()),
       source_id: format!("vfs-{}", std::process::id()),
     }
@@ -542,15 +648,19 @@ impl NFSFileSystem for AtomicNfsFs {
   async fn remove(&self, dirid: fileid3, filename: &filename3) -> Result<(), nfsstat3> {
     let parent = self.dir_subject(dirid).await?;
     let mut resource = self.find_child(&parent, filename.as_ref()).await?;
+    let subject = resource.get_subject().to_string();
 
     // Drop any pending staged writes for it before it goes away.
-    let id = self.ids.get_or_alloc(resource.get_subject().as_str());
+    let id = self.ids.get_or_alloc(&subject);
     self.staging.files.lock().unwrap().remove(&id);
 
     resource
       .destroy(&self.store)
       .await
       .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+
+    // Reclaim its persisted fileid entry.
+    self.ids.forget(id, &subject);
 
     Ok(())
   }
@@ -1274,5 +1384,44 @@ mod tests {
     // remove.
     fs.remove(folder_id, &fname("renamed.txt")).await.unwrap();
     assert!(fs.lookup(folder_id, &fname("renamed.txt")).await.is_err());
+  }
+
+  /// A file keeps its NFS fileid across a remount (a fresh `AtomicNfsFs` with an
+  /// empty cache), because the map is persisted in the store.
+  #[tokio::test(flavor = "multi_thread")]
+  async fn fileids_are_stable_across_remounts() {
+    let store = Db::init_temp("vfs_stable_ids").await.unwrap();
+    let drive = store.create_drive("Stable Drive").await.unwrap();
+    let folder = store
+      .create_resource(urls::FOLDER, &drive, "F", None)
+      .await
+      .unwrap();
+
+    async fn folder_id(fs: &AtomicNfsFs) -> fileid3 {
+      let root = fs.readdir(ROOT_ID, 0, 100).await.unwrap();
+      let drive_id = root
+        .entries
+        .iter()
+        .find(|entry| name_of(entry) == "Stable Drive")
+        .unwrap()
+        .fileid;
+      let listing = fs.readdir(drive_id, 0, 100).await.unwrap();
+      listing
+        .entries
+        .iter()
+        .find(|entry| name_of(entry) == "F")
+        .unwrap()
+        .fileid
+    }
+
+    let first = folder_id(&AtomicNfsFs::new(store.clone())).await;
+
+    // A second mount starts with an empty in-memory cache but reads the
+    // persisted map, so the same subject yields the same id.
+    let fs2 = AtomicNfsFs::new(store.clone());
+    let second = folder_id(&fs2).await;
+
+    assert_eq!(first, second);
+    assert_eq!(fs2.ids.subject(second).unwrap(), folder);
   }
 }
