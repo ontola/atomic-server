@@ -5254,86 +5254,39 @@ msgid "<0>This can’t be undone.</0> Without a recovery backup, no one can rest
 msgstr ""
 
 #: src/actions/resourceActions.tsx
-msgid "Edit as draft"
-msgstr ""
-
-#: src/actions/resourceActions.tsx
-msgid "Fork this resource into a draft. The original is untouched until you merge."
-msgstr ""
-
-#: src/actions/resourceActions.tsx
-msgid "Draft created"
-msgstr ""
-
-#: src/actions/resourceActions.tsx
-msgid "Merge draft"
-msgstr ""
-
-#: src/actions/resourceActions.tsx
-msgid "Write this draft onto the resource it was forked from, as a single commit."
-msgstr ""
-
-#: src/actions/resourceActions.tsx
-#: src/components/DraftBar.tsx
-msgid "Draft merged"
-msgstr ""
-
-#: src/actions/resourceActions.tsx
 msgid "Open original"
-msgstr ""
-
-#: src/actions/resourceActions.tsx
-msgid "Open the resource this draft was forked from."
 msgstr ""
 
 #: src/helpers/draftsFolder.ts
 msgid "Drafts"
 msgstr ""
 
-#: src/helpers/draftsFolder.ts
+#: src/helpers/forksFolder.ts
 msgid "Work in progress. Resources here are visible to people who can write to this drive, and are published by moving them somewhere publicly readable."
 msgstr ""
 
-#: src/components/DraftBar.tsx
-msgid "Draft discarded"
-msgstr ""
-
-#: src/components/DraftBar.tsx
+#: src/components/ForkBar.tsx
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftBar.tsx
+#: src/components/ForkBar.tsx
 msgid "<0/> Merge"
 msgstr ""
 
-#: src/components/DraftBar.tsx
-msgid "Draft of"
-msgstr ""
-
-#. 0: conflicts.length; 1: conflicts.length === 1 ? 'y was' \\: 'ies were'; 2: conflicts .map(c => c.property.split('/').pop()) .join(', '); 3: conflicts.length === 1 ? 'it' \\: 'them'
-#: src/components/DraftBar.tsx
-msgid "{0} propert{1} also changed on the original since this draft was made ({2}). Merging will overwrite {3} with this draft's version. Continue?"
-msgstr ""
-
-#: src/components/DraftBar.tsx
+#: src/components/ForkBar.tsx
 msgid "No changes yet."
 msgstr ""
 
 #. 0: changes.length; 1: changes.length === 1 ? 'y' \\: 'ies'
-#: src/components/DraftBar.tsx
+#: src/components/ForkBar.tsx
 msgid "{0} changed propert{1}."
 msgstr ""
 
-#: src/components/DraftBar.tsx
+#: src/components/ForkBar.tsx
 msgid "conflict"
 msgstr ""
 
-#. 0: draftSubjects.length
-#: src/components/PendingDrafts.tsx
-msgid "{0} drafts propose changes to this:"
-msgstr ""
-
-#: src/components/DraftBar.tsx
+#: src/components/ForkBar.tsx
 msgid "Edit the body, then merge."
 msgstr ""
 
@@ -5343,10 +5296,6 @@ msgstr ""
 
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New Meeting"
-msgstr ""
-
-#: src/components/Presence/FollowSessionPanelContainer.tsx
-msgid "Open notes"
 msgstr ""
 
 #: src/components/Presence/MeetingBanner.tsx
@@ -5367,4 +5316,71 @@ msgstr ""
 
 #: src/views/Meeting/MeetingPage.tsx
 msgid "Loading meeting notes…"
+msgstr ""
+
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "Notes"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Edit as fork"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Fork this resource. The original is untouched until you merge the fork back."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Fork created"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Merge fork"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Write this fork onto the resource it was forked from, as a single commit."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+#: src/components/ForkBar.tsx
+msgid "Fork merged"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Open the resource this fork was forked from."
+msgstr ""
+
+#. 0: conflicts.length; 1: conflicts.length === 1 ? 'y was' \\: 'ies were'; 2: conflicts .map(c => c.property.split('/').pop()) .join(', '); 3: conflicts.length === 1 ? 'it' \\: 'them'
+#: src/components/ForkBar.tsx
+msgid "{0} propert{1} also changed on the original since this fork was made ({2}). Merging will overwrite {3} with this fork's version. Continue?"
+msgstr ""
+
+#: src/components/ForkBar.tsx
+msgid "Fork discarded"
+msgstr ""
+
+#: src/components/ForkBar.tsx
+msgid "Fork of"
+msgstr ""
+
+#. 0: forkSubjects.length
+#: src/components/PendingForks.tsx
+msgid "{0} forks propose changes to this:"
+msgstr ""
+
+#: src/helpers/forksFolder.ts
+msgid "Forks"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "New draft"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Create new, unpublished content in this drive’s Drafts folder."
+msgstr ""
+
+#: src/helpers/draftsFolder.ts
+msgid "Unpublished new content. Resources here are visible to people who can write to this drive; publish one by moving it somewhere publicly readable."
 msgstr ""

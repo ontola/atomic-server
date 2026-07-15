@@ -1,0 +1,61 @@
+[
+  {
+    "@id": "https://atomicdata.dev/ontology/forks",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
+    "https://atomicdata.dev/properties/shortname": "forks",
+    "https://atomicdata.dev/properties/description": "Proposing changes to existing resources. A Fork is a copy of another resource: it carries the same classes as the resource it forked, alongside the Fork class, and names its original through `originalSubject`. Merging a Fork writes its state onto the original as an ordinary commit signed by whoever holds write rights there, so a Fork needs no special authorization. Forks and suggestions are the same mechanism: a fork is a change you merge yourself, a suggestion is one you ask someone else to merge.\n\nA *draft* is a different thing and is deliberately not modelled here: unpublished new content is just an ordinary resource that lives in a private folder. Whether a resource is public is decided by where it lives — a resource in a publicly readable folder is public, one outside it is not. Publishing and archiving are moves, not status changes. So a fork has a target resource (`originalSubject`) and merges; a draft only has a target parent and publishes by moving.",
+    "https://atomicdata.dev/properties/classes": [
+      "https://atomicdata.dev/classes/Fork"
+    ],
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/properties/originalSubject",
+      "https://atomicdata.dev/properties/forkBase",
+      "https://atomicdata.dev/properties/forkVersion"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Fork",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/forks",
+    "https://atomicdata.dev/properties/shortname": "fork",
+    "https://atomicdata.dev/properties/description": "A proposed change to another resource. Added *alongside* the classes of the resource it forked (e.g. `isA: [BlogPost, Fork]`), so the normal views render it. A Fork is an ordinary resource with its own subject, history and rights: it can be edited, discussed and shared like anything else, and it is private exactly when its parent is.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/originalSubject"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/originalSubject",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/forks",
+    "https://atomicdata.dev/properties/shortname": "original-subject",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The resource that this Fork proposes to change — the resource it was forked from. Merging the Fork writes its state onto this subject."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/forkBase",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/forks",
+    "https://atomicdata.dev/properties/shortname": "fork-base",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The content properties of the original at the moment this Fork was made, as a JSON object keyed by property URL. Merging diffs the Fork against this base so only the properties the Fork actually changed are written onto the original — a property the Fork left untouched does not revert a concurrent edit to the original. A self-contained base: it needs no retained commit history to reconstruct the forked-from version."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/forkVersion",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/forks",
+    "https://atomicdata.dev/properties/shortname": "fork-version",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "For a Fork of a resource with a Loro-backed body (a document, a canvas), the original's Loro version vector at the moment of the fork, base64-encoded. Merging exports the Fork's body operations since this point and imports them into the original, so the two bodies merge as a CRDT — concurrent edits on both sides are preserved, not overwritten."
+  }
+]

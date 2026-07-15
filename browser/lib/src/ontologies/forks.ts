@@ -1,17 +1,17 @@
 /* -----------------------------------
  * Hand-maintained, in the shape @tomic/cli generates.
  *
- * The `drafts` ontology is defined in `lib/defaults/drafts.json` and bootstrapped
+ * The `forks` ontology is defined in `lib/defaults/forks.json` and bootstrapped
  * by every server, but its Ontology resource does not exist on atomicdata.dev, so
  * `ad-generate ontologies` cannot produce this file. Keep it in sync with
- * `lib/defaults/drafts.json` by hand until the ontology is published.
+ * `lib/defaults/forks.json` by hand until the ontology is published.
  * -------------------------------- */
 
 import type { OntologyBaseObject, BaseProps, JSONValue } from '../index.js';
 
-export const drafts = {
+export const forks = {
   classes: {
-    draft: 'https://atomicdata.dev/classes/Draft',
+    fork: 'https://atomicdata.dev/classes/Fork',
   },
   properties: {
     originalSubject: 'https://atomicdata.dev/properties/originalSubject',
@@ -19,34 +19,34 @@ export const drafts = {
     forkVersion: 'https://atomicdata.dev/properties/forkVersion',
   },
   __classDefs: {
-    ['https://atomicdata.dev/classes/Draft']: [
+    ['https://atomicdata.dev/classes/Fork']: [
       'https://atomicdata.dev/properties/originalSubject',
     ],
   },
 } as const satisfies OntologyBaseObject;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
-export namespace Drafts {
-  export type Draft = typeof drafts.classes.draft;
+export namespace Forks {
+  export type Fork = typeof forks.classes.fork;
 }
 
 declare module '../index.js' {
   interface Classes {
-    [drafts.classes.draft]: {
-      requires: BaseProps | typeof drafts.properties.originalSubject;
-      recommends: typeof drafts.properties.forkBase;
+    [forks.classes.fork]: {
+      requires: BaseProps | typeof forks.properties.originalSubject;
+      recommends: typeof forks.properties.forkBase;
     };
   }
 
   interface PropTypeMapping {
-    [drafts.properties.originalSubject]: string;
-    [drafts.properties.forkBase]: JSONValue;
-    [drafts.properties.forkVersion]: string;
+    [forks.properties.originalSubject]: string;
+    [forks.properties.forkBase]: JSONValue;
+    [forks.properties.forkVersion]: string;
   }
 
   interface PropSubjectToNameMapping {
-    [drafts.properties.originalSubject]: 'originalSubject';
-    [drafts.properties.forkBase]: 'forkBase';
-    [drafts.properties.forkVersion]: 'forkVersion';
+    [forks.properties.originalSubject]: 'originalSubject';
+    [forks.properties.forkBase]: 'forkBase';
+    [forks.properties.forkVersion]: 'forkVersion';
   }
 }

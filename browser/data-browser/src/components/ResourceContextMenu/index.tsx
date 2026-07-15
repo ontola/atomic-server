@@ -44,8 +44,8 @@ export const ContextMenuOptions = {
   AddToChat: 'addToChat',
   Favorite: 'favorite',
   Parent: 'parent',
-  EditAsDraft: 'editAsDraft',
-  MergeDraft: 'mergeDraft',
+  EditAsFork: 'editAsFork',
+  MergeFork: 'mergeFork',
   OpenOriginal: 'openOriginal',
 } as const;
 

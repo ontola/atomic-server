@@ -29,10 +29,10 @@ import {
 import type { ChangeSource, Store } from './store.js';
 import {
   forkResource,
-  isDraft,
-  mergeDraft,
-  type MergeDraftOptions,
-} from './drafts.js';
+  isFork,
+  mergeFork,
+  type MergeForkOptions,
+} from './forks.js';
 import { GENESIS, properties, instances } from './urls.js';
 import {
   valToArray,
@@ -2695,28 +2695,28 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * Fork this resource into a Draft under `parent`, and save it.
+   * Fork this resource into a Fork under `parent`, and save it.
    *
-   * The draft is only as private as `parent` is — see {@link forkResource}.
+   * The fork is only as private as `parent` is — see {@link forkResource}.
    */
   public fork(parent: string): Promise<Resource> {
     return forkResource(this.store, this, parent);
   }
 
   /**
-   * Merge this Draft onto the resource it forked, as a single commit signed by
-   * the current agent. Throws if this is not a Draft. See {@link mergeDraft}.
+   * Merge this Fork onto the resource it forked, as a single commit signed by
+   * the current agent. Throws if this is not a Fork. See {@link mergeFork}.
    *
    * Named for its target rather than `merge`, which already means something
    * else here: folding another Resource's propvals into this one.
    */
-  public mergeIntoOriginal(options?: MergeDraftOptions): Promise<Resource> {
-    return mergeDraft(this.store, this, options);
+  public mergeIntoOriginal(options?: MergeForkOptions): Promise<Resource> {
+    return mergeFork(this.store, this, options);
   }
 
   /** Whether this resource proposes a change to another one. */
-  public get isDraft(): boolean {
-    return isDraft(this);
+  public get isFork(): boolean {
+    return isFork(this);
   }
 
   /**
@@ -2744,7 +2744,7 @@ export class Resource<C extends OptionalClass = any> {
    *
    * The import also overwrites this resource's propvals with `source`'s; the
    * caller MUST re-assert this resource's own identity/propvals afterward.
-   * @internal drafts fork/merge only.
+   * @internal fork/merge only.
    */
   public seedLoroBodyFrom(source: Resource): string | undefined {
     const src = source.getLoroDoc();
@@ -2760,18 +2760,18 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * Merge `draft`'s body edits since `forkVersionB64` into this resource's live
-   * Loro doc. Because the draft's body shares this resource's pre-fork history
-   * (see {@link seedLoroBodyFrom}), only the draft's new body ops are imported,
+   * Merge `fork`'s body edits since `forkVersionB64` into this resource's live
+   * Loro doc. Because the fork's body shares this resource's pre-fork history
+   * (see {@link seedLoroBodyFrom}), only the fork's new body ops are imported,
    * and they merge with any concurrent edits to this resource as a CRDT — no
    * side loses its work.
    *
-   * The import also overwrites this resource's propvals with the draft's; the
+   * The import also overwrites this resource's propvals with the fork's; the
    * caller MUST restore this resource's own propvals afterward.
-   * @internal drafts fork/merge only.
+   * @internal fork/merge only.
    */
-  public mergeLoroBodyFrom(draft: Resource, forkVersionB64: string): void {
-    const src = draft.getLoroDoc();
+  public mergeLoroBodyFrom(fork: Resource, forkVersionB64: string): void {
+    const src = fork.getLoroDoc();
     const dst = this.getLoroDoc();
 
     if (!src || !dst) return;

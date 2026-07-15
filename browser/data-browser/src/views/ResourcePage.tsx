@@ -28,8 +28,8 @@ import { BookmarkPage } from './BookmarkPage/BookmarkPage';
 import { ImporterPage } from './ImporterPage.jsx';
 import { FolderPage } from './FolderPage';
 import { ArticlePage } from './Article';
-import { DraftBar } from '../components/DraftBar';
-import { PendingDrafts } from '../components/PendingDrafts';
+import { ForkBar } from '../components/ForkBar';
+import { PendingForks } from '../components/PendingForks';
 import { Main } from '../components/Main';
 import { OntologyPage } from './OntologyPage';
 import { TagPage } from './TagPage/TagPage';
@@ -169,11 +169,11 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
     <Main subject={subject}>
       <ErrorBoundary>
         <Suspense fallback={<Spinner />}>
-          {/* A draft renders through its content class's own view, so the bar is
+          {/* A fork renders through its content class's own view, so the bar is
               the only thing telling you this is not the original. */}
-          <DraftBar resource={resource} />
-          {/* And on the original: the drafts proposing changes to it. */}
-          <PendingDrafts resource={resource} />
+          <ForkBar resource={resource} />
+          {/* And on the original: the forks proposing changes to it. */}
+          <PendingForks resource={resource} />
           <ReturnComponent resource={resource} />
         </Suspense>
       </ErrorBoundary>

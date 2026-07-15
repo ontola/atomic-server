@@ -1,5 +1,5 @@
 import toast from 'react-hot-toast';
-import { canvas, core, drafts, server } from '@tomic/react';
+import { canvas, core, forks, server } from '@tomic/react';
 import {
   FaArrowUpRightFromSquare,
   FaClock,
@@ -7,6 +7,7 @@ import {
   FaCodeBranch,
   FaCodeMerge,
   FaDownload,
+  FaFilePen,
   FaMagnifyingGlass,
   FaMessage,
   FaPencil,
@@ -19,6 +20,7 @@ import {
   FaVideo,
   FaVideoSlash,
 } from 'react-icons/fa6';
+import { getOrCreateForksFolder } from '../helpers/forksFolder';
 import { getOrCreateDraftsFolder } from '../helpers/draftsFolder';
 import {
   constructOpenURL,
@@ -62,6 +64,34 @@ export const resourceActions: ActionDefinition[] = [
         const meeting = await ctx.startMeeting?.();
 
         if (meeting) ctx.openMeetingPanel?.(meeting);
+      }
+    },
+  },
+  {
+    id: 'newDraft',
+    scope: 'app',
+    section: 'action',
+    label: () => 'New draft',
+    // A draft is new content that isn't published yet. It is not a class, it is
+    // a place: a resource in the drive's Drafts folder, which carries no public
+    // read grant, so it stays private until you publish it by moving it out.
+    // (A Fork, by contrast, proposes a change to an *existing* resource.)
+    helper: () =>
+      'Create new, unpublished content in this drive’s Drafts folder.',
+    keywords: ['draft', 'new', 'create', 'unpublished', 'compose', 'post'],
+    icon: () => <FaFilePen />,
+    available: ctx => !!ctx.drive,
+    run: async ctx => {
+      try {
+        const draftsFolder = await getOrCreateDraftsFolder(
+          ctx.store,
+          ctx.drive!,
+        );
+        ctx.navigate(
+          `${paths.new}?parentSubject=${encodeURIComponent(draftsFolder)}`,
+        );
+      } catch (error) {
+        toast.error((error as Error).message);
       }
     },
   },
@@ -123,13 +153,13 @@ export const resourceActions: ActionDefinition[] = [
     run: ctx => ctx.navigate(editURL(ctx.subject)),
   },
   {
-    id: 'editAsDraft',
+    id: 'editAsFork',
     scope: 'resource',
     section: 'action',
-    label: () => 'Edit as draft',
+    label: () => 'Edit as fork',
     helper: () =>
-      'Fork this resource into a draft. The original is untouched until you merge.',
-    keywords: ['draft', 'fork', 'suggest', 'propose', 'copy', 'branch'],
+      'Fork this resource. The original is untouched until you merge the fork back.',
+    keywords: ['fork', 'draft', 'suggest', 'propose', 'copy', 'branch'],
     icon: () => <FaCodeBranch />,
     // A Drive is a container, not content: forking one would copy its ACL and
     // its whole shape, which is meaningless as a proposed change. A Canvas keeps
@@ -138,38 +168,35 @@ export const resourceActions: ActionDefinition[] = [
     // fork/merge.
     available: ctx =>
       ctx.canWrite &&
-      !ctx.resource.isDraft &&
+      !ctx.resource.isFork &&
       !ctx.resource.getClasses().includes(server.classes.drive) &&
       !ctx.resource.getClasses().includes(canvas.classes.canvas) &&
       !!ctx.drive,
     run: async ctx => {
       try {
-        const draftsFolder = await getOrCreateDraftsFolder(
-          ctx.store,
-          ctx.drive!,
-        );
-        const draft = await ctx.resource.fork(draftsFolder);
-        toast.success('Draft created');
-        ctx.navigate(constructOpenURL(draft.subject));
+        const forksFolder = await getOrCreateForksFolder(ctx.store, ctx.drive!);
+        const fork = await ctx.resource.fork(forksFolder);
+        toast.success('Fork created');
+        ctx.navigate(constructOpenURL(fork.subject));
       } catch (error) {
         toast.error((error as Error).message);
       }
     },
   },
   {
-    id: 'mergeDraft',
+    id: 'mergeFork',
     scope: 'resource',
     section: 'action',
-    label: () => 'Merge draft',
+    label: () => 'Merge fork',
     helper: () =>
-      'Write this draft onto the resource it was forked from, as a single commit.',
-    keywords: ['merge', 'publish', 'apply', 'accept', 'draft'],
+      'Write this fork onto the resource it was forked from, as a single commit.',
+    keywords: ['merge', 'publish', 'apply', 'accept', 'fork', 'draft'],
     icon: () => <FaCodeMerge />,
-    available: ctx => ctx.resource.isDraft,
+    available: ctx => ctx.resource.isFork,
     run: async ctx => {
       try {
         const original = await ctx.resource.mergeIntoOriginal();
-        toast.success('Draft merged');
+        toast.success('Fork merged');
         ctx.navigate(constructOpenURL(original.subject));
       } catch (error) {
         toast.error((error as Error).message);
@@ -181,12 +208,12 @@ export const resourceActions: ActionDefinition[] = [
     scope: 'resource',
     section: 'view',
     label: () => 'Open original',
-    helper: () => 'Open the resource this draft was forked from.',
-    keywords: ['original', 'source', 'draft'],
+    helper: () => 'Open the resource this fork was forked from.',
+    keywords: ['original', 'source', 'fork', 'draft'],
     icon: () => <FaTurnUp />,
-    available: ctx => ctx.resource.isDraft,
+    available: ctx => ctx.resource.isFork,
     run: ctx => {
-      const original = ctx.resource.get(drafts.properties.originalSubject);
+      const original = ctx.resource.get(forks.properties.originalSubject);
 
       if (original) {
         ctx.navigate(constructOpenURL(original));

@@ -6,11 +6,16 @@ const DRAFTS_LOCAL_ID = 'drafts';
 /**
  * The drive's Drafts folder, created on first use.
  *
- * Drafts are kept out of the publicly readable part of a drive by *living*
- * somewhere the public cannot read — a folder is private precisely when it
- * carries no public read grant. So a draft is only as private as this folder is:
- * on a drive that is itself publicly readable, everything in it is public, and
- * this folder does not pretend otherwise.
+ * A *draft* is unpublished new content — an ordinary resource that has not been
+ * published yet. It is not a class, it is a *place*: anything living in this
+ * folder is a draft, and publishing it is simply moving it somewhere publicly
+ * readable. The folder carries no public read grant, so its contents are visible
+ * to people who can write to the drive but not to the public — which is what
+ * keeps an unpublished draft unpublished.
+ *
+ * This is distinct from a Fork (see {@link getOrCreateForksFolder}): a fork
+ * proposes a change to an *existing* resource and merges onto it, whereas a draft
+ * is brand-new content with no target other than its parent.
  */
 export async function getOrCreateDraftsFolder(
   store: Store,
@@ -40,7 +45,7 @@ export async function getOrCreateDraftsFolder(
       [core.properties.name]: 'Drafts',
       [core.properties.localId]: DRAFTS_LOCAL_ID,
       [core.properties.description]:
-        'Work in progress. Resources here are visible to people who can write to this drive, and are published by moving them somewhere publicly readable.',
+        'Unpublished new content. Resources here are visible to people who can write to this drive; publish one by moving it somewhere publicly readable.',
     },
   });
 

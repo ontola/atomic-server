@@ -29,7 +29,7 @@ pub const PLUGIN: &str = "https://atomicdata.dev/classes/Plugin";
 pub const TAG: &str = "https://atomicdata.dev/classes/Tag";
 pub const PEER: &str = "https://atomicdata.dev/classes/Peer";
 pub const PLAIN_TEXT: &str = "https://atomicdata.dev/classes/PlainText";
-pub const DRAFT: &str = "https://atomicdata.dev/classes/Draft";
+pub const FORK: &str = "https://atomicdata.dev/classes/Fork";
 
 // Properties
 pub const ORIGINAL_SUBJECT: &str = "https://atomicdata.dev/properties/originalSubject";

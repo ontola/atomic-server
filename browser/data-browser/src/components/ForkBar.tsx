@@ -3,8 +3,8 @@ import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import {
   commits,
-  diffDraft,
-  drafts,
+  diffFork,
+  forks,
   useResource,
   useValue,
   type Resource,
@@ -16,53 +16,51 @@ import { ResourceInline } from '../views/ResourceInline/ResourceInline';
 import { Button } from './Button';
 import { Row } from './Row';
 
-interface DraftBarProps {
+interface ForkBarProps {
   resource: Resource;
 }
 
 /**
- * Shown above a Draft's normal view. A draft renders through the same view as
+ * Shown above a Fork's normal view. A fork renders through the same view as
  * the resource it forked — it carries that resource's classes — so without this
  * bar there is nothing on screen to say you are not looking at the original.
  */
-export function DraftBar({
-  resource,
-}: DraftBarProps): React.JSX.Element | null {
+export function ForkBar({ resource }: ForkBarProps): React.JSX.Element | null {
   const navigate = useNavigateWithTransition();
-  const original = resource.get(drafts.properties.originalSubject) as
+  const original = resource.get(forks.properties.originalSubject) as
     | string
     | undefined;
   const originalResource = useResource(original ?? '');
 
   // Subscribe to each resource's latest commit so the component re-renders when
-  // either changes — and so `diffDraft` is recomputed then, rather than being
+  // either changes — and so `diffFork` is recomputed then, rather than being
   // memoized on the (stable) resource proxy references, which never change when
   // a resource mutates internally. See the React-Compiler / Resource-proxy note.
-  const [draftCommit] = useValue(resource, commits.properties.lastCommit);
+  const [forkCommit] = useValue(resource, commits.properties.lastCommit);
   const [originalCommit] = useValue(
     originalResource,
     commits.properties.lastCommit,
   );
 
   const changes = useMemo(
-    () => diffDraft(resource, originalResource),
+    () => diffFork(resource, originalResource),
     // The commit ids are deliberate invalidation keys, not syntactic inputs:
-    // `diffDraft` reads the resources' internals, which mutate without changing
+    // `diffFork` reads the resources' internals, which mutate without changing
     // the proxy reference. Re-run when either resource commits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [resource, originalResource, draftCommit, originalCommit],
+    [resource, originalResource, forkCommit, originalCommit],
   );
 
-  if (!resource.isDraft || !original) {
+  if (!resource.isFork || !original) {
     return null;
   }
 
   const conflicts = changes.filter(c => c.conflict);
-  // A document/canvas draft carries its edits in a Loro body, not in propvals,
-  // so `diffDraft` (propvals only) can't see them. Presence of a fork version
-  // marks such a draft; treat it as always mergeable rather than showing "no
+  // A document/canvas fork carries its edits in a Loro body, not in propvals,
+  // so `diffFork` (propvals only) can't see them. Presence of a fork version
+  // marks such a fork; treat it as always mergeable rather than showing "no
   // changes" and disabling merge. The body itself is CRDT-merged.
-  const hasBody = !!resource.get(drafts.properties.forkVersion);
+  const hasBody = !!resource.get(forks.properties.forkVersion);
   const mergeable = changes.length > 0 || hasBody;
 
   const merge = async () => {
@@ -73,11 +71,11 @@ export function DraftBar({
       !window.confirm(
         `${conflicts.length} propert${
           conflicts.length === 1 ? 'y was' : 'ies were'
-        } also changed on the original since this draft was made (${conflicts
+        } also changed on the original since this fork was made (${conflicts
           .map(c => c.property.split('/').pop())
           .join(', ')}). Merging will overwrite ${
           conflicts.length === 1 ? 'it' : 'them'
-        } with this draft's version. Continue?`,
+        } with this fork's version. Continue?`,
       )
     ) {
       return;
@@ -85,7 +83,7 @@ export function DraftBar({
 
     try {
       const merged = await resource.mergeIntoOriginal();
-      toast.success('Draft merged');
+      toast.success('Fork merged');
       navigate(constructOpenURL(merged.subject));
     } catch (error) {
       toast.error((error as Error).message);
@@ -95,7 +93,7 @@ export function DraftBar({
   const discard = async () => {
     try {
       await resource.destroy();
-      toast.success('Draft discarded');
+      toast.success('Fork discarded');
       navigate(constructOpenURL(original));
     } catch (error) {
       toast.error((error as Error).message);
@@ -110,7 +108,7 @@ export function DraftBar({
             an array of children, which React then wants keys for. */}
         <Row center gap='1ch'>
           <FaCodeBranch />
-          <span>Draft of</span>
+          <span>Fork of</span>
           <ResourceInline subject={original} />
           <Subtle>
             {changes.length === 0
