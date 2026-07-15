@@ -9,6 +9,7 @@ import { ChatRoomView } from '../../views/ChatRoom/ChatRoomView';
 import { EditableTitle } from '../EditableTitle';
 import { Column, Row } from '../Row';
 import { AtomicLink } from '../AtomicLink';
+import { Button, ButtonSubtle } from '../Button';
 
 /**
  * Right-side panel with the live meeting: who's here, the trail of
@@ -116,11 +117,13 @@ function FollowSessionChat({ subject }: { subject: string }) {
           )}
         </Row>
         <Row center gap='0.5rem'>
-          <AtomicLink subject={subject}>Open notes</AtomicLink>
+          <NotesButton as={AtomicLink} subject={subject} clean>
+            Notes
+          </NotesButton>
           {showAction && (
-            <LeaveButton type='button' onClick={handleAction} disabled={ending}>
+            <Button subtle onClick={handleAction} disabled={ending}>
               {ending ? 'Ending…' : label}
-            </LeaveButton>
+            </Button>
           )}
         </Row>
       </PanelHeader>
@@ -144,21 +147,21 @@ const PanelTitle = styled(EditableTitle)`
   margin: 0;
 `;
 
-const LeaveButton = styled.button`
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  padding: 0.15rem 0.7rem;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 600;
-  background: ${p => p.theme.colors.bg1};
-  color: ${p => p.theme.colors.text};
+/**
+ * AtomicLink's own `LinkView` styling (blue text) has the same CSS
+ * specificity as ButtonSubtle's, and wins ties based on style-sheet
+ * insertion order. The `&&` doubles our selector's specificity so the
+ * button look always wins regardless of that order.
+ */
+const NotesButton = styled(ButtonSubtle)`
+  && {
+    color: var(--button-text-color);
+    text-decoration: none;
 
-  &:hover,
-  &:focus-visible {
-    background: ${p => p.theme.colors.main};
-    color: white;
-    border-color: ${p => p.theme.colors.main};
+    &:hover,
+    &:focus-visible {
+      color: var(--button-text-color-hover);
+    }
   }
 `;
 

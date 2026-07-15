@@ -46,12 +46,16 @@ export function MeetingPage({
     setChanging(false);
   }
 
+  const focusEditor = () => {
+    document.getElementById('meeting-editor')?.focus();
+  };
+
   return (
     <Page>
       <MeetingHeader>
         <Column gap='0.4rem'>
           <Phase>{phase}</Phase>
-          <EditableTitle resource={resource} />
+          <EditableTitle resource={resource} onCommit={focusEditor} />
         </Column>
         <Row gap='0.5rem' center>
           <Button subtle onClick={() => openMeetingPanel(resource.subject)}>

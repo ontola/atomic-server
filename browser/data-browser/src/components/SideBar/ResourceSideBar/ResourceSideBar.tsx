@@ -65,14 +65,15 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
 
     // Classes that own their children's display in their own UI — skip the
     // sidebar tree for them. Tables show rows in the grid view, chatrooms
-    // show messages in the timeline, AI chats show messages in the AI panel,
-    // ontologies show classes/properties in their dedicated panel. Listing
-    // those children again in the sidebar would be noisy and confuses drop
-    // targeting.
+    // and meetings show messages in the timeline, AI chats show messages
+    // in the AI panel, ontologies show classes/properties in their
+    // dedicated panel. Listing those children again in the sidebar would
+    // be noisy and confuses drop targeting.
     const classes = resource.getClasses();
     const hideChildren =
       classes.includes(dataBrowser.classes.table) ||
       classes.includes(dataBrowser.classes.chatroom) ||
+      classes.includes(dataBrowser.classes.meeting) ||
       classes.includes(ai.classes.aiChat) ||
       classes.includes(core.classes.ontology);
 

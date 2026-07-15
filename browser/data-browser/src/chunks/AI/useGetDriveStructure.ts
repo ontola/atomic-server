@@ -58,6 +58,7 @@ function hideChildrenOf(classes: string[]): boolean {
   return (
     classes.includes(dataBrowser.classes.table) ||
     classes.includes(dataBrowser.classes.chatroom) ||
+    classes.includes(dataBrowser.classes.meeting) ||
     classes.includes(ai.classes.aiChat) ||
     classes.includes(core.classes.ontology)
   );
