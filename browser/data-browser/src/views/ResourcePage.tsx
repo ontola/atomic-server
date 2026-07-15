@@ -40,6 +40,7 @@ import { canvas } from '@tomic/lib';
 import { PluginPage } from '@views/Plugin/PluginPage';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { PluginView } from './PluginView/PluginView';
+import { MeetingPage } from './Meeting/MeetingPage';
 
 const TablePage = lazy(() =>
   import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
@@ -219,6 +220,8 @@ function selectComponent(klass: string | undefined) {
       return AIChatPage;
     case dataBrowser.classes.documentV2:
       return DocumentV2FullPage;
+    case dataBrowser.classes.meeting:
+      return MeetingPage;
     case canvas.classes.canvas:
       return CanvasPage;
     case server.classes.plugin:

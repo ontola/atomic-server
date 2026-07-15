@@ -43,6 +43,7 @@ export interface ActionContext {
   /** Start leading a meeting in the current drive. Absent when the
    *  surface has no follow context. Name is optional. */
   startMeeting?: (name?: string) => Promise<string>;
+  openMeetingPanel?: (subject: string) => void;
   /** Stop leading the current meeting. */
   endMeeting?: () => Promise<void>;
   /** The subject lives on another server (e.g. shown via an AtomicLink). */

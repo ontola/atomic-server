@@ -24,7 +24,10 @@ import {
 } from '@components/IconButton/IconButton';
 import { FaCheck, FaXmark } from 'react-icons/fa6';
 import { plural } from '@helpers/plural';
-import { readDocumentV2TiptapJson } from '@chunks/RTE/readDocumentV2TiptapJson';
+import {
+  hasDocumentContent,
+  readDocumentV2TiptapJson,
+} from '@chunks/RTE/readDocumentV2TiptapJson';
 import { applyPatchedJsonToLoroDocCollaborative } from '@chunks/RTE/applyPatchedJsonToLoroDocCollaborative';
 import {
   ensureAIReviewPersistHoldInstalled,
@@ -93,7 +96,7 @@ export const AIChangesRuntime: React.FC<{
 
       let documentSnapshot: JSONContent | undefined;
 
-      if (originalResource.hasClasses(dataBrowser.classes.documentV2)) {
+      if (hasDocumentContent(originalResource)) {
         const read = readDocumentV2TiptapJson(originalResource, store);
 
         if (read.ok) {
@@ -139,10 +142,7 @@ export const AIChangesRuntime: React.FC<{
       const currentResource = await store.getResource(subject);
       const snapshotJson = oldDocumentSnapshots[subject];
 
-      if (
-        snapshotJson &&
-        currentResource.hasClasses(dataBrowser.classes.documentV2)
-      ) {
+      if (snapshotJson && hasDocumentContent(currentResource)) {
         const loroDoc = currentResource.getLoroDoc();
 
         if (loroDoc) {

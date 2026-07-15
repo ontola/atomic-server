@@ -2,18 +2,16 @@
 import { generateText, type LanguageModel } from 'ai';
 import { applyPatch } from 'fast-json-patch';
 import type { Operation } from 'fast-json-patch';
-import {
-  dataBrowser,
-  useStore,
-  type DataBrowser,
-  type Store,
-} from '@tomic/react';
+import { useStore, type Store } from '@tomic/react';
 import type { JSONContent } from '@tiptap/core';
 import { z } from 'zod';
 import { useGetModel } from './useModel';
 import type { AIModelIdentifier } from './types';
 import { applyPatchedJsonToLoroDocCollaborative } from '@chunks/RTE/applyPatchedJsonToLoroDocCollaborative';
-import { readDocumentV2TiptapJson } from '@chunks/RTE/readDocumentV2TiptapJson';
+import {
+  hasDocumentContent,
+  readDocumentV2TiptapJson,
+} from '@chunks/RTE/readDocumentV2TiptapJson';
 import { flushSync } from 'react-dom';
 
 const EDIT_PROMPT = `## Role
@@ -236,10 +234,10 @@ async function runDocumentEdit(
   edit: string,
   beforeApply: () => void,
 ): Promise<string> {
-  const resource = await store.getResource<DataBrowser.DocumentV2>(subject);
+  const resource = await store.getResource(subject);
 
-  if (!resource.hasClasses(dataBrowser.classes.documentV2)) {
-    return `Error: Resource ${subject} is not a Document (document-v2).`;
+  if (!hasDocumentContent(resource)) {
+    return `Error: Resource ${subject} has no editable document content.`;
   }
 
   const model = getModel(editModel);

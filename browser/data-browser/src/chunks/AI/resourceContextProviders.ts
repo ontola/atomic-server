@@ -22,6 +22,7 @@ import {
 } from '@tomic/react';
 import { shortenSubject } from '@helpers/subjectRefs';
 import { getDocumentContentForAgent } from './getDocumentContentForAgent';
+import { hasDocumentContent } from '@chunks/RTE/readDocumentV2TiptapJson';
 import { buildClassContext, describeClassCompact } from './jsonAdCompact';
 import { getTableContextForAgent } from './tableContextProvider';
 
@@ -211,10 +212,12 @@ export const getClassContextForAgent = async (
   resource: Resource,
   compact?: Record<string, unknown>,
 ): Promise<string | undefined> => {
-  if (compact && resource.hasClasses(dataBrowser.classes.documentV2)) {
+  if (compact && hasDocumentContent(resource)) {
     await enrichDocumentCompact(store, resource, compact);
 
-    return undefined;
+    return resource.hasClasses(dataBrowser.classes.meeting)
+      ? getChatroomContextForAgent(store, resource)
+      : undefined;
   }
 
   if (resource.hasClasses(dataBrowser.classes.table)) {

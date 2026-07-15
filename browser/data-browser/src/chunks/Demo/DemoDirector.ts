@@ -25,7 +25,6 @@ import { getOrCreateMeetingsFolder } from '../../helpers/standardLocations';
 import { simulatePropEdit } from './simulatedEdits';
 import { SimulatedTypist } from './SimulatedTypist';
 import { YUSUF_LIVE_STROKES } from './moodboardStrokes';
-import { add } from '@dnd-kit/utilities';
 
 /** Presence entries expire after 30s; refresh well inside that. */
 const HEARTBEAT_MS = 10_000;
@@ -856,7 +855,7 @@ export class DemoDirector {
 
   // ─── Meeting ─────────────────────────────────────────────────────
 
-  /** Mara starts the tour Meeting: a ChatRoom+Meeting listed in the
+  /** Mara starts the tour Meeting and lists it in the
    *  drive's `currentMeetings`, which lights up the Join banner. The
    *  drive/meeting genesis is user-signed (only the user's agent can),
    *  guarded against the reactive triggers. */
@@ -874,8 +873,12 @@ export class DemoDirector {
 
       const meeting = await this.store.newResource({
         parent: meetingsFolder,
-        isA: [dataBrowser.classes.chatroom, dataBrowser.classes.meeting],
-        propVals: { [core.properties.name]: 'Onboarding meeting' },
+        isA: dataBrowser.classes.meeting,
+        propVals: {
+          [core.properties.name]: 'Onboarding meeting',
+          [dataBrowser.properties.meetingStartedAt]: Date.now(),
+          [dataBrowser.properties.meetingLeader]: this.manifest.personas.mara,
+        },
       });
       await meeting.save();
 
@@ -912,6 +915,13 @@ export class DemoDirector {
       text: 'The meeting has ended.',
       extraClasses: [dataBrowser.classes.followEvent],
     }).catch(() => undefined);
+
+    const meetingResource = await this.store.getResource(meeting);
+    await meetingResource.set(
+      dataBrowser.properties.meetingEndedAt,
+      Date.now(),
+    );
+    await meetingResource.save();
 
     this.meeting = undefined;
     this.selfSaving = true;

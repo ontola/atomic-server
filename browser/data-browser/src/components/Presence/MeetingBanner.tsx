@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { styled, keyframes } from 'styled-components';
 import { FaVideo } from 'react-icons/fa6';
 import {
@@ -8,6 +8,7 @@ import {
   useCurrentAgent,
   useDrive,
   useDrivePresence,
+  useNumber,
   useResource,
   useTitle,
 } from '@tomic/react';
@@ -36,13 +37,17 @@ export function MeetingBanner(): React.JSX.Element | null {
   const presence = useDrivePresence();
   const [agent] = useCurrentAgent();
   const { follow, followedAgent, activeMeeting, startMeeting } = useFollow();
-  const { setPanelOpen, activePanel } = useRightPanel();
+  const { setPanelOpen, activePanel, openMeetingPanel } = useRightPanel();
+  const [starting, setStarting] = useState(false);
   const panelOpen = activePanel === 'followSession';
   const [currentSubject] = useCurrentSubject();
+  const locallyStartedMeeting = drive
+    ? sessionStorage.getItem(`atomic.activeMeeting:${drive}`)
+    : undefined;
 
   // The most recently announced live meeting: listed on the drive AND
   // carried by some presence entry's `session`.
-  const live = useMemo(() => {
+  const announcedLive = useMemo(() => {
     let freshest: { meeting: string; leader: string; at: number } | undefined;
 
     for (const meeting of currentMeetings) {
@@ -60,9 +65,20 @@ export function MeetingBanner(): React.JSX.Element | null {
     return freshest;
   }, [currentMeetings, presence]);
 
-  const leading = !!activeMeeting;
-  const meetingSubject = activeMeeting ?? live?.meeting ?? unknownSubject;
-  const meetingResource = useResource(meetingSubject);
+  const announcedSubject =
+    activeMeeting ?? announcedLive?.meeting ?? unknownSubject;
+  const meetingResource = useResource(announcedSubject);
+  const [endedAt] = useNumber(
+    meetingResource,
+    dataBrowser.properties.meetingEndedAt,
+  );
+  // Persisted lifecycle wins over lagging presence/currentMeetings signals.
+  // This makes the top-bar action return to Meet immediately after End.
+  const live = endedAt ? undefined : announcedLive;
+  const leading = !!activeMeeting && !endedAt;
+  const meetingSubject = leading
+    ? activeMeeting
+    : (live?.meeting ?? unknownSubject);
   const [title] = useTitle(meetingResource);
   const leaderResource = useResource(live?.leader ?? unknownSubject);
   const [leaderName] = useTitle(leaderResource);
@@ -74,27 +90,55 @@ export function MeetingBanner(): React.JSX.Element | null {
     !!live &&
     currentSubject === live.meeting &&
     !activeMeeting &&
+    locallyStartedMeeting !== live.meeting &&
     followedAgent !== live.leader;
 
   useEffect(() => {
     if (shouldAutoJoin && live) {
       follow(live.leader);
-      setPanelOpen('followSession', true);
+      openMeetingPanel(live.meeting);
     }
-  }, [shouldAutoJoin, live, follow, setPanelOpen]);
+  }, [shouldAutoJoin, live, follow, openMeetingPanel]);
+
+  // `meetingEndedAt` is saved before de-listing and clearing local leadership.
+  // Keep the control disabled during that short window so a new start cannot
+  // race the old meeting's final drive update.
+  if (activeMeeting && endedAt) {
+    return (
+      <LabelButton type='button' disabled title='Ending meeting'>
+        <FaVideo />
+        <span>Ending…</span>
+      </LabelButton>
+    );
+  }
 
   // No live meeting → offer to start one (same spot Join would appear).
   if (meetingSubject === unknownSubject) {
     if (!agent || !drive) return null;
 
     const handleStart = () => {
-      void startMeeting().then(() => setPanelOpen('followSession', true));
+      setStarting(true);
+      void startMeeting().then(
+        subject => {
+          openMeetingPanel(subject);
+          setStarting(false);
+        },
+        error => {
+          console.error('[Meeting] could not start meeting:', error);
+          setStarting(false);
+        },
+      );
     };
 
     return (
-      <LabelButton type='button' onClick={handleStart} title='Meet'>
+      <LabelButton
+        type='button'
+        onClick={handleStart}
+        disabled={starting}
+        title='Meet'
+      >
         <FaVideo />
-        <span>Meet</span>
+        <span>{starting ? 'Starting…' : 'Meet'}</span>
       </LabelButton>
     );
   }
@@ -118,7 +162,7 @@ export function MeetingBanner(): React.JSX.Element | null {
 
     if (live) {
       follow(live.leader);
-      setPanelOpen('followSession', true);
+      openMeetingPanel(live.meeting);
     }
   }
 

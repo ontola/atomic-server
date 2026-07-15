@@ -31,6 +31,7 @@ import { Tag } from '../../components/Tag';
 import { ResourceContextMenu } from '../../components/ResourceContextMenu';
 import { AIChatContentCard } from './AIChatContentCard';
 import { DocumentV2Card } from './DocumentV2Card';
+import { MeetingCard } from './MeetingCard';
 import { HideInPrint } from '@components/HideInPrint';
 import { useOnValueChange } from '@helpers/useOnValueChange';
 import { FolderCard } from './FolderCard';
@@ -125,6 +126,8 @@ function ResourceCardInner(props: ResourceCardProps): JSX.Element {
       return <AIChatContentCard resource={resource} {...props} />;
     case dataBrowser.classes.documentV2:
       return <DocumentV2Card resource={resource} {...props} />;
+    case dataBrowser.classes.meeting:
+      return <MeetingCard resource={resource} {...props} />;
     case dataBrowser.classes.folder:
       return <FolderCard resource={resource} {...props} />;
     case server.classes.plugin:

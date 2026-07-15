@@ -632,10 +632,6 @@ msgid "Editor was destroyed before it finished initializing"
 msgstr "El editor fue destruido antes de que terminara de inicializarse"
 
 #: src/chunks/RTE/readDocumentV2TiptapJson.ts
-msgid "Resource is not a document-v2"
-msgstr "El recurso no es un documento-v2"
-
-#: src/chunks/RTE/readDocumentV2TiptapJson.ts
 msgid "Loro not loaded"
 msgstr "Loro no cargado"
 
@@ -4739,10 +4735,12 @@ msgid "No matching shortcuts"
 msgstr ""
 
 #: src/actions/resourceActions.tsx
+#: src/views/Meeting/MeetingPage.tsx
 msgid "End meeting"
 msgstr ""
 
 #: src/actions/resourceActions.tsx
+#: src/views/Meeting/MeetingPage.tsx
 msgid "Start meeting"
 msgstr ""
 
@@ -4811,6 +4809,7 @@ msgid "{0} here"
 msgstr ""
 
 #: src/components/Presence/FollowSessionPanelContainer.tsx
+#: src/components/Presence/MeetingBanner.tsx
 msgid "Ending…"
 msgstr ""
 
@@ -5336,4 +5335,36 @@ msgstr ""
 
 #: src/components/DraftBar.tsx
 msgid "Edit the body, then merge."
+msgstr ""
+
+#: src/chunks/RTE/readDocumentV2TiptapJson.ts
+msgid "Resource has no editable document content"
+msgstr ""
+
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New Meeting"
+msgstr ""
+
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "Open notes"
+msgstr ""
+
+#: src/components/Presence/MeetingBanner.tsx
+msgid "Ending meeting"
+msgstr ""
+
+#: src/components/Presence/MeetingBanner.tsx
+msgid "Starting…"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "Meeting"
+msgstr ""
+
+#: src/views/Meeting/MeetingPage.tsx
+msgid "Open chat"
+msgstr ""
+
+#: src/views/Meeting/MeetingPage.tsx
+msgid "Loading meeting notes…"
 msgstr ""

@@ -1,8 +1,9 @@
 import {
   readDocumentV2TiptapJson,
+  hasDocumentContent,
   type DocumentV2TiptapJsonResult,
 } from '@chunks/RTE/readDocumentV2TiptapJson';
-import { dataBrowser, type Resource, type Store } from '@tomic/react';
+import { type Resource, type Store } from '@tomic/react';
 import { tiptapJsonToAgentXml } from './tiptapJsonToAgentXml';
 
 export type DocumentContentForAgentResult =
@@ -16,7 +17,7 @@ export function getDocumentContentForAgent(
   resource: Resource,
   store: Store,
 ): DocumentContentForAgentResult {
-  if (!resource.hasClasses(dataBrowser.classes.documentV2)) {
+  if (!hasDocumentContent(resource)) {
     return { ok: true, text: '' };
   }
 

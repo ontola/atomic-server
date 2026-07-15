@@ -72,7 +72,7 @@ export async function getOrCreateAiChatsFolder(
   );
 }
 
-/** The Drive's Meetings folder: home for Meeting ChatRooms, so live and
+/** The Drive's Meetings folder: home for Meeting resources, so live and
  *  past meetings don't clutter the drive root. */
 export async function getOrCreateMeetingsFolder(
   store: Store,

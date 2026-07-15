@@ -37,6 +37,7 @@ import {
   FaLink,
   FaCode,
   FaPuzzlePiece,
+  FaVideo,
 } from 'react-icons/fa6';
 import { AIIcon } from '../components/AI/AIIcon';
 
@@ -46,6 +47,7 @@ const iconMap = new Map<string, IconType>([
   [dataBrowser.classes.chatroom, FaComment],
   [dataBrowser.classes.document, FaFileLines],
   [dataBrowser.classes.documentV2, FaFileLines],
+  [dataBrowser.classes.meeting, FaVideo],
   [server.classes.file, FaFile],
   [server.classes.drive, FaHardDrive],
   [server.classes.plugin, FaPuzzlePiece],

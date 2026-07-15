@@ -26,7 +26,7 @@ import { useChatMessages } from '../../views/ChatRoom/ChatRoomView';
  */
 export function MeetingMessageToaster(): null {
   const { followedSession, activeMeeting } = useFollow();
-  const { activePanel, setPanelOpen } = useRightPanel();
+  const { activePanel, openMeetingPanel } = useRightPanel();
   const [agent] = useCurrentAgent();
   const store = useStore();
 
@@ -83,7 +83,7 @@ export function MeetingMessageToaster(): null {
           <MeetingToast
             subject={subject}
             onOpen={() => {
-              setPanelOpen('followSession', true);
+              openMeetingPanel(meeting);
               toast.dismiss(t.id);
             }}
           />
@@ -91,7 +91,7 @@ export function MeetingMessageToaster(): null {
         { duration: 5000 },
       );
     }
-  }, [messages, panelOpen, meeting, agent, store, setPanelOpen]);
+  }, [messages, panelOpen, meeting, agent, store, openMeetingPanel]);
 
   return null;
 }

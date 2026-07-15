@@ -1,6 +1,7 @@
 import { dataBrowser, core, classes, ai, canvas } from '@tomic/react';
 import { registerBasicInstanceHandler } from '../useNewResourceUI';
 import { DEFAULT_AICHAT_NAME } from '../../../AI/aiContstants';
+import { getOrCreateMeetingsFolder } from '../../../../helpers/standardLocations';
 
 /**
  * These handlers do not show any UI / inputs when creating new instances.
@@ -64,6 +65,22 @@ export const registerBasicInstanceHandlers = () => {
         {
           parent,
         },
+      );
+    },
+  );
+
+  registerBasicInstanceHandler(
+    dataBrowser.classes.meeting,
+    async (parent, createAndNavigate, { store }) => {
+      const drive = store.getDrive();
+      const meetingsFolder = drive
+        ? await getOrCreateMeetingsFolder(store, drive)
+        : parent;
+
+      await createAndNavigate(
+        dataBrowser.classes.meeting,
+        { [core.properties.name]: 'Meeting' },
+        { parent: meetingsFolder },
       );
     },
   );

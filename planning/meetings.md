@@ -1,58 +1,75 @@
 # Meetings: follow-mode with a front door
 
-> **Status:** v1 built and verified live (July 2026). A meeting is a
-> ChatRoom+Meeting listed in the drive's `currentMeetings`; while its
-> leader's presence entry announces it (`session`), a vibrant Join
-> banner shows in the top bar. Join = follow the leader + open the
-> meeting chat. Verified: banner appears on start, Join follows +
-> opens chat + flips to Chat/Leave, narration and "Viewing …" trail
-> land in the meeting room (leader-attributed), End clears the banner.
+> **Status:** built and verified in July 2026. A Meeting is now one dedicated
+> resource with a rich-text Agenda/Notes/Minutes body and child chat messages.
+> It is neither a DocumentV2 nor a ChatRoom. The clean cutover deliberately has
+> no migration or backwards-compatibility path.
 >
-> **Built:**
+> Focused browser integration covers prepared agenda → start → minutes and the
+> two-session More → Start → join → follow trail → end → reopen flow.
 >
-> - Ontology: `Meeting` class + `currentMeetings` drive property in
->   `lib/defaults/chatroom.json` and the browser `dataBrowser` ontology.
-> - `FollowContext`: `activeMeeting` + `startMeeting`/`endMeeting`;
->   while leading, presence `session` points at the meeting and the
->   session trail posts there.
-> - `MeetingBanner` (top bar, in `NavBar`): Join / Chat+Leave /
->   Chat+End states.
-> - Start/End affordance in the drive switcher menu.
-> - Demo v3: Mara starts an "Onboarding meeting" meeting; join-gated tour
->   with a fallback nudge; chat narration per stop; reactive payoff on
->   the user's first meeting-chat message; End at wind-down.
->
-> **Refinements since v1 (all built + verified):**
->
-> - Follow-sessions **removed entirely** — meetings replace them. Plain
->   follow is navigation-only; shared chat/trail lives in a meeting.
->   `ChatRoomView`'s FollowEvent renderer now shows markers verbatim
->   ("Started the meeting.", "The meeting has ended.").
-> - The banner is one big button: Join when out, open-chat when in.
->   Leave/End moved into the chat panel header.
-> - **Opening a live meeting resource = joining it** (follow + open
->   chat), so the welcome-doc link behaves like the Join button.
-> - The chat panel **persists the last meeting** after it ends (log /
->   minutes), instead of clearing.
-> - "Own" = I'm the leader (not merely same agent), so a second tab or
->   same-agent attendee can still join.
-> - e2e: `browser/e2e/tests/meetings.spec.ts` (two-session start → join
->   → follow-along → end); `presence-follow.spec.ts` trimmed to
->   navigation-only follow. Both green.
->
-> **Follow-ups / not yet done:**
->
-> - Server ontology ships in `chatroom.json`; a pre-existing server
->   needs a re-`populate`/migration to know `Meeting`/`currentMeetings`
->   (fresh init picks it up — verified via the e2e server).
-> - Stale-meeting reaping: leader presence expiring without End leaves
->   a stale `currentMeetings` entry (banner hides — no live `session` —
->   but the list entry lingers). Wants a janitor / TTL.
-> - Joining doesn't announce attendance ("X joined") in chat.
-> - `MeetingBanner` shows only the most-recent live meeting when several
->   run at once in one drive.
->
-> Original design sketch follows.
+> **Open follow-ups:** stale-meeting reaping when a leader disappears without
+> ending; attendance events; and choosing among several simultaneous live
+> meetings in the banner.
+
+## Agenda, notes, and minutes build plan
+
+### Decided model
+
+```text
+Meeting (isA: Meeting only)
+├── name
+├── documentContent       Agenda → Notes → Minutes
+├── meetingStartedAt      absent while preparing
+├── meetingEndedAt        absent until ended
+├── meetingLeader         persisted agent reference
+└── Message children      chat and FollowEvent trail
+```
+
+- Meeting has a dedicated page and visual identity. It reuses the rich-text
+  editor and chat view as components, but is neither `DocumentV2` nor
+  `ChatRoom`.
+- `currentMeetings` remains the drive's live index. Persisted timestamps
+  distinguish preparing, live, and ended Meetings after presence expires.
+- **New meeting** creates an editable Agenda without going live. **Start
+  meeting** activates that resource. Global Start remains a quick-create/start.
+- Meeting chat can be explicitly opened by subject before, during, or after a
+  meeting; it is not inferred only from follow state.
+- Existing multi-class Meeting resources are unsupported. Demo/test data is
+  recreated; no migrations, fallbacks, aliases, or dual rendering.
+
+### Checklist
+
+- [x] Move Meeting ontology definitions into `lib/defaults/meeting.json`; add
+  lifecycle properties and update generated TypeScript mappings.
+- [x] Split Meeting creation from activation; make Start/End persisted and
+  idempotent; create Meeting resources with only the Meeting class.
+- [x] Introduce explicit `selectedMeeting` / `openMeetingPanel(subject)` state
+  and use it from Start, Join, Meeting pages, toasts, and ended chat history.
+- [x] Add a dedicated Meeting page with title, lifecycle status,
+  Agenda/Notes/Minutes editor, Start/End, and Open chat; participants remain in
+  the linked meeting panel.
+- [x] Generalize document-content readers/editors/AI paths through one
+  capability helper supporting DocumentV2 and Meeting.
+- [x] Add New meeting and quick-start surfaces; make the Meeting itself the
+  deterministic first Focus when quick-started.
+- [x] Update the demo and remove all Meeting+ChatRoom creation paths and
+  assumptions.
+- [x] Extend focused tests through prepare → start → join → collaborative notes
+  → end → reopen minutes/chat; run browser typecheck/lint/unit/E2E checks.
+
+### Acceptance
+
+- [x] New Meetings have only the Meeting class and one rich-text body.
+- [x] Prepared agendas are editable without becoming live.
+- [x] Start preserves the agenda, opens chat, and focuses the Meeting first.
+- [x] Live notes and child chat messages synchronize independently.
+- [x] Ended Meetings retain minutes, chat, and trail and can reopen either.
+- [x] Meeting UI is distinct from generic DocumentV2 and ChatRoom pages.
+- [x] No backwards-compatibility code is introduced.
+
+Original design sketch follows and is superseded where it calls Meeting a
+ChatRoom.
 
 ---
 

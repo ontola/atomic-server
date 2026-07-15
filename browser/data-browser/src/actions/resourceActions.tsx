@@ -54,14 +54,14 @@ export const resourceActions: ActionDefinition[] = [
         : 'Invite everyone in this drive to follow you live.',
     keywords: ['meeting', 'present', 'tour', 'follow', 'call'],
     icon: ctx => (ctx.activeMeeting ? <FaVideoSlash /> : <FaVideo />),
-    available: ctx =>
-      !!ctx.drive && !!ctx.startMeeting && !!ctx.openMeetingPanel,
+    available: ctx => !!ctx.drive && !!ctx.startMeeting,
     run: async ctx => {
       if (ctx.activeMeeting) {
         await ctx.endMeeting?.();
       } else {
-        await ctx.startMeeting?.();
-        ctx.openMeetingPanel?.();
+        const meeting = await ctx.startMeeting?.();
+
+        if (meeting) ctx.openMeetingPanel?.(meeting);
       }
     },
   },

@@ -11,7 +11,7 @@ import {
  * under the "doc" root container. This walks that tree to extract text.
  */
 export function useDocumentText(
-  resource: Resource<DataBrowser.DocumentV2>,
+  resource: Resource<DataBrowser.DocumentV2 | DataBrowser.Meeting>,
   maxLength?: number,
 ) {
   const doc = useLoroDoc(resource);

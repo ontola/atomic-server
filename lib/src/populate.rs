@@ -270,6 +270,13 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
         .map_err(|e| format!("Failed to import chatroom.json: {e}"))?;
     store
         .import(
+            include_str!("../defaults/meeting.json"),
+            &ParseOpts::default(),
+        )
+        .await
+        .map_err(|e| format!("Failed to import meeting.json: {e}"))?;
+    store
+        .import(
             include_str!("../defaults/table.json"),
             &ParseOpts::default(),
         )

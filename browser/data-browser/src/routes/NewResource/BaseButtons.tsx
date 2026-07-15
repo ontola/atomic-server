@@ -13,6 +13,7 @@ const buttons = [
   dataBrowser.classes.table,
   dataBrowser.classes.folder,
   dataBrowser.classes.documentV2,
+  dataBrowser.classes.meeting,
   dataBrowser.classes.chatroom,
   dataBrowser.classes.bookmark,
   canvas.classes.canvas,

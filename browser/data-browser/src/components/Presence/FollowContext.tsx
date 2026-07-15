@@ -47,11 +47,10 @@ interface FollowContextValue {
   /** The Meeting this agent is currently LEADING, if any. While set, the
    *  presence `session` points at it so joiners open the meeting chat. */
   activeMeeting: string | undefined;
-  /** Start leading a meeting: creates the Meeting (a ChatRoom with the
-   *  Meeting class) in the drive, lists it in the drive's
-   *  `currentMeetings`, and announces it on presence. Name is optional
-   *  (defaults to a dated title the user can rename). */
-  startMeeting: (name?: string) => Promise<string>;
+  /** Create a Meeting agenda without making it live. */
+  createMeeting: (name?: string) => Promise<string>;
+  /** Start a prepared Meeting, or create one for quick-start. */
+  startMeeting: (name?: string, subject?: string) => Promise<string>;
   /** Stop leading: de-lists the meeting (the resource remains as
    *  minutes). */
   endMeeting: () => Promise<void>;
@@ -69,6 +68,7 @@ const FollowContext = createContext<FollowContextValue>({
   isFollowDisabledFor: () => false,
   followedSession: undefined,
   activeMeeting: undefined,
+  createMeeting: async () => '',
   startMeeting: async () => '',
   endMeeting: async () => undefined,
 } satisfies FollowContextValue);
@@ -202,6 +202,7 @@ export function FollowProvider({
   // "Viewing …" entry. Keyed by meeting so a new meeting starts fresh.
   const trailedRef = useRef<Set<string>>(new Set());
   const trailMeetingRef = useRef<string>(undefined);
+  const meetingNarrationRef = useRef<Promise<void>>(Promise.resolve());
 
   // Restore the meeting we're leading on this drive from sessionStorage: it
   // survives a page refresh (so a refreshed leader keeps their meeting going)
@@ -274,10 +275,10 @@ export function FollowProvider({
     [setAllowFollowStored],
   );
 
-  const startMeeting = useCallback(
+  const createMeeting = useCallback(
     async (name?: string): Promise<string> => {
       if (!drive) {
-        throw new Error('Cannot start a meeting without a drive.');
+        throw new Error('Cannot create a meeting without a drive.');
       }
 
       // A title is optional — default to a dated name the user can
@@ -298,41 +299,100 @@ export function FollowProvider({
 
       const meeting = await store.newResource({
         parent: meetingsFolder,
-        isA: [dataBrowser.classes.chatroom, dataBrowser.classes.meeting],
+        isA: dataBrowser.classes.meeting,
         propVals: { [core.properties.name]: meetingName },
       });
       await meeting.save();
-
-      const driveRes = await store.getResource(drive);
-      driveRes.push(
-        dataBrowser.properties.currentMeetings,
-        [meeting.subject],
-        true,
-      );
-      await driveRes.save();
-
-      await sendChatMessage(store, {
-        parent: meeting.subject,
-        text: /* @wc-ignore */ 'Started the meeting.',
-        extraClasses: [dataBrowser.classes.followEvent],
-      }).catch(() => undefined);
-
-      setActiveMeeting(meeting.subject);
-      sessionStorage.setItem(meetingStorageKey(drive), meeting.subject);
 
       return meeting.subject;
     },
     [drive, store],
   );
 
+  const startMeeting = useCallback(
+    async (name?: string, preparedSubject?: string): Promise<string> => {
+      if (!drive || !agentSubject) {
+        throw new Error('Cannot start a meeting without a drive and agent.');
+      }
+
+      const subject = preparedSubject ?? (await createMeeting(name));
+      const meeting = await store.getResource(subject);
+      const startedAt = meeting.get(dataBrowser.properties.meetingStartedAt) as
+        | number
+        | undefined;
+
+      if (!startedAt) {
+        await meeting.set(
+          dataBrowser.properties.meetingStartedAt,
+          Date.now(),
+          false,
+        );
+        await meeting.set(
+          dataBrowser.properties.meetingLeader,
+          agentSubject,
+          false,
+        );
+        await meeting.save();
+      }
+
+      const driveRes = await store.getResource(drive);
+      const current = (driveRes.get(dataBrowser.properties.currentMeetings) ??
+        []) as string[];
+
+      if (!current.includes(subject)) {
+        await driveRes.set(dataBrowser.properties.currentMeetings, [
+          ...current,
+          subject,
+        ]);
+        await driveRes.save();
+      }
+
+      trailMeetingRef.current = subject;
+      trailedRef.current = new Set([subject]);
+      setActiveMeeting(subject);
+      sessionStorage.setItem(meetingStorageKey(drive), subject);
+      navigate(constructOpenURL(subject));
+
+      // Chat narration is useful history, but it must not block the visible
+      // start transition or make the top-bar button appear unresponsive.
+      if (!startedAt) {
+        const startMessage = sendChatMessage(store, {
+          parent: subject,
+          text: /* @wc-ignore */ 'Started the meeting.',
+          extraClasses: [dataBrowser.classes.followEvent],
+        }).catch(() => undefined);
+        meetingNarrationRef.current = startMessage;
+        void startMessage
+          .then(() => postTrailMessage(store, subject, subject))
+          .catch(() => undefined);
+      }
+
+      return subject;
+    },
+    [agentSubject, createMeeting, drive, navigate, store],
+  );
+
   const endMeeting = useCallback(async (): Promise<void> => {
     if (!activeMeeting) return;
 
-    await sendChatMessage(store, {
-      parent: activeMeeting,
-      text: /* @wc-ignore */ 'The meeting has ended.',
-      extraClasses: [dataBrowser.classes.followEvent],
-    }).catch(() => undefined);
+    const endingMeeting = activeMeeting;
+    const meeting = await store.getResource(endingMeeting);
+    const endedAt = meeting.get(dataBrowser.properties.meetingEndedAt) as
+      | number
+      | undefined;
+
+    if (!endedAt) {
+      // Preserve marker order when Start's non-blocking narration is still
+      // being persisted.
+      await meetingNarrationRef.current;
+      await sendChatMessage(store, {
+        parent: endingMeeting,
+        text: /* @wc-ignore */ 'The meeting has ended.',
+        extraClasses: [dataBrowser.classes.followEvent],
+      }).catch(() => undefined);
+      await meeting.set(dataBrowser.properties.meetingEndedAt, Date.now());
+      await meeting.save();
+    }
 
     if (drive) {
       try {
@@ -341,7 +401,7 @@ export function FollowProvider({
           []) as string[];
         await driveRes.set(
           dataBrowser.properties.currentMeetings,
-          current.filter(subject => subject !== activeMeeting),
+          current.filter(subject => subject !== endingMeeting),
         );
         await driveRes.save();
       } catch (e) {
@@ -349,10 +409,18 @@ export function FollowProvider({
       }
     }
 
-    setActiveMeeting(undefined);
+    // Do not let a slow End completion clear a newer meeting that was started
+    // from the top bar in the meantime.
+    setActiveMeeting(current =>
+      current === endingMeeting ? undefined : current,
+    );
 
     if (drive) {
-      sessionStorage.removeItem(meetingStorageKey(drive));
+      const storageKey = meetingStorageKey(drive);
+
+      if (sessionStorage.getItem(storageKey) === endingMeeting) {
+        sessionStorage.removeItem(storageKey);
+      }
     }
   }, [activeMeeting, drive, store]);
 
@@ -369,6 +437,7 @@ export function FollowProvider({
       isFollowDisabledFor,
       followedSession,
       activeMeeting,
+      createMeeting,
       startMeeting,
       endMeeting,
     }),
@@ -384,6 +453,7 @@ export function FollowProvider({
       isFollowDisabledFor,
       followedSession,
       activeMeeting,
+      createMeeting,
       startMeeting,
       endMeeting,
     ],

@@ -44,17 +44,6 @@
     "https://atomicdata.dev/properties/shortname": "comments-folder"
   },
   {
-    "@id": "https://atomicdata.dev/properties/meetingsFolder",
-    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Folder",
-    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-    "https://atomicdata.dev/properties/description": "Points to the Folder in this Drive where Meetings are stored. Clients create Meetings as children of this folder (creating it on first use) so they don't clutter the Drive root.",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/classes/Property"
-    ],
-    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/shortname": "meetings-folder"
-  },
-  {
     "@id": "https://atomicdata.dev/properties/followSessionsChatroom",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/ChatRoom",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
@@ -119,31 +108,5 @@
       "https://atomicdata.dev/properties/description"
     ],
     "https://atomicdata.dev/properties/shortname": "follow-event"
-  },
-  {
-    "@id": "https://atomicdata.dev/classes/Meeting",
-    "https://atomicdata.dev/properties/description": "A live, joinable session in a Drive: a ChatRoom with a leader. While a Meeting is listed in its Drive's `currentMeetings` and the leader's presence entry points at it (`session`), clients show a prominent join affordance; joining means following the leader and opening this room. After it ends, the Meeting remains as a browsable log (minutes). Meetings are also ChatRooms (both classes are set).",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/classes/Class"
-    ],
-    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-    "https://atomicdata.dev/properties/recommends": [
-      "https://atomicdata.dev/properties/messages"
-    ],
-    "https://atomicdata.dev/properties/requires": [
-      "https://atomicdata.dev/properties/name"
-    ],
-    "https://atomicdata.dev/properties/shortname": "meeting"
-  },
-  {
-    "@id": "https://atomicdata.dev/properties/currentMeetings",
-    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Meeting",
-    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-    "https://atomicdata.dev/properties/description": "The Meetings currently live in this Drive. Starting a meeting pushes it here; ending removes it (the Meeting resource itself remains). Clients surface a live meeting prominently, e.g. as a join banner in the top bar.",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/classes/Property"
-    ],
-    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/shortname": "current-meetings"
   }
 ]

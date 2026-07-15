@@ -11,13 +11,17 @@ export type DocumentV2TiptapJsonResult =
   | { ok: true; docJson: JSONContent }
   | { ok: false; error: string };
 
+export const hasDocumentContent = (resource: Resource): boolean =>
+  resource.hasClasses(dataBrowser.classes.documentV2) ||
+  resource.hasClasses(dataBrowser.classes.meeting);
+
 /** Read a document-v2 body as TipTap JSON (not raw loro-prosemirror `toJSON`). */
 export function readDocumentV2TiptapJson(
   resource: Resource,
   store: Store,
 ): DocumentV2TiptapJsonResult {
-  if (!resource.hasClasses(dataBrowser.classes.documentV2)) {
-    return { ok: false, error: 'Resource is not a document-v2' };
+  if (!hasDocumentContent(resource)) {
+    return { ok: false, error: 'Resource has no editable document content' };
   }
 
   const loroDoc = resource.getLoroDoc();

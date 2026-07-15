@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useCurrentAgent, useDrivePresence, useResource } from '@tomic/react';
 import { styled } from 'styled-components';
 import { RightPanel } from '../RightPanel/RightPanel';
@@ -8,6 +8,7 @@ import { PresenceAvatarMenu } from './PresenceAvatarMenu';
 import { ChatRoomView } from '../../views/ChatRoom/ChatRoomView';
 import { EditableTitle } from '../EditableTitle';
 import { Column, Row } from '../Row';
+import { AtomicLink } from '../AtomicLink';
 
 /**
  * Right-side panel with the live meeting: who's here, the trail of
@@ -27,33 +28,9 @@ export const FollowSessionPanelContainer: React.FC = () => {
 
 function FollowSessionPanel() {
   const { followedSession, activeMeeting } = useFollow();
-  const { setPanelOpen } = useRightPanel();
+  const { selectedMeeting } = useRightPanel();
   const liveSubject = followedSession ?? activeMeeting;
-
-  // Keep showing the last meeting even after it ends (leader clicked
-  // End, or the followed leader left): the chat is a log worth reading
-  // back. It only clears when the panel is closed and reopened with no
-  // live meeting.
-  const lastShownRef = useRef<string>(undefined);
-
-  useEffect(() => {
-    if (liveSubject) {
-      lastShownRef.current = liveSubject;
-    }
-  }, [liveSubject]);
-
-  const chatroomSubject = liveSubject ?? lastShownRef.current;
-
-  // Nothing to show — e.g. after a refresh, where the meeting state (which
-  // lives in memory, not the URL) is gone while the panel-open flag persisted.
-  // A leader's meeting is restored from sessionStorage; a follower's isn't, so
-  // rather than a dead "No meeting yet" placeholder, close the panel. The
-  // top-bar Join banner still offers any meeting that's live.
-  useEffect(() => {
-    if (!chatroomSubject) {
-      setPanelOpen('followSession', false);
-    }
-  }, [chatroomSubject, setPanelOpen]);
+  const chatroomSubject = selectedMeeting ?? liveSubject;
 
   if (!chatroomSubject) {
     return null;
@@ -107,7 +84,6 @@ function FollowSessionChat({ subject }: { subject: string }) {
       setEnding(true);
       await endMeeting();
       setEnding(false);
-      setPanelOpen('followSession', false);
 
       return;
     }
@@ -139,11 +115,14 @@ function FollowSessionChat({ subject }: { subject: string }) {
             </Facepile>
           )}
         </Row>
-        {showAction && (
-          <LeaveButton type='button' onClick={handleAction} disabled={ending}>
-            {ending ? 'Ending…' : label}
-          </LeaveButton>
-        )}
+        <Row center gap='0.5rem'>
+          <AtomicLink subject={subject}>Open notes</AtomicLink>
+          {showAction && (
+            <LeaveButton type='button' onClick={handleAction} disabled={ending}>
+              {ending ? 'Ending…' : label}
+            </LeaveButton>
+          )}
+        </Row>
       </PanelHeader>
       <ChatRoomView resource={chatroom} noContainerPadding />
     </PanelWrapper>
@@ -159,7 +138,7 @@ const PanelHeader = styled(Row)`
   padding-block: ${p => p.theme.size(2)};
 `;
 
-/** The meeting name, click-to-edit — it's the ChatRoom's own title. */
+/** The meeting name, click-to-edit. */
 const PanelTitle = styled(EditableTitle)`
   font-size: 1rem;
   margin: 0;

@@ -42,6 +42,9 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/followSessionsChatroom',
     currentMeetings: 'https://atomicdata.dev/properties/currentMeetings',
     meetingsFolder: 'https://atomicdata.dev/properties/meetingsFolder',
+    meetingStartedAt: 'https://atomicdata.dev/properties/meetingStartedAt',
+    meetingEndedAt: 'https://atomicdata.dev/properties/meetingEndedAt',
+    meetingLeader: 'https://atomicdata.dev/properties/meetingLeader',
     currency: 'https://atomicdata.dev/ontology/data-browser/property/currency',
     customNodePositioning:
       'https://atomicdata.dev/properties/custom-node-positioning',
@@ -299,7 +302,12 @@ declare module '../index.js' {
     };
     [dataBrowser.classes.meeting]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/name';
-      recommends: typeof dataBrowser.properties.messages;
+      recommends:
+        | typeof dataBrowser.properties.documentContent
+        | typeof dataBrowser.properties.messages
+        | typeof dataBrowser.properties.meetingStartedAt
+        | typeof dataBrowser.properties.meetingEndedAt
+        | typeof dataBrowser.properties.meetingLeader;
     };
     [dataBrowser.classes.numberFormat]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/shortname';
@@ -379,6 +387,9 @@ declare module '../index.js' {
     [dataBrowser.properties.followSessionsChatroom]: string;
     [dataBrowser.properties.currentMeetings]: string[];
     [dataBrowser.properties.meetingsFolder]: string;
+    [dataBrowser.properties.meetingStartedAt]: number;
+    [dataBrowser.properties.meetingEndedAt]: number;
+    [dataBrowser.properties.meetingLeader]: string;
     [dataBrowser.properties.currency]: string;
     [dataBrowser.properties.customNodePositioning]: Record<
       string,
@@ -429,6 +440,9 @@ declare module '../index.js' {
     [dataBrowser.properties.followSessionsChatroom]: 'followSessionsChatroom';
     [dataBrowser.properties.currentMeetings]: 'currentMeetings';
     [dataBrowser.properties.meetingsFolder]: 'meetingsFolder';
+    [dataBrowser.properties.meetingStartedAt]: 'meetingStartedAt';
+    [dataBrowser.properties.meetingEndedAt]: 'meetingEndedAt';
+    [dataBrowser.properties.meetingLeader]: 'meetingLeader';
     [dataBrowser.properties.currency]: 'currency';
     [dataBrowser.properties.customNodePositioning]: 'customNodePositioning';
     [dataBrowser.properties.dateFormat]: 'dateFormat';

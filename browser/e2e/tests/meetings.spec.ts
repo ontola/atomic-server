@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, getDevDriveSecret, signIn, FRONTEND_URL } from './test-utils';
+import {
+  before,
+  getCurrentSubject,
+  getDevDriveSecret,
+  signIn,
+  FRONTEND_URL,
+} from './test-utils';
 
 /**
  * Meetings (#1127): follow-mode with a front door, driven as two
@@ -17,14 +23,89 @@ import { before, getDevDriveSecret, signIn, FRONTEND_URL } from './test-utils';
 
 const facepile = (page: Page) =>
   page.locator('[aria-label="Also viewing this resource"]');
-// Nav-bar affordances. The "Meet" button starts a meeting; once one is
-// live the banner (by title) is the Join / open-chat control —
+// Once a meeting is live the banner (by title) is the Join / open-chat control —
 // unambiguous vs. the sidebar's meeting resource item (same name).
-const meetButton = (page: Page) =>
-  page.getByRole('button', { name: 'Meet', exact: true });
 const joinBanner = (page: Page) => page.getByTitle(/led by/);
 const meetingBanner = (page: Page) =>
   page.getByTitle(/led by|Open the meeting chat/);
+
+test('top-bar Meet starts a meeting and opens its panel', async ({ page }) => {
+  await before({ page });
+  await page.waitForLoadState('load');
+
+  const initialSubject = await getCurrentSubject(page);
+  await page
+    .getByRole('button', { name: 'Meet', exact: true })
+    .click({ timeout: 30_000 });
+
+  await expect(page.getByText('notes', { exact: true }).first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId('follow-session-panel')).toHaveAttribute(
+    'data-open',
+    '',
+    { timeout: 30_000 },
+  );
+
+  const firstMeeting = await getCurrentSubject(page);
+  expect(firstMeeting).not.toBe(initialSubject);
+
+  await page.getByRole('button', { name: 'End meeting' }).click();
+  await expect(page.getByText('minutes', { exact: true }).first()).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Meet', exact: true })
+    .click({ timeout: 30_000 });
+
+  await expect(page.getByText('notes', { exact: true }).first()).toBeVisible({
+    timeout: 30_000,
+  });
+  expect(await getCurrentSubject(page)).not.toBe(firstMeeting);
+});
+
+test('prepare an agenda, start it, and preserve minutes', async ({ page }) => {
+  test.setTimeout(90_000);
+  await before({ page });
+  await page.waitForLoadState('load');
+
+  await page.getByRole('button', { name: 'New Meeting' }).first().click();
+  await expect(page.getByText('agenda', { exact: true }).first()).toBeVisible({
+    timeout: 30_000,
+  });
+
+  const meeting = await getCurrentSubject(page);
+  expect(meeting).toBeTruthy();
+  const agendaText = 'Approve launch plan';
+  await page.getByLabel('Rich Text Editor').fill(agendaText);
+  await expect(page.getByText(agendaText)).toBeVisible();
+
+  expect(
+    await page.evaluate(subject => {
+      const store = window.store;
+      const drive = store.getDrive();
+
+      if (!drive) return false;
+
+      const resource = store.getResourceLoading(drive);
+      const live = (resource.get(
+        'https://atomicdata.dev/properties/currentMeetings',
+      ) ?? []) as string[];
+
+      return live.includes(subject!);
+    }, meeting),
+  ).toBe(false);
+
+  await page.getByRole('button', { name: 'Start meeting' }).click();
+  await expect(page.getByText('notes', { exact: true }).first()).toBeVisible();
+  await expect(page.getByTestId('follow-session-panel')).toHaveAttribute(
+    'data-open',
+    '',
+  );
+  await expect(page.getByText(agendaText)).toBeVisible();
+
+  await page.getByRole('button', { name: 'End meeting' }).click();
+  await expect(page.getByText('minutes', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(agendaText)).toBeVisible();
+});
 
 test('start a meeting, join it, follow along, and end it', async ({
   browser,
@@ -82,20 +163,29 @@ test('start a meeting, join it, follow along, and end it', async ({
     timeout: 30_000,
   });
 
-  // 1. A starts a meeting from the nav-bar "Meet" button (no title
-  // prompt — it gets a dated name A can rename later).
-  await expect(meetButton(pageA)).toBeVisible({ timeout: 30_000 });
-  await meetButton(pageA).click();
+  // 1. A quick-starts from More. It navigates to the dedicated Meeting page,
+  // labels the shared body Notes, and opens that same Meeting's chat.
+  await pageA.getByRole('button', { name: 'More' }).click();
+  await pageA.getByTestId('menu-item-meeting').click();
+  await expect(pageA.getByText('notes', { exact: true }).first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(pageA.getByTestId('follow-session-panel')).toHaveAttribute(
+    'data-open',
+    '',
+    { timeout: 30_000 },
+  );
 
   // 2. B sees the Join banner (title carries "led by") and clicks it.
   await expect(joinBanner(pageB)).toBeVisible({ timeout: 30_000 });
   await joinBanner(pageB).click();
 
   // The meeting chat opens with the start marker.
-  await expect(pageB.getByRole('heading', { name: 'Meeting' })).toBeVisible({
+  const followerPanel = pageB.getByTestId('follow-session-panel');
+  await expect(followerPanel).toHaveAttribute('data-open', '', {
     timeout: 30_000,
   });
-  await expect(pageB.getByText('Started the meeting.')).toBeVisible({
+  await expect(followerPanel.getByText('Started the meeting.')).toBeVisible({
     timeout: 30_000,
   });
 
@@ -121,6 +211,13 @@ test('start a meeting, join it, follow along, and end it', async ({
 
   // The chat shows the end marker and B's meeting banner is gone.
   await expect(pageB.getByText('The meeting has ended.')).toBeVisible({
+    timeout: 30_000,
+  });
+  await pageA
+    .getByTestId('follow-session-panel')
+    .getByRole('link', { name: 'Open notes' })
+    .click();
+  await expect(pageA.getByText('minutes', { exact: true }).first()).toBeVisible({
     timeout: 30_000,
   });
   await expect(meetingBanner(pageB)).toHaveCount(0, { timeout: 30_000 });
