@@ -16,10 +16,15 @@
 //! writes are attributed to the user and sync with the user's rights.
 //!
 //! Addressed here: filename sanitization at the materialization boundary,
-//! commit coalescing, and admission caps (max file size, name length).
-//! Deferred (see the doc): content-defined chunking for write amplification, a
-//! disk-backed fileid map, `readdir` cursor pagination, and conflicted-copy
-//! naming for concurrent binary edits.
+//! commit coalescing, admission caps (max file size, name length), persisted
+//! stable fileids, and a per-directory listing cache so paging a large folder is
+//! O(N) per enumeration rather than O(N²).
+//!
+//! Deferred (see the doc): content-defined chunking for write amplification; a
+//! *store-level* `readdir` cursor (O(log N) per page via an index range-seek —
+//! the cache here removes the per-page re-scan but still fetches the whole
+//! listing once, and a real cursor would also help browser pagination); and
+//! conflicted-copy naming for concurrent binary edits.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -77,6 +82,20 @@ struct StagedFile {
 #[derive(Default)]
 struct Staging {
   files: Mutex<HashMap<fileid3, StagedFile>>,
+}
+
+/// How long a cached directory listing is reused. A fresh `ls` always starts at
+/// cookie 0, which rebuilds the listing, so this only bounds staleness within a
+/// single multi-page enumeration.
+const DIR_CACHE_TTL: Duration = Duration::from_secs(5);
+
+/// A directory's children, built once per enumeration and paged from, so a
+/// large folder isn't re-fetched and re-sorted on every `readdir` page (which
+/// would be O(N²)). `DirEntry` isn't `Clone`, so its parts are cached and the
+/// entry is rebuilt per page.
+struct DirListing {
+  at: Instant,
+  entries: Vec<(fileid3, filename3, fattr3)>,
 }
 
 // Persistent-map key namespaces inside `Tree::PluginMeta`.
@@ -238,6 +257,7 @@ pub struct AtomicNfsFs {
   store: Db,
   ids: IdMap,
   staging: Arc<Staging>,
+  dir_cache: Mutex<HashMap<fileid3, DirListing>>,
   /// Echo-suppression identity for the commits this mount signs. Threaded into
   /// the commit path so the VFS doesn't read its own writes back as change
   /// notifications once cache invalidation subscribes to them.
@@ -251,6 +271,7 @@ impl AtomicNfsFs {
       ids: IdMap::new(store.clone()),
       store,
       staging: Arc::new(Staging::default()),
+      dir_cache: Mutex::new(HashMap::new()),
       source_id: format!("vfs-{}", std::process::id()),
     }
   }
@@ -405,14 +426,52 @@ impl AtomicNfsFs {
       .map_err(|_| nfsstat3::NFS3ERR_NOENT)
   }
 
-  /// A directory entry for a resource: mint its id, project its attributes.
-  fn entry_for(&self, resource: &Resource) -> DirEntry {
+  /// The cacheable parts of a directory entry for a resource: mint its id,
+  /// sanitize its name, project its attributes.
+  fn entry_parts(&self, resource: &Resource) -> (fileid3, filename3, fattr3) {
     let id = self.ids.get_or_alloc(resource.get_subject().as_str());
-    DirEntry {
-      fileid: id,
-      name: sanitize_name(&display_name(resource)).into_bytes().into(),
-      attr: attr_for(id, resource),
-    }
+    (
+      id,
+      sanitize_name(&display_name(resource)).into_bytes().into(),
+      attr_for(id, resource),
+    )
+  }
+
+  /// Every child entry of a directory (drives at the root; File/Folder children
+  /// elsewhere), sorted by id for a deterministic, pageable listing.
+  async fn collect_dir_entries(
+    &self,
+    dirid: fileid3,
+  ) -> Result<Vec<(fileid3, filename3, fattr3)>, nfsstat3> {
+    let mut entries: Vec<(fileid3, filename3, fattr3)> = if dirid == ROOT_ID {
+      let mut out = Vec::new();
+
+      for drive in self.drives().await? {
+        if let Ok(resource) = self.store.get_resource(&drive).await {
+          out.push(self.entry_parts(&resource));
+        }
+      }
+
+      out
+    } else {
+      let subject = self.ids.subject(dirid).ok_or(nfsstat3::NFS3ERR_NOENT)?;
+      self
+        .children(&subject)
+        .await?
+        .iter()
+        .map(|resource| self.entry_parts(resource))
+        .collect()
+    };
+
+    entries.sort_by_key(|(id, _, _)| *id);
+
+    Ok(entries)
+  }
+
+  /// Drop a directory's cached listing so a create/remove/rename is reflected on
+  /// the next `readdir` rather than waiting for the TTL.
+  fn invalidate_dir(&self, dirid: fileid3) {
+    self.dir_cache.lock().unwrap().remove(&dirid);
   }
 }
 
@@ -476,37 +535,45 @@ impl NFSFileSystem for AtomicNfsFs {
     start_after: fileid3,
     max_entries: usize,
   ) -> Result<ReadDirResult, nfsstat3> {
-    // Gather every child entry (allocating ids), order by id for a
-    // deterministic listing, then page from `start_after`.
-    let mut entries: Vec<DirEntry> = if dirid == ROOT_ID {
-      let mut out = Vec::new();
+    // Build the full listing once per enumeration (a fresh `ls` starts at
+    // cookie 0), cache it, and page from the cache — so a large folder isn't
+    // re-fetched and re-sorted on every `readdir` page.
+    let rebuild = start_after == 0
+      || match self.dir_cache.lock().unwrap().get(&dirid) {
+        Some(listing) => listing.at.elapsed() >= DIR_CACHE_TTL,
+        None => true,
+      };
 
-      for drive in self.drives().await? {
-        if let Ok(resource) = self.store.get_resource(&drive).await {
-          out.push(self.entry_for(&resource));
-        }
-      }
+    if rebuild {
+      let entries = self.collect_dir_entries(dirid).await?;
+      self.dir_cache.lock().unwrap().insert(
+        dirid,
+        DirListing {
+          at: Instant::now(),
+          entries,
+        },
+      );
+    }
 
-      out
-    } else {
-      let subject = self.ids.subject(dirid).ok_or(nfsstat3::NFS3ERR_NOENT)?;
-      self
-        .children(&subject)
-        .await?
-        .iter()
-        .map(|resource| self.entry_for(resource))
-        .collect()
-    };
+    let cache = self.dir_cache.lock().unwrap();
+    let listing = cache.get(&dirid).ok_or(nfsstat3::NFS3ERR_IO)?;
 
-    entries.sort_by_key(|entry| entry.fileid);
-
-    let start = entries
+    let start = listing
+      .entries
       .iter()
-      .position(|entry| entry.fileid > start_after)
-      .unwrap_or(entries.len());
-    let page: Vec<DirEntry> = entries.into_iter().skip(start).collect();
-    let end = page.len() <= max_entries;
-    let page: Vec<DirEntry> = page.into_iter().take(max_entries).collect();
+      .position(|(id, _, _)| *id > start_after)
+      .unwrap_or(listing.entries.len());
+    let remaining = &listing.entries[start..];
+    let end = remaining.len() <= max_entries;
+    let page: Vec<DirEntry> = remaining
+      .iter()
+      .take(max_entries)
+      .map(|(id, name, attr)| DirEntry {
+        fileid: *id,
+        name: name.clone(),
+        attr: *attr,
+      })
+      .collect();
 
     Ok(ReadDirResult { entries: page, end })
   }
@@ -607,6 +674,7 @@ impl NFSFileSystem for AtomicNfsFs {
     let parent = self.dir_subject(dirid).await?;
     let name = decode_name(filename.as_ref())?;
     let id = self.create_file(&parent, &name).await?;
+    self.invalidate_dir(dirid);
 
     Ok((id, file_attr(id, 0)))
   }
@@ -623,7 +691,10 @@ impl NFSFileSystem for AtomicNfsFs {
     }
 
     let name = decode_name(filename.as_ref())?;
-    self.create_file(&parent, &name).await
+    let id = self.create_file(&parent, &name).await?;
+    self.invalidate_dir(dirid);
+
+    Ok(id)
   }
 
   async fn mkdir(
@@ -641,6 +712,7 @@ impl NFSFileSystem for AtomicNfsFs {
       .map_err(|_| nfsstat3::NFS3ERR_IO)?;
 
     let id = self.ids.get_or_alloc(&subject);
+    self.invalidate_dir(dirid);
 
     Ok((id, dir_attr(id)))
   }
@@ -661,6 +733,7 @@ impl NFSFileSystem for AtomicNfsFs {
 
     // Reclaim its persisted fileid entry.
     self.ids.forget(id, &subject);
+    self.invalidate_dir(dirid);
 
     Ok(())
   }
@@ -711,6 +784,12 @@ impl NFSFileSystem for AtomicNfsFs {
       .save_locally(&self.store)
       .await
       .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+
+    self.invalidate_dir(from_dirid);
+
+    if to_dirid != from_dirid {
+      self.invalidate_dir(to_dirid);
+    }
 
     Ok(())
   }
@@ -1423,5 +1502,70 @@ mod tests {
 
     assert_eq!(first, second);
     assert_eq!(fs2.ids.subject(second).unwrap(), folder);
+  }
+
+  /// Paging a directory in small chunks returns every child exactly once — the
+  /// listing is built once (cookie 0) and served from cache across pages.
+  #[tokio::test(flavor = "multi_thread")]
+  async fn readdir_pages_through_a_directory() {
+    let store = Db::init_temp("vfs_readdir_pages").await.unwrap();
+    let drive = store.create_drive("Paging Drive").await.unwrap();
+    let folder = store
+      .create_resource(urls::FOLDER, &drive, "Many", None)
+      .await
+      .unwrap();
+
+    for i in 0..25 {
+      store
+        .create_resource(
+          urls::FILE,
+          &folder,
+          &format!("f{i:02}"),
+          Some(vec![
+            (urls::FILENAME, Value::String(format!("f{i:02}.txt"))),
+            (urls::INTERNAL_ID, Value::String(hex::encode([0u8; 32]))),
+            (urls::FILESIZE, Value::Integer(0)),
+          ]),
+        )
+        .await
+        .unwrap();
+    }
+
+    let fs = AtomicNfsFs::new(store.clone());
+    let root = fs.readdir(ROOT_ID, 0, 100).await.unwrap();
+    let drive_id = root
+      .entries
+      .iter()
+      .find(|entry| name_of(entry) == "Paging Drive")
+      .unwrap()
+      .fileid;
+    let drive_listing = fs.readdir(drive_id, 0, 100).await.unwrap();
+    let folder_id = drive_listing
+      .entries
+      .iter()
+      .find(|entry| name_of(entry) == "Many")
+      .unwrap()
+      .fileid;
+
+    let mut names = std::collections::HashSet::new();
+    let mut cursor = 0;
+
+    loop {
+      let page = fs.readdir(folder_id, cursor, 10).await.unwrap();
+
+      for entry in &page.entries {
+        names.insert(name_of(entry));
+      }
+
+      if page.end || page.entries.is_empty() {
+        break;
+      }
+
+      cursor = page.entries.last().unwrap().fileid;
+    }
+
+    assert_eq!(names.len(), 25);
+    assert!(names.contains("f00.txt"));
+    assert!(names.contains("f24.txt"));
   }
 }
