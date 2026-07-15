@@ -5434,6 +5434,9 @@ msgstr ""
 msgid "<0/> Open"
 msgstr ""
 
+#~ msgid "Mount your Atomic drives as a read-only folder on this computer. Your files, folders and documents show up in your file manager."
+#~ msgstr ""
+
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Mount your Atomic drives as a read-only folder on this computer. Your files, folders and documents show up in your file manager."
+msgid "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
 msgstr ""

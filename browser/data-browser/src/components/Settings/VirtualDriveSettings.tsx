@@ -51,8 +51,9 @@ export function VirtualDriveSettings(): React.JSX.Element {
   return (
     <Column gap='0.75rem'>
       <p>
-        Mount your Atomic drives as a read-only folder on this computer. Your
-        files, folders and documents show up in your file manager.
+        Mount your Atomic drives as a folder on this computer. Your files,
+        folders and documents show up in your file manager, and changes you make
+        there sync back.
       </p>
       <Row center gap='1ch'>
         <Button onClick={toggle} disabled={busy}>

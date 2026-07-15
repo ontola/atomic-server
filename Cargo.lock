@@ -1196,6 +1196,7 @@ dependencies = [
  "async-trait",
  "atomic-server",
  "atomic_lib",
+ "blake3",
  "clap",
  "hex",
  "jni 0.22.4",

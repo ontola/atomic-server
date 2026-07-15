@@ -1,29 +1,36 @@
 //! Virtual Drive: mount your Atomic drives as a filesystem over local NFS v3.
 //!
-//! This is the desktop v1 of `planning/virtual-drive.md`: a read-only NFS server
-//! bound to loopback that the OS mounts, with the mount root listing every Drive
-//! the node can see, folders as directories, and Files streaming their blob
-//! bytes. Neither mobile OS can mount NFS, so this module is compiled only on
-//! desktop (see the `cfg` gate on `mod vfs` in `lib.rs`).
+//! Desktop feature from `planning/virtual-drive.md`: a read-write NFS server
+//! bound to loopback that the OS mounts. The mount root lists every Drive the
+//! node can see, Folders are directories, and Files stream their blob bytes.
+//! Neither mobile OS can mount NFS, so this module is compiled only on desktop
+//! (see the `cfg` gate on `mod vfs` in `lib.rs`).
 //!
-//! **Designed for read-write even though v1 is read-only.** The mutating trait
-//! methods return `NFS3ERR_ROFS` today, but the structure that a write path
-//! needs is already here: the id map *allocates* ids (create/mkdir will need
-//! fresh ones), names are sanitized at the materialization boundary (a
-//! load-bearing safety step for writes), and the filesystem carries a stable
-//! `source_id` so commits it will eventually sign are echo-suppressed like any
-//! other transport (see `CommitOpts::source_id`). Turning it read-write is
-//! flipping `capabilities()` and filling in the stubs, not a reshape.
+//! **Reads** are lazy (bytes only on `read`, never on readdir/getattr).
+//!
+//! **Writes** stage bytes in RAM and commit them once the file has been quiet
+//! for `WRITE_DEBOUNCE` (commit coalescing, so an editor's write burst is one
+//! commit, not one per syscall). `create`/`mkdir`/`remove`/`rename` map to
+//! ordinary signed commits. Commits are signed by the store's default agent —
+//! which the desktop app sets to the signed-in user via `adopt_agent` — so
+//! writes are attributed to the user and sync with the user's rights.
+//!
+//! Addressed here: filename sanitization at the materialization boundary,
+//! commit coalescing, and admission caps (max file size, name length).
+//! Deferred (see the doc): content-defined chunking for write amplification, a
+//! disk-backed fileid map, `readdir` cursor pagination, and conflicted-copy
+//! naming for concurrent binary edits.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 
 use atomic_lib::db::trees::Tree;
 use atomic_lib::{urls, Db, Resource, Storelike, Subject, Value};
 use nfsserve::nfs::{
-  fattr3, fileid3, filename3, ftype3, nfspath3, nfsstat3, nfstime3, sattr3, specdata3,
+  fattr3, fileid3, filename3, ftype3, nfspath3, nfsstat3, nfstime3, sattr3, set_size3, specdata3,
 };
 use nfsserve::tcp::{NFSTcp, NFSTcpListener};
 use nfsserve::vfs::{DirEntry, NFSFileSystem, ReadDirResult, VFSCapabilities};
@@ -36,18 +43,48 @@ const ROOT_ID: fileid3 = 1;
 /// `port=`/`mountport=` pointing here, so no privileged (<1024) port is needed.
 pub const NFS_ADDR: &str = "127.0.0.1:11111";
 
-/// Read-only permission bits: everything is world-readable (so the mount works
-/// regardless of which uid the NFS client asserts over AUTH_UNIX) and nothing is
-/// writable while `capabilities()` is `ReadOnly`.
-const DIR_MODE: u32 = 0o555;
-const FILE_MODE: u32 = 0o444;
+/// Permission bits. Read-write now: dirs traversable + writable, files
+/// read/write. World-accessible so the mount works regardless of which uid the
+/// NFS client asserts over AUTH_UNIX.
+const DIR_MODE: u32 = 0o755;
+const FILE_MODE: u32 = 0o644;
+
+/// Admission caps (a subset of `planning/virtual-drive.md`'s hostile-peer
+/// limits). Bytes are staged in RAM until flushed, so bound file size; bound the
+/// FS name length too.
+const MAX_FILE_BYTES: usize = 512 * 1024 * 1024;
+const MAX_NAME_BYTES: usize = 255;
+
+/// Commit coalescing (the doc's gating item): a file is committed once its
+/// writes have been quiet for this long, so an editor's open/write*/close burst
+/// produces one commit, not one per `write` syscall.
+const WRITE_DEBOUNCE: Duration = Duration::from_millis(500);
+/// How often the flusher wakes to look for quiesced files.
+const FLUSH_TICK: Duration = Duration::from_millis(250);
+
+/// A file being written: bytes accumulate here across `write` syscalls and are
+/// committed (hashed → blob → signed commit) once quiet. Reads and getattr see
+/// the staged bytes so an editor's write-then-read is consistent before flush.
+struct StagedFile {
+  subject: String,
+  data: Vec<u8>,
+  dirty: bool,
+  last_write: Instant,
+}
+
+/// Per-mount write staging, shared between the filesystem (which fills it) and
+/// the background flusher (which drains it).
+#[derive(Default)]
+struct Staging {
+  files: Mutex<HashMap<fileid3, StagedFile>>,
+}
 
 /// Bidirectional `fileid3 <-> Subject` map. NFS needs small stable `u64` file
 /// ids; Atomic subjects are long strings. v1 keeps this in memory and rebuilds
 /// it per mount — `planning/virtual-drive.md` calls for a disk-backed map before
-/// fileid stability becomes a wire guarantee, but for a read-only session an
-/// in-memory map is correct. `get_or_alloc` is what a future `create`/`mkdir`
-/// will call to mint an id for a freshly committed resource.
+/// fileid stability becomes a wire guarantee, but for a single mount session an
+/// in-memory map is correct. `get_or_alloc` also mints the id for a freshly
+/// created resource (`create`/`mkdir`).
 struct IdMap {
   inner: Mutex<IdMapInner>,
 }
@@ -94,9 +131,10 @@ impl IdMap {
 pub struct AtomicNfsFs {
   store: Db,
   ids: IdMap,
-  /// Echo-suppression identity for commits this mount will sign once it goes
-  /// read-write. Unused while read-only, held now so the write path threads it
-  /// into `apply_commit_json` without reshaping this struct.
+  staging: Arc<Staging>,
+  /// Echo-suppression identity for the commits this mount signs. Threaded into
+  /// the commit path so the VFS doesn't read its own writes back as change
+  /// notifications once cache invalidation subscribes to them.
   #[allow(dead_code)]
   source_id: String,
 }
@@ -106,8 +144,111 @@ impl AtomicNfsFs {
     AtomicNfsFs {
       store,
       ids: IdMap::new(),
+      staging: Arc::new(Staging::default()),
       source_id: format!("vfs-{}", std::process::id()),
     }
+  }
+
+  /// The subject of a writable directory (a Folder or Drive). The mount root is
+  /// the drive *list* — you cannot create resources directly in it.
+  async fn dir_subject(&self, dirid: fileid3) -> Result<String, nfsstat3> {
+    if dirid == ROOT_ID {
+      return Err(nfsstat3::NFS3ERR_PERM);
+    }
+
+    let subject = self.ids.subject(dirid).ok_or(nfsstat3::NFS3ERR_NOENT)?;
+    let resource = self
+      .store
+      .get_resource(&Subject::from(subject.as_str()))
+      .await
+      .map_err(|_| nfsstat3::NFS3ERR_NOENT)?;
+
+    if is_dir(&resource) {
+      Ok(subject)
+    } else {
+      Err(nfsstat3::NFS3ERR_NOTDIR)
+    }
+  }
+
+  /// Find a File/Folder child of `parent` by its (sanitized) filesystem name.
+  async fn find_child(&self, parent: &str, name: &[u8]) -> Result<Resource, nfsstat3> {
+    for child in self.children(parent).await? {
+      if sanitize_name(&display_name(&child)).as_bytes() == name {
+        return Ok(child);
+      }
+    }
+
+    Err(nfsstat3::NFS3ERR_NOENT)
+  }
+
+  /// The current persisted bytes of a file, for seeding a staging buffer before
+  /// a partial (offset) write.
+  async fn current_blob(&self, subject: &str) -> Vec<u8> {
+    let Ok(resource) = self.store.get_resource(&Subject::from(subject)).await else {
+      return Vec::new();
+    };
+
+    read_blob(&self.store, &resource).unwrap_or_default()
+  }
+
+  /// The staged (unflushed) size of a file, if it is being written.
+  fn staged_size(&self, id: fileid3) -> Option<u64> {
+    self
+      .staging
+      .files
+      .lock()
+      .unwrap()
+      .get(&id)
+      .map(|file| file.data.len() as u64)
+  }
+
+  /// Ensure a staging buffer exists for `id`, seeded from the file's current
+  /// bytes so a partial (offset) write extends rather than truncates.
+  async fn ensure_staged(&self, id: fileid3, subject: &str) {
+    if self.staging.files.lock().unwrap().contains_key(&id) {
+      return;
+    }
+
+    let current = self.current_blob(subject).await;
+    self
+      .staging
+      .files
+      .lock()
+      .unwrap()
+      .entry(id)
+      .or_insert_with(|| StagedFile {
+        subject: subject.to_string(),
+        data: current,
+        dirty: false,
+        last_write: Instant::now(),
+      });
+  }
+
+  /// Create an empty, valid File under `parent` and return its fileid.
+  async fn create_file(&self, parent: &str, name: &str) -> Result<fileid3, nfsstat3> {
+    let hash = blake3::hash(&[]);
+    self
+      .store
+      .kv
+      .insert(Tree::Blobs, hash.as_bytes(), &[])
+      .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+
+    // A File requires all of these to be a valid resource (see the upload
+    // handler), not just the blob pointer.
+    let mut props = hash_props(&self.store, &hash.to_hex().to_string(), 0);
+    props.push((urls::FILENAME, Value::String(name.to_string())));
+    props.push((
+      urls::MIMETYPE,
+      Value::String("application/octet-stream".to_string()),
+    ));
+
+    let subject = self
+      .store
+      .create_resource(urls::FILE, parent, name, Some(props))
+      .await
+      .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+
+    Ok(self.ids.get_or_alloc(&subject))
   }
 
   /// The Drives the mount root exposes as top-level directories. On a
@@ -172,9 +313,7 @@ impl AtomicNfsFs {
 #[async_trait]
 impl NFSFileSystem for AtomicNfsFs {
   fn capabilities(&self) -> VFSCapabilities {
-    // Read-only for v1. The write path (create/write/mkdir/rename/remove
-    // routing through `apply_commit_json`) flips this to `ReadWrite`.
-    VFSCapabilities::ReadOnly
+    VFSCapabilities::ReadWrite
   }
 
   fn root_dir(&self) -> fileid3 {
@@ -187,7 +326,16 @@ impl NFSFileSystem for AtomicNfsFs {
     }
 
     let resource = self.get(id).await?;
-    Ok(attr_for(id, &resource))
+    let mut attr = attr_for(id, &resource);
+
+    // A file mid-write reports its staged size, so an editor sees the bytes it
+    // just wrote before the debounced commit lands.
+    if let Some(size) = self.staged_size(id) {
+      attr.size = size;
+      attr.used = size;
+    }
+
+    Ok(attr)
   }
 
   async fn lookup(&self, dirid: fileid3, filename: &filename3) -> Result<fileid3, nfsstat3> {
@@ -258,23 +406,25 @@ impl NFSFileSystem for AtomicNfsFs {
   }
 
   async fn read(&self, id: fileid3, offset: u64, count: u32) -> Result<(Vec<u8>, bool), nfsstat3> {
-    let resource = self.get(id).await?;
+    // Prefer staged (unflushed) bytes so a read right after a write is
+    // consistent. Otherwise read the blob lazily — only on `read`, never on
+    // readdir/getattr (the doc's no-prefetch contract). No range API on the blob
+    // store yet, so read the whole blob and slice; content-defined chunking (v2)
+    // makes this cheap.
+    let bytes = {
+      let staged = self
+        .staging
+        .files
+        .lock()
+        .unwrap()
+        .get(&id)
+        .map(|file| file.data.clone());
 
-    // Read bytes lazily on `read` only — never on readdir/getattr (the doc's
-    // no-prefetch contract). No range API on the blob store yet, so read the
-    // whole blob and slice; content-defined chunking (v2) makes this cheap.
-    let internal_id = resource
-      .get(urls::INTERNAL_ID)
-      .map_err(|_| nfsstat3::NFS3ERR_INVAL)?;
-    let hash_hex = value_string(internal_id).ok_or(nfsstat3::NFS3ERR_INVAL)?;
-    let hash_bytes = hex::decode(&hash_hex).map_err(|_| nfsstat3::NFS3ERR_IO)?;
-
-    let bytes = self
-      .store
-      .kv
-      .get(Tree::Blobs, &hash_bytes)
-      .map_err(|_| nfsstat3::NFS3ERR_IO)?
-      .ok_or(nfsstat3::NFS3ERR_NOENT)?;
+      match staged {
+        Some(data) => data,
+        None => read_blob(&self.store, &self.get(id).await?)?,
+      }
+    };
 
     let start = (offset as usize).min(bytes.len());
     let end = start.saturating_add(count as usize).min(bytes.len());
@@ -288,54 +438,171 @@ impl NFSFileSystem for AtomicNfsFs {
     Err(nfsstat3::NFS3ERR_NOTSUPP)
   }
 
-  // --- Write path: not yet. Everything below returns ROFS until
-  //     `capabilities()` becomes `ReadWrite`. See the module doc. ---
+  // --- Write path. Commits are signed by the store's default agent, which the
+  //     desktop app sets to the signed-in user via `adopt_agent` — so writes
+  //     are attributed to the user and sync with their rights. ---
 
-  async fn setattr(&self, _id: fileid3, _setattr: sattr3) -> Result<fattr3, nfsstat3> {
-    Err(nfsstat3::NFS3ERR_ROFS)
+  /// Truncate/extend (editors call this with size 0 before rewriting a file).
+  /// Other attributes (mode/uid/times) are accepted but not persisted.
+  async fn setattr(&self, id: fileid3, setattr: sattr3) -> Result<fattr3, nfsstat3> {
+    if let set_size3::size(new_size) = setattr.size {
+      if new_size as usize > MAX_FILE_BYTES {
+        return Err(nfsstat3::NFS3ERR_FBIG);
+      }
+
+      let subject = self.ids.subject(id).ok_or(nfsstat3::NFS3ERR_NOENT)?;
+      self.ensure_staged(id, &subject).await;
+
+      let mut files = self.staging.files.lock().unwrap();
+
+      if let Some(file) = files.get_mut(&id) {
+        file.data.resize(new_size as usize, 0);
+        file.dirty = true;
+        file.last_write = Instant::now();
+      }
+    }
+
+    self.getattr(id).await
   }
 
-  async fn write(&self, _id: fileid3, _offset: u64, _data: &[u8]) -> Result<fattr3, nfsstat3> {
-    Err(nfsstat3::NFS3ERR_ROFS)
+  async fn write(&self, id: fileid3, offset: u64, data: &[u8]) -> Result<fattr3, nfsstat3> {
+    let end = (offset as usize).saturating_add(data.len());
+
+    if end > MAX_FILE_BYTES {
+      return Err(nfsstat3::NFS3ERR_FBIG);
+    }
+
+    let subject = self.ids.subject(id).ok_or(nfsstat3::NFS3ERR_NOENT)?;
+    self.ensure_staged(id, &subject).await;
+
+    let size = {
+      let mut files = self.staging.files.lock().unwrap();
+      let file = files.get_mut(&id).ok_or(nfsstat3::NFS3ERR_IO)?;
+
+      if file.data.len() < end {
+        file.data.resize(end, 0);
+      }
+
+      file.data[offset as usize..end].copy_from_slice(data);
+      file.dirty = true;
+      file.last_write = Instant::now();
+      file.data.len() as u64
+    };
+
+    Ok(file_attr(id, size))
   }
 
   async fn create(
     &self,
-    _dirid: fileid3,
-    _filename: &filename3,
+    dirid: fileid3,
+    filename: &filename3,
     _attr: sattr3,
   ) -> Result<(fileid3, fattr3), nfsstat3> {
-    Err(nfsstat3::NFS3ERR_ROFS)
+    let parent = self.dir_subject(dirid).await?;
+    let name = decode_name(filename.as_ref())?;
+    let id = self.create_file(&parent, &name).await?;
+
+    Ok((id, file_attr(id, 0)))
   }
 
   async fn create_exclusive(
     &self,
-    _dirid: fileid3,
-    _filename: &filename3,
+    dirid: fileid3,
+    filename: &filename3,
   ) -> Result<fileid3, nfsstat3> {
-    Err(nfsstat3::NFS3ERR_ROFS)
+    let parent = self.dir_subject(dirid).await?;
+
+    if self.find_child(&parent, filename.as_ref()).await.is_ok() {
+      return Err(nfsstat3::NFS3ERR_EXIST);
+    }
+
+    let name = decode_name(filename.as_ref())?;
+    self.create_file(&parent, &name).await
   }
 
   async fn mkdir(
     &self,
-    _dirid: fileid3,
-    _dirname: &filename3,
+    dirid: fileid3,
+    dirname: &filename3,
   ) -> Result<(fileid3, fattr3), nfsstat3> {
-    Err(nfsstat3::NFS3ERR_ROFS)
+    let parent = self.dir_subject(dirid).await?;
+    let name = decode_name(dirname.as_ref())?;
+
+    let subject = self
+      .store
+      .create_resource(urls::FOLDER, &parent, &name, None)
+      .await
+      .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+
+    let id = self.ids.get_or_alloc(&subject);
+
+    Ok((id, dir_attr(id)))
   }
 
-  async fn remove(&self, _dirid: fileid3, _filename: &filename3) -> Result<(), nfsstat3> {
-    Err(nfsstat3::NFS3ERR_ROFS)
+  async fn remove(&self, dirid: fileid3, filename: &filename3) -> Result<(), nfsstat3> {
+    let parent = self.dir_subject(dirid).await?;
+    let mut resource = self.find_child(&parent, filename.as_ref()).await?;
+
+    // Drop any pending staged writes for it before it goes away.
+    let id = self.ids.get_or_alloc(resource.get_subject().as_str());
+    self.staging.files.lock().unwrap().remove(&id);
+
+    resource
+      .destroy(&self.store)
+      .await
+      .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+
+    Ok(())
   }
 
   async fn rename(
     &self,
-    _from_dirid: fileid3,
-    _from_filename: &filename3,
-    _to_dirid: fileid3,
-    _to_filename: &filename3,
+    from_dirid: fileid3,
+    from_filename: &filename3,
+    to_dirid: fileid3,
+    to_filename: &filename3,
   ) -> Result<(), nfsstat3> {
-    Err(nfsstat3::NFS3ERR_ROFS)
+    let from_parent = self.dir_subject(from_dirid).await?;
+    let to_parent = self.dir_subject(to_dirid).await?;
+    let mut resource = self
+      .find_child(&from_parent, from_filename.as_ref())
+      .await?;
+    let new_name = decode_name(to_filename.as_ref())?;
+
+    resource
+      .set(
+        urls::NAME.into(),
+        Value::String(new_name.clone()),
+        &self.store,
+      )
+      .await
+      .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+
+    if is_file(&resource) {
+      resource
+        .set(urls::FILENAME.into(), Value::String(new_name), &self.store)
+        .await
+        .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+    }
+
+    // A move to a different directory re-parents the resource.
+    if to_parent != from_parent {
+      resource
+        .set(
+          urls::PARENT.into(),
+          Value::AtomicUrl(to_parent.into()),
+          &self.store,
+        )
+        .await
+        .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+    }
+
+    resource
+      .save_locally(&self.store)
+      .await
+      .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+
+    Ok(())
   }
 
   async fn symlink(
@@ -345,7 +612,8 @@ impl NFSFileSystem for AtomicNfsFs {
     _symlink: &nfspath3,
     _attr: &sattr3,
   ) -> Result<(fileid3, fattr3), nfsstat3> {
-    Err(nfsstat3::NFS3ERR_ROFS)
+    // Symlinks have no Atomic representation yet.
+    Err(nfsstat3::NFS3ERR_NOTSUPP)
   }
 }
 
@@ -364,6 +632,57 @@ fn is_dir(resource: &Resource) -> bool {
   classes(resource)
     .iter()
     .any(|class| class == urls::FOLDER || class == urls::DRIVE)
+}
+
+fn is_file(resource: &Resource) -> bool {
+  classes(resource).iter().any(|class| class == urls::FILE)
+}
+
+/// Read a File resource's blob bytes (whole blob; there is no range API yet).
+fn read_blob(store: &Db, resource: &Resource) -> Result<Vec<u8>, nfsstat3> {
+  let internal_id = resource
+    .get(urls::INTERNAL_ID)
+    .map_err(|_| nfsstat3::NFS3ERR_INVAL)?;
+  let hash_hex = value_string(internal_id).ok_or(nfsstat3::NFS3ERR_INVAL)?;
+  let hash_bytes = hex::decode(&hash_hex).map_err(|_| nfsstat3::NFS3ERR_IO)?;
+
+  store
+    .kv
+    .get(Tree::Blobs, &hash_bytes)
+    .map_err(|_| nfsstat3::NFS3ERR_IO)?
+    .ok_or(nfsstat3::NFS3ERR_NOENT)
+}
+
+/// The blob-dependent File properties — everything that changes when the bytes
+/// change. A File requires `downloadURL`, so a VFS-written File must carry the
+/// same shape a server upload produces, not just the blob hash.
+fn hash_props(store: &Db, hash_hex: &str, size: usize) -> Vec<(&'static str, Value)> {
+  let base = store
+    .get_base_domain()
+    .unwrap_or_else(|| "https://localhost".to_string());
+
+  vec![
+    (urls::INTERNAL_ID, Value::String(hash_hex.to_string())),
+    (
+      urls::BLOB,
+      Value::AtomicUrl(format!("did:ad:blob:{hash_hex}").into()),
+    ),
+    (urls::FILESIZE, Value::Integer(size as i64)),
+    (
+      urls::DOWNLOAD_URL,
+      Value::String(format!("{base}/download/files/{hash_hex}")),
+    ),
+  ]
+}
+
+/// Turn a filesystem basename into an Atomic name: valid UTF-8, within the FS
+/// length cap (an admission-control limit).
+fn decode_name(name: &[u8]) -> Result<String, nfsstat3> {
+  if name.is_empty() || name.len() > MAX_NAME_BYTES {
+    return Err(nfsstat3::NFS3ERR_INVAL);
+  }
+
+  String::from_utf8(name.to_vec()).map_err(|_| nfsstat3::NFS3ERR_INVAL)
 }
 
 fn classes(resource: &Resource) -> Vec<String> {
@@ -523,16 +842,93 @@ pub struct VfsStatus {
 }
 
 /// Serve the NFS filesystem until `shutdown` resolves (fired, or its sender
-/// dropped). Bound to loopback.
+/// dropped). Bound to loopback. Runs a background flusher that commits quiesced
+/// writes, and flushes anything still pending on the way out.
 async fn serve_until(
   store: Db,
   shutdown: tokio::sync::oneshot::Receiver<()>,
 ) -> std::io::Result<()> {
-  let listener = NFSTcpListener::bind(NFS_ADDR, AtomicNfsFs::new(store)).await?;
+  let fs = AtomicNfsFs::new(store.clone());
+  let staging = fs.staging.clone();
+  let listener = NFSTcpListener::bind(NFS_ADDR, fs).await?;
 
-  tokio::select! {
+  let flush_store = store.clone();
+  let flush_staging = staging.clone();
+  let flusher = tokio::spawn(async move { flush_loop(flush_store, flush_staging).await });
+
+  let result = tokio::select! {
     result = listener.handle_forever() => result,
     _ = shutdown => Ok(()),
+  };
+
+  flusher.abort();
+  flush_ready(&store, &staging, false).await; // final flush, ignore debounce
+  result
+}
+
+/// Commit the file bytes: hash → blob → a signed commit updating the File
+/// resource's `internalId` + `filesize`. Signed by the store's default agent.
+async fn commit_file(store: &Db, subject: &str, data: &[u8]) {
+  let hash = blake3::hash(data);
+
+  if store.kv.insert(Tree::Blobs, hash.as_bytes(), data).is_err() {
+    return;
+  }
+
+  let Ok(mut resource) = store.get_resource(&Subject::from(subject)).await else {
+    return;
+  };
+
+  for (prop, value) in hash_props(store, &hash.to_hex().to_string(), data.len()) {
+    if let Err(error) = resource.set(prop.into(), value, store).await {
+      eprintln!("[vfs] flush set {prop} failed for {subject}: {error}");
+
+      return;
+    }
+  }
+
+  if let Err(error) = resource.save_locally(store).await {
+    eprintln!("[vfs] flush commit failed for {subject}: {error}");
+  }
+}
+
+/// Flush files whose writes have quiesced (or all dirty files when `gated` is
+/// false). Snapshots the ready set, releases the lock, commits, then clears the
+/// dirty flag only if no newer write arrived meanwhile.
+async fn flush_ready(store: &Db, staging: &Staging, gated: bool) {
+  let ready: Vec<(fileid3, String, Vec<u8>, Instant)> = {
+    let files = staging.files.lock().unwrap();
+    files
+      .iter()
+      .filter(|(_, file)| file.dirty && (!gated || file.last_write.elapsed() >= WRITE_DEBOUNCE))
+      .map(|(id, file)| {
+        (
+          *id,
+          file.subject.clone(),
+          file.data.clone(),
+          file.last_write,
+        )
+      })
+      .collect()
+  };
+
+  for (id, subject, data, wrote_at) in ready {
+    commit_file(store, &subject, &data).await;
+
+    let mut files = staging.files.lock().unwrap();
+
+    if let Some(file) = files.get_mut(&id) {
+      if file.last_write == wrote_at {
+        file.dirty = false;
+      }
+    }
+  }
+}
+
+async fn flush_loop(store: Db, staging: Arc<Staging>) {
+  loop {
+    tokio::time::sleep(FLUSH_TICK).await;
+    flush_ready(&store, &staging, true).await;
   }
 }
 
@@ -559,7 +955,7 @@ fn os_mount(mount_point: &std::path::Path) -> Result<(), String> {
     .map_err(|e| format!("Could not create the mount folder: {e}"))?;
 
   let port = NFS_ADDR.rsplit(':').next().unwrap_or("11111");
-  let options = format!("nolocks,vers=3,tcp,port={port},mountport={port},soft,ro");
+  let options = format!("nolocks,vers=3,tcp,port={port},mountport={port},soft");
 
   let output = std::process::Command::new("mount")
     .args(["-t", "nfs", "-o", &options, "127.0.0.1:/"])
@@ -789,5 +1185,94 @@ mod tests {
   fn falls_back_to_the_last_subject_segment() {
     assert_eq!(subject_fallback("https://x.com/foo/bar"), "bar");
     assert_eq!(subject_fallback("https://x.com/baz/"), "baz");
+  }
+
+  fn fname(name: &str) -> filename3 {
+    name.as_bytes().into()
+  }
+
+  fn no_op_sattr() -> sattr3 {
+    use nfsserve::nfs::{set_atime, set_gid3, set_mode3, set_mtime, set_uid3};
+
+    sattr3 {
+      mode: set_mode3::Void,
+      uid: set_uid3::Void,
+      gid: set_gid3::Void,
+      size: set_size3::Void,
+      atime: set_atime::DONT_CHANGE,
+      mtime: set_mtime::DONT_CHANGE,
+    }
+  }
+
+  /// Create → write → (staged) read → flush → persist, plus mkdir, rename,
+  /// truncate and remove, all through the NFS trait against a real store.
+  #[tokio::test(flavor = "multi_thread")]
+  async fn writes_create_edit_rename_truncate_and_remove() {
+    let store = Db::init_temp("vfs_write").await.unwrap();
+    let drive = store.create_drive("Write Drive").await.unwrap();
+    let _ = drive;
+    let fs = AtomicNfsFs::new(store.clone());
+
+    let root = fs.readdir(ROOT_ID, 0, 100).await.unwrap();
+    let drive_id = root
+      .entries
+      .iter()
+      .find(|entry| name_of(entry) == "Write Drive")
+      .unwrap()
+      .fileid;
+
+    // mkdir under the drive.
+    let (folder_id, folder_attr) = fs.mkdir(drive_id, &fname("Docs")).await.unwrap();
+    assert!(matches!(folder_attr.ftype, ftype3::NF3DIR));
+
+    // create + write; a read sees the staged bytes before the flush commits.
+    let (file_id, _) = fs
+      .create(folder_id, &fname("note.txt"), no_op_sattr())
+      .await
+      .unwrap();
+    let attr = fs.write(file_id, 0, b"hello vfs").await.unwrap();
+    assert_eq!(attr.size, 9);
+    let (staged, _) = fs.read(file_id, 0, 100).await.unwrap();
+    assert_eq!(staged, b"hello vfs");
+
+    // flush → the File resource persists the bytes as a signed commit.
+    flush_ready(&store, &fs.staging, false).await;
+    let subject = fs.ids.subject(file_id).unwrap();
+    let resource = store
+      .get_resource(&Subject::from(subject.as_str()))
+      .await
+      .unwrap();
+    assert_eq!(read_blob(&store, &resource).unwrap(), b"hello vfs");
+
+    // truncate to empty via setattr(size = 0), then flush.
+    fs.setattr(file_id, {
+      let mut attr = no_op_sattr();
+      attr.size = set_size3::size(0);
+      attr
+    })
+    .await
+    .unwrap();
+    flush_ready(&store, &fs.staging, false).await;
+    let resource = store
+      .get_resource(&Subject::from(subject.as_str()))
+      .await
+      .unwrap();
+    assert_eq!(read_blob(&store, &resource).unwrap().len(), 0);
+
+    // rename within the folder.
+    fs.rename(
+      folder_id,
+      &fname("note.txt"),
+      folder_id,
+      &fname("renamed.txt"),
+    )
+    .await
+    .unwrap();
+    assert!(fs.lookup(folder_id, &fname("renamed.txt")).await.is_ok());
+    assert!(fs.lookup(folder_id, &fname("note.txt")).await.is_err());
+
+    // remove.
+    fs.remove(folder_id, &fname("renamed.txt")).await.unwrap();
+    assert!(fs.lookup(folder_id, &fname("renamed.txt")).await.is_err());
   }
 }
