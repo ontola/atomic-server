@@ -1,9 +1,9 @@
-# Drafts, publishing, and suggestions
+# Forks, drafts, publishing, and suggestions
 
-> **Status:** design agreed, 2026-07-14. Covers milestone 11 (Local-first
-> headless CMS): issue #467 (drafts / publishing / archiving) and the mechanism
-> half of #1000 (edit content from a webpage). Content i18n (#1069) is out of
-> scope for this round.
+> **Status:** design agreed 2026-07-14; **terminology split 2026-07-15.** Covers
+> milestone 11 (Local-first headless CMS): issue #467 (drafts / publishing /
+> archiving) and the mechanism half of #1000 (edit content from a webpage).
+> Content i18n (#1069) is out of scope for this round.
 
 ## Two orthogonal things, neither of them CMS-specific
 
@@ -13,12 +13,23 @@ feature; there is no `Website`-specific code path anywhere in this plan.
 1. **Visibility is location.** A resource is public because it lives somewhere
    public. Publishing, unpublishing, and archiving are *moving a resource* —
    an operation that already exists.
-2. **A proposed change is a fork.** A `Draft` resource names the resource it
+2. **A proposed change is a fork.** A `Fork` resource names the resource it
    proposes to change, via `originalSubject`. Merging squashes it onto the
    original. This is the same mechanism whether you hold write rights (staging
    your own edit) or not (suggesting one to someone else).
 
 Everything below follows from those two sentences.
+
+**The two words, kept apart** (the 2026-07-15 split). Earlier the fork concept
+was called a "Draft", which overloaded the word and forced every draft to target
+an existing resource. They are now distinct:
+
+- A **Fork** is capability 2: a proposed change to an *existing* resource. It has
+  a target resource (`originalSubject`) and a lifecycle of **merge**.
+- A **Draft** is capability 1: unpublished *new* content. It is **not a class**,
+  it is a *place* — a resource living in the drive's private Drafts folder. It has
+  only a target *parent* and a lifecycle of **publish** (= move somewhere publicly
+  readable). Nothing to add or strip; publishing a draft is an ordinary re-parent.
 
 ## 1. Visibility is location
 
@@ -54,10 +65,10 @@ original `status`-property proposal in #467 fell into.
 
 | Term | Datatype | Meaning |
 | --- | --- | --- |
-| `Draft` (class) | — | Marker: this resource proposes a change to another. |
+| `Fork` (class) | — | Marker: this resource proposes a change to another. |
 | `originalSubject` | atomicURL | The resource it proposes to change. |
 | `forkBase` | json | The original's content propvals at fork time, for the three-way propval merge. |
-| `forkVersion` | string | Base64 Loro version vector at fork time, for the CRDT body merge (only on drafts of Loro-body classes). |
+| `forkVersion` | string | Base64 Loro version vector at fork time, for the CRDT body merge (only on forks of Loro-body classes). |
 
 `originalSubject` is the term already spec'd in `docs/src/commits/suggestions.md`
 ("Fork", "Suggestion", "Controller", "Inbox"); we implement it rather than mint a
@@ -65,8 +76,8 @@ competing `target`.
 
 A fork is a normal resource: it has its own subject, its own Loro doc, its own
 commit history, and it can be collaboratively edited, commented on, and shared
-like anything else. It carries the content class **alongside** `Draft`
-(`isA: [BlogPost, Draft]`) so the normal views render it — no parallel preview
+like anything else. It carries the content class **alongside** `Fork`
+(`isA: [BlogPost, Fork]`) so the normal views render it — no parallel preview
 stack.
 
 **Merging is a three-way squash.** A plain squash (write every draft propval onto
@@ -76,10 +87,10 @@ received in the meantime. To avoid that, a fork records `forkBase` — the origi
 content propvals at fork time, as a self-contained JSON snapshot (chosen over
 replaying the forked-from commit, because commit retention is optional node policy
 per `commit-retention-and-state-certificates.md` and a snapshot works on a pruned
-or offline node). Merging (`diffDraft` / `mergeDraft` in `browser/lib/src/drafts.ts`)
+or offline node). Merging (`diffFork` / `mergeFork` in `browser/lib/src/forks.ts`)
 writes **only** the properties the draft changed relative to `forkBase`; a property
 untouched by the draft is left alone. Where both sides changed the same property it
-is a **conflict**, surfaced (`DraftChange.conflict`, count shown in the DraftBar,
+is a **conflict**, surfaced (`ForkChange.conflict`, count shown in the ForkBar,
 `onConflict: 'throw'` to abort) rather than silently resolved.
 
 Squash rather than importing the fork's Loro oplog *for propvals*, because an oplog
@@ -99,24 +110,24 @@ on the original and one on the draft both survive. This is scoped to the `doc` c
 seeding/merging a snapshot would clobber the original's propvals, so the merge snapshots
 the original's propvals around the import and restores them, keeping the body merge (Loro)
 and the propval merge (three-way) independent. Pinned by
-`browser/lib/src/drafts.test.ts` ("forks a document body and merges concurrent body edits
-as a CRDT") and the `edit a document body as a draft` e2e.
+`browser/lib/src/forks.test.ts` ("forks a document body and merges concurrent body edits
+as a CRDT") and the `edit a document body as a fork` e2e.
 
 Because the merge commit is an ordinary write to the original, **authorization needs
 no changes at all**: `check_write` on the original already decides who may merge.
 
 **Flow gaps still open** (the mechanism is safe, but the review flow is not complete):
-- **Discovery — done for same-drive.** A `PendingDrafts` bar on the original runs a
-  reverse query (`originalSubject == thisResource`, drive-scoped) and lists the drafts
-  proposing changes to it. This works because a same-drive draft rides ordinary drive
+- **Discovery — done for same-drive.** A `PendingForks` bar on the original runs a
+  reverse query (`originalSubject == thisResource`, drive-scoped) and lists the forks
+  proposing changes to it. This works because a same-drive fork rides ordinary drive
   sync into the reviewer's own replica, where a local query finds it — no inbox, no
-  push. It only surfaces drafts the reviewer can already read; a proposal on someone
+  push. It only surfaces forks the reviewer can already read; a proposal on someone
   else's drive is invisible here **by design** and needs the cross-agent delivery
   primitive below.
-- **Review/diff UI.** `diffDraft` returns per-property base/draft/original + conflict;
-  reuse the existing `components/ResourceDiff` to render it. The DraftBar only shows
+- **Review/diff UI.** `diffFork` returns per-property base/draft/original + conflict;
+  reuse the existing `components/ResourceDiff` to render it. The ForkBar only shows
   counts today.
-- **Suggest-an-edit for non-writers.** `Edit as draft` is gated on `canWrite`, so the
+- **Suggest-an-edit for non-writers.** `Edit as fork` is gated on `canWrite`, so the
   actor-side "propose a change to a resource you can't write" half of
   `docs/src/commits/suggestions.md` is unimplemented. Needs distributor mode (see
   Open questions) — scope separately.
@@ -124,10 +135,10 @@ no changes at all**: `check_write` on the original already decides who may merge
   A record/notification is missing.
 - **DocumentV2 is supported; Canvas is not.** A document's body is a Loro `doc`
   container, now seeded on fork and CRDT-merged on merge (see "The body of a Loro-body
-  class" above), so `Edit as draft` works on documents and the draft bar offers Merge on
+  class" above), so `Edit as fork` works on documents and the draft bar offers Merge on
   the strength of a body edit alone (`hasBody`, no changed propval). A Canvas keeps its
   content in Loro *stroke lists*, not the `doc` container the fork seeds, so forking one
-  would silently lose the body — `Edit as draft` is gated off Canvas (and off Drive)
+  would silently lose the body — `Edit as fork` is gated off Canvas (and off Drive)
   until canvas grows its own fork/merge.
 
 ## What we are *not* doing, and why
@@ -146,7 +157,7 @@ Each was considered against the code, not on taste.
   created wherever you create it. Creating a resource keeps behaving exactly as it does
   today.
 - **Deferring class validation for drafts.** Only needed to let an incomplete
-  `isA: [BlogPost, Draft]` post save. With new content being ordinary content, the real
+  `isA: [BlogPost, Fork]` post save. With new content being ordinary content, the real
   problem is that the website ontology marks `cover-image` and `published-at` as
   *required*, which is over-strict regardless of drafts. Fix the ontology, not core
   validation.
@@ -183,11 +194,11 @@ Delivery/discovery is deliberately unresolved — see Open questions.
 Lands in the actions registry (`browser/data-browser/src/actions/`, `planning/actions.md`),
 so each verb appears in the context menu, ⌘K, ⌘M and the AI/MCP surface for free.
 
-- **Edit as draft** — forks the resource. `available: canWrite`.
+- **Edit as fork** — forks the resource. `available: canWrite`.
 - **Suggest an edit** — the same fork, authored on your own drive. `available: !canWrite`.
   This is the "right-click any Atomic Data on the web and suggest an edit" verb from
   `docs/src/commits/suggestions.md`.
-- **Merge / Publish draft** — squash onto `originalSubject`. `available: isDraft && canWrite(original)`.
+- **Merge fork** — squash onto `originalSubject`. `available: isDraft && canWrite(original)`.
 - **Discard draft**.
 - **Publish / Unpublish / Archive** for plain content — a *move* into or out of the public
   folder. Generic; nothing website-specific.
@@ -201,7 +212,7 @@ so each verb appears in the context menu, ⌘K, ⌘M and the AI/MCP surface for 
 - Ship a `Drafts` folder (private) next to the public site folder.
 - Loosen the over-strict `requires` on `blogpost` (`cover-image`, `published-at`) so an
   incomplete post is saveable anywhere.
-- Generated queries must exclude `Draft` and stop rendering future-dated posts. Today
+- Generated queries must exclude `Fork` and stop rendering future-dated posts. Today
   `published-at` is used only for sorting and display, so a post dated 2099 renders now.
 - E2E: a draft is invisible to an anonymous visitor of the generated site, and visible
   after publish.
@@ -212,9 +223,9 @@ so each verb appears in the context menu, ⌘K, ⌘M and the AI/MCP surface for 
 already populated never picks up a newly-added `lib/defaults/*.json`. That applies
 to **both** ends:
 
-- **Server:** needs `--repopulate-defaults` (or a fresh store) to learn `Draft` /
-  `originalSubject`. Without it, a commit carrying `isA: [.., Draft]` is rejected
-  with *"Failed getting class .../Draft … 404"*.
+- **Server:** needs `--repopulate-defaults` (or a fresh store) to learn `Fork` /
+  `originalSubject`. Without it, a commit carrying `isA: [.., Fork]` is rejected
+  with *"Failed getting class .../Fork … 404"*.
 - **Browser:** the WASM ClientDb embeds the same defaults, so it needs a rebuilt
   wasm bundle *and* a store that repopulates. An existing client silently falls
   back to fetching `https://atomicdata.dev/properties/originalSubject` over the
@@ -244,5 +255,5 @@ import missing defaults idempotently on boot) before this ships.
 - **Cross-agent suggestions need distributor mode**, not the hub-mediated trust mode that
   ships today. Same-drive drafts do not — which is why drafts ship first.
 - **Canvas body merge.** DocumentV2's `doc` container is CRDT-merged; Canvas's stroke lists
-  are not yet forked/merged, so `Edit as draft` is gated off Canvas. Extending the
+  are not yet forked/merged, so `Edit as fork` is gated off Canvas. Extending the
   seed/merge to stroke containers is the remaining Loro-body case.
