@@ -5423,36 +5423,51 @@ msgstr "Unpublished new content. Resources here are visible to people who can wr
 msgid "Virtual drive"
 msgstr "Virtual drive"
 
-#. 0: error
-#: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Virtual drive: {0}"
-msgstr "Virtual drive: {0}"
+#~ msgid "Virtual drive: {0}"
+#~ msgstr "Virtual drive: {0}"
+
+#~ msgid "Mount command copied"
+#~ msgstr "Mount command copied"
+
+#~ msgid "Stop virtual drive"
+#~ msgstr "Stop virtual drive"
+
+#~ msgid "Start virtual drive"
+#~ msgstr "Start virtual drive"
+
+#~ msgid "Running on {0}"
+#~ msgstr "Running on {0}"
+
+#~ msgid "Stopped"
+#~ msgstr "Stopped"
+
+#~ msgid "Copy mount command"
+#~ msgstr "Copy mount command"
+
+#~ msgid "Mount your Atomic drives as a read-only folder on this computer, served over local NFS. Turn it on, then run the mount command in a terminal."
+#~ msgstr "Mount your Atomic drives as a read-only folder on this computer, served over local NFS. Turn it on, then run the mount command in a terminal."
 
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Mount command copied"
-msgstr "Mount command copied"
+msgid "Turn off"
+msgstr "Turn off"
 
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Stop virtual drive"
-msgstr "Stop virtual drive"
+msgid "Turn on"
+msgstr "Turn on"
 
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Start virtual drive"
-msgstr "Start virtual drive"
+msgid "Open in file manager"
+msgstr "Open in file manager"
 
-#. 0: status.addr
+#. 0: status.mount_path
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Running on {0}"
-msgstr "Running on {0}"
-
-#: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Stopped"
-msgstr "Stopped"
+msgid "Mounted at {0}"
+msgstr "Mounted at {0}"
 
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Copy mount command"
-msgstr "Copy mount command"
+msgid "<0/> Open"
+msgstr "<0/> Open"
 
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Mount your Atomic drives as a read-only folder on this computer, served over local NFS. Turn it on, then run the mount command in a terminal."
-msgstr "Mount your Atomic drives as a read-only folder on this computer, served over local NFS. Turn it on, then run the mount command in a terminal."
+msgid "Mount your Atomic drives as a read-only folder on this computer. Your files, folders and documents show up in your file manager."
+msgstr "Mount your Atomic drives as a read-only folder on this computer. Your files, folders and documents show up in your file manager."

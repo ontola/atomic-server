@@ -156,7 +156,7 @@ fn virtual_drive_start(
     .get()
     .ok_or("The local node has not finished starting up.")?
     .clone();
-  vfs.start(store);
+  vfs.start(store)?;
 
   Ok(vfs.status())
 }
@@ -174,6 +174,13 @@ fn virtual_drive_status(
   vfs: tauri::State<'_, std::sync::Arc<vfs::VfsController>>,
 ) -> vfs::VfsStatus {
   vfs.status()
+}
+
+/// Open the mounted virtual drive in the OS file manager.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn virtual_drive_open() -> Result<(), String> {
+  vfs::open_mount()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -201,7 +208,8 @@ pub fn run() {
       adopt_agent,
       virtual_drive_start,
       virtual_drive_stop,
-      virtual_drive_status
+      virtual_drive_status,
+      virtual_drive_open
     ]);
   #[cfg(any(target_os = "android", target_os = "ios"))]
   let builder = builder.invoke_handler(tauri::generate_handler![adopt_agent]);

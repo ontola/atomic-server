@@ -506,23 +506,20 @@ fn sanitize_name(name: &str) -> String {
   sanitized
 }
 
-/// The `mount` command a user runs to attach the virtual drive read-only. The
-/// non-privileged port needs no sudo, but the `mount` call itself may still
-/// require elevated rights depending on the OS.
-pub fn mount_command() -> String {
-  let port = NFS_ADDR.rsplit(':').next().unwrap_or("11111");
-  format!(
-    "mkdir -p ~/AtomicDrive && mount -t nfs -o \
-     nolocks,vers=3,tcp,port={port},mountport={port},soft,ro 127.0.0.1:/ ~/AtomicDrive"
-  )
+/// Where the drive is mounted: `~/AtomicDrive`.
+fn mount_point() -> Option<std::path::PathBuf> {
+  let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+  Some(std::path::PathBuf::from(home).join("AtomicDrive"))
 }
 
-/// Status of the virtual-drive NFS server, surfaced to the desktop UI.
+/// Status of the virtual drive, surfaced to the desktop UI.
 #[derive(serde::Serialize)]
 pub struct VfsStatus {
+  /// The NFS server is listening.
   pub running: bool,
-  pub addr: String,
-  pub mount_command: String,
+  /// The drive is mounted into the filesystem at `mount_path`.
+  pub mounted: bool,
+  pub mount_path: Option<String>,
 }
 
 /// Serve the NFS filesystem until `shutdown` resolves (fired, or its sender
@@ -539,64 +536,158 @@ async fn serve_until(
   }
 }
 
-/// Owns the virtual-drive NFS server's lifecycle, so the app (via a Tauri
-/// command) starts and stops the mount rather than it being always-on.
+/// Wait for the NFS server to accept connections before mounting, so `mount`
+/// doesn't race the listener's bind. ~3s budget.
+fn wait_until_listening() -> bool {
+  for _ in 0..30 {
+    if std::net::TcpStream::connect(NFS_ADDR).is_ok() {
+      return true;
+    }
+
+    std::thread::sleep(std::time::Duration::from_millis(100));
+  }
+
+  false
+}
+
+/// Mount the running NFS server into the filesystem. On macOS a normal user can
+/// mount NFS to a directory they own (no sudo); on Linux `mount` usually needs
+/// privilege, so the error is surfaced to the UI.
+#[cfg(unix)]
+fn os_mount(mount_point: &std::path::Path) -> Result<(), String> {
+  std::fs::create_dir_all(mount_point)
+    .map_err(|e| format!("Could not create the mount folder: {e}"))?;
+
+  let port = NFS_ADDR.rsplit(':').next().unwrap_or("11111");
+  let options = format!("nolocks,vers=3,tcp,port={port},mountport={port},soft,ro");
+
+  let output = std::process::Command::new("mount")
+    .args(["-t", "nfs", "-o", &options, "127.0.0.1:/"])
+    .arg(mount_point)
+    .output()
+    .map_err(|e| format!("Could not run mount: {e}"))?;
+
+  if output.status.success() {
+    Ok(())
+  } else {
+    Err(format!(
+      "mount failed: {}",
+      String::from_utf8_lossy(&output.stderr).trim()
+    ))
+  }
+}
+
+#[cfg(unix)]
+fn os_unmount(mount_point: &str) {
+  let _ = std::process::Command::new("umount")
+    .arg(mount_point)
+    .output();
+}
+
+#[cfg(not(unix))]
+fn os_mount(_mount_point: &std::path::Path) -> Result<(), String> {
+  Err("Mounting the virtual drive isn't supported on this platform yet.".into())
+}
+
+#[cfg(not(unix))]
+fn os_unmount(_mount_point: &str) {}
+
+/// Open the mounted folder in the OS file manager.
+pub fn open_mount() -> Result<(), String> {
+  let path = mount_point().ok_or("No mount location.")?;
+  #[cfg(target_os = "macos")]
+  let opener = "open";
+  #[cfg(all(unix, not(target_os = "macos")))]
+  let opener = "xdg-open";
+  #[cfg(windows)]
+  let opener = "explorer";
+
+  std::process::Command::new(opener)
+    .arg(&path)
+    .spawn()
+    .map(|_| ())
+    .map_err(|e| format!("Could not open the folder: {e}"))
+}
+
+/// Owns the virtual drive's lifecycle — the NFS server *and* the OS mount — so
+/// the app (via a Tauri command) turns it on and off with one action.
 #[derive(Default)]
 pub struct VfsController {
   running: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+  mount_path: Mutex<Option<String>>,
 }
 
 impl VfsController {
-  /// Start the NFS server if it isn't already running, on its own thread +
-  /// runtime (independent of the embedded server's actix reactor).
-  pub fn start(&self, store: Db) {
-    let mut running = self.running.lock().unwrap();
+  /// Start the NFS server (if needed) and mount it into the filesystem. The
+  /// server runs on its own thread + runtime, independent of the embedded
+  /// server's actix reactor.
+  pub fn start(&self, store: Db) -> Result<(), String> {
+    {
+      let mut running = self.running.lock().unwrap();
 
-    if running.is_some() {
-      return;
+      if running.is_none() {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+
+        std::thread::Builder::new()
+          .name("atomic-vfs-nfs".to_string())
+          .spawn(move || {
+            let runtime = match tokio::runtime::Builder::new_multi_thread()
+              .enable_all()
+              .build()
+            {
+              Ok(runtime) => runtime,
+              Err(error) => {
+                eprintln!("[vfs] could not start the NFS runtime: {error}");
+                return;
+              }
+            };
+
+            if let Err(error) = runtime.block_on(serve_until(store, shutdown_rx)) {
+              eprintln!("[vfs] NFS server stopped: {error}");
+            }
+          })
+          .expect("failed to spawn the atomic-vfs-nfs thread");
+
+        *running = Some(shutdown_tx);
+        println!("[vfs] virtual drive listening on {NFS_ADDR}");
+      }
     }
 
-    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    if self.mount_path.lock().unwrap().is_some() {
+      return Ok(()); // already mounted
+    }
 
-    std::thread::Builder::new()
-      .name("atomic-vfs-nfs".to_string())
-      .spawn(move || {
-        let runtime = match tokio::runtime::Builder::new_multi_thread()
-          .enable_all()
-          .build()
-        {
-          Ok(runtime) => runtime,
-          Err(error) => {
-            eprintln!("[vfs] could not start the NFS runtime: {error}");
-            return;
-          }
-        };
+    if !wait_until_listening() {
+      return Err("The virtual drive did not start listening.".into());
+    }
 
-        if let Err(error) = runtime.block_on(serve_until(store, shutdown_rx)) {
-          eprintln!("[vfs] NFS server stopped: {error}");
-        }
-      })
-      .expect("failed to spawn the atomic-vfs-nfs thread");
+    let mount_point = mount_point().ok_or("Could not find a home folder to mount into.")?;
+    os_mount(&mount_point)?;
 
-    *running = Some(shutdown_tx);
-    println!("[vfs] virtual drive listening on {NFS_ADDR}");
+    let path = mount_point.to_string_lossy().to_string();
+    println!("[vfs] virtual drive mounted at {path}");
+    *self.mount_path.lock().unwrap() = Some(path);
+
+    Ok(())
   }
 
-  /// Stop the server if running. Dropping the shutdown sender ends the accept
-  /// loop, and the worker thread then exits on its own.
+  /// Unmount and stop the server. Dropping the shutdown sender ends the accept
+  /// loop; the worker thread then exits on its own.
   pub fn stop(&self) {
+    if let Some(path) = self.mount_path.lock().unwrap().take() {
+      os_unmount(&path);
+    }
+
     self.running.lock().unwrap().take();
   }
 
-  pub fn is_running(&self) -> bool {
-    self.running.lock().unwrap().is_some()
-  }
-
   pub fn status(&self) -> VfsStatus {
+    let mount_path = self.mount_path.lock().unwrap().clone();
+
     VfsStatus {
-      running: self.is_running(),
-      addr: NFS_ADDR.to_string(),
-      mount_command: mount_command(),
+      running: self.running.lock().unwrap().is_some(),
+      mounted: mount_path.is_some(),
+      mount_path,
     }
   }
 }

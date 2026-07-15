@@ -5389,36 +5389,51 @@ msgstr ""
 msgid "Virtual drive"
 msgstr ""
 
-#. 0: error
+#~ msgid "Virtual drive: {0}"
+#~ msgstr ""
+
+#~ msgid "Mount command copied"
+#~ msgstr ""
+
+#~ msgid "Stop virtual drive"
+#~ msgstr ""
+
+#~ msgid "Start virtual drive"
+#~ msgstr ""
+
+#~ msgid "Running on {0}"
+#~ msgstr ""
+
+#~ msgid "Stopped"
+#~ msgstr ""
+
+#~ msgid "Copy mount command"
+#~ msgstr ""
+
+#~ msgid "Mount your Atomic drives as a read-only folder on this computer, served over local NFS. Turn it on, then run the mount command in a terminal."
+#~ msgstr ""
+
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Virtual drive: {0}"
+msgid "Turn off"
 msgstr ""
 
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Mount command copied"
+msgid "Turn on"
 msgstr ""
 
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Stop virtual drive"
+msgid "Open in file manager"
+msgstr ""
+
+#. 0: status.mount_path
+#: src/components/Settings/VirtualDriveSettings.tsx
+msgid "Mounted at {0}"
 msgstr ""
 
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Start virtual drive"
-msgstr ""
-
-#. 0: status.addr
-#: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Running on {0}"
+msgid "<0/> Open"
 msgstr ""
 
 #: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Stopped"
-msgstr ""
-
-#: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Copy mount command"
-msgstr ""
-
-#: src/components/Settings/VirtualDriveSettings.tsx
-msgid "Mount your Atomic drives as a read-only folder on this computer, served over local NFS. Turn it on, then run the mount command in a terminal."
+msgid "Mount your Atomic drives as a read-only folder on this computer. Your files, folders and documents show up in your file manager."
 msgstr ""
