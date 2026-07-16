@@ -4,7 +4,8 @@ use crate::{
 };
 use actix_web::http::header::{ContentDisposition, DispositionType};
 use actix_web::{web, HttpRequest, HttpResponse};
-use atomic_lib::{urls, Resource, Storelike};
+use atomic_lib::storelike::Query;
+use atomic_lib::{urls, Resource, Storelike, Subject, Value};
 
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -44,6 +45,12 @@ pub async fn handle_download(
     if params.q.is_none() && params.w.is_none() && params.f.is_none() {
         if let Some(hash_hex) = subject_path.strip_prefix("/files/") {
             if let Some(bytes) = blob_by_hash_hex(hash_hex, &appstate)? {
+                return Ok(user_blob_response("application/octet-stream", bytes));
+            }
+
+            // No whole-file blob under this hash: it may be a chunked file whose
+            // `internalId` is this hash. Find it and reconstruct from its chunks.
+            if let Some(bytes) = chunked_file_by_internal_id(hash_hex, &appstate).await? {
                 return Ok(user_blob_response("application/octet-stream", bytes));
             }
         }
@@ -116,17 +123,33 @@ fn blob_by_hash_hex(hash_hex: &str, appstate: &AppState) -> AtomicServerResult<O
         .flatten())
 }
 
-pub fn download_file_handler_partial(
-    resource: &Resource,
-    _req: &HttpRequest,
-    params: &web::Query<DownloadParams>,
-    appstate: &AppState,
-) -> AtomicServerResult<HttpResponse> {
+/// The bytes of a File: concatenated chunk blobs when it is chunked (its `chunks`
+/// property is a non-empty ordered list of `did:ad:blob:` refs), otherwise the
+/// single blob referenced by `internalId`.
+fn reconstruct_file_bytes(resource: &Resource, appstate: &AppState) -> AtomicServerResult<Vec<u8>> {
+    if let Ok(Value::ResourceArray(chunks)) = resource.get(urls::CHUNKS) {
+        if !chunks.is_empty() {
+            let mut out = Vec::new();
+
+            for chunk in chunks {
+                let did = chunk.to_string();
+                let subject = Subject::from(did.as_str());
+                let hash_hex = subject
+                    .blob_hash_hex()
+                    .ok_or_else(|| format!("Invalid chunk reference: {did}"))?;
+                let bytes = blob_by_hash_hex(hash_hex, appstate)?
+                    .ok_or_else(|| format!("Chunk blob not found: {hash_hex}"))?;
+                out.extend_from_slice(&bytes);
+            }
+
+            return Ok(out);
+        }
+    }
+
     let internal_id = resource
         .get(urls::INTERNAL_ID)
         .map_err(|e| format!("Internal ID of file could not be resolved. {}", e))?
         .to_string();
-
     let hash_bytes = hex::decode(&internal_id)
         .map_err(|_| format!("File internalId is not hex: {}", internal_id))?;
     if hash_bytes.len() != 32 {
@@ -137,11 +160,48 @@ pub fn download_file_handler_partial(
         .into());
     }
 
-    let bytes = appstate
+    appstate
         .store
         .kv
         .get(atomic_lib::db::trees::Tree::Blobs, &hash_bytes)?
-        .ok_or_else(|| format!("Blob not found: {}", internal_id))?;
+        .ok_or_else(|| format!("Blob not found: {}", internal_id).into())
+}
+
+/// Find a chunked File by its whole-file `internalId` and reconstruct its bytes,
+/// so the content-addressed `/download/files/{hash}` URL works for chunked files
+/// (whose whole-file blob is never stored). `None` if no such chunked File.
+async fn chunked_file_by_internal_id(
+    hash_hex: &str,
+    appstate: &AppState,
+) -> AtomicServerResult<Option<Vec<u8>>> {
+    let result = appstate
+        .store
+        .query(&Query::new_prop_val(urls::INTERNAL_ID, hash_hex))
+        .await?;
+
+    for resource in result.resources {
+        if matches!(resource.get(urls::CHUNKS), Ok(Value::ResourceArray(c)) if !c.is_empty()) {
+            return Ok(Some(reconstruct_file_bytes(&resource, appstate)?));
+        }
+    }
+
+    Ok(None)
+}
+
+pub fn download_file_handler_partial(
+    resource: &Resource,
+    _req: &HttpRequest,
+    params: &web::Query<DownloadParams>,
+    appstate: &AppState,
+) -> AtomicServerResult<HttpResponse> {
+    let bytes = reconstruct_file_bytes(resource, appstate)?;
+
+    // The source hash for the image-rendition cache key is the whole-file hash.
+    let internal_id = resource
+        .get(urls::INTERNAL_ID)
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+    let hash_bytes = hex::decode(&internal_id).unwrap_or_default();
 
     let mimetype = resource
         .get(urls::MIMETYPE)

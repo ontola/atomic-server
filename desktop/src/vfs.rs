@@ -17,14 +17,15 @@
 //!
 //! Addressed here: filename sanitization at the materialization boundary,
 //! commit coalescing, admission caps (max file size, name length), persisted
-//! stable fileids, and a per-directory listing cache so paging a large folder is
-//! O(N) per enumeration rather than O(N²).
+//! stable fileids, a per-directory listing cache (paging is O(N) per enumeration
+//! rather than O(N²)), and content-defined chunking so a small edit to a large
+//! file rewrites only the changed chunks (`chunks` File property; large files
+//! only).
 //!
-//! Deferred (see the doc): content-defined chunking for write amplification; a
-//! *store-level* `readdir` cursor (O(log N) per page via an index range-seek —
-//! the cache here removes the per-page re-scan but still fetches the whole
-//! listing once, and a real cursor would also help browser pagination); and
-//! conflicted-copy naming for concurrent binary edits.
+//! Deferred (see the doc): a *store-level* `readdir` cursor (O(log N) per page
+//! via an index range-seek — the cache here removes the per-page re-scan but
+//! still fetches the whole listing once, and a real cursor would also help
+//! browser pagination); and conflicted-copy naming for concurrent binary edits.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -33,6 +34,7 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 
 use atomic_lib::db::trees::Tree;
+use atomic_lib::values::SubResource;
 use atomic_lib::{urls, Db, Resource, Storelike, Subject, Value};
 use nfsserve::nfs::{
   fattr3, fileid3, filename3, ftype3, nfspath3, nfsstat3, nfstime3, sattr3, set_size3, specdata3,
@@ -59,6 +61,15 @@ const FILE_MODE: u32 = 0o644;
 /// FS name length too.
 const MAX_FILE_BYTES: usize = 512 * 1024 * 1024;
 const MAX_NAME_BYTES: usize = 255;
+
+/// Content-defined chunking (FastCDC): files larger than the threshold are
+/// stored as an ordered list of variable-size chunk-blobs, so a small edit
+/// rewrites only the changed chunks (and unchanged chunks dedupe by hash)
+/// instead of a whole-file blob. Smaller files stay a single blob.
+const CHUNK_MIN: u32 = 256 * 1024;
+const CHUNK_AVG: u32 = 1024 * 1024;
+const CHUNK_MAX: u32 = 4 * 1024 * 1024;
+const CHUNK_THRESHOLD: usize = CHUNK_MAX as usize;
 
 /// Commit coalescing (the doc's gating item): a file is committed once its
 /// writes have been quiet for this long, so an editor's open/write*/close burst
@@ -827,13 +838,42 @@ fn is_file(resource: &Resource) -> bool {
   classes(resource).iter().any(|class| class == urls::FILE)
 }
 
-/// Read a File resource's blob bytes (whole blob; there is no range API yet).
+/// Read a File resource's bytes: concatenate its chunk blobs when it is chunked,
+/// otherwise the single blob. (Whole file into memory; there is no range API
+/// yet.)
 fn read_blob(store: &Db, resource: &Resource) -> Result<Vec<u8>, nfsstat3> {
+  if let Ok(Value::ResourceArray(chunks)) = resource.get(urls::CHUNKS) {
+    if !chunks.is_empty() {
+      let mut out = Vec::new();
+
+      for chunk in chunks {
+        out.extend_from_slice(&blob_by_did(store, &chunk.to_string())?);
+      }
+
+      return Ok(out);
+    }
+  }
+
   let internal_id = resource
     .get(urls::INTERNAL_ID)
     .map_err(|_| nfsstat3::NFS3ERR_INVAL)?;
   let hash_hex = value_string(internal_id).ok_or(nfsstat3::NFS3ERR_INVAL)?;
-  let hash_bytes = hex::decode(&hash_hex).map_err(|_| nfsstat3::NFS3ERR_IO)?;
+
+  blob_by_hash_hex(store, &hash_hex)
+}
+
+/// Fetch a blob by a `did:ad:blob:{hex}` reference.
+fn blob_by_did(store: &Db, did: &str) -> Result<Vec<u8>, nfsstat3> {
+  let hash_hex = Subject::from(did)
+    .blob_hash_hex()
+    .ok_or(nfsstat3::NFS3ERR_IO)?
+    .to_string();
+
+  blob_by_hash_hex(store, &hash_hex)
+}
+
+fn blob_by_hash_hex(store: &Db, hash_hex: &str) -> Result<Vec<u8>, nfsstat3> {
+  let hash_bytes = hex::decode(hash_hex).map_err(|_| nfsstat3::NFS3ERR_IO)?;
 
   store
     .kv
@@ -1078,9 +1118,11 @@ async fn commit_file(store: &Db, subject: &str, data: &[u8]) {
     return;
   }
 
-  if store.kv.insert(Tree::Blobs, hash.as_bytes(), data).is_err() {
-    return;
-  }
+  // Store bytes: chunk large files, single blob for small ones.
+  let chunks = match store_bytes(store, data) {
+    Ok(chunks) => chunks,
+    Err(()) => return,
+  };
 
   for (prop, value) in hash_props(store, &hash_hex, data.len()) {
     if let Err(error) = resource.set(prop.into(), value, store).await {
@@ -1090,9 +1132,55 @@ async fn commit_file(store: &Db, subject: &str, data: &[u8]) {
     }
   }
 
+  // Record the chunk list (or clear a stale one if the file shrank below the
+  // chunking threshold), so a read reconstructs the bytes correctly.
+  let chunk_result = match chunks {
+    Some(refs) => resource
+      .set(urls::CHUNKS.into(), Value::ResourceArray(refs), store)
+      .await
+      .map(|_| ()),
+    None if resource.get(urls::CHUNKS).is_ok() => resource.remove_propval(urls::CHUNKS),
+    None => Ok(()),
+  };
+
+  if let Err(error) = chunk_result {
+    eprintln!("[vfs] flush set chunks failed for {subject}: {error}");
+
+    return;
+  }
+
   if let Err(error) = resource.save_locally(store).await {
     eprintln!("[vfs] flush commit failed for {subject}: {error}");
   }
+}
+
+/// Persist a file's bytes: a single blob for small files, or FastCDC chunk-blobs
+/// for large ones. Returns the ordered chunk references, or `None` for a single
+/// blob. Chunk (and whole-file) blobs dedupe by hash, so an unchanged chunk is a
+/// no-op insert.
+fn store_bytes(store: &Db, data: &[u8]) -> Result<Option<Vec<SubResource>>, ()> {
+  if data.len() <= CHUNK_THRESHOLD {
+    store
+      .kv
+      .insert(Tree::Blobs, blake3::hash(data).as_bytes(), data)
+      .map_err(|_| ())?;
+
+    return Ok(None);
+  }
+
+  let mut refs = Vec::new();
+
+  for chunk in fastcdc::v2020::FastCDC::new(data, CHUNK_MIN, CHUNK_AVG, CHUNK_MAX) {
+    let bytes = &data[chunk.offset..chunk.offset + chunk.length];
+    let hash = blake3::hash(bytes);
+    store
+      .kv
+      .insert(Tree::Blobs, hash.as_bytes(), bytes)
+      .map_err(|_| ())?;
+    refs.push(SubResource::from(format!("did:ad:blob:{}", hash.to_hex())));
+  }
+
+  Ok(Some(refs))
 }
 
 /// Flush files whose writes have quiesced (or all dirty files when `gated` is
@@ -1581,5 +1669,70 @@ mod tests {
     assert_eq!(names.len(), 25);
     assert!(names.contains("f00.txt"));
     assert!(names.contains("f24.txt"));
+  }
+
+  fn chunk_hashes(resource: &Resource) -> Vec<String> {
+    match resource.get(urls::CHUNKS) {
+      Ok(Value::ResourceArray(chunks)) => chunks.iter().map(|c| c.to_string()).collect(),
+      _ => Vec::new(),
+    }
+  }
+
+  /// A large file is stored as content-defined chunks; a small overwrite reuses
+  /// (dedupes) all but the touched chunk, and reads reconstruct exactly.
+  #[tokio::test(flavor = "multi_thread")]
+  async fn large_files_are_chunked_and_dedupe_on_edit() {
+    let store = Db::init_temp("vfs_chunking").await.unwrap();
+    let drive = store.create_drive("Chunk Drive").await.unwrap();
+    let fs = AtomicNfsFs::new(store.clone());
+    let root = fs.readdir(ROOT_ID, 0, 100).await.unwrap();
+    let drive_id = root
+      .entries
+      .iter()
+      .find(|entry| name_of(entry) == "Chunk Drive")
+      .unwrap()
+      .fileid;
+
+    // ~10 MB of varied content so FastCDC finds several boundaries.
+    let mut data: Vec<u8> = (0..10_000_000u32)
+      .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
+      .collect();
+
+    let (file_id, _) = fs
+      .create(drive_id, &fname("big.bin"), no_op_sattr())
+      .await
+      .unwrap();
+    fs.write(file_id, 0, &data).await.unwrap();
+    flush_ready(&store, &fs.staging, false).await;
+
+    let subject = fs.ids.subject(file_id).unwrap();
+    let resource = store
+      .get_resource(&Subject::from(subject.as_str()))
+      .await
+      .unwrap();
+    let chunks_v1 = chunk_hashes(&resource);
+    assert!(chunks_v1.len() > 1, "a 10 MB file should be many chunks");
+    // Reconstruction from chunks matches the original.
+    assert_eq!(read_blob(&store, &resource).unwrap(), data);
+
+    // Overwrite a few bytes near the start; the rest of the file is unchanged.
+    data[100..110].copy_from_slice(b"CHANGEDXYZ");
+    fs.write(file_id, 100, b"CHANGEDXYZ").await.unwrap();
+    flush_ready(&store, &fs.staging, false).await;
+
+    let resource = store
+      .get_resource(&Subject::from(subject.as_str()))
+      .await
+      .unwrap();
+    let chunks_v2 = chunk_hashes(&resource);
+    let shared = chunks_v1.iter().filter(|h| chunks_v2.contains(*h)).count();
+    assert!(
+      shared as f64 > chunks_v1.len() as f64 * 0.5,
+      "a localized edit should reuse most chunks (shared {shared} of {})",
+      chunks_v1.len()
+    );
+
+    // And the edit is reflected on read.
+    assert_eq!(read_blob(&store, &resource).unwrap(), data);
   }
 }

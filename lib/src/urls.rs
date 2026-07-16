@@ -155,6 +155,9 @@ pub const ATOM_VALUE: &str = "https://atomicdata.dev/properties/atom/value";
 // ... for Files
 pub const CHECKSUM: &str = "https://atomicdata.dev/properties/checksum";
 pub const BLOB: &str = "https://atomicdata.dev/properties/blob";
+/// Ordered list of `did:ad:blob:` chunk references; concatenated, they are the
+/// file's bytes. Present on content-defined-chunked files, superseding `BLOB`.
+pub const CHUNKS: &str = "https://atomicdata.dev/properties/chunks";
 pub const FILENAME: &str = "https://atomicdata.dev/properties/filename";
 pub const FILESIZE: &str = "https://atomicdata.dev/properties/filesize";
 pub const MIMETYPE: &str = "https://atomicdata.dev/properties/mimetype";

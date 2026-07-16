@@ -33,6 +33,7 @@ tauri-plugin-barcode-scanner = "2"
 nfsserve = "0.10"
 hex = "0.4"
 blake3 = "1"
+fastcdc = "3"
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 
