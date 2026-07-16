@@ -102,6 +102,20 @@ function normalizeServerUrl(input: string): string {
   return `${isLocal ? 'http' : 'https'}://${trimmed}`;
 }
 
+/** Whether two server URLs point at the same origin — how "is this the one in
+ * use?" is decided, tolerant of trailing slashes and paths. */
+function sameOrigin(a: string, b: string | undefined): boolean {
+  if (!b) {
+    return false;
+  }
+
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return false;
+  }
+}
+
 /** A server's `host:port` for display, so two `localhost`s on different ports
  * (e.g. an embedded node and a stale one) are distinguishable. */
 function serverLabel(server: string): string {
@@ -430,11 +444,6 @@ function SyncPage() {
   const serverHostname = status.serverUrl
     ? new URL(status.serverUrl).hostname
     : undefined;
-  // For display, include the port so two localhosts (e.g. an embedded node and
-  // a stale one) are distinguishable — matches the switch cards below.
-  const serverDisplay = status.serverUrl
-    ? serverLabel(status.serverUrl)
-    : undefined;
   const embeddedActive =
     isNode &&
     (serverHostname === 'localhost' || serverHostname === '127.0.0.1');
@@ -444,11 +453,31 @@ function SyncPage() {
   const pairedPeers = isNode ? knownPeers : [];
   const connectionCount = (showServerConn ? 1 : 0) + pairedPeers.length;
 
+  // Every known server, in one stable list — the active one is *styled*, not
+  // moved. Rendering the active server as its own card above the rest made the
+  // list reshuffle on every switch, which is disorienting. In the Tauri shell
+  // the embedded localhost is "This device", not a connection, so it's excluded
+  // there (same rule as `embeddedActive`).
+  const connectionServers = knownServers.filter(server => {
+    if (!isNode) {
+      return true;
+    }
+
+    try {
+      const { hostname } = new URL(server);
+
+      return hostname !== 'localhost' && hostname !== '127.0.0.1';
+    } catch {
+      return false;
+    }
+  });
+
   // Offer a Cloud Sync backup only for a drive that lives on this device (a
   // local-only drive, or the embedded node with no remote server) and isn't
   // already enrolled. A drive already homed on a remote server is a migration,
   // not a backup — out of scope for this action.
-  const deviceLocalDrive = !!status.drive && (localOnlyDrive || !showServerConn);
+  const deviceLocalDrive =
+    !!status.drive && (localOnlyDrive || !showServerConn);
   const showCloudBackup =
     isCloudSyncAvailable(managedInfo) &&
     cloudEnrolled === false &&
@@ -523,7 +552,9 @@ function SyncPage() {
         // popup on web) so the user signs in / creates an account there; it
         // shares our cookie jar, so once done we just retry — no token handoff.
         if (!result.portalUrl) {
-          toast.error(`No ${PRODUCT_NAME} portal is configured for this server.`);
+          toast.error(
+            `No ${PRODUCT_NAME} portal is configured for this server.`,
+          );
 
           return;
         }
@@ -791,7 +822,10 @@ function SyncPage() {
             </ConnNote>
           )}
 
-          {connectionCount === 0 && (
+          {/* Only when there's genuinely nothing here — a known-but-unselected
+              server still renders a card, and "not syncing anywhere" above a
+              list of them would contradict itself. */}
+          {connectionCount === 0 && connectionServers.length === 0 && (
             <EmptyConnections>
               <p>
                 Not syncing anywhere yet — your data is safe on this device.
@@ -804,91 +838,129 @@ function SyncPage() {
             </EmptyConnections>
           )}
 
-          {/* Remote / cloud server connection */}
-          {showServerConn && (
-            <ConnCard>
-              <ConnIcon $tone={managedInfo.managed ? 'cloud' : 'server'}>
-                {managedInfo.managed ? <FaCloud /> : <FaServer />}
-              </ConnIcon>
-              <ConnBody>
-                <ConnTopRow>
-                  <ConnTitle>
-                    {managedInfo.managed ? 'Cloud Sync' : serverDisplay}
-                  </ConnTitle>
-                  <ConnTopRight>
-                    <StatusPill $status={nodes.server}>
-                      <StatusIcon status={nodes.server} />
-                      {statusLabel(nodes.server)}
-                    </StatusPill>
-                    {status.serverConnected ? (
-                      <NodeAction onClick={() => store.disconnect()}>
-                        Disconnect
-                      </NodeAction>
-                    ) : (
-                      <NodeAction
-                        onClick={() =>
-                          store.reconnect().catch(e => store.notifyError(e))
-                        }
-                      >
-                        Reconnect
-                      </NodeAction>
+          {/* Servers — one stable list; the active one is marked, not moved. */}
+          {connectionServers.map(server => {
+            const isActive = sameOrigin(server, status.serverUrl);
+            const isCloud = isActive && managedInfo.managed;
+
+            return (
+              <ConnCard key={server} $active={isActive}>
+                <ConnIcon
+                  $tone={isCloud ? 'cloud' : 'server'}
+                  $active={isActive}
+                >
+                  {isCloud ? <FaCloud /> : <FaServer />}
+                </ConnIcon>
+                <ConnBody>
+                  <ConnTopRow>
+                    <ConnTitle>
+                      {isCloud ? 'Cloud Sync' : serverLabel(server)}
+                    </ConnTitle>
+                    <ConnTopRight>
+                      {isActive ? (
+                        <>
+                          <StatusPill $status={nodes.server}>
+                            <StatusIcon status={nodes.server} />
+                            {statusLabel(nodes.server)}
+                          </StatusPill>
+                          {status.serverConnected ? (
+                            <NodeAction onClick={() => store.disconnect()}>
+                              Disconnect
+                            </NodeAction>
+                          ) : (
+                            <NodeAction
+                              onClick={() =>
+                                store
+                                  .reconnect()
+                                  .catch(e => store.notifyError(e))
+                              }
+                            >
+                              Reconnect
+                            </NodeAction>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <StatusPill $status='unknown'>
+                            Not connected
+                          </StatusPill>
+                          <NodeAction onClick={() => switchToServer(server)}>
+                            Switch
+                          </NodeAction>
+                        </>
+                      )}
+                    </ConnTopRight>
+                  </ConnTopRow>
+
+                  <ConnSub>
+                    {isActive
+                      ? isCloud
+                        ? serverHostname
+                        : 'Self-hosted Atomic Server · in use'
+                      : 'Known server'}
+                  </ConnSub>
+
+                  {/* Status details belong to the server actually in use. */}
+                  {isActive &&
+                    !status.serverConnected &&
+                    status.serverConnectionError && (
+                      <ConnError role='alert'>
+                        <FaCircleExclamation aria-hidden />
+                        <span>{status.serverConnectionError}</span>
+                      </ConnError>
                     )}
-                  </ConnTopRight>
-                </ConnTopRow>
-                <ConnSub>
-                  {managedInfo.managed
-                    ? serverHostname
-                    : 'Self-hosted Atomic Server'}
-                </ConnSub>
 
-                {!status.serverConnected && status.serverConnectionError && (
-                  <ConnError role='alert'>
-                    <FaCircleExclamation aria-hidden />
-                    <span>{status.serverConnectionError}</span>
-                  </ConnError>
-                )}
-
-                {usagePct !== null && (
-                  <UsageBar
-                    aria-label={`${usagePct}% of storage used`}
-                    title={`${usagePct}% used`}
-                  >
-                    <UsageFill style={{ width: `${usagePct}%` }} />
-                  </UsageBar>
-                )}
-
-                {nodeUsage && (
-                  <ConnMeta>
-                    {nodeUsage.resourceCount.toLocaleString()} resources ·{' '}
-                    {formatBytes(nodeUsage.blobBytes + nodeUsage.loroBytes)}
-                    {quotaBytes ? ` of ${formatBytes(quotaBytes)}` : ''}
-                    {status.lastDriveSync
-                      ? ` · synced ${formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ?? 'just now'}`
-                      : ''}
-                  </ConnMeta>
-                )}
-                {!nodeUsage && status.lastDriveSync && (
-                  <ConnMeta>
-                    Last synced{' '}
-                    {formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ??
-                      'just now'}
-                  </ConnMeta>
-                )}
-
-                {managedInfo.managed && managedInfo.portalUrl && (
-                  <ConnActions>
-                    <ManagedLink
-                      href={managedInfo.portalUrl}
-                      target='_blank'
-                      rel='noopener noreferrer'
+                  {isActive && usagePct !== null && (
+                    <UsageBar
+                      aria-label={`${usagePct}% of storage used`}
+                      title={`${usagePct}% used`}
                     >
-                      {'Manage account & plan →'}
-                    </ManagedLink>
-                  </ConnActions>
-                )}
-              </ConnBody>
-            </ConnCard>
-          )}
+                      <UsageFill style={{ width: `${usagePct}%` }} />
+                    </UsageBar>
+                  )}
+
+                  {isActive && nodeUsage && (
+                    <ConnMeta>
+                      {nodeUsage.resourceCount.toLocaleString()} resources ·{' '}
+                      {formatBytes(nodeUsage.blobBytes + nodeUsage.loroBytes)}
+                      {quotaBytes ? ` of ${formatBytes(quotaBytes)}` : ''}
+                      {status.lastDriveSync
+                        ? ` · synced ${formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ?? 'just now'}`
+                        : ''}
+                    </ConnMeta>
+                  )}
+                  {isActive && !nodeUsage && status.lastDriveSync && (
+                    <ConnMeta>
+                      Last synced{' '}
+                      {formatTimeAgo(
+                        new Date(status.lastDriveSync.timestamp),
+                      ) ?? 'just now'}
+                    </ConnMeta>
+                  )}
+
+                  {isCloud && managedInfo.portalUrl && (
+                    <ConnActions>
+                      <ManagedLink
+                        href={managedInfo.portalUrl}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                      >
+                        {'Manage account & plan →'}
+                      </ManagedLink>
+                    </ConnActions>
+                  )}
+                  {/* Removing the server you're using would strand the app. */}
+                  {!isActive && (
+                    <ConnActions>
+                      <NodeActionSubtle onClick={() => removeServer(server)}>
+                        Remove
+                      </NodeActionSubtle>
+                    </ConnActions>
+                  )}
+                </ConnBody>
+              </ConnCard>
+            );
+          })}
 
           {/* Paired devices (Iroh peers) */}
           {pairedPeers.map(peer => (
@@ -930,41 +1002,6 @@ function SyncPage() {
             </PeerSyncResult>
           )}
 
-          {/* Other known servers you can switch to. The active one is the card
-              above; these are the rest, each one click away. */}
-          {knownServers
-            .filter(server => {
-              try {
-                return new URL(server).origin !== new URL(baseURL).origin;
-              } catch {
-                return false;
-              }
-            })
-            .map(server => (
-              <ConnCard key={server}>
-                <ConnIcon $tone='server'>
-                  <FaServer />
-                </ConnIcon>
-                <ConnBody>
-                  <ConnTopRow>
-                    <ConnTitle>{serverLabel(server)}</ConnTitle>
-                    <ConnTopRight>
-                      <StatusPill $status='unknown'>Not connected</StatusPill>
-                      <NodeAction onClick={() => switchToServer(server)}>
-                        Switch
-                      </NodeAction>
-                    </ConnTopRight>
-                  </ConnTopRow>
-                  <ConnSub>Known server</ConnSub>
-                  <ConnActions>
-                    <NodeActionSubtle onClick={() => removeServer(server)}>
-                      Remove
-                    </NodeActionSubtle>
-                  </ConnActions>
-                </ConnBody>
-              </ConnCard>
-            ))}
-
           {/* Add-a-server: inline (no dialog) — the same act as the switch
               cards above, so it lives in the same list. */}
           <AddRow>
@@ -972,6 +1009,7 @@ function SyncPage() {
               <AddServerForm
                 onSubmit={e => {
                   e.preventDefault();
+
                   if (!serverInput.trim()) {
                     return;
                   }
@@ -1496,9 +1534,14 @@ const NodeIdValue = styled.button`
   }
 `;
 
-const ConnCard = styled.div`
+/** `$active` marks the server actually in use. The list order is stable across
+ *  switches, so this accent is the only thing that changes — which is the point:
+ *  a reshuffling list is far harder to follow than a highlighted row. */
+const ConnCard = styled.div<{ $active?: boolean }>`
   ${cardBase}
   margin-bottom: 0.6rem;
+  border-color: ${p => (p.$active ? p.theme.colors.main : undefined)};
+  background: ${p => (p.$active ? `${p.theme.colors.main}0a` : undefined)};
 `;
 
 /** Accent card for a local-only (unsynced) workspace — visually distinct
@@ -1574,7 +1617,11 @@ const PairHint = styled.p`
   font-size: 0.78rem;
 `;
 
-const ConnIcon = styled.div<{ $tone: 'device' | 'cloud' | 'server' }>`
+const ConnIcon = styled.div<{
+  $tone: 'device' | 'cloud' | 'server';
+  /** The server in use — accented, so which one is live reads at a glance. */
+  $active?: boolean;
+}>`
   flex-shrink: 0;
   width: 2.4rem;
   height: 2.4rem;
@@ -1583,13 +1630,16 @@ const ConnIcon = styled.div<{ $tone: 'device' | 'cloud' | 'server' }>`
   align-items: center;
   justify-content: center;
   font-size: 1.1rem;
-  color: ${p => (p.$tone === 'device' ? p.theme.colors.text : 'white')};
+  color: ${p =>
+    p.$tone === 'device' && !p.$active ? p.theme.colors.text : 'white'};
   background: ${p =>
-    p.$tone === 'device'
-      ? p.theme.colors.bg2
-      : p.$tone === 'cloud'
-        ? p.theme.colors.main
-        : p.theme.colors.textLight};
+    p.$active
+      ? p.theme.colors.main
+      : p.$tone === 'device'
+        ? p.theme.colors.bg2
+        : p.$tone === 'cloud'
+          ? p.theme.colors.main
+          : p.theme.colors.textLight};
 `;
 
 const ConnBody = styled.div`
