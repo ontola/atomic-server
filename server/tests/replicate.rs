@@ -243,3 +243,63 @@ async fn refuses_to_export_a_private_drive_for_an_anonymous_requester() {
         "a private drive must not be exported for an anonymous requester"
     );
 }
+
+/// The scenario a user worries about, end-to-end at the integration level:
+/// create a resource on one node, get it onto another, lose the first, then open
+/// a *fresh* session against the second — is the resource really there and
+/// readable? Replicate the drive to the target, drop the source ("server 1 is
+/// gone"), then read the child back from the target with a brand-new authed HTTP
+/// client (no local cache). `in_sync` proves the bytes match; this proves a
+/// client can actually *read* them.
+#[tokio::test]
+async fn a_fresh_client_reads_a_replicated_resource_after_the_source_is_gone() {
+    let port = start_server("freshread");
+    wait_for_server(port).await;
+    let ws_url = format!("ws://localhost:{}/ws", port);
+
+    let (db, agent, drive, child) = source_node("freshread").await;
+    let export_as = ForAgent::AgentSubject(agent.subject.clone());
+
+    replicate_drive_to_remote(
+        &db,
+        &drive,
+        &ws_url,
+        &export_as,
+        ReplicateAuth::Agent(Box::new(agent.clone())),
+    )
+    .await
+    .expect("replication should succeed");
+
+    // "Server 1 is gone" — drop the source store. The target must stand alone.
+    drop(db);
+
+    // A fresh client reads the child from the target, authenticated as Alice.
+    // The signed message is the exact request URL (query string and all).
+    let url = format!(
+        "http://localhost:{}/did?subject={}",
+        port,
+        urlencoding::encode(&child)
+    );
+    let headers =
+        atomic_lib::client::get_authentication_headers(&url, &agent).expect("auth headers");
+
+    let client = reqwest::Client::new();
+    let mut req = client.get(&url).header("Accept", "application/ad+json");
+    for (k, v) in headers {
+        req = req.header(k, v);
+    }
+    let resp = req.send().await.expect("request should reach the target");
+
+    assert!(
+        resp.status().is_success(),
+        "the replicated resource should be readable on the target after the source \
+         is gone, got {}",
+        resp.status()
+    );
+
+    let body = resp.text().await.expect("body");
+    assert!(
+        body.contains("Something only Alice can read"),
+        "the target must serve the resource's actual content, not an empty shell: {body}"
+    );
+}
