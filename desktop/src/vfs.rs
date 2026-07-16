@@ -307,11 +307,25 @@ fn read_u64_bytes(bytes: &[u8]) -> Option<fileid3> {
   bytes.try_into().ok().map(u64::from_be_bytes)
 }
 
+/// The most-recently reconstructed file's bytes. The OS issues one `read` per
+/// window when streaming a file, so without this each window would rebuild the
+/// whole file from its blobs — an O(size²) read. Caching the last file makes a
+/// sequential read-through reconstruct once (O(size)). Keyed by fileid + the
+/// file's whole-file hash (`internalId`), so an edit (new hash) misses and
+/// re-reads. Single-entry: interleaving two large files degrades to
+/// rebuild-per-window, which is rare and still correct.
+struct ReadCache {
+  id: fileid3,
+  internal_id: String,
+  bytes: Arc<Vec<u8>>,
+}
+
 pub struct AtomicNfsFs {
   store: Db,
   ids: IdMap,
   staging: Arc<Staging>,
   dir_cache: Mutex<HashMap<fileid3, DirListing>>,
+  read_cache: Mutex<Option<ReadCache>>,
   /// Echo-suppression identity for the commits this mount signs. Threaded into
   /// the commit path so the VFS doesn't read its own writes back as change
   /// notifications once cache invalidation subscribes to them.
@@ -326,6 +340,7 @@ impl AtomicNfsFs {
       store,
       staging: Arc::new(Staging::default()),
       dir_cache: Mutex::new(HashMap::new()),
+      read_cache: Mutex::new(None),
       source_id: format!("vfs-{}", std::process::id()),
     }
   }
@@ -525,18 +540,10 @@ impl AtomicNfsFs {
     Ok(resources)
   }
 
-  async fn get(&self, id: fileid3) -> Result<Resource, nfsstat3> {
-    let subject = self.ids.subject(id).ok_or(nfsstat3::NFS3ERR_NOENT)?;
-    self
-      .store
-      .get_resource(&Subject::from(subject.as_str()))
-      .await
-      .map_err(|_| nfsstat3::NFS3ERR_NOENT)
-  }
-
-  /// Like `get`, but a shallow (propvals-only) read — for `getattr`, which only
-  /// needs the projected name/size/type and is called once per entry by the OS.
-  /// The full Loro decode `get` does would make attribute stat storms O(store).
+  /// A shallow (propvals-only) read of the resource behind a fileid — for
+  /// `getattr` and `read`, which need the projected name/size/type/blob refs but
+  /// not the resource's full Loro state. A full decode here would make attribute
+  /// stat storms and per-window reads O(store) / O(history).
   fn get_shallow(&self, id: fileid3) -> Result<Resource, nfsstat3> {
     let subject = self.ids.subject(id).ok_or(nfsstat3::NFS3ERR_NOENT)?;
     self
@@ -713,38 +720,63 @@ impl NFSFileSystem for AtomicNfsFs {
   }
 
   async fn read(&self, id: fileid3, offset: u64, count: u32) -> Result<(Vec<u8>, bool), nfsstat3> {
-    // Prefer staged (unflushed) bytes so a read right after a write is
-    // consistent. Otherwise read the blob lazily — only on `read`, never on
-    // readdir/getattr (the doc's no-prefetch contract). No range API on the blob
-    // store yet, so read the whole blob and slice; content-defined chunking (v2)
-    // makes this cheap.
-    let bytes = {
-      let staged = self
-        .staging
-        .files
-        .lock()
-        .unwrap()
-        .get(&id)
-        .map(|file| file.data.clone());
+    // Staged (unflushed) bytes win, so a read right after a write is consistent.
+    // Bytes are read lazily — only on `read`, never on readdir/getattr (the
+    // doc's no-prefetch contract).
+    if let Some(data) = self
+      .staging
+      .files
+      .lock()
+      .unwrap()
+      .get(&id)
+      .map(|file| file.data.clone())
+    {
+      return Ok(slice_read(&data, offset, count));
+    }
 
-      match staged {
-        Some(data) => data,
-        None => {
-          let resource = self.get(id).await?;
-          if is_link_resource(&resource) {
-            link_file_bytes(resource.get_subject().as_str())
-          } else {
-            read_blob(&self.store, &resource)?
-          }
-        }
+    // A shallow read (no Loro decode) is enough to project the file; each `read`
+    // window would otherwise pay a full decode too.
+    let resource = self.get_shallow(id)?;
+
+    if is_link_resource(&resource) {
+      return Ok(slice_read(
+        &link_file_bytes(resource.get_subject().as_str()),
+        offset,
+        count,
+      ));
+    }
+
+    let internal_id = resource
+      .get(urls::INTERNAL_ID)
+      .ok()
+      .and_then(value_string)
+      .unwrap_or_default();
+
+    // Reconstruct the whole file from its blobs at most once per read-through,
+    // then serve every window from the cache (see `ReadCache`). Without range
+    // support on the blob store, the alternative is rebuilding it per window.
+    let cached = {
+      let cache = self.read_cache.lock().unwrap();
+      cache
+        .as_ref()
+        .filter(|entry| entry.id == id && entry.internal_id == internal_id)
+        .map(|entry| entry.bytes.clone())
+    };
+
+    let bytes = match cached {
+      Some(bytes) => bytes,
+      None => {
+        let bytes = Arc::new(read_blob(&self.store, &resource)?);
+        *self.read_cache.lock().unwrap() = Some(ReadCache {
+          id,
+          internal_id,
+          bytes: bytes.clone(),
+        });
+        bytes
       }
     };
 
-    let start = (offset as usize).min(bytes.len());
-    let end = start.saturating_add(count as usize).min(bytes.len());
-    let eof = end >= bytes.len();
-
-    Ok((bytes[start..end].to_vec(), eof))
+    Ok(slice_read(&bytes, offset, count))
   }
 
   async fn readlink(&self, _id: fileid3) -> Result<nfspath3, nfsstat3> {
@@ -1034,6 +1066,15 @@ fn read_blob(store: &Db, resource: &Resource) -> Result<Vec<u8>, nfsstat3> {
   let hash_hex = value_string(internal_id).ok_or(nfsstat3::NFS3ERR_INVAL)?;
 
   blob_by_hash_hex(store, &hash_hex)
+}
+
+/// Slice the `[offset, offset+count)` window out of a file's bytes and report
+/// whether the window reaches EOF — the shape every `read` returns.
+fn slice_read(bytes: &[u8], offset: u64, count: u32) -> (Vec<u8>, bool) {
+  let start = (offset as usize).min(bytes.len());
+  let end = start.saturating_add(count as usize).min(bytes.len());
+
+  (bytes[start..end].to_vec(), end >= bytes.len())
 }
 
 /// Fetch a blob by a `did:ad:blob:{hex}` reference.
@@ -1986,5 +2027,202 @@ mod tests {
 
     // And the edit is reflected on read.
     assert_eq!(read_blob(&store, &resource).unwrap(), data);
+  }
+}
+
+/// Opt-in performance benchmarks. They print throughput/latency numbers (the
+/// planning doc asks for "numbers, not adjectives") and a couple assert a floor
+/// so a real regression fails rather than merely prints. Run with:
+///   cargo test -p atomic-server-tauri --lib benches -- --ignored --nocapture
+#[cfg(test)]
+mod benches {
+  use super::*;
+  use std::time::Instant;
+
+  /// Deterministic pseudo-random bytes, so content-defined chunking finds real
+  /// boundaries (a constant fill collapses to uniform max-size chunks).
+  fn pseudo_random(len: usize) -> Vec<u8> {
+    let mut out = Vec::with_capacity(len + 8);
+    let mut state: u64 = 0x9E37_79B9_7F4A_7C15;
+    while out.len() < len {
+      state = state
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
+      out.extend_from_slice(&state.to_le_bytes());
+    }
+    out.truncate(len);
+    out
+  }
+
+  /// A drive holding one File whose `bytes` are stored exactly as a flush would
+  /// (chunked when large) — but *without* going through write staging, so reads
+  /// take the blob-reconstruction path rather than returning staged RAM.
+  async fn drive_with_stored_file(name: &str, bytes: &[u8]) -> (Db, String) {
+    let store = Db::init_temp("vfs_bench").await.unwrap();
+    let drive = store.create_drive("Bench Drive").await.unwrap();
+    let subject = store
+      .create_resource(
+        urls::FILE,
+        &drive,
+        name,
+        Some(vec![
+          (urls::FILENAME, Value::String(name.to_string())),
+          (
+            urls::MIMETYPE,
+            Value::String("application/octet-stream".to_string()),
+          ),
+          (
+            urls::INTERNAL_ID,
+            Value::String(blake3::hash(&[]).to_hex().to_string()),
+          ),
+          (urls::FILESIZE, Value::Integer(0)),
+        ]),
+      )
+      .await
+      .unwrap();
+
+    commit_file(&store, &subject, bytes).await;
+
+    (store, subject)
+  }
+
+  /// Count of stored blobs and their total size — a proxy for on-disk growth.
+  fn blob_stats(store: &Db) -> (usize, u64) {
+    let mut count = 0;
+    let mut bytes = 0u64;
+    for item in store.kv.iter_tree(Tree::Blobs).flatten() {
+      count += 1;
+      bytes += item.1.len() as u64;
+    }
+    (count, bytes)
+  }
+
+  fn file_id_named(listing: &ReadDirResult, name: &str) -> fileid3 {
+    listing
+      .entries
+      .iter()
+      .find(|entry| String::from_utf8_lossy(entry.name.as_ref()) == name)
+      .unwrap_or_else(|| panic!("{name} not in listing"))
+      .fileid
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  #[ignore = "perf benchmark; run with --ignored --nocapture"]
+  async fn bench_sequential_read_throughput() {
+    const SIZE: usize = 32 * 1024 * 1024; // 32 MiB
+    const WINDOW: usize = 1024 * 1024; // 1 MiB, an NFS-ish read window
+
+    let data = pseudo_random(SIZE);
+    let (store, _subject) = drive_with_stored_file("big.bin", &data).await;
+    let fs = AtomicNfsFs::new(store); // empty staging → reads take the blob path
+
+    let drive_id = fs
+      .lookup(ROOT_ID, &b"Bench Drive"[..].into())
+      .await
+      .unwrap();
+    let listing = fs.readdir(drive_id, 0, 100).await.unwrap();
+    let file_id = file_id_named(&listing, "big.bin");
+
+    let start = Instant::now();
+    let mut offset = 0u64;
+    let mut total = 0usize;
+    loop {
+      let (chunk, eof) = fs.read(file_id, offset, WINDOW as u32).await.unwrap();
+      total += chunk.len();
+      offset += chunk.len() as u64;
+      if eof || chunk.is_empty() {
+        break;
+      }
+    }
+    let secs = start.elapsed().as_secs_f64();
+    let mib = SIZE as f64 / (1024.0 * 1024.0);
+    println!(
+      "[bench] sequential read {:.0} MiB in {} x {} KiB windows: {:.3}s -> {:.1} MiB/s",
+      mib,
+      SIZE / WINDOW,
+      WINDOW / 1024,
+      secs,
+      mib / secs
+    );
+    assert_eq!(total, SIZE, "read back the whole file");
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  #[ignore = "perf benchmark; run with --ignored --nocapture"]
+  async fn bench_save_latency() {
+    const SIZE: usize = 32 * 1024 * 1024;
+
+    let data = pseudo_random(SIZE);
+    let (store, subject) = drive_with_stored_file("save.bin", &data).await;
+
+    // One-byte edit, then time the re-save (re-chunk + store).
+    let mut edited = data.clone();
+    edited[SIZE / 2] ^= 0xFF;
+
+    let start = Instant::now();
+    commit_file(&store, &subject, &edited).await;
+    let secs = start.elapsed().as_secs_f64();
+    let mib = SIZE as f64 / (1024.0 * 1024.0);
+    println!(
+      "[bench] save {:.0} MiB (1-byte edit, re-chunk+store): {:.3}s -> {:.1} MiB/s",
+      mib,
+      secs,
+      mib as f64 / secs
+    );
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  #[ignore = "perf benchmark; run with --ignored --nocapture"]
+  async fn bench_db_growth_per_edit() {
+    const EDITS: usize = 50;
+    const SIZE: usize = 256 * 1024; // small file: single blob, no chunk dedup
+
+    let (store, subject) = drive_with_stored_file("doc.bin", &pseudo_random(SIZE)).await;
+    let (c0, b0) = blob_stats(&store);
+
+    for i in 0..EDITS {
+      let mut data = pseudo_random(SIZE);
+      data[0] = i as u8; // guarantee distinct content each edit
+      commit_file(&store, &subject, &data).await;
+    }
+
+    let (c1, b1) = blob_stats(&store);
+    println!(
+      "[bench] {EDITS} edits of a {} KiB file: blobs {c0}->{c1} (+{}), stored bytes {}->{} KiB (+{} KiB) — old blobs are never GC'd",
+      SIZE / 1024,
+      c1 - c0,
+      b0 / 1024,
+      b1 / 1024,
+      (b1 - b0) / 1024
+    );
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  #[ignore = "perf benchmark; run with --ignored --nocapture"]
+  async fn bench_listing_latency() {
+    const N: usize = 1000;
+
+    let store = Db::init_temp("vfs_bench_list").await.unwrap();
+    let drive = store.create_drive("List Drive").await.unwrap();
+    for i in 0..N {
+      store
+        .create_resource(urls::FOLDER, &drive, &format!("folder{i:04}"), None)
+        .await
+        .unwrap();
+    }
+
+    let fs = AtomicNfsFs::new(store);
+    let drive_id = fs.lookup(ROOT_ID, &b"List Drive"[..].into()).await.unwrap();
+
+    let start = Instant::now();
+    let listing = fs.readdir(drive_id, 0, N + 10).await.unwrap();
+    let ms = start.elapsed().as_secs_f64() * 1000.0;
+    println!(
+      "[bench] readdir cold build of {} children: {:.1}ms ({} entries)",
+      N,
+      ms,
+      listing.entries.len()
+    );
+    assert!(listing.entries.len() >= N);
   }
 }

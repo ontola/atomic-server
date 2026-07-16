@@ -26,6 +26,62 @@ Benefits:
 - Open arbitrary file types via OS apps; non-file resources still open in the
   Atomic UI via a stub file association
 
+## Implementation status (desktop NFS)
+
+Shipped in the **Tauri desktop app** (`desktop/src/vfs.rs`), not the headless
+server — the embedded node mounts an in-process `nfsserve` v3 server at
+`~/AtomicDrive`, toggled from Settings → Virtual drive. GitHub issue #1154.
+
+Done:
+
+- Read + write path (create / edit / rename / remove → signed commits), with
+  the ~500 ms write-quiet debounce (commit coalescing) and a content-addressed
+  no-op-commit skip.
+- Content-defined chunking (FastCDC) for files > 4 MiB; small files stay a
+  single whole-file blob. The server download path reconstructs chunked files.
+- Stable fileids persisted to `Tree::PluginMeta`, minted in memory and written
+  in one batched transaction off the hot path.
+- Root lists the **signed-in agent's own drives** (`personalDrive` + agent
+  `drives`), *not* every Drive (Sudo) — a synced node holds thousands the user
+  can't open.
+- Non-file/non-folder resources surface as read-only macOS `.inetloc` link
+  files that open in Atomic desktop via an `atomic://open?subject=…` deep link.
+- Listing performance: shallow (propvals-only) reads, a dir cache, and
+  cache-backed `lookup`/`getattr` — a cold root listing of 2578 drives went
+  from ~762 s to ~0.01 s.
+- Read performance: a reconstruct-once read cache (keyed by fileid + whole-file
+  hash) turns a sequential read-through from O(size²) back to O(size).
+
+### Benchmarks
+
+`#[ignore]` benches live in `desktop/src/vfs.rs` (`mod benches`). Run:
+
+```
+cargo test -p atomic-server-tauri --lib benches -- --ignored --nocapture
+```
+
+Indicative numbers on the dev machine (temp store, not the 2.1 GB real one):
+
+| Bench | Result |
+| --- | --- |
+| Sequential read, 32 MiB / 1 MiB windows | 137 → **387 MiB/s** after the read-cache fix |
+| Save (1-byte edit of 32 MiB, re-chunk + store) | ~28 MiB/s |
+| 50 edits of a 256 KiB file | **+49 orphan blobs, +12.5 MiB, never GC'd** |
+| Cold `readdir` of 1000 children | ~84 ms |
+
+Known remaining perf gaps (see [Hard problems](#hard-problems-the-docs-dont-yet-resolve)):
+
+- **No blob GC.** Every edit orphans the prior blob(s); storage grows
+  unbounded. Needs refcounting or a sweep (blocked on the same design as
+  s3-blob-storage.md Phase 1d).
+- **Write amplification.** A 1-byte edit re-hashes and re-chunks the whole
+  file (`store_bytes`), and the whole file sits in RAM in staging.
+- **True range reads.** The read cache holds one whole file; interleaving two
+  large files, or a single file bigger than comfortable RAM, still rebuilds
+  per window. A real fix stores per-chunk sizes so `read` can fetch only the
+  chunks covering `[offset, len)` — the `read ... with range` the mapping
+  below always intended.
+
 ## Why the primitives already fit
 
 Three pieces of existing work make this much smaller than it would otherwise
