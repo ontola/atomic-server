@@ -44,7 +44,6 @@ import {
 } from '../helpers/tauri';
 import { deviceHasDriveData } from '../helpers/driveData';
 import { deliverDeepLink } from '../helpers/deepLinkQueue';
-import { ConnectServerDialog } from '../components/ConnectServerDialog';
 import { ThisDeviceCode } from '../components/ThisDeviceCode';
 import { ConnectToDeviceForm } from '../components/ConnectToDeviceForm';
 import {
@@ -86,6 +85,16 @@ function nodeDidToRaw(nodeDid: string): string | undefined {
 
 function rawToNodeDid(raw: string): string {
   return `${NODE_DID_PREFIX}${raw}`;
+}
+
+/** A server's `host:port` for display, so two `localhost`s on different ports
+ * (e.g. an embedded node and a stale one) are distinguishable. */
+function serverLabel(server: string): string {
+  try {
+    return new URL(server).host;
+  } catch {
+    return server;
+  }
 }
 
 function normalizeStoredPeer(peer: KnownPeer): KnownPeer | undefined {
@@ -184,7 +193,10 @@ function SyncPage() {
   const [clientDbOn, setClientDbOn] = useState(() => isClientDbEnabled());
   const { setServer, baseURL } = useSettings();
   const knownServers = serverURLStorage.getKnownServers();
-  const [showServerDialog, setShowServerDialog] = useState(false);
+  // Server switching + adding happen inline in the Connections section (not a
+  // separate dialog): `showAddServer` reveals the add-a-server form.
+  const [showAddServer, setShowAddServer] = useState(false);
+  const [serverInput, setServerInput] = useState('');
   const [localNodeId, setLocalNodeId] = useState<string | null>(null);
   const [peerSyncing, setPeerSyncing] = useState(false);
   const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
@@ -652,7 +664,7 @@ function SyncPage() {
               </ConnSub>
               <ConnActions>
                 {!(isNode && localNodeId) && (
-                  <Button onClick={() => setShowServerDialog(true)}>
+                  <Button onClick={() => setShowAddServer(true)}>
                     Connect a server
                   </Button>
                 )}
@@ -856,20 +868,89 @@ function SyncPage() {
             </PeerSyncResult>
           )}
 
-          <AddRow>
-            <AddButton onClick={() => setShowServerDialog(true)}>
-              <FaPlus aria-hidden /> Connect a server
-            </AddButton>
-          </AddRow>
+          {/* Other known servers you can switch to. The active one is the card
+              above; these are the rest, each one click away. */}
+          {knownServers
+            .filter(server => {
+              try {
+                return new URL(server).origin !== new URL(baseURL).origin;
+              } catch {
+                return false;
+              }
+            })
+            .map(server => (
+              <ConnCard key={server}>
+                <ConnIcon $tone='server'>
+                  <FaServer />
+                </ConnIcon>
+                <ConnBody>
+                  <ConnTopRow>
+                    <ConnTitle>{serverLabel(server)}</ConnTitle>
+                    <StatusPill $status='unknown'>Not connected</StatusPill>
+                  </ConnTopRow>
+                  <ConnSub>Known server</ConnSub>
+                  <ConnActions>
+                    <NodeAction onClick={() => setServer(server)}>
+                      Switch to this server
+                    </NodeAction>
+                  </ConnActions>
+                </ConnBody>
+              </ConnCard>
+            ))}
 
-          <ConnectServerDialog
-            knownServers={knownServers}
-            activeServer={baseURL}
-            isNode={isNode}
-            setServer={setServer}
-            show={showServerDialog}
-            bindShow={setShowServerDialog}
-          />
+          {/* Add-a-server: inline (no dialog) — the same act as the switch
+              cards above, so it lives in the same list. */}
+          <AddRow>
+            {showAddServer ? (
+              <AddServerForm
+                onSubmit={e => {
+                  e.preventDefault();
+                  const url = serverInput.trim();
+
+                  if (!url) {
+                    return;
+                  }
+
+                  setServer(url);
+                  setServerInput('');
+                  setShowAddServer(false);
+                }}
+              >
+                <ServerInputRow>
+                  <ServerInput
+                    autoFocus
+                    autoComplete='off'
+                    placeholder='https://your-server.example'
+                    value={serverInput}
+                    onChange={e => setServerInput(e.target.value)}
+                  />
+                  <Button type='submit' disabled={!serverInput.trim()}>
+                    Connect
+                  </Button>
+                  <NodeAction
+                    type='button'
+                    onClick={() => {
+                      setShowAddServer(false);
+                      setServerInput('');
+                    }}
+                  >
+                    Cancel
+                  </NodeAction>
+                </ServerInputRow>
+                <DocsLink
+                  href='https://docs.atomicdata.dev/atomicserver/installation.html'
+                  target='_blank'
+                  rel='noopener'
+                >
+                  How to run your own server
+                </DocsLink>
+              </AddServerForm>
+            ) : (
+              <AddButton onClick={() => setShowAddServer(true)}>
+                <FaPlus aria-hidden /> Connect a server
+              </AddButton>
+            )}
+          </AddRow>
         </Section>
 
         {/* Pairing is the point of this page on a peer node, so it's shown
@@ -1537,6 +1618,37 @@ const AddButton = styled.button`
     border-color: ${p => p.theme.colors.main};
     background: ${p => p.theme.colors.main}0d;
   }
+`;
+
+const AddServerForm = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+`;
+
+const ServerInputRow = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+`;
+
+const ServerInput = styled.input`
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  padding: 0.45rem 0.6rem;
+  font-size: 0.85rem;
+  background: ${p => p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
+  flex: 1;
+  min-width: 12rem;
+`;
+
+const DocsLink = styled.a`
+  font-size: 0.8rem;
+  color: ${p => p.theme.colors.textLight};
+  display: inline-block;
 `;
 
 // --- Developer disclosure ---
