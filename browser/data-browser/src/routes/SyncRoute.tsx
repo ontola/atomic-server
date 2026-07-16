@@ -87,6 +87,21 @@ function rawToNodeDid(raw: string): string {
   return `${NODE_DID_PREFIX}${raw}`;
 }
 
+/** Turn what someone types in the connect box into a full server URL. A bare
+ * `host[:port]` is fine — localhost gets `http://`, anything else `https://` —
+ * so no one has to type the scheme. */
+function normalizeServerUrl(input: string): string {
+  const trimmed = input.trim().replace(/\/+$/, '');
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  const isLocal = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(trimmed);
+
+  return `${isLocal ? 'http' : 'https'}://${trimmed}`;
+}
+
 /** A server's `host:port` for display, so two `localhost`s on different ports
  * (e.g. an embedded node and a stale one) are distinguishable. */
 function serverLabel(server: string): string {
@@ -951,22 +966,26 @@ function SyncPage() {
               <AddServerForm
                 onSubmit={e => {
                   e.preventDefault();
-                  const url = serverInput.trim();
-
-                  if (!url) {
+                  if (!serverInput.trim()) {
                     return;
                   }
 
-                  setServer(url);
+                  setServer(normalizeServerUrl(serverInput));
                   setServerInput('');
                   setShowAddServer(false);
                 }}
               >
+                <AddServerExplainer>
+                  Connect to an Atomic-Server by its web address — it keeps your
+                  data online and lets you share it. To sync with another one of
+                  your own devices instead, use the pairing code
+                  {isNode ? ' below' : ' in the desktop app'}.
+                </AddServerExplainer>
                 <ServerInputRow>
                   <ServerInput
                     autoFocus
                     autoComplete='off'
-                    placeholder='https://your-server.example'
+                    placeholder='localhost:9883 or your-server.example'
                     value={serverInput}
                     onChange={e => setServerInput(e.target.value)}
                   />
@@ -1702,6 +1721,12 @@ const AddServerForm = styled.form`
   flex-direction: column;
   gap: 0.4rem;
   width: 100%;
+`;
+
+const AddServerExplainer = styled.p`
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.8rem;
+  margin: 0;
 `;
 
 const ServerInputRow = styled.div`
