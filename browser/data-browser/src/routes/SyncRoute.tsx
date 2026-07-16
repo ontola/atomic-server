@@ -192,7 +192,9 @@ function SyncPage() {
   );
   const [clientDbOn, setClientDbOn] = useState(() => isClientDbEnabled());
   const { setServer, baseURL } = useSettings();
-  const knownServers = serverURLStorage.getKnownServers();
+  const [knownServers, setKnownServers] = useState<string[]>(() =>
+    serverURLStorage.getKnownServers(),
+  );
   // Server switching + adding happen inline in the Connections section (not a
   // separate dialog): `showAddServer` reveals the add-a-server form.
   const [showAddServer, setShowAddServer] = useState(false);
@@ -413,6 +415,11 @@ function SyncPage() {
   const serverHostname = status.serverUrl
     ? new URL(status.serverUrl).hostname
     : undefined;
+  // For display, include the port so two localhosts (e.g. an embedded node and
+  // a stale one) are distinguishable — matches the switch cards below.
+  const serverDisplay = status.serverUrl
+    ? serverLabel(status.serverUrl)
+    : undefined;
   const embeddedActive =
     isNode &&
     (serverHostname === 'localhost' || serverHostname === '127.0.0.1');
@@ -621,6 +628,28 @@ function SyncPage() {
     savePeers(knownPeers.filter(p => p.nodeId !== nodeId));
   }
 
+  /** Point the app at `server` and reconnect. `setServer` runs through
+   * `store.setServerUrl`, which reopens the WebSocket — the connection card
+   * then reflects the new server's status. The toast is the immediate feedback
+   * (the reconnect itself is async). */
+  function switchToServer(server: string) {
+    if (server === baseURL) {
+      return;
+    }
+
+    try {
+      setServer(server);
+      toast.success(`Switching to ${serverLabel(server)}…`);
+    } catch (e) {
+      store.notifyError(e as Error);
+    }
+  }
+
+  function removeServer(server: string) {
+    serverURLStorage.removeKnownServer(server);
+    setKnownServers(serverURLStorage.getKnownServers());
+  }
+
   return (
     <Main>
       <ContainerNarrow>
@@ -643,6 +672,20 @@ function SyncPage() {
                   ? 'Cached locally · works offline'
                   : 'Server-only · no local cache'}
             </ConnSub>
+            {isNode && localNodeId && (
+              <NodeIdRow>
+                <NodeIdLabel>Node ID</NodeIdLabel>
+                <NodeIdValue
+                  title='Copy Node ID'
+                  onClick={() => {
+                    navigator.clipboard.writeText(localNodeId);
+                    toast.success('Node ID copied');
+                  }}
+                >
+                  {localNodeId}
+                </NodeIdValue>
+              </NodeIdRow>
+            )}
           </ConnBody>
         </DeviceCard>
 
@@ -755,7 +798,7 @@ function SyncPage() {
               <ConnBody>
                 <ConnTopRow>
                   <ConnTitle>
-                    {managedInfo.managed ? 'Cloud Sync' : serverHostname}
+                    {managedInfo.managed ? 'Cloud Sync' : serverDisplay}
                   </ConnTitle>
                   <StatusPill $status={nodes.server}>
                     <StatusIcon status={nodes.server} />
@@ -890,8 +933,11 @@ function SyncPage() {
                   </ConnTopRow>
                   <ConnSub>Known server</ConnSub>
                   <ConnActions>
-                    <NodeAction onClick={() => setServer(server)}>
+                    <NodeAction onClick={() => switchToServer(server)}>
                       Switch to this server
+                    </NodeAction>
+                    <NodeAction onClick={() => removeServer(server)}>
+                      Remove
                     </NodeAction>
                   </ConnActions>
                 </ConnBody>
@@ -1372,10 +1418,41 @@ const cardBase = css`
 /** The "This device" card — the source of truth, visually distinct. */
 const DeviceCard = styled.div`
   ${cardBase}
-  align-items: center;
   background: ${p => p.theme.colors.bg1};
   border-color: transparent;
   margin-bottom: 1.5rem;
+`;
+
+const NodeIdRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+`;
+
+const NodeIdLabel = styled.span`
+  color: ${p => p.theme.colors.textLight};
+  flex-shrink: 0;
+`;
+
+const NodeIdValue = styled.button`
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.text};
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+
+  &:hover {
+    color: ${p => p.theme.colors.main};
+    text-decoration: underline;
+  }
 `;
 
 const ConnCard = styled.div`
