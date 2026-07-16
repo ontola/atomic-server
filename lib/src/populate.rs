@@ -265,6 +265,12 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
 }
 
 /// Imports the Atomic Data Core items (the entire atomicdata.dev Ontology / Vocabulary)
+///
+/// NOTE: every `defaults/*.json` imported here must ALSO be added to
+/// `browser/data-browser/src/bootstrap.ts`. These subjects live under
+/// `https://atomicdata.dev/...` but are not published there; without the
+/// client-side bootstrap, `resource.set()` datatype validation tries to fetch
+/// them from the real atomicdata.dev and stalls writes for up to 10s.
 pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> {
     store
         .import(
