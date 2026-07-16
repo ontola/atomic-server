@@ -5031,6 +5031,7 @@ msgid "did:ad:node:{0}…"
 msgstr "did:ad:node:{0}…"
 
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Node ID"
 msgstr "Node ID"
 
@@ -5474,3 +5475,16 @@ msgstr "<0/> Open"
 #: src/components/Settings/VirtualDriveSettings.tsx
 msgid "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
 msgstr "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
+
+#. 0: serverLabel(server)
+#: src/routes/SyncRoute.tsx
+msgid "Switching to {0}…"
+msgstr "Switching to {0}…"
+
+#: src/routes/SyncRoute.tsx
+msgid "Copy Node ID"
+msgstr "Copy Node ID"
+
+#: src/routes/SyncRoute.tsx
+msgid "Node ID copied"
+msgstr "Node ID copied"
