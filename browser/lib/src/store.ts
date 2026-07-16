@@ -3434,7 +3434,26 @@ export class Store {
       throw Error('baseUrl should not have a trailing slash');
     }
 
+    const previous = this.serverUrl;
+
     this.serverUrl = url;
+
+    // Switching servers: tear down the old socket and reset the connection
+    // status. `serverConnected` / `serverConnectionError` describe *the current
+    // server*, so a leftover socket is not just waste — it keeps retrying and
+    // overwriting them, which surfaces the previous server's error on the new
+    // server's card.
+    if (previous && previous !== url) {
+      const stale = this.webSockets.get(previous);
+
+      if (stale) {
+        stale.close();
+        this.webSockets.delete(previous);
+      }
+
+      this.setServerConnected(false);
+    }
+
     this.eventManager.emit(StoreEvents.ServerURLChanged, url);
 
     if (supportsWebSockets()) {

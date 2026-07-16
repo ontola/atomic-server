@@ -815,10 +815,25 @@ function SyncPage() {
                   <ConnTitle>
                     {managedInfo.managed ? 'Cloud Sync' : serverDisplay}
                   </ConnTitle>
-                  <StatusPill $status={nodes.server}>
-                    <StatusIcon status={nodes.server} />
-                    {statusLabel(nodes.server)}
-                  </StatusPill>
+                  <ConnTopRight>
+                    <StatusPill $status={nodes.server}>
+                      <StatusIcon status={nodes.server} />
+                      {statusLabel(nodes.server)}
+                    </StatusPill>
+                    {status.serverConnected ? (
+                      <NodeAction onClick={() => store.disconnect()}>
+                        Disconnect
+                      </NodeAction>
+                    ) : (
+                      <NodeAction
+                        onClick={() =>
+                          store.reconnect().catch(e => store.notifyError(e))
+                        }
+                      >
+                        Reconnect
+                      </NodeAction>
+                    )}
+                  </ConnTopRight>
                 </ConnTopRow>
                 <ConnSub>
                   {managedInfo.managed
@@ -860,21 +875,8 @@ function SyncPage() {
                   </ConnMeta>
                 )}
 
-                <ConnActions>
-                  {status.serverConnected ? (
-                    <NodeAction onClick={() => store.disconnect()}>
-                      Disconnect
-                    </NodeAction>
-                  ) : (
-                    <NodeAction
-                      onClick={() =>
-                        store.reconnect().catch(e => store.notifyError(e))
-                      }
-                    >
-                      Reconnect
-                    </NodeAction>
-                  )}
-                  {managedInfo.managed && managedInfo.portalUrl && (
+                {managedInfo.managed && managedInfo.portalUrl && (
+                  <ConnActions>
                     <ManagedLink
                       href={managedInfo.portalUrl}
                       target='_blank'
@@ -882,8 +884,8 @@ function SyncPage() {
                     >
                       {'Manage account & plan →'}
                     </ManagedLink>
-                  )}
-                </ConnActions>
+                  </ConnActions>
+                )}
               </ConnBody>
             </ConnCard>
           )}
@@ -897,7 +899,15 @@ function SyncPage() {
               <ConnBody>
                 <ConnTopRow>
                   <ConnTitle title={peer.nodeId}>{peer.label}</ConnTitle>
-                  <StatusPill $status='unknown'>Paired</StatusPill>
+                  <ConnTopRight>
+                    <StatusPill $status='unknown'>Paired</StatusPill>
+                    <NodeAction
+                      onClick={() => syncWithPeer(peer.nodeId)}
+                      disabled={peerSyncing}
+                    >
+                      {peerSyncing ? 'Syncing…' : 'Sync now'}
+                    </NodeAction>
+                  </ConnTopRight>
                 </ConnTopRow>
                 <ConnSub>
                   Paired device
@@ -906,15 +916,9 @@ function SyncPage() {
                     : ''}
                 </ConnSub>
                 <ConnActions>
-                  <NodeAction
-                    onClick={() => syncWithPeer(peer.nodeId)}
-                    disabled={peerSyncing}
-                  >
-                    {peerSyncing ? 'Syncing…' : 'Sync now'}
-                  </NodeAction>
-                  <NodeAction onClick={() => removePeer(peer.nodeId)}>
+                  <NodeActionSubtle onClick={() => removePeer(peer.nodeId)}>
                     Remove
-                  </NodeAction>
+                  </NodeActionSubtle>
                 </ConnActions>
               </ConnBody>
             </ConnCard>
@@ -944,16 +948,18 @@ function SyncPage() {
                 <ConnBody>
                   <ConnTopRow>
                     <ConnTitle>{serverLabel(server)}</ConnTitle>
-                    <StatusPill $status='unknown'>Not connected</StatusPill>
+                    <ConnTopRight>
+                      <StatusPill $status='unknown'>Not connected</StatusPill>
+                      <NodeAction onClick={() => switchToServer(server)}>
+                        Switch
+                      </NodeAction>
+                    </ConnTopRight>
                   </ConnTopRow>
                   <ConnSub>Known server</ConnSub>
                   <ConnActions>
-                    <NodeAction onClick={() => switchToServer(server)}>
-                      Switch to this server
-                    </NodeAction>
-                    <NodeAction onClick={() => removeServer(server)}>
+                    <NodeActionSubtle onClick={() => removeServer(server)}>
                       Remove
-                    </NodeAction>
+                    </NodeActionSubtle>
                   </ConnActions>
                 </ConnBody>
               </ConnCard>
@@ -1377,6 +1383,22 @@ const NodeAction = styled.button`
   &:hover {
     text-decoration: underline;
   }
+
+  &:disabled {
+    color: ${p => p.theme.colors.textLight};
+    cursor: default;
+    text-decoration: none;
+  }
+`;
+
+/** Secondary / destructive actions (Remove). Muted so the card's primary
+ *  action — the one beside the status pill — stays the obvious thing to click. */
+const NodeActionSubtle = styled(NodeAction)`
+  color: ${p => p.theme.colors.textLight};
+
+  &:hover {
+    color: ${p => p.theme.colors.alert};
+  }
 `;
 
 const ManagedLink = styled.a`
@@ -1584,6 +1606,16 @@ const ConnTopRow = styled.div`
   justify-content: space-between;
   gap: 0.5rem;
   min-width: 0;
+`;
+
+/** Status and the one thing you'd do about it, together: "Offline · Reconnect",
+ *  "Not connected · Switch". The state and its remedy read as one unit rather
+ *  than the action being stranded at the bottom of the card. */
+const ConnTopRight = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
 `;
 
 const ConnTitle = styled.span`
