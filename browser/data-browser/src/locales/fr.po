@@ -4963,9 +4963,8 @@ msgstr ""
 msgid "Cloud Sync"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Self-hosted Atomic Server"
-msgstr ""
+#~ msgid "Self-hosted Atomic Server"
+#~ msgstr ""
 
 #. 0: usagePct
 #: src/routes/SyncRoute.tsx
@@ -5453,4 +5452,12 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Node ID copied"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Self-hosted Atomic Server · in use"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Known server"
 msgstr ""
