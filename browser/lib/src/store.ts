@@ -989,13 +989,28 @@ export class Store {
         },
         onTerminalDrop: (entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);
-          // Surface the recovery to the user — silent discards are
-          // worse than visible recoveries when a write got lost.
-          this.notifyError(
-            new Error(
-              `Dropped stuck commit for ${entry.subject.slice(0, 60)}…: ${msg}`,
-            ),
+          // A redundant genesis commit (the resource already exists on the
+          // server) is a benign reconciliation drop, not a lost write — the
+          // data is already there. These can arrive in bulk when local state
+          // lost its `lastCommit` chain (e.g. after switching servers), so
+          // alarming the user with an error toast per commit is pure noise.
+          // Other terminal drops may mean a genuinely lost edit, so those still
+          // surface — silent discards are worse than visible recoveries there.
+          const isRedundantGenesis = msg.includes(
+            'is_genesis: true, but the resource already exists',
           );
+
+          if (isRedundantGenesis) {
+            console.debug(
+              `Dropped redundant genesis commit for ${entry.subject} (already on server)`,
+            );
+          } else {
+            this.notifyError(
+              new Error(
+                `Dropped stuck commit for ${entry.subject.slice(0, 60)}…: ${msg}`,
+              ),
+            );
+          }
           // Best-effort: refetch the resource so the local copy
           // aligns with whatever the server already has.
           this.fetchResourceFromServer(entry.subject).catch(() => undefined);
