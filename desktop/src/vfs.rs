@@ -55,6 +55,8 @@ pub const NFS_ADDR: &str = "127.0.0.1:11111";
 /// NFS client asserts over AUTH_UNIX.
 const DIR_MODE: u32 = 0o755;
 const FILE_MODE: u32 = 0o644;
+/// Read-only: link (`.inetloc`) files have generated content, not editable bytes.
+const LINK_MODE: u32 = 0o444;
 
 /// Admission caps (a subset of `planning/virtual-drive.md`'s hostile-peer
 /// limits). Bytes are staged in RAM until flushed, so bound file size; bound the
@@ -383,6 +385,23 @@ impl AtomicNfsFs {
 
   /// Ensure a staging buffer exists for `id`, seeded from the file's current
   /// bytes so a partial (offset) write extends rather than truncates.
+  /// Reject a mutation aimed at a read-only link (`.inetloc`) resource before it
+  /// gets staged as if it were a File — staging + flushing one would overwrite
+  /// the real resource with location-file bytes. Only checks on first touch (an
+  /// already-staged id is a real file being edited), so real writes pay nothing
+  /// after the first.
+  fn deny_if_link(&self, id: fileid3) -> Result<(), nfsstat3> {
+    if self.staging.files.lock().unwrap().contains_key(&id) {
+      return Ok(());
+    }
+
+    if is_link_resource(&self.get_shallow(id)?) {
+      return Err(nfsstat3::NFS3ERR_ROFS);
+    }
+
+    Ok(())
+  }
+
   async fn ensure_staged(&self, id: fileid3, subject: &str) {
     if self.staging.files.lock().unwrap().contains_key(&id) {
       return;
@@ -433,25 +452,43 @@ impl AtomicNfsFs {
     Ok(id)
   }
 
-  /// The Drives the mount root exposes as top-level directories. On a
-  /// single-user desktop node the default query context is `Sudo`, so this is
-  /// every Drive in the store — "all my drives".
+  /// The Drives the mount root exposes as top-level directories: the signed-in
+  /// user's own drives (their `personalDrive` plus everything on the agent's
+  /// `drives` list).
+  ///
+  /// Deliberately *not* every Drive in the store. A desktop node syncs drives
+  /// from other peers, so `Sudo` would list thousands the user has no rights to
+  /// — and opening one hands the auth-gated UI a resource it bounces to the
+  /// welcome page. Scoping to the agent's drives keeps the mount to what the
+  /// user can actually open, and empties it when signed out.
   async fn drives(&self) -> Result<Vec<Subject>, nfsstat3> {
-    // A directory listing only needs each drive's subject; its name and
-    // attributes are read cheaply per-entry via `get_resource`. Leaving the
-    // query nested would run every Drive's class extenders (collection builds,
-    // a `check_read` hierarchy walk, and a durable redb flush) on *every*
-    // readdir — which on a large store makes the whole mount appear to hang.
-    let mut query = atomic_lib::storelike::Query::new_class(urls::DRIVE);
-    query.include_nested = false;
+    let Ok(agent) = self.store.get_default_agent() else {
+      return Ok(Vec::new());
+    };
 
-    let result = self
-      .store
-      .query(&query)
-      .await
-      .map_err(|_| nfsstat3::NFS3ERR_SERVERFAULT)?;
+    let Ok(agent_resource) = self.store.get_resource_shallow(&agent.subject) else {
+      return Ok(Vec::new());
+    };
 
-    Ok(result.subjects)
+    let mut drives: Vec<Subject> = Vec::new();
+
+    // The home drive first, so it sorts as the user's primary entry.
+    if let Ok(value) = agent_resource.get(urls::PERSONAL_DRIVE) {
+      if let Some(subject) = value_string(value) {
+        drives.push(Subject::from(subject.as_str()));
+      }
+    }
+
+    if let Ok(Value::ResourceArray(list)) = agent_resource.get(urls::DRIVES) {
+      for item in list {
+        let subject = item.to_string();
+        if !drives.iter().any(|drive| drive.as_str() == subject) {
+          drives.push(Subject::from(subject.as_str()));
+        }
+      }
+    }
+
+    Ok(drives)
   }
 
   /// The File/Folder children of a container (drive or folder), by `parent`.
@@ -482,8 +519,9 @@ impl AtomicNfsFs {
       }
     }
 
-    resources.retain(is_file_or_folder);
-
+    // The whole hierarchy is mirrored: Folders become directories, Files become
+    // files, and every other resource becomes a `.inetloc` link that opens in
+    // Atomic desktop (see `entry_parts` / `is_link_resource`).
     Ok(resources)
   }
 
@@ -511,11 +549,14 @@ impl AtomicNfsFs {
   /// sanitize its name, project its attributes.
   fn entry_parts(&self, resource: &Resource) -> (fileid3, filename3, fattr3) {
     let id = self.ids.get_or_alloc(resource.get_subject().as_str());
-    (
-      id,
-      sanitize_name(&display_name(resource)).into_bytes().into(),
-      attr_for(id, resource),
-    )
+    let mut name = sanitize_name(&display_name(resource));
+
+    // Non-file, non-container resources surface as `.inetloc` link files.
+    if is_link_resource(resource) {
+      name = format!("{name}.{LINK_EXT}");
+    }
+
+    (id, name.into_bytes().into(), attr_for(id, resource))
   }
 
   /// Every child entry of a directory (drives at the root; File/Folder children
@@ -688,7 +729,14 @@ impl NFSFileSystem for AtomicNfsFs {
 
       match staged {
         Some(data) => data,
-        None => read_blob(&self.store, &self.get(id).await?)?,
+        None => {
+          let resource = self.get(id).await?;
+          if is_link_resource(&resource) {
+            link_file_bytes(resource.get_subject().as_str())
+          } else {
+            read_blob(&self.store, &resource)?
+          }
+        }
       }
     };
 
@@ -716,6 +764,8 @@ impl NFSFileSystem for AtomicNfsFs {
         return Err(nfsstat3::NFS3ERR_FBIG);
       }
 
+      self.deny_if_link(id)?;
+
       let subject = self.ids.subject(id).ok_or(nfsstat3::NFS3ERR_NOENT)?;
       self.ensure_staged(id, &subject).await;
 
@@ -737,6 +787,8 @@ impl NFSFileSystem for AtomicNfsFs {
     if end > MAX_FILE_BYTES {
       return Err(nfsstat3::NFS3ERR_FBIG);
     }
+
+    self.deny_if_link(id)?;
 
     let subject = self.ids.subject(id).ok_or(nfsstat3::NFS3ERR_NOENT)?;
     self.ensure_staged(id, &subject).await;
@@ -900,15 +952,6 @@ impl NFSFileSystem for AtomicNfsFs {
   }
 }
 
-/// True for resources the filesystem surfaces: Files (regular files) and
-/// Folders (directories). Everything else stays out of the mount for v1 — the
-/// `.atomic` stub-file question in the doc is deferred.
-fn is_file_or_folder(resource: &Resource) -> bool {
-  classes(resource)
-    .iter()
-    .any(|class| class == urls::FILE || class == urls::FOLDER)
-}
-
 /// Directories in the mount: Folders and Drives (the mount root's drives are
 /// top-level directories). Everything else that is surfaced is a regular file.
 fn is_dir(resource: &Resource) -> bool {
@@ -919,6 +962,54 @@ fn is_dir(resource: &Resource) -> bool {
 
 fn is_file(resource: &Resource) -> bool {
   classes(resource).iter().any(|class| class == urls::FILE)
+}
+
+/// A resource that is neither a File nor a container (Folder/Drive). These are
+/// surfaced as macOS "internet location" files: opening one hands off to Atomic
+/// desktop via the `atomic://` deep link instead of downloading bytes.
+fn is_link_resource(resource: &Resource) -> bool {
+  !is_dir(resource) && !is_file(resource)
+}
+
+/// macOS location-file extension. `.inetloc` (unlike `.webloc`, which only
+/// resolves http/https) opens custom URL schemes like `atomic://`.
+const LINK_EXT: &str = "inetloc";
+
+/// The `.inetloc` (plist) bytes that open `subject` in Atomic desktop. The OS
+/// resolves the embedded `atomic://` URL to the registered desktop app, whose
+/// deep-link handler forwards it to the frontend to navigate to the resource.
+fn link_file_bytes(subject: &str) -> Vec<u8> {
+  let url = xml_escape(&format!(
+    "atomic://open?subject={}",
+    percent_encode(subject)
+  ));
+  format!(
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+     <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \
+     \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
+     <plist version=\"1.0\">\n<dict>\n\t<key>URL</key>\n\t<string>{url}</string>\n</dict>\n</plist>\n"
+  )
+  .into_bytes()
+}
+
+/// Percent-encode a subject so it survives as an `atomic://…?subject=` query
+/// value (its `:`, `/`, `?` etc. would otherwise break the URL).
+fn percent_encode(input: &str) -> String {
+  let mut out = String::with_capacity(input.len());
+  for &byte in input.as_bytes() {
+    match byte {
+      b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(byte as char),
+      _ => out.push_str(&format!("%{byte:02X}")),
+    }
+  }
+  out
+}
+
+fn xml_escape(input: &str) -> String {
+  input
+    .replace('&', "&amp;")
+    .replace('<', "&lt;")
+    .replace('>', "&gt;")
 }
 
 /// Read a File resource's bytes: concatenate its chunk blobs when it is chunked,
@@ -1041,6 +1132,10 @@ fn value_string(value: &Value) -> Option<String> {
 fn attr_for(id: fileid3, resource: &Resource) -> fattr3 {
   if is_dir(resource) {
     dir_attr(id)
+  } else if is_link_resource(resource) {
+    // A read-only location file; its size is the generated `.inetloc` content.
+    let size = link_file_bytes(resource.get_subject().as_str()).len() as u64;
+    link_attr(id, size)
   } else {
     let size = resource
       .get(urls::FILESIZE)
@@ -1063,6 +1158,12 @@ fn dir_attr(id: fileid3) -> fattr3 {
 
 fn file_attr(id: fileid3, size: u64) -> fattr3 {
   base_attr(id, ftype3::NF3REG, FILE_MODE, 1, size)
+}
+
+/// A link (`.inetloc`) file is a regular file to the OS but read-only — its
+/// bytes are generated, not stored, and editing it would be meaningless.
+fn link_attr(id: fileid3, size: u64) -> fattr3 {
+  base_attr(id, ftype3::NF3REG, LINK_MODE, 1, size)
 }
 
 fn base_attr(id: fileid3, ftype: ftype3, mode: u32, nlink: u32, size: u64) -> fattr3 {
@@ -1325,6 +1426,11 @@ fn wait_until_listening() -> bool {
 /// privilege, so the error is surfaced to the UI.
 #[cfg(unix)]
 fn os_mount(mount_point: &std::path::Path) -> Result<(), String> {
+  // A previous run that was hard-killed (rather than cleanly stopped) leaves a
+  // dead NFS mount here; mounting onto it fails with EPERM. Clear any stale
+  // mount first so toggling the drive on always works.
+  force_unmount(&mount_point.to_string_lossy());
+
   std::fs::create_dir_all(mount_point)
     .map_err(|e| format!("Could not create the mount folder: {e}"))?;
 
@@ -1349,9 +1455,28 @@ fn os_mount(mount_point: &std::path::Path) -> Result<(), String> {
 
 #[cfg(unix)]
 fn os_unmount(mount_point: &str) {
+  force_unmount(mount_point);
+}
+
+/// Best-effort force-unmount. Used to tear down on stop and to clear a dead
+/// mount left by a hard-killed previous run before mounting again. All errors
+/// are ignored: unmounting a path that isn't mounted is a harmless no-op.
+#[cfg(unix)]
+fn force_unmount(mount_point: &str) {
   let _ = std::process::Command::new("umount")
+    .arg("-f")
     .arg(mount_point)
     .output();
+
+  // macOS: `umount -f` sometimes refuses a wedged NFS mount that `diskutil`
+  // still clears.
+  #[cfg(target_os = "macos")]
+  {
+    let _ = std::process::Command::new("diskutil")
+      .args(["unmount", "force"])
+      .arg(mount_point)
+      .output();
+  }
 }
 
 #[cfg(not(unix))]
@@ -1545,6 +1670,50 @@ mod tests {
     let (head, eof) = fs.read(file_entry.fileid, 0, 5).await.unwrap();
     assert_eq!(head, b"hello");
     assert!(!eof);
+  }
+
+  /// A resource that is neither a File nor a container surfaces as a read-only
+  /// `.inetloc` link file whose bytes open it in Atomic desktop.
+  #[tokio::test(flavor = "multi_thread")]
+  async fn non_file_resources_surface_as_openable_links() {
+    let store = Db::init_temp("vfs_links").await.unwrap();
+    let drive = store.create_drive("Link Drive").await.unwrap();
+    let table_subject = store
+      .create_resource(urls::TABLE, &drive, "My Table", None)
+      .await
+      .unwrap();
+
+    let fs = AtomicNfsFs::new(store);
+
+    let drive_id = fs.lookup(ROOT_ID, &fname("Link Drive")).await.unwrap();
+    let listing = fs.readdir(drive_id, 0, 100).await.unwrap();
+    let link = listing
+      .entries
+      .iter()
+      .find(|entry| name_of(entry) == "My Table.inetloc")
+      .expect("a non-file resource should appear as a .inetloc link");
+
+    // A read-only regular file.
+    assert!(matches!(link.attr.ftype, ftype3::NF3REG));
+    assert_eq!(link.attr.mode, LINK_MODE);
+
+    // Its content is the deep link that opens the resource in Atomic desktop.
+    let (bytes, _eof) = fs.read(link.fileid, 0, 4096).await.unwrap();
+    let content = String::from_utf8(bytes).unwrap();
+    assert!(content.contains("atomic://open?subject="));
+    assert!(content.contains(&percent_encode(&table_subject)));
+
+    // Lookup resolves the link by its `.inetloc` name.
+    assert_eq!(
+      fs.lookup(drive_id, &fname("My Table.inetloc"))
+        .await
+        .unwrap(),
+      link.fileid
+    );
+
+    // Writes are refused — a link is not an editable File.
+    let err = fs.write(link.fileid, 0, b"nope").await.unwrap_err();
+    assert!(matches!(err, nfsstat3::NFS3ERR_ROFS));
   }
 
   #[test]
