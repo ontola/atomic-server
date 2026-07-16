@@ -1493,6 +1493,35 @@ impl Db {
         }
     }
 
+    /// A resource built only from its last-committed materialized propvals,
+    /// **skipping the Loro snapshot re-decode** that [`Storelike::get_resource`]
+    /// performs. That decode decompresses a resource's full CRDT history and can
+    /// cost tens of milliseconds each — fine for a single fetch, ruinous when a
+    /// directory listing reads hundreds of resources just to project their names
+    /// and sizes. The propvals are the materialized state after the last commit,
+    /// which is exactly what a read-only listing needs; do not use this where
+    /// CRDT-authoritative state matters. Subject normalization (incl. the DID
+    /// drive hint) matches `get_resource`, so ids/subjects stay consistent.
+    pub fn get_resource_shallow(&self, subject: &Subject) -> AtomicResult<Resource> {
+        let normalized = self.normalize_subject(subject);
+        let subject_str = normalized.pure_id();
+        let propvals = self.get_propvals(&subject_str)?;
+
+        let mut res_subject = normalized.clone();
+        if let Subject::Did {
+            drive_hint: None, ..
+        } = &res_subject
+        {
+            if let Ok(Some(hint_bin)) = self.kv.get(Tree::DidMapping, subject_str.as_bytes()) {
+                if let Ok(hint) = std::str::from_utf8(&hint_bin) {
+                    res_subject = res_subject.set_drive_hint(hint.to_string());
+                }
+            }
+        }
+
+        Ok(Resource::from_propvals(propvals, res_subject))
+    }
+
     /// Removes all values from the indexes.
     pub fn clear_index(&self) -> AtomicResult<()> {
         self.kv.clear_tree(Tree::ValPropSub)?;

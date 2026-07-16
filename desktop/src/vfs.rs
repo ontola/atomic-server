@@ -33,7 +33,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 
-use atomic_lib::db::trees::Tree;
+use atomic_lib::db::trees::{Method, Operation, Tree};
 use atomic_lib::values::SubResource;
 use atomic_lib::{urls, Db, Resource, Storelike, Subject, Value};
 use nfsserve::nfs::{
@@ -124,6 +124,12 @@ const ID_NEXT: &[u8] = b"vfs:next";
 struct IdMap {
   store: Db,
   cache: Mutex<IdCache>,
+  /// Ids minted since the last `persist_pending`, waiting to be written to the
+  /// store in a single batched transaction. Kept off the hot path because each
+  /// separate kv write is its own redb commit; minting 3 keys per entry
+  /// synchronously turned a directory listing into hundreds of commits that
+  /// contend with the live server's writer (see `persist_pending`).
+  pending: Mutex<Vec<(fileid3, String)>>,
 }
 
 #[derive(Default)]
@@ -139,6 +145,7 @@ impl IdMap {
     IdMap {
       store,
       cache: Mutex::new(IdCache::default()),
+      pending: Mutex::new(Vec::new()),
     }
   }
 
@@ -167,24 +174,54 @@ impl IdMap {
     });
     let id = next;
     cache.next = Some(next + 1);
-
-    let _ = self
-      .store
-      .kv
-      .insert(Tree::PluginMeta, ID_NEXT, &(next + 1).to_be_bytes());
-    let _ = self.store.kv.insert(
-      Tree::PluginMeta,
-      &subject_to_id_key(subject),
-      &id.to_be_bytes(),
-    );
-    let _ = self
-      .store
-      .kv
-      .insert(Tree::PluginMeta, &id_to_subject_key(id), subject.as_bytes());
-
     cache.remember(id, subject);
+    drop(cache);
+
+    // Persist off the hot path — see `pending` / `persist_pending`. The id is
+    // already usable from the in-memory cache; durability only matters across
+    // remounts, and a lost-on-crash id just gets re-minted next session.
+    self.pending.lock().unwrap().push((id, subject.to_string()));
 
     id
+  }
+
+  /// Write every id minted since the last call in a single batched transaction,
+  /// instead of one redb commit per key. Called after a listing is built and
+  /// after create/mkdir; a no-op when nothing is pending.
+  fn persist_pending(&self) {
+    let pending: Vec<(fileid3, String)> = {
+      let mut p = self.pending.lock().unwrap();
+      if p.is_empty() {
+        return;
+      }
+      std::mem::take(&mut *p)
+    };
+
+    let next = self.cache.lock().unwrap().next.unwrap_or(ROOT_ID + 1);
+
+    let mut ops = Vec::with_capacity(pending.len() * 2 + 1);
+    ops.push(Operation {
+      tree: Tree::PluginMeta,
+      method: Method::Insert,
+      key: ID_NEXT.to_vec(),
+      val: Some(next.to_be_bytes().to_vec()),
+    });
+    for (id, subject) in &pending {
+      ops.push(Operation {
+        tree: Tree::PluginMeta,
+        method: Method::Insert,
+        key: subject_to_id_key(subject),
+        val: Some(id.to_be_bytes().to_vec()),
+      });
+      ops.push(Operation {
+        tree: Tree::PluginMeta,
+        method: Method::Insert,
+        key: id_to_subject_key(*id),
+        val: Some(subject.as_bytes().to_vec()),
+      });
+    }
+
+    let _ = self.store.kv.apply_batch(&ops);
   }
 
   fn subject(&self, id: fileid3) -> Option<String> {
@@ -209,6 +246,10 @@ impl IdMap {
   /// Forget a subject's id (both directions + cache), for a resource that was
   /// removed, so the persistent map doesn't accumulate dead entries.
   fn forget(&self, id: fileid3, subject: &str) {
+    // Drop it from the not-yet-persisted queue too, so a later flush can't
+    // resurrect a removed entry.
+    self.pending.lock().unwrap().retain(|(pid, _)| *pid != id);
+
     let _ = self
       .store
       .kv
@@ -386,16 +427,27 @@ impl AtomicNfsFs {
       .await
       .map_err(|_| nfsstat3::NFS3ERR_IO)?;
 
-    Ok(self.ids.get_or_alloc(&subject))
+    let id = self.ids.get_or_alloc(&subject);
+    self.ids.persist_pending();
+
+    Ok(id)
   }
 
   /// The Drives the mount root exposes as top-level directories. On a
   /// single-user desktop node the default query context is `Sudo`, so this is
   /// every Drive in the store — "all my drives".
   async fn drives(&self) -> Result<Vec<Subject>, nfsstat3> {
+    // A directory listing only needs each drive's subject; its name and
+    // attributes are read cheaply per-entry via `get_resource`. Leaving the
+    // query nested would run every Drive's class extenders (collection builds,
+    // a `check_read` hierarchy walk, and a durable redb flush) on *every*
+    // readdir — which on a large store makes the whole mount appear to hang.
+    let mut query = atomic_lib::storelike::Query::new_class(urls::DRIVE);
+    query.include_nested = false;
+
     let result = self
       .store
-      .query(&atomic_lib::storelike::Query::new_class(urls::DRIVE))
+      .query(&query)
       .await
       .map_err(|_| nfsstat3::NFS3ERR_SERVERFAULT)?;
 
@@ -404,20 +456,27 @@ impl AtomicNfsFs {
 
   /// The File/Folder children of a container (drive or folder), by `parent`.
   async fn children(&self, parent: &str) -> Result<Vec<Resource>, nfsstat3> {
-    let query = atomic_lib::storelike::Query::new_prop_val(urls::PARENT, parent);
+    // Non-nested for the same reason as `drives`: a listing needs subjects
+    // only, and each child is then read raw via `get_resource`. Nested fetching
+    // runs the extender + durable-flush path per child on every readdir.
+    let mut query = atomic_lib::storelike::Query::new_prop_val(urls::PARENT, parent);
+    query.include_nested = false;
+
     let result = self
       .store
       .query(&query)
       .await
       .map_err(|_| nfsstat3::NFS3ERR_SERVERFAULT)?;
 
-    // The query returns the resources directly under `Sudo`; fall back to
-    // fetching by subject if a backend ever returns subjects only.
+    // With a non-nested query the resources come back as subjects; fetch each
+    // one raw. (`result.resources` stays populated on any backend that returns
+    // full resources anyway, in which case the fallback is skipped.)
     let mut resources = result.resources;
 
     if resources.is_empty() && !result.subjects.is_empty() {
       for subject in &result.subjects {
-        if let Ok(resource) = self.store.get_resource(subject).await {
+        // Shallow read — a listing needs names/attrs, not full Loro state.
+        if let Ok(resource) = self.store.get_resource_shallow(subject) {
           resources.push(resource);
         }
       }
@@ -434,6 +493,17 @@ impl AtomicNfsFs {
       .store
       .get_resource(&Subject::from(subject.as_str()))
       .await
+      .map_err(|_| nfsstat3::NFS3ERR_NOENT)
+  }
+
+  /// Like `get`, but a shallow (propvals-only) read — for `getattr`, which only
+  /// needs the projected name/size/type and is called once per entry by the OS.
+  /// The full Loro decode `get` does would make attribute stat storms O(store).
+  fn get_shallow(&self, id: fileid3) -> Result<Resource, nfsstat3> {
+    let subject = self.ids.subject(id).ok_or(nfsstat3::NFS3ERR_NOENT)?;
+    self
+      .store
+      .get_resource_shallow(&Subject::from(subject.as_str()))
       .map_err(|_| nfsstat3::NFS3ERR_NOENT)
   }
 
@@ -458,7 +528,9 @@ impl AtomicNfsFs {
       let mut out = Vec::new();
 
       for drive in self.drives().await? {
-        if let Ok(resource) = self.store.get_resource(&drive).await {
+        // Shallow read: a listing only needs the name/attrs, not the full
+        // Loro-materialized resource (see `get_resource_shallow`).
+        if let Ok(resource) = self.store.get_resource_shallow(&drive) {
           out.push(self.entry_parts(&resource));
         }
       }
@@ -474,6 +546,9 @@ impl AtomicNfsFs {
         .collect()
     };
 
+    // Flush the ids minted above in one transaction rather than per entry.
+    self.ids.persist_pending();
+
     entries.sort_by_key(|(id, _, _)| *id);
 
     Ok(entries)
@@ -483,6 +558,31 @@ impl AtomicNfsFs {
   /// the next `readdir` rather than waiting for the TTL.
   fn invalidate_dir(&self, dirid: fileid3) {
     self.dir_cache.lock().unwrap().remove(&dirid);
+  }
+
+  /// Ensure `dirid`'s listing is cached and within its TTL, building it once if
+  /// absent or stale. `readdir` pages from it, and `lookup` scans it by name —
+  /// so resolving every entry the OS asks about after a listing costs no extra
+  /// store reads (previously each `lookup` re-enumerated the whole directory,
+  /// making a folder open O(entries²)).
+  async fn ensure_dir_cached(&self, dirid: fileid3) -> Result<(), nfsstat3> {
+    let fresh = matches!(
+      self.dir_cache.lock().unwrap().get(&dirid),
+      Some(listing) if listing.at.elapsed() < DIR_CACHE_TTL
+    );
+
+    if !fresh {
+      let entries = self.collect_dir_entries(dirid).await?;
+      self.dir_cache.lock().unwrap().insert(
+        dirid,
+        DirListing {
+          at: Instant::now(),
+          entries,
+        },
+      );
+    }
+
+    Ok(())
   }
 }
 
@@ -501,7 +601,7 @@ impl NFSFileSystem for AtomicNfsFs {
       return Ok(dir_attr(ROOT_ID));
     }
 
-    let resource = self.get(id).await?;
+    let resource = self.get_shallow(id)?;
     let mut attr = attr_for(id, &resource);
 
     // A file mid-write reports its staged size, so an editor sees the bytes it
@@ -517,27 +617,21 @@ impl NFSFileSystem for AtomicNfsFs {
   async fn lookup(&self, dirid: fileid3, filename: &filename3) -> Result<fileid3, nfsstat3> {
     let target = filename.as_ref();
 
-    if dirid == ROOT_ID {
-      for drive in self.drives().await? {
-        if let Ok(resource) = self.store.get_resource(&drive).await {
-          if sanitize_name(&display_name(&resource)).as_bytes() == target {
-            return Ok(self.ids.get_or_alloc(drive.as_str()));
-          }
-        }
-      }
+    // Resolve against the cached directory listing rather than re-enumerating
+    // the directory. The OS issues a `lookup` per entry right after a `readdir`;
+    // re-reading every sibling on each one made opening a folder O(entries²).
+    // The ids were already minted (and persisted) when the listing was built.
+    self.ensure_dir_cached(dirid).await?;
 
-      return Err(nfsstat3::NFS3ERR_NOENT);
-    }
+    let cache = self.dir_cache.lock().unwrap();
+    let listing = cache.get(&dirid).ok_or(nfsstat3::NFS3ERR_NOENT)?;
 
-    let subject = self.ids.subject(dirid).ok_or(nfsstat3::NFS3ERR_NOENT)?;
-
-    for child in self.children(&subject).await? {
-      if sanitize_name(&display_name(&child)).as_bytes() == target {
-        return Ok(self.ids.get_or_alloc(child.get_subject().as_str()));
-      }
-    }
-
-    Err(nfsstat3::NFS3ERR_NOENT)
+    listing
+      .entries
+      .iter()
+      .find(|(_, name, _)| name.as_ref() == target)
+      .map(|(id, _, _)| *id)
+      .ok_or(nfsstat3::NFS3ERR_NOENT)
   }
 
   async fn readdir(
@@ -549,22 +643,10 @@ impl NFSFileSystem for AtomicNfsFs {
     // Build the full listing once per enumeration (a fresh `ls` starts at
     // cookie 0), cache it, and page from the cache — so a large folder isn't
     // re-fetched and re-sorted on every `readdir` page.
-    let rebuild = start_after == 0
-      || match self.dir_cache.lock().unwrap().get(&dirid) {
-        Some(listing) => listing.at.elapsed() >= DIR_CACHE_TTL,
-        None => true,
-      };
-
-    if rebuild {
-      let entries = self.collect_dir_entries(dirid).await?;
-      self.dir_cache.lock().unwrap().insert(
-        dirid,
-        DirListing {
-          at: Instant::now(),
-          entries,
-        },
-      );
+    if start_after == 0 {
+      self.invalidate_dir(dirid);
     }
+    self.ensure_dir_cached(dirid).await?;
 
     let cache = self.dir_cache.lock().unwrap();
     let listing = cache.get(&dirid).ok_or(nfsstat3::NFS3ERR_IO)?;
@@ -723,6 +805,7 @@ impl NFSFileSystem for AtomicNfsFs {
       .map_err(|_| nfsstat3::NFS3ERR_IO)?;
 
     let id = self.ids.get_or_alloc(&subject);
+    self.ids.persist_pending();
     self.invalidate_dir(dirid);
 
     Ok((id, dir_attr(id)))
@@ -1683,7 +1766,7 @@ mod tests {
   #[tokio::test(flavor = "multi_thread")]
   async fn large_files_are_chunked_and_dedupe_on_edit() {
     let store = Db::init_temp("vfs_chunking").await.unwrap();
-    let drive = store.create_drive("Chunk Drive").await.unwrap();
+    let _drive = store.create_drive("Chunk Drive").await.unwrap();
     let fs = AtomicNfsFs::new(store.clone());
     let root = fs.readdir(ROOT_ID, 0, 100).await.unwrap();
     let drive_id = root
