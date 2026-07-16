@@ -889,12 +889,15 @@ impl Db {
     }
 
     /// Per-drive storage usage (resource count, Loro snapshot bytes, blob
-    /// bytes) for the given `drive_subjects`, for a managed node's control-plane
-    /// usage report. A managed node passes its allowlisted (hosted) drives —
-    /// these belong to enrolled users, not the node's own agent. Walks the Loro
-    /// and resource trees once each. Blobs are content-addressed and counted
-    /// once — a blob shared across drives is attributed to whichever drive's
-    /// resource is visited first.
+    /// bytes) for the given `drive_subjects` — the Sync page's usage display and
+    /// a managed node's control-plane usage report. A managed node passes its
+    /// allowlisted (hosted) drives — these belong to enrolled users, not the
+    /// node's own agent.
+    ///
+    /// Cost is O(the drives' resources), not O(store): it resolves each drive's
+    /// subjects and point-looks-up their propvals/snapshots. Blobs are
+    /// content-addressed and counted once — a blob shared across drives is
+    /// attributed to whichever drive's resource is visited first.
     pub async fn per_drive_usage(
         &self,
         drive_subjects: &[String],
@@ -933,30 +936,31 @@ impl Db {
             }
         }
 
-        // Loro snapshot bytes — one pass over the snapshots tree (subject-keyed).
-        for item in self.kv.iter_tree(Tree::LoroSnapshots) {
-            let Ok((key, val)) = item else { continue };
-            let subject = String::from_utf8_lossy(&key);
-            if let Some(drive) = subject_to_drive.get(subject.as_ref()) {
-                if let Some(row) = usage.get_mut(drive) {
-                    row.loro_bytes += val.len() as u64;
-                }
-            }
-        }
-
-        // Resource counts + blob bytes — one pass over resources.
+        // Walk only the drives' own subjects, with point lookups. Scanning every
+        // resource and every Loro snapshot in the store to filter down to one
+        // drive makes this O(store) rather than O(drive) — measured at ~4s for a
+        // 43-resource drive on a multi-GB store, and it is paid on every Sync
+        // page load.
         let mut seen_blobs: HashSet<[u8; 32]> = HashSet::new();
-        for resource in self.all_resources(false) {
-            let subject = resource.get_subject().pure_id();
-            let Some(drive) = subject_to_drive.get(&subject).cloned() else {
+
+        for (subject, drive) in &subject_to_drive {
+            let Some(row) = usage.get_mut(drive) else {
                 continue;
             };
 
-            if let Some(row) = usage.get_mut(&drive) {
-                row.resource_count += 1;
+            if let Ok(Some(snapshot)) = self.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
+                row.loro_bytes += snapshot.len() as u64;
             }
 
-            let Ok(blob_val) = resource.get(urls::BLOB) else {
+            // Propvals only — the materialized state carries `blob`, and a Loro
+            // decode per resource would put the cost right back.
+            let Ok(propvals) = self.get_propvals(subject) else {
+                continue;
+            };
+
+            row.resource_count += 1;
+
+            let Some(blob_val) = propvals.get(urls::BLOB) else {
                 continue;
             };
             let blob_did = blob_val.to_string();
@@ -976,9 +980,7 @@ impl Db {
                 continue;
             }
             if let Ok(Some(bytes)) = self.kv.get(Tree::Blobs, &hash) {
-                if let Some(row) = usage.get_mut(&drive) {
-                    row.blob_bytes += bytes.len() as u64;
-                }
+                row.blob_bytes += bytes.len() as u64;
             }
         }
 
