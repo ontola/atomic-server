@@ -243,6 +243,7 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .to(handlers::post_resource::handle_post_resource),
     )
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
+    .service(web::resource("/drive-usage").to(handlers::drive_usage::handle_drive_usage))
     .service(web::resource("/node-info").to(node_info_handler))
     .service(web::resource("/iroh-node-id").to(iroh_node_id_handler))
     .service(web::resource("/iroh-sync").to(iroh_sync_handler))

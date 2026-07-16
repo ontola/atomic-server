@@ -629,3 +629,95 @@ async fn upload_download_test() {
     let downloaded_bytes = test::read_body(resp).await;
     assert_eq!(downloaded_bytes, test_content.as_slice());
 }
+
+/// `GET /drive-usage` reports a drive's resource count + blob/Loro bytes for the
+/// sync page. The frontend has shipped this UI for a while, but the endpoint was
+/// never implemented server-side (it 404'd), so the usage bar silently never
+/// appeared — this test guards against that regressing again.
+#[actix_rt::test]
+async fn drive_usage_endpoint() {
+    let unique_string = atomic_lib::utils::random_string(10);
+    use clap::Parser;
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", unique_string),
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+    ]);
+
+    let mut config = config::build_config(opts).expect("failed init config");
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+    let appstate = crate::appstate::AppState::init(config.clone())
+        .await
+        .expect("failed init appstate");
+
+    let data = Data::new(appstate.clone());
+    let app = test::init_service(
+        App::new()
+            .app_data(data)
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let drive_did = atomic_lib::test_utils::create_test_drive(&appstate.store)
+        .await
+        .unwrap();
+
+    // Upload a file so the drive has a resource with a blob to account for.
+    let test_content = b"hello blake3 world";
+    let multipart_boundary = "boundary";
+    let body = format!(
+        "--{multipart_boundary}\r\n\
+        Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+        Content-Type: text/plain\r\n\r\n\
+        {}\r\n\
+        --{multipart_boundary}--\r\n",
+        String::from_utf8_lossy(test_content)
+    );
+    let req = build_request_authenticated(
+        &format!("/upload?parent={}", urlencoding::encode(drive_did.as_str())),
+        &appstate,
+    )
+    .method(actix_web::http::Method::POST)
+    .insert_header((
+        "Content-Type",
+        format!("multipart/form-data; boundary={multipart_boundary}"),
+    ))
+    .set_payload(body)
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_success(),
+        "upload failed: {:?}",
+        resp.status()
+    );
+
+    // Now the endpoint the sync page calls should report real numbers.
+    let req = build_request_authenticated(
+        &format!(
+            "/drive-usage?subject={}",
+            urlencoding::encode(drive_did.as_str())
+        ),
+        &appstate,
+    )
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    let status = resp.status();
+    let body = get_body(resp);
+    assert!(status.is_success(), "drive-usage status {status}: {body}");
+
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    // camelCase field names — the shape `fetchNodeDriveUsage` reads.
+    assert!(
+        json["resourceCount"].as_u64().unwrap() >= 1,
+        "expected at least the uploaded file counted: {body}"
+    );
+    assert_eq!(
+        json["blobBytes"].as_u64().unwrap(),
+        test_content.len() as u64,
+        "blobBytes should equal the uploaded content length: {body}"
+    );
+    assert!(json.get("loroBytes").is_some(), "loroBytes missing: {body}");
+}
