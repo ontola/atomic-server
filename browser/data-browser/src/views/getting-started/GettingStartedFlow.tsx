@@ -328,6 +328,25 @@ export function GettingStartedFlow({
     void handleSignInWithSecret(pasted);
   }
 
+  // The Paste button, for touch and for anyone who'd rather not hunt for the
+  // field. Same paste-and-go as pasting into the field. Reading the clipboard
+  // can be blocked (permissions, an unfocused tab) — fall back to filling the
+  // field so the value is at least there to submit by hand.
+  async function pasteSecretFromClipboard() {
+    if (loading) return;
+
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+
+      if (!text) return;
+
+      setSecretValue(text);
+      await handleSignInWithSecret(text);
+    } catch {
+      // Left to sign in manually — nothing was pasted, so say nothing.
+    }
+  }
+
   return (
     <Shell>
       {step === 'welcome' ? (
@@ -418,6 +437,14 @@ export function GettingStartedFlow({
                       disabled={loading || !secretValue.trim()}
                     >
                       {loading ? 'Signing in…' : 'Continue'}
+                    </Button>
+                    <Button
+                      type='button'
+                      subtle
+                      disabled={loading}
+                      onClick={pasteSecretFromClipboard}
+                    >
+                      Paste from clipboard
                     </Button>
                     <Button
                       type='button'

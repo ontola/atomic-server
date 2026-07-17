@@ -21,6 +21,9 @@ class _LoginScreenState extends State<LoginScreen> {
   _Step _step = _Step.loading;
   final _nameController = TextEditingController(text: '');
   final _secretController = TextEditingController();
+  // A secret is hidden by default — it is a password. A reveal toggle lets
+  // someone check a value they typed or pasted.
+  bool _obscureSecret = true;
   final _serverController = TextEditingController();
   String? _error;
   bool _busy = false;
@@ -181,6 +184,23 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ── Step: Sign In ───────────────────────────────────────────────────
+
+  /// Paste the clipboard into the field and sign in, in one tap — the secret
+  /// almost always comes from another device's clipboard, so pasting is the
+  /// action, not a step before it.
+  Future<void> _pasteSecretAndSignIn() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final pasted = data?.text?.trim() ?? '';
+
+    if (pasted.isEmpty) {
+      setState(() => _error = 'Nothing to paste');
+
+      return;
+    }
+
+    _secretController.text = pasted;
+    await _doSignIn();
+  }
 
   Future<void> _doSignIn() async {
     final secret = _secretController.text.trim();
@@ -467,25 +487,52 @@ class _LoginScreenState extends State<LoginScreen> {
         // device you can just scan.
         TextField(
           controller: _secretController,
-          decoration: const InputDecoration(
-            labelText: 'Your secret',
-            border: OutlineInputBorder(),
-            isDense: true,
-          ),
-          maxLines: 3,
+          obscureText: _obscureSecret,
           autofocus: true,
+          // Enter submits — a secret is one line, pasted or not.
+          onSubmitted: (_) => _busy ? null : _doSignIn(),
+          decoration: InputDecoration(
+            labelText: 'Your secret',
+            border: const OutlineInputBorder(),
+            isDense: true,
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscureSecret ? Icons.visibility : Icons.visibility_off,
+                size: 20,
+              ),
+              tooltip: _obscureSecret ? 'Show' : 'Hide',
+              onPressed: () =>
+                  setState(() => _obscureSecret = !_obscureSecret),
+            ),
+          ),
         ),
-        const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: _busy ? null : _doSignIn,
-          style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14)),
-          child: _busy
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Sign In'),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _busy ? null : _doSignIn,
+                style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                child: _busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Sign In'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Paste-and-go: the secret lives on another device's clipboard,
+            // so one tap pastes it and signs in.
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _pasteSecretAndSignIn,
+              icon: const Icon(Icons.content_paste, size: 18),
+              label: const Text('Paste'),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12)),
+            ),
+          ],
         ),
         _errorWidget(),
       ],
