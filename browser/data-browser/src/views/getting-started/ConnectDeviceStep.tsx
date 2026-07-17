@@ -4,7 +4,7 @@ import { FaMobileScreenButton } from 'react-icons/fa6';
 import { useStore } from '@tomic/react';
 import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
-import { ThisDeviceCode } from '../../components/ThisDeviceCode';
+import { PairingCode } from '../../components/PairingCode';
 import { ConnectToDeviceForm } from '../../components/ConnectToDeviceForm';
 import { ConnectServerDialog } from '../../components/ConnectServerDialog';
 import { useOwnNodeDid } from '../../hooks/useOwnNodeDid';
@@ -188,7 +188,7 @@ export function ConnectDeviceStep({
                     holds your key.
                   </Explainer>
                   <QrRow>
-                    <ThisDeviceCode nodeDid={nodeDid} />
+                    <PairingCode nodeDid={nodeDid} />
                   </QrRow>
                 </Section>
               )}

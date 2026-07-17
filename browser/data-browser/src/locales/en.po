@@ -1774,13 +1774,10 @@ msgstr "Manage account & plan →"
 msgid "Add"
 msgstr "Add"
 
-#: src/components/ThisDeviceCode.tsx
+#: src/components/PairingCode.tsx
 #: src/components/Toaster.tsx
 msgid "Copy"
 msgstr "Copy"
-
-#~ msgid "Node DID copied to clipboard"
-#~ msgstr "Node DID copied to clipboard"
 
 #: src/components/forms/SearchBox/SearchBox.tsx
 #: src/routes/LinkOpenRouter.tsx
@@ -4881,11 +4878,11 @@ msgstr "{0} is online"
 msgid "Close the meeting chat"
 msgstr "Close the meeting chat"
 
-#: src/components/ThisDeviceCode.tsx
+#: src/components/PairingCode.tsx
 msgid "Pairing code copied."
 msgstr "Pairing code copied."
 
-#: src/components/ThisDeviceCode.tsx
+#: src/components/PairingCode.tsx
 msgid "Could not copy — select and copy the code manually."
 msgstr "Could not copy — select and copy the code manually."
 
@@ -4995,9 +4992,6 @@ msgstr "Connect a server to back up your data and reach it from anywhere."
 msgid "Cloud Sync"
 msgstr "Cloud Sync"
 
-#~ msgid "Self-hosted Atomic Server"
-#~ msgstr "Self-hosted Atomic Server"
-
 #. 0: usagePct
 #: src/routes/SyncRoute.tsx
 msgid "{0}% of storage used"
@@ -5021,9 +5015,6 @@ msgstr "Sync now"
 #: src/components/ConnectServerDialog.tsx
 msgid "Embedded (this device)"
 msgstr "Embedded (this device)"
-
-#~ msgid "did:ad:node:{0}…"
-#~ msgstr "did:ad:node:{0}…"
 
 #: src/routes/SyncRoute.tsx
 msgid "Node ID"
@@ -5418,30 +5409,6 @@ msgstr "Unpublished new content. Resources here are visible to people who can wr
 msgid "Virtual drive"
 msgstr "Virtual drive"
 
-#~ msgid "Virtual drive: {0}"
-#~ msgstr "Virtual drive: {0}"
-
-#~ msgid "Mount command copied"
-#~ msgstr "Mount command copied"
-
-#~ msgid "Stop virtual drive"
-#~ msgstr "Stop virtual drive"
-
-#~ msgid "Start virtual drive"
-#~ msgstr "Start virtual drive"
-
-#~ msgid "Running on {0}"
-#~ msgstr "Running on {0}"
-
-#~ msgid "Stopped"
-#~ msgstr "Stopped"
-
-#~ msgid "Copy mount command"
-#~ msgstr "Copy mount command"
-
-#~ msgid "Mount your Atomic drives as a read-only folder on this computer, served over local NFS. Turn it on, then run the mount command in a terminal."
-#~ msgstr "Mount your Atomic drives as a read-only folder on this computer, served over local NFS. Turn it on, then run the mount command in a terminal."
-
 #: src/components/Settings/VirtualDriveSettings.tsx
 msgid "Turn off"
 msgstr "Turn off"
@@ -5462,9 +5429,6 @@ msgstr "Mounted at {0}"
 #: src/components/Settings/VirtualDriveSettings.tsx
 msgid "<0/> Open"
 msgstr "<0/> Open"
-
-#~ msgid "Mount your Atomic drives as a read-only folder on this computer. Your files, folders and documents show up in your file manager."
-#~ msgstr "Mount your Atomic drives as a read-only folder on this computer. Your files, folders and documents show up in your file manager."
 
 #: src/components/Settings/VirtualDriveSettings.tsx
 msgid "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
@@ -5496,3 +5460,23 @@ msgstr "Known server"
 #: src/routes/SyncRoute.tsx
 msgid "Copy {0}"
 msgstr "Copy {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "A pairing code only says where to reach a device — the other side still proves it holds your key. Both directions work: show yours, or take theirs."
+msgstr "A pairing code only says where to reach a device — the other side still proves it holds your key. Both directions work: show yours, or take theirs."
+
+#: src/routes/SyncRoute.tsx
+msgid "Scan this with another device to sync your drives through this server. The code only says where to reach it — the other side still proves it holds your key."
+msgstr "Scan this with another device to sync your drives through this server. The code only says where to reach it — the other side still proves it holds your key."
+
+#: src/routes/SyncRoute.tsx
+msgid "Scan to sync with this server"
+msgstr "Scan to sync with this server"
+
+#: src/routes/SyncRoute.tsx
+msgid "This code reaches"
+msgstr "This code reaches"
+
+#: src/routes/SyncRoute.tsx
+msgid ", not this browser — a browser tab isn’t a device others can sync with."
+msgstr ", not this browser — a browser tab isn’t a device others can sync with."

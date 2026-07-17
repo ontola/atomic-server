@@ -45,7 +45,7 @@ import {
 } from '../helpers/tauri';
 import { deviceHasDriveData } from '../helpers/driveData';
 import { deliverDeepLink } from '../helpers/deepLinkQueue';
-import { ThisDeviceCode } from '../components/ThisDeviceCode';
+import { PairingCode } from '../components/PairingCode';
 import { ConnectToDeviceForm } from '../components/ConnectToDeviceForm';
 import {
   decodePairingEnvelope,
@@ -446,9 +446,12 @@ function SyncPage() {
   const nodes = deriveNodeStatuses(status);
 
   // The app is itself an Iroh peer node only inside the Tauri shell (embedded
-  // server). A plain browser talks to a remote server; its `/iroh-node-id`
-  // would be that *server's* node, not "this device", so pairing is hidden.
+  // server). A plain browser is not a node — but the server it is signed in to
+  // is one, and that is the node another device should reach to sync a drive
+  // that lives there. So both cases have a code worth showing; what differs is
+  // whose it is, which is the whole of the copy below.
   const isNode = isRunningInTauri();
+  const pairNodeId = isNode ? localNodeId : serverNodeId;
   // A local-only drive (the demo, or any drive made offline) is a normal
   // drive the sync engine was simply told to skip — not a special code path.
   // When the active drive is local-only the "syncs with N places" story is a
@@ -1099,41 +1102,56 @@ function SyncPage() {
           </AddRow>
         </Section>
 
-        {/* Pairing is the point of this page on a peer node, so it's shown
-            outright rather than hidden behind a button: the code is routing
-            only, and safe to leave on screen. */}
-        {isNode && localNodeId && (
+        {/* Pairing is the point of this page, so it's shown outright rather
+            than hidden behind a button: the code is routing only, and safe to
+            leave on screen. */}
+        {pairNodeId && (
           <Section>
             <SectionTitle>Sync a device</SectionTitle>
             <ConnNote>
-              A pairing code only says where to reach a device — the other side
-              still proves it holds your key. Both directions work: show yours,
-              or take theirs.
+              {isNode
+                ? 'A pairing code only says where to reach a device — the other side still proves it holds your key. Both directions work: show yours, or take theirs.'
+                : 'Scan this with another device to sync your drives through this server. The code only says where to reach it — the other side still proves it holds your key.'}
             </ConnNote>
             <PairCard>
               <PairSide>
-                <PairLabel>Show this code</PairLabel>
-                <QrCentered>
-                  <ThisDeviceCode nodeDid={rawToNodeDid(localNodeId)} />
-                </QrCentered>
-              </PairSide>
-
-              <PairDivider aria-hidden />
-
-              <PairSide>
                 <PairLabel>
-                  {isMobileTauri()
-                    ? 'Or scan the other device’s'
-                    : 'Or paste the other device’s'}
+                  {isNode ? 'Show this code' : 'Scan to sync with this server'}
                 </PairLabel>
-                {/* Same path a scanned deep link takes (PairingLinkHandler):
-                    validate, persist the peer, start a sync. */}
-                <ConnectToDeviceForm onCode={deliverDeepLink} />
-                <PairHint>
-                  Not signed in over there yet? Sign in with your account secret
-                  first, then pair.
-                </PairHint>
+                <QrCentered>
+                  <PairingCode nodeDid={rawToNodeDid(pairNodeId)} />
+                </QrCentered>
+                {!isNode && (
+                  <PairHint>
+                    This code reaches {serverLabel(status.serverUrl ?? '')}, not
+                    this browser — a browser tab isn’t a device others can sync
+                    with.
+                  </PairHint>
+                )}
               </PairSide>
+
+              {/* Taking someone else's code needs a node to dial from, which a
+                  browser tab is not. */}
+              {isNode && (
+                <>
+                  <PairDivider aria-hidden />
+
+                  <PairSide>
+                    <PairLabel>
+                      {isMobileTauri()
+                        ? 'Or scan the other device’s'
+                        : 'Or paste the other device’s'}
+                    </PairLabel>
+                    {/* Same path a scanned deep link takes (PairingLinkHandler):
+                        validate, persist the peer, start a sync. */}
+                    <ConnectToDeviceForm onCode={deliverDeepLink} />
+                    <PairHint>
+                      Not signed in over there yet? Sign in with your account
+                      secret first, then pair.
+                    </PairHint>
+                  </PairSide>
+                </>
+              )}
             </PairCard>
           </Section>
         )}

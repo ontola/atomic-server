@@ -1774,13 +1774,10 @@ msgstr ""
 msgid "Add"
 msgstr "Ajouter"
 
-#: src/components/ThisDeviceCode.tsx
+#: src/components/PairingCode.tsx
 #: src/components/Toaster.tsx
 msgid "Copy"
 msgstr "Copier"
-
-#~ msgid "Node DID copied to clipboard"
-#~ msgstr "DID de nœud copié dans le presse-papiers"
 
 #: src/components/forms/SearchBox/SearchBox.tsx
 #: src/routes/LinkOpenRouter.tsx
@@ -4847,11 +4844,11 @@ msgstr ""
 msgid "Close the meeting chat"
 msgstr ""
 
-#: src/components/ThisDeviceCode.tsx
+#: src/components/PairingCode.tsx
 msgid "Pairing code copied."
 msgstr ""
 
-#: src/components/ThisDeviceCode.tsx
+#: src/components/PairingCode.tsx
 msgid "Could not copy — select and copy the code manually."
 msgstr ""
 
@@ -4961,9 +4958,6 @@ msgstr ""
 msgid "Cloud Sync"
 msgstr ""
 
-#~ msgid "Self-hosted Atomic Server"
-#~ msgstr ""
-
 #. 0: usagePct
 #: src/routes/SyncRoute.tsx
 msgid "{0}% of storage used"
@@ -4987,9 +4981,6 @@ msgstr ""
 #: src/components/ConnectServerDialog.tsx
 msgid "Embedded (this device)"
 msgstr ""
-
-#~ msgid "did:ad:node:{0}…"
-#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Node ID"
@@ -5384,30 +5375,6 @@ msgstr ""
 msgid "Virtual drive"
 msgstr ""
 
-#~ msgid "Virtual drive: {0}"
-#~ msgstr ""
-
-#~ msgid "Mount command copied"
-#~ msgstr ""
-
-#~ msgid "Stop virtual drive"
-#~ msgstr ""
-
-#~ msgid "Start virtual drive"
-#~ msgstr ""
-
-#~ msgid "Running on {0}"
-#~ msgstr ""
-
-#~ msgid "Stopped"
-#~ msgstr ""
-
-#~ msgid "Copy mount command"
-#~ msgstr ""
-
-#~ msgid "Mount your Atomic drives as a read-only folder on this computer, served over local NFS. Turn it on, then run the mount command in a terminal."
-#~ msgstr ""
-
 #: src/components/Settings/VirtualDriveSettings.tsx
 msgid "Turn off"
 msgstr ""
@@ -5428,9 +5395,6 @@ msgstr ""
 #: src/components/Settings/VirtualDriveSettings.tsx
 msgid "<0/> Open"
 msgstr ""
-
-#~ msgid "Mount your Atomic drives as a read-only folder on this computer. Your files, folders and documents show up in your file manager."
-#~ msgstr ""
 
 #: src/components/Settings/VirtualDriveSettings.tsx
 msgid "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
@@ -5461,4 +5425,24 @@ msgstr ""
 #. 0: rawToNodeDid(serverNodeId)
 #: src/routes/SyncRoute.tsx
 msgid "Copy {0}"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "A pairing code only says where to reach a device — the other side still proves it holds your key. Both directions work: show yours, or take theirs."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Scan this with another device to sync your drives through this server. The code only says where to reach it — the other side still proves it holds your key."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Scan to sync with this server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This code reaches"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid ", not this browser — a browser tab isn’t a device others can sync with."
 msgstr ""

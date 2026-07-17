@@ -6,20 +6,24 @@ import { encodePairingEnvelope, type PairingEnvelope } from '@tomic/lib';
 import { Button } from './Button';
 import { useSettings } from '../helpers/AppSettings';
 
-interface ThisDeviceCodeProps {
-  /** This node's Iroh identity: `did:ad:node:<64 hex>`. */
+interface PairingCodeProps {
+  /** The Iroh identity to advertise: `did:ad:node:<64 hex>`. */
   nodeDid: string;
 }
 
 /**
- * This device's `atomic://pair` code, as a QR and as copyable text, for
+ * An `atomic://pair` code for `nodeDid`, as a QR and as copyable text, for
  * another device to scan or paste.
  *
- * The code is **routing only** — it says where to reach this device, and
- * nothing more. Whoever dials still has to prove they hold the same agent key
- * over AUTH, so this is safe to show on screen.
+ * The node is whichever one another device should reach to sync: this device
+ * when the app is itself a peer node, or the server it is signed in to when it
+ * is not — a browser tab is not a node, but the server behind it is.
+ *
+ * The code is **routing only** — it says where to reach a node, and nothing
+ * more. Whoever dials still has to prove they hold the same agent key over
+ * AUTH, so this is safe to show on screen.
  */
-export function ThisDeviceCode({ nodeDid }: ThisDeviceCodeProps): JSX.Element {
+export function PairingCode({ nodeDid }: PairingCodeProps): JSX.Element {
   const { baseURL } = useSettings();
 
   // A LAN/WS fast path is only worth advertising when another device could
