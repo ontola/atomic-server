@@ -202,6 +202,11 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     )
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
     .service(web::resource("/drive-usage").to(handlers::drive_usage::handle_drive_usage))
+    .service(
+        web::resource("/forget-peer")
+            .guard(guard::Method(Method::POST))
+            .to(handlers::forget_peer::handle_forget_peer),
+    )
     .service(web::resource("/iroh-sync").to(iroh_sync_handler))
     .service(web::resource("/export").to(handlers::export::handle_export))
     .service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui))
