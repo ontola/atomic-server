@@ -165,6 +165,24 @@ impl AtomicLoroDoc {
         VersionID::from_frontiers(&self.doc.state_frontiers())
     }
 
+    /// An independent document, as this one was at `version`.
+    ///
+    /// Prefer this over [Self::checkout] for reads: the receiver keeps its
+    /// place, so time-travelling does not strand whoever else is holding it.
+    pub fn fork_at(&self, version: &VersionID) -> AtomicResult<Self> {
+        let frontiers = version.to_frontiers()?;
+        let doc = self
+            .doc
+            .fork_at(&frontiers)
+            .map_err(|e| AtomicError::other_error(format!("Loro fork error: {e}")))?;
+        doc.set_record_timestamp(true);
+
+        Ok(Self {
+            doc,
+            undo_manager: std::sync::Mutex::new(None),
+        })
+    }
+
     /// Moves the document to a historical version.
     /// The doc enters a "detached" read-only state.
     pub fn checkout(&self, version: &VersionID) -> AtomicResult<()> {
@@ -196,7 +214,16 @@ impl AtomicLoroDoc {
         let _ = self
             .doc
             .travel_change_ancestors(&frontier_ids, &mut |change| {
-                let id = VersionID::from_frontiers(&loro::Frontiers::from_id(change.id));
+                // A change is identified by its *first* op, but a version means
+                // the state that change produced — so the id has to point at its
+                // last op. Pointing at the first op reads the change as only
+                // partly applied: for the oldest change, that is an almost empty
+                // document.
+                let last_op = loro::ID::new(
+                    change.id.peer,
+                    change.id.counter + change.len.saturating_sub(1) as i32,
+                );
+                let id = VersionID::from_frontiers(&loro::Frontiers::from_id(last_op));
                 history.push(VersionMetadata {
                     id,
                     timestamp: change.timestamp,
@@ -209,8 +236,14 @@ impl AtomicLoroDoc {
             });
 
         // travel_change_ancestors yields in reverse lamport order (newest first),
-        // but sort explicitly by timestamp for consistent output.
-        history.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        // but sort explicitly by timestamp for consistent output. Timestamps are
+        // whole seconds, so edits made in quick succession share one — lamport
+        // breaks the tie, being the causal order the timestamp only approximates.
+        history.sort_by(|a, b| {
+            b.timestamp
+                .cmp(&a.timestamp)
+                .then(b.lamport.cmp(&a.lamport))
+        });
         history
     }
 
@@ -559,6 +592,17 @@ impl AtomicLoroDoc {
     /// Finalize pending Loro edits so they enter the oplog (required for undo + sync export).
     pub fn commit(&self) {
         self.doc.commit();
+    }
+
+    /// Commit the pending edits as a change carrying `message`.
+    ///
+    /// The message also keeps this change separate: Loro merges adjacent
+    /// changes by the same peer within the same second, so edits committed
+    /// without one collapse into a single change — and a single version, since
+    /// [crate::history] reads changes. Clients tag every edit for this reason.
+    pub fn commit_with_message(&self, message: &str) {
+        self.doc
+            .commit_with(loro::CommitOptions::new().commit_msg(message));
     }
 
     /// Record a checkpoint so that subsequent operations form a new undo group.
