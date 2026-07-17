@@ -787,3 +787,78 @@ async fn server_info_endpoint() {
         "portalUrl should be absent on a self-hosted node: {body}"
     );
 }
+
+/// `/all-versions` lists a resource's versions as links to the `/version`
+/// endpoint. Those links have to name a path that exists — they were built as
+/// `/versioning?commit=`, which matches no endpoint at all, so every version
+/// link fell through to the SPA. Nothing covered `/version`.
+///
+/// This asserts the link shape only. `/version` itself still fails deeper in
+/// `construct_version`, which runs a sorted (indexed) commit query without the
+/// drive scope such queries now require. Reviving that is a separate question
+/// from the link being addressable.
+#[actix_rt::test]
+async fn version_endpoints() {
+    let unique_string = atomic_lib::utils::random_string(10);
+    use clap::Parser;
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", unique_string),
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+    ]);
+
+    let mut config = config::build_config(opts).expect("failed init config");
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+    let appstate = crate::appstate::AppState::init(config.clone())
+        .await
+        .expect("failed init appstate");
+
+    let data = Data::new(appstate.clone());
+    let app = test::init_service(
+        App::new()
+            .app_data(data)
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let drive_did = atomic_lib::test_utils::create_test_drive(&appstate.store)
+        .await
+        .unwrap();
+
+    let req = build_request_authenticated(
+        &format!(
+            "/all-versions?subject={}",
+            urlencoding::encode(drive_did.as_str())
+        ),
+        &appstate,
+    )
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    let status = resp.status();
+    let body = get_body(resp);
+    assert!(status.is_success(), "/all-versions status {status}: {body}");
+
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let members = json[urls::COLLECTION_MEMBERS]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(!members.is_empty(), "expected version members: {body}");
+
+    let member = members[0].as_str().unwrap();
+    assert!(
+        member.contains("/version?commit="),
+        "version links must point at the /version endpoint: {member}"
+    );
+    assert!(
+        appstate
+            .store
+            .get_endpoints()
+            .iter()
+            .any(|e| e.path == "/version"),
+        "the path version links name must be a real endpoint"
+    );
+}

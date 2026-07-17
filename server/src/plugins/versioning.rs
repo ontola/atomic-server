@@ -152,7 +152,7 @@ fn construct_version_endpoint_url(
     commit_url: &str,
 ) -> AtomicResult<String> {
     Ok(format!(
-        "{}/versioning?commit={}",
+        "{}/version?commit={}",
         store.get_base_domain().ok_or("No base domain set")?,
         urlencoding::encode(commit_url)
     ))
