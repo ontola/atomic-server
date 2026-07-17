@@ -4854,6 +4854,7 @@ msgstr ""
 
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
+#: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connect"
 msgstr ""
 
@@ -5041,9 +5042,8 @@ msgstr ""
 msgid "Your data is on another device"
 msgstr ""
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Connect a server"
-msgstr ""
+#~ msgid "Connect a server"
+#~ msgstr ""
 
 #: src/components/ConnectServerDialog.tsx
 msgid "A server keeps your workspaces online and backed up, and lets you share them with other people."
@@ -5404,17 +5404,14 @@ msgstr ""
 #~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a server that can reach it."
 #~ msgstr ""
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Send it here from that device"
-msgstr ""
+#~ msgid "Send it here from that device"
+#~ msgstr ""
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "This browser isn’t a device your others can sync with directly — it reads your workspace from a server. So push it up from the device that has it: open <0>Sync</0> there and sync the workspace to a server."
-msgstr ""
+#~ msgid "This browser isn’t a device your others can sync with directly — it reads your workspace from a server. So push it up from the device that has it: open <0>Sync</0> there and sync the workspace to a server."
+#~ msgstr ""
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Already did that, or it was on a server all along? Connect that server here and your workspace appears."
-msgstr ""
+#~ msgid "Already did that, or it was on a server all along? Connect that server here and your workspace appears."
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Your data lives on the device you’re connected to."
@@ -5482,4 +5479,21 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Or paste theirs"
+msgstr ""
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Scan this from that device"
+msgstr ""
+
+#. 0: serverLabel(baseURL)
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Syncs your workspace with {0}, which this browser reads from. Safe to show: a code only routes."
+msgstr ""
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Connect a device that has it"
+msgstr ""
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "An always-on device has an address — add it and your workspace appears."
 msgstr ""

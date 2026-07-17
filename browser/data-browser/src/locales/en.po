@@ -4888,6 +4888,7 @@ msgstr "Could not copy — select and copy the code manually."
 
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
+#: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connect"
 msgstr "Connect"
 
@@ -5075,9 +5076,8 @@ msgstr "<0/> Scan a QR code"
 msgid "Your data is on another device"
 msgstr "Your data is on another device"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Connect a server"
-msgstr "Connect a server"
+#~ msgid "Connect a server"
+#~ msgstr "Connect a server"
 
 #: src/components/ConnectServerDialog.tsx
 msgid "A server keeps your workspaces online and backed up, and lets you share them with other people."
@@ -5438,17 +5438,14 @@ msgstr "You’re signed in, but this device doesn’t have your workspace yet. S
 #~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a server that can reach it."
 #~ msgstr "You’re signed in, but this device doesn’t have your workspace yet. Connect a server that can reach it."
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Send it here from that device"
-msgstr "Send it here from that device"
+#~ msgid "Send it here from that device"
+#~ msgstr "Send it here from that device"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "This browser isn’t a device your others can sync with directly — it reads your workspace from a server. So push it up from the device that has it: open <0>Sync</0> there and sync the workspace to a server."
-msgstr "This browser isn’t a device your others can sync with directly — it reads your workspace from a server. So push it up from the device that has it: open <0>Sync</0> there and sync the workspace to a server."
+#~ msgid "This browser isn’t a device your others can sync with directly — it reads your workspace from a server. So push it up from the device that has it: open <0>Sync</0> there and sync the workspace to a server."
+#~ msgstr "This browser isn’t a device your others can sync with directly — it reads your workspace from a server. So push it up from the device that has it: open <0>Sync</0> there and sync the workspace to a server."
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Already did that, or it was on a server all along? Connect that server here and your workspace appears."
-msgstr "Already did that, or it was on a server all along? Connect that server here and your workspace appears."
+#~ msgid "Already did that, or it was on a server all along? Connect that server here and your workspace appears."
+#~ msgstr "Already did that, or it was on a server all along? Connect that server here and your workspace appears."
 
 #: src/routes/SyncRoute.tsx
 msgid "Your data lives on the device you’re connected to."
@@ -5517,3 +5514,20 @@ msgstr "Or scan theirs"
 #: src/routes/SyncRoute.tsx
 msgid "Or paste theirs"
 msgstr "Or paste theirs"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Scan this from that device"
+msgstr "Scan this from that device"
+
+#. 0: serverLabel(baseURL)
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Syncs your workspace with {0}, which this browser reads from. Safe to show: a code only routes."
+msgstr "Syncs your workspace with {0}, which this browser reads from. Safe to show: a code only routes."
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Connect a device that has it"
+msgstr "Connect a device that has it"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "An always-on device has an address — add it and your workspace appears."
+msgstr "An always-on device has an address — add it and your workspace appears."

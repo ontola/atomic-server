@@ -1,12 +1,12 @@
-import { useEffect, useState, type JSX } from 'react';
+import React, { useEffect, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaMobileScreenButton } from 'react-icons/fa6';
 import { useStore } from '@tomic/react';
 import { Button } from '../../components/Button';
-import { Column } from '../../components/Row';
+import { Column, Row } from '../../components/Row';
 import { PairingCode } from '../../components/PairingCode';
 import { ConnectToDeviceForm } from '../../components/ConnectToDeviceForm';
-import { ConnectServerDialog } from '../../components/ConnectServerDialog';
+import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { useOwnNodeDid } from '../../hooks/useOwnNodeDid';
 import {
   usePairingFlow,
@@ -15,7 +15,8 @@ import {
 import { useSettings } from '../../helpers/AppSettings';
 import { deviceHasDriveData } from '../../helpers/driveData';
 import { fetchPersonalDriveSubject } from '../../helpers/personalDrive';
-import { serverURLStorage } from '../../helpers/serverURLStorage';
+import { fetchManagedInfo } from '../../helpers/managedServer';
+import { normalizeServerUrl, serverLabel } from '../../helpers/serverUrl';
 import { isRunningInTauri } from '../../helpers/tauri';
 import {
   CardSubtitle,
@@ -37,6 +38,9 @@ import {
 const DRIVE_WAIT_MS = 30_000;
 const DRIVE_POLL_INTERVAL_MS = 1_000;
 
+/** How often to look while a code is on screen, waiting for a scan to push. */
+const WATCH_INTERVAL_MS = 3_000;
+
 interface ConnectDeviceStepProps {
   /** The drive that should be here but isn't. Absent if none resolved. */
   drive?: string;
@@ -57,11 +61,10 @@ interface ConnectDeviceStepProps {
  * other device scan the code shown here (desktops don't). Either way this
  * device ends up holding the drive.
  *
- * A plain browser tab has no node of its own, and cannot borrow the server's:
- * peer sync fails closed on identity (`is_same_agent_as_ours` in
- * sync/peer.rs), and a server signs in as its own agent, never as yours. So a
- * browser has no code to show — the workspace has to be pushed to a server
- * from the device holding it, and read from there.
+ * A plain browser tab has no node of its own, so it shows the code of the
+ * always-on device it reads from: scanning that from the device holding the
+ * workspace syncs it there, and this reads it from there. Same code, same
+ * component, as the Sync page — a person who has seen one has seen both.
  */
 export function ConnectDeviceStep({
   drive,
@@ -73,7 +76,14 @@ export function ConnectDeviceStep({
   const nodeDid = useOwnNodeDid();
   const isNode = isRunningInTauri();
   const startPairing = usePairingFlow();
-  const [showServerDialog, setShowServerDialog] = useState(false);
+  const [serverInput, setServerInput] = useState('');
+  /**
+   * The node another device should reach to put the workspace within this
+   * browser's reach. A browser is not a node, so it shows the code of the
+   * always-on device it reads from: scanning that syncs the workspace there,
+   * and this reads it from there. Same code the Sync page shows.
+   */
+  const [reachableNodeDid, setReachableNodeDid] = useState<string>();
 
   /**
    * The drive we should open. Re-resolved rather than trusted: on a device that
@@ -148,6 +158,43 @@ export function ConnectDeviceStep({
     };
   }, [baseURL]);
 
+  useEffect(() => {
+    if (isNode || !baseURL) return;
+
+    let cancelled = false;
+
+    void fetchManagedInfo(baseURL).then(info => {
+      if (!cancelled && info.nodeId) setReachableNodeDid(info.nodeId);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseURL, isNode]);
+
+  // A scan pushes from the other device, which changes nothing here to react
+  // to — so watch. Without this the workspace lands and the screen sits there,
+  // still asking for it.
+  useEffect(() => {
+    if (isNode || !reachableNodeDid) return;
+
+    let cancelled = false;
+
+    const timer = setInterval(async () => {
+      const arrived = await driveIsHere();
+
+      if (!cancelled && arrived) {
+        clearInterval(timer);
+        onConnected(arrived);
+      }
+    }, WATCH_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [reachableNodeDid, isNode]);
+
   function connectWithCode(code: string) {
     // The dialog owns the progress and the outcome from here: connect, then
     // wait for the workspace to actually land, then offer to open it.
@@ -197,34 +244,60 @@ export function ConnectDeviceStep({
               )}
             </>
           ) : (
-            <Section>
-              <SectionTitle>Send it here from that device</SectionTitle>
-              <Explainer>
-                This browser isn’t a device your others can sync with directly —
-                it reads your workspace from a server. So push it up from the
-                device that has it: open <strong>Sync</strong> there and sync
-                the workspace to a server.
-              </Explainer>
-              <Aside>
-                Already did that, or it was on a server all along? Connect that
-                server here and your workspace appears.
-              </Aside>
-              <Button subtle onClick={() => setShowServerDialog(true)}>
-                Connect a server
-              </Button>
-            </Section>
+            <>
+              {reachableNodeDid && (
+                <Section>
+                  <SectionTitle>Scan this from that device</SectionTitle>
+                  <Explainer>
+                    Syncs your workspace with {serverLabel(baseURL)}, which this
+                    browser reads from. Safe to show: a code only routes.
+                  </Explainer>
+                  <QrRow>
+                    <PairingCode nodeDid={reachableNodeDid} />
+                  </QrRow>
+                </Section>
+              )}
+
+              <Section>
+                <SectionTitle>
+                  {reachableNodeDid
+                    ? '…or read it from somewhere else'
+                    : 'Connect a device that has it'}
+                </SectionTitle>
+                <Explainer>
+                  An always-on device has an address — add it and your workspace
+                  appears.
+                </Explainer>
+                <form
+                  onSubmit={(e: React.FormEvent) => {
+                    e.preventDefault();
+
+                    const url = normalizeServerUrl(serverInput);
+
+                    if (url) setServer(url);
+                  }}
+                >
+                  <Row gap='0.5rem'>
+                    <InputWrapper>
+                      <InputStyled
+                        autoComplete='off'
+                        placeholder='localhost:9883 or your-server.example'
+                        value={serverInput}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setServerInput(e.target.value)
+                        }
+                      />
+                    </InputWrapper>
+                    <Button type='submit' subtle disabled={!serverInput.trim()}>
+                      Connect
+                    </Button>
+                  </Row>
+                </form>
+              </Section>
+            </>
           )}
         </Column>
       </OnboardingCard>
-
-      <ConnectServerDialog
-        knownServers={serverURLStorage.getKnownServers()}
-        activeServer={baseURL}
-        isNode={isNode}
-        setServer={setServer}
-        show={showServerDialog}
-        bindShow={setShowServerDialog}
-      />
 
       <FooterBar>
         <Button subtle type='button' onClick={onSkip}>
@@ -262,14 +335,6 @@ const Explainer = styled.p`
   color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
   margin: 0 0 0.6rem;
-`;
-
-/* The mechanism, for whoever wants it — a person who just wants their data
-   back shouldn't have to read about servers to get it. */
-const Aside = styled.p`
-  margin: 0;
-  font-size: 0.75rem;
-  color: ${p => p.theme.colors.textLight};
 `;
 
 const QrRow = styled.div`
