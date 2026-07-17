@@ -112,13 +112,19 @@ fn load_or_create_secret_key(store: &Db) -> iroh::SecretKey {
             return iroh::SecretKey::from_bytes(&arr);
         }
     }
-    // Generate and persist
+    // Generate and persist. Flush immediately: kv writes use Durability::None
+    // (no fsync per commit), which redb rolls back on an unclean kill unless a
+    // later durable commit lands. This node's identity is written exactly once
+    // and must survive the very next app kill — otherwise every restart mints a
+    // new NodeID, the paired server is effectively a stranger again, and the
+    // user has to re-scan the QR. A one-time fsync here is well worth that.
     let key = iroh::SecretKey::generate(rand::rngs::OsRng);
     let _ = store.kv.insert(
         crate::db::trees::Tree::PluginMeta,
         IROH_SECRET_KEY,
         &key.to_bytes(),
     );
+    let _ = store.flush();
     key
 }
 
@@ -1704,6 +1710,10 @@ pub fn add_known_peer(store: &Db, node_id: &str, name: &str) {
         KNOWN_PEERS_KEY,
         &serde_json::to_vec(&peers).unwrap_or_default(),
     );
+    // Durable now: a paired peer that vanishes on the next app kill means a
+    // re-scan. These writes are rare (pairing / first sync), so the fsync cost
+    // is negligible.
+    let _ = store.flush();
 }
 
 /// Remember where a peer can be reached, captured from a live connection. Stored
@@ -1746,6 +1756,10 @@ pub fn remember_peer_addr(
         KNOWN_PEERS_KEY,
         &serde_json::to_vec(&peers).unwrap_or_default(),
     );
+    // Durable now: a paired peer that vanishes on the next app kill means a
+    // re-scan. These writes are rare (pairing / first sync), so the fsync cost
+    // is negligible.
+    let _ = store.flush();
 }
 
 /// Build a dial target for a peer, preferring a stored relay/address hint over a
@@ -1801,6 +1815,10 @@ pub fn mark_peer_synced(store: &Db, node_id: &str) {
         KNOWN_PEERS_KEY,
         &serde_json::to_vec(&peers).unwrap_or_default(),
     );
+    // Durable now: a paired peer that vanishes on the next app kill means a
+    // re-scan. These writes are rare (pairing / first sync), so the fsync cost
+    // is negligible.
+    let _ = store.flush();
 }
 
 /// Remove a peer from the known peers list.
@@ -1813,6 +1831,10 @@ pub fn remove_known_peer(store: &Db, node_id: &str) {
         KNOWN_PEERS_KEY,
         &serde_json::to_vec(&peers).unwrap_or_default(),
     );
+    // Durable now: a paired peer that vanishes on the next app kill means a
+    // re-scan. These writes are rare (pairing / first sync), so the fsync cost
+    // is negligible.
+    let _ = store.flush();
 }
 
 /// Handle a single bidirectional QUIC stream.

@@ -698,7 +698,12 @@ impl Db {
     /// Set the active drive subject. Persisted in the database.
     pub fn set_active_drive(&self, drive: &str) -> AtomicResult<()> {
         self.kv
-            .insert(trees::Tree::PluginMeta, b"active_drive", drive.as_bytes())
+            .insert(trees::Tree::PluginMeta, b"active_drive", drive.as_bytes())?;
+        // Durable now: with Durability::None a freshly adopted drive is rolled
+        // back on the next app kill, and the auto-connect loop (which needs an
+        // active drive) then has nothing to reconnect to. Rare write; cheap.
+        let _ = self.flush();
+        Ok(())
     }
 
     /// Clear the default agent.
