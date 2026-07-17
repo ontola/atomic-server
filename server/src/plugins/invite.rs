@@ -21,14 +21,13 @@ fn read_token_from_subject(subject: &url::Url) -> Option<String> {
 }
 
 pub fn invite_endpoint() -> Endpoint {
-    Endpoint {
-        path: urls::PATH_INVITE.to_string(),
-        params: vec!["token".to_string()],
-        description: "Stateless invite endpoint that accepts user-signed tokens.".to_string(),
-        shortname: "invites".to_string(),
-        handle: Some(handle_invite_request),
-        handle_post: Some(handle_invite_post),
-    }
+    Endpoint::builder(urls::PATH_INVITE)
+        .shortname("invites")
+        .params(["token"])
+        .description("Stateless invite endpoint that accepts user-signed tokens.")
+        .handle(handle_invite_request)
+        .handle_post(handle_invite_post)
+        .build()
 }
 
 pub fn handle_invite_request<'a>(

@@ -6,16 +6,13 @@ use atomic_lib::{
 };
 
 pub fn did_endpoint() -> Endpoint {
-    Endpoint {
-        path: "/did".to_string(),
-        params: [urls::SUBJECT.to_string()].into(),
-        description:
-            "Resolves a DID (Decentralized Identifier) `did:ad:...` to an Atomic Resource."
-                .to_string(),
-        shortname: "did".to_string(),
-        handle: Some(handle_did_request),
-        handle_post: None,
-    }
+    Endpoint::builder("/did")
+        .params([urls::SUBJECT])
+        .description(
+            "Resolves a DID (Decentralized Identifier) `did:ad:...` to an Atomic Resource.",
+        )
+        .handle(handle_did_request)
+        .build()
 }
 
 #[tracing::instrument]

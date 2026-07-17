@@ -13,19 +13,15 @@ use atomic_lib::{
 };
 
 pub fn import_endpoint() -> Endpoint {
-    Endpoint {
-        path: "/import".to_string(),
-        params: [
-            urls::IMPORTER_OVERWRITE_OUTSIDE.to_string(),
-            urls::IMPORTER_PARENT.to_string(),
-            urls::IMPORTER_URL.to_string(),
-        ].into(),
-        description: "Imports one or more Resources to some parent. POST your JSON-AD and add a `parent` query param to the URL. See https://docs.atomicdata.dev/create-json-ad.html".to_string(),
-        shortname: "path".to_string(),
-        // Not sure if we need this, or if we should derive it from `None` here.
-        handle: None,
-        handle_post: Some(handle_post),
-    }
+    Endpoint::builder("/import")
+        .params([
+            urls::IMPORTER_OVERWRITE_OUTSIDE,
+            urls::IMPORTER_PARENT,
+            urls::IMPORTER_URL,
+        ])
+        .description("Imports one or more Resources to some parent. POST your JSON-AD and add a `parent` query param to the URL. See https://docs.atomicdata.dev/create-json-ad.html")
+        .handle_post(handle_post)
+        .build()
 }
 
 pub fn handle_get<'a>(

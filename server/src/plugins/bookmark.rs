@@ -28,14 +28,12 @@ use atomic_lib::{
 type Handler<'s, 'h> = Vec<(Cow<'s, Selector>, ElementContentHandlers<'h>)>;
 
 pub fn bookmark_endpoint() -> Endpoint {
-    Endpoint {
-        path: urls::PATH_FETCH_BOOKMARK.into(),
-        params: [urls::URL.to_string(), urls::NAME.to_string()].into(),
-        description: "The website will be fetched and parsed. The main content of the page is identified, and the rest is stripped. Returns the Markdown.".to_string(),
-        shortname: "bookmark".to_string(),
-        handle: Some(handle_bookmark_request),
-        handle_post: None,
-    }
+    Endpoint::builder(urls::PATH_FETCH_BOOKMARK)
+        .shortname("bookmark")
+        .params([urls::URL, urls::NAME])
+        .description("The website will be fetched and parsed. The main content of the page is identified, and the rest is stripped. Returns the Markdown.")
+        .handle(handle_bookmark_request)
+        .build()
 }
 
 #[tracing::instrument(skip(context))]

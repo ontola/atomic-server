@@ -14,14 +14,11 @@ struct BindDriveRequest {
 }
 
 pub fn bind_drive_endpoint() -> Endpoint {
-    Endpoint {
-        path: "/bind-drive".to_string(),
-        params: vec![urls::SETUP_RESET.into()],
-        description: "Binds the current host to a Drive DID, routing all requests on this domain to that drive.".to_string(),
-        shortname: "bind-drive".to_string(),
-        handle: None,
-        handle_post: Some(handle_bind_drive_request),
-    }
+    Endpoint::builder("/bind-drive")
+        .params([urls::SETUP_RESET])
+        .description("Binds the current host to a Drive DID, routing all requests on this domain to that drive.")
+        .handle_post(handle_bind_drive_request)
+        .build()
 }
 
 fn handle_bind_drive_request<'a>(

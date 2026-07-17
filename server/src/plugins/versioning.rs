@@ -8,26 +8,20 @@ use atomic_lib::{
 };
 
 pub fn version_endpoint() -> Endpoint {
-    Endpoint {
-        path: "/version".to_string(),
-        params: [urls::SUBJECT.to_string()].into(),
-        description: "Constructs a version of a resource from a Commit URL.".to_string(),
-        shortname: "versions".to_string(),
-        handle: Some(handle_version_request),
-        handle_post: None,
-    }
+    Endpoint::builder("/version")
+        .shortname("versions")
+        .params([urls::SUBJECT])
+        .description("Constructs a version of a resource from a Commit URL.")
+        .handle(handle_version_request)
+        .build()
 }
 
 pub fn all_versions_endpoint() -> Endpoint {
-    Endpoint {
-        path: "/all-versions".to_string(),
-        params: [urls::SUBJECT.to_string()].into(),
-        description: "Shows all versions for some resource. Constructs these using Commits."
-            .to_string(),
-        shortname: "all-versions".to_string(),
-        handle: Some(handle_all_versions_request),
-        handle_post: None,
-    }
+    Endpoint::builder("/all-versions")
+        .params([urls::SUBJECT])
+        .description("Shows all versions for some resource. Constructs these using Commits.")
+        .handle(handle_all_versions_request)
+        .build()
 }
 
 fn handle_version_request<'a>(

@@ -8,25 +8,22 @@ use atomic_lib::{
 
 // Note that the actual logic of this endpoint resides in `atomic-server`, as it depends on the Actix runtime.
 pub fn query_endpoint() -> Endpoint {
-    Endpoint {
-        path: urls::PATH_QUERY.into(),
-        params: [
-            urls::COLLECTION_PROPERTY.to_string(),
-            urls::COLLECTION_VALUE.to_string(),
-            urls::COLLECTION_PAGE_SIZE.to_string(),
-            urls::COLLECTION_CURRENT_PAGE.to_string(),
-            urls::COLLECTION_INCLUDE_EXTERNAL.to_string(),
-            urls::COLLECTION_INCLUDE_NESTED.to_string(),
-            urls::COLLECTION_SORT_BY.to_string(),
-            urls::COLLECTION_SORT_DESC.to_string(),
-            "drive".to_string(),
-        ]
-        .into(),
-        description: "Query the server for resources matching the query filter.".to_string(),
-        shortname: "query".to_string(),
-        handle: Some(handle_query_request),
-        handle_post: None,
-    }
+    Endpoint::builder(urls::PATH_QUERY)
+        .shortname("query")
+        .params([
+            urls::COLLECTION_PROPERTY,
+            urls::COLLECTION_VALUE,
+            urls::COLLECTION_PAGE_SIZE,
+            urls::COLLECTION_CURRENT_PAGE,
+            urls::COLLECTION_INCLUDE_EXTERNAL,
+            urls::COLLECTION_INCLUDE_NESTED,
+            urls::COLLECTION_SORT_BY,
+            urls::COLLECTION_SORT_DESC,
+            "drive",
+        ])
+        .description("Query the server for resources matching the query filter.")
+        .handle(handle_query_request)
+        .build()
 }
 
 #[tracing::instrument(skip(context))]

@@ -33,17 +33,13 @@ struct ReplicateRequest {
 }
 
 pub fn replicate_drive_endpoint() -> Endpoint {
-    Endpoint {
-        path: "/replicate-drive".to_string(),
-        params: vec![],
-        description:
+    Endpoint::builder("/replicate-drive")
+        .description(
             "Replicates a Drive to another Atomic Server, so it is hosted in both places. \
-             Requires write access to the Drive."
-                .to_string(),
-        shortname: "replicate-drive".to_string(),
-        handle: None,
-        handle_post: Some(handle_replicate_request),
-    }
+             Requires write access to the Drive.",
+        )
+        .handle_post(handle_replicate_request)
+        .build()
 }
 
 /// Accept either an origin or a full WebSocket URL, and normalise to the `/ws`

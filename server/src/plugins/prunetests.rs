@@ -29,16 +29,14 @@ fn drive_should_be_pruned(resource: &Resource) -> bool {
 }
 
 pub fn prune_tests_endpoint() -> Endpoint {
-    Endpoint {
-        path: urls::PATH_PRUNE_TESTS.into(),
-        params: [].into(),
-        description: format!(
+    Endpoint::builder(urls::PATH_PRUNE_TESTS)
+        .shortname("prunetests")
+        .description(format!(
             "Deletes drives created by dev-drive ({PRUNE_DEV_DRIVE_MARKER} in description) or E2E ({PRUNE_TEST_DRIVE_NAME_SUBSTR} in name)."
-        ),
-        shortname: "prunetests".to_string(),
-        handle: Some(handle_get),
-        handle_post: Some(handle_prune_tests_request),
-    }
+        ))
+        .handle(handle_get)
+        .handle_post(handle_prune_tests_request)
+        .build()
 }
 
 pub fn handle_get<'a>(

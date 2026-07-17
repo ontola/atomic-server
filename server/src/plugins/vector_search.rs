@@ -6,19 +6,17 @@ use atomic_lib::{
 };
 
 pub fn vector_search_endpoint() -> Endpoint {
-    Endpoint {
-        path: "/vector_search".to_string(),
-        params: vec![
-            urls::SEARCH_QUERY.into(),
-            urls::SEARCH_LIMIT.into(),
-            "https://atomicdata.dev/properties/search/parents".into(),
-            urls::CLASSES.into(),
-        ],
-        description: "Vector search endpoint powered by PolarisDB and FastEmbed. Supports filtering by parents and isA.".to_string(),
-        shortname: "vector-search".to_string(),
-        handle: Some(handle_vector_search),
-        handle_post: None,
-    }
+    Endpoint::builder("/vector_search")
+        .shortname("vector-search")
+        .params([
+            urls::SEARCH_QUERY,
+            urls::SEARCH_LIMIT,
+            "https://atomicdata.dev/properties/search/parents",
+            urls::CLASSES,
+        ])
+        .description("Vector search endpoint powered by PolarisDB and FastEmbed. Supports filtering by parents and isA.")
+        .handle(handle_vector_search)
+        .build()
 }
 
 #[tracing::instrument(skip(context))]

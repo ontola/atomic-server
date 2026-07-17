@@ -9,16 +9,25 @@ use crate::{
 };
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-/// The function that is called when a GET request matches the path
-pub type HandleGet =
-    for<'a> fn(context: HandleGetContext<'a>) -> BoxFuture<'a, AtomicResult<ResourceResponse>>;
+/// The function that is called when a GET request matches the path.
+/// This is a closure rather than a plain fn pointer, so handlers can capture
+/// state they need (config, handles to running services) at registration time.
+pub type HandleGet = Arc<
+    dyn for<'a> Fn(HandleGetContext<'a>) -> BoxFuture<'a, AtomicResult<ResourceResponse>>
+        + Send
+        + Sync,
+>;
 
-/// The function that is called when a POST request matches the path
-pub type HandlePost =
-    for<'a> fn(context: HandlePostContext<'a>) -> BoxFuture<'a, AtomicResult<ResourceResponse>>;
+/// The function that is called when a POST request matches the path.
+pub type HandlePost = Arc<
+    dyn for<'a> Fn(HandlePostContext<'a>) -> BoxFuture<'a, AtomicResult<ResourceResponse>>
+        + Send
+        + Sync,
+>;
 
 /// Passed to an Endpoint GET request handler.
 #[derive(Debug)]
@@ -54,15 +63,93 @@ pub struct Endpoint {
     pub shortname: String,
 }
 
-pub struct PostEndpoint {
-    pub path: String,
-    pub handle: Option<HandlePost>,
-    pub params: Vec<String>,
-    pub description: String,
-    pub shortname: String,
+/// Builds an [Endpoint]. The path is the endpoint's identity, so it is required;
+/// everything else is optional and chained on. The shortname defaults to the path
+/// without its leading slash.
+pub struct EndpointBuilder {
+    path: String,
+    handle: Option<HandleGet>,
+    handle_post: Option<HandlePost>,
+    params: Vec<String>,
+    description: String,
+    shortname: Option<String>,
+}
+
+impl EndpointBuilder {
+    fn new(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            handle: None,
+            handle_post: None,
+            params: Vec::new(),
+            description: String::new(),
+            shortname: None,
+        }
+    }
+
+    /// Overrides the shortname, which defaults to the path without its leading slash.
+    pub fn shortname(mut self, shortname: impl Into<String>) -> Self {
+        self.shortname = Some(shortname.into());
+        self
+    }
+
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = description.into();
+        self
+    }
+
+    /// The properties that can be passed to the Endpoint as query parameters.
+    pub fn params(mut self, params: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.params = params.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Called when a GET request matches the path.
+    /// If none is set, the endpoint returns the basic Endpoint resource.
+    pub fn handle<F>(mut self, handler: F) -> Self
+    where
+        F: for<'a> Fn(HandleGetContext<'a>) -> BoxFuture<'a, AtomicResult<ResourceResponse>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.handle = Some(Arc::new(handler));
+        self
+    }
+
+    /// Called when a POST request matches the path.
+    pub fn handle_post<F>(mut self, handler: F) -> Self
+    where
+        F: for<'a> Fn(HandlePostContext<'a>) -> BoxFuture<'a, AtomicResult<ResourceResponse>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.handle_post = Some(Arc::new(handler));
+        self
+    }
+
+    pub fn build(self) -> Endpoint {
+        let shortname = self
+            .shortname
+            .unwrap_or_else(|| self.path.trim_start_matches('/').to_string());
+        Endpoint {
+            path: self.path,
+            handle: self.handle,
+            handle_post: self.handle_post,
+            params: self.params,
+            description: self.description,
+            shortname,
+        }
+    }
 }
 
 impl Endpoint {
+    /// Start building an Endpoint served at `path`, e.g. `/versions`. Include the slash.
+    pub fn builder(path: impl Into<String>) -> EndpointBuilder {
+        EndpointBuilder::new(path)
+    }
+
     /// Converts Endpoint to resource. Does not save it.
     pub async fn to_resource(
         &self,

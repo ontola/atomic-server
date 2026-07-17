@@ -2007,7 +2007,7 @@ impl Db {
             if url.path() == endpoint.path {
                 // Not all Endpoints have a handle function.
                 // If there is none, return the endpoint plainly.
-                let response = if let Some(handle) = endpoint.handle {
+                let response = if let Some(handle) = endpoint.handle.as_ref() {
                     // Call the handle function for the endpoint, if it exists.
                     let context: HandleGetContext = HandleGetContext {
                         subject: url,

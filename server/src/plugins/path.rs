@@ -6,14 +6,11 @@ use atomic_lib::{
 };
 
 pub fn path_endpoint() -> Endpoint {
-    Endpoint {
-        path: "/path".to_string(),
-        params: [urls::PATH.to_string()].into(),
-        description: "An Atomic Path is a string that starts with the URL of some Atomic Resource, followed by one or multiple other Property URLs or Property Shortnames. It resolves to one specific Resource or Value. At this moment, Values are not yet supported.".to_string(),
-        shortname: "path".to_string(),
-        handle: Some(handle_path_request),
-        handle_post: None,
-    }
+    Endpoint::builder("/path")
+        .params([urls::PATH])
+        .description("An Atomic Path is a string that starts with the URL of some Atomic Resource, followed by one or multiple other Property URLs or Property Shortnames. It resolves to one specific Resource or Value. At this moment, Values are not yet supported.")
+        .handle(handle_path_request)
+        .build()
 }
 
 #[tracing::instrument]
