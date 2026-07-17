@@ -11,7 +11,10 @@ import {
 describe('getManagedPortalUrl', () => {
   it('uses the connected node’s advertised portal', () => {
     expect(
-      getManagedPortalUrl({ managed: true, portalUrl: 'https://portal.example' }),
+      getManagedPortalUrl({
+        managed: true,
+        portalUrl: 'https://portal.example',
+      }),
     ).toBe('https://portal.example');
   });
 
@@ -23,9 +26,14 @@ describe('getManagedPortalUrl', () => {
 describe('isCloudSyncAvailable', () => {
   it('true when a portal resolves, false otherwise', () => {
     expect(
-      isCloudSyncAvailable({ managed: true, portalUrl: 'https://portal.example' }),
+      isCloudSyncAvailable({
+        managed: true,
+        portalUrl: 'https://portal.example',
+      }),
     ).toBe(true);
-    expect(isCloudSyncAvailable({ managed: false, portalUrl: null })).toBe(false);
+    expect(isCloudSyncAvailable({ managed: false, portalUrl: null })).toBe(
+      false,
+    );
   });
 });
 

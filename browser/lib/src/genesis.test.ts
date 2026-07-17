@@ -188,20 +188,25 @@ describe('GenesisCert golden vectors (shared fixture)', () => {
       expect(hex(encodeGenesisCert(cert))).toBe(v.certBytesHex);
 
       // Same key + cert → the exact same signature, DID, and signer DID.
-      const signature = await signGenesisCert(cert, decodeB64(v.privateKeyBase64));
+      const signature = await signGenesisCert(
+        cert,
+        decodeB64(v.privateKeyBase64),
+      );
       expect(signature).toBe(v.signature);
 
       // The production signing path (a CryptoProvider signing raw bytes) must
       // produce the same signature — this is what actually mints the DID.
       const provider = new JSCryptoProvider(v.privateKeyBase64);
-      expect(await provider.signBytes(encodeGenesisCert(cert))).toBe(v.signature);
+      expect(await provider.signBytes(encodeGenesisCert(cert))).toBe(
+        v.signature,
+      );
       expect(subjectForSignature(signature)).toBe(v.did);
       expect(genesisSignerDid(cert)).toBe(v.signerDid);
 
       // The fixture bytes decode back to the same cert.
-      expect(hex(encodeGenesisCert(decodeGenesisCert(unhex(v.certBytesHex))))).toBe(
-        v.certBytesHex,
-      );
+      expect(
+        hex(encodeGenesisCert(decodeGenesisCert(unhex(v.certBytesHex)))),
+      ).toBe(v.certBytesHex);
     });
   }
 });

@@ -65,7 +65,10 @@ export async function driveHasCloudEnrollment(drive: string): Promise<boolean> {
 }
 
 /** Resolve once the store reports a live server connection, or reject on timeout. */
-function waitForServerConnected(store: Store, timeoutMs = 20_000): Promise<void> {
+function waitForServerConnected(
+  store: Store,
+  timeoutMs = 20_000,
+): Promise<void> {
   if (store.getSyncStatus().serverConnected) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
@@ -114,7 +117,12 @@ async function openAuthWindow(url: string): Promise<AuthWindowHandle> {
       await existing.setFocus();
     } else {
       // eslint-disable-next-line no-new -- constructing the window IS the effect
-      new WebviewWindow(label, { url, title: 'Sign in', width: 480, height: 760 });
+      new WebviewWindow(label, {
+        url,
+        title: 'Sign in',
+        width: 480,
+        height: 760,
+      });
     }
 
     return {
@@ -148,7 +156,9 @@ function delay(ms: number): Promise<void> {
  * visible here). Resolves false if the user closes the window or it times out.
  * The portal needs no awareness of being embedded.
  */
-export async function ensureManagedSession(portalUrl: string): Promise<boolean> {
+export async function ensureManagedSession(
+  portalUrl: string,
+): Promise<boolean> {
   if (await getManagedAccount().catch(() => null)) return true;
 
   // `embed=1` asks the portal for its sign-in form rather than its landing

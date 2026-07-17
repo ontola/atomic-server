@@ -1011,6 +1011,7 @@ export class Store {
               ),
             );
           }
+
           // Best-effort: refetch the resource so the local copy
           // aligns with whatever the server already has.
           this.fetchResourceFromServer(entry.subject).catch(() => undefined);

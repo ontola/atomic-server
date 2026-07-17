@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, sideBarDriveSwitcher } from './test-utils';
+import { before } from './test-utils';
 
 test.describe('keyboard shortcuts', () => {
   test.beforeEach(before);

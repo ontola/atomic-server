@@ -59,12 +59,13 @@ describe('genesis cert round-trip against a live server', () => {
       'https://atomicdata.dev/properties/genesis',
     ) as string;
     expect(propval).toBeTypeOf('string');
-    const { decodeGenesisCert, verifyGenesisCert } = await import('./genesis.js');
+    const { decodeGenesisCert, verifyGenesisCert } =
+      await import('./genesis.js');
     const { decodeB64 } = await import('./base64.js');
     const cert = decodeGenesisCert(decodeB64(propval));
-    expect(await verifyGenesisCert(cert, drive.subject.slice('did:ad:'.length))).toBe(
-      true,
-    );
+    expect(
+      await verifyGenesisCert(cert, drive.subject.slice('did:ad:'.length)),
+    ).toBe(true);
 
     // The real gate: POST the genesis to the live server. If the server's
     // cert verification (Path 1) rejected it, this would throw / drain-fail.
