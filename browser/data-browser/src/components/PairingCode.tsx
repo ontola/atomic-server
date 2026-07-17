@@ -19,12 +19,18 @@ interface PairingCodeProps {
  * when the app is itself a peer node, or the server it is signed in to when it
  * is not — a browser tab is not a node, but the server behind it is.
  *
- * The code is **routing only** — it says where to reach a node, and nothing
- * more. Whoever dials still has to prove they hold the same agent key over
- * AUTH, so this is safe to show on screen.
+ * The code names the drive it is shown for, which is the point of `drives`:
+ * "the field that tells a freshly signed-in device *which* drive to pull"
+ * (planning/device-pairing.md). A device with a secret and nothing else has no
+ * drive to ask for — a code saying `*` leaves it exactly as stuck as before it
+ * scanned, because "all of them" names none of them.
+ *
+ * The code is **routing only** — it says where to reach a node and what to ask
+ * it for, and grants neither. Whoever dials still has to prove they hold a key
+ * that may read the drive, so this is safe to show on screen.
  */
 export function PairingCode({ nodeDid }: PairingCodeProps): JSX.Element {
-  const { baseURL } = useSettings();
+  const { baseURL, drive } = useSettings();
 
   // A LAN/WS fast path is only worth advertising when another device could
   // actually reach it — localhost never resolves to this machine elsewhere.
@@ -45,11 +51,13 @@ export function PairingCode({ nodeDid }: PairingCodeProps): JSX.Element {
       v: 1,
       node: nodeDid,
       ...(urlHint ? { url: urlHint } : {}),
-      drives: '*',
+      // `*` only when there is genuinely nothing to name — a device scanning
+      // that has to already know what it came for.
+      drives: drive ? [drive] : '*',
     };
 
     return encodePairingEnvelope(envelope);
-  }, [nodeDid, urlHint]);
+  }, [nodeDid, urlHint, drive]);
 
   const pairSvg = useMemo(() => renderSVG(pairUri), [pairUri]);
 

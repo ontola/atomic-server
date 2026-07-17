@@ -220,7 +220,35 @@ class _PairScreenState extends State<PairScreen> {
       unawaited(AtomicSession.addKnownServer(peer.serverUrl!));
     }
 
-    _doSync(peer.nodeId, peer.name);
+    _adoptDriveThenSync(peer);
+  }
+
+  /// A sync is of a drive, and a device holding only a secret has none — the
+  /// key says who you are, never what you have. So the code's `drives` is what
+  /// gets it unstuck: it names what to ask the other device for.
+  ///
+  /// Only when there is nothing here yet. A device that already has a workspace
+  /// scanned this code to sync *that*, not to be handed a different one.
+  Future<void> _adoptDriveThenSync(PeerInfo peer) async {
+    final named = peer.drives?.firstOrNull;
+
+    if (named != null && AtomicClient.getActiveDrive() == null) {
+      try {
+        await AtomicClient.setActiveDrive(named);
+        await AtomicSession.saveDrive(named);
+      } catch (e) {
+        if (!mounted) return;
+
+        setState(() {
+          _error = 'Could not open the workspace that code names: $e';
+          _step = _Step.error;
+        });
+
+        return;
+      }
+    }
+
+    await _doSync(peer.nodeId, peer.name);
   }
 
   Future<void> _doSync(String nodeId, [String name = '']) async {

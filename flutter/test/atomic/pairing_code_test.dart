@@ -26,6 +26,16 @@ void main() {
       expect(peer!.serverUrl, 'https://my.server.com');
     });
 
+    test('a code that names a drive says which one — that is what unsticks a new device', () {
+      // A device holding only a secret has no drive to sync. The code naming
+      // one is the whole mechanism for its first pull; `*` names none.
+      final peer = PairScreen.parsePeerInfo(
+        'atomic://pair?v=1&node=did:ad:node:$_hex&drives=did%3Aad%3Amyworkspace',
+      );
+
+      expect(peer!.drives, ['did:ad:myworkspace']);
+    });
+
     test('reads every drive when a code names more than one', () {
       final peer = PairScreen.parsePeerInfo(
         'atomic://pair?v=1&node=did:ad:node:$_hex&drives=did%3Aad%3Aone&drives=did%3Aad%3Atwo',
