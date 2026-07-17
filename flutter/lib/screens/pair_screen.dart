@@ -1,20 +1,39 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../atomic/atomic_client.dart';
+import '../atomic/session.dart';
 
 /// DID prefix for Iroh node identifiers.
 const _nodeDidPrefix = 'did:ad:node:';
 
+/// The `atomic://pair` URI the data-browser and the Tauri apps put in their QR
+/// codes. See `planning/device-pairing.md` and `browser/lib/src/pairing.ts` —
+/// this parser must accept what those produce.
+const _pairingUriPrefix = 'atomic://pair?';
+
 enum _Step { loading, showQr, syncing, done, error }
 
 /// Parsed result from a QR code or DID URI.
+///
+/// A pairing code is **routing only**: it says which node to reach, and
+/// optionally where else to find it. It grants nothing — the node dialed still
+/// proves it holds the same agent key before any resource crosses.
 class PeerInfo {
+  PeerInfo(this.nodeId, [this.name = '', this.serverUrl, this.drives]);
+
   final String nodeId;
   final String name;
-  PeerInfo(this.nodeId, [this.name = '']);
+
+  /// An http(s) server the code advertises — a routing hint, never identity.
+  /// Set when the code came from a browser signed in to a reachable server.
+  final String? serverUrl;
+
+  /// Which drives to sync. Null means all of the agent's drives.
+  final List<String>? drives;
 }
 
 class PairScreen extends StatefulWidget {
@@ -30,10 +49,23 @@ class PairScreen extends StatefulWidget {
     );
   }
 
-  /// Parse a QR code value into a PeerInfo.
-  /// Formats: "did:ad:node:<hex>:<name>" or "did:ad:node:<hex>" or raw hex.
+  /// Parse a QR code value into a PeerInfo. Null when it is not a pairing code
+  /// this app understands.
+  ///
+  /// Formats:
+  ///  - `atomic://pair?v=1&node=did:ad:node:<hex>&url=<server>&drives=<a>&drives=<b>`
+  ///    — what the data-browser and Tauri apps show, including the code a
+  ///    browser shows for the server its drives live on.
+  ///  - `did:ad:node:<hex>:<name>` / `did:ad:node:<hex>` / raw hex / `iroh:<hex>`
+  ///    — this app's own code, and anything pasted by hand.
   static PeerInfo? parsePeerInfo(String input) {
-    var value = input.trim();
+    final trimmed = input.trim();
+
+    if (trimmed.startsWith(_pairingUriPrefix)) {
+      return _parsePairingUri(trimmed);
+    }
+
+    var value = trimmed;
     String name = '';
 
     if (value.startsWith(_nodeDidPrefix)) {
@@ -49,6 +81,42 @@ class PairScreen extends StatefulWidget {
       return PeerInfo(value, name);
     }
     return null;
+  }
+
+  /// Reads an `atomic://pair?…` envelope.
+  ///
+  /// An unknown version is refused rather than read as far as it parses: a
+  /// newer code may mean something this app would get wrong, and dialing the
+  /// wrong node on a half-understood code is worse than saying no.
+  static PeerInfo? _parsePairingUri(String uri) {
+    final params =
+        Uri.splitQueryString(uri.substring(_pairingUriPrefix.length));
+
+    final version = params['v'];
+
+    if (version != null && version != '1') return null;
+
+    final node = params['node'];
+
+    if (node == null || !node.startsWith(_nodeDidPrefix)) return null;
+
+    final nodeId = node.substring(_nodeDidPrefix.length);
+
+    if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(nodeId)) return null;
+
+    // `drives` repeats for multiple drives, which splitQueryString collapses to
+    // the last one — so read them off the raw query instead. `*` means all.
+    final drives = Uri.parse(uri)
+        .queryParametersAll['drives']
+        ?.where((d) => d != '*')
+        .toList();
+
+    return PeerInfo(
+      nodeId,
+      '',
+      params['url'],
+      drives == null || drives.isEmpty ? null : drives,
+    );
   }
 
   /// Format a QR code value with optional device name.
@@ -143,6 +211,15 @@ class _PairScreenState extends State<PairScreen> {
     _scanController?.stop();
     _scannedNodeId = peer.nodeId;
     _scannedName = peer.name;
+
+    // A code from a browser names the server its drives live on. Remember it,
+    // so it shows up in settings — but don't switch to it: syncing with the
+    // node is what was asked for, and where this device syncs through is a
+    // choice that stays the owner's.
+    if (peer.serverUrl != null && peer.serverUrl!.isNotEmpty) {
+      unawaited(AtomicSession.addKnownServer(peer.serverUrl!));
+    }
+
     _doSync(peer.nodeId, peer.name);
   }
 
