@@ -416,7 +416,7 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
         Theme(
           data: theme.copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
-            title: Text('Offline Sync & Pairing',
+            title: Text('Sync devices',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -445,7 +445,7 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
               // Peers header
               Row(
                 children: [
-                  Text('Direct Peers',
+                  Text('Devices',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -508,42 +508,6 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (isOnline && !isBusy)
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 6),
-                              minimumSize: const Size(0, 0),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            onPressed: () async {
-                              setState(() {
-                                _syncing = true;
-                                _syncResult = null;
-                              });
-                              try {
-                                final result =
-                                    await AtomicClient.peerSync(nodeId);
-                                // Refresh first so the HELLO name persisted
-                                // by `peerSync` is reflected in the toast.
-                                await _loadData();
-                                setState(() {
-                                  _syncResult =
-                                      _formatSyncResult(result, nodeId);
-                                  _lastSyncCount = result.imported;
-                                  _lastSyncTime = DateTime.now();
-                                  _syncing = false;
-                                });
-                              } catch (e) {
-                                setState(() {
-                                  _syncResult = 'Error: $e';
-                                  _syncing = false;
-                                });
-                              }
-                            },
-                            child: const Text('Sync',
-                                style: TextStyle(fontSize: 11)),
-                          ),
                         IconButton(
                           icon: const Icon(Icons.close, size: 14),
                           padding: EdgeInsets.zero,
@@ -568,7 +532,7 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
                 _peerStatusRow(
                     theme,
                     Icons.check_circle,
-                    'Synced $_lastSyncCount resources (${_timeAgo(_lastSyncTime!)})',
+                    _syncResult ?? 'In sync (${_timeAgo(_lastSyncTime!)})',
                     Colors.green)
               else if (_syncResult != null && _syncResult!.startsWith('Error'))
                 _peerStatusRow(
