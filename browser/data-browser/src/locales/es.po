@@ -4917,15 +4917,9 @@ msgstr ""
 msgid "Setting up your demo…"
 msgstr ""
 
-#~ msgid "Your data lives on the connected server."
-#~ msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Your data lives on this device — it isn’t syncing anywhere yet."
 msgstr ""
-
-#~ msgid "Your data lives on this device and syncs with {0} {1}."
-#~ msgstr ""
 
 #. 0: status.lastDriveSync.count.toLocaleString()
 #: src/routes/SyncRoute.tsx
@@ -4943,12 +4937,6 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Server-only · no local cache"
 msgstr ""
-
-#~ msgid "Pair another device to sync peer-to-peer, or connect a server to back up and reach it from the web."
-#~ msgstr ""
-
-#~ msgid "Connect a server to back up your data and reach it from anywhere."
-#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Cloud Sync"
@@ -5007,15 +4995,9 @@ msgstr ""
 msgid "This workspace is stored only on this device — it isn’t backed up or synced anywhere."
 msgstr ""
 
-#~ msgid "Syncing this workspace to the server…"
-#~ msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Sync this workspace"
 msgstr ""
-
-#~ msgid "Connect a server below first."
-#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Only on this device"
@@ -5041,9 +5023,6 @@ msgstr ""
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Your data is on another device"
 msgstr ""
-
-#~ msgid "Connect a server"
-#~ msgstr ""
 
 #: src/components/ConnectServerDialog.tsx
 msgid "A server keeps your workspaces online and backed up, and lets you share them with other people."
@@ -5134,15 +5113,6 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Show this code"
 msgstr ""
-
-#~ msgid "Or scan the other device’s"
-#~ msgstr ""
-
-#~ msgid "Or paste the other device’s"
-#~ msgstr ""
-
-#~ msgid "Not signed in over there yet? Sign in with your account secret first, then pair."
-#~ msgstr ""
 
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "This device can’t tell which workspace to open. Open the app on your other device, then pair again."
@@ -5386,12 +5356,6 @@ msgstr ""
 msgid "Node ID copied"
 msgstr ""
 
-#~ msgid "Self-hosted Atomic Server · in use"
-#~ msgstr ""
-
-#~ msgid "Known server"
-#~ msgstr ""
-
 #. 0: rawToNodeDid(serverNodeId)
 #: src/routes/SyncRoute.tsx
 msgid "Copy {0}"
@@ -5400,18 +5364,6 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it."
 msgstr ""
-
-#~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a server that can reach it."
-#~ msgstr ""
-
-#~ msgid "Send it here from that device"
-#~ msgstr ""
-
-#~ msgid "This browser isn’t a device your others can sync with directly — it reads your workspace from a server. So push it up from the device that has it: open <0>Sync</0> there and sync the workspace to a server."
-#~ msgstr ""
-
-#~ msgid "Already did that, or it was on a server all along? Connect that server here and your workspace appears."
-#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Your data lives on the device you’re connected to."
@@ -5454,15 +5406,6 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Your data lives on this device and syncs with {0} other {1}."
 msgstr ""
-
-#~ msgid "Scan with your other device"
-#~ msgstr ""
-
-#~ msgid "This is"
-#~ msgstr ""
-
-#~ msgid ", the always-on device this browser reads from — not the browser itself. Scanning it syncs your workspace there, and it shows up here."
-#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Codes only route — your key still decides what syncs. Show yours, or take theirs."

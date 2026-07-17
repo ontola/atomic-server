@@ -271,28 +271,28 @@ export function GettingStartedFlow({
       setAgent(newAgent);
       await saveAgentToIDB(secret);
 
-      // Came in via a drive sign-in guard → return to that drive.
-      if (nextDrive) {
-        setDrive(nextDrive);
-        navigate(constructOpenURL(nextDrive));
+      // Where this sign-in wants to end up: the drive it came from, or the
+      // account's own. One target, so there is one gate below — an early
+      // return for the guard case is an early return around the gate.
+      const target =
+        nextDrive ?? (await fetchPersonalDriveSubject(store, newAgent));
 
-        return;
-      }
+      // Name the account's drive even when its data hasn't arrived: the Sync
+      // page says "your data is on another device" about *that* drive, which
+      // is true and useful. But when the account's drive cannot be named at
+      // all, no drive is the honest answer — the value here otherwise falls
+      // back to whatever was last open, or to the default, which is the
+      // server's own root. Showing that as your workspace is how signing in
+      // ends with somebody else's data on screen.
+      setDrive(target ?? '');
 
-      const home = await fetchPersonalDriveSubject(store, newAgent);
-
-      if (home) {
-        setDrive(home);
-      }
-
-      // A secret restores who you are, not what you have. On a device that
-      // holds none of the account's data yet, opening the drive shows an empty
-      // shell — stay here and offer the one thing that fixes it: reach the
-      // device that has the data.
-      if (home && (await deviceHasDriveData(store, home))) {
-        navigate(constructOpenURL(home));
+      // A secret restores who you are, not what you have. So the app only
+      // opens once the workspace is here to read: opening one we cannot read
+      // shows an empty shell wearing its name, which reads as data loss.
+      if (target && (await deviceHasDriveData(store, target))) {
+        navigate(constructOpenURL(target));
       } else {
-        setMissingDrive(home);
+        setMissingDrive(target);
         setStep('connect-device');
       }
     } catch (err) {
@@ -485,12 +485,14 @@ export function GettingStartedFlow({
               navigate(constructOpenURL(target));
             }}
             onSkip={() => {
-              // Into the app without the data. The Sync page keeps offering
-              // the same pairing route from its "data is on another device"
-              // card, so this is a deferral, not a dead end.
-              navigate(
-                missingDrive ? constructOpenURL(missingDrive) : paths.sync,
-              );
+              // A deferral, not a dead end: the Sync page offers the same
+              // route from its "data is on another device" card.
+              //
+              // Never into the drive itself, even though we can name it —
+              // that is the empty shell this step exists to keep people out
+              // of, and arriving in it by pressing Skip makes it look like
+              // the workspace came back empty.
+              navigate(paths.sync);
             }}
           />
         </Swap>
