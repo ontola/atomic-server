@@ -271,6 +271,25 @@ impl Resource {
         Ok(())
     }
 
+    /// Merge externally-persisted CRDT state into this editable doc before a
+    /// local edit, so the edit builds on top of it instead of overwriting it.
+    ///
+    /// The sync layer writes a peer's merged changes straight to the store's
+    /// snapshot, bypassing any in-memory editing session an app is holding for
+    /// the same resource. Appending to that stale session and saving would then
+    /// export a snapshot without the peer's change — silently reverting it.
+    /// Calling this with the store's current snapshot first catches the session
+    /// up. Idempotent: importing already-known state is a Loro no-op.
+    pub fn merge_persisted_state(&mut self, state: &[u8]) -> AtomicResult<()> {
+        if state.is_empty() {
+            return Ok(());
+        }
+        self.ensure_materialized()?;
+        self.loro().import_update(state)?;
+        self.sync_propvals_from_loro();
+        Ok(())
+    }
+
     /// Fetches all 'required' properties. Returns an error if any are missing in this Resource.
     pub async fn check_required_props(&self, store: &impl Storelike) -> AtomicResult<()> {
         let classvec = self.get_classes(store).await?;

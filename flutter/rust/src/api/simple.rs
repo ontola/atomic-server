@@ -32,6 +32,28 @@ async fn save_and_push(resource: &mut atomic_lib::Resource, store: &atomic_lib::
     Ok(())
 }
 
+/// Catch a cached editing session up to the store's current snapshot before a
+/// local edit. A peer's stroke that the sync layer merged into the store since
+/// this session was cached is not in the in-memory doc; without this, appending
+/// and saving would export a snapshot missing that stroke and silently revert
+/// it. Synchronous (under the canvas guard), unlike the async cache-invalidation
+/// listener which can lag behind a fast next stroke. Cheap when already current
+/// — importing already-known state is a Loro no-op.
+fn refresh_editing_session(
+    resource: &mut atomic_lib::Resource,
+    store: &atomic_lib::Db,
+    subject: &str,
+) {
+    let key =
+        atomic_lib::Subject::from_raw(subject, store.get_base_domain().as_deref()).pure_id();
+    if let Ok(Some(snapshot)) = store
+        .kv
+        .get(atomic_lib::db::trees::Tree::LoroSnapshots, key.as_bytes())
+    {
+        let _ = resource.merge_persisted_state(&snapshot);
+    }
+}
+
 fn is_unreachable_hub_url(url: &str) -> bool {
     let lower = url.to_lowercase();
     lower.contains("localhost") || lower.contains("127.0.0.1")
@@ -493,6 +515,9 @@ pub async fn push_stroke(subject: String, stroke_json: String) -> Result<(), Str
 
     let mut guard = get_canvas(&subject).await?;
     let resource = guard.as_mut().unwrap();
+    // Merge any peer strokes the store received since this session was cached,
+    // so appending ours doesn't overwrite them.
+    refresh_editing_session(resource, store.as_ref(), &subject);
     resource
         .push_list_item(CANVAS_STROKE_DATA, item)
         .map_err(err)?;
