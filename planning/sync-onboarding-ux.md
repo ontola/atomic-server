@@ -109,16 +109,29 @@ Shared, and authoritative over all of the above:
 
 | Level | Covers | Where |
 | --- | --- | --- |
-| Rust unit | pairing AUTH; a different agent syncs what it may read, and is told why when it may read nothing | `lib/src/sync/` |
+| Rust unit | pairing AUTH; a different agent syncs what it may read, is told why when it may read nothing, and pushing to an empty device is not a failure | `lib/src/sync/` |
 | Rust integration | replication, a fresh client reading a replicated workspace | `server/tests/replicate.rs` |
 | Rust integration | `/server`, `/drive-usage` | `server/src/tests.rs` |
 | Dart unit | URL rules, pairing code parsing, signing parity with Rust | `flutter/test/atomic/` |
 | Browser e2e | two servers, sync between them | `browser/e2e/` |
 
+**How the suite missed the flow it exists for.** Nine of the ten Iroh e2e
+tests are built on `setup_pair`, which loads *one agent's secret into both
+devices*. The tenth used two agents and asserted that nothing crossed. So the
+fixture itself encoded "peers are one person's devices" — the assumption the
+identity gate was made of — and the entire two-account half of the space,
+which is every flow involving an always-on device, had no test that could
+fail. A test suite shaped by an assumption cannot question it.
+
+The lesson is not "write more tests". It is: **a fixture is an assumption**.
+When one setup function opens nine tests, read what it decided for them.
+
 Gaps worth knowing, rather than rediscovering:
 
 - **No test crosses two clients.** Every path in §3 is verified by hand. The
   Flutter↔Tauri pairing row has never been run at all.
+- **No test measures the push direction from Dart.** The Rust side now covers
+  "push to an empty device"; nothing above it does.
 - **Dart signing is checked against Rust by golden vectors**
   (`lib/src/genesis_test_vectors.json`), not by a live handshake. That caught a
   real bug (base64 alphabet); it would not catch a header the server ignores.
