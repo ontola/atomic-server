@@ -79,48 +79,6 @@ fn precompressed_br_available(ctx: &guard::GuardContext<'_>) -> bool {
     map.contains_key(br_key.as_str()) && map.contains_key(path)
 }
 
-async fn iroh_node_id_handler() -> actix_web::HttpResponse {
-    if let Some(node_id) = crate::iroh_transport::get_node_id() {
-        return actix_web::HttpResponse::Ok()
-            .content_type("application/json")
-            .body(format!(r#"{{"nodeId":"did:ad:node:{node_id}"}}"#));
-    }
-
-    actix_web::HttpResponse::Ok()
-        .content_type("application/json")
-        .body(r#"{"nodeId":null}"#)
-}
-
-/// Read-only node metadata the data-browser fetches to adapt its onboarding:
-/// a `managed` node (one configured to report to a control plane) sets
-/// `managed: true` and a `portalUrl` (the user-facing portal, learned from
-/// the control plane). Self-hosted / FOSS nodes report `managed: false`.
-#[derive(serde::Serialize)]
-struct NodeInfo {
-    managed: bool,
-    #[serde(rename = "portalUrl")]
-    portal_url: Option<String>,
-}
-
-async fn node_info_handler(
-    appstate: web::Data<crate::appstate::AppState>,
-) -> actix_web::HttpResponse {
-    // Both are generic and default to unmanaged/none. An embedder (the closed
-    // managed-node wrapper, via `serve_with_hook`) flips `managed` and sets the
-    // dashboard URL it learned from its control plane. The open server itself
-    // has no control-plane knowledge.
-    let portal_url = appstate
-        .managed_dashboard_url
-        .read()
-        .ok()
-        .and_then(|guard| guard.clone());
-
-    actix_web::HttpResponse::Ok().json(NodeInfo {
-        managed: appstate.managed.load(std::sync::atomic::Ordering::Relaxed),
-        portal_url,
-    })
-}
-
 fn node_id_from_did(node_did: &str) -> Result<&str, &'static str> {
     let Some(rest) = node_did.strip_prefix("did:ad:node:") else {
         return Err("Expected nodeId to use did:ad:node:<node-id>");
@@ -244,8 +202,6 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     )
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
     .service(web::resource("/drive-usage").to(handlers::drive_usage::handle_drive_usage))
-    .service(web::resource("/node-info").to(node_info_handler))
-    .service(web::resource("/iroh-node-id").to(iroh_node_id_handler))
     .service(web::resource("/iroh-sync").to(iroh_sync_handler))
     .service(web::resource("/export").to(handlers::export::handle_export))
     .service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui))

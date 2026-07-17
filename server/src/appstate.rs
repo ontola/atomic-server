@@ -91,7 +91,17 @@ impl AppState {
             config.uploads_path.clone(),
         ))?;
 
+        // Owned here rather than in the AppState literal below, because the
+        // `/server` endpoint closes over them to report this node's status.
+        let server_info = plugins::server_info::ServerInfo {
+            managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            managed_dashboard_url: Arc::new(std::sync::RwLock::new(None)),
+        };
+
         // Register all built-in endpoints
+        store.add_endpoint(plugins::server_info::server_info_endpoint(
+            server_info.clone(),
+        ))?;
         store.add_endpoint(plugins::versioning::version_endpoint())?;
         store.add_endpoint(plugins::versioning::all_versions_endpoint())?;
         store.add_endpoint(plugins::did::did_endpoint())?;
@@ -203,8 +213,8 @@ impl AppState {
             search_state,
             vector_search_state,
             index_status_broadcast,
-            managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            managed_dashboard_url: Arc::new(std::sync::RwLock::new(None)),
+            managed: server_info.managed,
+            managed_dashboard_url: server_info.managed_dashboard_url,
         })
     }
 

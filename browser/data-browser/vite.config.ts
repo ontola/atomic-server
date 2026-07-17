@@ -448,7 +448,7 @@ export default defineConfig({
       ],
     },
     proxy: {
-      '/iroh-node-id': 'http://localhost:9883',
+      '/server': 'http://localhost:9883',
       '/iroh-sync': 'http://localhost:9883',
     },
   },

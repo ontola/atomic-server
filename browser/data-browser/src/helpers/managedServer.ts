@@ -1,18 +1,38 @@
 import { signRequest, type Agent } from '@tomic/react';
+import { serverProps } from './serverOntology';
 
 /**
- * Node info. Every Atomic node exposes `GET /node-info` with read-only
- * metadata; a managed node (one reporting to a control plane) sets `managed`
- * and a `portalUrl` so the welcome screen can adapt its copy and route
- * account creation to the dashboard.
+ * Node info, read from `GET /server` — a plain Atomic `Server` resource
+ * describing the node you are talking to. A managed node (one reporting to a
+ * control plane) sets `managed` and a `portalUrl`, so the welcome screen can
+ * adapt its copy and route account creation to the dashboard.
+ *
+ * Fetched rather than read through the store, because the node being asked
+ * about is often *not* the store's active server: the desktop shell asks its
+ * own embedded node, and the sync page asks servers it hasn't switched to yet.
  */
 export type ManagedInfo = {
   managed: boolean;
   /** User-facing portal URL, when the node is managed. */
   portalUrl: string | null;
+  /** This node's `did:ad:node:...` identity, if its p2p transport is running. */
+  nodeId?: string | null;
+  /** The atomic-server version the node runs. */
+  version?: string | null;
 };
 
-const DEFAULT: ManagedInfo = { managed: false, portalUrl: null };
+/** What a node reports when it is unreachable, or says nothing about itself. */
+export const EMPTY_NODE_INFO: ManagedInfo = {
+  managed: false,
+  portalUrl: null,
+  nodeId: null,
+  version: null,
+};
+
+const DEFAULT = EMPTY_NODE_INFO;
+
+const readString = (value: unknown): string | null =>
+  typeof value === 'string' && value.length > 0 ? value : null;
 
 export async function fetchManagedInfo(
   serverUrl: string,
@@ -20,16 +40,15 @@ export async function fetchManagedInfo(
   if (!serverUrl) return DEFAULT;
 
   try {
-    const res = await fetch(new URL('/node-info', serverUrl).toString(), {
-      headers: { Accept: 'application/json' },
+    const res = await fetch(new URL('/server', serverUrl).toString(), {
+      headers: { Accept: 'application/ad+json' },
     });
 
     if (!res.ok) return DEFAULT;
 
     const data = await res.json();
 
-    const rawPortalUrl =
-      typeof data?.portalUrl === 'string' ? data.portalUrl : null;
+    const rawPortalUrl = readString(data?.[serverProps.portalUrl]);
 
     // In local dev the user-facing portal runs on localhost, but a managed node
     // reports its public dashboard URL (typically a tunnel that isn't reachable
@@ -40,9 +59,11 @@ export async function fetchManagedInfo(
         window.location.hostname === '127.0.0.1');
 
     return {
-      managed: Boolean(data?.managed),
+      managed: Boolean(data?.[serverProps.managed]),
       portalUrl:
         rawPortalUrl && onLocalhost ? 'http://localhost:49237' : rawPortalUrl,
+      nodeId: readString(data?.[serverProps.nodeId]),
+      version: readString(data?.[serverProps.version]),
     };
   } catch {
     // Older/self-hosted nodes have no such endpoint — treat as non-managed.

@@ -1371,12 +1371,16 @@
   },
   {
     "@id": "https://atomicdata.dev/classes/Server",
-    "https://atomicdata.dev/properties/description": "An Atomic Data server node.",
+    "https://atomicdata.dev/properties/description": "An Atomic Data server node. Served by the `/server` endpoint, which describes the node you are talking to.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Class"
     ],
     "https://atomicdata.dev/properties/recommends": [
       "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/server/nodeId",
+      "https://atomicdata.dev/properties/server/version",
+      "https://atomicdata.dev/properties/server/managed",
+      "https://atomicdata.dev/properties/server/portalUrl",
       "https://atomicdata.dev/properties/isUninitialized"
     ],
     "https://atomicdata.dev/properties/requires": [
@@ -1530,5 +1534,45 @@
     "https://atomicdata.dev/properties/isLocked": true,
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "search-chunks"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/server/nodeId",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The Iroh node identifier of this server, as a `did:ad:node:...` DID. Peers use it to reach this node directly. Not set if the peer-to-peer transport is not running.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "node-id"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/server/version",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The version of atomic-server this node is running.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "version"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/server/managed",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "True if this node is managed by a control plane, rather than self-hosted.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "managed"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/server/portalUrl",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The user-facing portal where a managed node is administered. Only set on managed nodes.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "portal-url"
   }
 ]

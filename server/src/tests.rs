@@ -721,3 +721,69 @@ async fn drive_usage_endpoint() {
     );
     assert!(json.get("loroBytes").is_some(), "loroBytes missing: {body}");
 }
+
+/// `GET /server` describes the node itself as a `Server` resource, replacing the
+/// bespoke `/node-info` and `/iroh-node-id` JSON shapes. It must be real JSON-AD
+/// with an `isA` of Server, so any Atomic client can read it, not just our own
+/// data-browser.
+#[actix_rt::test]
+async fn server_info_endpoint() {
+    let unique_string = atomic_lib::utils::random_string(10);
+    use clap::Parser;
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", unique_string),
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+    ]);
+
+    let mut config = config::build_config(opts).expect("failed init config");
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+    let appstate = crate::appstate::AppState::init(config.clone())
+        .await
+        .expect("failed init appstate");
+
+    let data = Data::new(appstate.clone());
+    let app = test::init_service(
+        App::new()
+            .app_data(data)
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    // A node seeded before the `Server` properties existed still has to be able
+    // to say what it is. Dropping one of the Property resources stands in for
+    // such a store: rendering must not depend on the ontology being present,
+    // or every existing deployment answers 500 until an operator repopulates.
+    appstate
+        .store
+        .remove_resource(&urls::SERVER_VERSION.into())
+        .await
+        .expect("could not remove property");
+
+    let req = build_request_authenticated("/server", &appstate).to_request();
+    let resp = test::call_service(&app, req).await;
+    let status = resp.status();
+    let body = get_body(resp);
+    assert!(status.is_success(), "/server status {status}: {body}");
+
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        json[urls::IS_A][0].as_str(),
+        Some(urls::SERVER),
+        "/server should be typed as a Server: {body}"
+    );
+    assert_eq!(
+        json[urls::SERVER_VERSION].as_str(),
+        Some(env!("CARGO_PKG_VERSION")),
+        "version should be this build's version: {body}"
+    );
+    // An unmanaged (self-hosted) node reports managed:false and omits the portal.
+    assert_eq!(json[urls::SERVER_MANAGED].as_bool(), Some(false), "{body}");
+    assert!(
+        json.get(urls::SERVER_PORTAL_URL).is_none(),
+        "portalUrl should be absent on a self-hosted node: {body}"
+    );
+}

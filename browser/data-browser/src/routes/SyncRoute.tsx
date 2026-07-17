@@ -30,6 +30,7 @@ import { Card } from '../components/Card';
 import {
   fetchManagedInfo,
   type ManagedInfo,
+  EMPTY_NODE_INFO,
   fetchNodeDriveUsage,
   type NodeDriveUsage,
 } from '../helpers/managedServer';
@@ -224,6 +225,15 @@ function SyncPage() {
   const [knownServers, setKnownServers] = useState<string[]>(() =>
     serverURLStorage.getKnownServers(),
   );
+
+  // New servers are persisted by `setServer` (through `serverURLStorage`), and
+  // AppSettings registers the current origin on mount — neither can reach this
+  // state, so without re-reading, a server you just added only shows up after a
+  // reload. `baseURL` changes on every add and switch, which is the signal.
+  useEffect(() => {
+    setKnownServers(serverURLStorage.getKnownServers());
+  }, [baseURL]);
+
   // Server switching + adding happen inline in the Connections section (not a
   // separate dialog): `showAddServer` reveals the add-a-server form.
   const [showAddServer, setShowAddServer] = useState(false);
@@ -253,22 +263,19 @@ function SyncPage() {
     }
   });
 
-  // Whether the connected server is a managed node (and where its dashboard
-  // lives), read from the generic `/node-info` endpoint. This is the ONLY thing
-  // the FOSS data-browser knows about "being managed" — a flag and a URL the
-  // server hands it. Self-hosted servers report `managed:false` and no portal
-  // link is shown; anything plan/billing-specific lives behind the link, on the
-  // operator's portal.
-  const [managedInfo, setManagedInfo] = useState<ManagedInfo>({
-    managed: false,
-    portalUrl: null,
-  });
+  // What the server in use says about itself, read from its `/server` resource:
+  // its node id and version, plus whether it is a managed node and where its
+  // dashboard lives. The managed flag and portal URL are the ONLY things the
+  // FOSS data-browser knows about "being managed" — self-hosted servers report
+  // `managed:false` and no portal link is shown; anything plan/billing-specific
+  // lives behind the link, on the operator's portal.
+  const [managedInfo, setManagedInfo] = useState<ManagedInfo>(EMPTY_NODE_INFO);
 
   useEffect(() => {
     const serverUrl = status.serverUrl;
 
     if (!serverUrl) {
-      setManagedInfo({ managed: false, portalUrl: null });
+      setManagedInfo(EMPTY_NODE_INFO);
 
       return;
     }
@@ -282,6 +289,12 @@ function SyncPage() {
       cancelled = true;
     };
   }, [status.serverUrl]);
+
+  // Re-read per server, never carried across a switch: a node id belongs to one
+  // node, so a stale one on a server card would lie about who you're talking to.
+  const serverNodeId = managedInfo.nodeId
+    ? (nodeDidToRaw(managedInfo.nodeId) ?? null)
+    : null;
 
   // Resource count + bytes from the connected node's `/drive-usage` — generic,
   // works on any atomic-server (self-hosted included). Signed with the agent
@@ -367,17 +380,18 @@ function SyncPage() {
 
   useEffect(() => {
     // Absolute origin, not a bare path: inside the Tauri webview a bare
-    // `/iroh-node-id` resolves against `tauri.localhost` (the bundled
-    // assets), not the embedded atomic-server — so the node identity (and
-    // the whole pairing UI it gates) would never load on desktop/mobile.
-    fetch(`${getLocalServerOrigin()}/iroh-node-id`)
-      .then(r => r.json())
-      .then(data => {
-        if (typeof data.nodeId === 'string') {
-          const raw = nodeDidToRaw(data.nodeId);
-          if (!raw) return;
-          setLocalNodeId(raw);
-        }
+    // `/server` resolves against `tauri.localhost` (the bundled assets), not
+    // the embedded atomic-server — so the node identity (and the whole pairing
+    // UI it gates) would never load on desktop/mobile.
+    fetchManagedInfo(getLocalServerOrigin())
+      .then(info => {
+        if (!info.nodeId) return;
+
+        const raw = nodeDidToRaw(info.nodeId);
+
+        if (!raw) return;
+
+        setLocalNodeId(raw);
       })
       .catch(() => {});
   }, []);
@@ -938,6 +952,29 @@ function SyncPage() {
                     </ConnMeta>
                   )}
 
+                  {/* A node id identifies this server's node, so it belongs on
+                      the server — not buried in Developer. */}
+                  {isActive && serverNodeId && (
+                    <NodeIdRow>
+                      <NodeIdLabel>Node ID</NodeIdLabel>
+                      <NodeIdValue
+                        title={`Copy ${rawToNodeDid(serverNodeId)}`}
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(
+                              rawToNodeDid(serverNodeId),
+                            );
+                            toast.success('Node ID copied');
+                          } catch (e) {
+                            store.notifyError(e as Error);
+                          }
+                        }}
+                      >
+                        {rawToNodeDid(serverNodeId)}
+                      </NodeIdValue>
+                    </NodeIdRow>
+                  )}
+
                   {isCloud && managedInfo.portalUrl && (
                     <ConnActions>
                       <ManagedLink
@@ -1106,30 +1143,8 @@ function SyncPage() {
           <DevSummary>Developer</DevSummary>
 
           <DevGrid>
-            {localNodeId && (
-              <DevRow>
-                <DetailLabel>Node ID</DetailLabel>
-                <PeerIdRow>
-                  <PeerIdText title={`did:ad:node:${localNodeId}`}>
-                    did:ad:node:{localNodeId.slice(0, 12)}…
-                  </PeerIdText>
-                  <NodeAction
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(
-                          `did:ad:node:${localNodeId}`,
-                        );
-                        toast.success('Node DID copied to clipboard');
-                      } catch (e) {
-                        store.notifyError(e as Error);
-                      }
-                    }}
-                  >
-                    Copy
-                  </NodeAction>
-                </PeerIdRow>
-              </DevRow>
-            )}
+            {/* Node ID now lives on the server card / "This device" — it's
+                node identity, not a developer detail. */}
             <DevRow>
               <DetailLabel>Local database</DetailLabel>
               <LocalDbControl
@@ -2103,17 +2118,6 @@ const StatusDot = styled.span<{ $state: LocalDbStatus }>`
     }
   }};
   flex-shrink: 0;
-`;
-
-const PeerIdRow = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-`;
-
-const PeerIdText = styled.code`
-  font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
 `;
 
 const PeerSyncResult = styled.div<{ $error: boolean }>`

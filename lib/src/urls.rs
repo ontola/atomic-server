@@ -94,6 +94,13 @@ pub const PERSONAL_DRIVE: &str = "https://atomicdata.dev/properties/personalDriv
 /// Resources shared with this agent (e.g. accepted invites); clients show as "Shared with me".
 pub const SHARED_WITH_ME: &str = "https://atomicdata.dev/properties/sharedWithMe";
 pub const AVAILABLE_DOMAINS: &str = "https://atomicdata.dev/properties/availableDomains";
+// ... for the Server (node) itself, served by the `/server` endpoint
+pub const SERVER: &str = "https://atomicdata.dev/classes/Server";
+pub const SERVER_NODE_ID: &str = "https://atomicdata.dev/properties/server/nodeId";
+pub const SERVER_VERSION: &str = "https://atomicdata.dev/properties/server/version";
+pub const SERVER_MANAGED: &str = "https://atomicdata.dev/properties/server/managed";
+pub const SERVER_PORTAL_URL: &str = "https://atomicdata.dev/properties/server/portalUrl";
+
 // ... for Peers
 pub const PEER_NODE_ID: &str = "https://atomicdata.dev/properties/peer/nodeId";
 pub const PEER_DEVICE_NAME: &str = "https://atomicdata.dev/properties/peer/deviceName";

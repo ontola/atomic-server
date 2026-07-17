@@ -1776,13 +1776,11 @@ msgstr "Añadir"
 
 #: src/components/ThisDeviceCode.tsx
 #: src/components/Toaster.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Copy"
 msgstr "Copiar"
 
-#: src/routes/SyncRoute.tsx
-msgid "Node DID copied to clipboard"
-msgstr "DID del nodo copiado al portapapeles"
+#~ msgid "Node DID copied to clipboard"
+#~ msgstr "DID del nodo copiado al portapapeles"
 
 #: src/components/forms/SearchBox/SearchBox.tsx
 #: src/routes/LinkOpenRouter.tsx
@@ -4990,12 +4988,9 @@ msgstr ""
 msgid "Embedded (this device)"
 msgstr ""
 
-#. 0: localNodeId.slice(0, 12)
-#: src/routes/SyncRoute.tsx
-msgid "did:ad:node:{0}…"
-msgstr ""
+#~ msgid "did:ad:node:{0}…"
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Node ID"
 msgstr ""
@@ -5451,6 +5446,7 @@ msgid "Copy Node ID"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Node ID copied"
 msgstr ""
 
@@ -5460,4 +5456,9 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Known server"
+msgstr ""
+
+#. 0: rawToNodeDid(serverNodeId)
+#: src/routes/SyncRoute.tsx
+msgid "Copy {0}"
 msgstr ""
