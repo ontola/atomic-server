@@ -22,51 +22,9 @@ use atomic_lib::{
     errors::AtomicResult,
     Storelike,
 };
-use atomic_server_lib as atomic_server;
 use std::time::Duration;
 
-fn start_server() -> u16 {
-    let unique = atomic_lib::utils::random_string(10);
-    let port = portpicker::pick_unused_port().expect("no free port");
-
-    use clap::Parser;
-    let opts = atomic_server::config::Opts::parse_from([
-        "atomic-server",
-        "--initialize",
-        "--port",
-        &port.to_string(),
-        "--data-dir",
-        &format!("./.temp/wscommitiso_{}/db", unique),
-        "--config-dir",
-        &format!("./.temp/wscommitiso_{}/config", unique),
-    ]);
-
-    let mut config = atomic_server::config::build_config(opts).expect("config failed");
-    config.search_index_path = format!("./.temp/wscommitiso_{}/search", unique).into();
-
-    std::thread::spawn(move || {
-        let rt = actix_web::rt::System::new();
-        rt.block_on(async {
-            atomic_server::serve::serve(config).await.unwrap();
-        });
-    });
-
-    port
-}
-
-async fn wait_for_server(port: u16) {
-    let base = format!("http://localhost:{}", port);
-    // The server's vector-search (fastembed) init can take ~15-20s cold, and
-    // longer when multiple test servers boot under CPU contention. Give it
-    // ample headroom — the readiness signal is the bind, not a fixed timeout.
-    for _ in 0..400 {
-        if reqwest::get(&base).await.is_ok() {
-            return;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    panic!("Server did not start within 40 seconds");
-}
+use crate::common::{start_server, wait_for_server};
 
 /// Create a `did:ad:` Class resource under `parent`, sign it as `store`'s
 /// default agent, and return `(derived subject, wire-JSON commit)`.
@@ -110,7 +68,7 @@ async fn make_did_commit(
 
 #[tokio::test]
 async fn commits_do_not_leak_across_drives() -> AtomicResult<()> {
-    let port = start_server();
+    let port = start_server("ws_commit_isolation");
     wait_for_server(port).await;
     let server_url = format!("http://localhost:{}", port);
     let ws_url = format!("ws://localhost:{}/ws", port);

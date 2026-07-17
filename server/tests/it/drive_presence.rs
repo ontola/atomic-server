@@ -22,50 +22,11 @@ use atomic_lib::{
     },
     errors::AtomicResult,
 };
-use atomic_server_lib as atomic_server;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 
 /// Start an AtomicServer on a random port in a background thread.
-fn start_server() -> u16 {
-    let unique = atomic_lib::utils::random_string(10);
-    let port = portpicker::pick_unused_port().expect("no free port");
-
-    use clap::Parser;
-    let opts = atomic_server::config::Opts::parse_from([
-        "atomic-server",
-        "--initialize",
-        "--port",
-        &port.to_string(),
-        "--data-dir",
-        &format!("./.temp/drive_presence_{}/db", unique),
-        "--config-dir",
-        &format!("./.temp/drive_presence_{}/config", unique),
-    ]);
-
-    let mut config = atomic_server::config::build_config(opts).expect("config failed");
-    config.search_index_path = format!("./.temp/drive_presence_{}/search", unique).into();
-
-    std::thread::spawn(move || {
-        let rt = actix_web::rt::System::new();
-        rt.block_on(async {
-            atomic_server::serve::serve(config).await.unwrap();
-        });
-    });
-
-    port
-}
-
-async fn wait_for_server(port: u16) {
-    let base = format!("http://localhost:{}", port);
-    for _ in 0..600 {
-        if reqwest::get(&base).await.is_ok() {
-            return;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    panic!("Server did not start within 60 seconds");
-}
+use crate::common::{start_server, wait_for_server};
 
 /// Wait up to `secs` for a `PresenceUpdate` on `drive`; `None` on timeout.
 async fn recv_presence(rx: &mut Receiver<WsMessage>, drive: &str, secs: u64) -> Option<Vec<u8>> {
@@ -86,7 +47,7 @@ async fn recv_presence(rx: &mut Receiver<WsMessage>, drive: &str, secs: u64) -> 
 
 #[tokio::test]
 async fn presence_relays_caches_and_gates() -> AtomicResult<()> {
-    let port = start_server();
+    let port = start_server("drive_presence");
     wait_for_server(port).await;
     let server_url = format!("http://localhost:{}", port);
     let ws_url = format!("ws://localhost:{}/ws", port);

@@ -13,50 +13,8 @@ use atomic_lib::{
     Db, Storelike,
 };
 use atomic_server_lib as atomic_server;
-use std::time::Duration;
 
-/// Start an AtomicServer on a random port in a background thread.
-fn start_server(unique: &str) -> u16 {
-    let port = portpicker::pick_unused_port().expect("no free port");
-
-    use clap::Parser;
-    let opts = atomic_server::config::Opts::parse_from([
-        "atomic-server",
-        "--initialize",
-        "--port",
-        &port.to_string(),
-        "--data-dir",
-        &format!("./.temp/replicate_{}/db", unique),
-        "--config-dir",
-        &format!("./.temp/replicate_{}/config", unique),
-    ]);
-
-    let mut config = atomic_server::config::build_config(opts).expect("config failed");
-    config.search_index_path = format!("./.temp/replicate_{}/search", unique).into();
-
-    std::thread::spawn(move || {
-        let rt = actix_web::rt::System::new();
-        rt.block_on(async {
-            atomic_server::serve::serve(config).await.unwrap();
-        });
-    });
-
-    port
-}
-
-async fn wait_for_server(port: u16) {
-    let base = format!("http://localhost:{}", port);
-
-    for _ in 0..50 {
-        if reqwest::get(&base).await.is_ok() {
-            return;
-        }
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-
-    panic!("Server did not start within 5 seconds");
-}
+use crate::common::{start_server, wait_for_server};
 
 /// A self-hosted node: its own store, its own agent, one private drive with a
 /// child resource in it.
@@ -90,7 +48,7 @@ async fn source_node(unique: &str) -> (Db, atomic_lib::agents::Agent, String, St
 /// second version-vector probe agreeing proves the data is really there.
 #[tokio::test]
 async fn pushes_a_drive_to_a_server_that_has_never_seen_it() {
-    let port = start_server("lands");
+    let port = start_server("replicate_lands");
     wait_for_server(port).await;
     let ws_url = format!("ws://localhost:{}/ws", port);
 
@@ -125,7 +83,7 @@ async fn pushes_a_drive_to_a_server_that_has_never_seen_it() {
 /// what the target stored.
 #[tokio::test]
 async fn replicating_twice_pushes_nothing_the_second_time() {
-    let port = start_server("twice");
+    let port = start_server("replicate_twice");
     wait_for_server(port).await;
     let ws_url = format!("ws://localhost:{}/ws", port);
 
@@ -166,7 +124,7 @@ async fn replicating_twice_pushes_nothing_the_second_time() {
 /// contacts servers the user explicitly named.
 #[tokio::test]
 async fn a_stored_target_is_re_pushed_on_boot() {
-    let port = start_server("boot");
+    let port = start_server("replicate_boot");
     wait_for_server(port).await;
     let ws_url = format!("ws://localhost:{}/ws", port);
 
@@ -208,7 +166,7 @@ async fn a_stored_target_is_re_pushed_on_boot() {
 /// private drive somewhere else.
 #[tokio::test]
 async fn refuses_to_export_a_private_drive_for_an_anonymous_requester() {
-    let port = start_server("anon");
+    let port = start_server("replicate_anon");
     wait_for_server(port).await;
     let ws_url = format!("ws://localhost:{}/ws", port);
 
@@ -253,7 +211,7 @@ async fn refuses_to_export_a_private_drive_for_an_anonymous_requester() {
 /// client can actually *read* them.
 #[tokio::test]
 async fn a_fresh_client_reads_a_replicated_resource_after_the_source_is_gone() {
-    let port = start_server("freshread");
+    let port = start_server("replicate_freshread");
     wait_for_server(port).await;
     let ws_url = format!("ws://localhost:{}/ws", port);
 

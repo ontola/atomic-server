@@ -10,56 +10,16 @@
 //! Run: cargo test -p atomic-server --test put_blob
 
 use atomic_lib::{client::connected::Client, errors::AtomicResult, urls, Value};
-use std::time::Duration;
 
-use atomic_server_lib as atomic_server;
 
-fn start_server() -> u16 {
-    let unique = atomic_lib::utils::random_string(10);
-    let port = portpicker::pick_unused_port().expect("no free port");
-
-    use clap::Parser;
-    let opts = atomic_server::config::Opts::parse_from([
-        "atomic-server",
-        "--initialize",
-        "--port",
-        &port.to_string(),
-        "--data-dir",
-        &format!("./.temp/put_blob_{}/db", unique),
-        "--config-dir",
-        &format!("./.temp/put_blob_{}/config", unique),
-    ]);
-
-    let mut config = atomic_server::config::build_config(opts).expect("config failed");
-    config.search_index_path = format!("./.temp/put_blob_{}/search", unique).into();
-
-    std::thread::spawn(move || {
-        let rt = actix_web::rt::System::new();
-        rt.block_on(async {
-            atomic_server::serve::serve(config).await.unwrap();
-        });
-    });
-
-    port
-}
-
-async fn wait_for_server(port: u16) {
-    let base = format!("http://localhost:{}", port);
-    for _ in 0..50 {
-        if reqwest::get(&base).await.is_ok() {
-            return;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    panic!("Server did not start within 5 seconds");
-}
+use crate::common::{start_server, wait_for_server};
 
 /// The legit flow this endpoint exists for: the outbox drains a COMMIT
 /// (creating a resource that references `did:ad:blob:<hash>`) before
 /// pushing the blob's raw bytes — matches `local-outbox.ts`'s ordering.
 #[tokio::test]
 async fn put_blob_succeeds_after_referencing_commit_lands() -> AtomicResult<()> {
-    let port = start_server();
+    let port = start_server("put_blob");
     wait_for_server(port).await;
     let server_url = format!("http://localhost:{}", port);
 
@@ -114,7 +74,7 @@ async fn put_blob_succeeds_after_referencing_commit_lands() -> AtomicResult<()> 
 /// to must be rejected — the hash alone is not the write capability.
 #[tokio::test]
 async fn put_blob_rejects_unreferenced_hash() -> AtomicResult<()> {
-    let port = start_server();
+    let port = start_server("put_blob");
     wait_for_server(port).await;
     let server_url = format!("http://localhost:{}", port);
 

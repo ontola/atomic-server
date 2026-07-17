@@ -9,55 +9,16 @@ use atomic_lib::{
     },
     errors::AtomicResult,
 };
-use atomic_server_lib as atomic_server;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::time::Duration;
 
 static REQ_ID: AtomicU16 = AtomicU16::new(1);
 
-fn start_server() -> u16 {
-    let unique = atomic_lib::utils::random_string(10);
-    let port = portpicker::pick_unused_port().expect("no free port");
-
-    use clap::Parser;
-    let opts = atomic_server::config::Opts::parse_from([
-        "atomic-server",
-        "--initialize",
-        "--port",
-        &port.to_string(),
-        "--data-dir",
-        &format!("./.temp/wscommit_{}/db", unique),
-        "--config-dir",
-        &format!("./.temp/wscommit_{}/config", unique),
-    ]);
-
-    let mut config = atomic_server::config::build_config(opts).expect("config failed");
-    config.search_index_path = format!("./.temp/wscommit_{}/search", unique).into();
-
-    std::thread::spawn(move || {
-        let rt = actix_web::rt::System::new();
-        rt.block_on(async {
-            atomic_server::serve::serve(config).await.unwrap();
-        });
-    });
-
-    port
-}
-
-async fn wait_for_server(port: u16) {
-    let base = format!("http://localhost:{}", port);
-    for _ in 0..50 {
-        if reqwest::get(&base).await.is_ok() {
-            return;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    panic!("Server did not start within 5 seconds");
-}
+use crate::common::{start_server, wait_for_server};
 
 #[tokio::test]
 async fn ws_commit_syncs_to_subscriber() -> AtomicResult<()> {
-    let port = start_server();
+    let port = start_server("ws_commit");
     wait_for_server(port).await;
     let server_url = format!("http://localhost:{}", port);
     let ws_url = format!("ws://localhost:{}/ws", port);
