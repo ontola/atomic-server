@@ -745,6 +745,66 @@ pub async fn close_ws_sync() -> Result<(), String> {
     Ok(())
 }
 
+/// Push the active drive to a server, so it is hosted there as well as here.
+///
+/// [`open_ws_sync`] fetches a drive this device lacks, and pushes commits made
+/// from now on — but a drive made here before any server was connected has
+/// never been offered to one. This offers it: the same replication
+/// `/replicate-drive` runs, signed as this device's agent, which is the drive's
+/// owner and so may write it at the remote.
+///
+/// This is the only way a workspace made on this device reaches a browser: a
+/// browser is not a peer and cannot be paired with — it reads from a server.
+///
+/// Returns the number of resources pushed.
+pub async fn sync_drive_to_server(server_url: String) -> Result<i32, String> {
+    use atomic_lib::sync::replicate::{replicate_drive_to_remote, ReplicateAuth};
+
+    let store = db()?;
+    let drive = store.get_active_drive().ok_or("No active drive")?;
+    let agent = store.get_default_agent().map_err(err)?;
+    let ws_url = ws_sync::server_origin_to_ws_url(&server_url)?;
+
+    tracing::info!(
+        "[sync_drive_to_server] pushing {} to {ws_url}",
+        &drive[..drive.len().min(20)]
+    );
+
+    let outcome = replicate_drive_to_remote(
+        store.as_ref(),
+        &drive,
+        &ws_url,
+        // Export as the owner: the drive's own agent, whose key this device
+        // holds. Anything they can read is theirs to take with them.
+        &atomic_lib::agents::ForAgent::AgentSubject(agent.subject.clone()),
+        ReplicateAuth::Agent(Box::new(agent)),
+    )
+    .await
+    .map_err(|e: atomic_lib::AtomicError| {
+        tracing::error!("[sync_drive_to_server] failed: {e}");
+        e.to_string()
+    })?;
+
+    // `in_sync` is the receiver's drive hash matching ours on a second probe.
+    // Without it the push was acked but dropped — silently, for lack of write
+    // rights — and reporting a count would be reporting a lie.
+    if !outcome.in_sync {
+        return Err(
+            "The server accepted the workspace but does not have it. It may not \
+             allow this account to write there."
+                .into(),
+        );
+    }
+
+    tracing::info!(
+        "[sync_drive_to_server] pushed {} resources, {} blobs",
+        outcome.pushed,
+        outcome.blobs_served
+    );
+
+    Ok(outcome.pushed as i32)
+}
+
 /// Restore agent + drive on app start. Opens WS sync, fetches drive from server when missing,
 /// then falls back to Iroh discover / known peers (previous "auto pair on boot" behaviour).
 /// Returns `"ok"` or `"needs_sync"`.

@@ -183,6 +183,17 @@ class AtomicClient {
 
   static Future<void> closeWsSync() => ffi.closeWsSync();
 
+  /// Push the active drive to `serverUrl`, so it is hosted there too.
+  /// Returns the number of resources pushed.
+  ///
+  /// [openWsSync] fetches a drive this device lacks and pushes commits made
+  /// from now on; a drive made here before any server was connected has never
+  /// been offered to one. This offers it — and it is the only way a workspace
+  /// made here reaches a browser, which is not a peer and cannot be paired
+  /// with.
+  static Future<int> syncDriveToServer(String serverUrl) =>
+      ffi.syncDriveToServer(serverUrl: serverUrl);
+
   /// Boot / auto-login: load agent, WS sync, fetch drive, optional Iroh discover.
   /// Returns `ok` or `needs_sync`.
   static Future<String> resumeSession({

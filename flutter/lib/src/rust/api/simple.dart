@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'simple/types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `canvas_entry`, `db_event_to_json`, `destroy_resource_and_sync`, `drive_resource_exists`, `ensure_cache_listener`, `ensure_sync_connectivity`, `get_canvas`, `is_unreachable_hub_url`, `nudge_peers_after_local_change`, `save_and_push`, `sync_connectivity_inner`, `try_auto_peer_sync`
+// These functions are ignored because they are not marked as `pub`: `canvas_cache_key`, `canvas_entry`, `db_event_to_json`, `destroy_resource_and_sync`, `drive_resource_exists`, `ensure_cache_listener`, `ensure_sync_connectivity`, `get_canvas`, `is_unreachable_hub_url`, `nudge_peers_after_local_change`, `save_and_push`, `sync_connectivity_inner`, `try_auto_peer_sync`, `version_id_from_json`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `SyncConnectivityReport`
 
 /// Local-first Atomic Data SDK for Flutter.
@@ -181,6 +181,21 @@ Future<void> openWsSync({required String serverUrl}) =>
 
 /// Close the WebSocket sync session.
 Future<void> closeWsSync() => RustLib.instance.api.crateApiSimpleCloseWsSync();
+
+/// Push the active drive to a server, so it is hosted there as well as here.
+///
+/// [`open_ws_sync`] fetches a drive this device lacks, and pushes commits made
+/// from now on — but a drive made here before any server was connected has
+/// never been offered to one. This offers it: the same replication
+/// `/replicate-drive` runs, signed as this device's agent, which is the drive's
+/// owner and so may write it at the remote.
+///
+/// This is the only way a workspace made on this device reaches a browser: a
+/// browser is not a peer and cannot be paired with — it reads from a server.
+///
+/// Returns the number of resources pushed.
+Future<int> syncDriveToServer({required String serverUrl}) =>
+    RustLib.instance.api.crateApiSimpleSyncDriveToServer(serverUrl: serverUrl);
 
 /// Restore agent + drive on app start. Opens WS sync, fetches drive from server when missing,
 /// then falls back to Iroh discover / known peers (previous "auto pair on boot" behaviour).

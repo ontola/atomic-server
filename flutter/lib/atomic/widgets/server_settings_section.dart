@@ -152,6 +152,45 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
     await _load();
   }
 
+  /// Offer this device's workspace to the active server.
+  ///
+  /// Connecting alone does not do this: a drive made here before any server was
+  /// connected has never been pushed, so it exists nowhere else — and a browser
+  /// signed in as the same account still sees nothing, because a browser reads
+  /// from a server rather than syncing with devices.
+  Future<void> _pushWorkspace() async {
+    final active = _active;
+
+    if (active == null || _busy) return;
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    try {
+      final pushed = await AtomicClient.syncDriveToServer(active);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            pushed == 0
+                ? 'Already up to date'
+                : 'Synced $pushed ${pushed == 1 ? 'resource' : 'resources'} to ${serverLabel(active)}',
+          ),
+        ),
+      );
+
+      await _loadActiveDetails();
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _remove(String url) async {
     final wasActive = sameOrigin(url, _active);
 
@@ -277,6 +316,14 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              if (isActive)
+                TextButton(
+                  onPressed: _busy ? null : _pushWorkspace,
+                  child: const Text(
+                    'Sync workspace here',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
               if (!isActive)
                 TextButton(
                   onPressed: _busy ? null : () => _switchTo(server),
