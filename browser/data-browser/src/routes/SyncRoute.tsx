@@ -35,6 +35,11 @@ import {
   type NodeDriveUsage,
 } from '../helpers/managedServer';
 import { getDriveUsage } from '../helpers/managedUsage';
+import {
+  normalizeServerUrl,
+  sameOrigin,
+  serverLabel,
+} from '../helpers/serverUrl';
 import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
@@ -86,73 +91,6 @@ function nodeDidToRaw(nodeDid: string): string | undefined {
 
 function rawToNodeDid(raw: string): string {
   return `${NODE_DID_PREFIX}${raw}`;
-}
-
-/** Whether `authority` (`host` or `host:port`) names a machine on this network
- * rather than the internet: loopback, the RFC 1918 private ranges, or mDNS.
- *
- * Not just `localhost`, because `localhost` is only local to the machine that
- * types it. Another device on the network reaches this one by its LAN address,
- * and that address wants `http` for the same reason `localhost` does — no
- * public certificate exists for it. */
-function isLocalAddress(authority: string): boolean {
-  const host = authority.split(':')[0].toLowerCase();
-
-  if (host === 'localhost' || host === '::1' || host.endsWith('.local')) {
-    return true;
-  }
-
-  const octets = host.split('.').map(Number);
-
-  if (octets.length !== 4 || octets.some(o => !Number.isInteger(o))) {
-    return false;
-  }
-
-  const [a, b] = octets;
-
-  return (
-    a === 127 ||
-    a === 10 ||
-    (a === 192 && b === 168) ||
-    (a === 172 && b >= 16 && b <= 31)
-  );
-}
-
-/** Turn what someone types in the connect box into a full server URL. A bare
- * `host[:port]` is fine — a local address gets `http://`, anything else
- * `https://` — so no one has to type the scheme. */
-function normalizeServerUrl(input: string): string {
-  const trimmed = input.trim().replace(/\/+$/, '');
-
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
-  }
-
-  return `${isLocalAddress(trimmed) ? 'http' : 'https'}://${trimmed}`;
-}
-
-/** Whether two server URLs point at the same origin — how "is this the one in
- * use?" is decided, tolerant of trailing slashes and paths. */
-function sameOrigin(a: string, b: string | undefined): boolean {
-  if (!b) {
-    return false;
-  }
-
-  try {
-    return new URL(a).origin === new URL(b).origin;
-  } catch {
-    return false;
-  }
-}
-
-/** A server's `host:port` for display, so two `localhost`s on different ports
- * (e.g. an embedded node and a stale one) are distinguishable. */
-function serverLabel(server: string): string {
-  try {
-    return new URL(server).host;
-  } catch {
-    return server;
-  }
 }
 
 function normalizeStoredPeer(peer: KnownPeer): KnownPeer | undefined {
@@ -792,12 +730,15 @@ function SyncPage() {
             <ConnBody>
               <ConnTitle>Your data is on another device</ConnTitle>
               <ConnSub>
-                {isNode && localNodeId
-                  ? 'You’re signed in, but this device doesn’t have your workspace yet. Use the pairing code below to bring it over.'
-                  : 'You’re signed in, but this device doesn’t have your workspace yet. Connect the server that has it.'}
+                {/* Either code below brings it over: this device's when it is a
+                    node, otherwise the server's — the other device scans it and
+                    syncs the drive somewhere this one can read. */}
+                {pairNodeId
+                  ? 'You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it.'
+                  : 'You’re signed in, but this device doesn’t have your workspace yet. Connect a server that can reach it.'}
               </ConnSub>
               <ConnActions>
-                {!(isNode && localNodeId) && (
+                {!pairNodeId && (
                   <Button onClick={() => setShowAddServer(true)}>
                     Connect a server
                   </Button>
