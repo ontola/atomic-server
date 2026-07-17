@@ -34,6 +34,10 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
   String? _active;
   ServerInfo _info = ServerInfo.unknown;
   DriveUsage? _usage;
+  // Paired devices (Iroh peers) share this one Devices list with servers — a
+  // server is just an always-on device, and the browser lists them together.
+  List<Map<String, String>> _peers = [];
+  Set<String> _livePeerIds = {};
   bool _loading = true;
   bool _busy = false;
   bool _showAdd = false;
@@ -56,11 +60,25 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
     final servers = await AtomicSession.knownServers();
     final active = await AtomicSession.activeServer();
 
+    // Peers come from the Rust side; tolerate its absence (widget tests, a
+    // not-yet-initialized bridge) by showing the servers alone rather than
+    // failing the whole list.
+    List<Map<String, String>> peers = [];
+    Set<String> livePeerIds = {};
+    try {
+      peers = await AtomicClient.getKnownPeers();
+      livePeerIds = AtomicClient.livePeerIds();
+    } catch (_) {
+      // no peers available
+    }
+
     if (!mounted) return;
 
     setState(() {
       _servers = servers;
       _active = active;
+      _peers = peers;
+      _livePeerIds = livePeerIds;
       _loading = false;
     });
 
@@ -237,11 +255,11 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
             ),
           ),
         ),
-        if (_servers.isEmpty)
+        if (_servers.isEmpty && _peers.isEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              'No always-on device yet. This device syncs directly with your others.',
+              'No other devices yet. Pair one below, or add an always-on device by address.',
               style: TextStyle(
                 fontSize: 12,
                 color: theme.colorScheme.onSurfaceVariant,
@@ -249,6 +267,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
             ),
           ),
         for (final server in _servers) _serverCard(theme, server),
+        for (final peer in _peers) _peerCard(theme, peer),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -396,11 +415,72 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
     ];
   }
 
+  /// A paired device (Iroh peer), shown alongside the always-on ones. Live
+  /// means it holds a connection right now; the green dot mirrors the browser.
+  Widget _peerCard(ThemeData theme, Map<String, String> peer) {
+    final nodeId = peer['node_id'] ?? '';
+    final name = (peer['name'] ?? '').trim();
+    final label = name.isNotEmpty
+        ? name
+        : '${nodeId.substring(0, nodeId.length.clamp(0, 12))}…';
+    final isLive = AtomicClient.isLivePeer(nodeId, _livePeerIds);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.phone_android, size: 18, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 14),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: isLive
+                  ? Colors.green.withValues(alpha: 0.15)
+                  : scheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              isLive ? 'Connected' : 'Paired',
+              style: TextStyle(
+                fontSize: 10,
+                color: isLive ? Colors.green.shade800 : scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 16),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            tooltip: 'Remove',
+            onPressed: () async {
+              await AtomicClient.removeKnownPeer(nodeId);
+              setState(() =>
+                  _peers.removeWhere((p) => p['node_id'] == nodeId));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _addButton() {
     return TextButton.icon(
       onPressed: () => setState(() => _showAdd = true),
       icon: const Icon(Icons.add, size: 16),
-      label: const Text('Connect an always-on device', style: TextStyle(fontSize: 12)),
+      label: const Text('Connect by address', style: TextStyle(fontSize: 12)),
       style: TextButton.styleFrom(padding: EdgeInsets.zero),
     );
   }

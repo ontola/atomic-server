@@ -619,24 +619,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Only on the sign-in screen, where it answers a question someone actually
-  /// has: my data is elsewhere — where? "Sync hub URL" named the machinery
-  /// rather than the need, and named it a third way besides "server" and
-  /// "connection".
-  Widget _serverUrlField() {
-    return TextField(
-      controller: _serverController,
-      decoration: const InputDecoration(
-        labelText: 'Where your data is (optional)',
-        hintText: 'localhost:9883 — leave empty if it’s on your other devices',
-        border: OutlineInputBorder(),
-        isDense: true,
-      ),
-      keyboardType: TextInputType.url,
-      autocorrect: false,
-    );
-  }
-
   Widget _errorWidget() {
     if (_error == null) return const SizedBox.shrink();
     return Padding(
