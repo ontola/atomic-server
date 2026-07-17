@@ -340,8 +340,10 @@ class _LoginScreenState extends State<LoginScreen> {
           style: TextStyle(fontSize: 13, color: c.iconDisabled),
         ),
         const SizedBox(height: 24),
-        _serverUrlField(),
-        const SizedBox(height: 12),
+        // No sync address here: a new identity has no data anywhere to go and
+        // find, so asking where it syncs — before asking your name — is a
+        // question about plumbing at the one moment there is nothing to plumb.
+        // Settings has it, for when there is.
         TextField(
           controller: _nameController,
           decoration: const InputDecoration(
@@ -565,12 +567,16 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  /// Only on the sign-in screen, where it answers a question someone actually
+  /// has: my data is elsewhere — where? "Sync hub URL" named the machinery
+  /// rather than the need, and named it a third way besides "server" and
+  /// "connection".
   Widget _serverUrlField() {
     return TextField(
       controller: _serverController,
       decoration: const InputDecoration(
-        labelText: 'Sync hub URL (optional)',
-        hintText: 'localhost:9883 — or leave empty for device-to-device',
+        labelText: 'Where your data is (optional)',
+        hintText: 'localhost:9883 — leave empty if it’s on your other devices',
         border: OutlineInputBorder(),
         isDense: true,
       ),
