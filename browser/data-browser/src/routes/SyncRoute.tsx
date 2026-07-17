@@ -200,8 +200,9 @@ function SyncPage() {
     setKnownServers(serverURLStorage.getKnownServers());
   }, [baseURL]);
 
-  // Server switching + adding happen inline in the Connections section (not a
-  // separate dialog): `showAddServer` reveals the add-a-server form.
+  // Switching + adding happen inline in the Devices section (not a separate
+  // dialog): `showAddServer` reveals the add-a-device form. An always-on device
+  // is added by address; one you carry is added by pairing with its code.
   const [showAddServer, setShowAddServer] = useState(false);
   const [serverInput, setServerInput] = useState('');
   const [localNodeId, setLocalNodeId] = useState<string | null>(null);
@@ -411,16 +412,13 @@ function SyncPage() {
 
   const nodes = deriveNodeStatuses(status);
 
-  // The app is itself an Iroh peer node only inside the Tauri shell (embedded
-  // server). A plain browser talks to a remote server; its node id would be
-  // that *server's*, not "this device", so pairing is hidden.
-  //
-  // The server's node is not a pairing target either, however reachable it
-  // looks: peer sync fails closed on identity (`is_same_agent_as_ours` in
-  // sync/peer.rs), and a server signs in as its own agent, never as yours. A
-  // code for it would be refused by every device that scanned it.
+  // Whose code to show. Inside the Tauri shell this app is itself a node, so
+  // it shows its own. A browser tab is not a node and never will be — but the
+  // always-on device it is signed in to is one, and that is the device another
+  // of yours should reach. Either way a code is a node id, and a node id needs
+  // no address, port or certificate to dial: that is the point of Iroh.
   const isNode = isRunningInTauri();
-  const pairNodeId = isNode ? localNodeId : undefined;
+  const pairNodeId = isNode ? localNodeId : serverNodeId;
   // A local-only drive (the demo, or any drive made offline) is a normal
   // drive the sync engine was simply told to skip — not a special code path.
   // When the active drive is local-only the "syncs with N places" story is a
@@ -486,15 +484,15 @@ function SyncPage() {
     }
 
     if (!isNode && !clientDbOn) {
-      return 'Your data lives on the connected server.';
+      return 'Your data lives on the device you’re connected to.';
     }
 
     if (connectionCount === 0) {
       return 'Your data lives on this device — it isn’t syncing anywhere yet.';
     }
 
-    return `Your data lives on this device and syncs with ${connectionCount} ${
-      connectionCount === 1 ? 'place' : 'places'
+    return `Your data lives on this device and syncs with ${connectionCount} other ${
+      connectionCount === 1 ? 'device' : 'devices'
     }.`;
   }
 
@@ -504,7 +502,7 @@ function SyncPage() {
 
     try {
       await store.promoteLocalDrive(status.drive);
-      toast.success('Syncing this workspace to the server…');
+      toast.success('Syncing this workspace…');
     } catch (e) {
       store.notifyError(e as Error);
     } finally {
@@ -738,12 +736,12 @@ function SyncPage() {
                     syncs the drive somewhere this one can read. */}
                 {pairNodeId
                   ? 'You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it.'
-                  : 'You’re signed in, but this device doesn’t have your workspace yet. Connect a server that can reach it.'}
+                  : 'You’re signed in, but this device doesn’t have your workspace yet. Connect a device that has it.'}
               </ConnSub>
               <ConnActions>
                 {!pairNodeId && (
                   <Button onClick={() => setShowAddServer(true)}>
-                    Connect a server
+                    Connect a device
                   </Button>
                 )}
               </ConnActions>
@@ -797,14 +795,14 @@ function SyncPage() {
                 </Button>
               </ConnActions>
               {!status.serverConnected && (
-                <ConnMeta>Connect a server below first.</ConnMeta>
+                <ConnMeta>Connect a device below first.</ConnMeta>
               )}
             </ConnBody>
           </LocalDriveNotice>
         )}
 
         <Section>
-          <SectionTitle>Connections</SectionTitle>
+          <SectionTitle>Devices</SectionTitle>
           {localOnlyDrive && connectionCount > 0 && (
             <ConnNote>
               These sync your other drives — not this workspace.
@@ -821,8 +819,8 @@ function SyncPage() {
               </p>
               <p>
                 {isNode
-                  ? 'Pair another device to sync peer-to-peer, or connect a server to back up and reach it from the web.'
-                  : 'Connect a server to back up your data and reach it from anywhere.'}
+                  ? 'Pair another device to sync directly, or connect an always-on one to reach your data from anywhere.'
+                  : 'Connect an always-on device to back up your data and reach it from anywhere.'}
               </p>
             </EmptyConnections>
           )}
@@ -885,8 +883,8 @@ function SyncPage() {
                     {isActive
                       ? isCloud
                         ? serverHostname
-                        : 'Self-hosted Atomic Server · in use'
-                      : 'Known server'}
+                        : 'Always-on · in use'
+                      : 'Always-on device'}
                   </ConnSub>
 
                   {/* Status details belong to the server actually in use. */}
@@ -1032,10 +1030,9 @@ function SyncPage() {
                 }}
               >
                 <AddServerExplainer>
-                  Connect to an Atomic-Server by its web address — it keeps your
-                  data online and lets you share it. To sync with another one of
-                  your own devices instead, use the pairing code
-                  {isNode ? ' below' : ' in the desktop app'}.
+                  Add an always-on device by its address — it keeps your data
+                  online and lets you share it. A device you carry has no
+                  address: scan its code below instead.
                 </AddServerExplainer>
                 <ServerInputRow>
                   <ServerInput
@@ -1068,7 +1065,7 @@ function SyncPage() {
               </AddServerForm>
             ) : (
               <AddButton onClick={() => setShowAddServer(true)}>
-                <FaPlus aria-hidden /> Connect a server
+                <FaPlus aria-hidden /> Connect a device
               </AddButton>
             )}
           </AddRow>
@@ -1081,34 +1078,49 @@ function SyncPage() {
           <Section>
             <SectionTitle>Sync a device</SectionTitle>
             <ConnNote>
-              A pairing code only says where to reach a device — the other side
-              still proves it holds your key. Both directions work: show yours,
-              or take theirs.
+              A code only says where to reach a device — the other side still
+              proves it holds your key, and only gets what that key may read.
             </ConnNote>
             <PairCard>
               <PairSide>
-                <PairLabel>Show this code</PairLabel>
+                <PairLabel>
+                  {isNode ? 'Show this code' : `Scan with your other device`}
+                </PairLabel>
                 <QrCentered>
                   <PairingCode nodeDid={rawToNodeDid(pairNodeId)} />
                 </QrCentered>
+                {!isNode && (
+                  <PairHint>
+                    This is {serverLabel(status.serverUrl ?? '')}, the always-on
+                    device this browser reads from — not the browser itself.
+                    Scanning it syncs your workspace there, and it shows up
+                    here.
+                  </PairHint>
+                )}
               </PairSide>
 
-              <PairDivider aria-hidden />
+              {/* Taking someone else's code needs a node to dial from, which a
+                  browser tab is not. */}
+              {isNode && (
+                <>
+                  <PairDivider aria-hidden />
 
-              <PairSide>
-                <PairLabel>
-                  {isMobileTauri()
-                    ? 'Or scan the other device’s'
-                    : 'Or paste the other device’s'}
-                </PairLabel>
-                {/* Same path a scanned deep link takes (PairingLinkHandler):
-                    validate, persist the peer, start a sync. */}
-                <ConnectToDeviceForm onCode={deliverDeepLink} />
-                <PairHint>
-                  Not signed in over there yet? Sign in with your account secret
-                  first, then pair.
-                </PairHint>
-              </PairSide>
+                  <PairSide>
+                    <PairLabel>
+                      {isMobileTauri()
+                        ? 'Or scan the other device’s'
+                        : 'Or paste the other device’s'}
+                    </PairLabel>
+                    {/* Same path a scanned deep link takes (PairingLinkHandler):
+                        validate, persist the peer, start a sync. */}
+                    <ConnectToDeviceForm onCode={deliverDeepLink} />
+                    <PairHint>
+                      Not signed in over there yet? Sign in with your account
+                      secret first, then pair.
+                    </PairHint>
+                  </PairSide>
+                </>
+              )}
             </PairCard>
           </Section>
         )}

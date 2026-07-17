@@ -56,7 +56,7 @@ export function ConnectServerDialog({
   return (
     <Dialog {...dialogProps}>
       <DialogTitle>
-        <h1>Connect a server</h1>
+        <h1>Connect a device</h1>
       </DialogTitle>
       <DialogContent>
         <Explainer>

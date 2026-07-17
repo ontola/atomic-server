@@ -459,8 +459,12 @@ class _LoginScreenState extends State<LoginScreen> {
           style: TextStyle(fontSize: 13, color: c.iconDisabled),
         ),
         const SizedBox(height: 24),
-        _serverUrlField(),
-        const SizedBox(height: 12),
+        // Signing in restores who you are. Where your data is, is the next
+        // screen's question — and only if it turns out not to be here, which
+        // is the moment it can be asked with something to point at (`needsSync`
+        // offers pairing). Asking up front asks everyone, before anyone has the
+        // problem, and asks it as an address when the answer is usually a
+        // device you can just scan.
         TextField(
           controller: _secretController,
           decoration: const InputDecoration(

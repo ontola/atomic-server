@@ -4916,18 +4916,15 @@ msgstr ""
 msgid "Setting up your demo…"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Your data lives on the connected server."
-msgstr ""
+#~ msgid "Your data lives on the connected server."
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Your data lives on this device — it isn’t syncing anywhere yet."
 msgstr ""
 
-#. 0: connectionCount; 1: connectionCount === 1 ? 'place' \\: 'places'
-#: src/routes/SyncRoute.tsx
-msgid "Your data lives on this device and syncs with {0} {1}."
-msgstr ""
+#~ msgid "Your data lives on this device and syncs with {0} {1}."
+#~ msgstr ""
 
 #. 0: status.lastDriveSync.count.toLocaleString()
 #: src/routes/SyncRoute.tsx
@@ -4946,13 +4943,11 @@ msgstr ""
 msgid "Server-only · no local cache"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Pair another device to sync peer-to-peer, or connect a server to back up and reach it from the web."
-msgstr ""
+#~ msgid "Pair another device to sync peer-to-peer, or connect a server to back up and reach it from the web."
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Connect a server to back up your data and reach it from anywhere."
-msgstr ""
+#~ msgid "Connect a server to back up your data and reach it from anywhere."
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Cloud Sync"
@@ -5011,17 +5006,15 @@ msgstr ""
 msgid "This workspace is stored only on this device — it isn’t backed up or synced anywhere."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Syncing this workspace to the server…"
-msgstr ""
+#~ msgid "Syncing this workspace to the server…"
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Sync this workspace"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Connect a server below first."
-msgstr ""
+#~ msgid "Connect a server below first."
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Only on this device"
@@ -5048,8 +5041,6 @@ msgstr ""
 msgid "Your data is on another device"
 msgstr ""
 
-#: src/components/ConnectServerDialog.tsx
-#: src/routes/SyncRoute.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connect a server"
 msgstr ""
@@ -5398,13 +5389,11 @@ msgstr ""
 msgid "Node ID copied"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Self-hosted Atomic Server · in use"
-msgstr ""
+#~ msgid "Self-hosted Atomic Server · in use"
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Known server"
-msgstr ""
+#~ msgid "Known server"
+#~ msgstr ""
 
 #. 0: rawToNodeDid(serverNodeId)
 #: src/routes/SyncRoute.tsx
@@ -5415,9 +5404,8 @@ msgstr ""
 msgid "You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a server that can reach it."
-msgstr ""
+#~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a server that can reach it."
+#~ msgstr ""
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Send it here from that device"
@@ -5429,4 +5417,58 @@ msgstr ""
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Already did that, or it was on a server all along? Connect that server here and your workspace appears."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Your data lives on the device you’re connected to."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Syncing this workspace…"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a device that has it."
+msgstr ""
+
+#: src/components/ConnectServerDialog.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Connect a device"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Connect a device below first."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Pair another device to sync directly, or connect an always-on one to reach your data from anywhere."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Connect an always-on device to back up your data and reach it from anywhere."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Always-on · in use"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Always-on device"
+msgstr ""
+
+#. 0: connectionCount; 1: connectionCount === 1 ? 'device' \\: 'devices'
+#: src/routes/SyncRoute.tsx
+msgid "Your data lives on this device and syncs with {0} other {1}."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Scan with your other device"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This is"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid ", the always-on device this browser reads from — not the browser itself. Scanning it syncs your workspace there, and it shows up here."
 msgstr ""
