@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'simple/types.dart';
 
 // These functions are ignored because they are not marked as `pub`: `canvas_cache_key`, `canvas_entry`, `db_event_to_json`, `destroy_resource_and_sync`, `drive_resource_exists`, `ensure_cache_listener`, `ensure_sync_connectivity`, `get_canvas`, `is_unreachable_hub_url`, `nudge_peers_after_local_change`, `save_and_push`, `sync_connectivity_inner`, `try_auto_peer_sync`, `version_id_from_json`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `SyncConnectivityReport`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `PeerSyncReport`, `SyncConnectivityReport`
 
 /// Local-first Atomic Data SDK for Flutter.
 ///
@@ -231,9 +231,7 @@ String? getPeerId() => RustLib.instance.api.crateApiSimpleGetPeerId();
 Future<void> peerAnnounce({required String driveSubject}) =>
     RustLib.instance.api.crateApiSimplePeerAnnounce(driveSubject: driveSubject);
 
-/// Sync the active drive with a specific peer by Iroh NodeID.
-/// Call `start_peer()` first.
-Future<int> peerSync({required String nodeId}) =>
+Future<String> peerSync({required String nodeId}) =>
     RustLib.instance.api.crateApiSimplePeerSync(nodeId: nodeId);
 
 /// Discover a peer for a drive via pkarr relay and sync. Call `start_peer()` first.

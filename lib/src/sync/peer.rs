@@ -1100,7 +1100,16 @@ async fn sync_drive_with_peer_forced(
 /// don't speak HELLO yet). Display-only — see [`crate::sync::protocol::HELLO_MAX_CHARS`].
 #[derive(Debug, Clone)]
 pub struct PeerSyncOutcome {
+    /// Resources taken from the peer.
     pub count: usize,
+    /// Resources handed to the peer. A device sending its workspace somewhere
+    /// that has none takes nothing back — reporting only `count` tells the
+    /// person who just did that they did nothing.
+    pub pushed: usize,
+    /// The peer said both sides already hold the same thing. Nothing moved,
+    /// and nothing needed to: the difference between "up to date" and "failed"
+    /// is invisible in a count alone.
+    pub in_sync: bool,
     pub peer_name: Option<String>,
 }
 
@@ -1143,6 +1152,8 @@ pub async fn sync_drive_with_peer_using_outcome(
         );
         return Ok(PeerSyncOutcome {
             count: 0,
+            pushed: 0,
+            in_sync: true,
             peer_name: None,
         });
     }
@@ -1563,6 +1574,8 @@ pub async fn sync_drive_with_peer_using_outcome(
 
     Ok(PeerSyncOutcome {
         count: total_imported,
+        pushed: total_pushed,
+        in_sync: acked_in_sync,
         peer_name: peer_display_name,
     })
 }

@@ -171,7 +171,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<int> crateApiSimplePeerDiscoverSync({required String driveSubject});
 
-  Future<int> crateApiSimplePeerSync({required String nodeId});
+  Future<String> crateApiSimplePeerSync({required String nodeId});
 
   Future<String?> crateApiSimplePollDbEvent({required int timeoutMs});
 
@@ -1210,7 +1210,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<int> crateApiSimplePeerSync({required String nodeId}) {
+  Future<String> crateApiSimplePeerSync({required String nodeId}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -1219,7 +1219,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             funcId: 41, port: port_);
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_i_32,
+        decodeSuccessData: sse_decode_String,
         decodeErrorData: sse_decode_String,
       ),
       constMeta: kCrateApiSimplePeerSyncConstMeta,

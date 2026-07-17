@@ -107,13 +107,10 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
 
   /// "Synced 12 resources with Alice's Laptop" (HELLO name known) or
   /// "Synced 12 resources" (peer didn't introduce itself).
-  String _formatSyncResult(int count, String nodeId) {
-    final name = _peerNameFor(nodeId);
-    final noun = count == 1 ? 'resource' : 'resources';
-    return name == null
-        ? 'Synced $count $noun'
-        : 'Synced $count $noun with $name';
-  }
+  /// What the sync did, in the words of whoever asked for it. The name comes
+  /// from a previous HELLO when the result itself carries none.
+  String _formatSyncResult(PeerSyncResult result, String nodeId) =>
+      result.describe(_peerNameFor(nodeId));
 
   Future<void> _loadData() async {
     setState(() => _loading = true);
@@ -199,14 +196,14 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
         await AtomicClient.startPeer();
         setState(() => _peerId = nodeId);
       }
-      final count = await AtomicClient.peerSync(nodeId);
+      final result = await AtomicClient.peerSync(nodeId);
       _peerController.clear();
       // Refresh first so `_peerNameFor` sees the HELLO name `peerSync`
       // just persisted into the known-peers DB.
       await _loadData();
       setState(() {
-        _syncResult = _formatSyncResult(count, nodeId);
-        _lastSyncCount = count;
+        _syncResult = _formatSyncResult(result, nodeId);
+        _lastSyncCount = result.imported;
         _lastSyncTime = DateTime.now();
         _syncing = false;
         _showAddPeer = false;
@@ -525,15 +522,15 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
                                 _syncResult = null;
                               });
                               try {
-                                final count =
+                                final result =
                                     await AtomicClient.peerSync(nodeId);
                                 // Refresh first so the HELLO name persisted
                                 // by `peerSync` is reflected in the toast.
                                 await _loadData();
                                 setState(() {
                                   _syncResult =
-                                      _formatSyncResult(count, nodeId);
-                                  _lastSyncCount = count;
+                                      _formatSyncResult(result, nodeId);
+                                  _lastSyncCount = result.imported;
                                   _lastSyncTime = DateTime.now();
                                   _syncing = false;
                                 });

@@ -1095,7 +1095,18 @@ pub async fn peer_announce(drive_subject: String) -> Result<(), String> {
 
 /// Sync the active drive with a specific peer by Iroh NodeID.
 /// Call `start_peer()` first.
-pub async fn peer_sync(node_id: String) -> Result<i32, String> {
+/// What a sync did, in both directions. A count of imports alone cannot tell
+/// "sent your workspace" or "already up to date" from "nothing happened" —
+/// and those are most of what actually occurs.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct PeerSyncReport {
+    pub imported: i32,
+    pub pushed: i32,
+    pub in_sync: bool,
+    pub peer_name: Option<String>,
+}
+
+pub async fn peer_sync(node_id: String) -> Result<String, String> {
     tracing::info!(
         "[peer_sync] called with node_id={}",
         &node_id[..node_id.len().min(16)]
@@ -1118,15 +1129,27 @@ pub async fn peer_sync(node_id: String) -> Result<i32, String> {
     }
 
     tracing::info!("[peer_sync] calling sync_drive_with_peer...");
-    let count =
-        atomic_lib::sync::peer::sync_drive_with_peer(&node_id, &drive, store.as_ref())
+    let outcome =
+        atomic_lib::sync::peer::sync_drive_with_peer_outcome(&node_id, &drive, store.as_ref())
             .await
             .map_err(|e: atomic_lib::AtomicError| {
                 tracing::error!("[peer_sync] failed: {e}");
                 e.to_string()
             })?;
-    tracing::info!("[peer_sync] success: {count} resources");
-    Ok(count as i32)
+    tracing::info!(
+        "[peer_sync] success: imported {}, pushed {}, in_sync {}",
+        outcome.count,
+        outcome.pushed,
+        outcome.in_sync
+    );
+
+    serde_json::to_string(&PeerSyncReport {
+        imported: outcome.count as i32,
+        pushed: outcome.pushed as i32,
+        in_sync: outcome.in_sync,
+        peer_name: outcome.peer_name,
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// Discover a peer for a drive via pkarr relay and sync. Call `start_peer()` first.

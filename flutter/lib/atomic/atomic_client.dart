@@ -129,7 +129,10 @@ class AtomicClient {
       ffi.peerAnnounce(driveSubject: driveSubject);
 
   /// Sync the active drive with a peer by NodeID.
-  static Future<int> peerSync(String nodeId) => ffi.peerSync(nodeId: nodeId);
+  static Future<PeerSyncResult> peerSync(String nodeId) async =>
+      PeerSyncResult.fromJson(
+        jsonDecode(await ffi.peerSync(nodeId: nodeId)) as Map<String, dynamic>,
+      );
 
   /// Discover a peer via DHT and sync. Combines lookup + sync.
   static Future<int> peerDiscoverSync(String driveSubject) =>
@@ -362,4 +365,61 @@ class SyncConnectivityReport {
     required this.livePeers,
     required this.message,
   });
+}
+
+/// What a sync did, in both directions.
+///
+/// A count of imports alone says "0" for the two things that most often
+/// happen — sending a workspace somewhere that has none, and both sides
+/// already holding the same thing — and "0" reads as failure.
+class PeerSyncResult {
+  const PeerSyncResult({
+    required this.imported,
+    required this.pushed,
+    required this.inSync,
+    this.peerName,
+  });
+
+  /// Resources taken from the other device.
+  final int imported;
+
+  /// Resources handed to it.
+  final int pushed;
+
+  /// Both sides already held the same thing. Nothing moved, nothing needed to.
+  final bool inSync;
+
+  /// What the other device calls itself, if it said.
+  final String? peerName;
+
+  factory PeerSyncResult.fromJson(Map<String, dynamic> json) => PeerSyncResult(
+        imported: (json['imported'] as num?)?.toInt() ?? 0,
+        pushed: (json['pushed'] as num?)?.toInt() ?? 0,
+        inSync: json['in_sync'] == true,
+        peerName: json['peer_name'] as String?,
+      );
+
+  /// What happened, as a person would say it.
+  String describe([String? fallbackName]) {
+    final name = peerName?.isNotEmpty == true ? peerName : fallbackName;
+    final withWhom = name == null ? '' : ' with $name';
+
+    if (imported > 0 && pushed > 0) {
+      return 'Synced$withWhom — sent $pushed, received $imported';
+    }
+
+    if (pushed > 0) {
+      return 'Sent $pushed ${pushed == 1 ? 'resource' : 'resources'}$withWhom';
+    }
+
+    if (imported > 0) {
+      return 'Received $imported ${imported == 1 ? 'resource' : 'resources'}$withWhom';
+    }
+
+    if (inSync) {
+      return 'Already in sync$withWhom';
+    }
+
+    return 'Nothing to sync$withWhom';
+  }
 }

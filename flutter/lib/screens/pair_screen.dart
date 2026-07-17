@@ -146,7 +146,7 @@ class _PairScreenState extends State<PairScreen> {
   String? _scannedNodeId;
   String? _scannedName;
   String? _error;
-  int _syncCount = 0;
+  PeerSyncResult? _syncResult;
   bool _scanned = false;
   MobileScannerController? _scanController;
   String _deviceName = '';
@@ -230,7 +230,7 @@ class _PairScreenState extends State<PairScreen> {
       _error = null;
     });
     try {
-      final count = await AtomicClient.peerSync(nodeId).timeout(
+      final result = await AtomicClient.peerSync(nodeId).timeout(
         const Duration(seconds: 25),
         onTimeout: () => throw Exception(
           'Sync timed out after 25s. Keep both devices open on Wi‑Fi and try again.',
@@ -239,7 +239,7 @@ class _PairScreenState extends State<PairScreen> {
       await AtomicClient.addKnownPeer(nodeId, name);
       if (!mounted) return;
       setState(() {
-        _syncCount = count;
+        _syncResult = result;
         _step = _Step.done;
       });
     } catch (e) {
@@ -288,7 +288,7 @@ class _PairScreenState extends State<PairScreen> {
       case _Step.done:
         return [
           FilledButton(
-            onPressed: () => Navigator.pop(context, _syncCount),
+            onPressed: () => Navigator.pop(context, _syncResult?.imported ?? 0),
             child: const Text('Done'),
           ),
         ];
@@ -407,8 +407,11 @@ class _PairScreenState extends State<PairScreen> {
             const SizedBox(height: 12),
             Text('Paired with $label', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
+            // What happened, both directions. "Synced 0 resources" was true of
+            // a workspace sent somewhere that had none, and of two devices
+            // already holding the same thing — and read as failure for both.
             Text(
-              'Synced $_syncCount resource${_syncCount != 1 ? 's' : ''}',
+              _syncResult?.describe() ?? 'Nothing to sync',
               style: TextStyle(
                   fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
             ),
