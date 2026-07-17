@@ -129,7 +129,14 @@ class AndroidEnvironment {
 
     final ndkVersionParsed = Version.parse(ndkVersion);
     final rustFlagsKey = 'CARGO_ENCODED_RUSTFLAGS';
-    final rustFlagsValue = _libGccWorkaround(targetTempDir, ndkVersionParsed);
+    // Align native library LOAD segments to 16 KB. Android 15+ ships 16 KB-page
+    // devices and Play requires 16 KB-aligned .so files; NDK 26 still defaults
+    // segments to 4 KB, which trips "ELF alignment check failed" and fails to
+    // load on those devices. This is scoped to the Android target build (a
+    // cross-compile, so host build scripts are unaffected). \x1f is cargo's
+    // CARGO_ENCODED_RUSTFLAGS argument separator. (NDK r28+ makes this default.)
+    final rustFlagsValue = '${_libGccWorkaround(targetTempDir, ndkVersionParsed)}'
+        '\x1f-C\x1flink-arg=-Wl,-z,max-page-size=16384';
 
     final runRustTool =
         Platform.isWindows ? 'run_build_tool.cmd' : 'run_build_tool.sh';
