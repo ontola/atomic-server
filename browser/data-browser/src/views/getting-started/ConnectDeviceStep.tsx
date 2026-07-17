@@ -15,8 +15,6 @@ import {
 import { useSettings } from '../../helpers/AppSettings';
 import { deviceHasDriveData } from '../../helpers/driveData';
 import { fetchPersonalDriveSubject } from '../../helpers/personalDrive';
-import { fetchManagedInfo } from '../../helpers/managedServer';
-import { serverLabel } from '../../helpers/serverUrl';
 import { serverURLStorage } from '../../helpers/serverURLStorage';
 import { isRunningInTauri } from '../../helpers/tauri';
 import {
@@ -39,14 +37,6 @@ import {
 const DRIVE_WAIT_MS = 30_000;
 const DRIVE_POLL_INTERVAL_MS = 1_000;
 
-/**
- * How often to look while the code is on screen, waiting for the other device
- * to be scanned and push. Slower than the wait above, which runs for a bounded
- * 30s after a known action: this one runs for as long as someone leaves the
- * screen open, and every look is a fetch.
- */
-const WATCH_INTERVAL_MS = 3_000;
-
 interface ConnectDeviceStepProps {
   /** The drive that should be here but isn't. Absent if none resolved. */
   drive?: string;
@@ -67,15 +57,11 @@ interface ConnectDeviceStepProps {
  * other device scan the code shown here (desktops don't). Either way this
  * device ends up holding the drive.
  *
- * A plain browser tab has no node of its own, so it shows the code of the
- * server it is signed in to: the other device scans that, syncs the drive
- * there, and the browser reads it from somewhere it can reach. To the person
- * holding the phone that is still "bring my data to that screen", which is why
- * the copy talks about devices — the server is how it travels, not what this
- * is about.
- *
- * Connecting a different server stays on offer for the case that framing
- * doesn't cover: a workspace already synced somewhere else.
+ * A plain browser tab has no node of its own, and cannot borrow the server's:
+ * peer sync fails closed on identity (`is_same_agent_as_ours` in
+ * sync/peer.rs), and a server signs in as its own agent, never as yours. So a
+ * browser has no code to show — the workspace has to be pushed to a server
+ * from the device holding it, and read from there.
  */
 export function ConnectDeviceStep({
   drive,
@@ -162,57 +148,6 @@ export function ConnectDeviceStep({
     };
   }, [baseURL]);
 
-  /**
-   * The node another device should reach to put the workspace within this
-   * browser's reach. A browser is not a node, so the code shows the one it is
-   * signed in to — scanning it there syncs the drive to somewhere this browser
-   * can read, which is the whole of what "bring it here" means.
-   */
-  const [reachableNodeDid, setReachableNodeDid] = useState<string>();
-
-  useEffect(() => {
-    if (isNode || !baseURL) {
-      return;
-    }
-
-    let cancelled = false;
-
-    void fetchManagedInfo(baseURL).then(info => {
-      if (!cancelled && info.nodeId) {
-        setReachableNodeDid(info.nodeId);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [baseURL, isNode]);
-
-  // The other device pushes when it scans, which changes nothing here to
-  // react to — so watch for the workspace landing while the code is up.
-  // Without this the data arrives and the screen sits there, still asking.
-  useEffect(() => {
-    if (isNode || !reachableNodeDid) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const timer = setInterval(async () => {
-      const arrived = await driveIsHere();
-
-      if (!cancelled && arrived) {
-        clearInterval(timer);
-        onConnected(arrived);
-      }
-    }, WATCH_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [reachableNodeDid, isNode]);
-
   function connectWithCode(code: string) {
     // The dialog owns the progress and the outcome from here: connect, then
     // wait for the workspace to actually land, then offer to open it.
@@ -262,46 +197,22 @@ export function ConnectDeviceStep({
               )}
             </>
           ) : (
-            <>
-              {reachableNodeDid && (
-                <Section>
-                  <SectionTitle>Bring it here from that device</SectionTitle>
-                  <Explainer>
-                    Scan this code with the device that has your data. Your
-                    workspace syncs across and opens here — the code only says
-                    where to reach this browser, and the other side still proves
-                    it holds your key.
-                  </Explainer>
-                  <QrRow>
-                    <PairingCode nodeDid={reachableNodeDid} />
-                  </QrRow>
-                  <Aside>
-                    Your data travels through {serverLabel(baseURL)}, the server
-                    this browser is signed in to — a browser tab can’t hold a
-                    workspace by itself.
-                  </Aside>
-                </Section>
-              )}
-
-              <Section>
-                <SectionTitle>
-                  {reachableNodeDid
-                    ? '…or point this browser somewhere else'
-                    : 'Point this browser at your data'}
-                </SectionTitle>
-                <Explainer>
-                  {reachableNodeDid
-                    ? 'Already synced your workspace somewhere else? Connect that server instead.'
-                    : 'This browser isn’t signed in to a server that can reach your other devices. Connect one to bring your workspace here.'}
-                </Explainer>
-                <Button
-                  subtle={!!reachableNodeDid}
-                  onClick={() => setShowServerDialog(true)}
-                >
-                  Connect a server
-                </Button>
-              </Section>
-            </>
+            <Section>
+              <SectionTitle>Send it here from that device</SectionTitle>
+              <Explainer>
+                This browser isn’t a device your others can sync with directly —
+                it reads your workspace from a server. So push it up from the
+                device that has it: open <strong>Sync</strong> there and sync
+                the workspace to a server.
+              </Explainer>
+              <Aside>
+                Already did that, or it was on a server all along? Connect that
+                server here and your workspace appears.
+              </Aside>
+              <Button subtle onClick={() => setShowServerDialog(true)}>
+                Connect a server
+              </Button>
+            </Section>
           )}
         </Column>
       </OnboardingCard>
