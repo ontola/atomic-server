@@ -788,15 +788,10 @@ async fn server_info_endpoint() {
     );
 }
 
-/// `/all-versions` lists a resource's versions as links to the `/version`
-/// endpoint. Those links have to name a path that exists — they were built as
-/// `/versioning?commit=`, which matches no endpoint at all, so every version
-/// link fell through to the SPA. Nothing covered `/version`.
-///
-/// This asserts the link shape only. `/version` itself still fails deeper in
-/// `construct_version`, which runs a sorted (indexed) commit query without the
-/// drive scope such queries now require. Reviving that is a separate question
-/// from the link being addressable.
+/// The versioning round trip: `/all-versions` lists a resource's versions, and
+/// each link it hands out resolves to that resource as it was then. Both read
+/// the Loro oplog. Nothing covered either endpoint before, which is how they
+/// stayed broken (links pointed at `/versioning`, a path that never existed).
 #[actix_rt::test]
 async fn version_endpoints() {
     let unique_string = atomic_lib::utils::random_string(10);
@@ -824,15 +819,34 @@ async fn version_endpoints() {
     )
     .await;
 
-    let drive_did = atomic_lib::test_utils::create_test_drive(&appstate.store)
+    // A resource renamed once, each edit committed as its own change the way a
+    // client authors them — otherwise the two collapse into one Loro change,
+    // and there is no history to travel.
+    let agent = appstate.store.get_default_agent().unwrap().subject;
+    let subject = format!("{}/version-test", appstate.config.get_origin());
+
+    let doc = atomic_lib::loro::AtomicLoroDoc::new();
+    doc.set_property(urls::READ, &vec![agent.clone()].into())
+        .unwrap();
+    doc.set_property(urls::WRITE, &vec![agent].into()).unwrap();
+    doc.set_property(urls::NAME, &"first".to_string().into())
+        .unwrap();
+    doc.commit_with_message("e-1");
+
+    doc.set_property(urls::NAME, &"second".to_string().into())
+        .unwrap();
+    doc.commit_with_message("e-2");
+
+    let mut resource = atomic_lib::Resource::new(subject.as_str().into());
+    resource.apply_state_doc(doc).unwrap();
+    appstate
+        .store
+        .add_resource_opts(&resource, false, true, true)
         .await
         .unwrap();
 
     let req = build_request_authenticated(
-        &format!(
-            "/all-versions?subject={}",
-            urlencoding::encode(drive_did.as_str())
-        ),
+        &format!("/all-versions?subject={}", urlencoding::encode(&subject)),
         &appstate,
     )
     .to_request();
@@ -846,19 +860,40 @@ async fn version_endpoints() {
         .as_array()
         .cloned()
         .unwrap_or_default();
-    assert!(!members.is_empty(), "expected version members: {body}");
-
-    let member = members[0].as_str().unwrap();
     assert!(
-        member.contains("/version?commit="),
-        "version links must point at the /version endpoint: {member}"
+        members.len() >= 2,
+        "two edits should be two versions: {body}"
     );
+
+    // Newest first, so the last member is the resource as first written.
+    let oldest = members.last().unwrap().as_str().unwrap();
     assert!(
-        appstate
-            .store
-            .get_endpoints()
-            .iter()
-            .any(|e| e.path == "/version"),
-        "the path version links name must be a real endpoint"
+        oldest.contains("/version?subject=") && oldest.contains("version-id="),
+        "a version link must address a subject at a version: {oldest}"
+    );
+
+    let path = &oldest[oldest.find("/version?").unwrap()..];
+    let req = build_request_authenticated(path, &appstate).to_request();
+    let resp = test::call_service(&app, req).await;
+    let status = resp.status();
+    let body = get_body(resp);
+    assert!(status.is_success(), "{path} status {status}: {body}");
+
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        json[urls::NAME].as_str(),
+        Some("first"),
+        "the oldest version should read as the resource was first written: {body}"
+    );
+
+    // ...while the resource itself is still at its latest value.
+    let req = build_request_authenticated("/version-test", &appstate).to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = get_body(resp);
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        json[urls::NAME].as_str(),
+        Some("second"),
+        "reading a version must not move the live resource: {body}"
     );
 }

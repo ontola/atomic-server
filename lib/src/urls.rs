@@ -94,6 +94,9 @@ pub const PERSONAL_DRIVE: &str = "https://atomicdata.dev/properties/personalDriv
 /// Resources shared with this agent (e.g. accepted invites); clients show as "Shared with me".
 pub const SHARED_WITH_ME: &str = "https://atomicdata.dev/properties/sharedWithMe";
 pub const AVAILABLE_DOMAINS: &str = "https://atomicdata.dev/properties/availableDomains";
+/// Identifies a version in a resource's Loro history. See [crate::history].
+pub const VERSION_ID: &str = "https://atomicdata.dev/properties/versionId";
+
 // ... for the Server (node) itself, served by the `/server` endpoint
 pub const SERVER: &str = "https://atomicdata.dev/classes/Server";
 pub const SERVER_NODE_ID: &str = "https://atomicdata.dev/properties/server/nodeId";

@@ -1574,5 +1574,15 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "portal-url"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/versionId",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Identifies one version in a resource's Loro history. Opaque (base64url-encoded Loro Frontiers) — pass it to the `/version` endpoint, do not parse it.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "version-id"
   }
 ]

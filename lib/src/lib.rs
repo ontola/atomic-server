@@ -82,10 +82,7 @@ pub mod endpoints;
 pub mod errors;
 pub mod genesis;
 pub mod hierarchy;
-/// Resource version history (time-travel reads). Prefer this over `loro` in app code.
-pub mod history {
-    pub use crate::loro::{VersionID, VersionMetadata};
-}
+pub mod history;
 #[doc(hidden)]
 pub mod loro;
 pub mod mapping;
