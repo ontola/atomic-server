@@ -5079,23 +5079,7 @@ msgid "Scan this code from your other device instead. It only says where to reac
 msgstr ""
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Connect the server that has it"
-msgstr ""
-
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "This browser can’t sync directly with your other devices. Connect the server your workspace lives on to reach it."
-msgstr ""
-
-#: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Skip for now"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "You’re signed in, but this device doesn’t have your workspace yet. Use the pairing code below to bring it over."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect the server that has it."
 msgstr ""
 
 #: src/components/ConnectToDeviceForm.tsx
@@ -5428,21 +5412,21 @@ msgid "Copy {0}"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "A pairing code only says where to reach a device — the other side still proves it holds your key. Both directions work: show yours, or take theirs."
+msgid "You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "Scan this with another device to sync your drives through this server. The code only says where to reach it — the other side still proves it holds your key."
+msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a server that can reach it."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Scan to sync with this server"
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Send it here from that device"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "This code reaches"
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "This browser isn’t a device your others can sync with directly — it reads your workspace from a server. So push it up from the device that has it: open <0>Sync</0> there and sync the workspace to a server."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid ", not this browser — a browser tab isn’t a device others can sync with."
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Already did that, or it was on a server all along? Connect that server here and your workspace appears."
 msgstr ""
