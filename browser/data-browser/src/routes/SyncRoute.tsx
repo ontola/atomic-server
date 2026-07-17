@@ -32,6 +32,7 @@ import {
   type ManagedInfo,
   EMPTY_NODE_INFO,
   fetchNodeDriveUsage,
+  forgetServerPeer,
   type NodeDriveUsage,
 } from '../helpers/managedServer';
 import { getDriveUsage } from '../helpers/managedUsage';
@@ -590,6 +591,28 @@ function SyncPage() {
     localStorage.setItem('atomic-peers', JSON.stringify(peers));
   }
 
+  async function disconnectServerPeer(nodeId: string) {
+    const agent = store.getAgent();
+    const serverUrl = status.serverUrl;
+
+    if (!agent || !serverUrl) return;
+
+    // Drop it locally right away so the card disappears; the server forgets the
+    // reconnect entry and closes the live connection. A refetch reconciles.
+    setManagedInfo(prev => ({
+      ...prev,
+      peers: (prev.peers ?? []).filter(p => p.nodeId !== nodeId),
+    }));
+
+    const ok = await forgetServerPeer(serverUrl, nodeId, agent);
+
+    if (!ok) {
+      setPeerSyncResult('Error: could not disconnect that device');
+    }
+
+    fetchManagedInfo(serverUrl).then(setManagedInfo);
+  }
+
   async function syncWithPeer(input: string) {
     if (!input || !status.drive) return;
 
@@ -1047,6 +1070,13 @@ function SyncPage() {
                   <ConnSub>
                     Paired with {serverLabel(status.serverUrl ?? '')}
                   </ConnSub>
+                  <ConnActions>
+                    <NodeActionSubtle
+                      onClick={() => disconnectServerPeer(peer.nodeId)}
+                    >
+                      Disconnect
+                    </NodeActionSubtle>
+                  </ConnActions>
                 </ConnBody>
               </ConnCard>
             );

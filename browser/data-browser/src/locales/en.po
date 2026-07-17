@@ -577,6 +577,7 @@ msgstr "Not configured"
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Connected"
 msgstr "Connected"
 
@@ -1449,6 +1450,7 @@ msgstr "Sync"
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Offline"
 msgstr "Offline"
@@ -5474,3 +5476,11 @@ msgstr "Connect a device that has it"
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "An always-on device has an address — add it and your workspace appears."
 msgstr "An always-on device has an address — add it and your workspace appears."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Paste from clipboard"
+msgstr "Paste from clipboard"
+
+#: src/routes/SyncRoute.tsx
+msgid "Error: could not disconnect that device"
+msgstr "Error: could not disconnect that device"

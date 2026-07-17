@@ -126,6 +126,37 @@ export function accountCreationTarget(
   return { kind: 'local' };
 }
 
+/**
+ * Ask a server to stop syncing with a paired device. A browser is not a node,
+ * so this is how someone reading a server disconnects the phone that paired with
+ * it. Signed with the agent (node-admin only, server-side) and best-effort:
+ * returns false when the node is unreachable, the agent is unauthorized, or the
+ * node predates the endpoint.
+ */
+export async function forgetServerPeer(
+  serverUrl: string,
+  nodeId: string,
+  agent: Agent,
+): Promise<boolean> {
+  if (!serverUrl || !nodeId || !agent?.subject) return false;
+
+  const url = new URL('/forget-peer', serverUrl);
+  url.searchParams.set('node', nodeId);
+
+  try {
+    // Sign the exact URL being fetched (path + query), same scheme as
+    // fetchNodeDriveUsage — the server rebuilds and verifies it.
+    const headers = await signRequest(url.toString(), agent, {
+      Accept: 'application/json',
+    });
+    const res = await fetch(url.toString(), { method: 'POST', headers });
+
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export type NodeDriveUsage = {
   driveName: string | null;
   resourceCount: number;
