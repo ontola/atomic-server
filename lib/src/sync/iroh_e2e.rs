@@ -650,6 +650,112 @@ async fn same_agent_peers_reconcile_the_agent_resource() {
     );
 }
 
+/// A device hands a server its own agent resource on connect, even though they
+/// are different accounts. That is what lets a browser reading from the server
+/// later learn whose drives are whose: the agent resource carries `name` and
+/// `personalDrive`, lives outside every drive (so drive sync never moves it),
+/// and only travels on this handshake. Without it, signing in with a secret
+/// leaves the server holding your drive with no way to say it is yours.
+#[tokio::test]
+async fn a_device_hands_its_agent_resource_to_a_different_account_server() {
+    use crate::sync::peer;
+
+    // The server: its own account.
+    let db_server = Db::init_temp("agentx_server").await.unwrap();
+    db_server.setup("Server").await.unwrap();
+
+    // The phone: a named account with a drive, whose agent resource carries the
+    // name and drive pointer a fresh reader needs.
+    let db_phone = Db::init_temp("agentx_phone").await.unwrap();
+    let (phone_agent, _drive) = db_phone.setup("Alice").await.unwrap();
+    let phone_agent_subject = phone_agent.subject.to_string();
+
+    let (node_id, router) = peer::start(db_server.clone()).await.unwrap();
+    let ep_phone = iroh::Endpoint::builder()
+        .discovery_n0()
+        .discovery_local_network()
+        .bind()
+        .await
+        .unwrap();
+    ep_phone
+        .add_node_addr(router.endpoint().node_addr().await.unwrap())
+        .unwrap();
+
+    peer::sync_drive_with_peer_using(&ep_phone, &node_id.to_string(), &_drive, &db_phone, true)
+        .await
+        .expect("sync should not fail");
+
+    // The server should now hold the phone's agent resource, with its name —
+    // even though the phone is not the server's account.
+    let db_server_c = db_server.clone();
+    let subject = phone_agent_subject.clone();
+    let landed = wait_until(std::time::Duration::from_secs(10), || {
+        let db = db_server_c.clone();
+        let subject = subject.clone();
+        async move {
+            db.get_resource(&subject.as_str().into())
+                .await
+                .ok()
+                .and_then(|r| r.get(crate::urls::NAME).ok().map(|v| v.to_string()))
+                == Some("Alice".to_string())
+        }
+    })
+    .await;
+
+    assert!(
+        landed,
+        "the server should hold the phone's agent resource so a browser can find its drive"
+    );
+}
+
+/// A peer may hand over its *own* agent resource, and only its own. Now that
+/// every connect offers it (not just same-account ones), the boundary that
+/// keeps a peer from planting a *stranger's* identity — a forged public key, a
+/// `personalDrive` pointing at the attacker's drive — has to hold under that
+/// wider traffic. It does, and without a special case: `get_resource`
+/// synthesizes an agent resource from its own DID's public key, so the write
+/// is always checked against the real agent, and "agents can always edit
+/// themselves" admits only the holder of the key. This pins that.
+#[tokio::test]
+async fn a_peer_cannot_forge_a_third_agents_resource() {
+    use crate::agents::{Agent, ForAgent};
+    use crate::sync::peer;
+
+    let db_server = Db::init_temp("spoof_server").await.unwrap();
+    db_server.setup("Server").await.unwrap();
+
+    // Eve connects as herself; Victim is an account whose key she does not hold.
+    let eve = Agent::new(Some("Eve")).unwrap();
+    let victim = Agent::new(Some("Victim")).unwrap();
+
+    let mut cache = std::collections::HashMap::new();
+
+    // Eve tries to have Victim's agent resource admitted. She holds no key for
+    // it, and check_write against the synthesized victim agent denies her.
+    let forged = peer::admitted_for_drive_for_test(
+        &db_server,
+        &ForAgent::AgentSubject(eve.subject.clone()),
+        &victim.subject.to_string(),
+        &mut cache,
+    )
+    .await;
+    assert!(
+        !forged,
+        "a peer must not write an agent resource it holds no key for"
+    );
+
+    // Her own, by contrast, is admitted — the boundary is identity, not a
+    // blanket refusal of agent resources.
+    let own = peer::admitted_for_drive_for_test(
+        &db_server,
+        &ForAgent::AgentSubject(eve.subject.clone()),
+        &eve.subject.to_string(),
+        &mut cache,
+    )
+    .await;
+    assert!(own, "a peer's own agent resource must be admitted");
+}
+
 /// A device that gets its drive by pairing has no active drive of its own: the
 /// browser's secret carries a key and nothing else, so neither `create_drive`
 /// nor `load_agent_from_secret` ever names one. The auto-connect loop reads the

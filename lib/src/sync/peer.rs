@@ -582,6 +582,19 @@ fn start_live_sync(store: Db) {
 /// Scoped to one connection's lifetime — a fresh connection re-evaluates from
 /// scratch, which is exactly when a changed enrollment/rights grant should
 /// take effect anyway.
+/// Test window onto [admitted_for_drive] — the admission boundary the
+/// agent-resource guard lives in — without standing up two Iroh endpoints and
+/// forging a frame to reach it.
+#[cfg(test)]
+pub(crate) async fn admitted_for_drive_for_test(
+    store: &Db,
+    agent: &ForAgent,
+    drive_subject: &str,
+    cache: &mut std::collections::HashMap<String, bool>,
+) -> bool {
+    admitted_for_drive(store, agent, drive_subject, cache).await
+}
+
 async fn admitted_for_drive(
     store: &Db,
     agent: &ForAgent,
@@ -738,16 +751,20 @@ fn register_live_peer(
     // Always notify so both sides refresh UI (replacing a dead channel still counts).
     push_event(&key, 0, "connected");
 
-    // Hand a same-agent peer our own agent resource on connect. It lives
-    // outside any drive's subtree, so drive sync never carries it (see
-    // `own_agent_update_frame`). Both sides do this; the merge is idempotent.
-    // Guarded on same-agent so we never push our identity to a stranger — the
-    // dial/accept paths already refuse a different agent before reaching here,
-    // this is defence in depth.
-    if is_same_agent_as_ours(&store, &agent) {
-        if let Some(frame) = own_agent_update_frame(&store) {
-            let _ = tx_for_read.try_send(frame);
-        }
+    // Hand the peer our own agent resource on connect. It lives outside every
+    // drive's subtree, so drive sync never carries it (see
+    // `own_agent_update_frame`) — and yet it is the resource that says who owns
+    // which drive. A device signing in with a secret has the key and no name,
+    // no drive list, until this arrives; a server holding a drive for you can't
+    // tell a browser whose it is without it. So it always goes.
+    //
+    // It is our OWN identity only (`get_default_agent`), self-authored, so
+    // handing it over grants nothing — and the receiver admits an agent
+    // resource only from that agent (see `admitted_for_drive`), so nobody can
+    // forge someone else's from it. What it does reveal is our name and drive
+    // DIDs, to a peer we authenticated with; that is the point, not a leak.
+    if let Some(frame) = own_agent_update_frame(&store) {
+        let _ = tx_for_read.try_send(frame);
     }
 
     // Write loop: sends queued UPDATE frames to the peer
