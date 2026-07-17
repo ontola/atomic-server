@@ -12,6 +12,14 @@ export const serverProps = {
   version: 'https://atomicdata.dev/properties/server/version',
   managed: 'https://atomicdata.dev/properties/server/managed',
   portalUrl: 'https://atomicdata.dev/properties/server/portalUrl',
+  peers: 'https://atomicdata.dev/properties/server/peers',
+} as const;
+
+/** Property URLs of a nested `Peer` — a device the server syncs with. */
+export const peerProps = {
+  nodeId: 'https://atomicdata.dev/properties/peer/nodeId',
+  deviceName: 'https://atomicdata.dev/properties/peer/deviceName',
+  live: 'https://atomicdata.dev/properties/peer/live',
 } as const;
 
 export const NODE_DID_PREFIX = 'did:ad:node:';

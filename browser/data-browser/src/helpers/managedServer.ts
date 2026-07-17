@@ -1,5 +1,13 @@
 import { signRequest, type Agent } from '@tomic/react';
-import { serverProps } from './serverOntology';
+import { serverProps, peerProps } from './serverOntology';
+
+/** A device the server syncs with directly, from `/server`'s `peers`. */
+export type ServerPeer = {
+  nodeId: string;
+  deviceName: string | null;
+  /** Whether it holds a connection to the server right now. */
+  live: boolean;
+};
 
 /**
  * Node info, read from `GET /server` — a plain Atomic `Server` resource
@@ -19,6 +27,9 @@ export type ManagedInfo = {
   nodeId?: string | null;
   /** The atomic-server version the node runs. */
   version?: string | null;
+  /** The devices this server syncs with — how a browser sees the phone that
+   *  paired with its server, since a browser is not itself a node. */
+  peers?: ServerPeer[];
 };
 
 /** What a node reports when it is unreachable, or says nothing about itself. */
@@ -27,6 +38,7 @@ export const EMPTY_NODE_INFO: ManagedInfo = {
   portalUrl: null,
   nodeId: null,
   version: null,
+  peers: [],
 };
 
 const DEFAULT = EMPTY_NODE_INFO;
@@ -58,12 +70,30 @@ export async function fetchManagedInfo(
       (window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1');
 
+    const rawPeers = data?.[serverProps.peers];
+    const peers: ServerPeer[] = Array.isArray(rawPeers)
+      ? rawPeers
+          .map((p): ServerPeer | null => {
+            const nodeId = readString(p?.[peerProps.nodeId]);
+
+            return nodeId
+              ? {
+                  nodeId,
+                  deviceName: readString(p?.[peerProps.deviceName]),
+                  live: p?.[peerProps.live] === true,
+                }
+              : null;
+          })
+          .filter((p): p is ServerPeer => p !== null)
+      : [];
+
     return {
       managed: Boolean(data?.[serverProps.managed]),
       portalUrl:
         rawPortalUrl && onLocalhost ? 'http://localhost:49237' : rawPortalUrl,
       nodeId: readString(data?.[serverProps.nodeId]),
       version: readString(data?.[serverProps.version]),
+      peers,
     };
   } catch {
     // Older/self-hosted nodes have no such endpoint — treat as non-managed.

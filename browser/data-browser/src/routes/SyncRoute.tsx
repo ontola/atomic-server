@@ -248,12 +248,22 @@ function SyncPage() {
     }
 
     let cancelled = false;
-    fetchManagedInfo(serverUrl).then(info => {
-      if (!cancelled) setManagedInfo(info);
-    });
+
+    const poll = () =>
+      fetchManagedInfo(serverUrl).then(info => {
+        if (!cancelled) setManagedInfo(info);
+      });
+
+    void poll();
+
+    // Re-poll so a device connecting or dropping shows up without a reload —
+    // `peer/live` is a moment-to-moment fact, not a one-time read. Version and
+    // node id don't change, so this is cheap and idempotent.
+    const timer = setInterval(poll, 5000);
 
     return () => {
       cancelled = true;
+      clearInterval(timer);
     };
   }, [status.serverUrl]);
 
@@ -435,7 +445,13 @@ function SyncPage() {
   // device's own embedded one (browser: always; Tauri: only a real remote).
   const showServerConn = !!status.serverUrl && !embeddedActive;
   const pairedPeers = isNode ? knownPeers : [];
-  const connectionCount = (showServerConn ? 1 : 0) + pairedPeers.length;
+  // A browser is not a node, so it cannot pair with a device itself. But the
+  // server it reads from can — and reports who, over `/server`. So a phone
+  // paired with your server shows up here, as the server sees it. These are
+  // display-only: reaching them is the server's job, not this tab's.
+  const serverPeers = isNode ? [] : (managedInfo.peers ?? []);
+  const connectionCount =
+    (showServerConn ? 1 : 0) + pairedPeers.length + serverPeers.length;
 
   // Every known server, in one stable list — the active one is *styled*, not
   // moved. Rendering the active server as its own card above the rest made the
@@ -1005,6 +1021,36 @@ function SyncPage() {
               </ConnBody>
             </ConnCard>
           ))}
+
+          {/* Devices paired with the server this browser reads from — a phone
+              that scanned the code. The server reports them; this tab only
+              shows them. */}
+          {serverPeers.map(peer => {
+            const raw = nodeDidToRaw(peer.nodeId);
+            const name =
+              peer.deviceName ?? (raw ? `${raw.slice(0, 12)}…` : peer.nodeId);
+
+            return (
+              <ConnCard key={peer.nodeId}>
+                <ConnIcon $tone='device'>
+                  <FaMobileScreenButton />
+                </ConnIcon>
+                <ConnBody>
+                  <ConnTopRow>
+                    <ConnTitle title={peer.nodeId}>{name}</ConnTitle>
+                    <ConnTopRight>
+                      <StatusPill $status={peer.live ? 'synced' : 'unknown'}>
+                        {peer.live ? 'Connected' : 'Offline'}
+                      </StatusPill>
+                    </ConnTopRight>
+                  </ConnTopRow>
+                  <ConnSub>
+                    Paired with {serverLabel(status.serverUrl ?? '')}
+                  </ConnSub>
+                </ConnBody>
+              </ConnCard>
+            );
+          })}
 
           {peerSyncResult && (
             <PeerSyncResult $error={peerSyncResult.startsWith('Error')}>
