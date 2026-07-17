@@ -20,10 +20,36 @@ String normalizeServerUrl(String input) {
     return '';
   }
 
-  final isLocal = RegExp(r'^(localhost|127\.0\.0\.1)(:\d+)?$', caseSensitive: false)
-      .hasMatch(trimmed);
+  return '${isLocalAddress(trimmed) ? 'http' : 'https'}://$trimmed';
+}
 
-  return '${isLocal ? 'http' : 'https'}://$trimmed';
+/// Whether `authority` (`host` or `host:port`) names a machine on this network
+/// rather than the internet.
+///
+/// A phone cannot reach `localhost` — the dev server it wants is at the LAN
+/// address of the machine running it, so treating only `localhost` as local
+/// would default the one address a phone actually needs to `https`, which no
+/// dev server speaks. Private ranges can't hold public certificates anyway.
+bool isLocalAddress(String authority) {
+  final host = authority.split(':').first.toLowerCase();
+
+  if (host == 'localhost' || host == '::1' || host.endsWith('.local')) {
+    return true;
+  }
+
+  final octets = host.split('.');
+
+  if (octets.length != 4 || octets.any((o) => int.tryParse(o) == null)) {
+    return false;
+  }
+
+  final [a, b, _, _] = octets.map(int.parse).toList();
+
+  // The private ranges (RFC 1918) plus loopback.
+  return a == 127 ||
+      a == 10 ||
+      (a == 192 && b == 168) ||
+      (a == 172 && b >= 16 && b <= 31);
 }
 
 /// Whether two server URLs point at the same server — how "is this the one in

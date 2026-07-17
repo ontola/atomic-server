@@ -88,9 +88,39 @@ function rawToNodeDid(raw: string): string {
   return `${NODE_DID_PREFIX}${raw}`;
 }
 
+/** Whether `authority` (`host` or `host:port`) names a machine on this network
+ * rather than the internet: loopback, the RFC 1918 private ranges, or mDNS.
+ *
+ * Not just `localhost`, because `localhost` is only local to the machine that
+ * types it. Another device on the network reaches this one by its LAN address,
+ * and that address wants `http` for the same reason `localhost` does — no
+ * public certificate exists for it. */
+function isLocalAddress(authority: string): boolean {
+  const host = authority.split(':')[0].toLowerCase();
+
+  if (host === 'localhost' || host === '::1' || host.endsWith('.local')) {
+    return true;
+  }
+
+  const octets = host.split('.').map(Number);
+
+  if (octets.length !== 4 || octets.some(o => !Number.isInteger(o))) {
+    return false;
+  }
+
+  const [a, b] = octets;
+
+  return (
+    a === 127 ||
+    a === 10 ||
+    (a === 192 && b === 168) ||
+    (a === 172 && b >= 16 && b <= 31)
+  );
+}
+
 /** Turn what someone types in the connect box into a full server URL. A bare
- * `host[:port]` is fine — localhost gets `http://`, anything else `https://` —
- * so no one has to type the scheme. */
+ * `host[:port]` is fine — a local address gets `http://`, anything else
+ * `https://` — so no one has to type the scheme. */
 function normalizeServerUrl(input: string): string {
   const trimmed = input.trim().replace(/\/+$/, '');
 
@@ -98,9 +128,7 @@ function normalizeServerUrl(input: string): string {
     return trimmed;
   }
 
-  const isLocal = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(trimmed);
-
-  return `${isLocal ? 'http' : 'https'}://${trimmed}`;
+  return `${isLocalAddress(trimmed) ? 'http' : 'https'}://${trimmed}`;
 }
 
 /** Whether two server URLs point at the same origin — how "is this the one in

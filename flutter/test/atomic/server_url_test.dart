@@ -12,6 +12,20 @@ void main() {
       expect(normalizeServerUrl('my.server.com'), 'https://my.server.com');
     });
 
+    test('a LAN address is a dev server — the only one a phone can reach', () {
+      // `localhost` means nothing on a phone; this is how it reaches a laptop.
+      expect(normalizeServerUrl('192.168.0.79:9883'), 'http://192.168.0.79:9883');
+      expect(normalizeServerUrl('10.0.0.5:9883'), 'http://10.0.0.5:9883');
+      expect(normalizeServerUrl('172.16.4.2:9883'), 'http://172.16.4.2:9883');
+      expect(normalizeServerUrl('mac.local:9883'), 'http://mac.local:9883');
+    });
+
+    test('a public address is still https, private-looking or not', () {
+      expect(normalizeServerUrl('172.32.0.1:9883'), 'https://172.32.0.1:9883');
+      expect(normalizeServerUrl('8.8.8.8'), 'https://8.8.8.8');
+      expect(normalizeServerUrl('192.169.0.1'), 'https://192.169.0.1');
+    });
+
     test('keeps an explicit scheme, including http on a remote host', () {
       expect(normalizeServerUrl('http://my.server.com'), 'http://my.server.com');
       expect(normalizeServerUrl('https://my.server.com'), 'https://my.server.com');
