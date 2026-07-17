@@ -406,9 +406,27 @@ fn ensure_cache_listener() {
     let mut rx = store.subscribe_events();
     tokio::spawn(async move {
         loop {
-            let subject = match rx.recv().await {
-                Ok(atomic_lib::DbEvent::Changed { subject, .. }) => subject,
-                Ok(atomic_lib::DbEvent::Destroyed { subject, .. }) => subject,
+            // `from_remote` decides whether to drop the cached edit session. A
+            // local commit already updated that cached doc in place, so keeping
+            // it is correct and skips a reload. A change that did NOT come from
+            // our own commit — a stroke merged in from a peer — is NOT in the
+            // cached doc, so we must drop it: otherwise the next local
+            // `push_stroke` appends to a stale doc and its save overwrites the
+            // just-merged remote stroke, silently reverting it. `is_importing`
+            // alone missed this: it is only set around the agent-resource apply,
+            // never around a remote canvas UPDATE, so canvas edits raced and
+            // lost. `from_commit == false` is the reliable signal (remote sync
+            // applies via `add_resource_opts`; local strokes via a signed
+            // commit), and over-invalidating only ever costs a reload.
+            let (subject, from_remote) = match rx.recv().await {
+                Ok(atomic_lib::DbEvent::Changed {
+                    subject,
+                    from_commit,
+                    ..
+                }) => (subject, !from_commit || atomic_lib::sync::ws_apply::is_importing()),
+                Ok(atomic_lib::DbEvent::Destroyed { subject, .. }) => {
+                    (subject, atomic_lib::sync::ws_apply::is_importing())
+                }
                 Ok(atomic_lib::DbEvent::QueryMembershipChanged { .. }) => continue,
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(_) => {
@@ -419,8 +437,7 @@ fn ensure_cache_listener() {
                     continue;
                 }
             };
-            // Only invalidate if the change came from a remote peer (not our own writes)
-            if atomic_lib::sync::ws_apply::is_importing() {
+            if from_remote {
                 let key = subject.to_string();
                 let mut cache = CANVAS_CACHE.lock().unwrap();
                 if let Some(map) = cache.as_mut() {
