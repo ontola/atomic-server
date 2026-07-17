@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/canvas_entry.dart';
 import '../theme.dart';
 import '../atomic/atomic_client.dart';
+import '../atomic/session.dart';
 import 'canvas_store.dart';
 import '../atomic/widgets/agent_settings_dialog.dart';
 
@@ -32,11 +33,18 @@ class _GalleryScreenState extends State<GalleryScreen> {
   final _folderNameController = TextEditingController();
   final _folderNameFocus = FocusNode();
 
+  // Drives the gallery-root title switches between. The active drive's name is
+  // the title itself; tapping it lists the others (and offers a new one).
+  List<String> _drives = [];
+  Map<String, String> _driveNames = {};
+  String? _activeDrive;
+
   bool get _selecting => _selected.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
+    _loadDrives();
     _folderNameFocus.addListener(() {
       if (!_folderNameFocus.hasFocus && _editingFolderName) {
         _commitFolderRename();
@@ -409,6 +417,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
                         if (signedOut) {
                           widget.onSignOut?.call();
                         } else {
+                          // The drive may have been switched inside settings;
+                          // reload both the title's drive list and the canvases.
+                          await _loadDrives();
                           await widget.store.load();
                           if (mounted) setState(() {});
                         }
@@ -485,8 +496,169 @@ class _GalleryScreenState extends State<GalleryScreen> {
       );
     }
 
-    return const Text('Gallery',
-        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16));
+    return _buildDriveSwitcher();
+  }
+
+  /// The gallery-root title, doubling as a drive switcher: it shows the active
+  /// drive's name (falling back to "Gallery" before drives have loaded, or when
+  /// the drive has no name yet) and, on tap, lists the other drives plus a way
+  /// to make a new one.
+  Widget _buildDriveSwitcher() {
+    final c = context.appColors;
+    final activeName = (_driveNames[_activeDrive] ?? '').trim();
+    final label = activeName.isNotEmpty ? activeName : 'Gallery';
+
+    return PopupMenuButton<String>(
+      tooltip: 'Switch drive',
+      position: PopupMenuPosition.under,
+      onSelected: _onDriveMenuSelected,
+      itemBuilder: (ctx) => [
+        for (final drive in _drives)
+          PopupMenuItem<String>(
+            value: drive,
+            child: Row(
+              children: [
+                Icon(
+                  drive == _activeDrive
+                      ? Icons.check_circle
+                      : Icons.circle_outlined,
+                  size: 18,
+                  color: drive == _activeDrive ? c.textPrimary : c.iconDisabled,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    (_driveNames[drive] ?? '').trim().isNotEmpty
+                        ? _driveNames[drive]!
+                        : 'Untitled drive',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: _newDriveSentinel,
+          child: Row(
+            children: [
+              Icon(Icons.add, size: 18, color: c.textSecondary),
+              const SizedBox(width: 10),
+              const Text('New drive'),
+            ],
+          ),
+        ),
+      ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+                color: activeName.isNotEmpty ? c.textPrimary : c.textSecondary,
+              ),
+            ),
+          ),
+          Icon(Icons.arrow_drop_down, size: 20, color: c.textSecondary),
+        ],
+      ),
+    );
+  }
+
+  static const _newDriveSentinel = '__new_drive__';
+
+  Future<void> _loadDrives() async {
+    final drives = await AtomicClient.listDrives();
+    final active = AtomicClient.getActiveDrive();
+    final names = <String, String>{};
+    for (final d in drives) {
+      try {
+        names[d] = await AtomicClient.getProperty(
+            d, 'https://atomicdata.dev/properties/name');
+      } catch (_) {
+        names[d] = '';
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _drives = drives;
+        _driveNames = names;
+        _activeDrive = active;
+      });
+    }
+  }
+
+  Future<void> _onDriveMenuSelected(String value) async {
+    if (value == _newDriveSentinel) {
+      await _createDriveFlow();
+      return;
+    }
+    if (value == _activeDrive) return;
+    await _switchToDrive(value);
+  }
+
+  /// Switch the active drive and reload the gallery for it. Leaving the current
+  /// folder first, since folders belong to the drive we are leaving.
+  Future<void> _switchToDrive(String drive) async {
+    try {
+      await AtomicClient.setActiveDrive(drive);
+      await AtomicSession.saveDrive(drive);
+      if (!mounted) return;
+      setState(() {
+        _activeDrive = drive;
+        _currentFolder = null;
+        _selected.clear();
+      });
+      await widget.store.load();
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Could not switch drive: $e')));
+      }
+    }
+  }
+
+  Future<void> _createDriveFlow() async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New drive'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Drive name',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    try {
+      final drive = await AtomicClient.createDrive(name);
+      await _loadDrives();
+      await _switchToDrive(drive);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Could not create drive: $e')));
+      }
+    }
   }
 }
 
