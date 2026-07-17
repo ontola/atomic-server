@@ -1,3 +1,15 @@
+## Sync & onboarding — read first
+
+The Flutter canvas app (`flutter/lib/atomic/`) is a client of the same system,
+used by the same person. Before changing anything about signing in, servers,
+pairing or sync, read
+[`../../planning/sync-onboarding-ux.md`](../../planning/sync-onboarding-ux.md):
+it holds the shared vocabulary, the rules of what can actually reach what (a
+server is **not** a device you can pair with), every account/device path, and
+the map of which file here twins which file in the Flutter app.
+
+Change a sync screen here → change its twin there, and update that doc.
+
 ## Editing UI
 
 When working on the data-browser, determine if you need to change or add UI, if so, read `./UI_COMPONENTS.md` for a list of existing reusable components.

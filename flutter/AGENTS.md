@@ -1,5 +1,17 @@
 # Atomic Canvas Flutter — Agent Context
 
+## Sync & onboarding — read first
+
+The Dart in `lib/atomic/` is a client of the same system the data-browser
+talks to, and the same person uses both. Before changing anything about
+signing in, servers, pairing or sync, read
+[`../planning/sync-onboarding-ux.md`](../planning/sync-onboarding-ux.md): it
+holds the shared vocabulary, the rules of what can actually reach what (a
+server is **not** a device you can pair with), every account/device path, and
+the map of which file here twins which file in `browser/data-browser`.
+
+Change a sync screen here → change its twin there, and update that doc.
+
 ## What This Is
 
 A cross-platform infinite drawing canvas app, migrated from a Kotlin/Android + Jetpack Compose app at `../atomiccanvas`. The Flutter version targets Android, iOS, and Web from a single codebase.
