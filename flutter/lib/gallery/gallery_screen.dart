@@ -4,6 +4,7 @@ import '../models/canvas_entry.dart';
 import '../theme.dart';
 import '../atomic/atomic_client.dart';
 import '../atomic/session.dart';
+import '../widgets/error_snack.dart';
 import 'canvas_store.dart';
 import '../atomic/widgets/agent_settings_dialog.dart';
 
@@ -616,10 +617,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
       await widget.store.load();
       if (mounted) setState(() {});
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Could not switch drive: $e')));
-      }
+      if (mounted) showErrorSnack(context, 'Could not switch drive: $e');
     }
   }
 
@@ -654,10 +652,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
       await _loadDrives();
       await _switchToDrive(drive);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Could not create drive: $e')));
-      }
+      if (mounted) showErrorSnack(context, 'Could not create drive: $e');
     }
   }
 }

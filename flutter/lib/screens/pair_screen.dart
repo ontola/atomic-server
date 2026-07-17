@@ -455,10 +455,25 @@ class _PairScreenState extends State<PairScreen> {
             const SizedBox(height: 12),
             Text('Connection Failed', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
-            Text(
+            SelectableText(
               _error ?? 'Unknown error',
               style: const TextStyle(fontSize: 12, color: Colors.red),
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              icon: const Icon(Icons.copy, size: 16),
+              label: const Text('Copy error'),
+              onPressed: () {
+                Clipboard.setData(
+                    ClipboardData(text: _error ?? 'Unknown error'));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Error copied'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
             ),
           ],
         );

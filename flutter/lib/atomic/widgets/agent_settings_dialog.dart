@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../atomic_client.dart';
 import '../session.dart';
 import '../../screens/pair_screen.dart';
+import '../../widgets/error_snack.dart';
 import 'server_settings_section.dart';
 
 class AgentSettingsDialog extends StatefulWidget {
@@ -100,11 +101,7 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
       setState(() => _showNewDrive = false);
       await _loadData();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e')),
-        );
-      }
+      if (mounted) showErrorSnack(context, 'Failed to create drive: $e');
     }
     setState(() => _creatingDrive = false);
   }
@@ -115,11 +112,7 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
       await AtomicSession.saveDrive(drive);
       setState(() => _activeDrive = drive);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e')),
-        );
-      }
+      if (mounted) showErrorSnack(context, 'Failed to switch drive: $e');
     }
   }
 
