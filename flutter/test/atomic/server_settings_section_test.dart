@@ -22,8 +22,8 @@ void main() {
 
     await _pumpSection(tester);
 
-    expect(find.textContaining('No server'), findsOneWidget);
-    expect(find.text('Connect a server'), findsOneWidget);
+    expect(find.textContaining('No always-on device'), findsOneWidget);
+    expect(find.text('Connect an always-on device'), findsOneWidget);
   });
 
   testWidgets('marks the server in use instead of moving it', (tester) async {
@@ -72,7 +72,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     await _pumpSection(tester);
-    await tester.tap(find.text('Connect a server'));
+    await tester.tap(find.text('Connect an always-on device'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), 'localhost:1');

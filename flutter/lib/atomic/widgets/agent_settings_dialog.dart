@@ -308,12 +308,20 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Server ──
+                    // This device, then the devices it syncs with, then the
+                    // code to add another — the same order as the browser Sync
+                    // page. A server is one of those devices (an always-on
+                    // one), not a category of its own.
+                    _buildThisDeviceCard(theme),
+
+                    const SizedBox(height: 16),
+
+                    // ── Devices (servers + paired devices) ──
                     ServerSettingsSection(onServerChanged: _loadData),
 
                     const Divider(height: 32),
 
-                    // ── Sync ──
+                    // ── Sync a device (pairing) ──
                     _buildSyncSection(theme),
 
                     const Divider(height: 32),
@@ -346,6 +354,63 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
 
   // ── Sync Section ──────────────────────────────────────────────────────
 
+  /// This device, always shown first — the browser Sync page leads with the
+  /// same card. It is the one device you are looking *from*.
+  Widget _buildThisDeviceCard(ThemeData theme) {
+    final isOnline = _peerId != null;
+
+    return _deviceCard(
+      theme,
+      icon: Icons.phone_android,
+      title: _deviceName.isNotEmpty ? _deviceName : 'This device',
+      onTitleTap: () async {
+        final controller = TextEditingController(text: _deviceName);
+        final newName = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Device name'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Enter device name',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        );
+        if (newName != null && newName.isNotEmpty) {
+          await AtomicClient.setDeviceName(newName);
+          setState(() => _deviceName = newName);
+        }
+      },
+      status: isOnline ? 'Online' : (_peerStarting ? 'Starting...' : 'Offline'),
+      statusColor:
+          isOnline ? Colors.green : theme.colorScheme.onSurfaceVariant,
+      details: [
+        if (_peerId != null)
+          _miniDetail('Device ID', '${_peerId!.substring(0, 16)}...',
+              onCopy: () => _copyToClipboard(_peerId!, 'Device ID')),
+        if (_activeDrive != null)
+          _miniDetail(
+              'Drive',
+              _driveNames[_activeDrive]?.isNotEmpty == true
+                  ? _driveNames[_activeDrive]!
+                  : '${_activeDrive!.substring(0, 16)}...'),
+      ],
+    );
+  }
+
   Widget _buildSyncSection(ThemeData theme) {
     final isOnline = _peerId != null;
     final isSynced = _lastSyncCount != null;
@@ -354,64 +419,8 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Sync'),
-
-        // This device
-        _deviceCard(
-          theme,
-          icon: Icons.phone_android,
-          title: _deviceName.isNotEmpty ? _deviceName : 'This device',
-          onTitleTap: () async {
-            final controller = TextEditingController(text: _deviceName);
-            final newName = await showDialog<String>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Device name'),
-                content: TextField(
-                  controller: controller,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter device name',
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-                ),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Cancel')),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                    child: const Text('Save'),
-                  ),
-                ],
-              ),
-            );
-            if (newName != null && newName.isNotEmpty) {
-              await AtomicClient.setDeviceName(newName);
-              setState(() => _deviceName = newName);
-            }
-          },
-          status:
-              isOnline ? 'Online' : (_peerStarting ? 'Starting...' : 'Offline'),
-          statusColor:
-              isOnline ? Colors.green : theme.colorScheme.onSurfaceVariant,
-          details: [
-            if (_peerId != null)
-              _miniDetail('Device ID', '${_peerId!.substring(0, 16)}...',
-                  onCopy: () => _copyToClipboard(_peerId!, 'Device ID')),
-            if (_activeDrive != null)
-              _miniDetail(
-                  'Drive',
-                  _driveNames[_activeDrive]?.isNotEmpty == true
-                      ? _driveNames[_activeDrive]!
-                      : '${_activeDrive!.substring(0, 16)}...'),
-          ],
-        ),
-
-        const SizedBox(height: 12),
-
-        const SizedBox(height: 12),
+        _sectionTitle('Sync a device'),
+        const SizedBox(height: 4),
         // Advanced / Offline Sync (demoted)
         Theme(
           data: theme.copyWith(dividerColor: Colors.transparent),

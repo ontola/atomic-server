@@ -229,7 +229,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            'Server',
+            'Devices',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -241,7 +241,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              'No server. This device syncs directly with your other devices.',
+              'No always-on device yet. This device syncs directly with your others.',
               style: TextStyle(
                 fontSize: 12,
                 color: theme.colorScheme.onSurfaceVariant,
@@ -400,7 +400,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
     return TextButton.icon(
       onPressed: () => setState(() => _showAdd = true),
       icon: const Icon(Icons.add, size: 16),
-      label: const Text('Connect a server', style: TextStyle(fontSize: 12)),
+      label: const Text('Connect an always-on device', style: TextStyle(fontSize: 12)),
       style: TextButton.styleFrom(padding: EdgeInsets.zero),
     );
   }
