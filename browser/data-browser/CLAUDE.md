@@ -4,8 +4,8 @@ The Flutter canvas app (`flutter/lib/atomic/`) is a client of the same system,
 used by the same person. Before changing anything about signing in, servers,
 pairing or sync, read
 [`../../planning/sync-onboarding-ux.md`](../../planning/sync-onboarding-ux.md):
-it holds the shared vocabulary, the rules of what can actually reach what (a
-server is **not** a device you can pair with), every account/device path, and
+it holds the shared vocabulary, the rules of what can actually reach what (rights
+decide, on every transport — not whose device it is), every account/device path, and
 the map of which file here twins which file in the Flutter app.
 
 Change a sync screen here → change its twin there, and update that doc.
