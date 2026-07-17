@@ -115,31 +115,32 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   /// Re-run boot sync: optional WS hub (if configured) + Iroh known peers / discover.
+  /// Look for the workspace on the other devices — the slow part sign-in used
+  /// to block on. It runs here instead, on a screen built to wait: Iroh
+  /// discovery (pkarr + known peers) that can take tens of seconds, or land the
+  /// moment a paired device answers.
   Future<void> _retryPeerSync() async {
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final session = await AtomicSession.load();
-      if (session == null) {
-        setState(() => _error = 'No saved session');
-        return;
-      }
-      final status = await AtomicClient.resumeSession(
-        serverUrl: session.serverUrl,
-        secret: session.secret,
-        drive: session.drive,
-      );
+      final report = await AtomicClient.syncConnectivityNow();
+
       final drive = AtomicClient.getActiveDrive();
       if (drive != null) {
         await AtomicSession.saveDrive(drive);
       }
-      if (status == 'ok' && await _driveReady()) {
+
+      if (drive != null && await _driveReady()) {
         widget.onLoggedIn();
+
         return;
       }
-      setState(() => _error = 'Drive not available on this device yet');
+
+      setState(() => _error = report.imported > 0 || report.livePeers > 0
+          ? 'Synced, but your workspace isn’t here yet — try again'
+          : 'No other device reachable yet. Pair one with its QR code.');
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -573,7 +574,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2))
               : const Icon(Icons.sync),
-          label: Text(_busy ? 'Syncing…' : 'Try again'),
+          label: Text(_busy ? 'Looking for your devices…' : 'Try again'),
           style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14)),
           onPressed: _busy ? null : _retryPeerSync,

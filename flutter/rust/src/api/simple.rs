@@ -831,17 +831,21 @@ pub async fn resume_app_session(
         );
     }
 
-    // Iroh endpoint + pkarr announce; UI calls sync_connectivity_now once after login.
-    let _ = ensure_sync_connectivity(store.as_ref()).await;
-
+    // Fast on purpose. If a reachable server already has the drive, the WS
+    // sync above brought it — bring the Iroh endpoint up for live sync and
+    // answer "ok". If it does not, answer "needs_sync" immediately.
+    //
+    // What it must NOT do is run Iroh discovery to look for the drive: pkarr
+    // resolve and a peer-sync attempt time out in tens of seconds, and a fresh
+    // sign-in — about to pair by QR — can succeed at neither yet. Blocking the
+    // sign-in on that is the long wait before "sync your drive" appears, and it
+    // was run twice: here, and again when that screen calls back in. Discovery
+    // now lives only on the needs-sync screen (`sync_connectivity_now`), where
+    // there is a loading state for it, not a spinning button.
     if drive_resource_exists(store.as_ref()).await {
-        return Ok("ok".into());
-    }
+        let _ = ensure_sync_connectivity(store.as_ref()).await;
 
-    if try_auto_peer_sync(store.as_ref()).await? {
-        if drive_resource_exists(store.as_ref()).await {
-            return Ok("ok".into());
-        }
+        return Ok("ok".into());
     }
 
     Ok("needs_sync".into())
