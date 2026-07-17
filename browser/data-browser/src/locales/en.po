@@ -5169,17 +5169,14 @@ msgstr "Synced {0} {1} with {2}"
 msgid "Show this code"
 msgstr "Show this code"
 
-#: src/routes/SyncRoute.tsx
-msgid "Or scan the other device’s"
-msgstr "Or scan the other device’s"
+#~ msgid "Or scan the other device’s"
+#~ msgstr "Or scan the other device’s"
 
-#: src/routes/SyncRoute.tsx
-msgid "Or paste the other device’s"
-msgstr "Or paste the other device’s"
+#~ msgid "Or paste the other device’s"
+#~ msgstr "Or paste the other device’s"
 
-#: src/routes/SyncRoute.tsx
-msgid "Not signed in over there yet? Sign in with your account secret first, then pair."
-msgstr "Not signed in over there yet? Sign in with your account secret first, then pair."
+#~ msgid "Not signed in over there yet? Sign in with your account secret first, then pair."
+#~ msgstr "Not signed in over there yet? Sign in with your account secret first, then pair."
 
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "This device can’t tell which workspace to open. Open the app on your other device, then pair again."
@@ -5495,14 +5492,28 @@ msgstr "Always-on device"
 msgid "Your data lives on this device and syncs with {0} other {1}."
 msgstr "Your data lives on this device and syncs with {0} other {1}."
 
-#: src/routes/SyncRoute.tsx
-msgid "Scan with your other device"
-msgstr "Scan with your other device"
+#~ msgid "Scan with your other device"
+#~ msgstr "Scan with your other device"
+
+#~ msgid "This is"
+#~ msgstr "This is"
+
+#~ msgid ", the always-on device this browser reads from — not the browser itself. Scanning it syncs your workspace there, and it shows up here."
+#~ msgstr ", the always-on device this browser reads from — not the browser itself. Scanning it syncs your workspace there, and it shows up here."
 
 #: src/routes/SyncRoute.tsx
-msgid "This is"
-msgstr "This is"
+msgid "Codes only route — your key still decides what syncs. Show yours, or take theirs."
+msgstr "Codes only route — your key still decides what syncs. Show yours, or take theirs."
+
+#. 0: serverLabel(status.serverUrl ?? '')
+#: src/routes/SyncRoute.tsx
+msgid "Scan from your other device to sync with {0}. Safe to show: a code only routes."
+msgstr "Scan from your other device to sync with {0}. Safe to show: a code only routes."
 
 #: src/routes/SyncRoute.tsx
-msgid ", the always-on device this browser reads from — not the browser itself. Scanning it syncs your workspace there, and it shows up here."
-msgstr ", the always-on device this browser reads from — not the browser itself. Scanning it syncs your workspace there, and it shows up here."
+msgid "Or scan theirs"
+msgstr "Or scan theirs"
+
+#: src/routes/SyncRoute.tsx
+msgid "Or paste theirs"
+msgstr "Or paste theirs"

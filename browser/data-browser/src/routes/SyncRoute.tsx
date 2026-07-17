@@ -1030,9 +1030,8 @@ function SyncPage() {
                 }}
               >
                 <AddServerExplainer>
-                  Add an always-on device by its address — it keeps your data
-                  online and lets you share it. A device you carry has no
-                  address: scan its code below instead.
+                  An always-on device has an address. One you carry has a code —
+                  scan it below instead.
                 </AddServerExplainer>
                 <ServerInputRow>
                   <ServerInput
@@ -1077,26 +1076,20 @@ function SyncPage() {
         {pairNodeId && (
           <Section>
             <SectionTitle>Sync a device</SectionTitle>
+            {/* One line, not three: the card above already said what
+                `localhost:9883` is, and a paragraph on how keys work belongs
+                where someone asks — not over a QR they came here to scan. */}
             <ConnNote>
-              A code only says where to reach a device — the other side still
-              proves it holds your key, and only gets what that key may read.
+              {isNode
+                ? 'Codes only route — your key still decides what syncs. Show yours, or take theirs.'
+                : `Scan from your other device to sync with ${serverLabel(status.serverUrl ?? '')}. Safe to show: a code only routes.`}
             </ConnNote>
             <PairCard>
               <PairSide>
-                <PairLabel>
-                  {isNode ? 'Show this code' : `Scan with your other device`}
-                </PairLabel>
+                {isNode && <PairLabel>Show this code</PairLabel>}
                 <QrCentered>
                   <PairingCode nodeDid={rawToNodeDid(pairNodeId)} />
                 </QrCentered>
-                {!isNode && (
-                  <PairHint>
-                    This is {serverLabel(status.serverUrl ?? '')}, the always-on
-                    device this browser reads from — not the browser itself.
-                    Scanning it syncs your workspace there, and it shows up
-                    here.
-                  </PairHint>
-                )}
               </PairSide>
 
               {/* Taking someone else's code needs a node to dial from, which a
@@ -1107,17 +1100,11 @@ function SyncPage() {
 
                   <PairSide>
                     <PairLabel>
-                      {isMobileTauri()
-                        ? 'Or scan the other device’s'
-                        : 'Or paste the other device’s'}
+                      {isMobileTauri() ? 'Or scan theirs' : 'Or paste theirs'}
                     </PairLabel>
                     {/* Same path a scanned deep link takes (PairingLinkHandler):
                         validate, persist the peer, start a sync. */}
                     <ConnectToDeviceForm onCode={deliverDeepLink} />
-                    <PairHint>
-                      Not signed in over there yet? Sign in with your account
-                      secret first, then pair.
-                    </PairHint>
                   </PairSide>
                 </>
               )}
@@ -1610,13 +1597,6 @@ const PairLabel = styled.span`
   font-size: 0.82rem;
   font-weight: 600;
   color: ${p => p.theme.colors.textLight};
-`;
-
-const PairHint = styled.p`
-  margin: 0.2rem 0 0;
-  align-self: flex-start;
-  color: ${p => p.theme.colors.textLight};
-  font-size: 0.78rem;
 `;
 
 const ConnIcon = styled.div<{

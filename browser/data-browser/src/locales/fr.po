@@ -5135,17 +5135,14 @@ msgstr ""
 msgid "Show this code"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Or scan the other device’s"
-msgstr ""
+#~ msgid "Or scan the other device’s"
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Or paste the other device’s"
-msgstr ""
+#~ msgid "Or paste the other device’s"
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Not signed in over there yet? Sign in with your account secret first, then pair."
-msgstr ""
+#~ msgid "Not signed in over there yet? Sign in with your account secret first, then pair."
+#~ msgstr ""
 
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "This device can’t tell which workspace to open. Open the app on your other device, then pair again."
@@ -5461,14 +5458,28 @@ msgstr ""
 msgid "Your data lives on this device and syncs with {0} other {1}."
 msgstr ""
 
+#~ msgid "Scan with your other device"
+#~ msgstr ""
+
+#~ msgid "This is"
+#~ msgstr ""
+
+#~ msgid ", the always-on device this browser reads from — not the browser itself. Scanning it syncs your workspace there, and it shows up here."
+#~ msgstr ""
+
 #: src/routes/SyncRoute.tsx
-msgid "Scan with your other device"
+msgid "Codes only route — your key still decides what syncs. Show yours, or take theirs."
+msgstr ""
+
+#. 0: serverLabel(status.serverUrl ?? '')
+#: src/routes/SyncRoute.tsx
+msgid "Scan from your other device to sync with {0}. Safe to show: a code only routes."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "This is"
+msgid "Or scan theirs"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid ", the always-on device this browser reads from — not the browser itself. Scanning it syncs your workspace there, and it shows up here."
+msgid "Or paste theirs"
 msgstr ""
