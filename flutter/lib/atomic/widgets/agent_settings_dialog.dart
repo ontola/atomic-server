@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../atomic_client.dart';
 import '../session.dart';
 import '../../screens/pair_screen.dart';
+import 'server_settings_section.dart';
 
 class AgentSettingsDialog extends StatefulWidget {
   const AgentSettingsDialog({super.key});
@@ -310,6 +311,11 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ── Server ──
+                    ServerSettingsSection(onServerChanged: _loadData),
+
+                    const Divider(height: 32),
+
                     // ── Sync ──
                     _buildSyncSection(theme),
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../atomic/atomic_client.dart';
+import '../atomic/server_url.dart';
 import '../atomic/session.dart';
 import '../theme.dart';
 import 'pair_screen.dart';
@@ -42,7 +43,9 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  String get _serverOrigin => _serverController.text.trim();
+  /// Normalized, so `localhost:9883` works as typed — the same rule the
+  /// server settings use. Empty stays empty: no hub is a valid choice.
+  String get _serverOrigin => normalizeServerUrl(_serverController.text);
 
   /// Open WS sync to the server (primary path for multi-device).
   Future<void> _startNetworking(String driveSubject, {String? serverUrl}) async {
@@ -567,7 +570,7 @@ class _LoginScreenState extends State<LoginScreen> {
       controller: _serverController,
       decoration: const InputDecoration(
         labelText: 'Sync hub URL (optional)',
-        hintText: 'Leave empty for device-to-device only',
+        hintText: 'localhost:9883 — or leave empty for device-to-device',
         border: OutlineInputBorder(),
         isDense: true,
       ),
