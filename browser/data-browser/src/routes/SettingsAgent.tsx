@@ -39,7 +39,7 @@ export const AgentSettingsRoute = createRoute({
 
 const SettingsAgent: React.FunctionComponent = () => {
   const store = useStore();
-  const { agent, drive, baseURL, setAgent, setDrive } = useSettings();
+  const { agent, drive, setAgent, setDrive } = useSettings();
   // Sometimes the settings context can briefly lag behind the store on first
   // navigation. Fall back to the store-backed hook to avoid flashing the
   // logged-out panel for signed-in users.
@@ -69,35 +69,43 @@ const SettingsAgent: React.FunctionComponent = () => {
     }
   }, [effectiveAgent]);
 
-  async function handleSignOut() {
+  function handleSignOut() {
     const currentDrive = drive;
 
+    // Everything that makes the UI say "signed out" happens now, synchronously.
+    // `store.setAgent` drives a `useSyncExternalStore`, so the app re-renders
+    // this tick; the private workspace is no longer readable, so clear the
+    // active drive rather than leave it on screen; and go to the one sign-in
+    // surface. This used to sit behind an `await getResource` that a public
+    // drive skipped entirely, so signing out did nothing visible until a
+    // refresh re-read the (now empty) agent.
     setAgent(undefined);
-    saveAgentToIDB(undefined);
+    // Empty, not the server origin: a drive is a workspace, and the origin is
+    // the pre-DID default standing in for one. Signed out, there is no
+    // workspace — say that, don't fall back to the server's own.
+    setDrive('');
+    navigate({ to: paths.welcome, replace: true });
 
-    // Unified sign-out: also end the control-plane session so signing out on
-    // this device signs the user out of their managed account too (no-op when
-    // self-hosted / not signed in). Best-effort — never blocks the local
-    // sign-out below.
+    // The rest is cleanup the user should never wait on: persist the cleared
+    // agent, and end the control-plane session so signing out here signs out
+    // of a managed account too (no-op when self-hosted).
+    saveAgentToIDB(undefined);
     void logoutManagedSession();
 
-    try {
-      const driveResource = await store.getResource(currentDrive);
-      const readRight = driveResource.get(core.properties.read);
-      const readArray = Array.isArray(readRight) ? readRight : [];
-      const isPublic = readArray.includes(urls.instances.publicAgent);
+    // Best-effort: if the drive we just left was private, forget it from
+    // history too, so it does not reappear as a suggestion to a signed-out
+    // browser. Failure here changes nothing the user can see.
+    void store
+      .getResource(currentDrive)
+      .then(driveResource => {
+        const readRight = driveResource.get(core.properties.read);
+        const readArray = Array.isArray(readRight) ? readRight : [];
 
-      if (!isPublic) {
-        // The private drive is no longer readable signed-out — don't leave it
-        // lingering as the active drive. Reset to the public server root.
-        setDrive(baseURL || '');
-        navigate({ to: paths.welcome, replace: true });
-      }
-    } catch {
-      // If we can't determine visibility, default to welcome + server root.
-      setDrive(baseURL || '');
-      navigate({ to: paths.welcome, replace: true });
-    }
+        if (!readArray.includes(urls.instances.publicAgent)) {
+          removeFromHistory?.(currentDrive);
+        }
+      })
+      .catch(() => undefined);
   }
 
   function handleSetDrive(url: string) {

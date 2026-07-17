@@ -47,17 +47,21 @@ export function PairingCode({ nodeDid }: PairingCodeProps): JSX.Element {
   }, [baseURL]);
 
   const pairUri = useMemo(() => {
+    // Name a *specific* drive, which is a workspace DID. When the active drive
+    // is the server origin itself, no particular workspace is selected — that
+    // is the pre-DID default (`useLocalStorage('drive', baseURL)`) showing
+    // through, and "the whole server" is `*`, not a drive to pull.
+    const namedDrive = drive && drive !== baseURL ? [drive] : '*';
+
     const envelope: PairingEnvelope = {
       v: 1,
       node: nodeDid,
       ...(urlHint ? { url: urlHint } : {}),
-      // `*` only when there is genuinely nothing to name — a device scanning
-      // that has to already know what it came for.
-      drives: drive ? [drive] : '*',
+      drives: namedDrive,
     };
 
     return encodePairingEnvelope(envelope);
-  }, [nodeDid, urlHint, drive]);
+  }, [nodeDid, urlHint, drive, baseURL]);
 
   const pairSvg = useMemo(() => renderSVG(pairUri), [pairUri]);
 
