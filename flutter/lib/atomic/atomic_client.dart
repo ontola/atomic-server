@@ -152,7 +152,8 @@ class AtomicClient {
   // ── 8. Known peers ──────────────────────────────────────────────────────
 
   /// Get all known peers (persisted in DB).
-  /// Returns list of {node_id: String, name: String}.
+  /// Returns list of {node_id: String, name: String, last_synced: String}.
+  /// `last_synced` is unix millis as a string, or '' if never synced.
   static Future<List<Map<String, String>>> getKnownPeers() async {
     final json = ffi.getKnownPeersJson();
     try {
@@ -160,6 +161,9 @@ class AtomicClient {
           .map((e) => {
                 'node_id': (e['node_id'] ?? '') as String,
                 'name': (e['name'] ?? '') as String,
+                'last_synced': e['last_synced'] == null
+                    ? ''
+                    : '${e['last_synced']}',
               })
           .toList();
     } catch (_) {

@@ -190,13 +190,8 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
 
                     const SizedBox(height: 16),
 
-                    // ── Devices (servers + paired devices) ──
+                    // ── Devices (servers + paired devices, incl. QR pairing) ──
                     ServerSettingsSection(onServerChanged: _loadData),
-
-                    const Divider(height: 32),
-
-                    // ── Sync a device (pairing) ──
-                    _buildSyncSection(theme),
 
                     const Divider(height: 32),
 
@@ -281,40 +276,6 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
               _driveNames[_activeDrive]?.isNotEmpty == true
                   ? _driveNames[_activeDrive]!
                   : '${_activeDrive!.substring(0, 16)}...'),
-      ],
-    );
-  }
-
-  /// Pairing: show a code for another device to scan. The paired devices
-  /// themselves live in the one Devices list above (peers are rendered in
-  /// `ServerSettingsSection`), so this is only the action to add one — the same
-  /// shape as the browser's "Sync a device" section.
-  Widget _buildSyncSection(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionTitle('Sync a device'),
-        const SizedBox(height: 8),
-        Text(
-          'Scan a code with another device to sync it. Safe to show: a code '
-          'only routes.',
-          style: TextStyle(
-            fontSize: 12,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.qr_code_2, size: 18),
-            label: const Text('Pair with QR code'),
-            onPressed: () async {
-              final result = await PairScreen.show(context);
-              if (result != null) await _loadData();
-            },
-          ),
-        ),
       ],
     );
   }

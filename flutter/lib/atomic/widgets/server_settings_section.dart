@@ -12,6 +12,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../screens/pair_screen.dart';
 import '../atomic_auth.dart';
 import '../atomic_client.dart';
 import '../server_info.dart';
@@ -417,6 +418,8 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
 
   /// A paired device (Iroh peer), shown alongside the always-on ones. Live
   /// means it holds a connection right now; the green dot mirrors the browser.
+  /// Below the name we show the node id (copyable, so it can be pasted into
+  /// another device's "Connect by address") and when we last synced.
   Widget _peerCard(ThemeData theme, Map<String, String> peer) {
     final nodeId = peer['node_id'] ?? '';
     final name = (peer['name'] ?? '').trim();
@@ -425,6 +428,8 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
         : '${nodeId.substring(0, nodeId.length.clamp(0, 12))}…';
     final isLive = AtomicClient.isLivePeer(nodeId, _livePeerIds);
     final scheme = theme.colorScheme;
+    final labelStyle = TextStyle(fontSize: 11, color: scheme.onSurfaceVariant);
+    final lastSynced = int.tryParse(peer['last_synced'] ?? '');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -433,55 +438,121 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: scheme.outlineVariant),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.phone_android, size: 18, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 14),
-              overflow: TextOverflow.ellipsis,
-            ),
+          Row(
+            children: [
+              Icon(Icons.phone_android,
+                  size: 18, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isLive
+                      ? Colors.green.withValues(alpha: 0.15)
+                      : scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  isLive ? 'Connected' : 'Paired',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color:
+                        isLive ? Colors.green.shade800 : scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 16),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Remove',
+                onPressed: () async {
+                  await AtomicClient.removeKnownPeer(nodeId);
+                  setState(
+                      () => _peers.removeWhere((p) => p['node_id'] == nodeId));
+                },
+              ),
+            ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: isLive
-                  ? Colors.green.withValues(alpha: 0.15)
-                  : scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              isLive ? 'Connected' : 'Paired',
-              style: TextStyle(
-                fontSize: 10,
-                color: isLive ? Colors.green.shade800 : scheme.onSurfaceVariant,
+          if (nodeId.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            InkWell(
+              onTap: () => _copy(nodeId, 'Device ID'),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      nodeId,
+                      style:
+                          const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Icon(Icons.copy, size: 12, color: scheme.onSurfaceVariant),
+                ],
               ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 16),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            tooltip: 'Remove',
-            onPressed: () async {
-              await AtomicClient.removeKnownPeer(nodeId);
-              setState(() =>
-                  _peers.removeWhere((p) => p['node_id'] == nodeId));
-            },
+          ],
+          const SizedBox(height: 4),
+          Text(
+            lastSynced != null
+                ? 'Last synced ${_relativeTime(lastSynced)}'
+                : 'Not synced yet',
+            style: labelStyle,
           ),
         ],
       ),
     );
   }
 
+  /// Coarse "2m ago" / "3h ago" / "5d ago" for a unix-millis timestamp — enough
+  /// to tell "just now" from "days back" without a date library.
+  String _relativeTime(int millis) {
+    final delta = DateTime.now().difference(
+        DateTime.fromMillisecondsSinceEpoch(millis));
+
+    if (delta.inSeconds < 60) return 'just now';
+    if (delta.inMinutes < 60) return '${delta.inMinutes}m ago';
+    if (delta.inHours < 24) return '${delta.inHours}h ago';
+
+    return '${delta.inDays}d ago';
+  }
+
+  /// Show a QR code for another device to scan, then reload so the freshly
+  /// paired device appears in the list above.
+  Future<void> _pairWithQr() async {
+    final result = await PairScreen.show(context);
+
+    if (result != null && mounted) await _load();
+  }
+
   Widget _addButton() {
-    return TextButton.icon(
-      onPressed: () => setState(() => _showAdd = true),
-      icon: const Icon(Icons.add, size: 16),
-      label: const Text('Connect by address', style: TextStyle(fontSize: 12)),
-      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+    return Row(
+      children: [
+        TextButton.icon(
+          onPressed: _pairWithQr,
+          icon: const Icon(Icons.qr_code_2, size: 16),
+          label: const Text('Pair with QR code', style: TextStyle(fontSize: 12)),
+          style: TextButton.styleFrom(padding: EdgeInsets.zero),
+        ),
+        const SizedBox(width: 8),
+        TextButton.icon(
+          onPressed: () => setState(() => _showAdd = true),
+          icon: const Icon(Icons.add, size: 16),
+          label:
+              const Text('Connect by address', style: TextStyle(fontSize: 12)),
+          style: TextButton.styleFrom(padding: EdgeInsets.zero),
+        ),
+      ],
     );
   }
 
