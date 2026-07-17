@@ -199,7 +199,12 @@ pub async fn handle_frame(
 
         protocol::tag::SYNC_PUSH => {
             if let Some(push) = protocol::decode_sync_push(payload) {
-                let (_count, mut blob_requests) = import_sync_push(&push, store, agent).await;
+                // handle_frame serves connections dialed *into* us (accept side,
+                // WS): no owned-drive relaxation — the sender must itself hold
+                // write rights. The dial side calls import_sync_push directly
+                // with trust_owned=true.
+                let (_count, mut blob_requests) =
+                    import_sync_push(&push, store, agent, false).await;
                 let mut responses = vec![protocol::encode_sync_ok(&push.drive)];
                 responses.append(&mut blob_requests);
                 responses
@@ -906,25 +911,67 @@ pub async fn handle_sync_vv_filtered(
     frames
 }
 
+/// Whether an incoming write to `drive_resource` should be accepted.
+///
+/// The direct case: the peer that sent it can itself write the drive.
+///
+/// The relayed case (`trust_owned`): a peer we *chose to connect to* — a server
+/// that stores our drive, another of our devices — authenticates as its OWN
+/// agent, not ours, yet is faithfully relaying updates to a drive WE own. Gating
+/// on the transport peer's identity would reject every such update (this is why
+/// a phone stops receiving a browser's edits once its drive already exists on
+/// the server). So when we initiated the connection, we also accept updates to
+/// drives our own agent may write — the drive owner acting as the authority over
+/// their own replica. We never relax this for connections dialed *into* us: a
+/// stranger who dials us does not get to write our drives just because we own
+/// them.
+pub(crate) async fn may_accept_drive_write(
+    store: &Db,
+    drive_resource: &crate::Resource,
+    for_agent: &crate::agents::ForAgent,
+    trust_owned: bool,
+) -> bool {
+    if crate::hierarchy::check_write(store, drive_resource, for_agent)
+        .await
+        .is_ok()
+    {
+        return true;
+    }
+    if trust_owned {
+        if let Ok(own) = store.get_default_agent() {
+            let own_agent = crate::agents::ForAgent::from(own);
+            if crate::hierarchy::check_write(store, drive_resource, &own_agent)
+                .await
+                .is_ok()
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Import resources from a SYNC_PUSH message into the local store.
-/// When called from handle_frame (server receiving from a peer), `for_agent` is checked
-/// for write access to the drive. When called locally (e.g. client importing), pass `Sudo`.
+///
+/// `for_agent` is the identity the sending peer proved. `trust_owned` is true
+/// when WE dialed this peer, which lets a relayed push to a drive we own through
+/// even though the relaying peer is a different agent (see
+/// [`may_accept_drive_write`]). When importing locally, pass `Sudo`.
 pub async fn import_sync_push(
     push: &protocol::DecodedSyncPush,
     store: &Db,
     for_agent: &crate::agents::ForAgent,
+    trust_owned: bool,
 ) -> (usize, Vec<Vec<u8>>) {
     // Check write access to the drive
     let drive_subject = crate::Subject::from_raw(&push.drive, store.get_base_domain().as_deref());
     if let Ok(drive_resource) = store.get_resource(&drive_subject).await {
-        if crate::hierarchy::check_write(store, &drive_resource, for_agent)
-            .await
-            .is_err()
-        {
+        if !may_accept_drive_write(store, &drive_resource, for_agent, trust_owned).await {
             tracing::warn!(
-                "import_sync_push: agent {:?} has no write access to drive {}",
+                "import_sync_push: agent {:?} has no write access to drive {} (trust_owned={})",
                 for_agent,
-                push.drive
+                push.drive,
+                trust_owned
             );
             return (0, vec![]);
         }

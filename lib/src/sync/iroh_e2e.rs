@@ -422,7 +422,7 @@ async fn e2e_engine_pull_after_iroh_bulk_sync() {
         if frame.first() == Some(&crate::sync::protocol::tag::SYNC_PUSH) {
             if let Some(push) = crate::sync::protocol::decode_sync_push(&frame[1..]) {
                 let (count, _) =
-                    crate::sync::engine::import_sync_push(&push, &pair.db_b, &ForAgent::Sudo).await;
+                    crate::sync::engine::import_sync_push(&push, &pair.db_b, &ForAgent::Sudo, false).await;
                 imported += count;
             }
         }
@@ -595,7 +595,7 @@ async fn peer_sync_says_why_when_a_different_agent_may_read_nothing() {
     let error = result.expect_err("an empty sync must not report success");
     let message = error.to_string();
     assert!(
-        message.contains("different account"),
+        message.contains("nothing synced"),
         "the failure must say why, got: {message}"
     );
 
@@ -736,6 +736,7 @@ async fn a_peer_cannot_forge_a_third_agents_resource() {
         &db_server,
         &ForAgent::AgentSubject(eve.subject.clone()),
         &victim.subject.to_string(),
+        false,
         &mut cache,
     )
     .await;
@@ -750,6 +751,7 @@ async fn a_peer_cannot_forge_a_third_agents_resource() {
         &db_server,
         &ForAgent::AgentSubject(eve.subject.clone()),
         &eve.subject.to_string(),
+        false,
         &mut cache,
     )
     .await;

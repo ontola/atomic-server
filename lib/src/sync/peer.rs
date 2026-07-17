@@ -590,15 +590,17 @@ pub(crate) async fn admitted_for_drive_for_test(
     store: &Db,
     agent: &ForAgent,
     drive_subject: &str,
+    trust_owned: bool,
     cache: &mut std::collections::HashMap<String, bool>,
 ) -> bool {
-    admitted_for_drive(store, agent, drive_subject, cache).await
+    admitted_for_drive(store, agent, drive_subject, trust_owned, cache).await
 }
 
 async fn admitted_for_drive(
     store: &Db,
     agent: &ForAgent,
     drive_subject: &str,
+    trust_owned: bool,
     cache: &mut std::collections::HashMap<String, bool>,
 ) -> bool {
     if let Some(&verdict) = cache.get(drive_subject) {
@@ -612,18 +614,19 @@ async fn admitted_for_drive(
         return false;
     }
 
-    // ACL: does this agent have write access to the drive? Checked once
-    // against the drive resource itself (rights are inherited by its
-    // children, so this answers "can this agent write anything in this
-    // drive," which is exactly what the cache should hold). Mirrors
-    // import_sync_push's existing bootstrap carve-out: a drive that doesn't
-    // exist locally yet has nothing to check against, so admission alone
-    // gates it (the same trust already extended to bulk SYNC_PUSH).
+    // ACL: may this write land? The sending peer's own write access, or —
+    // when we dialed this peer (`trust_owned`) — our own agent's, so a server
+    // relaying our drive back to us is accepted even though it authenticates
+    // as its own agent (see `may_accept_drive_write`). Checked once against the
+    // drive resource itself (rights are inherited by its children, so this
+    // answers "can this write touch anything in this drive"). Mirrors
+    // import_sync_push's bootstrap carve-out: a drive that doesn't exist
+    // locally yet has nothing to check against, so admission alone gates it.
     let drive_subj = crate::Subject::from_raw(drive_subject, store.get_base_domain().as_deref());
     let verdict = match store.get_resource(&drive_subj).await {
-        Ok(drive_resource) => crate::hierarchy::check_write(store, &drive_resource, agent)
-            .await
-            .is_ok(),
+        Ok(drive_resource) => {
+            super::engine::may_accept_drive_write(store, &drive_resource, agent, trust_owned).await
+        }
         Err(_) => true,
     };
 
@@ -642,11 +645,12 @@ async fn apply_peer_remove(
     store: &Db,
     agent: &ForAgent,
     subject: &str,
+    trust_owned: bool,
     drive_cache: &mut std::collections::HashMap<String, bool>,
 ) {
     match super::ws_apply::resolve_destroy_drive(store, subject).await {
         Some(drive_subject) => {
-            if admitted_for_drive(store, agent, &drive_subject, drive_cache).await {
+            if admitted_for_drive(store, agent, &drive_subject, trust_owned, drive_cache).await {
                 let _ = super::ws_apply::apply_destroy_checked(store, subject).await;
             } else {
                 tracing::warn!(
@@ -679,36 +683,17 @@ fn invalidate_drive_cache_on_identity_change(
     }
 }
 
-/// Whether a peer that just proved an identity is *us* — the same agent, on
-/// another device.
-///
-/// Peer sync is same-agent only (serverless-p2p Principle 1: two devices trust
-/// each other iff each proves possession of the same agent key). Cross-agent
-/// replication is a separate product, gated behind grants.
-///
-/// This must be checked explicitly rather than left to `check_read`. A stranger
-/// who authenticates as *some* valid agent is not rejected by the rights checks;
-/// every subject is simply denied and skipped, so the sync completes reporting
-/// `count: 0, status: ok`. That is an authorization failure wearing a success's
-/// clothes — Principle 5 says fail closed on identity, not fail quiet.
-fn is_same_agent_as_ours(store: &Db, remote: &ForAgent) -> bool {
-    let ForAgent::AgentSubject(remote_subject) = remote else {
-        return false;
-    };
-
-    let Ok(ours) = store.get_default_agent() else {
-        return false;
-    };
-
-    store.normalize_subject(remote_subject) == store.normalize_subject(&ours.subject)
-}
-
 fn register_live_peer(
     peer_id: String,
     mut send: iroh::endpoint::SendStream,
     mut recv: iroh::endpoint::RecvStream,
     store: Db,
     agent: ForAgent,
+    // True when WE dialed this peer. Lets updates to a drive we own through
+    // even when the relaying peer is a different agent (a server holding our
+    // drive) — see `may_accept_drive_write`. Never relaxed for peers that
+    // dialed into us.
+    initiated_by_us: bool,
 ) {
     let key = normalize_node_id(&peer_id);
     // F9 minimal (planning/unified-sync.md): this function upgrades BOTH
@@ -867,8 +852,14 @@ fn register_live_peer(
                         .to_string();
                     match super::ws_apply::resolve_destroy_drive(&store, &subject).await {
                         Some(drive_subject) => {
-                            if admitted_for_drive(&store, &agent, &drive_subject, &mut drive_cache)
-                                .await
+                            if admitted_for_drive(
+                                &store,
+                                &agent,
+                                &drive_subject,
+                                initiated_by_us,
+                                &mut drive_cache,
+                            )
+                            .await
                             {
                                 let _ =
                                     super::ws_apply::apply_destroy_checked(&store, &subject).await;
@@ -907,6 +898,7 @@ fn register_live_peer(
                                 &store,
                                 &agent,
                                 &resolved.drive_subject,
+                                initiated_by_us,
                                 &mut drive_cache,
                             )
                             .await
@@ -1220,8 +1212,11 @@ pub async fn sync_drive_with_peer_using_outcome(
 
     const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
     let remote_short = &node_id.to_string()[..node_id.to_string().len().min(16)];
+    // Prefer a stored relay/address hint over a bare node id, so a re-dial does
+    // not hinge on a pkarr lookup that fails behind restrictive NAT.
+    let dial = dial_target(store, node_id);
     let conn =
-        match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(node_id, ATOMIC_ALPN)).await {
+        match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(dial, ATOMIC_ALPN)).await {
             Ok(Ok(c)) => c,
             Ok(Err(e)) => {
                 tracing::error!("[sync] connect failed to {remote_short}: {e}");
@@ -1421,7 +1416,11 @@ pub async fn sync_drive_with_peer_using_outcome(
                         diff.remove.len()
                     );
                     for subject in &diff.remove {
-                        apply_peer_remove(store, &remote_agent, subject, &mut drive_cache).await;
+                        // Dial side: we chose this peer, so a remove targeting a
+                        // drive we own is honored even when the peer relaying it
+                        // is a different agent (trust_owned=true).
+                        apply_peer_remove(store, &remote_agent, subject, true, &mut drive_cache)
+                            .await;
                     }
                     pull_subjects = diff.pull.clone();
 
@@ -1460,12 +1459,15 @@ pub async fn sync_drive_with_peer_using_outcome(
                     last_chunk = push.last;
                     // Import with the identity the peer proved via auth-back,
                     // NOT Sudo — dialing a peer never established the peer's
-                    // write rights. `import_sync_push` runs the same
-                    // drive-level `check_write` + admission gate the accept
-                    // path runs, with the same bootstrap carve-out for a drive
+                    // write rights. `trust_owned=true`: WE dialed this peer, so
+                    // a push to a drive we own is accepted even when the peer
+                    // relaying it is a different agent (a server holding our
+                    // drive authenticates as its own node agent, not ours).
+                    // `import_sync_push` still runs the drive-level check + the
+                    // admission gate, with the bootstrap carve-out for a drive
                     // that doesn't exist locally yet.
                     let (count, blob_requests) =
-                        super::engine::import_sync_push(&push, store, &remote_agent).await;
+                        super::engine::import_sync_push(&push, store, &remote_agent, true).await;
                     total_imported += count;
 
                     // Send blob requests if any
@@ -1566,23 +1568,36 @@ pub async fn sync_drive_with_peer_using_outcome(
     );
 
     // Nothing moved in either direction, and the remote never said we were
-    // level: the far side had nothing for us and wanted nothing from us. When
-    // it is also somebody else's account, that is why — say so, rather than
-    // report an empty success and leave two devices sitting "synced" and blank.
+    // level: the far side had nothing for us, wanted nothing from us, and never
+    // acked us in sync. Report it rather than leave two devices sitting
+    // "synced" and blank — but say what actually happened, not whose account it
+    // is: a server holding your drive under a different agent is a device you
+    // are meant to sync with, so identity is not the story here.
     //
-    // All three conditions matter. Pushing a workspace up to a device that had
-    // none imports nothing, and is exactly what someone came here to do; being
-    // already in sync moves nothing and is the happy ending.
-    if total_imported == 0
-        && total_pushed == 0
-        && !acked_in_sync
-        && !is_same_agent_as_ours(store, &remote_agent)
-    {
+    // The conditions are what matter, not who the peer is. Pushing a workspace
+    // up to a device that had none imports nothing and is exactly what someone
+    // came here to do; being already in sync (acked) moves nothing and is the
+    // happy ending. Only the all-quiet, no-ack case is a real anomaly.
+    if total_imported == 0 && total_pushed == 0 && !acked_in_sync {
         return Err(format!(
-            "That device is signed in as a different account ({remote_agent}), \
-             and nothing there is shared with yours."
+            "Connected to that device, but nothing synced: it shared nothing \
+             readable with you and took nothing of yours ({remote_agent})."
         )
         .into());
+    }
+
+    // The exchange completed and this is a real peer we hold a drive with —
+    // stamp it so the UI can show when we last synced, and remember where it
+    // lives now (relay + direct addrs) so the next dial skips discovery.
+    mark_peer_synced(store, &remote_key);
+    if let Some(info) = endpoint.remote_info(node_id) {
+        let addr: iroh::NodeAddr = info.into();
+        remember_peer_addr(
+            store,
+            &remote_key,
+            addr.relay_url.map(|u| u.to_string()),
+            addr.direct_addresses.iter().map(|a| a.to_string()).collect(),
+        );
     }
 
     // Transition to live mode: reuse the same bi stream for real-time updates.
@@ -1598,7 +1613,8 @@ pub async fn sync_drive_with_peer_using_outcome(
             v.push(conn);
         }
     }
-    register_live_peer(remote_key.clone(), send, recv, store.clone(), remote_agent);
+    // Dial side: we initiated, so trust this peer to relay drives we own.
+    register_live_peer(remote_key.clone(), send, recv, store.clone(), remote_agent, true);
 
     // Remember which drive this node syncs, so it can rebuild this link on its
     // own after a restart. The auto-connect loop above reads `get_active_drive`
@@ -1635,6 +1651,20 @@ const KNOWN_PEERS_KEY: &[u8] = b"_iroh_known_peers_v2";
 pub struct KnownPeer {
     pub node_id: String,
     pub name: String,
+    /// Unix millis of the last successful sync with this peer, if ever. Absent
+    /// for peers stored before this was tracked (serde default), so the UI shows
+    /// "not yet" rather than a bogus epoch time.
+    #[serde(default)]
+    pub last_synced: Option<i64>,
+    /// The peer's relay URL, captured from a live connection. Re-dialing with
+    /// this avoids a pkarr lookup — which is the difference between reconnecting
+    /// reliably and timing out on networks where hole-punching is blocked.
+    #[serde(default)]
+    pub relay_url: Option<String>,
+    /// The peer's last-known direct socket addresses ("ip:port"), captured from
+    /// a live connection. A hint alongside the relay, not a requirement.
+    #[serde(default)]
+    pub direct_addrs: Vec<String>,
 }
 
 /// Get all known peers from the DB.
@@ -1664,6 +1694,106 @@ pub fn add_known_peer(store: &Db, node_id: &str, name: &str) {
         peers.push(KnownPeer {
             node_id: key,
             name: name.to_string(),
+            last_synced: None,
+            relay_url: None,
+            direct_addrs: Vec::new(),
+        });
+    }
+    let _ = store.kv.insert(
+        crate::db::trees::Tree::PluginMeta,
+        KNOWN_PEERS_KEY,
+        &serde_json::to_vec(&peers).unwrap_or_default(),
+    );
+}
+
+/// Remember where a peer can be reached, captured from a live connection. Stored
+/// so the next dial can skip discovery and go straight to the relay. Empty
+/// values are ignored so a momentary lack of info never erases a good address.
+pub fn remember_peer_addr(
+    store: &Db,
+    node_id: &str,
+    relay_url: Option<String>,
+    direct_addrs: Vec<String>,
+) {
+    if relay_url.is_none() && direct_addrs.is_empty() {
+        return;
+    }
+    let key = normalize_node_id(node_id);
+    let mut peers = get_known_peers(store);
+    let entry = if let Some(existing) = peers
+        .iter_mut()
+        .find(|p| normalize_node_id(&p.node_id) == key)
+    {
+        existing
+    } else {
+        peers.push(KnownPeer {
+            node_id: key.clone(),
+            name: String::new(),
+            last_synced: None,
+            relay_url: None,
+            direct_addrs: Vec::new(),
+        });
+        peers.last_mut().unwrap()
+    };
+    if relay_url.is_some() {
+        entry.relay_url = relay_url;
+    }
+    if !direct_addrs.is_empty() {
+        entry.direct_addrs = direct_addrs;
+    }
+    let _ = store.kv.insert(
+        crate::db::trees::Tree::PluginMeta,
+        KNOWN_PEERS_KEY,
+        &serde_json::to_vec(&peers).unwrap_or_default(),
+    );
+}
+
+/// Build a dial target for a peer, preferring a stored relay/address hint over a
+/// bare node id. The bare id forces Iroh to discover the address via pkarr,
+/// which is exactly what fails on restrictive networks; a stored relay url lets
+/// the connection go straight through the relay.
+fn dial_target(store: &Db, node_id: NodeId) -> iroh::NodeAddr {
+    let key = node_id.to_string();
+    for peer in get_known_peers(store) {
+        if normalize_node_id(&peer.node_id) != normalize_node_id(&key) {
+            continue;
+        }
+        let mut addr = iroh::NodeAddr::new(node_id);
+        if let Some(relay) = peer.relay_url.as_deref().and_then(|s| s.parse().ok()) {
+            addr = addr.with_relay_url(relay);
+        }
+        let socks: Vec<std::net::SocketAddr> = peer
+            .direct_addrs
+            .iter()
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        if !socks.is_empty() {
+            addr = addr.with_direct_addresses(socks);
+        }
+        return addr;
+    }
+    iroh::NodeAddr::new(node_id)
+}
+
+/// Stamp a peer's `last_synced` to now, upserting it if unknown. Called when a
+/// sync exchange with the peer completes, so the UI can say "synced 2m ago"
+/// without a separate bookkeeping path.
+pub fn mark_peer_synced(store: &Db, node_id: &str) {
+    let key = normalize_node_id(node_id);
+    let mut peers = get_known_peers(store);
+    let now = crate::utils::now();
+    if let Some(existing) = peers
+        .iter_mut()
+        .find(|p| normalize_node_id(&p.node_id) == key)
+    {
+        existing.last_synced = Some(now);
+    } else {
+        peers.push(KnownPeer {
+            node_id: key,
+            name: String::new(),
+            last_synced: Some(now),
+            relay_url: None,
+            direct_addrs: Vec::new(),
         });
     }
     let _ = store.kv.insert(
@@ -1792,9 +1922,9 @@ async fn handle_stream(
         // Refusing here also meant a workspace could only reach a server over
         // HTTP, which is the thing Iroh is here to avoid — a node id needs no
         // address, no port, no certificate.
-        if just_authed && !is_same_agent_as_ours(&store, &agent) {
+        if just_authed {
             tracing::info!(
-                "[accept] {} authenticated as {agent}, not this node's account — serving what they may read",
+                "[accept] {} authenticated as {agent} — serving what they may read",
                 &remote_key[..remote_key.len().min(12)]
             );
         }
@@ -1890,7 +2020,9 @@ async fn handle_stream(
                 "[accept] sync complete, transitioning to live mode with {}",
                 &remote_key[..remote_key.len().min(12)]
             );
-            register_live_peer(remote_key, send, recv, store, agent);
+            // Accept side: the peer dialed us. No owned-drive relaxation — it
+            // must hold real write rights to touch anything here.
+            register_live_peer(remote_key, send, recv, store, agent, false);
             return Ok(total_imported);
         }
     }
@@ -1901,7 +2033,7 @@ async fn handle_stream(
             "[accept] SYNC_OK sent, entering live mode with {}",
             &remote_key[..remote_key.len().min(12)]
         );
-        register_live_peer(remote_key, send, recv, store, agent);
+        register_live_peer(remote_key, send, recv, store, agent, false);
     }
 
     Ok(total_imported)
@@ -1919,6 +2051,38 @@ mod live_write_admission_tests {
     /// is what closes it — these tests exercise it directly (rather than via a
     /// full two-peer Iroh handshake) so the ACL and admission-gate layers are
     /// each provable in isolation.
+    /// The relay case: a server holding our drive authenticates as its OWN
+    /// agent, which can't write our drive — so gating on the transport peer's
+    /// identity dropped every update it relayed back (a phone stopped receiving
+    /// a browser's edits once its drive already existed on the server). When WE
+    /// dialed the peer (`trust_owned`), an update to a drive our own agent owns
+    /// is accepted; a peer dialing into us gets no such relaxation.
+    #[tokio::test]
+    async fn relayed_write_to_our_own_drive_accepted_only_when_we_dialed() {
+        let db = Db::init_temp("relay_owned_drive").await.unwrap();
+        // Alice is this device's agent and owns the drive.
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        // The server: a different agent with no rights to Alice's drive.
+        let server = db.create_agent(Some("Server")).await.unwrap();
+        let server_agent = ForAgent::AgentSubject(server.subject.clone());
+
+        // Peer dialed into us (trust_owned=false): the server's own identity
+        // can't write our drive, so its relayed write is refused.
+        let mut cache = HashMap::new();
+        assert!(
+            !admitted_for_drive(&db, &server_agent, &drive, false, &mut cache).await,
+            "a peer that dialed us may not write our drive on its own identity"
+        );
+
+        // We dialed the server (trust_owned=true): it is relaying updates to a
+        // drive we own, which is the whole point of pairing with it.
+        let mut cache = HashMap::new();
+        assert!(
+            admitted_for_drive(&db, &server_agent, &drive, true, &mut cache).await,
+            "a server we dialed must be able to relay updates to our own drive"
+        );
+    }
+
     #[tokio::test]
     async fn owner_admitted_stranger_rejected() {
         let db = Db::init_temp("live_admission_owner_vs_stranger")
@@ -1933,6 +2097,7 @@ mod live_write_admission_tests {
                 &db,
                 &ForAgent::AgentSubject(alice.subject.clone()),
                 &drive,
+                false,
                 &mut cache
             )
             .await,
@@ -1945,6 +2110,7 @@ mod live_write_admission_tests {
                 &db,
                 &ForAgent::AgentSubject(mallory.subject.clone()),
                 &drive,
+                false,
                 &mut cache
             )
             .await,
@@ -1970,6 +2136,7 @@ mod live_write_admission_tests {
                 &db,
                 &ForAgent::AgentSubject(alice.subject.clone()),
                 &drive,
+                false,
                 &mut cache
             )
             .await,
@@ -1991,6 +2158,7 @@ mod live_write_admission_tests {
             &db,
             &ForAgent::AgentSubject(alice.subject.clone()),
             &drive,
+            false,
             &mut cache,
         )
         .await;
@@ -2013,7 +2181,7 @@ mod live_write_admission_tests {
         // for Alice's drive — the verdict lands in the cache.
         let mut cache = HashMap::new();
         assert!(
-            !admitted_for_drive(&db, &ForAgent::Public, &drive, &mut cache).await,
+            !admitted_for_drive(&db, &ForAgent::Public, &drive, false, &mut cache).await,
             "Public should not be admitted for Alice's drive"
         );
         assert_eq!(cache.get(&drive), Some(&false));
@@ -2031,7 +2199,7 @@ mod live_write_admission_tests {
         // wasn't just cosmetic; a *stale* cache would have kept returning
         // the cached `false` regardless of the new identity.
         assert!(
-            admitted_for_drive(&db, &upgraded, &drive, &mut cache).await,
+            admitted_for_drive(&db, &upgraded, &drive, false, &mut cache).await,
             "Alice must be admitted for her own drive once the stale cache is cleared"
         );
     }
@@ -2051,6 +2219,7 @@ mod live_write_admission_tests {
             &db,
             &ForAgent::AgentSubject(alice.subject.clone()),
             &drive,
+            false,
             &mut cache,
         )
         .await;
@@ -2207,6 +2376,7 @@ mod initiator_trust_tests {
             &db,
             &ForAgent::AgentSubject(mallory.subject.clone()),
             &child,
+            false,
             &mut cache,
         )
         .await;
@@ -2235,6 +2405,7 @@ mod initiator_trust_tests {
             &db,
             &ForAgent::AgentSubject(alice.subject.clone()),
             &child,
+            false,
             &mut cache,
         )
         .await;
