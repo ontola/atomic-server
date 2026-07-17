@@ -494,19 +494,39 @@ async fn e2e_managed_node_replicates_missing_drive() {
     );
 }
 
-/// Two devices, two different accounts. The dialer proves a valid agent key, so
-/// AUTH itself succeeds — but it is not the acceptor's agent, and peer sync is
-/// same-agent only (serverless-p2p Principle 1).
+/// Two devices, two different accounts, and nothing shared between them. The
+/// dialer proves a valid agent key, so AUTH succeeds — and then `check_read`
+/// denies it every subject, because none of them are its to read.
 ///
-/// Before this was enforced, the acceptor admitted the stranger and then denied
-/// it every subject in `check_read`, so the sync reported `count: 0` with status
-/// ok. Two real devices sat there "synced" and empty. Fail closed, and say why.
+/// The sync must say that, not report an empty success: two real devices sat
+/// there "synced" and blank, which is the worst way to answer a question.
+///
+/// It used to be said by refusing any agent that was not the acceptor's own.
+/// That answered before asking: a peer holding a drive shared with them, or a
+/// server holding one for them, was refused the same way — and a workspace
+/// could then only reach a server over HTTP, which is what Iroh is here to
+/// avoid. Rights decide, per subject (serverless-p2p Principle 2: one engine,
+/// one set of checks, every node). The explanation is for what actually failed.
 #[tokio::test]
-async fn peer_sync_refuses_a_different_agent() {
+async fn peer_sync_says_why_when_a_different_agent_may_read_nothing() {
     use crate::sync::peer;
 
     let db_a = Db::init_temp("xagent_a").await.unwrap();
-    let (_agent_a, drive) = db_a.setup("Alice").await.unwrap();
+    let (agent_a, drive) = db_a.setup("Alice").await.unwrap();
+
+    // `create_drive` makes a drive public-read. Alice's is private here, so
+    // "nothing is shared with Bob" is the drive's own doing, not the
+    // transport's.
+    let mut drive_resource = db_a.get_resource(&drive.clone().into()).await.unwrap();
+    drive_resource
+        .set(
+            crate::urls::READ.into(),
+            vec![agent_a.subject.to_string()].into(),
+            &db_a,
+        )
+        .await
+        .unwrap();
+    drive_resource.save(&db_a).await.unwrap();
 
     // Bob holds his own key: a perfectly valid agent, just not Alice.
     let db_b = Db::init_temp("xagent_b").await.unwrap();
@@ -525,16 +545,16 @@ async fn peer_sync_refuses_a_different_agent() {
     let result =
         peer::sync_drive_with_peer_using(&ep_b, &node_id_a.to_string(), &drive, &db_b, true).await;
 
-    let error = result.expect_err("a different agent must not be able to sync");
+    let error = result.expect_err("an empty sync must not report success");
     let message = error.to_string();
     assert!(
         message.contains("different account"),
-        "the refusal must say why, got: {message}"
+        "the failure must say why, got: {message}"
     );
 
     assert!(
         !db_b.has_resource_locally(&drive),
-        "nothing may cross to a device signed in as somebody else"
+        "a private drive may not cross to somebody else's device"
     );
 }
 

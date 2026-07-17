@@ -1465,16 +1465,12 @@ pub async fn sync_drive_with_peer_using_outcome(
                                         "[sync] peer {} authenticated back as {a:?}",
                                         &remote_key[..remote_key.len().min(12)]
                                     );
-                                    // Fail closed: a peer signed in as somebody
-                                    // else would deny us every subject and leave
-                                    // us reporting an empty, "successful" sync.
-                                    if !is_same_agent_as_ours(store, &a) {
-                                        return Err(format!(
-                                            "That device is signed in as a different account ({a}). \
-                                             Peer sync only works between devices signed in as the same account."
-                                        )
-                                        .into());
-                                    }
+                                    // Whether this agent may have anything of
+                                    // ours is `check_read`'s answer, per
+                                    // subject — not a question of whether they
+                                    // are us. A peer holding a drive shared
+                                    // with us is a different agent and has
+                                    // every right to sync it.
                                     invalidate_drive_cache_on_identity_change(
                                         &a,
                                         &remote_agent,
@@ -1502,6 +1498,20 @@ pub async fn sync_drive_with_peer_using_outcome(
     tracing::info!(
         "sync_drive_with_peer: imported {total_imported} resources from {remote_node_id}"
     );
+
+    // Nothing came, and the other side is signed in as somebody else: say that,
+    // rather than report an empty success. Two devices sitting "synced" and
+    // blank is what the old identity refusal was really protecting against —
+    // but it answered the question before asking it, refusing a peer who might
+    // have had every right to what we asked for (a drive shared with them, or a
+    // server holding it for us). Ask first; explain only what actually failed.
+    if total_imported == 0 && !is_same_agent_as_ours(store, &remote_agent) {
+        return Err(format!(
+            "That device is signed in as a different account ({remote_agent}), \
+             and nothing there is shared with yours."
+        )
+        .into());
+    }
 
     // Transition to live mode: reuse the same bi stream for real-time updates.
     // Don't close it — the server's handle_stream will also transition after
@@ -1690,29 +1700,24 @@ async fn handle_stream(
                 .iter()
                 .any(|r| !r.is_empty() && r[0] == super::protocol::tag::AUTH_OK);
 
-        // Fail closed on identity. A peer signed in as a different agent proves
-        // a valid key, so `handle_frame` happily answers AUTH_OK — and then
-        // every `check_read` denies it and the sync "succeeds" with nothing
-        // transferred. Say no here instead, while we can say why.
+        // Who this agent is decides nothing here; what they may read decides
+        // everything, per subject, in `check_read` — the same answer they would
+        // get over WS, which never asked this question. This connection used to
+        // be refused unless the agent was ours, on the grounds that a stranger
+        // would be denied every subject anyway and an empty "successful" sync
+        // is a poor way to say no. But that reasoning only holds for a device
+        // holding one person's drives. A server holds many people's, and would
+        // have served each of them exactly what they own; a drive shared with
+        // someone else's device is theirs to sync, and this refused that too.
+        //
+        // Refusing here also meant a workspace could only reach a server over
+        // HTTP, which is the thing Iroh is here to avoid — a node id needs no
+        // address, no port, no certificate.
         if just_authed && !is_same_agent_as_ours(&store, &agent) {
-            tracing::warn!(
-                "[accept] refusing {}: authenticated as {agent}, which is not this device's account",
+            tracing::info!(
+                "[accept] {} authenticated as {agent}, not this node's account — serving what they may read",
                 &remote_key[..remote_key.len().min(12)]
             );
-            let error = super::protocol::encode_error(
-                0,
-                super::protocol::error_code::UNKNOWN,
-                "This device is signed in as a different account. Peer sync only works between devices signed in as the same account.",
-            );
-            let _ = send.write_u32(error.len() as u32).await;
-            let _ = send.write_all(&error).await;
-            let _ = send.finish();
-            // Returning drops the connection, which would abort the frame in
-            // flight and leave the dialer reporting "connection lost" instead
-            // of the reason. Wait (briefly) for it to read the refusal.
-            let _ = tokio::time::timeout(std::time::Duration::from_secs(2), send.stopped()).await;
-
-            return Ok(0);
         }
 
         // Check if the client sent us a SYNC_PUSH (bidirectional data exchange complete)

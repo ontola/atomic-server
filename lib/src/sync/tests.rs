@@ -383,6 +383,72 @@ mod peer_sync_tests {
         );
     }
 
+    /// A peer signed in as somebody else syncs what it is allowed to, and
+    /// nothing more. Rights answer this, per subject — not "are you me?".
+    ///
+    /// The accept path used to refuse any agent that was not this node's own,
+    /// on the grounds that a stranger would be denied everything anyway. That
+    /// held only for a node holding one person's drives: a server holds many
+    /// people's, and a drive shared with another person's device is theirs to
+    /// sync. It also meant a workspace could only reach a server over HTTP,
+    /// which is the thing Iroh removes the need for.
+    #[cfg(feature = "iroh")]
+    #[tokio::test]
+    async fn a_different_agent_syncs_what_it_may_read() {
+        use crate::sync::peer;
+
+        // Alice's node, with a drive she shares with Bob — and one she doesn't.
+        let db_a = Db::init_temp("iroh_rights_a").await.unwrap();
+        let (_agent_a, shared_drive) = db_a.setup("Alice").await.unwrap();
+
+        let db_b = Db::init_temp("iroh_rights_b").await.unwrap();
+        let (agent_b, _drive_b) = db_b.setup("Bob").await.unwrap();
+
+        // Bob may read the drive.
+        let mut drive = db_a
+            .get_resource(&shared_drive.clone().into())
+            .await
+            .unwrap();
+        drive
+            .set(
+                crate::urls::READ.into(),
+                vec![agent_b.subject.to_string()].into(),
+                &db_a,
+            )
+            .await
+            .unwrap();
+        drive.save(&db_a).await.unwrap();
+
+        db_a.create_resource(crate::urls::FOLDER, &shared_drive, "shared-with-bob", None)
+            .await
+            .unwrap();
+
+        let (node_id_a, router_a) = peer::start(db_a.clone()).await.unwrap();
+        let ep_b = iroh::Endpoint::builder()
+            .discovery_n0()
+            .bind()
+            .await
+            .unwrap();
+        ep_b.add_node_addr(router_a.endpoint().node_addr().await.unwrap())
+            .unwrap();
+
+        // Bob is not Alice. That is not the question being asked.
+        let imported = peer::sync_drive_with_peer_using(
+            &ep_b,
+            &node_id_a.to_string(),
+            &shared_drive,
+            &db_b,
+            true,
+        )
+        .await
+        .expect("a peer with read rights must not be refused for being someone else");
+
+        assert!(
+            imported >= 1,
+            "Bob should receive the drive he may read, got {imported}"
+        );
+    }
+
     /// Two-peer Iroh roundtrip: Device A holds a File resource and its blob;
     /// Device B has nothing. After `sync_drive_with_peer_using`, B should
     /// have both the resource AND the bytes in `Tree::Blobs`. Exercises the
