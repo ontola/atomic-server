@@ -137,7 +137,14 @@ pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
     let secret_key = load_or_create_secret_key(&store);
     let endpoint: Endpoint = Endpoint::builder()
         .secret_key(secret_key)
+        // n0 discovery (relay + pkarr) reaches devices across networks, but two
+        // devices on the same Wi-Fi should not have to round-trip through a
+        // relay and hope hole-punching succeeds — which is exactly what fails on
+        // restrictive/mobile networks (a tablet dialing a phone by the QR's node
+        // id timed out). Local mDNS discovery lets same-LAN peers find and dial
+        // each other directly.
         .discovery_n0()
+        .discovery_local_network()
         .bind()
         .await?;
 
