@@ -317,6 +317,35 @@ static LIVE_PEERS: Mutex<Option<HashMap<String, tokio::sync::mpsc::Sender<Vec<u8
 /// Keep QUIC connections alive so live streams don't drop.
 static LIVE_CONNECTIONS: Mutex<Option<Vec<iroh::endpoint::Connection>>> = Mutex::new(None);
 
+/// What live peers call themselves, learnt over HELLO.
+///
+/// In memory, not in the known-peers table: writing a name there marks a peer
+/// as one to dial again forever, which an unsolicited inbound connection has
+/// not earned (F9, planning/unified-sync.md). Saying who is connected right
+/// now grants nothing — it ends when the connection does.
+static LIVE_PEER_NAMES: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+
+/// Remember what a connected peer calls itself, for as long as it is connected.
+pub fn set_live_peer_name(peer_id: &str, name: &str) {
+    if name.is_empty() {
+        return;
+    }
+
+    if let Ok(mut guard) = LIVE_PEER_NAMES.lock() {
+        guard
+            .get_or_insert_with(HashMap::new)
+            .insert(normalize_node_id(peer_id), name.to_string());
+    }
+}
+
+/// What a live peer calls itself, if it said.
+pub fn live_peer_name(peer_id: &str) -> Option<String> {
+    LIVE_PEER_NAMES
+        .lock()
+        .ok()
+        .and_then(|guard| guard.as_ref()?.get(&normalize_node_id(peer_id)).cloned())
+}
+
 /// Returns the number of currently connected live peers.
 pub fn live_peer_count() -> usize {
     LIVE_PEERS
@@ -1693,6 +1722,11 @@ async fn handle_stream(
                         &remote_key[..remote_key.len().min(12)],
                         name
                     );
+                    // Display-only, and only while connected: a client of this
+                    // node is not a node itself and cannot see who we are
+                    // paired with unless we say. Not `add_known_peer` — see
+                    // below.
+                    set_live_peer_name(&remote_key, name);
                     // F9 minimal (planning/unified-sync.md): deliberately
                     // NOT calling `add_known_peer` here. This is the accept
                     // side of an unsolicited inbound connection — the local

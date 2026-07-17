@@ -1381,6 +1381,7 @@
       "https://atomicdata.dev/properties/server/version",
       "https://atomicdata.dev/properties/server/managed",
       "https://atomicdata.dev/properties/server/portalUrl",
+      "https://atomicdata.dev/properties/server/peers",
       "https://atomicdata.dev/properties/isUninitialized"
     ],
     "https://atomicdata.dev/properties/requires": [
@@ -1584,5 +1585,60 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "version-id"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/server/peers",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The devices this node syncs with directly, as nested `Peer` resources. Reported by the `/server` endpoint, so a client — which is not itself a node — can see what its node is paired with.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "peers"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/peer/live",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "True while this peer holds an open connection to the node reporting it.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "live"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/peer/nodeId",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A peer's Iroh node identity, as a `did:ad:node:...` DID.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "node-id"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/peer/deviceName",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "What a peer calls itself, learnt when it introduced itself over HELLO.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "device-name"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Peer",
+    "https://atomicdata.dev/properties/description": "Another device a node syncs with directly, over a peer-to-peer connection.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/peer/nodeId",
+      "https://atomicdata.dev/properties/peer/deviceName",
+      "https://atomicdata.dev/properties/peer/live"
+    ],
+    "https://atomicdata.dev/properties/requires": [],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "peer"
   }
 ]

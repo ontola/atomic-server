@@ -15,7 +15,7 @@ use atomic_lib::{
     endpoints::{BoxFuture, Endpoint, HandleGetContext},
     errors::AtomicResult,
     storelike::ResourceResponse,
-    urls, Resource, Value,
+    urls, Db, Resource, Value,
 };
 
 /// The node facts that live in AppState rather than in the store.
@@ -35,6 +35,68 @@ pub fn server_info_endpoint(info: ServerInfo) -> Endpoint {
         )
         .handle(move |context| handle_get(context, info.clone()))
         .build()
+}
+
+/// The devices this node syncs with directly, as nested resources.
+///
+/// A client is not a node: a browser tab cannot see who its server is paired
+/// with, and so cannot show the phone that just paired with it. The node knows
+/// — it logged the introduction — so it says.
+///
+/// Both the peers connected right now and the ones this node would dial again.
+/// The union matters: a device that dials *us* is never written to the
+/// known-peers table (F9 — an unsolicited connection has not earned a
+/// permanent reconnect slot), so a phone that just paired appears only in the
+/// live list. Listing known peers alone would answer "nobody is here" to the
+/// person watching their phone connect.
+///
+/// Node-local state, not resources in a drive, so it is built per request.
+fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
+    let live = crate::iroh_transport::live_peer_ids();
+    let known = crate::iroh_transport::get_known_peers(store);
+
+    let mut seen: Vec<(String, Option<String>, bool)> = Vec::new();
+
+    for id in &live {
+        let name = crate::iroh_transport::live_peer_name(id).or_else(|| {
+            known
+                .iter()
+                .find(|p| crate::iroh_transport::normalize_node_id(&p.node_id) == *id)
+                .map(|p| p.name.clone())
+                .filter(|n| !n.is_empty())
+        });
+        seen.push((id.clone(), name, true));
+    }
+
+    for peer in &known {
+        let id = crate::iroh_transport::normalize_node_id(&peer.node_id);
+
+        if seen.iter().any(|(known_id, _, _)| known_id == &id) {
+            continue;
+        }
+
+        let name = Some(peer.name.clone()).filter(|n| !n.is_empty());
+        seen.push((id, name, false));
+    }
+
+    seen.into_iter()
+        .map(|(node_id, name, is_live)| {
+            let mut propvals = atomic_lib::resources::PropVals::new();
+            propvals.insert(urls::IS_A.into(), vec![urls::PEER.to_string()].into());
+            propvals.insert(
+                urls::PEER_NODE_ID.into(),
+                Value::String(format!("did:ad:node:{node_id}")),
+            );
+
+            if let Some(name) = name {
+                propvals.insert(urls::PEER_DEVICE_NAME.into(), Value::String(name));
+            }
+
+            propvals.insert(urls::PEER_LIVE.into(), Value::Boolean(is_live));
+
+            atomic_lib::values::SubResource::Nested(propvals)
+        })
+        .collect()
 }
 
 fn handle_get(
@@ -63,6 +125,12 @@ fn handle_get(
                 urls::SERVER_NODE_ID.into(),
                 Value::String(format!("did:ad:node:{node_id}")),
             )?;
+        }
+
+        let peers = peer_resources(context.store);
+
+        if !peers.is_empty() {
+            resource.set_unsafe(urls::SERVER_PEERS.into(), Value::ResourceArray(peers))?;
         }
 
         let managed = info.managed.load(std::sync::atomic::Ordering::Relaxed);

@@ -383,6 +383,29 @@ mod peer_sync_tests {
         );
     }
 
+    /// A device that dials us is never written to the known-peers table (F9: an
+    /// unsolicited connection has not earned a permanent reconnect slot). So
+    /// the name it introduced itself with lives only as long as the connection
+    /// — which is exactly long enough to tell a client who is connected.
+    #[test]
+    fn a_live_peer_is_known_by_name_without_being_remembered() {
+        use crate::sync::peer;
+
+        let node = "AD8B384053C0855C7F812497F7BF0704F9924E13B348F2656D60FE0D52083F31";
+
+        peer::set_live_peer_name(node, "Alice’s Phone");
+
+        // Case-insensitively, the way node ids arrive from either side.
+        assert_eq!(
+            peer::live_peer_name(&node.to_lowercase()).as_deref(),
+            Some("Alice’s Phone"),
+        );
+
+        // An empty introduction is not a name.
+        peer::set_live_peer_name("beef", "");
+        assert_eq!(peer::live_peer_name("beef"), None);
+    }
+
     /// A peer signed in as somebody else syncs what it is allowed to, and
     /// nothing more. Rights answer this, per subject — not "are you me?".
     ///
