@@ -494,6 +494,53 @@ async fn e2e_managed_node_replicates_missing_drive() {
     );
 }
 
+/// Pushing a workspace to a device that has none imports nothing — and that is
+/// the whole point of doing it. This is a phone sending its workspace to an
+/// always-on device, which is how it reaches a browser.
+///
+/// A check that counted only imports called this a failure, and told the owner
+/// their own workspace belonged to "a different account".
+#[tokio::test]
+async fn pushing_a_workspace_to_an_empty_device_is_not_a_failure() {
+    use crate::sync::peer;
+
+    // The always-on device: its own account, and nothing of Alice's on it.
+    let db_server = Db::init_temp("push_server").await.unwrap();
+    db_server.setup("Server").await.unwrap();
+
+    // Alice's phone, holding the only copy of her workspace.
+    let db_phone = Db::init_temp("push_phone").await.unwrap();
+    let (_agent, drive) = db_phone.setup("Alice").await.unwrap();
+    db_phone
+        .create_resource(crate::urls::FOLDER, &drive, "notes", None)
+        .await
+        .unwrap();
+
+    let (node_id, router) = peer::start(db_server.clone()).await.unwrap();
+    let ep_phone = iroh::Endpoint::builder()
+        .discovery_n0()
+        .discovery_local_network()
+        .bind()
+        .await
+        .unwrap();
+    ep_phone
+        .add_node_addr(router.endpoint().node_addr().await.unwrap())
+        .unwrap();
+
+    peer::sync_drive_with_peer_using(&ep_phone, &node_id.to_string(), &drive, &db_phone, true)
+        .await
+        .expect("pushing a workspace up must not be reported as a failure");
+
+    // The dialer writes its push and returns; the far side imports after that,
+    // so wait for the write to land rather than for the call to come back.
+    let landed = wait_until(std::time::Duration::from_secs(10), || async {
+        db_server.has_resource_locally(&drive)
+    })
+    .await;
+
+    assert!(landed, "the workspace should land on the always-on device");
+}
+
 /// Two devices, two different accounts, and nothing shared between them. The
 /// dialer proves a valid agent key, so AUTH succeeds — and then `check_read`
 /// denies it every subject, because none of them are its to read.

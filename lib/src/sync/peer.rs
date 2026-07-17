@@ -1300,6 +1300,12 @@ pub async fn sync_drive_with_peer_using_outcome(
 
     // Read response frames
     let mut total_imported = 0;
+    // What we sent, and whether the remote said we were already level. A sync
+    // that pushes a workspace up imports nothing — counting only imports calls
+    // that a failure — and one that finds both sides equal moves nothing at
+    // all, which is the definition of success.
+    let mut total_pushed = 0usize;
+    let mut acked_in_sync = false;
     let mut pull_subjects: Vec<String> = Vec::new();
 
     // Read frames until the peer is done
@@ -1346,6 +1352,7 @@ pub async fn sync_drive_with_peer_using_outcome(
             }
             super::protocol::tag::SYNC_OK => {
                 tracing::info!("Peer says drive {drive} is in sync");
+                acked_in_sync = true;
                 break;
             }
             super::protocol::tag::SYNC_DIFF => {
@@ -1381,6 +1388,7 @@ pub async fn sync_drive_with_peer_using_outcome(
                                     send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
                                     send.write_all(&chunk).await.map_err(io_err)?;
                                 }
+                                total_pushed += entries.len();
                                 tracing::info!("Pushed {} resources to peer", entries.len());
                             }
                         }
@@ -1432,6 +1440,7 @@ pub async fn sync_drive_with_peer_using_outcome(
                             send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
                             send.write_all(&chunk).await.map_err(io_err)?;
                         }
+                        total_pushed += entries.len();
                         tracing::info!("Pushed {} resources back to peer", entries.len());
                     }
                 }
@@ -1499,13 +1508,19 @@ pub async fn sync_drive_with_peer_using_outcome(
         "sync_drive_with_peer: imported {total_imported} resources from {remote_node_id}"
     );
 
-    // Nothing came, and the other side is signed in as somebody else: say that,
-    // rather than report an empty success. Two devices sitting "synced" and
-    // blank is what the old identity refusal was really protecting against —
-    // but it answered the question before asking it, refusing a peer who might
-    // have had every right to what we asked for (a drive shared with them, or a
-    // server holding it for us). Ask first; explain only what actually failed.
-    if total_imported == 0 && !is_same_agent_as_ours(store, &remote_agent) {
+    // Nothing moved in either direction, and the remote never said we were
+    // level: the far side had nothing for us and wanted nothing from us. When
+    // it is also somebody else's account, that is why — say so, rather than
+    // report an empty success and leave two devices sitting "synced" and blank.
+    //
+    // All three conditions matter. Pushing a workspace up to a device that had
+    // none imports nothing, and is exactly what someone came here to do; being
+    // already in sync moves nothing and is the happy ending.
+    if total_imported == 0
+        && total_pushed == 0
+        && !acked_in_sync
+        && !is_same_agent_as_ours(store, &remote_agent)
+    {
         return Err(format!(
             "That device is signed in as a different account ({remote_agent}), \
              and nothing there is shared with yours."
