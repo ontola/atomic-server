@@ -72,7 +72,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 679107244;
+  int get rustContentHash => 2026523593;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -223,9 +223,6 @@ abstract class RustLibApi extends BaseApi {
 
   Future<int> crateApiSimpleSyncDriveToServer({required String serverUrl});
 
-  Future<bool> crateApiSimpleWsSyncTryPushCommit(
-      {required Db store, required Commit commit});
-
   Future<int> crateApiSimpleUndoCanvas({required String subject});
 
   Future<int> crateApiSimpleWaitForPeerCountChange({required int current});
@@ -239,18 +236,6 @@ abstract class RustLibApi extends BaseApi {
   Future<String> crateApiSimpleWatchResource({required String subject});
 
   Future<void> crateApiSimpleWsSubscribeCanvas({required String subject});
-
-  RustArcIncrementStrongCountFnType get rust_arc_increment_strong_count_Commit;
-
-  RustArcDecrementStrongCountFnType get rust_arc_decrement_strong_count_Commit;
-
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_CommitPtr;
-
-  RustArcIncrementStrongCountFnType get rust_arc_increment_strong_count_Db;
-
-  RustArcDecrementStrongCountFnType get rust_arc_decrement_strong_count_Db;
-
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_DbPtr;
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -1752,42 +1737,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<bool> crateApiSimpleWsSyncTryPushCommit(
-      {required Db store, required Commit commit}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-            store, serializer);
-        sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-            commit, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 62, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_bool,
-        decodeErrorData: null,
-      ),
-      constMeta: kCrateApiSimpleWsSyncTryPushCommitConstMeta,
-      argValues: [store, commit],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiSimpleWsSyncTryPushCommitConstMeta =>
-      const TaskConstMeta(
-        debugName: "try_push_commit",
-        argNames: ["store", "commit"],
-      );
-
-  @override
   Future<int> crateApiSimpleUndoCanvas({required String subject}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(subject, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 63, port: port_);
+            funcId: 62, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_i_32,
@@ -1811,7 +1767,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_i_32(current, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 64, port: port_);
+            funcId: 63, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_i_32,
@@ -1835,7 +1791,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 65, port: port_);
+            funcId: 64, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -1860,7 +1816,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(subject, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 66, port: port_);
+            funcId: 65, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1885,7 +1841,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(parent, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 67, port: port_);
+            funcId: 66, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -1910,7 +1866,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(subject, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 68, port: port_);
+            funcId: 67, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -1935,7 +1891,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(subject, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 69, port: port_);
+            funcId: 68, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1952,50 +1908,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         debugName: "ws_subscribe_canvas",
         argNames: ["subject"],
       );
-
-  RustArcIncrementStrongCountFnType
-      get rust_arc_increment_strong_count_Commit => wire
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit;
-
-  RustArcDecrementStrongCountFnType
-      get rust_arc_decrement_strong_count_Commit => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit;
-
-  RustArcIncrementStrongCountFnType get rust_arc_increment_strong_count_Db => wire
-      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb;
-
-  RustArcDecrementStrongCountFnType get rust_arc_decrement_strong_count_Db => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb;
-
-  @protected
-  Commit
-      dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return CommitImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  Db dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-      dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return DbImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  Commit
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return CommitImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  Db dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-      dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return DbImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
 
   @protected
   String dco_decode_String(dynamic raw) {
@@ -2152,12 +2064,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  BigInt dco_decode_usize(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dcoDecodeU64(raw);
-  }
-
-  @protected
   VersionMetadata dco_decode_version_metadata(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -2171,40 +2077,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       len: dco_decode_i_32(arr[4]),
       message: dco_decode_opt_String(arr[5]),
     );
-  }
-
-  @protected
-  Commit
-      sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return CommitImpl.frbInternalSseDecode(
-        sse_decode_usize(deserializer), sse_decode_i_32(deserializer));
-  }
-
-  @protected
-  Db sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return DbImpl.frbInternalSseDecode(
-        sse_decode_usize(deserializer), sse_decode_i_32(deserializer));
-  }
-
-  @protected
-  Commit
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return CommitImpl.frbInternalSseDecode(
-        sse_decode_usize(deserializer), sse_decode_i_32(deserializer));
-  }
-
-  @protected
-  Db sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return DbImpl.frbInternalSseDecode(
-        sse_decode_usize(deserializer), sse_decode_i_32(deserializer));
   }
 
   @protected
@@ -2394,12 +2266,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  BigInt sse_decode_usize(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getBigUint64();
-  }
-
-  @protected
   VersionMetadata sse_decode_version_metadata(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_list_prim_u_8_strict(deserializer);
@@ -2415,42 +2281,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         lamport: var_lamport,
         len: var_len,
         message: var_message);
-  }
-
-  @protected
-  void
-      sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          Commit self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-        (self as CommitImpl).frbInternalSseEncode(move: false), serializer);
-  }
-
-  @protected
-  void
-      sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-          Db self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-        (self as DbImpl).frbInternalSseEncode(move: false), serializer);
-  }
-
-  @protected
-  void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          Commit self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-        (self as CommitImpl).frbInternalSseEncode(move: null), serializer);
-  }
-
-  @protected
-  void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-          Db self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-        (self as DbImpl).frbInternalSseEncode(move: null), serializer);
   }
 
   @protected
@@ -2619,12 +2449,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_usize(BigInt self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putBigUint64(self);
-  }
-
-  @protected
   void sse_encode_version_metadata(
       VersionMetadata self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -2635,44 +2459,4 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.len, serializer);
     sse_encode_opt_String(self.message, serializer);
   }
-}
-
-@sealed
-class CommitImpl extends RustOpaque implements Commit {
-  // Not to be used by end users
-  CommitImpl.frbInternalDcoDecode(List<dynamic> wire)
-      : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  CommitImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
-      : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_Commit,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_Commit,
-    rustArcDecrementStrongCountPtr:
-        RustLib.instance.api.rust_arc_decrement_strong_count_CommitPtr,
-  );
-}
-
-@sealed
-class DbImpl extends RustOpaque implements Db {
-  // Not to be used by end users
-  DbImpl.frbInternalDcoDecode(List<dynamic> wire)
-      : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  DbImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
-      : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_Db,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_Db,
-    rustArcDecrementStrongCountPtr:
-        RustLib.instance.api.rust_arc_decrement_strong_count_DbPtr,
-  );
 }

@@ -22,30 +22,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     required super.portManager,
   });
 
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_CommitPtr => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit;
-
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_DbPtr => wire
-      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb;
-
-  @protected
-  Commit
-      dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          dynamic raw);
-
-  @protected
-  Db dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-      dynamic raw);
-
-  @protected
-  Commit
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          dynamic raw);
-
-  @protected
-  Db dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-      dynamic raw);
-
   @protected
   String dco_decode_String(dynamic raw);
 
@@ -110,28 +86,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
-  BigInt dco_decode_usize(dynamic raw);
-
-  @protected
   VersionMetadata dco_decode_version_metadata(dynamic raw);
-
-  @protected
-  Commit
-      sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          SseDeserializer deserializer);
-
-  @protected
-  Db sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-      SseDeserializer deserializer);
-
-  @protected
-  Commit
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          SseDeserializer deserializer);
-
-  @protected
-  Db sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-      SseDeserializer deserializer);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -201,30 +156,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  BigInt sse_decode_usize(SseDeserializer deserializer);
-
-  @protected
   VersionMetadata sse_decode_version_metadata(SseDeserializer deserializer);
-
-  @protected
-  void
-      sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          Commit self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-          Db self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          Commit self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-          Db self, SseSerializer serializer);
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
@@ -298,9 +230,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
-  void sse_encode_usize(BigInt self, SseSerializer serializer);
-
-  @protected
   void sse_encode_version_metadata(
       VersionMetadata self, SseSerializer serializer);
 }
@@ -309,30 +238,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
 class RustLibWire implements BaseWire {
   RustLibWire.fromExternalLibrary(ExternalLibrary lib);
-
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-              ptr);
-
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-              ptr);
-
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-              ptr);
-
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-              ptr);
 }
 
 @JS('wasm_bindgen')
@@ -340,20 +245,4 @@ external RustLibWasmModule get wasmModule;
 
 @JS()
 @anonymous
-extension type RustLibWasmModule._(JSObject _) implements JSObject {
-  external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          int ptr);
-
-  external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCommit(
-          int ptr);
-
-  external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-          int ptr);
-
-  external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDb(
-          int ptr);
-}
+extension type RustLibWasmModule._(JSObject _) implements JSObject {}

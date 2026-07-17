@@ -183,6 +183,14 @@ async fn fetch_resource_state(_store: &atomic_lib::Db, subject: &str) -> Result<
 
 /// Best-effort: push a locally signed commit over WS when a session is open.
 /// Returns `true` if the commit was accepted by the hub.
+///
+/// Rust-only, though it lives under `crate::api`: Dart never pushes a commit
+/// itself, it calls something that saves and pushes. Mirroring it would drag
+/// `Db` and `Commit` across as opaque types for no caller — and the code
+/// generated for them does not compile, because it names them unqualified
+/// while emitting no `use` for this module. That mismatch was papered over by
+/// hand-editing the generated file, which every `generate` run then undid.
+#[flutter_rust_bridge::frb(ignore)]
 pub async fn try_push_commit(store: &atomic_lib::Db, commit: &atomic_lib::Commit) -> bool {
     let Ok(json) = atomic_lib::client::commit_to_wire_json(commit, store).await else {
         return false;
