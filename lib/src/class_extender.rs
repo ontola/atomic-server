@@ -1,15 +1,10 @@
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::{
     agents::ForAgent, errors::AtomicResult, storelike::ResourceResponse, urls, Commit, Db, Resource,
 };
 
-#[cfg(not(target_arch = "wasm32"))]
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-#[cfg(target_arch = "wasm32")]
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
+pub use crate::plugins::BoxFuture;
 
 pub struct GetExtenderContext<'a> {
     pub store: &'a Db,

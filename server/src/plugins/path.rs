@@ -9,6 +9,7 @@ pub fn path_endpoint() -> Endpoint {
     Endpoint::builder("/path")
         .params([urls::PATH])
         .description("An Atomic Path is a string that starts with the URL of some Atomic Resource, followed by one or multiple other Property URLs or Property Shortnames. It resolves to one specific Resource or Value. At this moment, Values are not yet supported.")
+        .form_when_missing(["path"])
         .handle(handle_path_request)
         .build()
 }
@@ -23,19 +24,14 @@ fn handle_path_request<'a>(
             for_agent,
             subject,
         } = context;
-        let params = subject.query_pairs();
-        let mut path = None;
-        for (k, v) in params {
-            if let "path" = k.as_ref() {
-                path = Some(v.to_string())
-            };
-        }
-        if path.is_none() {
-            return path_endpoint()
-                .to_resource_response(store, subject.as_str())
-                .await;
-        }
-        let result = store.get_path(&path.unwrap(), None, for_agent).await?;
+        // `form_when_missing` guarantees a `path` here.
+        let path = subject
+            .query_pairs()
+            .find(|(k, _)| k == "path")
+            .map(|(_, v)| v.to_string())
+            .ok_or("No path query parameter")?;
+
+        let result = store.get_path(&path, None, for_agent).await?;
         match result {
             PathReturn::Subject(subject) => {
                 store

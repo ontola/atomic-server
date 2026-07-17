@@ -7,11 +7,9 @@ use crate::{
     agents::ForAgent, errors::AtomicResult, storelike::ResourceResponse, urls, Db, Resource,
     Storelike, Value,
 };
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub use crate::plugins::BoxFuture;
 
 /// The function that is called when a GET request matches the path.
 /// This is a closure rather than a plain fn pointer, so handlers can capture
@@ -61,6 +59,10 @@ pub struct Endpoint {
     pub params: Vec<String>,
     pub description: String,
     pub shortname: String,
+    /// Query keys the GET handler cannot work without. When any is absent, the
+    /// Endpoint resource itself is returned — which clients render as a form to
+    /// fill in — instead of calling the handler. See [EndpointBuilder::form_when_missing].
+    pub form_when_missing: Vec<String>,
 }
 
 /// Builds an [Endpoint]. The path is the endpoint's identity, so it is required;
@@ -73,6 +75,7 @@ pub struct EndpointBuilder {
     params: Vec<String>,
     description: String,
     shortname: Option<String>,
+    form_when_missing: Vec<String>,
 }
 
 impl EndpointBuilder {
@@ -84,7 +87,19 @@ impl EndpointBuilder {
             params: Vec::new(),
             description: String::new(),
             shortname: None,
+            form_when_missing: Vec::new(),
         }
+    }
+
+    /// The query keys the GET handler cannot work without, e.g. `["subject"]`.
+    /// When any of them is missing from the request, the Endpoint resource is
+    /// returned instead of calling the handler — clients render that as a form.
+    ///
+    /// These are the query keys the handler reads, not the property URLs in
+    /// [Self::params]; a handler asking for `?commit=` needs `"commit"` here.
+    pub fn form_when_missing(mut self, keys: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.form_when_missing = keys.into_iter().map(Into::into).collect();
+        self
     }
 
     /// Overrides the shortname, which defaults to the path without its leading slash.
@@ -140,6 +155,7 @@ impl EndpointBuilder {
             params: self.params,
             description: self.description,
             shortname,
+            form_when_missing: self.form_when_missing,
         }
     }
 }

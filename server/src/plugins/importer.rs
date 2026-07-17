@@ -5,7 +5,7 @@ Importers allow users to (periodically) import JSON-AD files from a remote sourc
 use atomic_lib::{
     agents::ForAgent,
     client,
-    endpoints::{BoxFuture, Endpoint, HandleGetContext, HandlePostContext},
+    endpoints::{BoxFuture, Endpoint, HandlePostContext},
     errors::AtomicResult,
     parse,
     storelike::ResourceResponse,
@@ -20,18 +20,10 @@ pub fn import_endpoint() -> Endpoint {
             urls::IMPORTER_URL,
         ])
         .description("Imports one or more Resources to some parent. POST your JSON-AD and add a `parent` query param to the URL. See https://docs.atomicdata.dev/create-json-ad.html")
+        // No GET handler: an endpoint without one already returns itself, which
+        // is all the removed handler did.
         .handle_post(handle_post)
         .build()
-}
-
-pub fn handle_get<'a>(
-    context: HandleGetContext<'a>,
-) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
-    Box::pin(async move {
-        import_endpoint()
-            .to_resource_response(context.store, context.subject.as_str())
-            .await
-    })
 }
 
 /// When an importer is shown, we list a bunch of Parameters and a list of previously imported items.

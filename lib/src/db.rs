@@ -2005,9 +2005,20 @@ impl Db {
         // Check if the subject matches one of the endpoints
         for endpoint in self.endpoints.iter() {
             if url.path() == endpoint.path {
+                // An endpoint whose required query keys are absent returns itself,
+                // which clients render as a form to fill in. Handling it here (and
+                // not in each handler) keeps handlers to the case they exist for:
+                // the request that actually carries what they need.
+                let missing_required = endpoint.form_when_missing.iter().any(|key| {
+                    !url.query_pairs()
+                        .any(|(k, v)| k == key.as_str() && !v.is_empty())
+                });
+
                 // Not all Endpoints have a handle function.
                 // If there is none, return the endpoint plainly.
-                let response = if let Some(handle) = endpoint.handle.as_ref() {
+                let response = if missing_required {
+                    endpoint.to_resource_response(self, subject).await?
+                } else if let Some(handle) = endpoint.handle.as_ref() {
                     // Call the handle function for the endpoint, if it exists.
                     let context: HandleGetContext = HandleGetContext {
                         subject: url,

@@ -1,7 +1,7 @@
 use tracing::info;
 
 use atomic_lib::{
-    endpoints::{BoxFuture, Endpoint, HandleGetContext, HandlePostContext},
+    endpoints::{BoxFuture, Endpoint, HandlePostContext},
     errors::AtomicResult,
     storelike::{Query, ResourceResponse},
     urls, Resource, Storelike, Value,
@@ -34,19 +34,10 @@ pub fn prune_tests_endpoint() -> Endpoint {
         .description(format!(
             "Deletes drives created by dev-drive ({PRUNE_DEV_DRIVE_MARKER} in description) or E2E ({PRUNE_TEST_DRIVE_NAME_SUBSTR} in name)."
         ))
-        .handle(handle_get)
+        // No GET handler: an endpoint without one already returns itself, which
+        // is all the removed handler did.
         .handle_post(handle_prune_tests_request)
         .build()
-}
-
-pub fn handle_get<'a>(
-    context: HandleGetContext<'a>,
-) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
-    Box::pin(async move {
-        prune_tests_endpoint()
-            .to_resource_response(context.store, context.subject.as_str())
-            .await
-    })
 }
 
 fn handle_prune_tests_request<'a>(

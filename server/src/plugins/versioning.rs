@@ -12,6 +12,7 @@ pub fn version_endpoint() -> Endpoint {
         .shortname("versions")
         .params([urls::SUBJECT])
         .description("Constructs a version of a resource from a Commit URL.")
+        .form_when_missing(["commit"])
         .handle(handle_version_request)
         .build()
 }
@@ -20,6 +21,7 @@ pub fn all_versions_endpoint() -> Endpoint {
     Endpoint::builder("/all-versions")
         .params([urls::SUBJECT])
         .description("Shows all versions for some resource. Constructs these using Commits.")
+        .form_when_missing(["subject"])
         .handle(handle_all_versions_request)
         .build()
 }
@@ -28,20 +30,15 @@ fn handle_version_request<'a>(
     context: HandleGetContext<'a>,
 ) -> BoxFuture<'a, AtomicResult<ResourceResponse>> {
     Box::pin(async move {
-        let params = context.subject.query_pairs();
-        let mut commit_url = None;
-        for (k, v) in params {
-            if let "commit" = k.as_ref() {
-                commit_url = Some(v.to_string())
-            };
-        }
-        if commit_url.is_none() {
-            return version_endpoint()
-                .to_resource_response(context.store, context.subject.as_str())
-                .await;
-        }
-        let mut resource =
-            construct_version(&commit_url.unwrap(), context.store, context.for_agent).await?;
+        // `form_when_missing` guarantees a `commit` here.
+        let commit_url = context
+            .subject
+            .query_pairs()
+            .find(|(k, _)| k == "commit")
+            .map(|(_, v)| v.to_string())
+            .ok_or("No commit query parameter")?;
+
+        let mut resource = construct_version(&commit_url, context.store, context.for_agent).await?;
         resource.set_subject(context.subject.to_string());
         Ok(ResourceResponse::Resource(resource))
     })
@@ -56,19 +53,12 @@ fn handle_all_versions_request<'a>(
             for_agent,
             subject,
         } = context;
-        let params = subject.query_pairs();
-        let mut target_subject = None;
-        for (k, v) in params {
-            if let "subject" = k.as_ref() {
-                target_subject = Some(v.to_string())
-            };
-        }
-        if target_subject.is_none() {
-            return all_versions_endpoint()
-                .to_resource_response(store, subject.as_str())
-                .await;
-        }
-        let target = target_subject.unwrap();
+        // `form_when_missing` guarantees a `subject` here.
+        let target = subject
+            .query_pairs()
+            .find(|(k, _)| k == "subject")
+            .map(|(_, v)| v.to_string())
+            .ok_or("No subject query parameter")?;
         let collection_builder = CollectionBuilder {
             subject: subject.to_string(),
             property: Some(urls::SUBJECT.into()),

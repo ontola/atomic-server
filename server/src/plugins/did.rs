@@ -11,6 +11,7 @@ pub fn did_endpoint() -> Endpoint {
         .description(
             "Resolves a DID (Decentralized Identifier) `did:ad:...` to an Atomic Resource.",
         )
+        .form_when_missing(["subject"])
         .handle(handle_did_request)
         .build()
 }
@@ -25,19 +26,15 @@ fn handle_did_request<'a>(
             for_agent,
             subject,
         } = context;
-        let mut did = None;
-        for (k, v) in subject.query_pairs() {
-            if k == "subject" {
-                did = Some(v.to_string())
-            };
-        }
-        if did.is_none() {
-            return did_endpoint()
-                .to_resource_response(store, subject.as_str())
-                .await;
-        }
 
-        let did_subject = atomic_lib::Subject::from_raw(&did.unwrap(), None);
+        // `form_when_missing` guarantees a `subject` here.
+        let did = subject
+            .query_pairs()
+            .find(|(k, _)| k == "subject")
+            .map(|(_, v)| v.to_string())
+            .ok_or("No subject query parameter")?;
+
+        let did_subject = atomic_lib::Subject::from_raw(&did, None);
         store
             .fetch_resource_with_did_fallback(&did_subject, &store.get_server_url(), for_agent)
             .await
