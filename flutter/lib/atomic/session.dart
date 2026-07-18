@@ -1,13 +1,23 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'server_url.dart';
 
-/// Persists the atomic session (server URL, agent secret, drive) across restarts.
-/// On web: uses localStorage. On native: uses platform-specific secure storage.
+/// Persists the atomic session across restarts.
+///
+/// The **agent secret** is the one sensitive value — it is the account's private
+/// key — so it lives in platform secure storage (EncryptedSharedPreferences on
+/// Android, Keychain on iOS), not in plain SharedPreferences. Everything else
+/// (server URL, active drive, known servers, peers) is non-sensitive routing
+/// state and stays in SharedPreferences.
 class AtomicSession {
   static const _keyServerUrl = 'atomic_server_url';
   static const _keySecret = 'atomic_agent_secret';
   static const _keyDrive = 'atomic_drive';
+
+  static const _secure = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
 
   static Future<void> save({
     required String serverUrl,
@@ -16,7 +26,9 @@ class AtomicSession {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyServerUrl, serverUrl);
-    await prefs.setString(_keySecret, secret);
+    await _secure.write(key: _keySecret, value: secret);
+    // Clear any legacy plaintext copy left in SharedPreferences.
+    await prefs.remove(_keySecret);
     if (drive != null) {
       await prefs.setString(_keyDrive, drive);
     }
@@ -33,7 +45,7 @@ class AtomicSession {
       load() async {
     final prefs = await SharedPreferences.getInstance();
     final serverUrl = prefs.getString(_keyServerUrl);
-    final secret = prefs.getString(_keySecret);
+    final secret = await _loadSecret(prefs);
     if (serverUrl == null || secret == null) return null;
     return (
       serverUrl: serverUrl,
@@ -42,10 +54,26 @@ class AtomicSession {
     );
   }
 
+  /// Read the secret from secure storage, migrating a pre-existing plaintext
+  /// SharedPreferences secret into it on first run so nobody has to re-sign-in.
+  static Future<String?> _loadSecret(SharedPreferences prefs) async {
+    final secure = await _secure.read(key: _keySecret);
+    if (secure != null) return secure;
+
+    final legacy = prefs.getString(_keySecret);
+    if (legacy != null) {
+      await _secure.write(key: _keySecret, value: legacy);
+      await prefs.remove(_keySecret);
+      return legacy;
+    }
+    return null;
+  }
+
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyServerUrl);
-    await prefs.remove(_keySecret);
+    await _secure.delete(key: _keySecret);
+    await prefs.remove(_keySecret); // legacy, if any
     await prefs.remove(_keyDrive);
   }
 
