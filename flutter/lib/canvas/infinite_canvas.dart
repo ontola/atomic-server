@@ -59,7 +59,11 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
   StrokeData? _currentStroke;
 
   // ── History ─────────────────────────────────────────────────────────────────
-  late final List<HistoryAction> _allActions;
+  // Not `final`: rebuilt by `_applyStrokesFromStore` every time a remote change
+  // lands (now that live sync actually delivers them), so it is reassigned, not
+  // just mutated — a `late final` here threw LateInitializationError on the
+  // second remote update and left the canvas a white screen.
+  late List<HistoryAction> _allActions;
   int _actionIndex = 0;
   final List<DiscardedBranch> _discardedBranches = [];
   bool _isHistoryMode = false;
