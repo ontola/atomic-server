@@ -5484,3 +5484,8 @@ msgstr "Paste from clipboard"
 #: src/routes/SyncRoute.tsx
 msgid "Error: could not disconnect that device"
 msgstr "Error: could not disconnect that device"
+
+#. 0: title
+#: src/components/NavBar.tsx
+msgid "Go to {0}"
+msgstr "Go to {0}"

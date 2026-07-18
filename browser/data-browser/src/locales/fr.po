@@ -5450,3 +5450,8 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Error: could not disconnect that device"
 msgstr ""
+
+#. 0: title
+#: src/components/NavBar.tsx
+msgid "Go to {0}"
+msgstr ""

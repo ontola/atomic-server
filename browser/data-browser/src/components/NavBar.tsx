@@ -19,11 +19,13 @@ import {
 import { useSettings } from '../helpers/AppSettings';
 import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
+import { transition } from '../helpers/transition';
 import { ResourceContextMenu } from './ResourceContextMenu';
 import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
 import {
   FaArrowLeft,
   FaArrowRight,
+  FaArrowUp,
   FaBars,
   FaComments,
   FaMagnifyingGlass,
@@ -90,10 +92,10 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
 
   if (driveSubject === undefined || resource.loading) {
     return (
-      <TagsButton disabled>
+      <LabelButton disabled>
         <FaTags />
         <span>Tags</span>
-      </TagsButton>
+      </LabelButton>
     );
   }
 
@@ -106,14 +108,14 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
         onNewTag={canCreateTags ? handleNewTag : undefined}
         newTagParent={canCreateTags ? driveSubject : undefined}
         Trigger={
-          <TagsButton
+          <LabelButton
             as={RadixPopover.Trigger}
             data-testid='navbar-tags-button'
           >
             <FaTags />
             <span>Tags</span>
             {tags.length > 0 && <TagsCount>+{tags.length}</TagsCount>}
-          </TagsButton>
+          </LabelButton>
         }
       />
       {tags.length > 0 && (
@@ -178,6 +180,33 @@ function DirectParent({ subject }: { subject: string }): JSX.Element | null {
       </Breadcrumb>
       <Divider>/</Divider>
     </>
+  );
+}
+
+/**
+ * Single "go to parent" arrow shown on narrow bars in place of the breadcrumb
+ * trail. Hidden if the parent is unauthorized, like {@link DirectParent}.
+ */
+function ParentUpButton({ subject }: { subject: string }): JSX.Element | null {
+  const resource = useResource(subject, { allowIncomplete: true });
+  const [title] = useTitle(resource);
+  const navigate = useNavigateWithTransition();
+
+  if (resource.error || resource.isUnauthorized()) {
+    return null;
+  }
+
+  return (
+    <NarrowOnly>
+      <NavIconButton
+        color='textLight'
+        type='button'
+        title={`Go to ${title}`}
+        onClick={() => navigate(constructOpenURL(subject))}
+      >
+        <FaArrowUp />
+      </NavIconButton>
+    </NarrowOnly>
   );
 }
 
@@ -294,7 +323,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
 
   return (
     <NavBarWrapper ref={navRef} aria-label='Breadcrumbs'>
-      <IconButton
+      <NavIconButton
         color='textLight'
         type='button'
         onClick={() => setSideBarLocked(!sideBarLocked)}
@@ -302,36 +331,37 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         data-test='sidebar-toggle'
       >
         <FaBars />
-      </IconButton>
+      </NavIconButton>
       {isInStandaloneMode && (
-        <>
-          <IconButton
+        <WideOnly>
+          <NavIconButton
             color='textLight'
             type='button'
             title='Go back'
             onClick={back}
           >
             <FaArrowLeft />
-          </IconButton>
-          <IconButton
+          </NavIconButton>
+          <NavIconButton
             color='textLight'
             type='button'
             title='Go forward'
             onClick={forward}
           >
             <FaArrowRight />
-          </IconButton>
-        </>
+          </NavIconButton>
+        </WideOnly>
       )}
-      <IconButton
+      <NavIconButton
         color='textLight'
         type='button'
         title={`Search (${shortcuts.search})`}
         onClick={() => openSearchOverlay()}
       >
         <FaMagnifyingGlass />
-      </IconButton>
+      </NavIconButton>
       <VerticalDivider />
+      {parent && <ParentUpButton subject={parent} />}
       <CrumbGroup $iconOnly={iconOnly}>
         {parent && <DirectParent subject={parent} />}
         <EditableBreadcrumb resource={resource} fallback={title} />
@@ -423,6 +453,19 @@ const NavBarWrapper = styled.nav`
   }
 `;
 
+/**
+ * The bar's plain icon buttons (sidebar, back/forward, search, up). Darkens on
+ * hover like {@link LabelButton} so left and right feel like one set.
+ */
+const NavIconButton = styled(IconButton)`
+  &:not([disabled]) {
+    &:hover,
+    &:focus-visible {
+      color: ${p => p.theme.colors.text};
+    }
+  }
+`;
+
 const VerticalDivider = styled.div`
   width: 1px;
   background-color: ${props => props.theme.colors.bg2};
@@ -447,6 +490,31 @@ const CrumbGroup = styled.div<{ $iconOnly: boolean }>`
   min-width: 0;
   overflow: hidden;
   flex-shrink: ${p => (p.$iconOnly ? 1 : 0)};
+
+  /* On narrow bars the whole trail is replaced by ParentUpButton. */
+  @container breadcrumb-bar (max-width: 600px) {
+    display: none;
+  }
+`;
+
+/**
+ * In-app back/forward only earn their space on wide bars — on mobile the OS
+ * provides these as gestures.
+ */
+const WideOnly = styled.span`
+  display: contents;
+
+  @container breadcrumb-bar (max-width: 600px) {
+    display: none;
+  }
+`;
+
+const NarrowOnly = styled.span`
+  display: none;
+
+  @container breadcrumb-bar (max-width: 600px) {
+    display: contents;
+  }
 `;
 
 const ButtonArea = styled.div<{ $iconOnly: boolean }>`
@@ -456,6 +524,10 @@ const ButtonArea = styled.div<{ $iconOnly: boolean }>`
   gap: ${p => p.theme.size(1)};
   align-items: center;
   flex-shrink: 0;
+
+  @container breadcrumb-bar (max-width: 600px) {
+    gap: 0;
+  }
 
   /* Icon-only once the bar can no longer fit the labels (measured in JS, not a
    * fixed breakpoint). */
@@ -487,24 +559,6 @@ const CommentCount = styled.b`
   min-width: 1em;
   font-weight: inherit;
   line-height: 1;
-`;
-
-const TagsButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5ch;
-  padding: 0.25rem 0.5rem;
-  border: none;
-  border-radius: ${p => p.theme.radius};
-  background: transparent;
-  color: ${p => p.theme.colors.textLight};
-  cursor: pointer;
-  font-size: 0.875rem;
-
-  &:hover {
-    background: ${p => p.theme.colors.bg1};
-    color: ${p => p.theme.colors.text};
-  }
 `;
 
 /** Tag chips row — visible on wide, hidden on narrow */
@@ -548,11 +602,12 @@ const BreadCrumbBase = css`
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  ${transition('background-color', 'color')}
 `;
 
 const BreadCrumbCurrent = styled.span<{ $editable?: boolean }>`
   ${BreadCrumbBase}
-  border-radius: 4px;
+  border-radius: ${p => p.theme.radius};
   cursor: ${p => (p.$editable ? 'text' : 'default')};
 
   ${p =>
@@ -570,7 +625,7 @@ const BreadCrumbInput = styled.input`
   color: ${p => p.theme.colors.text};
   background: ${p => p.theme.colors.bg};
   border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: 4px;
+  border-radius: ${p => p.theme.radius};
   outline: none;
   min-width: 12ch;
 
