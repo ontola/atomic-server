@@ -1,6 +1,11 @@
 /target
 .envrc
 .env
+# Per-developer overrides. Vite loads `.env.local` in *every* mode, production
+# builds included, so a committed one bakes a local machine's URLs into shipped
+# bundles. Checked-in defaults belong in `.env.development` (dev-mode only).
+.env.local
+.env.*.local
 trace-*.json
 dev-drive-trace-*.json
 **/.temp
