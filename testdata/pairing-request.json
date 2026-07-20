@@ -1,0 +1,15 @@
+{
+  "_comment": [
+    "The canonical POST /iroh-sync body: the request a device sends to pair.",
+    "Both sides of this contract assert against this file, which is the point.",
+    "The browser helper (browser/data-browser/src/helpers/pairing.test.ts) must",
+    "SEND these field names; the server handler",
+    "(server/tests/it/iroh_pairing.rs) must ACCEPT them. Testing each side",
+    "against its own idea of the shape lets a rename pass both suites and break",
+    "pairing in production.",
+    "Keys beginning with an underscore are documentation and are stripped before",
+    "the body is used."
+  ],
+  "nodeId": "did:ad:node:1111111111111111111111111111111111111111111111111111111111111111",
+  "drive": "did:ad:pairingContractFixtureDrive"
+}

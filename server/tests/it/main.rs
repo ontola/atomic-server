@@ -9,6 +9,7 @@ mod common;
 mod blob_sync;
 mod drive_presence;
 mod drive_presence_shared;
+mod iroh_pairing;
 mod loro_ephemeral_sync;
 mod multi_client_sync;
 mod put_blob;
