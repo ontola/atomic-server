@@ -401,3 +401,118 @@ async fn iroh_sync_requires_both_a_node_and_a_drive() {
         );
     }
 }
+
+// ── Forgetting a device ────────────────────────────────────────────────────
+
+/// The node ids a server lists as peers on `/server`.
+async fn listed_peer_node_ids(base_url: &str) -> Vec<String> {
+    let body: serde_json::Value = reqwest::Client::new()
+        .get(format!("{base_url}/server"))
+        .header("Accept", "application/ad+json")
+        .send()
+        .await
+        .expect("server resource")
+        .json()
+        .await
+        .expect("server resource is JSON-AD");
+
+    body.get(atomic_lib::urls::SERVER_PEERS)
+        .and_then(|p| p.as_array())
+        .map(|peers| {
+            peers
+                .iter()
+                .filter_map(|peer| {
+                    peer.get(atomic_lib::urls::PEER_NODE_ID)
+                        .and_then(|id| id.as_str())
+                        .map(str::to_string)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn forget_peer_url(base_url: &str, node_did: &str) -> String {
+    format!(
+        "{base_url}/forget-peer?node={}",
+        urlencoding::encode(node_did)
+    )
+}
+
+/// Forgetting a device is refused without a proven identity.
+///
+/// The bar is a valid signature rather than node-admin on purpose — the drive
+/// owner is not necessarily the node's root admin — so "any signature" and "no
+/// signature" are the two cases that matter, and this pins the second.
+#[tokio::test]
+async fn forgetting_a_device_requires_a_signature() {
+    let port = start_server("forget_peer_anon");
+    wait_for_server(port).await;
+
+    let node = format!("did:ad:node:{}", "e".repeat(64));
+    let response = reqwest::Client::new()
+        .post(forget_peer_url(&format!("http://localhost:{port}"), &node))
+        .send()
+        .await
+        .expect("forget-peer request");
+
+    assert!(
+        !response.status().is_success(),
+        "an unsigned request must not be able to unpair someone's devices, got {}",
+        response.status()
+    );
+}
+
+/// The full pairing lifecycle: pair two servers, see the peer listed, forget
+/// it, see it gone. Forgetting is how someone reading a server in a browser
+/// disconnects a phone — the browser tab is not itself a node, so there is no
+/// other way to do it.
+#[tokio::test]
+async fn a_paired_device_can_be_forgotten() {
+    let source = start_server_process("forget_source").await;
+    let node_a = await_node_id(&source.base_url).await;
+
+    let client = Client::new(&source.base_url).await.unwrap();
+    let agent = client.new_agent("Alice").await.unwrap();
+    let drive = client
+        .new_public_drive(&agent, "Alice's public drive")
+        .await
+        .unwrap();
+    await_publicly_readable(&source.base_url, &drive).await;
+
+    let peer = start_server_process("forget_peer").await;
+    let (status, body) = post_iroh_sync(&peer.base_url, &node_a, &drive).await;
+    assert_eq!(status, 200, "pairing should succeed: {body}");
+
+    assert!(
+        listed_peer_node_ids(&peer.base_url).await.contains(&node_a),
+        "a device that just paired must be listed before it can be forgotten"
+    );
+
+    // Signed as an agent this server knows. The client signs the exact URL it
+    // fetches, query string included, and the server rebuilds it to verify.
+    let peer_agent = Client::new(&peer.base_url)
+        .await
+        .unwrap()
+        .new_agent("Owner")
+        .await
+        .unwrap();
+    let url = forget_peer_url(&peer.base_url, &node_a);
+    let headers =
+        atomic_lib::client::get_authentication_headers(&url, &peer_agent).expect("auth headers");
+
+    let mut request = reqwest::Client::new().post(&url);
+    for (key, value) in headers {
+        request = request.header(key, value);
+    }
+    let response = request.send().await.expect("forget-peer request");
+
+    assert!(
+        response.status().is_success(),
+        "a signed forget-peer must be accepted, got {}",
+        response.status()
+    );
+    assert!(
+        !listed_peer_node_ids(&peer.base_url).await.contains(&node_a),
+        "the forgotten device must stop being listed"
+    );
+}
