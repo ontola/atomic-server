@@ -12,7 +12,6 @@ use atomic_lib::{
     errors::AtomicResult,
 };
 
-
 use crate::common::{start_server, wait_for_server};
 
 /// POST a single file to `<server_url>/upload?parent=...` as `agent`.

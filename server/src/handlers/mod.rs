@@ -9,8 +9,8 @@ pub mod blob;
 pub mod commit;
 pub mod download;
 pub mod drive_usage;
-pub mod forget_peer;
 pub mod export;
+pub mod forget_peer;
 pub mod get_resource;
 #[cfg(feature = "image")]
 pub mod image;

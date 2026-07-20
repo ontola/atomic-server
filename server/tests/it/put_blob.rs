@@ -11,7 +11,6 @@
 
 use atomic_lib::{client::connected::Client, errors::AtomicResult, urls, Value};
 
-
 use crate::common::{start_server, wait_for_server};
 
 /// The legit flow this endpoint exists for: the outbox drains a COMMIT

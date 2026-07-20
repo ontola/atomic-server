@@ -98,7 +98,8 @@ mod peer_sync_tests {
                         push.drive
                     );
                     let (count, _blob_requests) =
-                        crate::sync::engine::import_sync_push(&push, &db_b, &ForAgent::Sudo, false).await;
+                        crate::sync::engine::import_sync_push(&push, &db_b, &ForAgent::Sudo, false)
+                            .await;
                     total_imported += count;
                 }
             } else if tag == crate::sync::protocol::tag::SYNC_DIFF {
@@ -177,9 +178,13 @@ mod peer_sync_tests {
             for frame in frames {
                 if frame.first() == Some(&crate::sync::protocol::tag::SYNC_PUSH) {
                     if let Some(push) = crate::sync::protocol::decode_sync_push(&frame[1..]) {
-                        let (count, _) =
-                            crate::sync::engine::import_sync_push(&push, db_b, &ForAgent::Sudo, false)
-                                .await;
+                        let (count, _) = crate::sync::engine::import_sync_push(
+                            &push,
+                            db_b,
+                            &ForAgent::Sudo,
+                            false,
+                        )
+                        .await;
                         imported += count;
                     }
                 }
@@ -283,7 +288,8 @@ mod peer_sync_tests {
             if frame[0] == crate::sync::protocol::tag::SYNC_PUSH {
                 let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
                 let (_count, reqs) =
-                    crate::sync::engine::import_sync_push(&push, &db_b, &ForAgent::Sudo, false).await;
+                    crate::sync::engine::import_sync_push(&push, &db_b, &ForAgent::Sudo, false)
+                        .await;
                 blob_requests.extend(reqs);
             }
         }

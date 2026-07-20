@@ -1609,7 +1609,10 @@ pub async fn sync_drive_with_peer_using_outcome(
             store,
             &remote_key,
             addr.relay_url.map(|u| u.to_string()),
-            addr.direct_addresses.iter().map(|a| a.to_string()).collect(),
+            addr.direct_addresses
+                .iter()
+                .map(|a| a.to_string())
+                .collect(),
         );
     }
 
@@ -1627,7 +1630,14 @@ pub async fn sync_drive_with_peer_using_outcome(
         }
     }
     // Dial side: we initiated, so trust this peer to relay drives we own.
-    register_live_peer(remote_key.clone(), send, recv, store.clone(), remote_agent, true);
+    register_live_peer(
+        remote_key.clone(),
+        send,
+        recv,
+        store.clone(),
+        remote_agent,
+        true,
+    );
 
     // Remember which drive this node syncs, so it can rebuild this link on its
     // own after a restart. The auto-connect loop above reads `get_active_drive`

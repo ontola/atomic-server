@@ -421,8 +421,13 @@ async fn e2e_engine_pull_after_iroh_bulk_sync() {
     for frame in frames {
         if frame.first() == Some(&crate::sync::protocol::tag::SYNC_PUSH) {
             if let Some(push) = crate::sync::protocol::decode_sync_push(&frame[1..]) {
-                let (count, _) =
-                    crate::sync::engine::import_sync_push(&push, &pair.db_b, &ForAgent::Sudo, false).await;
+                let (count, _) = crate::sync::engine::import_sync_push(
+                    &push,
+                    &pair.db_b,
+                    &ForAgent::Sudo,
+                    false,
+                )
+                .await;
                 imported += count;
             }
         }
