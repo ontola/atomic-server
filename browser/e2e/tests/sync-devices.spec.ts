@@ -1,0 +1,125 @@
+import { test, expect, type Page } from '@playwright/test';
+import { before, FRONTEND_URL } from './test-utils';
+
+/**
+ * The Sync page's device-facing surface: the pairing code a user scans, and
+ * the form they add an always-on device with.
+ *
+ * `sync.spec.ts` covers data actually syncing. This file covers the parts a
+ * user touches to *set that up*, which had no coverage at all — the pairing
+ * code in particular is the one string a second device has to act on, and
+ * nothing checked it was even well-formed.
+ *
+ * Paired-peer cards and the paste-a-code form are gated on `isRunningInTauri()`
+ * and cannot render in a browser run, so they are out of scope here; they need
+ * a desktop harness.
+ */
+
+const PAIRING_CODE = /^atomic:\/\/pair\?/;
+
+async function gotoSync(page: Page) {
+  await page.goto(`${FRONTEND_URL}/app/sync`);
+  await expect(
+    page.getByRole('heading', { name: 'Sync', exact: true }),
+  ).toBeVisible();
+}
+
+test.describe('sync page devices', () => {
+  test.beforeEach(before);
+
+  test('the pairing code on screen is a routable envelope', async ({
+    page,
+  }) => {
+    await gotoSync(page);
+
+    // Rendered only once the server has reported a node DID.
+    const code = page.locator('code', { hasText: PAIRING_CODE });
+    await expect(code).toBeVisible();
+
+    const uri = (await code.textContent())?.trim() ?? '';
+    const params = new URL(uri.replace('atomic://', 'https://')).searchParams;
+
+    // A second device parses exactly these three fields. A code that renders
+    // but does not carry them is a QR that scans and then does nothing.
+    expect(params.get('v')).toBe('1');
+    expect(params.get('node')).toMatch(/^did:ad:node:[0-9a-f]{64}$/i);
+    expect(params.getAll('drives').length).toBeGreaterThan(0);
+  });
+
+  test('the code is safe to show — it carries no secret', async ({ page }) => {
+    await gotoSync(page);
+
+    const uri =
+      (
+        await page.locator('code', { hasText: PAIRING_CODE }).textContent()
+      )?.trim() ?? '';
+
+    // A pairing code is routing only. Anything key-shaped in here would mean
+    // a printed or photographed code could hand over the account.
+    expect(uri).not.toMatch(/secret|privateKey|private_key/i);
+    // Only the documented fields; `drives` may repeat.
+    const keys = new Set([
+      ...new URL(uri.replace('atomic://', 'https://')).searchParams.keys(),
+    ]);
+    expect([...keys].sort()).toEqual(['drives', 'node', 'v']);
+  });
+
+  test('copying the pairing code puts that exact code on the clipboard', async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await gotoSync(page);
+
+    const uri =
+      (
+        await page.locator('code', { hasText: PAIRING_CODE }).textContent()
+      )?.trim() ?? '';
+
+    await page.getByRole('button', { name: 'Copy', exact: true }).click();
+    await expect(page.getByText('Pairing code copied.')).toBeVisible();
+
+    const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboard).toBe(uri);
+  });
+
+  test('adding a device requires an address before it will submit', async ({
+    page,
+  }) => {
+    await gotoSync(page);
+
+    await page
+      .getByRole('button', { name: 'Connect a device', exact: true })
+      .click();
+
+    const address = page.getByPlaceholder(
+      'localhost:9883 or your-server.example',
+    );
+    await expect(address).toBeVisible();
+
+    const connect = page.getByRole('button', { name: 'Connect', exact: true });
+    await expect(connect).toBeDisabled();
+
+    await address.fill('example.test:9883');
+    await expect(connect).toBeEnabled();
+
+    // Cancelling must not leave a half-added device behind.
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(address).not.toBeVisible();
+    await expect(page.getByText('example.test:9883')).toHaveCount(0);
+  });
+
+  test('the devices section lists the server this drive syncs with', async ({
+    page,
+  }) => {
+    await gotoSync(page);
+
+    await expect(
+      page.getByRole('heading', { name: 'Devices', exact: true }),
+    ).toBeVisible();
+
+    // The dev drive is created against localhost:9883, so that connection is
+    // the one thing guaranteed to be listed.
+    await expect(page.getByText('localhost:9883').first()).toBeVisible();
+  });
+});
