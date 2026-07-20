@@ -162,10 +162,22 @@ nothing to test yet. Listed so it is not mistaken for covered.
 
 One 13-line smoke test, never run in CI — the pipeline has no emulator.
 
-### 8. Known residual races
+### 8. A local edit racing a peer update loses ~⅓ of operations
 
-- A microsecond TOCTOU inside `apply_commit`: a peer update persisted between
-  the resource read and the snapshot write is overwritten. No cross-path lock.
+**Open bug, reproduced and measured.** `apply_commit` reads the resource, builds
+new state from that read, then *replaces* the persisted Loro snapshot. A peer
+update landing in that window is overwritten.
+
+This was recorded here as "a microsecond TOCTOU". It is not: at 40 concurrent
+rounds a side, typically 53–56 of 80 operations survive. Reproduction and full
+analysis in `lib/tests/concurrent_commit_and_peer_apply.rs` — `#[ignore]`d so it
+does not redden CI, with a sequential control that *does* run in CI and keeps
+every operation.
+
+Most likely explanation for strokes disappearing on a device drawing while a
+peer syncs. Unfixed because both candidate fixes (a per-subject lock across
+read→write, or merging instead of replacing) have a data-corruption downside
+that needs a decision about commit/checkout semantics; see the module docs.
 
 No known flaky tests as of 2026-07-20. The one that was
 (`rbsr_reduced_matches_full_sync_vv`) turned out to be a genuine RBSR bug, not
