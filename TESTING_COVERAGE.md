@@ -162,24 +162,17 @@ nothing to test yet. Listed so it is not mistaken for covered.
 
 One 13-line smoke test, never run in CI — the pipeline has no emulator.
 
-### 8. A local edit racing a peer update loses ~⅓ of operations
+### 8. Known residual races
 
-**Open bug, reproduced and measured.** `apply_commit` reads the resource, builds
-new state from that read, then *replaces* the persisted Loro snapshot. A peer
-update landing in that window is overwritten.
+None outstanding. The concurrent-writer bug that lived here — a local edit
+racing a peer update lost ~⅓ of all operations, because both paths
+read-modify-write the same Loro snapshot and end in a replace — was fixed
+2026-07-20 with a per-subject lock (`lib/src/subject_lock.rs`). Regression test:
+`lib/tests/concurrent_commit_and_peer_apply.rs`, which lost 53–56 of 80
+operations before the fix and now keeps all of them, with a sequential control
+that isolates concurrency as the cause.
 
-This was recorded here as "a microsecond TOCTOU". It is not: at 40 concurrent
-rounds a side, typically 53–56 of 80 operations survive. Reproduction and full
-analysis in `lib/tests/concurrent_commit_and_peer_apply.rs` — `#[ignore]`d so it
-does not redden CI, with a sequential control that *does* run in CI and keeps
-every operation.
-
-Most likely explanation for strokes disappearing on a device drawing while a
-peer syncs. Unfixed because both candidate fixes (a per-subject lock across
-read→write, or merging instead of replacing) have a data-corruption downside
-that needs a decision about commit/checkout semantics; see the module docs.
-
-No known flaky tests as of 2026-07-20. The one that was
+No known flaky tests. The one that was
 (`rbsr_reduced_matches_full_sync_vv`) turned out to be a genuine RBSR bug, not
 test noise — see below.
 
@@ -212,6 +205,15 @@ Recorded because each one cost real debugging time.
 - **Known peers are stored under a normalised node id**, not the
   `did:ad:node:` form the UI passes in. Look them up with
   `normalize_node_id`, or the lookup silently finds nothing.
+- **A lock keyed only by subject couples unrelated stores.** `populate()` seeds
+  well-known subjects that are byte-identical in every store, so a global
+  registry makes two independent `Db` instances — including two tests sharing a
+  process — wait on each other for no reason. `SubjectLocks` therefore lives on
+  the `Db`, and every clone of a store shares one registry.
+- **Measure a suspected regression on a quiet machine.** A test that looked
+  newly flaky right after a four-minute stress run was passing 20/20 once the
+  machine was idle. Compare against a stashed baseline under the same
+  conditions before concluding you caused something.
 - **A flaky test can be a real bug wearing a costume.**
   `rbsr_reduced_matches_full_sync_vv` failed ~1 run in 3. It was not noise:
   `reconcile_range` anchored its first child range at the first *local* key

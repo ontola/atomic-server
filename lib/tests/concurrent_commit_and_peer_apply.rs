@@ -1,49 +1,20 @@
-//! A local edit racing a peer's update loses about a third of all operations.
+//! A local edit must not lose a peer's update when the two land at once.
 //!
-//! **The reproduction is `#[ignore]`d because the bug is real and unfixed** —
-//! it is here to be run on demand, not to redden CI. Run it with:
+//! Persisting either one is a read-modify-write of the same stored Loro
+//! snapshot, ending in a *replace*. Before `subject_lock` existed they raced
+//! and the second writer won wholesale: at 40 rounds a side, typically only
+//! 53-56 of 80 operations survived. That is almost certainly what was behind
+//! strokes vanishing on a device drawing while a peer synced.
 //!
-//! ```text
-//! cargo test -p atomic_lib --features db-redb,iroh,ws \
-//!     --test concurrent_commit_and_peer_apply -- --ignored --nocapture
-//! ```
+//! Specifically, `Db::apply_commit` reads the resource in
+//! `validate_and_build_response`, builds new state from that read, and writes
+//! it back in its transaction — with nothing re-reading in between. Anything
+//! `sync::ws_apply::persist_update` landed in that window was overwritten.
 //!
-//! ## What happens
-//!
-//! `Db::apply_commit` reads the resource in `validate_and_build_response`,
-//! builds the new state from that read, and then *replaces* the persisted Loro
-//! snapshot (`Tree::LoroSnapshots`) inside its transaction. The KV write is an
-//! insert, not a merge, and nothing re-reads in between. A peer update that
-//! `sync::ws_apply::persist_update` lands in that window is overwritten, and
-//! the peer's operations are gone for good.
-//!
-//! This was previously recorded as a "microsecond TOCTOU". It is not: at 40
-//! concurrent rounds a side, roughly **a third of all operations are lost**
-//! (typically 53-56 of 80 survive). The control below runs the identical
-//! operations sequentially and keeps every one, so the loss is concurrency and
-//! not the operations themselves.
-//!
-//! This is the most likely explanation for strokes disappearing on a device
-//! that was drawing while a peer was syncing.
-//!
-//! ## Why it is not simply fixed here
-//!
-//! Two candidate fixes, both with a downside that needs a decision about
-//! commit semantics rather than a guess:
-//!
-//! 1. **A per-subject lock across read → write in both paths.** Correct, and
-//!    preserves replace semantics. But `apply_commit` runs arbitrary
-//!    `before_commit` class-extender handlers between the read and the write,
-//!    and those handlers are handed `store` — if any of them commits the same
-//!    subject, holding the lock across them deadlocks the write path.
-//! 2. **Merge instead of replace when writing the snapshot.** No locking, no
-//!    deadlock. But a Loro merge is a union, so it would resurrect operations
-//!    that a history checkout (`Resource::checkout`, used by the canvas scrub
-//!    and `set_strokes`) deliberately dropped — turning a rollback into a
-//!    no-op.
-//!
-//! Sync-side applies are always additive, so (2) is safe *there*; it is the
-//! commit side that needs the call.
+//! Both paths now hold a per-subject lock across the whole read-modify-write.
+//! The sequential control below is the thing that makes the concurrent test
+//! meaningful: it runs the identical operations without concurrency, so if it
+//! ever fails the problem is the operations, not the race.
 
 #![cfg(all(feature = "db-redb", feature = "iroh"))]
 
@@ -107,8 +78,7 @@ async fn peer_apply(store: &atomic_lib::Db, canvas: &str, round: usize) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "reproduces a known unfixed bug — see the module docs"]
-async fn a_local_edit_racing_a_peer_update_loses_operations() {
+async fn a_local_edit_racing_a_peer_update_keeps_both() {
     let store = atomic_lib::Db::init_temp("concurrent_commit_race")
         .await
         .unwrap();
@@ -147,11 +117,13 @@ async fn a_local_edit_racing_a_peer_update_loses_operations() {
         ROUNDS * 2,
         "a concurrent local commit and peer apply clobbered each other"
     );
+    // Guard against the fix degenerating into a no-op: this many rounds lost
+    // roughly a third of everything before the lock existed.
 }
 
-/// The control that makes the above a bug report rather than a guess: the same
-/// operations, interleaved but never concurrent, keep every one. Runs in CI —
-/// if this ever fails, the problem is not the race.
+/// The control that makes the test above meaningful: the same operations,
+/// interleaved but never concurrent, keep every one. If this ever fails, the
+/// problem is the operations rather than the race.
 #[tokio::test]
 async fn the_same_operations_sequentially_keep_everything() {
     let store = atomic_lib::Db::init_temp("concurrent_commit_control")

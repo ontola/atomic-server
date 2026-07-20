@@ -98,6 +98,9 @@ pub mod serialize;
 pub mod store;
 pub mod storelike;
 pub mod subject;
+/// Only the persisting write paths need it, and those are all behind `db`.
+#[cfg(feature = "db")]
+pub(crate) mod subject_lock;
 pub mod sync;
 pub mod test_utils;
 pub mod urls;

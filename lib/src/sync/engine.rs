@@ -1007,6 +1007,13 @@ pub async fn import_sync_push(
         let snapshot_key =
             crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref()).pure_id();
 
+        // Same read-modify-write as `ws_apply::persist_update`, so the same
+        // exclusion: everything from the read below to `add_resource_opts` at
+        // the end of this iteration must not interleave with a commit, or one
+        // silently replaces the other's snapshot. Held per entry, released at
+        // the end of each iteration.
+        let _subject_guard = store.subject_locks.lock(&snapshot_key).await;
+
         // Load existing doc or create new
         let doc = if let Ok(Some(existing)) =
             store.kv.get(Tree::LoroSnapshots, snapshot_key.as_bytes())

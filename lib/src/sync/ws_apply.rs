@@ -173,14 +173,51 @@ pub async fn persist_update(
 ) -> AtomicResult<()> {
     let snapshot_key =
         crate::Subject::from_raw(subject, store.get_base_domain().as_deref()).pure_id();
+
+    // Exclusive for the same reason `apply_commit` is: both the insert below and
+    // `add_resource_opts` replace the stored snapshot, so a commit landing
+    // between them would be clobbered (or clobber this).
+    let _subject_guard = store.subject_locks.lock(&snapshot_key).await;
+
+    // `resolved` was built from a read taken before the lock, so re-merge it
+    // into whatever is stored *now*. Safe to do here — unlike a commit, a sync
+    // apply only ever adds a peer's operations, so union is the correct
+    // outcome. Re-importing already-known operations is a Loro no-op.
+    let doc = match store.kv.get(
+        crate::db::trees::Tree::LoroSnapshots,
+        snapshot_key.as_bytes(),
+    ) {
+        Ok(Some(current)) => match crate::loro::AtomicLoroDoc::from_snapshot(&current) {
+            Ok(doc) => {
+                if let Err(e) = doc.import_update(&resolved.snapshot) {
+                    tracing::warn!("[ws_apply] re-merge failed for {snapshot_key}: {e}");
+                }
+                Some(doc)
+            }
+            Err(_) => None,
+        },
+        _ => None,
+    };
+
+    let mut resource = resolved.resource;
+    let snapshot = match doc {
+        Some(doc) => {
+            let snapshot = doc.export_snapshot();
+            // The resource carries the doc that `add_resource_opts` re-exports
+            // from, so it has to hold the merged state too — otherwise that
+            // call writes the pre-merge snapshot straight back over this one.
+            let _ = resource.apply_state_doc(doc);
+            snapshot
+        }
+        None => resolved.snapshot,
+    };
+
     let _ = store.kv.insert(
         crate::db::trees::Tree::LoroSnapshots,
         snapshot_key.as_bytes(),
-        &resolved.snapshot,
+        &snapshot,
     );
-    let _ = store
-        .add_resource_opts(&resolved.resource, false, true, true)
-        .await;
+    let _ = store.add_resource_opts(&resource, false, true, true).await;
     Ok(())
 }
 

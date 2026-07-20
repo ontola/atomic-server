@@ -205,6 +205,10 @@ pub struct Db {
     /// `check_if_atom_matches_watched_query_filters` reads from here and
     /// never touches msgpack on a commit.
     watched_queries_by_drive: Arc<RwLock<HashMap<String, Vec<Arc<query_index::QueryFilter>>>>>,
+    /// Serialises writers that read-modify-write the same subject's state, so
+    /// a commit and a sync apply cannot replace each other's snapshot. Per
+    /// store, not global — see [`crate::subject_lock`].
+    pub(crate) subject_locks: crate::subject_lock::SubjectLocks,
     /// Where the DB is stored on disk.
     #[allow(dead_code)]
     path: std::path::PathBuf,
@@ -315,6 +319,7 @@ impl Db {
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            subject_locks: Default::default(),
             base_domain,
             sync_policy: default_sync_policy(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
@@ -348,6 +353,7 @@ impl Db {
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            subject_locks: Default::default(),
             base_domain,
             sync_policy: default_sync_policy(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
@@ -379,6 +385,7 @@ impl Db {
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            subject_locks: Default::default(),
             base_domain,
             sync_policy: default_sync_policy(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
@@ -471,6 +478,7 @@ impl Db {
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            subject_locks: Default::default(),
             base_domain,
             sync_policy: default_sync_policy(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
@@ -611,6 +619,7 @@ impl Db {
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            subject_locks: Default::default(),
             base_domain,
             sync_policy: default_sync_policy(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
@@ -2277,6 +2286,14 @@ impl Storelike for Db {
         opts: &CommitOpts,
     ) -> AtomicResult<CommitResponse> {
         let store = self;
+
+        // Persisting a commit is a read-modify-write: `validate_and_build_response`
+        // reads the resource's stored Loro snapshot, applies this commit's ops to
+        // it, and the transaction below writes the result back as a *replace*. A
+        // peer update landing in that window would be overwritten and lost, so the
+        // whole span is exclusive per subject. See `subject_lock` for why this is
+        // a lock rather than a merge, and for the no-reentrancy invariant.
+        let _subject_guard = store.subject_locks.lock(&commit.subject.pure_id()).await;
 
         let commit_response = commit.validate_and_build_response(opts, store).await?;
 
