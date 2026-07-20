@@ -2,6 +2,10 @@ use atomic_lib::Storelike;
 use flutter_rust_bridge::frb;
 
 mod state;
+#[cfg(test)]
+mod peer_tests;
+#[cfg(test)]
+mod tests;
 pub mod types;
 pub mod ws_sync;
 
@@ -73,6 +77,17 @@ static LAST_PEER_NUDGE_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::Ato
 
 /// When WS push failed, run a debounced bulk sync with known peers / pkarr discover.
 async fn nudge_peers_after_local_change(store: &atomic_lib::Db) {
+    // The bridge unit tests assert local cache/store invariants. Standing up a
+    // real Iroh endpoint for them would make every save network-dependent and
+    // slow for no added coverage — the transport itself is covered by
+    // `atomic_lib`'s two-node `sync::iroh_e2e` suite.
+    #[cfg(test)]
+    {
+        let _ = store;
+        return;
+    }
+    #[cfg(not(test))]
+    {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -88,6 +103,7 @@ async fn nudge_peers_after_local_change(store: &atomic_lib::Db) {
     }
     if let Err(e) = try_auto_peer_sync(store).await {
         tracing::debug!("[save_and_push] peer nudge failed: {e}");
+    }
     }
 }
 
@@ -1390,6 +1406,12 @@ pub async fn set_strokes(subject: String, strokes_json: String) -> Result<(), St
 
     let mut guard = get_canvas(&subject).await?;
     let resource = guard.as_mut().unwrap();
+    // Catch up first: `arr` was derived from the store's full stroke list, so
+    // the session has to be on that same basis before we clear. A clear can
+    // only remove elements the doc knows about, so against a stale session a
+    // peer's stroke survives the clear *and* is re-added by the loop below —
+    // the erase leaves a duplicate behind instead of erasing.
+    refresh_editing_session(resource, store.as_ref(), &subject);
     resource.clear_json_array(CANVAS_STROKE_DATA).map_err(err)?;
     for item in &arr {
         resource

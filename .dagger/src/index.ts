@@ -182,6 +182,16 @@ export class AtomicServer {
         // Dart package — analyzing the whole repo without its own pub get fails.
         .withExec(['bash', '-lc', `${pathPrefix} && flutter analyze lib test`])
         .withExec(['bash', '-lc', `${pathPrefix} && flutter test --no-pub`])
+        // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
+        // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
+        // `flutter test` only runs Dart. Without this step the entire bridge —
+        // including the canvas editing-session cache, where a stale session
+        // duplicates or reverts a peer's stroke — ships untested.
+        .withExec([
+          'bash',
+          '-lc',
+          `${pathPrefix} && cargo test --manifest-path rust/Cargo.toml`,
+        ])
         .stdout()
     );
   }
