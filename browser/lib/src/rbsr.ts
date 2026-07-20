@@ -143,7 +143,13 @@ async function reconcileRange(
   let idx = 0;
 
   while (idx < localSlice.length) {
-    const chunkLo = localSlice[idx].subject;
+    // The first chunk starts at the range's own lower bound, NOT at the first
+    // local key. Anchoring it to the local key leaves `[lo, firstLocal)`
+    // covered by no child range, so a subject the remote has and we lack — one
+    // sorting below everything we hold here — is dropped from the diff and
+    // never pulled. Must stay in step with the Rust core (`sync/rbsr.rs`):
+    // these two compute the same differing set on either end of the wire.
+    const chunkLo = idx === 0 ? lo : localSlice[idx].subject;
     const next = Math.min(idx + chunk, localSlice.length);
     const chunkHi = next < localSlice.length ? localSlice[next].subject : hi;
     await reconcileRange(local, chunkLo, chunkHi, remote, split, leaf, out);

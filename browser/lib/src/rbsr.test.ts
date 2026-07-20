@@ -86,4 +86,36 @@ describe('RBSR (TS mirror of lib/src/sync/rbsr.rs)', () => {
     expect(diff.onlyLocal).toEqual([]);
     expect(diff.onlyRemote).toEqual([]);
   });
+
+  // Regression: when a range splits, its children have to tile `[lo, hi)`
+  // exactly. Anchoring the first child at the first *local* key instead leaves
+  // `[lo, firstLocal)` unvisited, so a subject the server has and this client
+  // lacks — sorting below everything the client holds — is never pulled.
+  // The Rust core carries the same pair of tests; they must not drift.
+  it('finds a remote-only subject sorting below every local key', async () => {
+    const local = sorted(
+      ['b', 'c', 'd', 'e', 'f'].map(subject => ({ subject, vv: { p1: 1 } })),
+    );
+    const remote = new MemRemote([...local, { subject: 'a', vv: { p1: 1 } }]);
+
+    const diff = await reconcile(local, remote, 4, 2);
+
+    expect(diff.onlyRemote).toEqual(['a']);
+    expect(diff.onlyLocal).toEqual([]);
+    expect(diff.differ).toEqual([]);
+  });
+
+  it('finds one below everything through deep recursion', async () => {
+    const local = sorted(
+      Array.from({ length: 24 }, (_, i) => ({
+        subject: `k${String(i).padStart(2, '0')}`,
+        vv: { p1: 1 },
+      })),
+    );
+    const remote = new MemRemote([...local, { subject: 'a', vv: { p1: 1 } }]);
+
+    const diff = await reconcile(local, remote, 4, 2);
+
+    expect(diff.onlyRemote).toEqual(['a']);
+  });
 });

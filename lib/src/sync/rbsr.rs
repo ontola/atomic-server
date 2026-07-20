@@ -158,7 +158,19 @@ fn reconcile_range(
     let chunk = local_slice.len().div_ceil(split);
     let mut idx = 0;
     while idx < local_slice.len() {
-        let chunk_lo = local_slice[idx].0.as_str();
+        // The first chunk starts at the range's own lower bound, NOT at the
+        // first local key. Starting at the local key leaves `[lo, first_local)`
+        // covered by no child range at all, so a subject the remote has and we
+        // lack — one that sorts before everything we hold here — is silently
+        // dropped from the diff and never syncs. The gap only opens when a
+        // range splits, and only for remote-only subjects at its low end, which
+        // is why it surfaced as an intermittent failure rather than an obvious
+        // one.
+        let chunk_lo = if idx == 0 {
+            lo
+        } else {
+            local_slice[idx].0.as_str()
+        };
         let next = (idx + chunk).min(local_slice.len());
         // The chunk's upper bound is the next chunk's first key (open above for
         // the final chunk), so [chunk_lo, chunk_hi) tiles the parent range.
@@ -245,6 +257,69 @@ mod tests {
     fn sorted(mut items: Vec<Item>) -> Vec<Item> {
         items.sort_by(|a, b| a.0.cmp(&b.0));
         items
+    }
+
+    /// A subject the remote has and we lack, sorting *before* everything we
+    /// hold, must still be found.
+    ///
+    /// This is the low-end gap: when a range splits, its child ranges have to
+    /// tile `[lo, hi)` exactly. Anchoring the first child at the first local
+    /// key instead leaves `[lo, first_local)` unvisited, so a remote-only
+    /// subject down there is dropped from the diff and never syncs. Enough
+    /// local items are used here to force a split — under the leaf size the
+    /// range is compared directly and the gap cannot open.
+    #[test]
+    fn a_remote_only_subject_below_every_local_key_is_still_found() {
+        let local = sorted(vec![
+            item("b", &[("p1", 1)]),
+            item("c", &[("p1", 1)]),
+            item("d", &[("p1", 1)]),
+            item("e", &[("p1", 1)]),
+            item("f", &[("p1", 1)]),
+        ]);
+        let mut remote = MemRemote::new({
+            let mut items = local.clone();
+            items.push(item("a", &[("p1", 1)]));
+            items
+        });
+
+        let diff = reconcile(&local, &mut remote, 4, 2);
+
+        assert_eq!(
+            diff.only_remote,
+            vec!["a".to_string()],
+            "the remote-only subject sorting below every local key must be \
+             reported, or it never syncs"
+        );
+        assert!(diff.only_local.is_empty());
+        assert!(diff.differ.is_empty());
+    }
+
+    /// The same gap, carried down the leftmost spine.
+    ///
+    /// Only a range whose `lo` sits strictly below its first local key can have
+    /// this gap, and after tiling correctly that is exactly the chain of
+    /// leftmost children. A set large enough to recurse several levels proves
+    /// the unbounded lower bound is propagated the whole way down, not just
+    /// handled once at the root.
+    #[test]
+    fn a_remote_only_subject_below_everything_is_found_through_deep_recursion() {
+        let local = sorted(
+            (0..24)
+                .map(|n| item(&format!("k{n:02}"), &[("p1", 1)]))
+                .collect(),
+        );
+        let mut remote = MemRemote::new({
+            let mut items = local.clone();
+            items.push(item("a", &[("p1", 1)]));
+            items
+        });
+
+        let diff = reconcile(&local, &mut remote, 4, 2);
+
+        assert_eq!(diff.only_remote, vec!["a".to_string()]);
+        assert!(diff.only_local.is_empty());
+        assert!(diff.differ.is_empty());
     }
 
     #[test]
