@@ -16,6 +16,9 @@ import { before, FRONTEND_URL } from './test-utils';
  * `/iroh-sync` is intercepted rather than dialled for real: what is under test
  * is how the UI reports an outcome, and the endpoint itself is covered against
  * a real second node in `server/tests/it/iroh_pairing.rs`.
+ *
+ * The second block covers the other half of the same gate: the cards a device
+ * shows for peers it has already paired with.
  */
 
 const NODE = `did:ad:node:${'a'.repeat(64)}`;
@@ -156,5 +159,51 @@ test.describe('pairing by pasting a code', () => {
     expect(stored).toContainEqual(
       expect.objectContaining({ nodeId: NODE, label: 'Tablet' }),
     );
+  });
+});
+
+test.describe('paired devices on the sync page', () => {
+  test.beforeEach(before);
+
+  /** Seed the peer list the app auto-dials from, before the page loads. */
+  async function withStoredPeers(
+    page: Page,
+    peers: Array<{ nodeId: string; label: string }>,
+  ) {
+    await page.addInitScript(stored => {
+      localStorage.setItem('atomic-peers', JSON.stringify(stored));
+    }, peers);
+  }
+
+  test('a paired device is listed with a way to forget it', async ({
+    page,
+  }) => {
+    await pretendToBeTheApp(page);
+    await withStoredPeers(page, [{ nodeId: NODE, label: 'Joep’s phone' }]);
+    await gotoSync(page);
+
+    await expect(page.getByText('Joep’s phone')).toBeVisible();
+    await expect(page.getByText('Paired', { exact: true })).toBeVisible();
+    // Unpairing has to be reachable from here: this list is what the device
+    // auto-dials, so there is nowhere else to remove an entry from.
+    await expect(
+      page.getByRole('button', { name: 'Remove', exact: true }),
+    ).toBeVisible();
+  });
+
+  test('a stored entry with a malformed node id is not shown', async ({
+    page,
+  }) => {
+    await pretendToBeTheApp(page);
+    await withStoredPeers(page, [
+      { nodeId: NODE, label: 'Real device' },
+      { nodeId: 'did:ad:node:tooshort', label: 'Corrupt entry' },
+    ]);
+    await gotoSync(page);
+
+    await expect(page.getByText('Real device')).toBeVisible();
+    // A node id that cannot be dialled is worse than absent: it would render a
+    // device the user thinks is paired and which can never sync.
+    await expect(page.getByText('Corrupt entry')).toHaveCount(0);
   });
 });

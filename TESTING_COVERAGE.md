@@ -89,6 +89,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 |---|---|---|
 | Browser records a peer and calls `/iroh-sync` | `data-browser/src/helpers/pairing.test.ts` | stubbed fetch |
 | Known-peer store: labels, dedupe, corrupt data, quota | `data-browser/src/helpers/knownPeers.test.ts` | |
+| `forgetServerPeer` signs the exact `?node=` URL, and fails soft | `data-browser/src/helpers/managedServer.test.ts` | mocked `signRequest` |
 | Canvas editing session merges a peer's stroke | `flutter/rust/src/api/simple/tests.rs` | |
 | Whole-list rewrite (erase/undo) keeps a peer's stroke | `flutter/rust/src/api/simple/tests.rs` | |
 | Bridge `start_peer` → `add_known_peer` → `peer_sync` pushes a drawing to a real remote process | `flutter/rust/src/api/simple/peer_tests.rs` | receiving side writes the receipt |
@@ -103,6 +104,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 |---|---|
 | Pairing code renders, is a routable envelope, carries no secret | `browser/e2e/tests/sync-devices.spec.ts` |
 | Pasting a code: form gated to the app, malformed refused without dialling, node's refusal shown, success reports what synced, peer remembered | `browser/e2e/tests/pairing-dialog.spec.ts` |
+| Paired-device cards render, expose a way to forget, and hide undialable entries | `browser/e2e/tests/pairing-dialog.spec.ts` |
 | Copy pairing code | `sync-devices.spec.ts` |
 | Add-a-device form validation | `sync-devices.spec.ts` |
 | Sync page status renders | `browser/e2e/tests/sync.spec.ts` |
@@ -140,13 +142,14 @@ discovery in `atomic_lib`, but not through the bridge.
 (`testdata/pairing-request.json`): the browser test asserts it *sends* that
 body, the server test asserts it *accepts* it, and renaming a field fails both.
 
-`/forget-peer` is covered server-side (`iroh_pairing.rs`: unsigned refused, and
-the full pair → listed → forget → gone lifecycle). The **browser** half,
-`forgetServerPeer` in `managedServer.ts`, still has no unit test, so that
-request shape is asserted from one side only.
+`/forget-peer` is covered on both sides now — `iroh_pairing.rs` for the handler
+(unsigned refused, full pair → listed → forget → gone lifecycle) and
+`managedServer.test.ts` for the client (signs the exact `?node=` URL). They are
+not *bound* by a shared fixture the way `/iroh-sync` is, so a rename would still
+pass both; the query-parameter name is asserted literally in each.
 
-Also unbound: the `nodeId` property on `/server` as consumed by the browser —
-the replacement for `/iroh-node-id`.
+Unbound: the `nodeId` property on `/server` as consumed by the browser — the
+replacement for `/iroh-node-id`.
 
 ### 4. Tauri-gated UI
 
@@ -155,10 +158,11 @@ the replacement for `/iroh-node-id`.
 `page.addInitScript` reaching it is enough, and nothing on that path calls
 `invoke`. See `pairing-dialog.spec.ts`.
 
-Still uncovered: paired-peer *cards* on the Sync page, `PairingLinkHandler`'s
-deep-link entry (the system camera launching the app), and
-`IdentityReconcileGate`. Anything that genuinely calls `invoke` needs a real
-desktop harness, not a faked global.
+Paired-peer cards are covered too, by seeding `atomic-peers` in an init script.
+
+Still uncovered: `PairingLinkHandler`'s deep-link entry (the system camera
+launching the app) and `IdentityReconcileGate`. Anything that genuinely calls
+`invoke` needs a real desktop harness, not a faked global.
 
 **Known wart, not a test gap:** `PairingLinkHandler` drops input that does not
 start with `atomic://` or `did:ad:node:`, so pasting something that is not a
