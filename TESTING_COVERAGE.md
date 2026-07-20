@@ -102,6 +102,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Flow | Where |
 |---|---|
 | Pairing code renders, is a routable envelope, carries no secret | `browser/e2e/tests/sync-devices.spec.ts` |
+| Pasting a code: form gated to the app, malformed refused without dialling, node's refusal shown, success reports what synced, peer remembered | `browser/e2e/tests/pairing-dialog.spec.ts` |
 | Copy pairing code | `sync-devices.spec.ts` |
 | Add-a-device form validation | `sync-devices.spec.ts` |
 | Sync page status renders | `browser/e2e/tests/sync.spec.ts` |
@@ -139,15 +140,30 @@ discovery in `atomic_lib`, but not through the bridge.
 (`testdata/pairing-request.json`): the browser test asserts it *sends* that
 body, the server test asserts it *accepts* it, and renaming a field fails both.
 
-**`/forget-peer` still has no test on either side**, and neither does
-`/iroh-node-id`'s replacement (the `nodeId` property on `/server`) as consumed
-by the browser.
+`/forget-peer` is covered server-side (`iroh_pairing.rs`: unsigned refused, and
+the full pair → listed → forget → gone lifecycle). The **browser** half,
+`forgetServerPeer` in `managedServer.ts`, still has no unit test, so that
+request shape is asserted from one side only.
+
+Also unbound: the `nodeId` property on `/server` as consumed by the browser —
+the replacement for `/iroh-node-id`.
 
 ### 4. Tauri-gated UI
 
-Paired-peer cards, `ConnectToDeviceForm` (paste a code), `PairingLinkHandler`
-(deep links) and `IdentityReconcileGate` are behind `isRunningInTauri()` and
-cannot render in a browser e2e run. Needs a desktop harness.
+`ConnectToDeviceForm` (paste a code) and the pairing dialog are now covered —
+`isRunningInTauri()` only checks for `window.__TAURI_INTERNALS__`, so
+`page.addInitScript` reaching it is enough, and nothing on that path calls
+`invoke`. See `pairing-dialog.spec.ts`.
+
+Still uncovered: paired-peer *cards* on the Sync page, `PairingLinkHandler`'s
+deep-link entry (the system camera launching the app), and
+`IdentityReconcileGate`. Anything that genuinely calls `invoke` needs a real
+desktop harness, not a faked global.
+
+**Known wart, not a test gap:** `PairingLinkHandler` drops input that does not
+start with `atomic://` or `did:ad:node:`, so pasting something that is not a
+URI reports *nothing at all* — no dialog, no error. Only malformed input that
+is URI-shaped reaches the flow and gets a message.
 
 ### 5. QR camera path
 
