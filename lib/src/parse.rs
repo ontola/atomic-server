@@ -605,6 +605,9 @@ pub fn parse_propval<'a>(
                 Value::new(&num.to_string(), &DataType::Timestamp)?
             }
             DataType::Json => Value::Json(val.clone()),
+            DataType::LocalizedText => Value::localized_text_from_json(val).map_err(|e| {
+                AtomicError::parse_error(&e.to_string(), subject, Some(&prop))
+            })?,
             DataType::Unsupported(s) => {
                 return Err(AtomicError::parse_error(
                     &format!("Unsupported datatype: {s}"),

@@ -8,6 +8,7 @@ import { SelectPropertyForm } from './SelectPropertyForm';
 import { TextPropertyForm } from './TextPropertyForm';
 import { buildComponentFactory } from '@helpers/buildComponentFactory';
 import { JSONPropertyForm } from './JSONPropertyForm';
+import { LocalizedTextPropertyForm } from './LocalizedTextPropertyForm';
 
 export type PropertyFormCategory =
   | 'text'
@@ -17,7 +18,8 @@ export type PropertyFormCategory =
   | 'file'
   | 'select'
   | 'relation'
-  | 'json';
+  | 'json'
+  | 'localizedText';
 
 const TEXT_TYPES = new Set<string>([
   Datatype.STRING,
@@ -64,6 +66,10 @@ export const getCategoryFromResource = (
     return 'json';
   }
 
+  if (datatype === Datatype.LOCALIZEDTEXT) {
+    return 'localizedText';
+  }
+
   if (datatype === Datatype.ATOMIC_URL) {
     return 'relation';
   }
@@ -84,6 +90,7 @@ export const categoryFormFactory = buildComponentFactory(
     ['date', DatePropertyForm],
     ['file', FilePropertyForm],
     ['json', JSONPropertyForm],
+    ['localizedText', LocalizedTextPropertyForm],
     ['relation', RelationPropertyForm],
   ]),
   NoCategorySelected,

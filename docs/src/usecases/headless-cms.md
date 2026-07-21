@@ -27,6 +27,16 @@ The [Atomic-Server](https://github.com/atomicdata-dev/atomic-server/blob/master/
 - **Versioning**. Built-in history, where each transaction is saved.
 - **Websockets**. If you need live updates and highly interactive apps (collaborative documents and chatrooms), we've got your back.
 - **Full-text search**. No need for a big elasticsearch server - atomic-server has one built-in.
+- **Translations / i18n**. Localize content per language — see below.
+
+## Internationalization (i18n)
+
+AtomicServer supports multilingual content with two mechanisms, matching how the mature CMSes model it (see [Translations & Localization](../schema/translations.md) for the full model):
+
+- **One resource per language** for content that diverges per language (blog posts, pages, documents). Each translation carries a `language` (BCP 47 tag, e.g. `nl`) and points at its canonical resource via `translationOf`. Because a translation is an ordinary resource, per-language paths (`/en/about` vs `/nl/over`), per-language publishing (an unpublished translation is just a resource in a private folder), and per-language edit rights all come for free.
+- **The [`LocalizedText` datatype](../schema/datatypes.md#localizedtext)** for short strings inside shared structure (labels, feature cards, product names): a single value holding all its translations as a `{ "en": "...", "nl": "..." }` map. The structure exists once; only the strings vary. Concurrent edits to different languages merge conflict-free.
+
+Declare `defaultLanguage` (and optionally `languages`) on your website or drive, and resolve a language in the client with the `localizeText` helper from `@tomic/lib` — the fallback chain is exact tag → primary subtag → default language.
 
 ## Limitations
 

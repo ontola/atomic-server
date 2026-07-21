@@ -59,6 +59,7 @@ import { isRunningInTauri } from '../helpers/tauri';
 import { openSearchOverlay } from './OverlayContainer';
 import { useAIChanges } from './AIChangesContext';
 import { Row } from './Row';
+import { ContentLanguageSelect } from './ContentLanguageSelect';
 import { ResourcePresenceRow } from './Presence/ResourcePresenceRow';
 import { FollowStatus } from './Presence/FollowStatus';
 import { MeetingBanner } from './Presence/MeetingBanner';
@@ -382,6 +383,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
           </Row>
         )}
 
+        <ContentLanguageSelect />
         <CommentsButton subject={resource.subject} />
         {enableAI && (
           <LabelButton

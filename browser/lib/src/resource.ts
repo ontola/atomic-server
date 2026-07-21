@@ -13,7 +13,7 @@ import { Client } from './client.js';
 import type { Collection } from './collection.js';
 import { CollectionBuilder } from './collectionBuilder.js';
 import { CommitBuilder, Commit } from './commit.js';
-import { validateDatatype, datatypeTag } from './datatypes.js';
+import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
 import { isUnauthorized } from './error.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
@@ -834,6 +834,40 @@ export class Resource<C extends OptionalClass = any> {
       typeof value === 'boolean'
     ) {
       map.set(prop, value);
+    } else if (this.isLocalizedTextProp(prop, value)) {
+      // LocalizedText: a native LoroMap keyed by language tag, so each
+      // language is its own LWW register and concurrent edits to different
+      // languages merge instead of clobbering. Mutate an existing container
+      // in place — replacing it resets its identity and drops cross-device
+      // merges targeting the old one (same reasoning as `replaceListItems`).
+      const { LoroMap: LoroMapClass } = LoroLoader.Loro;
+      const existing = map.get(prop);
+      const translations = value as Record<string, string>;
+
+      let langMap;
+
+      if (
+        existing &&
+        typeof existing === 'object' &&
+        'set' in existing &&
+        !('push' in existing)
+      ) {
+        langMap = existing;
+
+        for (const key of langMap.keys()) {
+          if (translations[key] === undefined) {
+            langMap.delete(key);
+          }
+        }
+      } else {
+        langMap = map.setContainer(prop, new LoroMapClass());
+      }
+
+      for (const [tag, translation] of Object.entries(translations)) {
+        if (langMap.get(tag) !== translation) {
+          langMap.set(tag, translation);
+        }
+      }
     } else if (Array.isArray(value)) {
       // Use native LoroList for arrays — enables per-element CRDT merge.
       // Object/array elements must become nested containers (LoroMap /
@@ -848,6 +882,29 @@ export class Resource<C extends OptionalClass = any> {
       // Objects: serialize to JSON string.
       map.set(prop, JSON.stringify(value));
     }
+  }
+
+  /**
+   * True when `prop` is a LocalizedText property (cache-only datatype
+   * lookup, same best-effort contract as `writeDatatypeTags`) holding a
+   * flat object of language tag -> string.
+   */
+  private isLocalizedTextProp(prop: string, value: JSONValue): boolean {
+    if (
+      value === null ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      Object.values(value).some(v => typeof v !== 'string')
+    ) {
+      return false;
+    }
+
+    const datatype = this._store?.resources
+      .get(prop)
+      ?.get(core.properties.datatype)
+      ?.toString();
+
+    return datatype === Datatype.LOCALIZEDTEXT;
   }
 
   /**
@@ -3385,7 +3442,9 @@ function normalizeLoroValue(
   // string/markdown propval (a chat title, a resource description) that
   // merely starts with `{` or `[` is never misread as JSON.
   if (
-    (loroDatatypeTag === 'resourceArray' || loroDatatypeTag === 'json') &&
+    (loroDatatypeTag === 'resourceArray' ||
+      loroDatatypeTag === 'json' ||
+      loroDatatypeTag === 'localizedText') &&
     typeof value === 'string' &&
     (value.startsWith('[') || value.startsWith('{'))
   ) {

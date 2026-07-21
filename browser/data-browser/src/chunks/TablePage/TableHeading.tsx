@@ -1,11 +1,6 @@
-import {
-  Core,
-  Datatype,
-  Property,
-  Resource,
-  useResource,
-  useTitle,
-} from '@tomic/react';
+import { Core, Datatype, Resource, useResource, useTitle } from '@tomic/react';
+import type { TableColumn } from './useTableColumns';
+import { ColumnLanguageChip } from './ColumnLanguageChip';
 
 import {
   FaAngleDown,
@@ -39,7 +34,7 @@ function getIcon(
   return dataTypeIconMap.get(dataType) ?? FaAtom;
 }
 
-export const TableHeading: TableHeadingComponent<Property> = ({
+export const TableHeading: TableHeadingComponent<TableColumn> = ({
   column,
   dragListeners,
   dragAttributes,
@@ -47,18 +42,25 @@ export const TableHeading: TableHeadingComponent<Property> = ({
   const [hoverOrFocus, setHoverOrFocus] = useState(false);
   const menuRef = useRef<TableHeadingMenuHandle>(null);
 
-  const propResource = useResource(column.subject);
+  const propResource = useResource(column.property.subject);
   const [title] = useTitle(propResource);
   const { setSortBy, sorting, tableClassSubject } =
     useContext(TablePageContext);
   const tableClass = useResource<Core.Class>(tableClassSubject);
 
-  const isRequired = (tableClass.props.requires ?? []).includes(column.subject);
+  const isRequired = (tableClass.props.requires ?? []).includes(
+    column.property.subject,
+  );
 
-  const Icon = getIcon(propResource, sorting, hoverOrFocus, column.datatype);
+  const Icon = getIcon(
+    propResource,
+    sorting,
+    hoverOrFocus,
+    column.property.datatype,
+  );
   const isSorted = sorting.prop === propResource.subject;
 
-  const text = `${title || column.shortname}${isRequired ? '*' : ''}`;
+  const text = `${title || column.property.shortname}${isRequired ? '*' : ''}`;
 
   return (
     <>
@@ -80,6 +82,12 @@ export const TableHeading: TableHeadingComponent<Property> = ({
         >
           {text}
         </NameButton>
+        {column.property.datatype === Datatype.LOCALIZEDTEXT && (
+          <ColumnLanguageChip
+            propertySubject={column.property.subject}
+            languageTag={column.languageTag}
+          />
+        )}
         <TableHeadingMenu ref={menuRef} resource={propResource} />
       </Wrapper>
     </>

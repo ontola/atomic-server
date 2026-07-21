@@ -32,6 +32,9 @@ pub enum Value {
     Json(serde_json::Value),
     /// Loro CRDT document binary (snapshot or update)
     LoroDoc(Vec<u8>),
+    /// Translated strings keyed by BCP 47 language tag (e.g. `nl`, `en-US`).
+    /// BTreeMap keeps serialization deterministic (signing).
+    LocalizedText(std::collections::BTreeMap<String, String>),
     Unsupported(UnsupportedValue),
 }
 
@@ -57,6 +60,9 @@ pub struct UnsupportedValue {
 pub const SLUG_REGEX: &str = r"^[a-z0-9]+(?:-[a-z0-9]+)*$";
 /// YYYY-MM-DD
 pub const DATE_REGEX: &str = r"^\d{4}\-(0[1-9]|1[012])\-(0[1-9]|[12][0-9]|3[01])$";
+/// Permissive BCP 47 shape check (language, optional subtags). Not a full
+/// grammar — it rejects obvious garbage without outlawing rare valid tags.
+pub const LANG_TAG_REGEX: &str = r"^[a-zA-Z]{2,8}(-[a-zA-Z0-9]{1,8})*$";
 
 use crate::storelike::Storelike;
 
@@ -122,6 +128,7 @@ impl Value {
             Value::Uri(_) => DataType::Uri,
             Value::Json(_) => DataType::Json,
             Value::LoroDoc(_) => DataType::LoroDoc,
+            Value::LocalizedText(_) => DataType::LocalizedText,
             Value::Unsupported(s) => DataType::Unsupported(s.datatype.clone()),
         }
     }
@@ -210,7 +217,43 @@ impl Value {
                     .map_err(|e| format!("Not a valid Base64 string: {}. {}", value, e))?;
                 Ok(Value::LoroDoc(bin))
             }
+            DataType::LocalizedText => {
+                let json: serde_json::Value = serde_json::from_str(value)?;
+                Value::localized_text_from_json(&json)
+            }
         }
+    }
+
+    /// Builds a `Value::LocalizedText` from a JSON object of
+    /// `{ "<BCP 47 tag>": "<translated string>" }`.
+    pub fn localized_text_from_json(json: &serde_json::Value) -> AtomicResult<Value> {
+        let serde_json::Value::Object(obj) = json else {
+            return Err(format!(
+                "Not a valid LocalizedText: {}. Should be a JSON object of language tag -> string.",
+                json
+            )
+            .into());
+        };
+        let re = Regex::new(LANG_TAG_REGEX).unwrap();
+        let mut map = std::collections::BTreeMap::new();
+        for (tag, val) in obj {
+            if !re.is_match(tag) {
+                return Err(format!(
+                    "Not a valid language tag in LocalizedText: {}. Use BCP 47 tags like 'en' or 'nl-BE'.",
+                    tag
+                )
+                .into());
+            }
+            let serde_json::Value::String(s) = val else {
+                return Err(format!(
+                    "Not a valid LocalizedText value for tag {}: {}. Should be a string.",
+                    tag, val
+                )
+                .into());
+            };
+            map.insert(tag.clone(), s.clone());
+        }
+        Ok(Value::LocalizedText(map))
     }
 
     /// Returns a new Value, accepts a datatype string
@@ -281,8 +324,33 @@ impl Value {
     pub fn to_sortable_string(&self) -> SortableValue {
         match self {
             Value::ResourceArray(arr) => arr.len().to_string(),
+            // Sort by one language so ordering is stable across resources:
+            // `en` when present, else the first tag. The query index cannot
+            // know the requester's language.
+            Value::LocalizedText(map) => map
+                .get("en")
+                .or_else(|| map.values().next())
+                .cloned()
+                .unwrap_or_default(),
             other => other.to_string(),
         }
+    }
+
+    /// Picks the best translation for a preferred language: exact tag →
+    /// primary subtag (`en-US` → `en`) → `en` → the first tag. Returns None
+    /// only when the map is empty.
+    pub fn to_localized_string(&self, preferred: &str) -> Option<&str> {
+        let Value::LocalizedText(map) = self else {
+            return None;
+        };
+        if let Some(s) = map.get(preferred) {
+            return Some(s);
+        }
+        let primary = preferred.split('-').next().unwrap_or(preferred);
+        map.get(primary)
+            .or_else(|| map.get("en"))
+            .or_else(|| map.values().next())
+            .map(|s| s.as_str())
     }
 
     /// Converts one Value to a bunch of indexable items.
@@ -414,6 +482,11 @@ impl fmt::Display for Value {
             Value::Uri(s) => write!(f, "{}", s),
             Value::Json(s) => write!(f, "{}", s),
             Value::LoroDoc(s) => write!(f, "{}", general_purpose::STANDARD.encode(s)),
+            Value::LocalizedText(map) => {
+                // BTreeMap serializes with sorted keys → deterministic bytes.
+                let json = serde_json::to_string(map).map_err(|_| fmt::Error)?;
+                write!(f, "{}", json)
+            }
             Value::Unsupported(u) => write!(f, "{}", u.value),
         }
     }
@@ -532,6 +605,29 @@ mod test {
         let converted = Value::from(8);
         assert_eq!(converted.datatype(), DataType::Integer);
         assert_eq!(converted.to_string(), "8");
+    }
+
+    #[test]
+    fn localized_text_parses_validates_and_resolves() {
+        let val = Value::new(
+            r#"{"en": "Fast sync", "nl": "Snelle synchronisatie", "en-US": "Fast sync (US)"}"#,
+            &DataType::LocalizedText,
+        )
+        .unwrap();
+        assert_eq!(val.datatype(), DataType::LocalizedText);
+        // Display is deterministic (sorted keys) and re-parses.
+        let reparsed = Value::new(&val.to_string(), &DataType::LocalizedText).unwrap();
+        assert_eq!(reparsed.to_string(), val.to_string());
+        // Fallback chain: exact → primary subtag → en → first.
+        assert_eq!(val.to_localized_string("en-US"), Some("Fast sync (US)"));
+        assert_eq!(val.to_localized_string("nl-BE"), Some("Snelle synchronisatie"));
+        assert_eq!(val.to_localized_string("de"), Some("Fast sync"));
+        assert_eq!(val.to_sortable_string(), "Fast sync");
+
+        // Invalid shapes are rejected.
+        Value::new("\"just a string\"", &DataType::LocalizedText).unwrap_err();
+        Value::new(r#"{"not a tag!": "x"}"#, &DataType::LocalizedText).unwrap_err();
+        Value::new(r#"{"en": 5}"#, &DataType::LocalizedText).unwrap_err();
     }
 
     #[test]

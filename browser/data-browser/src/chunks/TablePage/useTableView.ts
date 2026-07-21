@@ -84,6 +84,10 @@ export interface UseTableViewResult {
   viewGroupBy: string | undefined;
   /** Persist the group-by property to the active View (lazy-creates it). */
   setViewGroupBy: (property: string) => void;
+  /** LocalizedText properties split into one column per language tag. */
+  viewSplitLanguages: string[];
+  /** Persist the split-language property list to the active View (lazy-creates it). */
+  setViewSplitLanguages: (properties: string[]) => void;
 }
 
 /**
@@ -124,6 +128,10 @@ export function useTableView(table: Resource): UseTableViewResult {
   const [storedColumns] = useArray(view, dataBrowser.properties.viewColumns);
   const [storedKind] = useString(view, dataBrowser.properties.viewKind);
   const [viewGroupBy] = useString(view, dataBrowser.properties.viewGroupBy);
+  const [storedSplitLanguages] = useArray(
+    view,
+    dataBrowser.properties.viewSplitLanguages,
+  );
 
   const [filters, setFilters] = useState<TableFilter[]>([]);
   const [sorting, dispatchSort] = useReducer(sortReducer, DEFAULT_SORT);
@@ -389,6 +397,26 @@ export function useTableView(table: Resource): UseTableViewResult {
     [ensureView],
   );
 
+  const setViewSplitLanguages = useCallback(
+    (splitProperties: string[]) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        await v.set(
+          dataBrowser.properties.viewSplitLanguages,
+          splitProperties,
+          false,
+        );
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
   const setViewKind = useCallback(
     (subject: string, kind: ViewKind) => {
       void (async () => {
@@ -421,6 +449,7 @@ export function useTableView(table: Resource): UseTableViewResult {
           dataBrowser.properties.viewSortDesc,
           dataBrowser.properties.viewColumns,
           dataBrowser.properties.viewGroupBy,
+          dataBrowser.properties.viewSplitLanguages,
         ]) {
           const value = src.get(prop);
 
@@ -501,5 +530,9 @@ export function useTableView(table: Resource): UseTableViewResult {
     viewKind: normalizeViewKind(storedKind),
     viewGroupBy,
     setViewGroupBy,
+    viewSplitLanguages: Array.isArray(storedSplitLanguages)
+      ? (storedSplitLanguages as string[])
+      : [],
+    setViewSplitLanguages,
   };
 }

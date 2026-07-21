@@ -2821,6 +2821,7 @@ msgstr "Valeur invalide"
 #: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 #: src/components/forms/FilePicker/FilePicker.tsx
 #: src/components/forms/InputDate.tsx
+#: src/components/forms/InputLocalizedText.tsx
 #: src/components/forms/InputMarkdown.tsx
 #: src/components/forms/InputNumber.tsx
 #: src/components/forms/InputNumber.tsx
@@ -5224,9 +5225,8 @@ msgstr ""
 msgid "Resource has no editable document content"
 msgstr ""
 
-#: src/components/NewInstanceButton/QuickCreateRow.tsx
-msgid "New Meeting"
-msgstr ""
+#~ msgid "New Meeting"
+#~ msgstr ""
 
 #: src/components/Presence/MeetingBanner.tsx
 msgid "Ending meeting"
@@ -5454,4 +5454,101 @@ msgstr ""
 #. 0: title
 #: src/components/NavBar.tsx
 msgid "Go to {0}"
+msgstr ""
+
+#: src/components/EditLanguagesDialog.tsx
+#: src/components/forms/InputLocalizedText.tsx
+msgid "Invalid language tag"
+msgstr ""
+
+#: src/components/EditLanguagesDialog.tsx
+#: src/components/forms/InputLocalizedText.tsx
+msgid "Language already added"
+msgstr ""
+
+#. 0: tag
+#: src/components/forms/InputLocalizedText.tsx
+msgid "Translation for {0}"
+msgstr ""
+
+#. 0: tag
+#: src/components/forms/InputLocalizedText.tsx
+msgid "Remove {0} translation"
+msgstr ""
+
+#: src/components/EditLanguagesDialog.tsx
+#: src/components/forms/InputLocalizedText.tsx
+msgid "New language tag"
+msgstr ""
+
+#: src/components/forms/InputLocalizedText.tsx
+msgid "<0/> Add language"
+msgstr ""
+
+#: src/components/EditLanguagesDialog.tsx
+#: src/components/forms/InputLocalizedText.tsx
+msgid "Add a language"
+msgstr ""
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "Localized Text"
+msgstr ""
+
+#~ msgid "Switch language"
+#~ msgstr ""
+
+#. 0: contentLanguage; 1: title
+#: src/components/LocalizedTextValue.tsx
+msgid "No {0} translation. {1}"
+msgstr ""
+
+#~ msgid "+ add"
+#~ msgstr ""
+
+#: src/chunks/TablePage/ColumnLanguageChip.tsx
+#: src/components/ContentLanguageSelect.tsx
+#: src/components/ContentLanguageSelect.tsx
+msgid "Content language"
+msgstr ""
+
+#: src/chunks/TablePage/ColumnLanguageChip.tsx
+msgid "Unsplit language columns"
+msgstr ""
+
+#: src/chunks/TablePage/ColumnLanguageChip.tsx
+msgid "Split by language"
+msgstr ""
+
+#. 0: tag
+#: src/chunks/TablePage/ColumnLanguageChip.tsx
+msgid "Language: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/ColumnLanguageChip.tsx
+msgid "Edit languages…"
+msgstr ""
+
+#: src/components/EditLanguagesDialog.tsx
+msgid "Languages"
+msgstr ""
+
+#. 0: tag
+#: src/components/EditLanguagesDialog.tsx
+msgid "Remove {0}"
+msgstr ""
+
+#~ msgid "The languages this drive publishes content in (BCP 47 tags, e.g. <0/> or <1/>). Language pickers offer these, and a missing translation is flagged against this set."
+#~ msgstr ""
+
+#: src/components/EditLanguagesDialog.tsx
+msgid "<0/> Add"
+msgstr ""
+
+#. 0: ' '
+#: src/components/EditLanguagesDialog.tsx
+msgid "The languages this drive publishes content in (BCP 47 tags, e.g.{0} <0/> or <1/>). Language pickers offer these, and a missing translation is flagged against this set."
+msgstr ""
+
+#: src/chunks/TablePage/ColumnLanguageChip.tsx
+msgid "LanguageChipTrigger"
 msgstr ""

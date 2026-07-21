@@ -34,6 +34,7 @@ import {
   FaMarkdown,
   FaPaintbrush,
   FaRegSquareCheck,
+  FaLanguage,
   FaLink,
   FaCode,
   FaPuzzlePiece,
@@ -85,4 +86,5 @@ export const dataTypeIconMap = new Map<string, IconType>([
   [Datatype.TIMESTAMP, FaClock],
   [Datatype.URI, FaLink],
   [Datatype.JSON, FaCode],
+  [Datatype.LOCALIZEDTEXT, FaLanguage],
 ]);

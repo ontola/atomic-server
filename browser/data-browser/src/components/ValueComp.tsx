@@ -7,7 +7,9 @@ import {
   valToResource,
   type AtomicValue,
   type JSONValue,
+  type LocalizedText,
 } from '@tomic/react';
+import { LocalizedTextValue } from './LocalizedTextValue';
 import { ResourceInline } from '../views/ResourceInline';
 import { DateTime } from './datatypes/DateTime';
 import Markdown from './datatypes/Markdown';
@@ -48,6 +50,10 @@ function ValueComp({ value, datatype }: Props): JSX.Element {
         return <JSONRenderer value={value as JSONValue} />;
       case Datatype.LORODOC:
         return <LoroDocValue value={value as Uint8Array} />;
+
+      case Datatype.LOCALIZEDTEXT:
+        return <LocalizedTextValue value={value as LocalizedText} />;
+
       case Datatype.URI:
         return (
           <AtomicLink href={value as string}>{value as string}</AtomicLink>

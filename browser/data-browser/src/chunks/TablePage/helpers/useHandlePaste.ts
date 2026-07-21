@@ -1,5 +1,5 @@
 import {
-  Property,
+  Datatype,
   Resource,
   useStore,
   Collection,
@@ -8,6 +8,8 @@ import {
 import { useCallback } from 'react';
 import { CellPasteData } from '@chunks/TableEditor';
 import { appendStringToType } from '../dataTypeMaps';
+import type { TableColumn } from '../useTableColumns';
+import { useSettings } from '../../../helpers/AppSettings';
 import {
   HistoryItemBatch,
   createResourceCreatedHistoryItem,
@@ -22,9 +24,10 @@ export function useHandlePaste(
   addHistoryItemBatchToStack: (historyItemBatch: HistoryItemBatch) => void,
 ) {
   const store = useStore();
+  const { contentLanguage } = useSettings();
 
   return useCallback(
-    async (pasteData: CellPasteData<Property>[]) => {
+    async (pasteData: CellPasteData<TableColumn>[]) => {
       const historyItemBatch: HistoryItemBatch = [];
 
       const resourceMemos = new Map<number, Resource>();
@@ -60,17 +63,26 @@ export function useHandlePaste(
           }
         }
 
-        const property = cell.index[1];
+        const { property, languageTag } = cell.index[1];
 
         historyItemBatch.push(
           createValueChangedHistoryItem(row, property.subject),
         );
 
-        const value = appendStringToType(
-          undefined,
-          cell.data,
-          property.datatype,
-        );
+        let value;
+
+        if (property.datatype === Datatype.LOCALIZEDTEXT) {
+          // Paste replaces one language and keeps the rest of the map — the
+          // split column's language, or the app's content language.
+          const existing = row.get(property.subject);
+          const map =
+            existing && typeof existing === 'object' && !Array.isArray(existing)
+              ? (existing as Record<string, string>)
+              : {};
+          value = { ...map, [languageTag ?? contentLanguage]: cell.data };
+        } else {
+          value = appendStringToType(undefined, cell.data, property.datatype);
+        }
 
         await row.set(property.subject, value);
         await row.save();
@@ -83,6 +95,6 @@ export function useHandlePaste(
         invalidateCollection();
       }
     },
-    [collection, invalidateCollection, store],
+    [collection, invalidateCollection, store, contentLanguage],
   );
 }

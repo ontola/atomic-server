@@ -64,6 +64,11 @@ const getCategoryGenesisPropVals = (
         isA: core.classes.property,
         propVals: { [core.properties.datatype]: Datatype.JSON },
       };
+    case 'localizedText':
+      return {
+        isA: core.classes.property,
+        propVals: { [core.properties.datatype]: Datatype.LOCALIZEDTEXT },
+      };
     case 'select':
       return {
         isA: [core.classes.property, dataBrowser.classes.selectProperty],

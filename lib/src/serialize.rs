@@ -94,6 +94,13 @@ pub fn val_to_serde(
             }
         },
         Value::LoroDoc(val) => SerdeValue::String(general_purpose::STANDARD.encode(val)),
+        Value::LocalizedText(map) => {
+            let mut obj = Map::new();
+            for (tag, s) in map {
+                obj.insert(tag, SerdeValue::String(s));
+            }
+            SerdeValue::Object(obj)
+        }
     };
     Ok(json_val)
 }
@@ -171,6 +178,13 @@ pub async fn propvals_to_json_ld(
                     obj.into()
                 }
                 DataType::Markdown => prop_url.as_str().into(),
+                DataType::LocalizedText => {
+                    let mut obj = Map::new();
+                    obj.insert("@id".into(), prop_url.as_str().into());
+                    // JSON-LD language map: keys are language tags.
+                    obj.insert("@container".into(), "@language".into());
+                    obj.into()
+                }
                 DataType::ResourceArray => {
                     let mut obj = Map::new();
                     obj.insert("@id".into(), prop_url.as_str().into());

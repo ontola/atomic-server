@@ -71,6 +71,7 @@
   - [Schema](schema/intro.md)
     - [Classes](schema/classes.md)
     - [Datatypes](schema/datatypes.md)
+    - [Translations & Localization](schema/translations.md)
     - [FAQ](schema/faq.md)
 
 - [Atomic Data Extended](extended.md)

@@ -150,3 +150,25 @@ Used for `loroUpdate` commit fields and other binary CRDT payloads.
 ```json
 "bG9ybwAAAAAAAA..."
 ```
+
+## LocalizedText
+
+_URL: `https://atomicdata.dev/datatypes/localizedText`_
+
+Translated strings for a single value, as a JSON object mapping [BCP 47](https://www.rfc-editor.org/rfc/bcp/bcp47.txt) language tags (e.g. `en`, `nl-BE`) to strings.
+
+```json
+{
+  "en": "Hello world",
+  "nl": "Hallo wereld",
+  "de-CH": "Hallo Welt"
+}
+```
+
+Clients resolve a language with this fallback chain: exact tag → primary subtag (`en-US` → `en`) → the scope's `defaultLanguage` → `en` → the first available tag.
+
+Use `LocalizedText` for short user-facing text that varies per language while the rest of the resource is shared (labels, names, card text).
+For long-form content that diverges per language (a blog post, a document), prefer one resource per language linked with `translationOf` — see [Translations](translations.md).
+
+Stored internally as a native CRDT map keyed by language tag, so concurrent edits to *different* languages merge without conflict.
+In JSON-LD, a `LocalizedText` property serializes with an `@language` container (a standard JSON-LD language map); in RDF it maps to language-tagged literals.

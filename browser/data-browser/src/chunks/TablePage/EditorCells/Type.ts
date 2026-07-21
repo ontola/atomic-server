@@ -7,12 +7,16 @@ export interface EditCellProps<T extends JSONValue> {
   onChange: (value: T) => void;
   property: string;
   resource: Resource;
+  /** For a split-by-language column: the single language tag this cell edits */
+  languageTag?: string;
 }
 
 export interface DisplayCellProps<T extends JSONValue> {
   value: T;
   onChange: (value: T) => void;
   property: string;
+  /** For a split-by-language column: the single language tag this cell shows */
+  languageTag?: string;
 }
 
 export type CellContainer<T extends JSONValue> = {

@@ -282,7 +282,8 @@
       "https://atomicdata.dev/properties/view-sort-by",
       "https://atomicdata.dev/properties/view-sort-desc",
       "https://atomicdata.dev/properties/view-columns",
-      "https://atomicdata.dev/properties/view-group-by"
+      "https://atomicdata.dev/properties/view-group-by",
+      "https://atomicdata.dev/properties/view-split-languages"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/name",
@@ -352,6 +353,17 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "view-group-by"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-split-languages",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The LocalizedText properties of this view that are split into one column per language tag.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-split-languages"
   },
   {
     "@id": "https://atomicdata.dev/properties/table-views",

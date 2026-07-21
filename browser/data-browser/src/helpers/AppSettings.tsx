@@ -49,6 +49,14 @@ export const AppSettingsContextProvider = (
   );
   const [navbarTop, setNavbarTop] = useLocalStorage('navbarTop', true);
 
+  // == CONTENT LANGUAGE ==
+  // The language localized *content* (LocalizedText values, translated
+  // resources) is shown in — independent of the UI chrome language.
+  const [contentLanguage, setContentLanguage] = useLocalStorage(
+    'contentLanguage',
+    navigator.language.split('-')[0],
+  );
+
   const store = useStore();
 
   useEffect(() => {
@@ -146,6 +154,8 @@ export const AppSettingsContextProvider = (
       setServer,
       navbarTop,
       setNavbarTop,
+      contentLanguage,
+      setContentLanguage,
     }),
     [
       drive,
@@ -170,6 +180,8 @@ export const AppSettingsContextProvider = (
       setServer,
       navbarTop,
       setNavbarTop,
+      contentLanguage,
+      setContentLanguage,
     ],
   );
 
@@ -217,6 +229,9 @@ export interface AppSettings {
   /** Whether the navbar should be at the top or bottom */
   navbarTop: boolean;
   setNavbarTop: (b: boolean) => void;
+  /** BCP 47 tag localized content is shown in (not the UI chrome language) */
+  contentLanguage: string;
+  setContentLanguage: (s: string) => void;
 }
 
 const initialState: AppSettings = {
@@ -242,6 +257,8 @@ const initialState: AppSettings = {
   setServer: () => undefined,
   navbarTop: true,
   setNavbarTop: () => undefined,
+  contentLanguage: 'en',
+  setContentLanguage: () => undefined,
 };
 
 /** Hook for using App Settings, such as theme and darkmode */

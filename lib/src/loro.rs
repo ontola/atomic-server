@@ -458,6 +458,18 @@ impl AtomicLoroDoc {
                         .map_err(|e| format!("Loro set error: {e}"))?;
                 }
             },
+            Value::LocalizedText(translations) => {
+                // Native LoroMap keyed by language tag — each language is its
+                // own LWW register, so concurrent edits to different
+                // languages merge cleanly.
+                let map = root
+                    .insert_container(property, loro::LoroMap::new())
+                    .map_err(|e| format!("Loro insert_container error: {e}"))?;
+                for (tag, s) in translations {
+                    map.insert(tag, s.as_str())
+                        .map_err(|e| format!("Loro map insert error: {e}"))?;
+                }
+            }
             _ => {
                 // For other complex types, serialize the display string.
                 root.insert(property, value.to_string().as_str())
@@ -818,6 +830,7 @@ pub fn datatype_tag(value: &Value) -> Option<&'static str> {
         Value::AtomicUrl(_) => Some("atomicUrl"),
         Value::ResourceArray(_) => Some("resourceArray"),
         Value::Json(_) => Some("json"),
+        Value::LocalizedText(_) => Some("localizedText"),
         Value::NestedResource(_) => Some("resource"),
         Value::Markdown(_) => Some("markdown"),
         Value::Slug(_) => Some("slug"),
@@ -860,6 +873,16 @@ fn atomic_value_from_tag(lv: &loro::LoroValue, tag: &str) -> Option<Value> {
             serde_json::from_str::<std::collections::HashMap<String, Value>>(s.as_ref())
                 .ok()
                 .map(|obj| Value::NestedResource(crate::values::SubResource::Nested(obj)))
+        }
+        ("localizedText", lv) => {
+            // Written as a native LoroMap by current clients; tolerate a
+            // JSON-stringified object from older writers (same as `json`).
+            if let loro::LoroValue::String(s) = lv {
+                let parsed = serde_json::from_str::<serde_json::Value>(s.as_ref()).ok()?;
+                return Value::localized_text_from_json(&parsed).ok();
+            }
+            let json = loro_value_to_json(lv);
+            Value::localized_text_from_json(&json).ok()
         }
         ("resourceArray", loro::LoroValue::List(items)) => {
             let subjects: Vec<crate::values::SubResource> = items
@@ -1501,6 +1524,13 @@ mod test {
             .unwrap();
         doc.set_property(&p("ts"), &Value::Timestamp(1_700_000_000_000))
             .unwrap();
+        let translations: std::collections::BTreeMap<String, String> = [
+            ("en".to_string(), "Fast sync".to_string()),
+            ("nl".to_string(), "Snelle synchronisatie".to_string()),
+        ]
+        .into();
+        doc.set_property(&p("tagline"), &Value::LocalizedText(translations))
+            .unwrap();
 
         // Round-trip through a snapshot, as sync / persistence does.
         let doc2 = AtomicLoroDoc::from_snapshot(&doc.export_snapshot()).unwrap();
@@ -1543,10 +1573,22 @@ mod test {
             mat("ts"),
             Some(Value::Timestamp(1_700_000_000_000))
         ));
+        // A LoroMap without a tag would materialize as Json; the tag pins it.
+        match mat("tagline") {
+            Some(Value::LocalizedText(m)) => {
+                assert_eq!(m.get("nl").map(String::as_str), Some("Snelle synchronisatie"));
+                assert_eq!(m.len(), 2);
+            }
+            other => panic!("expected LocalizedText, got {other:?}"),
+        }
         // Scalars and plain strings get no `datatypes` entry — the map is sparse.
         assert!(!tags.contains_key(&p("text")));
         assert!(tags.contains_key(&p("ref")));
         assert_eq!(tags.get(&p("desc")).map(String::as_str), Some("markdown"));
+        assert_eq!(
+            tags.get(&p("tagline")).map(String::as_str),
+            Some("localizedText")
+        );
     }
 
     #[test]

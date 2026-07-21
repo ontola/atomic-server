@@ -23,6 +23,7 @@ const CheckboxIcon = dataTypeIconMap.get(Datatype.BOOLEAN)!;
 const SelectIcon = FaCircleChevronDown;
 const FileIcon = FaFile;
 const RelationIcon = dataTypeIconMap.get(Datatype.ATOMIC_URL)!;
+const LocalizedTextIcon = dataTypeIconMap.get(Datatype.LOCALIZEDTEXT)!;
 
 export const NewColumnButton: React.FC = () => {
   const [showDialog, setShowDialog] = useState(false);
@@ -85,6 +86,12 @@ export const NewColumnButton: React.FC = () => {
         label: 'JSON',
         onClick: openDialog('json'),
         icon: <FaCode />,
+      },
+      {
+        id: 'localizedText',
+        label: 'Localized Text',
+        onClick: openDialog('localizedText'),
+        icon: <LocalizedTextIcon />,
       },
       {
         id: 'relation',

@@ -1,6 +1,12 @@
 import { describe, it } from 'vitest';
 
-import { Datatype, datatypeTag, urls, validateDatatype } from './index.js';
+import {
+  Datatype,
+  datatypeTag,
+  localizeText,
+  urls,
+  validateDatatype,
+} from './index.js';
 
 describe('Datatypes', () => {
   it('throws errors when datatypes dont match values', async ({ expect }) => {
@@ -64,6 +70,46 @@ describe('Datatypes', () => {
     expect(() => validateDatatype(string, Datatype.RESOURCEARRAY)).to.throw();
     expect(() => validateDatatype(int, Datatype.RESOURCEARRAY)).to.throw();
   });
+
+  it('validates LocalizedText values', ({ expect }) => {
+    expect(() =>
+      validateDatatype(
+        { en: 'Fast sync', 'nl-BE': 'Snelle synchronisatie' },
+        Datatype.LOCALIZEDTEXT,
+      ),
+    ).to.not.throw();
+    // Empty map is a valid (if useless) LocalizedText.
+    expect(() => validateDatatype({}, Datatype.LOCALIZEDTEXT)).to.not.throw();
+
+    expect(() =>
+      validateDatatype('just a string', Datatype.LOCALIZEDTEXT),
+    ).to.throw();
+    expect(() => validateDatatype(['en'], Datatype.LOCALIZEDTEXT)).to.throw();
+    expect(() =>
+      validateDatatype({ 'not a tag!': 'x' }, Datatype.LOCALIZEDTEXT),
+    ).to.throw();
+    expect(() =>
+      validateDatatype({ en: 5 }, Datatype.LOCALIZEDTEXT),
+    ).to.throw();
+  });
+});
+
+describe('localizeText', () => {
+  it('resolves exact → primary subtag → default → en → first', ({
+    expect,
+  }) => {
+    const value = {
+      en: 'Fast sync',
+      'en-US': 'Fast sync (US)',
+      nl: 'Snelle synchronisatie',
+    };
+    expect(localizeText(value, 'en-US')).toBe('Fast sync (US)');
+    expect(localizeText(value, 'nl-BE')).toBe('Snelle synchronisatie');
+    expect(localizeText(value, 'de', 'nl')).toBe('Snelle synchronisatie');
+    expect(localizeText(value, 'de')).toBe('Fast sync');
+    expect(localizeText({ fr: 'Bonjour' }, 'de')).toBe('Bonjour');
+    expect(localizeText(undefined, 'en')).toBeUndefined();
+  });
 });
 
 describe('datatypeTag', () => {
@@ -91,6 +137,11 @@ describe('datatypeTag', () => {
     expect(datatypeTag(Datatype.URI, 'mailto:a@b.c')).toBe('uri');
     expect(datatypeTag(Datatype.DATE, '2026-05-21')).toBe('date');
     expect(datatypeTag(Datatype.TIMESTAMP, 1700000000000)).toBe('timestamp');
+
+    // LocalizedText: a map that must not materialize as plain Json.
+    expect(datatypeTag(Datatype.LOCALIZEDTEXT, { en: 'hi' })).toBe(
+      'localizedText',
+    );
 
     // Plain string and scalars stay untagged (the default).
     expect(datatypeTag(Datatype.STRING, 'hello')).toBeUndefined();

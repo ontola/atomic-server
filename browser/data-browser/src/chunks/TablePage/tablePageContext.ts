@@ -15,6 +15,10 @@ export interface TablePageContextType {
   setFilterOperator: (property: string, operator: FilterOperator) => void;
   removeFilter: (property: string) => void;
   hideColumn: (property: string) => void;
+  /** LocalizedText properties currently split into one column per language. */
+  splitLanguageSubjects: string[];
+  /** Toggle split-by-language for a LocalizedText property. */
+  toggleSplitLanguages: (property: string) => void;
   addItemsToHistoryStack: AddItemToHistoryStack;
 }
 
@@ -32,5 +36,7 @@ export const TablePageContext = createContext<TablePageContextType>({
   setFilterOperator: () => undefined,
   removeFilter: () => undefined,
   hideColumn: () => undefined,
+  splitLanguageSubjects: [],
+  toggleSplitLanguages: () => undefined,
   addItemsToHistoryStack: () => undefined,
 });

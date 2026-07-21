@@ -1,0 +1,58 @@
+[
+  {
+    "@id": "https://atomicdata.dev/ontology/i18n",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
+    "https://atomicdata.dev/properties/shortname": "i18n",
+    "https://atomicdata.dev/properties/description": "Content internationalization. Two mechanisms, by content shape. Whole-entity content that diverges per language (a blog post, a document, a page with its own URL) gets one resource per language: each carries `language`, and a translation names its canonical resource through `translationOf`. Shared-structure content with short strings inside (labels, feature cards, product names) keeps one resource and uses the `localizedText` datatype, which holds all translations of a single value. A site root declares `defaultLanguage` (and optionally `languages`); consumers resolve a language by exact tag, then primary subtag (`en-US` → `en`), then the default.",
+    "https://atomicdata.dev/properties/classes": [],
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/properties/language",
+      "https://atomicdata.dev/properties/translationOf",
+      "https://atomicdata.dev/properties/defaultLanguage",
+      "https://atomicdata.dev/properties/languages"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/language",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/i18n",
+    "https://atomicdata.dev/properties/shortname": "language",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The language this resource's content is written in, as a BCP 47 language tag (e.g. `en`, `nl-BE`)."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/translationOf",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/i18n",
+    "https://atomicdata.dev/properties/shortname": "translation-of",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The canonical resource this resource is a translation of. The canonical resource is the one without `translationOf`; it carries `language` too. Finding all translations of a resource is a reverse query on this property."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/defaultLanguage",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/i18n",
+    "https://atomicdata.dev/properties/shortname": "default-language",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The fallback language for a site or scope, as a BCP 47 tag. Also the language assumed for content that carries no `language` of its own."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/languages",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/i18n",
+    "https://atomicdata.dev/properties/shortname": "languages",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The languages a site or scope publishes in, as a JSON array of BCP 47 tags. A hint for language pickers and generated routing; the set of languages that actually exist is derivable from the content."
+  }
+]

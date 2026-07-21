@@ -11,13 +11,13 @@ import {
   core,
   dataBrowser,
   DataBrowser,
-  Property,
   Resource,
   unknownSubject,
   useMemberFromCollection,
   useResource,
 } from '@tomic/react';
 import { TableCell } from './TableCell';
+import type { TableColumn } from './useTableColumns';
 import { styled, keyframes } from 'styled-components';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 import { FaTriangleExclamation } from 'react-icons/fa6';
@@ -26,7 +26,7 @@ import { useMaterializeWhenDeselected } from './useMaterializeWhenDeselected';
 interface TableRowProps {
   collection: Collection;
   index: number;
-  columns: Property[];
+  columns: TableColumn[];
 }
 
 const WarningIcon = styled(FaTriangleExclamation)`
@@ -110,7 +110,7 @@ export function TableRow({
     return (
       <>
         {columns.map((column, i) => (
-          <Loader key={column.subject} delay={i * 100} title='loading' />
+          <Loader key={column.key} delay={i * 100} title='loading' />
         ))}
       </>
     );
@@ -120,11 +120,12 @@ export function TableRow({
     <>
       {columns.map((column, cIndex) => (
         <TableCellMemo
-          key={column.subject}
+          key={column.key}
           rowIndex={index}
           columnIndex={cIndex + 1}
           subject={displaySubject}
-          property={column}
+          property={column.property}
+          languageTag={column.languageTag}
         />
       ))}
     </>
@@ -226,11 +227,12 @@ export function TableNewRow({
     <>
       {columns.map((column, cIndex) => (
         <TableCellMemo
-          key={column.subject}
+          key={column.key}
           rowIndex={index}
           columnIndex={cIndex + 1}
           subject={subject}
-          property={column}
+          property={column.property}
+          languageTag={column.languageTag}
           onFirstContent={handleFirstContent}
         />
       ))}

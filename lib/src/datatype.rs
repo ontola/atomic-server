@@ -20,6 +20,8 @@ pub enum DataType {
     Uri,
     Json,
     LoroDoc,
+    /// A map of BCP 47 language tags to translated strings
+    LocalizedText,
     Unsupported(String),
 }
 
@@ -38,6 +40,7 @@ pub fn match_datatype(string: &str) -> DataType {
         urls::URI => DataType::Uri,
         urls::JSON => DataType::Json,
         urls::LORO_DOC => DataType::LoroDoc,
+        urls::LOCALIZED_TEXT => DataType::LocalizedText,
         unsupported_datatype => DataType::Unsupported(unsupported_datatype.into()),
     }
 }
@@ -60,6 +63,7 @@ impl std::str::FromStr for DataType {
             urls::URI => DataType::Uri,
             urls::JSON => DataType::Json,
             urls::LORO_DOC => DataType::LoroDoc,
+            urls::LOCALIZED_TEXT => DataType::LocalizedText,
             unsupported_datatype => DataType::Unsupported(unsupported_datatype.into()),
         })
     }
@@ -81,6 +85,7 @@ impl fmt::Display for DataType {
             DataType::Uri => write!(f, "{}", urls::URI),
             DataType::Json => write!(f, "{}", urls::JSON),
             DataType::LoroDoc => write!(f, "{}", urls::LORO_DOC),
+            DataType::LocalizedText => write!(f, "{}", urls::LOCALIZED_TEXT),
             DataType::Unsupported(url) => write!(f, "{}", url),
         }
     }

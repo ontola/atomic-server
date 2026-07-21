@@ -1,5 +1,6 @@
 import {
   commits,
+  Datatype,
   JSONValue,
   Property,
   useDebouncedSave,
@@ -23,12 +24,16 @@ import { TablePageContext } from './tablePageContext';
 import { createValueChangedHistoryItem } from './helpers/useTableHistory';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 import { RemoteCellPresence, TablePresenceContext } from './TablePresence';
+import { useSettings } from '../../helpers/AppSettings';
 
 interface TableCellProps {
   columnIndex: number;
   rowIndex: number;
   subject: string;
   property: Property;
+  /** When set, this cell shows a single language of a LocalizedText property
+   * (a split-by-language column). */
+  languageTag?: string;
   /** Called on every edit; the row uses it to spawn a trailing placeholder the
    * first time a virtual new row gains content (no-op for existing rows). */
   onFirstContent?: () => void;
@@ -60,9 +65,11 @@ export function TableCell({
   rowIndex,
   subject,
   property,
+  languageTag,
   onFirstContent,
 }: TableCellProps): JSX.Element {
   const resource = useResource(subject);
+  const { contentLanguage } = useSettings();
   const { setActiveCell } = useTableEditorContext();
   const { addItemsToHistoryStack } = useContext(TablePageContext);
   const { openResourceMenu } = useResourceContextMenu();
@@ -149,9 +156,23 @@ export function TableCell({
 
   const handleEnterEditModeWithCharacter = useCallback(
     (key: string) => {
+      // A LocalizedText cell replaces only its own language — spreading the
+      // existing map keeps the other languages. `appendStringToType` starts
+      // from `undefined` (spreadsheet type-over semantics), which for a map
+      // value would wipe every language, not just the edited one.
+      if (dataType === Datatype.LOCALIZEDTEXT) {
+        const map =
+          value && typeof value === 'object' && !Array.isArray(value)
+            ? (value as Record<string, string>)
+            : {};
+        onChange({ ...map, [languageTag ?? contentLanguage]: key });
+
+        return;
+      }
+
       onChange(appendStringToType(undefined, key, dataType));
     },
-    [onChange, dataType],
+    [onChange, dataType, value, languageTag, contentLanguage],
   );
 
   const handleEditNextRow = useCallback(() => {
@@ -186,12 +207,14 @@ export function TableCell({
           onChange={onChange}
           property={property.subject}
           resource={resource}
+          languageTag={languageTag}
         />
       ) : (
         <Editor.Display
           value={value}
           onChange={onChange}
           property={property.subject}
+          languageTag={languageTag}
         />
       )}
       {remoteAgents && remoteAgents.length > 0 && (

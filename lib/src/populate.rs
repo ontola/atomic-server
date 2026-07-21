@@ -307,6 +307,13 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
         )
         .await
         .map_err(|e| format!("Failed to import forks.json: {e}"))?;
+    store
+        .import(
+            include_str!("../defaults/i18n.json"),
+            &ParseOpts::default(),
+        )
+        .await
+        .map_err(|e| format!("Failed to import i18n.json: {e}"))?;
     Ok(())
 }
 

@@ -1410,6 +1410,15 @@
     "https://atomicdata.dev/properties/shortname": "lorodoc"
   },
   {
+    "@id": "https://atomicdata.dev/datatypes/localizedText",
+    "https://atomicdata.dev/properties/description": "Translated strings, as a JSON object mapping BCP 47 language tags (e.g. `en`, `nl-BE`) to strings: `{\"en\": \"Hello\", \"nl\": \"Hallo\"}`. Use for short user-facing text that varies per language while the rest of the resource is shared. For long-form content that diverges per language, prefer a separate resource per language linked with `translationOf`.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Datatype"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/datatypes",
+    "https://atomicdata.dev/properties/shortname": "localized-text"
+  },
+  {
     "@id": "https://atomicdata.dev/ontology/canvas",
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev"
   },

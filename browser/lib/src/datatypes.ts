@@ -28,8 +28,16 @@ export enum Datatype {
   /** URI */
   URI = 'https://atomicdata.dev/datatypes/uri',
   LORODOC = 'https://atomicdata.dev/datatypes/lorodoc',
+  /** Translated strings: a JSON object of BCP 47 language tag -> string */
+  LOCALIZEDTEXT = 'https://atomicdata.dev/datatypes/localizedText',
   UNKNOWN = 'unknown-datatype',
 }
+
+/** A LocalizedText value: translated strings keyed by BCP 47 language tag */
+export type LocalizedText = Record<string, string>;
+
+/** Permissive BCP 47 shape check, mirroring Rust `LANG_TAG_REGEX` */
+export const langTagRegex = /^[a-zA-Z]{2,8}(-[a-zA-Z0-9]{1,8})*$/;
 
 const validDatatypes = Object.values(Datatype) as string[];
 
@@ -81,6 +89,8 @@ export const datatypeTag = (
       return 'date';
     case Datatype.TIMESTAMP:
       return 'timestamp';
+    case Datatype.LOCALIZEDTEXT:
+      return 'localizedText';
     default:
       return undefined;
   }
@@ -251,6 +261,32 @@ export const validateDatatype = (
       break;
     }
 
+    case Datatype.LOCALIZEDTEXT: {
+      if (
+        typeof value !== 'object' ||
+        value === null ||
+        Array.isArray(value) ||
+        value instanceof Uint8Array
+      ) {
+        err = 'Not a LocalizedText: expected an object of language tag -> string';
+        break;
+      }
+
+      for (const [tag, translation] of Object.entries(value)) {
+        if (tag.match(langTagRegex) === null) {
+          err = `Invalid language tag "${tag}". Use BCP 47 tags like "en" or "nl-BE"`;
+          break;
+        }
+
+        if (typeof translation !== 'string') {
+          err = `Translation for "${tag}" is not a string`;
+          break;
+        }
+      }
+
+      break;
+    }
+
     default: {
       throw new Error(`Unsupported datatype: ${datatype}`);
     }
@@ -283,5 +319,34 @@ export const reverseDatatypeMapping = {
   [Datatype.ATOMIC_URL]: 'Resource',
   [Datatype.RESOURCEARRAY]: 'ResourceArray',
   [Datatype.LORODOC]: 'LoroDoc',
+  [Datatype.LOCALIZEDTEXT]: 'LocalizedText',
   [Datatype.UNKNOWN]: 'Unknown',
+};
+
+/**
+ * Picks the best translation from a LocalizedText value for a preferred
+ * language: exact tag → primary subtag (`en-US` → `en`) → `defaultLanguage` →
+ * `en` → the first tag. Mirrors Rust `Value::to_localized_string`.
+ */
+export const localizeText = (
+  value: LocalizedText | undefined,
+  preferred: string,
+  defaultLanguage?: string,
+): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  if (value[preferred] !== undefined) {
+    return value[preferred];
+  }
+
+  const primary = preferred.split('-')[0];
+
+  return (
+    value[primary] ??
+    (defaultLanguage ? value[defaultLanguage] : undefined) ??
+    value['en'] ??
+    Object.values(value)[0]
+  );
 };

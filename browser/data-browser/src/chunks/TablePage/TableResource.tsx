@@ -7,6 +7,7 @@ import {
   type Property,
   type Resource,
 } from '@tomic/react';
+import type { CellIndex } from '@chunks/TableEditor';
 import toast from 'react-hot-toast';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
 import { useHandleClearCells } from '@chunks/TablePage/helpers/useHandleClearCells';
@@ -22,7 +23,10 @@ import {
   type TablePageContextType,
 } from '@chunks/TablePage/tablePageContext';
 import { TableNewRow, TableRow } from '@chunks/TablePage/TableRow';
-import { useTableColumns } from '@chunks/TablePage/useTableColumns';
+import {
+  useTableColumns,
+  type TableColumn,
+} from '@chunks/TablePage/useTableColumns';
 import { useTableData } from '@chunks/TablePage/useTableData';
 import {
   useId,
@@ -46,7 +50,7 @@ interface TableResourceProps {
   resource: Resource<DataBrowser.Table>;
 }
 
-const columnToKey = (column: Property) => column.subject;
+const columnToKey = (column: TableColumn) => column.key;
 
 export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   const store = useStore();
@@ -79,10 +83,50 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     viewKind,
     viewGroupBy,
     setViewGroupBy,
+    viewSplitLanguages,
+    setViewSplitLanguages,
   } = useTableData(resource);
 
   const { columns, allColumns, reorderColumns, hideColumn, showColumn } =
-    useTableColumns(tableClass, viewColumns, setViewColumns);
+    useTableColumns(
+      tableClass,
+      viewColumns,
+      setViewColumns,
+      viewSplitLanguages,
+    );
+
+  // The rendered column's property, per grid index (split columns repeat
+  // theirs) — for consumers that need index alignment (presence).
+  const columnProperties = useMemo(
+    () => columns.map(c => c.property),
+    [columns],
+  );
+
+  // The visible properties, deduplicated — for consumers that work per
+  // property, not per rendered column (filters, visibility menu, kanban).
+  const uniqueColumnProperties = useMemo(() => {
+    const seen = new Set<string>();
+
+    return columnProperties.filter(p => {
+      if (seen.has(p.subject)) {
+        return false;
+      }
+
+      seen.add(p.subject);
+
+      return true;
+    });
+  }, [columnProperties]);
+
+  const toggleSplitLanguages = useCallback(
+    (subject: string) => {
+      const next = viewSplitLanguages.includes(subject)
+        ? viewSplitLanguages.filter(s => s !== subject)
+        : [...viewSplitLanguages, subject];
+      setViewSplitLanguages(next);
+    },
+    [viewSplitLanguages, setViewSplitLanguages],
+  );
 
   const { undoLastItem, addItemsToHistoryStack } =
     useTableHistory(invalidateCollection);
@@ -392,6 +436,8 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       setFilterOperator,
       removeFilter,
       hideColumn,
+      splitLanguageSubjects: viewSplitLanguages,
+      toggleSplitLanguages,
       addItemsToHistoryStack,
     }),
     [
@@ -405,6 +451,8 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       setFilterOperator,
       removeFilter,
       hideColumn,
+      viewSplitLanguages,
+      toggleSplitLanguages,
       addItemsToHistoryStack,
     ],
   );
@@ -469,7 +517,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   // cards via TablePresenceContext).
   const { presenceValue, handleSelectedCellChange } = useTablePresence(
     resource.subject,
-    { collection, columns, memberCount, newRowSubjects },
+    { collection, columns: columnProperties, memberCount, newRowSubjects },
   );
 
   const handleClearCells = useHandleClearCells(
@@ -477,7 +525,20 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     addItemsToHistoryStack,
   );
 
-  const handleCopyCommand = useHandleCopyCommand(collection);
+  const handleCopyCommandByProperty = useHandleCopyCommand(collection);
+
+  // The grid works in rendered (TableColumn) cells; the copy helper works
+  // per property, so unwrap at the boundary.
+
+  const handleCopyCommand = useCallback(
+    (cells: CellIndex<TableColumn>[]) =>
+      handleCopyCommandByProperty(
+        cells.map(
+          ([row, column]): CellIndex<Property> => [row, column.property],
+        ),
+      ),
+    [handleCopyCommandByProperty],
+  );
 
   const [columnSizes, handleColumnResize] = useHandleColumnResize(resource);
 
@@ -533,7 +594,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
           viewName={viewName}
           renameView={renameView}
           allColumns={allColumns}
-          columns={columns}
+          columns={uniqueColumnProperties}
           showColumn={showColumn}
           hideColumn={hideColumn}
           canWrite={canWrite}
@@ -543,7 +604,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
             tableSubject={resource.subject}
             tableClass={tableClass}
             allColumns={allColumns}
-            columns={columns}
+            columns={uniqueColumnProperties}
             collection={collection}
             ready={ready}
             viewGroupBy={viewGroupBy}
@@ -563,7 +624,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
           />
         ) : (
           <>
-            <TableFilterBar columns={columns} />
+            <TableFilterBar columns={uniqueColumnProperties} />
             <FancyTable
               readOnly={!canWrite}
               columns={columns}

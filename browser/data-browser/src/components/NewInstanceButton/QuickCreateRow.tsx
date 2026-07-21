@@ -4,7 +4,6 @@ import {
   FaFolder,
   FaPlus,
   FaTable,
-  FaVideo,
 } from 'react-icons/fa6';
 import { type JSX } from 'react';
 import { styled } from 'styled-components';
@@ -57,18 +56,6 @@ export function QuickCreateRow({
           <NewLabelText>New</NewLabelText>
         </NewResourceTrigger>
       </NewResourceOpacity>
-      <IconButtonWrapper>
-        <IconButton
-          color='textLight'
-          title='New Meeting'
-          onClick={() => {
-            onItemClick?.();
-            createNewResource(dataBrowser.classes.meeting, parent);
-          }}
-        >
-          <FaVideo />
-        </IconButton>
-      </IconButtonWrapper>
       <IconButtonWrapper>
         <IconButton
           color='textLight'

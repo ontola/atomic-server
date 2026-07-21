@@ -13,6 +13,7 @@ import { CellContainer } from './EditorCells/Type';
 import { URICell } from './EditorCells/URICell';
 import { MarkdownCell } from './EditorCells/MarkdownCell';
 import { JSONCell } from './EditorCells/JSONCell';
+import { LocalizedTextCell } from './EditorCells/LocalizedTextCell';
 
 export const dataTypeCellMap = new Map<Datatype, CellContainer<JSONValue>>([
   [Datatype.STRING, StringCell],
@@ -27,6 +28,7 @@ export const dataTypeCellMap = new Map<Datatype, CellContainer<JSONValue>>([
   [Datatype.TIMESTAMP, DateTimeCell],
   [Datatype.DATE, DateCell],
   [Datatype.JSON, JSONCell],
+  [Datatype.LOCALIZEDTEXT, LocalizedTextCell],
 ]);
 
 export const dataTypeAlignmentMap = new Map<string, CellAlign>([

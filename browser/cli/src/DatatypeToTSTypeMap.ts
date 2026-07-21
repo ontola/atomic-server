@@ -14,5 +14,6 @@ export const DatatypeToTSTypeMap = {
   [Datatype.URI]: 'string',
   [Datatype.JSON]: 'JSONValue',
   [Datatype.LORODOC]: 'never',
+  [Datatype.LOCALIZEDTEXT]: 'LocalizedText',
   [Datatype.UNKNOWN]: 'JSONValue',
 };

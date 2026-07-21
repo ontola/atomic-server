@@ -18,7 +18,9 @@ export const generatePropTypeMapping = (
     ${lines}
   }`;
 
-  const imports = mappingString.includes('JSONValue') ? ['JSONValue'] : [];
+  const imports = ['JSONValue', 'LocalizedText'].filter(type =>
+    mappingString.includes(type),
+  );
 
   return [mappingString, imports];
 };
