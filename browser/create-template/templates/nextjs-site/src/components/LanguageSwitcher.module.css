@@ -1,0 +1,12 @@
+.list {
+  display: flex;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 1rem;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.link {
+  color: inherit;
+}

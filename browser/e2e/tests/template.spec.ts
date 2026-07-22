@@ -131,6 +131,50 @@ const waitForServer = (
   });
 };
 
+/**
+ * The seeded site is a two-locale site (en default, nl declared): the balloon
+ * post has a Dutch translation linked via `translationOf`, everything else is
+ * English-only. Asserts the whole document-level i18n contract end-to-end.
+ */
+async function assertTwoLocaleSite(
+  page: Page,
+  url: string,
+  checkHtmlLang: boolean,
+) {
+  const ENGLISH_TITLE = 'The Biology of Balloon Animals';
+  const DUTCH_TITLE = 'De biologie van ballondieren';
+
+  // The nl route of the ENGLISH slug serves the Dutch sibling.
+  await page.goto(`${url}/nl/blog/the-biology-of-balloon-animals`);
+  await expect(page.locator('body')).toContainText(DUTCH_TITLE);
+
+  if (checkHtmlLang) {
+    await expect(page.locator('html')).toHaveAttribute('lang', 'nl');
+  }
+
+  // The Dutch slug serves the Dutch post directly, no prefix needed.
+  await page.goto(`${url}/blog/de-biologie-van-ballondieren`);
+  await expect(page.locator('body')).toContainText(DUTCH_TITLE);
+
+  // The nl listing shows the nl variant, falls back to the canonical for
+  // untranslated posts, and never shows both variants of one post.
+  await page.goto(`${url}/nl/blog`);
+  await expect(page.locator('body')).toContainText(DUTCH_TITLE);
+  await expect(page.locator('body')).toContainText('Coffee');
+  await expect(page.locator('body')).not.toContainText(ENGLISH_TITLE);
+
+  // The default-language listing is unchanged.
+  await page.goto(`${url}/blog`);
+  await expect(page.locator('body')).toContainText(ENGLISH_TITLE);
+  await expect(page.locator('body')).not.toContainText(DUTCH_TITLE);
+
+  // The English post advertises its Dutch sibling.
+  await page.goto(`${url}/blog/the-biology-of-balloon-animals`);
+  await expect(
+    page.locator('link[rel="alternate"][hreflang="nl"]'),
+  ).toHaveCount(1);
+}
+
 test.describe('Test create-template package', () => {
   test.describe.configure({ mode: 'serial' });
   test.beforeEach(before);
@@ -172,6 +216,8 @@ test.describe('Test create-template package', () => {
       await searchInput.fill('balloon');
       await expect(page.locator('body')).toContainText('Balloon');
       await expect(page.locator('body')).not.toContainText('coffee');
+
+      await assertTwoLocaleSite(page, url, false);
     } finally {
       try {
         await kill(3000);
@@ -220,6 +266,8 @@ test.describe('Test create-template package', () => {
       await searchInput.fill('balloon');
       await expect(page.locator('body')).toContainText('Balloon');
       await expect(page.locator('body')).not.toContainText('coffee');
+
+      await assertTwoLocaleSite(page, url, true);
     } finally {
       try {
         await kill(4174);

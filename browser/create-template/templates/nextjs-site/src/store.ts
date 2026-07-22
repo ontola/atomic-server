@@ -13,3 +13,14 @@ store.setDrive(env.NEXT_PUBLIC_ATOMIC_DRIVE);
 if (typeof window === 'undefined') {
   store.setServerConnected(true);
 }
+
+/**
+ * Extra AND-constraint that pins a collection query to this site's drive.
+ * The server's basic property/value index is shared across all drives it
+ * hosts, so shared values (hrefs like `/blog`, template localIds) would
+ * otherwise match resources from other drives on the same server.
+ */
+export const driveFilter = {
+  property: 'https://atomicdata.dev/properties/drive',
+  value: env.NEXT_PUBLIC_ATOMIC_DRIVE,
+};

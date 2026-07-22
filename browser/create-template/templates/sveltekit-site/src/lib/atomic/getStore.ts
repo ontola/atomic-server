@@ -28,3 +28,14 @@ export const getStore = (): Store => {
 
   return store!;
 };
+
+/**
+ * Extra AND-constraint that pins a collection query to this site's drive.
+ * The server's basic property/value index is shared across all drives it
+ * hosts, so shared values (hrefs like `/blog`, template localIds) would
+ * otherwise match resources from other drives on the same server.
+ */
+export const driveFilter = {
+  property: "https://atomicdata.dev/properties/drive",
+  value: PUBLIC_ATOMIC_DRIVE,
+};

@@ -2525,12 +2525,25 @@ export class Store {
           if (connected) {
             await this.fetchResourceFromServer(subject, opts);
           } else {
-            this.failResource(
-              subject,
-              new Error(
-                'Offline: resource not available locally. Reconnect to fetch.',
-              ),
-            );
+            // Nothing cancels this 5s wait if the resource gets resolved by
+            // some OTHER path in the meantime — e.g. a subject that isn't
+            // recognized as local-only (agent DIDs aren't parented under a
+            // drive, so `isLocalOnlySubject` misses them) but gets created
+            // and saved locally moments after this fetch started. Without
+            // this check, the stale timeout below fires anyway and clobbers
+            // that already-good resource back into an error state.
+            const current = this.resources.get(subject);
+            const alreadyResolved =
+              current && current.loading === false && !current.error;
+
+            if (!alreadyResolved) {
+              this.failResource(
+                subject,
+                new Error(
+                  'Offline: resource not available locally. Reconnect to fetch.',
+                ),
+              );
+            }
           }
         }
       } else if (hasLocalData) {
@@ -2921,7 +2934,13 @@ export class Store {
     if (
       !opts.allowIncomplete &&
       resource.loading === false &&
-      !resource.error
+      !resource.error &&
+      // Unlike `fetchResourceWithLocalFallback`, this recheck used to have no
+      // local-only guard: a local-only resource that (for whatever reason)
+      // carries a stale `incomplete` propval would get re-fetched from a
+      // server it can never reach, on every render that omits
+      // `allowIncomplete` — a guaranteed, silent failure.
+      !this.isLocalOnlySubject(resolved)
     ) {
       // In many cases, a user will always need a complete resource.
       // This checks if the resource is incomplete and fetches it if it is.

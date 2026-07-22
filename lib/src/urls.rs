@@ -35,6 +35,11 @@ pub const FORK: &str = "https://atomicdata.dev/classes/Fork";
 pub const ORIGINAL_SUBJECT: &str = "https://atomicdata.dev/properties/originalSubject";
 pub const FORK_BASE: &str = "https://atomicdata.dev/properties/forkBase";
 pub const FORK_VERSION: &str = "https://atomicdata.dev/properties/forkVersion";
+// Content i18n (lib/defaults/i18n.json)
+pub const LANGUAGE: &str = "https://atomicdata.dev/properties/language";
+pub const TRANSLATION_OF: &str = "https://atomicdata.dev/properties/translationOf";
+pub const DEFAULT_LANGUAGE: &str = "https://atomicdata.dev/properties/defaultLanguage";
+pub const LANGUAGES: &str = "https://atomicdata.dev/properties/languages";
 pub const SHORTNAME: &str = "https://atomicdata.dev/properties/shortname";
 pub const DESCRIPTION: &str = "https://atomicdata.dev/properties/description";
 /// Structured error classification on an `Error` resource, numeric — see

@@ -70,6 +70,30 @@ export async function postProcess(context: PostProcessContext) {
     process.exit(1);
   }
 
+  // A freshly applied template is not immediately usable: the server
+  // finishes writing the imported resources asynchronously, and until then
+  // fetching them errors or yields property-less stubs. `update-ontologies`
+  // (the documented next step) needs the ontology and all of its members, so
+  // wait for them here instead of handing the user a broken project.
+  log('Waiting for the template resources to become available...');
+  const readyOntology = await waitForMaterialized(store, ontology.subject);
+  await waitForMaterialized(store, website.subject);
+
+  const subjectsOf = (value: unknown): string[] =>
+    Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string')
+      : [];
+
+  const ontologyMembers = [
+    ...subjectsOf(readyOntology.get(core.properties.classes)),
+    ...subjectsOf(readyOntology.get(core.properties.properties)),
+    ...subjectsOf(readyOntology.get(core.properties.instances)),
+  ];
+
+  for (const member of ontologyMembers) {
+    await waitForMaterialized(store, member);
+  }
+
   const executionContext: ExecutionContext = {
     serverUrl,
     drive,
@@ -81,16 +105,91 @@ export async function postProcess(context: PostProcessContext) {
   await createEnvFile(folderPath, baseTemplate.generateEnv(executionContext));
 }
 
-async function findByLocalId(store: Store, drive: string, localId: string) {
-  const collection = await new CollectionBuilder(store)
-    .setDrive(drive)
-    .setProperty(core.properties.localId)
-    .setValue(localId)
-    .setPageSize(1)
-    .buildAndFetch();
-  const subject = await collection.getMemberWithIndex(0);
+/**
+ * How long to keep probing for the template resources before giving up.
+ * The server indexes and persists freshly imported resources asynchronously
+ * (observed to take up to ~30s for the website template), so a query or fetch
+ * fired right after the template import can miss even though the import
+ * succeeded — the polls below use the queried/fetched state itself as the
+ * readiness signal.
+ */
+const FIND_TIMEOUT_MS = 60_000;
+const FIND_RETRY_INTERVAL_MS = 500;
 
-  return subject ? store.getResource(subject) : undefined;
+const wait = (ms: number) =>
+  new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+
+/**
+ * Polls until the resource is fully readable: fetching it succeeds and it
+ * carries its `isA` — freshly imported resources briefly error or come back
+ * as property-less stubs while the server finishes writing them.
+ */
+async function waitForMaterialized(
+  store: Store,
+  subject: string,
+): Promise<Resource> {
+  const deadline = Date.now() + FIND_TIMEOUT_MS;
+  let last: Resource | undefined;
+
+  while (Date.now() < deadline) {
+    try {
+      const resource = await store.fetchResourceFromServer(subject, {
+        noWebSocket: true,
+      });
+      last = resource;
+
+      if (!resource.error && resource.getClasses().length > 0) {
+        return resource;
+      }
+    } catch (_e) {
+      // Treat a failed fetch like a not-yet-ready resource and retry.
+    }
+
+    await wait(FIND_RETRY_INTERVAL_MS);
+  }
+
+  console.error(
+    `\nTimed out waiting for template resource ${subject} to become available: ${last?.error?.message ?? 'resource has no class'}`,
+  );
+  process.exit(1);
+}
+
+async function findByLocalId(store: Store, drive: string, localId: string) {
+  const deadline = Date.now() + FIND_TIMEOUT_MS;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const collection = await new CollectionBuilder(store)
+      .setDrive(drive)
+      .setProperty(core.properties.localId)
+      .setValue(localId)
+      // Template localIds are identical in every drive the template was
+      // applied to, and the server's basic property/value index spans all
+      // drives it hosts — constrain on the drive property so we resolve the
+      // resource in *this* drive instead of an arbitrary one.
+      .addFilter({
+        property: 'https://atomicdata.dev/properties/drive',
+        value: drive,
+      })
+      .setPageSize(1)
+      .buildAndFetch();
+
+    if (collection.totalMembers > 0) {
+      const subject = await collection.getMemberWithIndex(0);
+
+      if (subject) {
+        return store.getResource(subject);
+      }
+    }
+
+    if (Date.now() >= deadline) {
+      return undefined;
+    }
+
+    await wait(FIND_RETRY_INTERVAL_MS);
+  }
 }
 
 async function modifyConfig(

@@ -9,6 +9,7 @@
 	import { getAllBlogposts } from '$lib/atomic/getAllBlogposts';
 	import { getStoreFromContext } from '@tomic/svelte';
 	import { PUBLIC_ATOMIC_DRIVE } from '$env/static/public';
+	import { appState } from '$lib/stores/appstate.svelte';
 
 	interface Props {
 		resource: Resource<BlogIndexPage>;
@@ -25,14 +26,27 @@
 	let searchVersion = 0;
 
 	// We create a collection that collects all resources with the blogpost class. Sorted by publishedAt in descending order.
-	const allBlogpostsPromise = getAllBlogposts();
+	// The list is re-fetched when the language of the current page changes.
+	const allBlogpostsPromise = $derived(getAllBlogposts(appState.currentLang));
 
-	allBlogpostsPromise.then((members) => {
-		allItems = members;
+	$effect(() => {
+		let cancelled = false;
 
-		if (searchValue === '') {
-			results = members;
-		}
+		allBlogpostsPromise.then((members) => {
+			if (cancelled) {
+				return;
+			}
+
+			allItems = members;
+
+			if (searchValue === '') {
+				results = members;
+			}
+		});
+
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	$effect(() => {
@@ -53,12 +67,25 @@
 			const blogParent =
 				(firstBlogpost?.get(core.properties.parent) as string | undefined) ??
 				PUBLIC_ATOMIC_DRIVE;
-			const nextResults = await store.search(searchValue, {
-				parents: blogParent,
-				filters: {
-					[core.properties.isA]: website.classes.blogpost
+
+			// A transient search failure surfaces as an empty result set, so an
+			// empty answer is retried a couple of times before we show "no results".
+			let nextResults: string[] = [];
+
+			for (let attempt = 0; attempt < 3; attempt++) {
+				nextResults = await store.search(searchValue, {
+					parents: blogParent,
+					filters: {
+						[core.properties.isA]: website.classes.blogpost
+					}
+				});
+
+				if (nextResults.length > 0 || version !== searchVersion) {
+					break;
 				}
-			});
+
+				await new Promise((resolve) => setTimeout(resolve, 400));
+			}
 
 			if (version === searchVersion) {
 				results = nextResults;

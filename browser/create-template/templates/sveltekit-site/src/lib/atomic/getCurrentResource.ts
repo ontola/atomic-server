@@ -1,5 +1,6 @@
 import { CollectionBuilder, type Resource } from "@tomic/lib";
-import { getStore } from "./getStore";
+import { driveFilter, getStore } from "./getStore";
+import { findTranslation, parseLocalizedPath } from "./i18n";
 import { website } from "$lib/ontologies/website";
 import { PUBLIC_ATOMIC_DRIVE } from "$env/static/public";
 
@@ -20,13 +21,15 @@ export async function getCurrentResource(
   // To make sure the store can make use of this we need to inject the fetch function into the store.
   store.injectFetch(fetchOverride);
 
-  const path = url.pathname;
+  // The path may start with a language prefix, e.g. /nl/blog/some-post.
+  const { lang, path, prefixed } = await parseLocalizedPath(url.pathname);
 
   // Find the resource with the current path as href.
   const collection = await new CollectionBuilder(store)
     .setDrive(PUBLIC_ATOMIC_DRIVE)
     .setProperty(website.properties.href)
     .setValue(path)
+    .addFilter(driveFilter)
     .buildAndFetch();
 
   if (collection.totalMembers === 0) {
@@ -39,5 +42,15 @@ export async function getCurrentResource(
     return undefined;
   }
 
-  return await store.getResource(currentResourceSubject);
+  const resource = await store.getResource(currentResourceSubject);
+
+  if (!prefixed) {
+    // Without an explicit language in the URL, the resource's own href wins:
+    // every translation is reachable through its own path.
+    return resource;
+  }
+
+  // When the resource is not in the explicitly requested language, prefer a
+  // translation that is.
+  return await findTranslation(resource, lang);
 }

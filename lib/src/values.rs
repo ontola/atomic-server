@@ -620,7 +620,10 @@ mod test {
         assert_eq!(reparsed.to_string(), val.to_string());
         // Fallback chain: exact → primary subtag → en → first.
         assert_eq!(val.to_localized_string("en-US"), Some("Fast sync (US)"));
-        assert_eq!(val.to_localized_string("nl-BE"), Some("Snelle synchronisatie"));
+        assert_eq!(
+            val.to_localized_string("nl-BE"),
+            Some("Snelle synchronisatie")
+        );
         assert_eq!(val.to_localized_string("de"), Some("Fast sync"));
         assert_eq!(val.to_sortable_string(), "Fast sync");
 

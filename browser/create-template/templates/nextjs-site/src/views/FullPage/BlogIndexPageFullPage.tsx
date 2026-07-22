@@ -14,12 +14,14 @@ import { env } from '@/env';
 
 const BlogIndexPageFullPage = async ({
   resource,
+  lang,
   searchParams,
 }: {
   resource: Resource<Page>;
+  lang?: string;
   searchParams?: Record<string, string | string[] | undefined>;
 }) => {
-  const allItems = await getAllBlogposts();
+  const allItems = await getAllBlogposts(lang);
   let results: string[] = [];
 
   // We check if the searchParams have a search query. If so, we search for blogposts that match the query.

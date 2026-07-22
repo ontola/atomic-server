@@ -1576,7 +1576,10 @@ mod test {
         // A LoroMap without a tag would materialize as Json; the tag pins it.
         match mat("tagline") {
             Some(Value::LocalizedText(m)) => {
-                assert_eq!(m.get("nl").map(String::as_str), Some("Snelle synchronisatie"));
+                assert_eq!(
+                    m.get("nl").map(String::as_str),
+                    Some("Snelle synchronisatie")
+                );
                 assert_eq!(m.len(), 2);
             }
             other => panic!("expected LocalizedText, got {other:?}"),

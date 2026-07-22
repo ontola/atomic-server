@@ -7,9 +7,11 @@ import { store } from '@/store';
 
 const FullPageView = async ({
   subject,
+  lang,
   searchParams,
 }: {
   subject: string;
+  lang?: string;
   searchParams?: Record<string, string | string[] | undefined>;
 }) => {
   const resource = await store.getResource(subject);
@@ -24,7 +26,7 @@ const FullPageView = async ({
     DefaultFullPage,
   );
 
-  return <Component resource={resource} searchParams={searchParams} />;
+  return <Component resource={resource} lang={lang} searchParams={searchParams} />;
 };
 
 export default FullPageView;

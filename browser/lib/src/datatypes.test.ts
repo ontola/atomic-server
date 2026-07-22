@@ -95,9 +95,7 @@ describe('Datatypes', () => {
 });
 
 describe('localizeText', () => {
-  it('resolves exact → primary subtag → default → en → first', ({
-    expect,
-  }) => {
+  it('resolves exact → primary subtag → default → en → first', ({ expect }) => {
     const value = {
       en: 'Fast sync',
       'en-US': 'Fast sync (US)',

@@ -78,7 +78,8 @@ export const dataBrowser = {
     viewSortDesc: 'https://atomicdata.dev/properties/view-sort-desc',
     viewColumns: 'https://atomicdata.dev/properties/view-columns',
     viewGroupBy: 'https://atomicdata.dev/properties/view-group-by',
-    viewSplitLanguages: 'https://atomicdata.dev/properties/view-split-languages',
+    viewSplitLanguages:
+      'https://atomicdata.dev/properties/view-split-languages',
     tags: 'https://atomicdata.dev/properties/tags',
     tagList: 'https://atomicdata.dev/ontology/data-browser/property/tag-list',
     url: 'https://atomicdata.dev/property/url',

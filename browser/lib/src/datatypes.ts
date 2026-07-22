@@ -268,7 +268,8 @@ export const validateDatatype = (
         Array.isArray(value) ||
         value instanceof Uint8Array
       ) {
-        err = 'Not a LocalizedText: expected an object of language tag -> string';
+        err =
+          'Not a LocalizedText: expected an object of language tag -> string';
         break;
       }
 

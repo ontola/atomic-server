@@ -47,6 +47,12 @@ pub struct ParseOpts {
     /// The skipped properties will NOT be stored or indexed.
     /// Useful for client-side seeding where not all property definitions are available.
     pub skip_unknown_props: bool,
+    /// `localId -> reserved subject` for the current DID import batch.
+    /// Consulted in *reference positions* (`try_to_subject`) so forward
+    /// references and cycles between localIds resolve — a plain string value
+    /// that merely equals a localId (e.g. a `shortname` matching the
+    /// resource's own localId) is never rewritten.
+    pub reserved_local_ids: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -73,6 +79,7 @@ impl std::default::Default for ParseOpts {
             overwrite_outside: true,
             save: SaveOpts::Save,
             skip_unknown_props: false,
+            reserved_local_ids: HashMap::new(),
         }
     }
 }
@@ -176,7 +183,16 @@ pub async fn parse_json_ad_string(
             // real import can resolve forward references and cycles between
             // local IDs (ontologies are a common example).
             let reserved_subjects = reserve_did_import_subjects(&arr, store, parse_opts).await?;
-            resolve_reserved_local_id_references(&mut arr, &reserved_subjects);
+            // Property KEYS may be localIds (imported property definitions
+            // used as keys on other resources) — rewrite those up front.
+            // VALUES are resolved lazily in `try_to_subject`, which only runs
+            // in reference positions, so scalar values that happen to equal a
+            // localId are left alone.
+            resolve_reserved_local_id_keys(&mut arr, &reserved_subjects);
+            let parse_opts = &ParseOpts {
+                reserved_local_ids: reserved_subjects.clone(),
+                ..parse_opts.clone()
+            };
 
             // Move all properties to the front of the array because some of the other resouces might use these properties.
             arr.sort_by(|a, b| {
@@ -266,17 +282,18 @@ async fn reserve_did_import_subjects(
     Ok(subjects)
 }
 
-fn resolve_reserved_local_id_references(
+/// Rewrites property KEYS that are localIds (an imported Property definition
+/// used as a key on another resource) to their reserved subjects. String
+/// VALUES are deliberately left untouched: value-position localIds resolve in
+/// `try_to_subject`, which only runs for reference datatypes — a blind value
+/// rewrite corrupted scalar values that merely equal a localId (e.g. the
+/// website template's ontology, whose `shortname` equals its own localId).
+fn resolve_reserved_local_id_keys(
     values: &mut [serde_json::Value],
     subjects: &HashMap<String, String>,
 ) {
     fn resolve(value: &mut serde_json::Value, subjects: &HashMap<String, String>) {
         match value {
-            serde_json::Value::String(string) => {
-                if let Some(subject) = subjects.get(string) {
-                    *string = subject.clone();
-                }
-            }
             serde_json::Value::Array(values) => {
                 for value in values {
                     resolve(value, subjects);
@@ -287,11 +304,7 @@ fn resolve_reserved_local_id_references(
 
                 for (key, mut value) in old {
                     let resolved_key = subjects.get(&key).cloned().unwrap_or(key);
-
-                    if resolved_key != urls::LOCAL_ID {
-                        resolve(&mut value, subjects);
-                    }
-
+                    resolve(&mut value, subjects);
                     object.insert(resolved_key, value);
                 }
             }
@@ -367,7 +380,11 @@ async fn try_to_subject(
     store: &impl crate::Storelike,
     parse_opts: &ParseOpts,
 ) -> AtomicResult<String> {
-    if check_valid_url(subject).is_ok() {
+    if let Some(reserved) = parse_opts.reserved_local_ids.get(subject) {
+        // A localId from the current import batch: forward references and
+        // cycles resolve through the reservation map.
+        Ok(reserved.clone())
+    } else if check_valid_url(subject).is_ok() {
         Ok(subject.into())
     } else if let Some(importer) = &parse_opts.importer {
         if let Some(synth) = generate_id_from_local_id(importer, subject) {
@@ -605,9 +622,8 @@ pub fn parse_propval<'a>(
                 Value::new(&num.to_string(), &DataType::Timestamp)?
             }
             DataType::Json => Value::Json(val.clone()),
-            DataType::LocalizedText => Value::localized_text_from_json(val).map_err(|e| {
-                AtomicError::parse_error(&e.to_string(), subject, Some(&prop))
-            })?,
+            DataType::LocalizedText => Value::localized_text_from_json(val)
+                .map_err(|e| AtomicError::parse_error(&e.to_string(), subject, Some(&prop)))?,
             DataType::Unsupported(s) => {
                 return Err(AtomicError::parse_error(
                     &format!("Unsupported datatype: {s}"),
@@ -1061,6 +1077,166 @@ mod test {
         // parents can dedupe via (parent, localId) lookup.
         assert_eq!(found.get(urls::LOCAL_ID).unwrap().to_string(), local_id);
     }
+    #[cfg(feature = "db")]
+    async fn create_db_and_importer() -> (crate::Db, crate::Subject) {
+        let store = crate::Db::init_temp("import_i18n_db").await.unwrap();
+        let mut importer = Resource::new_instance(urls::IMPORTER, &store)
+            .await
+            .unwrap();
+        importer.save_locally(&store).await.unwrap();
+        (store, importer.get_subject().clone())
+    }
+
+    // A scalar value that merely EQUALS a localId (the website template's
+    // ontology has shortname == its own localId, 'website') must not be
+    // rewritten to the reserved subject; only reference positions resolve
+    // localIds. The blind value rewrite made the whole template import abort
+    // with "Not a valid slug: did:ad:…".
+    #[cfg(feature = "db")]
+    #[tokio::test]
+    async fn import_keeps_scalar_values_that_equal_a_local_id() {
+        let (store, importer) = create_db_and_importer().await;
+
+        let json = r#"[
+        {
+            "https://atomicdata.dev/properties/localId": "website",
+            "https://atomicdata.dev/properties/shortname": "website",
+            "https://atomicdata.dev/properties/name": "website"
+        },
+        {
+            "https://atomicdata.dev/properties/localId": "child",
+            "https://atomicdata.dev/properties/name": "Child",
+            "https://atomicdata.dev/properties/parent": "website"
+        }
+        ]"#;
+
+        let parse_opts = ParseOpts {
+            save: SaveOpts::Commit,
+            signer: Some(store.get_default_agent().unwrap()),
+            for_agent: ForAgent::Sudo,
+            overwrite_outside: false,
+            importer: Some(importer.clone()),
+            ..Default::default()
+        };
+
+        store.import(json, &parse_opts).await.unwrap();
+
+        let find = |local_id: &'static str| {
+            let store = &store;
+            let importer = &importer;
+            async move {
+                let subject = find_existing_by_local_id(store, importer, local_id)
+                    .await
+                    .unwrap()
+                    .expect("imported resource findable by localId");
+                store.get_resource(&subject.as_str().into()).await.unwrap()
+            }
+        };
+
+        let website = find("website").await;
+        assert_eq!(
+            website.get(urls::SHORTNAME).unwrap().to_string(),
+            "website",
+            "scalar shortname equal to the localId must not be rewritten"
+        );
+
+        // The reference position DOES resolve: child's parent is the
+        // website's reserved subject.
+        let child = find("child").await;
+        assert_eq!(
+            child.get(urls::PARENT).unwrap().to_string(),
+            website.get_subject().to_string(),
+        );
+    }
+
+    // Same as `import_preserves_i18n_properties`, but against `Db` — the
+    // server's store type — since resolution of the (defaults-seeded) i18n
+    // Property resources can behave differently there.
+    #[cfg(feature = "db")]
+    #[tokio::test]
+    async fn import_preserves_i18n_properties_db() {
+        let (store, importer) = create_db_and_importer().await;
+        import_i18n_and_assert(&store, &importer).await;
+    }
+
+    #[tokio::test]
+    async fn import_preserves_i18n_properties() {
+        let (store, importer) = create_store_and_importer().await;
+        import_i18n_and_assert(&store, &importer).await;
+    }
+
+    async fn import_i18n_and_assert(store: &impl Storelike, importer: &crate::Subject) {
+        // Mirrors the website template's shape: a canonical post, a
+        // translation referencing it by localId, and a site root with the
+        // declared language set.
+        let json = r#"[
+        {
+            "https://atomicdata.dev/properties/localId": "site",
+            "https://atomicdata.dev/properties/name": "My site",
+            "https://atomicdata.dev/properties/defaultLanguage": "en",
+            "https://atomicdata.dev/properties/languages": ["en", "nl"]
+        },
+        {
+            "https://atomicdata.dev/properties/localId": "post-en",
+            "https://atomicdata.dev/properties/name": "Hello",
+            "https://atomicdata.dev/properties/language": "en"
+        },
+        {
+            "https://atomicdata.dev/properties/localId": "post-nl",
+            "https://atomicdata.dev/properties/name": "Hallo",
+            "https://atomicdata.dev/properties/language": "nl",
+            "https://atomicdata.dev/properties/translationOf": "post-en"
+        }
+        ]"#;
+
+        let parse_opts = ParseOpts {
+            save: SaveOpts::Commit,
+            signer: Some(store.get_default_agent().unwrap()),
+            for_agent: ForAgent::Sudo,
+            overwrite_outside: false,
+            importer: Some(importer.clone()),
+            ..Default::default()
+        };
+
+        store.import(json, &parse_opts).await.unwrap();
+
+        async fn get(
+            store: &impl Storelike,
+            importer: &crate::Subject,
+            local_id: &str,
+        ) -> Resource {
+            let subject = generate_id_from_local_id(importer, local_id).unwrap();
+            store.get_resource(&subject.as_str().into()).await.unwrap()
+        }
+
+        let site = get(store, importer, "site").await;
+        assert_eq!(
+            site.get(urls::DEFAULT_LANGUAGE).unwrap().to_string(),
+            "en",
+            "defaultLanguage must survive import"
+        );
+        assert_eq!(
+            site.get(urls::LANGUAGES).unwrap().to_string(),
+            r#"["en","nl"]"#,
+            "languages must survive import"
+        );
+
+        let post_en = get(store, importer, "post-en").await;
+        assert_eq!(post_en.get(urls::LANGUAGE).unwrap().to_string(), "en");
+
+        let post_nl = get(store, importer, "post-nl").await;
+        assert_eq!(post_nl.get(urls::LANGUAGE).unwrap().to_string(), "nl");
+        // The localId reference must be rewritten to the canonical's subject.
+        let translation_of = post_nl.get(urls::TRANSLATION_OF).unwrap().to_string();
+        assert_eq!(
+            translation_of,
+            generate_id_from_local_id(importer, "post-en")
+                .unwrap()
+                .to_string(),
+            "translationOf localId reference must resolve to the canonical post"
+        );
+    }
+
     #[tokio::test]
     async fn import_resource_with_json() {
         let (store, importer) = create_store_and_importer().await;

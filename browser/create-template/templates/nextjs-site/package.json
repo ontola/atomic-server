@@ -15,6 +15,7 @@
     "@tomic/react": "^0.41.0-beta.0",
     "clsx": "^2.1.1",
     "gray-matter": "^4.0.3",
+    "loro-crdt": "^1.12.1",
     "modern-css-reset": "^1.4.0",
     "next": "16.2.6",
     "react": "19.2.7",

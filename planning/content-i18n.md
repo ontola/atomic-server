@@ -358,7 +358,29 @@ language on the canonical resource) and, later, a drive-wide saved query.
       column toggles (reload + index rebuild), or split re-render drops
       virtual rows. 3/3 green against live dev servers.
 
+- [x] **Phase 4 — website templates (SHIPPED 2026-07-21, template e2e 2/2
+      green incl. `assertTwoLocaleSite` on both frameworks):** template
+      ontology seeds `language`/`translationOf` on blogpost+page recommends,
+      `defaultLanguage: en` + `languages: [en, nl]` on the Website, and a
+      Dutch translation of the balloon post — every applied template is a
+      two-locale site. Both site templates implement locale-prefixed
+      routing, `translationOf` sibling swap, group-fallback listings,
+      hreflang, a footer switcher, per-request `<html lang>` (Svelte; Next
+      keeps site default). `template.spec.ts` gained `assertTwoLocaleSite`
+      (the acceptance bar). A late `/nl` 404 in the e2e turned out to be
+      stale scaffold state from pre-import-fix runs, not template code —
+      manual production build verified correct before the clean green run.
+      **Platform bug found & fixed on the way:** DID imports blindly
+      rewrote every string value equal to a reserved localId — the website
+      ontology's `shortname: 'website'` == its own localId, so template
+      import silently aborted after DID reservation ("Not a valid slug:
+      did:ad:…"), invisible because the apply-dialog heading assert matched
+      the preview. Fix in `lib/src/parse.rs`: values resolve localIds only
+      in reference positions (`try_to_subject` consults the reservation
+      map; forward refs/cycles still work), keys still rewritten. Pinned by
+      `import_keeps_scalar_values_that_equal_a_local_id` +
+      `import_preserves_i18n_properties(_db)`.
+
 Not in this round (tracked in phases above): Translate action /
-TranslationsBar, `useTranslation` sibling resolution, template locale
-routing, `/query` `lang` param, search `language` filter, the two-locale
-*website* e2e (template-level acceptance bar).
+TranslationsBar, `useTranslation` sibling resolution, `/query` `lang`
+param, search `language` filter.

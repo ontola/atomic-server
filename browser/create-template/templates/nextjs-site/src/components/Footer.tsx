@@ -1,4 +1,6 @@
 import Container from './Layout/Container';
+import HStack from './Layout/HStack';
+import LanguageSwitcher from './LanguageSwitcher';
 import styles from './Footer.module.css';
 
 const Footer = () => {
@@ -7,7 +9,10 @@ const Footer = () => {
   return (
     <footer className={styles.footer}>
       <Container>
-        <p>&copy; {year} Your Company</p>
+        <HStack align='center' justify='space-between' wrap>
+          <p>&copy; {year} Your Company</p>
+          <LanguageSwitcher />
+        </HStack>
       </Container>
     </footer>
   );

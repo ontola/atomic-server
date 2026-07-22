@@ -1,5 +1,6 @@
 import type { PageLoad } from './$types';
 import { getCurrentResource } from '$lib/atomic/getCurrentResource';
+import { getLanguageAlternates, parseLocalizedPath } from '$lib/atomic/i18n';
 import { error } from '@sveltejs/kit';
 import { preloadResources } from '$lib/atomic/preloadResources';
 
@@ -14,7 +15,12 @@ export const load = (async ({ fetch, url }) => {
 
 	await preloadResources(resource);
 
+	const { lang } = await parseLocalizedPath(url.pathname);
+	const alternates = await getLanguageAlternates(resource);
+
 	return {
-		subject: resource.subject
+		subject: resource.subject,
+		lang,
+		alternates
 	};
 }) satisfies PageLoad;

@@ -1,5 +1,5 @@
 // @wc-ignore-file
-import { core, dataBrowser } from '@tomic/react';
+import { core, dataBrowser, i18n } from '@tomic/react';
 import type { TemplateFn, TemplateContext } from '../template';
 
 const description = (
@@ -70,6 +70,10 @@ export const website: TemplateFn = context => ({
       [core.properties.isA]: [core.classes.class],
 
       [core.properties.parent]: 'website',
+      [core.properties.recommends]: [
+        i18n.properties.language,
+        i18n.properties.translationOf,
+      ],
       [core.properties.requires]: [
         core.properties.name,
         core.properties.description,
@@ -111,7 +115,11 @@ export const website: TemplateFn = context => ({
       [core.properties.isA]: [core.classes.class],
 
       [core.properties.parent]: 'website',
-      [core.properties.recommends]: ['website/property/blocks'],
+      [core.properties.recommends]: [
+        'website/property/blocks',
+        i18n.properties.language,
+        i18n.properties.translationOf,
+      ],
       [core.properties.requires]: [
         core.properties.name,
         core.properties.description,
@@ -134,7 +142,11 @@ export const website: TemplateFn = context => ({
       [core.properties.isA]: [core.classes.class],
 
       [core.properties.parent]: 'website',
-      [core.properties.recommends]: ['website/property/menu-items'],
+      [core.properties.recommends]: [
+        'website/property/menu-items',
+        i18n.properties.defaultLanguage,
+        i18n.properties.languages,
+      ],
       [core.properties.requires]: [
         'website/property/homepage',
         core.properties.name,
@@ -273,6 +285,8 @@ export const website: TemplateFn = context => ({
       ],
       [core.properties.isA]: ['website/class/website'],
       [core.properties.name]: 'Atomic Website Template',
+      [i18n.properties.defaultLanguage]: 'en',
+      [i18n.properties.languages]: ['en', 'nl'],
       [core.properties.parent]: 'site-data',
       [dataBrowser.properties.subResources]: [
         '01j670xy9me8yk6fte8wrqwxfd',
@@ -429,6 +443,7 @@ export const website: TemplateFn = context => ({
         '01j6cc8pn7rpg4pymv6v0bvx2c',
         '01j6ccm53p4bv9f92m4tpehcba',
         '01j6ewtynjsyq7b3sc1pgqppde',
+        '01k0m3balloon5nl0translatn',
       ],
       'https://atomicdata.dev/property/display-style':
         'https://atomicdata.dev/display-style/list',
@@ -481,8 +496,24 @@ export const website: TemplateFn = context => ({
       [core.properties.description]:
         'Balloon animals, those delightful creatures found at birthday parties, fairs, and street performances, are often overlooked in the annals of biology. Yet, these fascinating beings have an intricate life cycle, unique dietary needs, and habitats that are, tragically, under threat from climate change. Let\'s explore the mysterious biology of balloon animals and uncover the truth about these inflatable creatures.\n\n#### Habitat: Where Do Balloon Animals Live?\n\nThe natural habitat of the balloon animal is a curious one. While you may have spotted them in urban environments, twisting and squeaking in the hands of street performers or children, balloon animals originate from the rare and mystical land known as **Balloonia**.\n\n**Balloonia** is an elusive place, often forming in the back rooms of party supply stores, deep within the hands of skilled balloon artists. It’s a warm, dry region, ideal for balloon creatures who thrive in low-humidity environments (their number-one predator is moisture). In Balloonia, these animals are free to roam under ceilings and occasionally drift near HVAC systems for an exhilarating ride on air currents.\n\nHowever, the changing climate is taking its toll on this once-thriving habitat. Rising temperatures and unpredictable weather patterns are wreaking havoc on the delicate balloons, causing rapid deflation and increased rates of premature "popping," a tragic end for any balloon creature.\n\n#### Diet: What Do Balloon Animals Eat?\n\nContrary to popular belief, balloon animals have a very specific diet. Though they may appear weightless and hollow, they subsist on a steady intake of **party vibes** and **laughter energy**. These animals feed off the joyful atmosphere at birthday parties, weddings, and carnivals, thriving best when surrounded by giggling children and adults exclaiming, "How do they do that?"\n\nWhile balloon animals can absorb happiness through osmosis, they have a special fondness for being gently bopped on the head or having their squeaky surfaces rubbed by curious hands. This helps stimulate their "fun receptors," boosting their buoyancy and prolonging their lifespan. \n\nHowever, with the decline in in-person celebrations due to various global challenges (we’re looking at you, pandemic), balloon animals are facing a food crisis. Zoom parties, though cheerful, do not emit the same level of concentrated joy energy, leaving many balloon creatures feeling deflated—literally and figuratively.\n\n#### Balloon Animal Taxonomy: From Dogs to Dinosaurs\n\nBalloon animals come in a wide variety of shapes and species, much like any other animal kingdom. The **Canis Latex**, commonly known as the Balloon Dog, is one of the most ubiquitous species, often found bouncing around children’s parties. These creatures are characterized by their perky tails, elongated snouts, and irresistible urge to be bopped around.\n\nOther notable species include:\n- **Equus Inflateus (The Balloon Horse)**: Known for its long, wobbly legs and majestic mane, the balloon horse can be seen galloping across festive fields.\n- **Sauris Popperus (The Balloon Dinosaur)**: Once thought extinct, this species can still be found at prehistoric-themed parties, usually crafted into a fierce-looking T-Rex or a friendly brontosaurus.\n- **Serpentis Twisticus (The Balloon Snake)**: A simple, yet elegant species, the balloon snake is often the first balloon animal to emerge from the hands of novice balloon artists. It’s long, sleek, and sometimes given an adorable face with a permanent marker.\n\nBalloon animals, while plentiful in variety, all share the same genetic makeup: a latex exterior and a hollow, air-filled core. The complex twists and knots of their bodies are akin to their evolutionary armor, protecting them from predators (except for sharp objects, of course—more on those enemies later).\n\n#### Natural Predators and Threats\n\nBalloon animals, despite their festive appearance, face numerous threats in the wild. Their greatest nemesis? **Sharp objects**. This includes everything from wayward tree branches to the terrifying claws of household cats. The sight of a balloon dog trembling as it senses a nearby cactus is enough to tug at anyone’s heartstrings.\n\nOther natural enemies include:\n- **Direct sunlight**: Prolonged exposure to UV rays causes balloon animals to lose their elasticity, resulting in drooping and eventual death by slow deflation.\n- **Over-excited children**: Though balloon animals thrive in environments filled with joy, an overly enthusiastic child’s rough handling can lead to an untimely pop.\n- **Humidity**: A balloon animal’s worst nightmare. Moisture weakens their latex skin, causing it to break down more easily. Balloonia’s dry climate is the perfect breeding ground, but humid places like basements or rainy outdoor parties? Pure balloon carnage.\n\n#### Climate Change: The Balloon Animal Crisis\n\nIn recent years, climate change has posed a significant threat to balloon animals and their habitats. The rise in global temperatures has resulted in the **Balloonia Heatwave Phenomenon**, where balloon animals are now subjected to extreme heat, causing rapid expansion and the dreaded "pop" syndrome. As the air inside them heats up, it expands, stretching their latex bodies to the breaking point.\n\nAdditionally, the increase in natural disasters, like thunderstorms, has made balloon parties more unpredictable. Lightning strikes and sudden gusts of wind pose serious dangers to balloon animals, often flinging them into hazardous environments filled with sharp debris.\n\n**Deflation rates have skyrocketed**, with some species, like the intricate balloon giraffe, now considered endangered due to their fragile long necks, which are more prone to bursting under pressure.\n\nIn an effort to combat this crisis, balloon conservationists have suggested several mitigation strategies:\n- **Indoor-only parties**: By holding celebrations indoors, balloon animals are kept safe from harmful UV rays and weather-related threats.\n- **Humidity control measures**: Balloon sanctuaries now include humidifiers and coolers to preserve their latex structures.\n- **Adopting biodegradable balloons**: These are not only eco-friendly but less prone to the environmental damage caused by traditional balloon material, giving balloon animals a fighting chance in a warming world.\n\n#### The Future of Balloon Animals\n\nWith climate change on the rise and unpredictable party attendance rates, the future of balloon animals is uncertain. Conservation efforts are underway, and balloon scientists are exploring the possibility of more resilient latex species that can survive in a variety of conditions.\n\nIn the meantime, you can do your part by adopting sustainable party practices, holding celebrations in climate-controlled environments, and treating balloon animals with the gentle care they deserve. Every bounce, every squeak prolongs their precious, inflatable lives.\n\nRemember: a world without balloon animals is a world without joy. Let’s keep these delightful creatures thriving for future generations!',
       [core.properties.isA]: ['website/class/blogpost'],
+      [i18n.properties.language]: 'en',
       [core.properties.name]:
         'The Biology of Balloon Animals: A Deep Dive into Their Wild World',
+      [core.properties.parent]: '01j6cbg9djf269zdwwv5114jsd',
+    },
+    {
+      [core.properties.localId]: '01k0m3balloon5nl0translatn',
+      'website/property/cover-image':
+        'https://atomicdata.dev/files/1726129576337-pexels-karolina-grabowska-7273405.jpg',
+      'website/property/path': '/blog/de-biologie-van-ballondieren',
+      'website/property/published-at': 1724929560000,
+      [core.properties.description]:
+        'Ballondieren, die vrolijke wezens op verjaardagsfeestjes, kermissen en straatoptredens, worden in de biologie vaak over het hoofd gezien. Toch hebben deze fascinerende wezens een bijzondere levenscyclus, unieke voedingsbehoeften en leefgebieden die helaas bedreigd worden door klimaatverandering. Laten we de mysterieuze biologie van ballondieren verkennen.\n\n#### Leefgebied: waar leven ballondieren?\n\nHet natuurlijke leefgebied van het ballondier is merkwaardig. Hoewel je ze in stedelijke omgevingen tegenkomt, komen ballondieren oorspronkelijk uit het zeldzame en mystieke land **Ballonië** — een warme, droge streek, ideaal voor ballonwezens die gedijen bij lage luchtvochtigheid (hun grootste natuurlijke vijand is vocht).\n\n#### Dieet: wat eten ballondieren?\n\nIn tegenstelling tot wat vaak wordt gedacht, hebben ballondieren een heel specifiek dieet: een gestage toevoer van **feestvreugde** en **lachenergie**. Ze gedijen het best omringd door giechelende kinderen.\n\n#### De toekomst van ballondieren\n\nMet de opkomende klimaatverandering is de toekomst van ballondieren onzeker. Je kunt zelf bijdragen door feestjes binnenshuis te houden en ballondieren met zachte zorg te behandelen. Onthoud: een wereld zonder ballondieren is een wereld zonder vreugde!',
+      [core.properties.isA]: ['website/class/blogpost'],
+      [i18n.properties.language]: 'nl',
+      [i18n.properties.translationOf]: '01j6ewtynjsyq7b3sc1pgqppde',
+      [core.properties.name]:
+        'De biologie van ballondieren: een duik in hun wilde wereld',
       [core.properties.parent]: '01j6cbg9djf269zdwwv5114jsd',
     },
     {

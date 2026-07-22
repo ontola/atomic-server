@@ -1,4 +1,5 @@
 import { getCurrentResource } from '@/atomic/getCurrentResource';
+import { getLanguageAlternates, parseLocalizedPath } from '@/atomic/i18n';
 import FullPageView from '@/views/FullPage/FullPageView';
 import { core } from '@tomic/lib';
 import type { Metadata } from 'next';
@@ -13,10 +14,10 @@ type Props = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-const fetchResource = async (slug?: string[]) => {
-  const path = slug ? `/${slug.join('/')}` : '/';
+const slugToPath = (slug?: string[]) => (slug ? `/${slug.join('/')}` : '/');
 
-  return await getCurrentResource(path);
+const fetchResource = async (slug?: string[]) => {
+  return await getCurrentResource(slugToPath(slug));
 };
 
 export const generateMetadata = async ({
@@ -25,22 +26,35 @@ export const generateMetadata = async ({
   const slug = (await params).slug;
   const resource = await fetchResource(slug);
 
+  // Link the different translations of this page together via hreflang alternates.
+  const alternates = resource ? await getLanguageAlternates(resource) : [];
+
   return {
     title: resource?.title,
     description: resource?.get(core.properties.description),
+    ...(alternates.length > 0 && {
+      alternates: {
+        languages: Object.fromEntries(
+          alternates.map(alternate => [alternate.lang, alternate.href]),
+        ),
+      },
+    }),
   };
 };
 
 const Page = async ({ params, searchParams }: Props) => {
   const slug = (await params).slug;
   const search = await searchParams;
+  const { lang } = await parseLocalizedPath(slugToPath(slug));
   const resource = await fetchResource(slug);
 
   if (!resource) {
     return notFound();
   }
 
-  return <FullPageView subject={resource.subject} searchParams={search} />;
+  return (
+    <FullPageView subject={resource.subject} lang={lang} searchParams={search} />
+  );
 };
 
 export default Page;
