@@ -11,12 +11,24 @@ import { Agent, Store, core, server } from '@tomic/react';
  * the server (a paired device pushed the real agent resource with it), a
  * cached read would keep returning the stub, so the workspace would never be
  * found. A forced read sees the real one.
+ *
+ * Skip that forced fetch for local-only agents (e.g. the demo's guest
+ * identity, see `chunks/Demo/guestAgent.ts`): they never exist on any
+ * server, so the fetch is a guaranteed failure. Worse, `fetchResourceFromServer`
+ * writes straight into the store's shared resource cache — every OTHER
+ * consumer of `useResource(agent.subject)` (message authors, avatars) reads
+ * that same entry, so this call's failure flashes "Error loading resource"
+ * everywhere that subject is displayed, not just here.
  */
 export async function fetchPersonalDriveSubject(
   store: Store,
   agent: Agent,
 ): Promise<string | undefined> {
   if (!agent.subject) {
+    return agent.initialDrive;
+  }
+
+  if (store.isLocalOnlySubject(agent.subject)) {
     return agent.initialDrive;
   }
 

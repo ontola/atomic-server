@@ -25,6 +25,21 @@ export async function ensureAgentForDemo(store: Store): Promise<boolean> {
   const agent = new Agent(new JSCryptoProvider(keys.privateKey), subject);
 
   store.setAgent(agent);
+  // The agent's OWN resource is a free-standing DID, never parented under
+  // the demo drive — `isLocalOnlySubject` only recognizes subjects reachable
+  // through a drive's parent chain, so without this it falls through as a
+  // normal remote-fetchable subject. The instant `setAgent` fires, reactive
+  // consumers (the sidebar identity chip, message author avatars) mount
+  // `useResource(subject)` and race a real network fetch — which always
+  // fails (this identity exists nowhere but here) and leaves the resource
+  // permanently flashing "Error loading resource" (`getMessageForErrorType`),
+  // re-triggered on every WS reconnect attempt via
+  // `refetchOfflineErroredResources`. Register it synchronously, right after
+  // `setAgent` and before anything async, so no consumer can mount first.
+  // MUST be unregistered if this guest ever upgrades to a real account
+  // (signs up) — no such flow exists yet (see planning/demo-experience.md's
+  // "Known gap" / guest→account upgrade notes).
+  store.registerLocalOnlyDrive(subject);
   // A throwaway guest must not become the identity this device's node signs
   // peer AUTH with — that survives the demo, and the agent doesn't.
   await saveAgentToIDB(Agent.buildSecret(keys.privateKey, subject), {
