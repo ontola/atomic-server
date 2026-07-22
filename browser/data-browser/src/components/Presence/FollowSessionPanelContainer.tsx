@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useCurrentAgent, useDrivePresence, useResource } from '@tomic/react';
 import { styled } from 'styled-components';
+import { FaNoteSticky } from 'react-icons/fa6';
 import { RightPanel } from '../RightPanel/RightPanel';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { useFollow } from './FollowContext';
 import { PresenceAvatarMenu } from './PresenceAvatarMenu';
 import { ChatRoomView } from '../../views/ChatRoom/ChatRoomView';
 import { EditableTitle } from '../EditableTitle';
+import { MEETING_PANEL_TITLE_TRANSITION_TAG } from '../../helpers/transitionName';
 import { Column, Row } from '../Row';
 import { AtomicLink } from '../AtomicLink';
 import { Button, ButtonSubtle } from '../Button';
@@ -99,8 +101,11 @@ function FollowSessionChat({ subject }: { subject: string }) {
   return (
     <PanelWrapper>
       <PanelHeader center justify='space-between'>
-        <Row center gap='0.5rem'>
-          <PanelTitle resource={chatroom} />
+        <TitleRow center gap='0.5rem'>
+          <PanelTitle
+            resource={chatroom}
+            transitionTag={MEETING_PANEL_TITLE_TRANSITION_TAG}
+          />
           {participants.length > 0 && (
             <Facepile title={`${participants.length} here`}>
               {participants.slice(0, 5).map(subj => (
@@ -115,17 +120,17 @@ function FollowSessionChat({ subject }: { subject: string }) {
               )}
             </Facepile>
           )}
-        </Row>
-        <Row center gap='0.5rem'>
-          <NotesButton as={AtomicLink} subject={subject} clean>
-            Notes
+        </TitleRow>
+        <ButtonRow center gap='0.5rem'>
+          <NotesButton as={AtomicLink} subject={subject} clean title='Notes'>
+            <FaNoteSticky />
           </NotesButton>
           {showAction && (
             <Button subtle onClick={handleAction} disabled={ending}>
               {ending ? 'Ending…' : label}
             </Button>
           )}
-        </Row>
+        </ButtonRow>
       </PanelHeader>
       <ChatRoomView resource={chatroom} noContainerPadding />
     </PanelWrapper>
@@ -141,10 +146,29 @@ const PanelHeader = styled(Row)`
   padding-block: ${p => p.theme.size(2)};
 `;
 
+/** Shrinks to make room for ButtonRow; the panel is narrow by nature, so the
+ *  title — not the actions — gives way first, truncating with an ellipsis. */
+const TitleRow = styled(Row)`
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+`;
+
+/** Icon-only actions, so they keep their size and the title truncates
+ *  instead of squishing them. */
+const ButtonRow = styled(Row)`
+  flex-shrink: 0;
+`;
+
 /** The meeting name, click-to-edit. */
 const PanelTitle = styled(EditableTitle)`
   font-size: 1rem;
   margin: 0;
+  min-width: 0;
+  width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 /**

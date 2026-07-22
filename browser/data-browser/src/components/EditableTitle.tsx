@@ -24,6 +24,13 @@ export interface EditableTitleProps {
   className?: string;
   /** Called when the user commits the title (Enter or blur) */
   onCommit?: () => void;
+  /**
+   * View-transition tag for this title. Defaults to PAGE_TITLE_TRANSITION_TAG.
+   * Override when a second EditableTitle for the same resource can be on
+   * screen at once (e.g. a side panel mirroring the main page's title) —
+   * two elements sharing a view-transition-name skips the transition.
+   */
+  transitionTag?: string;
 }
 
 const opts = {
@@ -37,6 +44,7 @@ export function EditableTitle({
   id,
   className,
   onCommit,
+  transitionTag = PAGE_TITLE_TRANSITION_TAG,
   ...props
 }: EditableTitleProps): JSX.Element {
   const store = useStore();
@@ -132,6 +140,7 @@ export function EditableTitle({
       onClick={handleClick}
       subtle={!!canEdit && !text}
       subject={resource.subject}
+      transitionTag={transitionTag}
       className={className}
     >
       <>
@@ -153,6 +162,7 @@ interface TitleProps {
   subtle: boolean;
   canEdit: boolean;
   disabled: boolean;
+  transitionTag: string;
 }
 
 const Title = styled.h1<TitleProps & ViewTransitionProps>`
@@ -168,7 +178,7 @@ const Title = styled.h1<TitleProps & ViewTransitionProps>`
   width: fit-content;
   max-width: 100%;
 
-  ${props => transitionName(PAGE_TITLE_TRANSITION_TAG, props.subject)};
+  ${props => transitionName(props.transitionTag, props.subject)};
 `;
 
 const TitleInput = styled.input`

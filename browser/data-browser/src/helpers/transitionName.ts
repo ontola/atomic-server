@@ -1,6 +1,15 @@
 export const FILE_IMAGE_TRANSITION_TAG = 'file-image';
 export const SIDEBAR_TRANSITION_TAG = 'sidebar';
 export const PAGE_TITLE_TRANSITION_TAG = 'page-title';
+/**
+ * Distinct from PAGE_TITLE_TRANSITION_TAG: the meeting side panel's title
+ * shows the same resource as the main page title whenever you're viewing the
+ * meeting itself (MeetingPage's own EditableTitle + the panel's). Two
+ * simultaneously-rendered elements can't share a view-transition-name — the
+ * browser skips the transition and warns. Same subject, different UI slot,
+ * so it needs its own tag rather than colliding with the page title's.
+ */
+export const MEETING_PANEL_TITLE_TRANSITION_TAG = 'meeting-panel-title';
 export const RESOURCE_PAGE_TRANSITION_TAG = 'resource-page';
 export const BREADCRUMB_BAR_TRANSITION_TAG = 'breadcrumb-bar';
 export const NAVBAR_TRANSITION_TAG = 'navbar';
