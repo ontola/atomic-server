@@ -369,7 +369,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
               height: 64,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                color: c.canvasBg.withOpacity(0.95),
+                color: c.canvasBg.withValues(alpha: 0.95),
               ),
               child: Row(
                 children: [

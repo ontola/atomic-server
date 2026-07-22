@@ -79,7 +79,7 @@ class _CanvasToolbarState extends State<CanvasToolbar> {
           height: 48,
           decoration: BoxDecoration(
             color:
-                isActive ? const Color(0xFF1976D2) : c.panelBg.withOpacity(0.9),
+                isActive ? const Color(0xFF1976D2) : c.panelBg.withValues(alpha: 0.9),
             shape: BoxShape.circle,
             boxShadow: [BoxShadow(color: c.panelShadow, blurRadius: 4)],
           ),
@@ -102,7 +102,7 @@ class _CanvasToolbarState extends State<CanvasToolbar> {
         Container(
           width: 56,
           decoration: BoxDecoration(
-            color: c.panelBg.withOpacity(0.92),
+            color: c.panelBg.withValues(alpha: 0.92),
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
@@ -144,8 +144,8 @@ class _CanvasToolbarState extends State<CanvasToolbar> {
                     height: 48,
                     decoration: BoxDecoration(
                       color: widget.canUndo
-                          ? c.panelBg.withOpacity(0.9)
-                          : c.panelBg.withOpacity(0.5),
+                          ? c.panelBg.withValues(alpha: 0.9)
+                          : c.panelBg.withValues(alpha: 0.5),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(color: c.panelShadow, blurRadius: 4)
@@ -232,7 +232,7 @@ class _CanvasToolbarState extends State<CanvasToolbar> {
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: c.panelBg.withOpacity(0.95),
+                color: c.panelBg.withValues(alpha: 0.95),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [BoxShadow(color: c.hoverShadow, blurRadius: 8)],
               ),
@@ -240,7 +240,7 @@ class _CanvasToolbarState extends State<CanvasToolbar> {
                 spacing: 8,
                 runSpacing: 8,
                 children: _colors.map((col) {
-                  final selected = col.value == widget.penColor.value;
+                  final selected = col.toARGB32() == widget.penColor.toARGB32();
                   return GestureDetector(
                     onTap: () {
                       widget.onColorChanged(col);
@@ -269,7 +269,7 @@ class _CanvasToolbarState extends State<CanvasToolbar> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: c.panelBg.withOpacity(0.95),
+                color: c.panelBg.withValues(alpha: 0.95),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [BoxShadow(color: c.hoverShadow, blurRadius: 8)],
               ),

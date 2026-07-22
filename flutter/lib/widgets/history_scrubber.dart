@@ -35,7 +35,7 @@ class HistoryScrubberOverlay extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
-              color: c.panelBg.withOpacity(0.92),
+              color: c.panelBg.withValues(alpha: 0.92),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [BoxShadow(color: c.panelShadow, blurRadius: 8)],
             ),

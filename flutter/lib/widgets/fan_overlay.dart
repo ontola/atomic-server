@@ -86,7 +86,7 @@ class _FanPainter extends CustomPainter {
     }
 
     final linePaint = Paint()
-      ..color = Colors.white.withOpacity(0.6)
+      ..color = Colors.white.withValues(alpha: 0.6)
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(buttonCenter, buttonCenter + dragOffset, linePaint);
@@ -108,8 +108,8 @@ class _FanPainter extends CustomPainter {
         final color =
             adjustColorForDarkMode(getFanColor(h, numHues, d), isDarkMode);
         final isHovered = hoveredColor != null &&
-            adjustColorForDarkMode(hoveredColor!, isDarkMode).value ==
-                color.value;
+            adjustColorForDarkMode(hoveredColor!, isDarkMode).toARGB32() ==
+                color.toARGB32();
         final radius = isHovered ? circleR * 1.5 : circleR;
 
         if (isHovered) {

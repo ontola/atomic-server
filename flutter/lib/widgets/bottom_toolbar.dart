@@ -174,7 +174,7 @@ class _BottomToolbarState extends State<BottomToolbar> {
             width: btnSize,
             height: btnSize,
             decoration: BoxDecoration(
-              color: c.panelBg.withOpacity(hovered ? 1.0 : 0.9),
+              color: c.panelBg.withValues(alpha: hovered ? 1.0 : 0.9),
               shape: BoxShape.circle,
               border: Border.all(color: c.border),
               boxShadow: hovered
@@ -309,7 +309,7 @@ class _BottomToolbarState extends State<BottomToolbar> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         color:
-            _overlayActive ? Colors.transparent : c.panelBg.withOpacity(0.95),
+            _overlayActive ? Colors.transparent : c.panelBg.withValues(alpha: 0.95),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: buttons,
@@ -321,7 +321,7 @@ class _BottomToolbarState extends State<BottomToolbar> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color:
-            _overlayActive ? Colors.transparent : c.panelBg.withOpacity(0.88),
+            _overlayActive ? Colors.transparent : c.panelBg.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(32),
         boxShadow: _overlayActive
             ? null
@@ -366,7 +366,7 @@ class _CircleBtn extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: c.panelBg.withOpacity(enabled ? (hovered ? 1.0 : 0.9) : 0.5),
+        color: c.panelBg.withValues(alpha: enabled ? (hovered ? 1.0 : 0.9) : 0.5),
         shape: BoxShape.circle,
         boxShadow: hovered && enabled
             ? [BoxShadow(color: c.hoverShadow, blurRadius: 6, spreadRadius: 1)]

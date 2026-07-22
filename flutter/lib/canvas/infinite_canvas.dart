@@ -913,7 +913,7 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, _) {
         if (!didPop) widget.onClose();
       },
       child: Scaffold(

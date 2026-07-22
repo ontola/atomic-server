@@ -20,7 +20,7 @@ const RUST_IMAGE = 'rust:bookworm';
 // test times out at `page.goto`.
 const PLAYWRIGHT_VERSION = 'v1.58.2-noble';
 // Keep in sync with `flutter/.mise.toml` (`[tools].flutter`).
-const FLUTTER_IMAGE = 'ghcr.io/cirruslabs/flutter:3.22.1';
+const FLUTTER_IMAGE = 'ghcr.io/cirruslabs/flutter:3.44.0';
 // See https://github.com/rust-cross/rust-musl-cross?tab=readme-ov-file#prebuilt-images
 const TARGET_IMAGE_MAP = {
   'x86_64-unknown-linux-musl': 'ghcr.io/rust-cross/rust-musl-cross:x86_64-musl',

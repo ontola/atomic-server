@@ -27,8 +27,8 @@ class CanvasEntry {
         'folderId': folderId,
         'lastModified': lastModified.toIso8601String(),
         'strokes': strokes.map((s) => s.toJson()).toList(),
-        'penColor': penColor.value,
-        'prevColor': prevColor.value,
+        'penColor': penColor.toARGB32(),
+        'prevColor': prevColor.toARGB32(),
       };
 
   factory CanvasEntry.fromJson(Map<String, dynamic> json) {

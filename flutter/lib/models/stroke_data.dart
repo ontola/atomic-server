@@ -21,7 +21,7 @@ class StrokeData {
   }
 
   Map<String, dynamic> toJson() => {
-        'color': color.value,
+        'color': color.toARGB32(),
         'width': strokeWidth,
         'path': points.map((p) => [p.dx, p.dy]).toList(),
       };
