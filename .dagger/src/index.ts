@@ -573,7 +573,24 @@ export class AtomicServer {
       // data-browser imports the repo-root logo from `../../../../logo.svg`
       // and `../../../../../logo.svg`. Browser mount sits at /app, so those
       // resolve to /logo.svg. Place the asset there.
-      .withFile('/logo.svg', this.source.file('logo.svg'));
+      .withFile('/logo.svg', this.source.file('logo.svg'))
+      // browser/lib/src/genesis.test.ts reads the Rust/TS/Dart shared golden
+      // vectors fixture via a plain `readFileSync` (not Vite, so the
+      // lib-defaults alias below doesn't apply) at
+      // `../../../lib/src/genesis_test_vectors.json` from /app/lib/src —
+      // same /lib collision as above, so mount just this one file rather
+      // than all of repo-root lib/.
+      .withFile(
+        '/lib/src/genesis_test_vectors.json',
+        this.source.file('lib/src/genesis_test_vectors.json'),
+      )
+      // data-browser/src/helpers/pairing.test.ts reads a repo-root testdata
+      // fixture the same way (`../../../../testdata/pairing-request.json`
+      // from /app/data-browser/src/helpers) — mount just this one file.
+      .withFile(
+        '/testdata/pairing-request.json',
+        this.source.file('testdata/pairing-request.json'),
+      );
 
     // Build all packages since they may depend on each other's built artifacts
     let buildContainer = sourceContainer.withEnvVariable(
