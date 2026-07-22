@@ -325,6 +325,11 @@ async fn prompt_field(
             // (`Json` and `JsonArray` were merged into `Json`, handled above).
             return Ok(None);
         }
+        DataType::LocalizedText => {
+            // Per-language map, not a single scalar — cannot be created via
+            // a single-string CLI prompt (same as LoroDoc above).
+            return Ok(None);
+        }
     };
 }
 
