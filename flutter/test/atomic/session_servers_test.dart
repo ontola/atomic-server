@@ -1,9 +1,23 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:atomiccanvas_flutter/atomic/session.dart';
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  // AtomicSession.save() writes the agent secret through FlutterSecureStorage,
+  // which has no test-time platform implementation — without this mock, the
+  // real method channel call hangs on an uninitialized ServicesBinding.
+  const secureStorageChannel = MethodChannel(
+    'plugins.it_nomads.com/flutter_secure_storage',
+  );
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureStorageChannel, (call) async => null);
+  });
 
   group('known servers', () {
     test('a server typed any which way is remembered once', () async {
