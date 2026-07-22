@@ -4,9 +4,19 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+## [v0.41.0-beta.1] - 2026-07-22
+
+### Atomic Browser
+
+- [#1069](https://github.com/atomicdata-dev/atomic-server/issues/1069) Content localization / i18n: a new `LocalizedText` property type with a per-language input (`InputLocalizedText`), a table-editor cell with a language switcher and column-language chip, a New Column category + datatype picker, and a read-only view that resolves the visitor's preferred language. `@tomic/cli` codegen maps the datatype to the `LocalizedText` TS type.
+- [#1069](https://github.com/atomicdata-dev/atomic-server/issues/1069) The Next.js and SvelteKit site templates (`create-template`) now scaffold two-locale sites out of the box: locale-prefixed routing, a translation-sibling switcher, hreflang tags, group-fallback listings, and a footer language switcher.
+- Add `@tomic/edit-mode`: turn any page rendered from Atomic Data into a guest-editable, local-first clone — an "Edit this page" affordance backed by a guest agent and a local-only drive in the visitor's browser. Every edit is a signed CRDT commit; nothing reaches a server.
+- Renamed the hosted product from AtomicCloud to AtomicServer.eu.
+- Fix: the meeting side panel's title no longer collides with the main page title's view-transition (which silently skipped the transition when both were on screen).
+- Fix: the demo's guest identity no longer flashes "Error loading resource" across the UI.
+- Fix: the "Sign in to your account" onboarding button no longer sends self-hosted users to a hardcoded dev portal URL.
 - Cloud Sync: the Sync page now shows the connected node's per-drive usage (resources + bytes, from the generic `/drive-usage` endpoint), with plan quota for managed nodes, plus a "Manage account & plan" link for managed nodes. The redundant Drive row was removed.
 - Cloud Sync identity: when signed in to Cloud Sync with a device agent that differs from the account, the app now converges **silently** — it adopts the device agent (when the account has none) or restores the account's agent — instead of blocking on a "resolve identity mismatch" screen that surfaced agent DIDs.
-
 - Favorites: favorite any resource from its context menu and find it back in a new sidebar **Favorites** panel.
 - The per-user index lists — `favorites`, `sharedWithMe` and saved `drives` — are now stored on the user's **private drive** (the per-user home index) instead of on the Agent identity resource. They hold pointers to resources that may live on any drive, resolved per-pointer.
 - The **Favorites** and **Shared with me** panels now sit at the bottom of the sidebar (above App settings) rather than scrolling with the active drive's tree.

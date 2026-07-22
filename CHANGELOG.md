@@ -7,6 +7,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+## [v0.41.0-beta.1] - 2026-07-22
+
+- [#1069](https://github.com/atomicdata-dev/atomic-server/issues/1069) Internationalization / content localization: new `LocalizedText` datatype storing per-language values as a native Loro map, with a fallback-chain resolver (exact locale → primary subtag → configured default language → first available).
+- [#1069](https://github.com/atomicdata-dev/atomic-server/issues/1069) Fixed a DID-import bug where any string value equal to a reserved local ID was rewritten, not just values in reference positions — this could silently corrupt content (e.g. the website template ontology's own `shortname`, which equals its own local ID). Values now only resolve local IDs in reference positions; keys are still rewritten.
 - Add `GET /drive-usage?subject=<drive>` — per-drive resource and byte usage (from `per_drive_usage`), signed by the requesting agent and gated on read access to the drive. Generic node metadata, available to self-hosted nodes too (not just managed ones).
 - Add a `favorites` property to the default store, so clients can keep a per-user favorites list (alongside `drives` / `sharedWithMe`) on the user's private drive.
 
