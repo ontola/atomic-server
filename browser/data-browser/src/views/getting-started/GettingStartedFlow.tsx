@@ -538,10 +538,11 @@ export function GettingStartedFlow({
                     </p>
                     <Button
                       type='button'
+                      disabled={createTarget.kind !== 'portal'}
                       onClick={() => {
-                        // Dev portal; in production this comes from the node's
-                        // portalUrl (see managedServer.ts).
-                        window.location.assign('http://localhost:49237');
+                        if (createTarget.kind === 'portal') {
+                          window.location.assign(createTarget.url);
+                        }
                       }}
                     >
                       {`Sign in to your ${PRODUCT_NAME} account`}
