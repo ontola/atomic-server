@@ -182,39 +182,6 @@ impl Commit {
         Ok(())
     }
 
-    /// Rejects a Loro update that writes a property only the server itself may
-    /// assign. `internalId` is the motivating case: it identifies the blob a
-    /// File resource resolves to, assigned once by `/upload`; letting a client
-    /// overwrite it on an existing resource would repoint that resource at an
-    /// arbitrary (or nonexistent) blob.
-    ///
-    /// Decodes the update in isolation (same approach as the semantic-no-op
-    /// check above) to see which properties THIS update writes — works
-    /// cleanly for snapshots, may miss a pure delta that only touches
-    /// properties not present in this update's own ops.
-    pub fn check_server_managed_properties(&self) -> AtomicResult<()> {
-        const SERVER_MANAGED_PROPERTIES: &[&str] = &[urls::INTERNAL_ID];
-
-        let Some(loro_bytes) = &self.loro_update else {
-            return Ok(());
-        };
-        let doc = crate::loro::AtomicLoroDoc::new();
-        let _ = doc.import_update(loro_bytes);
-        let written = doc.get_all_properties();
-
-        for prop in SERVER_MANAGED_PROPERTIES {
-            if written.contains_key(*prop) {
-                return Err(format!(
-                    "Property '{}' is managed by the server and cannot be set directly.",
-                    prop
-                )
-                .into());
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn validate_previous_commit(
         &self,
         resource_old: &Resource,
@@ -609,15 +576,6 @@ impl Commit {
                 commit.subject
             )
             .into());
-        }
-
-        // `validate_rights` is only false for commits the server builds and signs
-        // itself (e.g. Resource::save from a handler like /upload) - those are
-        // trusted. Anything that reaches here with `validate_rights: true` came in
-        // as a signed Commit from a client, however privileged, and must not be able
-        // to set properties the server alone is supposed to manage.
-        if opts.validate_rights {
-            commit.check_server_managed_properties()?;
         }
 
         let mut applied = commit
