@@ -1,7 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { before, inDialog, REBUILD_INDEX_TIME } from './test-utils';
 
-const LOCALIZED_TEXT_DATATYPE = 'https://atomicdata.dev/datatypes/localizedText';
+const LOCALIZED_TEXT_DATATYPE =
+  'https://atomicdata.dev/datatypes/localizedText';
 const DATATYPE_PROP = 'https://atomicdata.dev/properties/datatype';
 const NAME_PROP = 'https://atomicdata.dev/properties/name';
 
@@ -140,9 +141,9 @@ test.describe('LocalizedText table columns', () => {
 
     await waitForSaved(page);
     await page.reload();
-    await expect(
-      page.getByRole('gridcell', { name: 'Hello' }),
-    ).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('gridcell', { name: 'Hello' })).toBeVisible({
+      timeout: 15000,
+    });
 
     // The stored value is a language map, not a bare string.
     await expect
@@ -245,9 +246,9 @@ test.describe('LocalizedText table columns', () => {
 
     // Both the value and the (un)split view state survive a reload.
     await page.reload();
-    await expect(
-      page.getByRole('gridcell', { name: 'Hi' }),
-    ).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('gridcell', { name: 'Hi' })).toBeVisible({
+      timeout: 15000,
+    });
     await expect(chips(page)).toHaveCount(1);
   });
 });

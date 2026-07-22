@@ -71,7 +71,9 @@ async function main() {
   await page.waitForURL(/\/app\/show/, { timeout: 30_000 });
   const setupDoneAt = Date.now();
   const skipSeconds = (setupDoneAt - recordingStartedAt) / 1000;
-  console.log(`Setup took ${skipSeconds.toFixed(1)}s — will trim that off the front.`);
+  console.log(
+    `Setup took ${skipSeconds.toFixed(1)}s — will trim that off the front.`,
+  );
 
   // Mara starts the tour meeting only after she's finished typing the
   // welcome doc — give it a wide window.
@@ -96,6 +98,7 @@ async function main() {
   // completion signal, with a generous fallback in case the camera isn't
   // on that doc when it happens.
   console.log('Waiting for the tour to finish …');
+
   try {
     await page
       .getByText('Poke around!', { exact: false })
@@ -115,6 +118,7 @@ async function main() {
 
   if (!rawVideoPath) {
     console.log(`Video saved under ${outDir}`);
+
     return;
   }
 
@@ -149,7 +153,10 @@ async function main() {
     console.log(
       "Could not run ffmpeg automatically — here's the trim + convert command to run by hand:",
     );
-    console.log(`  ffmpeg ${ffmpegArgs.map(a => (a.includes(' ') ? `"${a}"` : a)).join(' ')}`);
+    console.log(
+      `  ffmpeg ${ffmpegArgs.map(a => (a.includes(' ') ? `"${a}"` : a)).join(' ')}`,
+    );
+
     return;
   }
 
