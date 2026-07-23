@@ -1,5 +1,13 @@
 import { dataBrowser, core, useStore } from '@tomic/react';
-import { useState, useCallback, useEffect, useRef, FormEvent, FC } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  FormEvent,
+  FC,
+} from 'react';
 import { styled } from 'styled-components';
 import { useSettings } from '../../../../../helpers/AppSettings';
 import { BetaBadge } from '../../../../BetaBadge';
@@ -58,6 +66,7 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
 }) => {
   const store = useStore();
   const { drive: driveSubject } = useSettings();
+  const formId = useId();
   const [useExistingClass, setUseExistingClass] =
     useState(!!initialExistingClass);
   const [existingClass, setExistingClass] = useState<string | undefined>(
@@ -175,18 +184,20 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     <Dialog {...dialogProps}>
       {isOpen && (
         <>
-          <RelativeDialogTitle>
-            <h1>New Table</h1>
-            <BetaBadge />
+          <RelativeDialogTitle key='title'>
+            <h1 key='heading'>New Table</h1>
+            <BetaBadge key='badge' />
           </RelativeDialogTitle>
-          <WiderDialogContent>
+          <WiderDialogContent key='content'>
             <form
+              id={formId}
               onSubmit={(e: FormEvent) => {
                 e.preventDefault();
+                if (saveDisabled) return;
                 hide(true);
               }}
             >
-              <Field label='Start from'>
+              <Field key='template' label='Start from'>
                 <TemplateGrid>
                   {TABLE_TEMPLATES.map(template => (
                     <TemplateCard
@@ -212,15 +223,15 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
                       }}
                       title={template.description}
                     >
-                      <strong>{template.title}</strong>
-                      <TemplateDescription>
+                      <strong key='title'>{template.title}</strong>
+                      <TemplateDescription key='description'>
                         {template.description}
                       </TemplateDescription>
                     </TemplateCard>
                   ))}
                 </TemplateGrid>
               </Field>
-              <Field required label='Name'>
+              <Field key='name' required label='Name'>
                 <InputWrapper>
                   <InputStyled
                     ref={nameInputRef}
@@ -244,6 +255,7 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
               </Field>
               {!(templateId === 'blank' && useExistingClass) && (
                 <Field
+                  key='row-name'
                   required
                   label='Each row is a'
                   helper='Names the class of the rows — e.g. every row of an Employees table is an Employee.'
@@ -261,15 +273,16 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
                 </Field>
               )}
               {templateId === 'blank' && (
-                <>
-                  <CheckboxLabel>
+                <React.Fragment key='existing-class'>
+                  <CheckboxLabel key='checkbox'>
                     <Checkbox
+                      key='input'
                       checked={useExistingClass}
                       onChange={setUseExistingClass}
                     />
                     Use existing class
                   </CheckboxLabel>
-                  <Field>
+                  <Field key='selector'>
                     {useExistingClass && (
                       <ResourceSelector
                         hideCreateOption
@@ -280,15 +293,20 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
                       />
                     )}
                   </Field>
-                </>
+                </React.Fragment>
               )}
             </form>
           </WiderDialogContent>
-          <DialogActions>
-            <Button onClick={() => hide(false)} subtle>
+          <DialogActions key='actions'>
+            <Button key='cancel' onClick={() => hide(false)} subtle>
               Cancel
             </Button>
-            <Button onClick={() => hide(true)} disabled={saveDisabled}>
+            <Button
+              key='create'
+              type='submit'
+              form={formId}
+              disabled={saveDisabled}
+            >
               Create
             </Button>
           </DialogActions>

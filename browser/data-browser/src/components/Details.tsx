@@ -111,7 +111,7 @@ export function Details(props: PropsWithChildren<DetailsProps>): JSX.Element {
                 hide={!!disabled}
                 aria-label={isOpen ? 'collapse' : 'expand'}
               >
-                <Icon $turn={!!isOpen} subtle={subtle} />
+                <Icon $turn={!!isOpen} $subtle={subtle} />
               </StyledIconButton>
             ) : null}
             <TitleWrapper $noLeadingCaret={!showCaret}>
@@ -200,9 +200,9 @@ const TitleAsButton = styled.button<{ $subtle: boolean }>`
   }
 `;
 
-const Icon = styled(FaCaretRight)<{ $turn: boolean; subtle: boolean }>`
-  color: ${({ theme, subtle }) =>
-    subtle ? theme.colors.textLight : theme.colors.main};
+const Icon = styled(FaCaretRight)<{ $turn: boolean; $subtle: boolean }>`
+  color: ${({ theme, $subtle }) =>
+    $subtle ? theme.colors.textLight : theme.colors.main};
   margin-top: auto;
   cursor: pointer;
   * {

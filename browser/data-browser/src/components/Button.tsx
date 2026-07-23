@@ -23,7 +23,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 interface ButtonPropsStyled {
-  gutter?: boolean;
+  $gutter?: boolean;
 }
 
 const getButtonComp = ({ clean, icon, subtle, alert }: ButtonProps) => {
@@ -52,13 +52,21 @@ export const Button = forwardRef<
   HTMLButtonElement,
   PropsWithChildren<ButtonProps>
 >(({ children, loading, ...props }, ref): JSX.Element => {
-  // Filter out props that should not be passed to the button element or styled component.
-  const { icon: _icon, ...buttonProps } = props;
+  // Styling-only flags: consumed here to pick a variant / the $gutter
+  // transient prop, then dropped so they never reach the DOM button element.
+  const {
+    icon: _icon,
+    subtle: _subtle,
+    alert: _alert,
+    clean: _clean,
+    gutter,
+    ...buttonProps
+  } = props;
 
   const Comp = getButtonComp(props);
 
   return (
-    <Comp type='button' {...buttonProps} ref={ref}>
+    <Comp type='button' {...buttonProps} $gutter={gutter} ref={ref}>
       {loading ? <Spinner /> : children}
     </Comp>
   );
@@ -81,7 +89,7 @@ export const ButtonClean = styled.button<ButtonPropsStyled>`
 `;
 
 /** Base button style. You're likely to want to use ButtonMargin in most places */
-export const ButtonBase = styled(ButtonClean)`
+export const ButtonBase = styled(ButtonClean)<ButtonPropsStyled>`
   height: 2rem;
   display: flex;
   align-items: center;
@@ -90,7 +98,7 @@ export const ButtonBase = styled(ButtonClean)`
   background-color: ${props => props.theme.colors.main};
   color: ${props => props.theme.colors.bg};
   white-space: nowrap;
-  margin-bottom: ${p => (p.gutter ? `${p.theme.margin}rem` : '')};
+  margin-bottom: ${p => (p.$gutter ? `${p.theme.margin}rem` : '')};
   ${transition(
     'background-color',
     'box-shadow',

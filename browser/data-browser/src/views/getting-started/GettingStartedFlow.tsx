@@ -352,14 +352,16 @@ export function GettingStartedFlow({
       {step === 'welcome' ? (
         <Swap key='welcome'>
           <WelcomeStack>
-            <VisuallyHiddenH1>AtomicServer</VisuallyHiddenH1>
+            <VisuallyHiddenH1 key='heading'>AtomicServer</VisuallyHiddenH1>
             <AtomicServerLogo
+              key='logo'
               src={atomicServerLogoUrl}
               alt=''
               decoding='async'
             />
-            <ButtonStack>
+            <ButtonStack key='buttons'>
               <CtaButton
+                key='create'
                 type='button'
                 onClick={() => {
                   // Managed node → create the account on the portal
@@ -374,6 +376,7 @@ export function GettingStartedFlow({
                 Create account
               </CtaButton>
               <CtaButton
+                key='signin'
                 type='button'
                 subtle
                 onClick={() => {
@@ -385,6 +388,7 @@ export function GettingStartedFlow({
                 Sign in
               </CtaButton>
               <CtaButton
+                key='demo'
                 type='button'
                 subtle
                 onClick={() => {
@@ -396,25 +400,29 @@ export function GettingStartedFlow({
                 Try the live demo
               </CtaButton>
             </ButtonStack>
-            {error ? <CardError role='alert'>{error.message}</CardError> : null}
+            {error ? (
+              <CardError key='error' role='alert'>
+                {error.message}
+              </CardError>
+            ) : null}
           </WelcomeStack>
         </Swap>
       ) : step === 'signin' ? (
         <Swap key='signin'>
           <OnboardingWrap>
-            <OnboardingCard>
+            <OnboardingCard key='card'>
               <Column gap='1rem'>
-                <CardTitle>
+                <CardTitle key='title'>
                   {nextDrive ? 'Sign in to access this drive' : 'Sign in'}
                 </CardTitle>
                 {nextDrive ? (
-                  <CardSubtitle>
+                  <CardSubtitle key='subtitle'>
                     Enter your agent secret to unlock this drive on this device.
                   </CardSubtitle>
                 ) : null}
-                <form onSubmit={handleSubmitSignIn}>
+                <form key='form' onSubmit={handleSubmitSignIn}>
                   <Column gap='1rem'>
-                    <InputWrapper hasPrefix>
+                    <InputWrapper key='input' hasPrefix>
                       <FaKey />
                       <InputStyled
                         value={secretValue}
@@ -430,15 +438,19 @@ export function GettingStartedFlow({
                       />
                     </InputWrapper>
                     {error ? (
-                      <CardError role='alert'>{error.message}</CardError>
+                      <CardError key='error' role='alert'>
+                        {error.message}
+                      </CardError>
                     ) : null}
                     <Button
+                      key='continue'
                       type='submit'
                       disabled={loading || !secretValue.trim()}
                     >
                       {loading ? 'Signing in…' : 'Continue'}
                     </Button>
                     <Button
+                      key='paste'
                       type='button'
                       subtle
                       disabled={loading}
@@ -447,6 +459,7 @@ export function GettingStartedFlow({
                       Paste from clipboard
                     </Button>
                     <Button
+                      key='forgot'
                       type='button'
                       subtle
                       onClick={() => {
@@ -465,6 +478,7 @@ export function GettingStartedFlow({
                       // this, a stranger has no visible path forward besides
                       // "Back" (not obvious it leads to account creation).
                       <Button
+                        key='create'
                         type='button'
                         subtle
                         onClick={() => {
@@ -484,8 +498,9 @@ export function GettingStartedFlow({
                 </form>
               </Column>
             </OnboardingCard>
-            <FooterBar>
+            <FooterBar key='footer'>
               <Button
+                key='back'
                 type='button'
                 subtle
                 onClick={() => {
@@ -495,11 +510,11 @@ export function GettingStartedFlow({
                 }}
               >
                 <BackLabel>
-                  <FaArrowLeft aria-hidden />
+                  <FaArrowLeft key='icon' aria-hidden />
                   Back
                 </BackLabel>
               </Button>
-              <StepDotsSlot ref={stepDotsSlotRef} />
+              <StepDotsSlot key='dots' ref={stepDotsSlotRef} />
             </FooterBar>
           </OnboardingWrap>
         </Swap>
@@ -526,17 +541,18 @@ export function GettingStartedFlow({
       ) : step === 'restore' ? (
         <Swap key='restore'>
           <OnboardingWrap>
-            <OnboardingCard>
+            <OnboardingCard key='card'>
               <Column gap='1rem'>
-                <CardTitle>Restore account</CardTitle>
+                <CardTitle key='title'>Restore account</CardTitle>
                 {restore.phase === 'checking' ? (
-                  <p>{`Checking your ${PRODUCT_NAME} account…`}</p>
+                  <p key='checking'>{`Checking your ${PRODUCT_NAME} account…`}</p>
                 ) : restore.phase === 'no-session' ? (
-                  <Column gap='0.75rem'>
-                    <p>
+                  <Column key='no-session' gap='0.75rem'>
+                    <p key='copy'>
                       {`To restore your account, sign in to your ${PRODUCT_NAME} account first, then come back here.`}
                     </p>
                     <Button
+                      key='signin'
                       type='button'
                       disabled={createTarget.kind !== 'portal'}
                       onClick={() => {
@@ -549,17 +565,17 @@ export function GettingStartedFlow({
                     </Button>
                   </Column>
                 ) : restore.phase === 'no-backup' ? (
-                  <p>
+                  <p key='no-backup'>
                     No recovery backup was found for {restore.email}. Account
                     recovery only works if you enabled it earlier.
                   </p>
                 ) : (
-                  <form onSubmit={handleRestore}>
+                  <form key='ready' onSubmit={handleRestore}>
                     <Column gap='1rem'>
-                      <p>
+                      <p key='copy'>
                         Enter the recovery password you set for {restore.email}.
                       </p>
-                      <InputWrapper hasPrefix>
+                      <InputWrapper key='input' hasPrefix>
                         <FaKey />
                         <InputStyled
                           value={restorePassword}
@@ -572,9 +588,12 @@ export function GettingStartedFlow({
                         />
                       </InputWrapper>
                       {error ? (
-                        <CardError role='alert'>{error.message}</CardError>
+                        <CardError key='error' role='alert'>
+                          {error.message}
+                        </CardError>
                       ) : null}
                       <Button
+                        key='submit'
                         type='submit'
                         disabled={loading || !restorePassword.trim()}
                       >
@@ -585,8 +604,9 @@ export function GettingStartedFlow({
                 )}
               </Column>
             </OnboardingCard>
-            <FooterBar>
+            <FooterBar key='footer'>
               <Button
+                key='back'
                 type='button'
                 subtle
                 onClick={() => {
@@ -596,18 +616,18 @@ export function GettingStartedFlow({
                 }}
               >
                 <BackLabel>
-                  <FaArrowLeft aria-hidden />
+                  <FaArrowLeft key='icon' aria-hidden />
                   Back
                 </BackLabel>
               </Button>
-              <StepDotsSlot ref={stepDotsSlotRef} />
+              <StepDotsSlot key='dots' ref={stepDotsSlotRef} />
             </FooterBar>
           </OnboardingWrap>
         </Swap>
       ) : (
         <Swap key='create'>
           <OnboardingWrap>
-            <OnboardingCard>
+            <OnboardingCard key='card'>
               <Column gap='1.5rem'>
                 {fromManaged && !managedReady ? (
                   <p>Setting up your account…</p>
@@ -627,14 +647,19 @@ export function GettingStartedFlow({
                 )}
               </Column>
             </OnboardingCard>
-            <FooterBar>
-              <Button subtle type='button' onClick={() => setStep('welcome')}>
+            <FooterBar key='footer'>
+              <Button
+                key='back'
+                subtle
+                type='button'
+                onClick={() => setStep('welcome')}
+              >
                 <BackLabel>
-                  <FaArrowLeft aria-hidden />
+                  <FaArrowLeft key='icon' aria-hidden />
                   Back
                 </BackLabel>
               </Button>
-              <StepDotsSlot ref={stepDotsSlotRef} />
+              <StepDotsSlot key='dots' ref={stepDotsSlotRef} />
             </FooterBar>
           </OnboardingWrap>
         </Swap>

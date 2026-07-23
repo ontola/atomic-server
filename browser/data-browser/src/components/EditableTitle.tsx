@@ -12,7 +12,6 @@ import {
   PAGE_TITLE_TRANSITION_TAG,
   transitionName,
 } from '../helpers/transitionName';
-import { ViewTransitionProps } from '../helpers/ViewTransitionProps';
 import { UnsavedIndicator } from './UnsavedIndicator';
 import { Flex } from './Row';
 
@@ -134,13 +133,13 @@ export function EditableTitle({
     <Title
       disabled={!canEdit}
       id={id}
-      canEdit={!!canEdit}
+      $canEdit={!!canEdit}
       title={canEdit ? 'Click to edit title' : ''}
       data-testid='editable-title'
       onClick={handleClick}
-      subtle={!!canEdit && !text}
-      subject={resource.subject}
-      transitionTag={transitionTag}
+      $subtle={!!canEdit && !text}
+      $subject={resource.subject}
+      $transitionTag={transitionTag}
       className={className}
     >
       <>
@@ -159,26 +158,27 @@ const TitleShared = css`
 `;
 
 interface TitleProps {
-  subtle: boolean;
-  canEdit: boolean;
+  $subtle: boolean;
+  $canEdit: boolean;
   disabled: boolean;
-  transitionTag: string;
+  $transitionTag: string;
+  $subject?: string;
 }
 
-const Title = styled.h1<TitleProps & ViewTransitionProps>`
+const Title = styled.h1<TitleProps>`
   ${TitleShared}
   display: flex;
   align-items: center;
   gap: ${p => p.theme.size()};
-  cursor: ${props => (props.canEdit ? 'pointer' : 'initial')};
-  opacity: ${props => (props.subtle ? 0.5 : 1)};
+  cursor: ${props => (props.$canEdit ? 'pointer' : 'initial')};
+  opacity: ${props => (props.$subtle ? 0.5 : 1)};
   /* Hug the text: this element is a view-transition morph target, and a
      full-width box makes small titles (grid items, cards) stretch across
      the whole content width mid-morph before snapping back. */
   width: fit-content;
   max-width: 100%;
 
-  ${props => transitionName(props.transitionTag, props.subject)};
+  ${props => transitionName(props.$transitionTag, props.$subject)};
 `;
 
 const TitleInput = styled.input`

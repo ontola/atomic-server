@@ -276,30 +276,31 @@ export function NewIdentitySection({
   return (
     <Column gap='1.5rem'>
       {stepIndicatorPortal
-        ? createPortal(stepIndicator, stepIndicatorPortal)
+        ? createPortal(stepIndicator, stepIndicatorPortal, 'step-indicator')
         : stepIndicator}
 
       {step === 'idle' && (
-        <Column gap='1rem'>
-          <p>
+        <Column key='idle' gap='1rem'>
+          <p key='copy'>
             Create a new Agent on this server. We will set your username and
             create a private drive as your home.
           </p>
-          {error && <ErrorText>{error}</ErrorText>}
-          <Button onClick={handleCreate} disabled={loading}>
+          {error && <ErrorText key='error'>{error}</ErrorText>}
+          <Button key='create' onClick={handleCreate} disabled={loading}>
             {loading ? 'Generating...' : 'Create new identity'}
           </Button>
         </Column>
       )}
 
       {step === 'creating' && (
-        <Column gap='1rem'>
+        <Column key='creating' gap='1rem'>
           <p>Generating your identity...</p>
         </Column>
       )}
 
       {step === 'profile' && identity && (
         <ProfileStep
+          key='profile'
           error={error}
           loading={loading}
           onSave={handleProfileSave}
@@ -308,13 +309,14 @@ export function NewIdentitySection({
       )}
 
       {step === 'creating-drive' && (
-        <Column gap='1rem'>
+        <Column key='creating-drive' gap='1rem'>
           <p>Creating your personal drive…</p>
         </Column>
       )}
 
       {step === 'recovery-backup' && identity && (
         <RecoveryBackupStep
+          key='recovery-backup'
           error={error}
           loading={loading}
           onBackup={handleBackupRecovery}
@@ -327,6 +329,7 @@ export function NewIdentitySection({
 
       {step === 'secret' && identity && (
         <SecretStep
+          key='secret'
           secret={identity.secret}
           secretBackedUp={secretBackedUp}
           onCopy={() => setSecretBackedUp(true)}
@@ -337,7 +340,11 @@ export function NewIdentitySection({
       )}
 
       {step === 'verify' && identity && (
-        <VerifyStep secret={identity.secret} onVerify={handleVerify} />
+        <VerifyStep
+          key='verify'
+          secret={identity.secret}
+          onVerify={handleVerify}
+        />
       )}
     </Column>
   );
@@ -455,18 +462,19 @@ function SecretStep({
 
   return (
     <Column gap='1rem'>
-      <h3>Safely store your secret</h3>
-      <p>
+      <h3 key='title'>Safely store your secret</h3>
+      <p key='important'>
         <strong>IMPORTANT:</strong> You need this secret to sign in again. We do
         not store a copy you can reset like a normal password.
       </p>
-      <p>
+      <p key='ways'>
         <strong>Ways to keep it:</strong> a password manager (best),{' '}
         <strong>Save as file</strong> below and move it to a private folder, or
         copy into a <strong>locked note</strong> (Apple Notes, Google Keep,
         etc.)—not email or chat.
       </p>
       <StyledCodeBlock
+        key='code'
         className='secret-protected'
         wordWrap
         content={secret}
@@ -477,37 +485,45 @@ function SecretStep({
 
           return (
             <>
-              <span data-code-text-first>{firstLine}</span>
+              <span key='first' data-code-text-first>
+                {firstLine}
+              </span>
               {restText ? (
-                <span data-code-text-rest>{'\n' + restText}</span>
+                <span key='rest' data-code-text-rest>
+                  {'\n' + restText}
+                </span>
               ) : null}
             </>
           );
         }}
         onCopy={onCopy}
       />
-      <Row gap='0.75rem' wrapItems>
+      <Row key='download' gap='0.75rem' wrapItems>
         <Button type='button' subtle onClick={handleDownload}>
-          <FaDownload aria-hidden style={{ marginRight: '0.45em' }} />
+          <FaDownload
+            key='icon'
+            aria-hidden
+            style={{ marginRight: '0.45em' }}
+          />
           Save backup file…
         </Button>
       </Row>
       {secretBackedUp ? (
-        <>
-          <p>
+        <React.Fragment key='confirm'>
+          <p key='warning'>
             Are you sure you&apos;ve stored this secret somewhere safe? You
             cannot recover it if you lose it.
           </p>
-          <Row gap='1rem'>
+          <Row key='confirm-row' gap='1rem'>
             <Button onClick={onConfirm}>
               {verifySecret
                 ? "Yes, I've stored it — sign me out to verify"
                 : "Yes, I've stored it safely"}
             </Button>
           </Row>
-        </>
+        </React.Fragment>
       ) : (
-        <Button disabled>
+        <Button key='disabled' disabled>
           Copy the secret or save the backup file to continue
         </Button>
       )}
@@ -526,12 +542,12 @@ function VerifyStep({
 
   return (
     <Column gap='1rem'>
-      <h3>Verify your secret</h3>
-      <p>
+      <h3 key='title'>Verify your secret</h3>
+      <p key='copy'>
         You have been signed out to verify that you saved your secret. Enter it
         below to sign in.
       </p>
-      <Field label='Enter your Agent Secret' fieldId='agent-secret'>
+      <Field key='field' label='Enter your Agent Secret' fieldId='agent-secret'>
         <InputWrapper>
           <InputStyled
             id='agent-secret'
@@ -578,11 +594,12 @@ function ProfileStep({
 
   return (
     <Column gap='1rem'>
-      <h3>Set your profile name!</h3>
-      <p>Others can read this. You can change this later.</p>
-      <form onSubmit={handleSave}>
+      <h3 key='title'>Set your profile name!</h3>
+      <p key='copy'>Others can read this. You can change this later.</p>
+      <form key='form' onSubmit={handleSave}>
         <Column gap='1rem'>
           <Field
+            key='field'
             label='Profile Name'
             fieldId='profile-name'
             error={error ? new Error(error) : undefined}
@@ -600,7 +617,7 @@ function ProfileStep({
               />
             </InputWrapper>
           </Field>
-          <Row gap='1rem'>
+          <Row key='submit' gap='1rem'>
             <ContinueButton type='submit' disabled={loading || !name.trim()}>
               {loading ? 'Creating drive…' : 'Save & continue'}
             </ContinueButton>
@@ -639,14 +656,14 @@ function RecoveryBackupStep({
   if (confirmingSkip) {
     return (
       <Column gap='1rem'>
-        <h3>Skip the recovery backup?</h3>
-        <SkipWarning role='alert'>
+        <h3 key='title'>Skip the recovery backup?</h3>
+        <SkipWarning key='warning' role='alert'>
           <strong>This can’t be undone.</strong> Without a recovery backup, no
           one can restore your account if you lose your secret — not even the
           sync service. Your data would be permanently inaccessible. Only skip
           if you’re certain you’ll keep your secret somewhere safe.
         </SkipWarning>
-        <Row gap='1rem'>
+        <Row key='actions' gap='1rem'>
           <ContinueButton
             type='button'
             onClick={() => setConfirmingSkip(false)}
@@ -664,15 +681,16 @@ function RecoveryBackupStep({
 
   return (
     <Column gap='1rem'>
-      <h3>Back up your secret?</h3>
-      <p>
+      <h3 key='title'>Back up your secret?</h3>
+      <p key='copy'>
         This lets you recover your account if you lose your secret. We won't get
         access to your data — your secret is encrypted with the recovery
         password below before it leaves your device.
       </p>
-      <form onSubmit={handleSubmit}>
+      <form key='form' onSubmit={handleSubmit}>
         <Column gap='1rem'>
           <Field
+            key='field'
             label='Recovery password'
             fieldId='recovery-password'
             error={error ? new Error(error) : undefined}
@@ -690,7 +708,7 @@ function RecoveryBackupStep({
               />
             </InputWrapper>
           </Field>
-          <Row gap='1rem'>
+          <Row key='actions' gap='1rem'>
             <ContinueButton
               type='submit'
               disabled={loading || !password.trim()}

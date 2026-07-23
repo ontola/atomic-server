@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
 import { FaCheck, FaCopy } from 'react-icons/fa6';
 import { styled } from 'styled-components';
@@ -55,12 +55,15 @@ export function CodeBlock({
         'loading...'
       ) : (
         <>
-          {renderContent ? (
-            renderContent(content)
-          ) : (
-            <span data-code-text>{content}</span>
-          )}
+          <Fragment key='content'>
+            {renderContent ? (
+              renderContent(content)
+            ) : (
+              <span data-code-text>{content}</span>
+            )}
+          </Fragment>
           <Button
+            key='copy'
             subtle
             style={{
               position: 'absolute',
