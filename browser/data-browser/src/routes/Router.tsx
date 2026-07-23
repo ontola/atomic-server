@@ -22,6 +22,7 @@ import { InviteRoute } from './InviteRoute';
 import { LinkOpenRouter } from './LinkOpenRouter';
 import { OnboardingRoute } from './OnboardingRoute';
 import { WelcomeRoute } from './WelcomeRoute';
+import { NewDriveRoute } from './NewDriveRoute';
 
 const DevDriveRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -83,6 +84,7 @@ const routeTree = rootRoute.addChildren({
     TokenRoute,
     HistoryRoute,
     NewRoute,
+    NewDriveRoute,
     PruneTestsRoute,
     SandboxRoute,
     DevDriveRoute,
