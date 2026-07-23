@@ -60,7 +60,6 @@ import { useCustomBodyColor } from '@hooks/useCustomBodyColor';
 import { getDocumentCollaborationCoreExtensions } from './documentCollaborationExtensions';
 import { useAIChanges } from '@components/AIChangesContext';
 import { ComparePlugin } from './comparePlugin';
-import { useOnValueChange } from '@helpers/useOnValueChange';
 import { registerCollaborativeDocumentEditor } from './collaborativeDocumentEditorRegistry';
 
 export type CollaborativeEditorProps = {
@@ -121,9 +120,6 @@ export default function CollaborativeEditor({
 
   const editor = useEditor(
     {
-      onCreate() {
-        setEditorReady(true);
-      },
       extensions: [
         ...getDocumentCollaborationCoreExtensions({
           uploadImage: upload,
@@ -315,6 +311,32 @@ export default function CollaborativeEditor({
     [drive, doc],
   );
 
+  // Tiptap fires `create` from inside a `window.setTimeout(0)` in
+  // `Editor.mount()`, i.e. genuinely async and outside React's render/commit
+  // cycle. Passing `onCreate` as a `useEditor` option (as before) let it call
+  // `setEditorReady` from that timeout even when the render attempt that
+  // constructed the editor gets thrown away (e.g. a Suspense retry), landing
+  // the update on a fiber that never mounted. Watching it from a `useEffect`
+  // instead ties the listener's lifetime to a committed instance of this
+  // component, and `editor.isInitialized` covers the case where `create`
+  // already fired before this effect ran.
+  useEffect(() => {
+    if (!editor) return;
+
+    if (editor.isInitialized) {
+      setEditorReady(true);
+
+      return;
+    }
+
+    const handleCreate = () => setEditorReady(true);
+    editor.on('create', handleCreate);
+
+    return () => {
+      editor.off('create', handleCreate);
+    };
+  }, [editor]);
+
   useEffect(() => {
     if (editor && editor.isEditable !== canWrite) {
       editor.setEditable(canWrite);
@@ -344,22 +366,22 @@ export default function CollaborativeEditor({
   }, [agentResource, ephemeralStore, color]);
 
   // Sync the comparison (AI-diff) content into the editor. This dispatches a
-  // ProseMirror transaction, so it MUST NOT run during render (doing so triggers
-  // "Cannot update a component while rendering" and cascades into editor
-  // instability / detached inputs).
-  useOnValueChange(
-    () => {
-      if (!editor || !editorReady) return;
+  // ProseMirror transaction, so it MUST NOT run during render (doing so
+  // triggers "Cannot update a component while rendering" — the transaction
+  // synchronously notifies BubbleMenu's `useEditorState` subscription while
+  // CollaborativeEditor is still rendering — and cascades into editor
+  // instability / detached inputs). Run it as a plain effect instead.
+  const isComparing = hasAIChanges(resource.subject);
 
-      if (hasAIChanges(resource.subject)) {
-        editor.commands.setComparisonContent(comparisonBaseline ?? '');
-      } else {
-        editor.commands.setComparisonContent('');
-      }
-    },
-    [hasAIChanges(resource.subject), editorReady, comparisonBaseline, editor],
-    true,
-  );
+  useEffect(() => {
+    if (!editor || !editorReady) return;
+
+    if (isComparing) {
+      editor.commands.setComparisonContent(comparisonBaseline ?? '');
+    } else {
+      editor.commands.setComparisonContent('');
+    }
+  }, [editor, editorReady, isComparing, comparisonBaseline]);
 
   return (
     <IsInRTEContex value={true}>
