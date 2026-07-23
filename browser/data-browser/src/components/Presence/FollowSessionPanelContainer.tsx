@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useCurrentAgent, useDrivePresence, useResource } from '@tomic/react';
-import { styled } from 'styled-components';
-import { FaNoteSticky } from 'react-icons/fa6';
+import { styled, css } from 'styled-components';
+import { FaNoteSticky, FaVideo } from 'react-icons/fa6';
 import { RightPanel } from '../RightPanel/RightPanel';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { useFollow } from './FollowContext';
@@ -12,6 +12,10 @@ import { MEETING_PANEL_TITLE_TRANSITION_TAG } from '../../helpers/transitionName
 import { Column, Row } from '../Row';
 import { AtomicLink } from '../AtomicLink';
 import { Button, ButtonSubtle } from '../Button';
+
+const ConferenceRoom = lazy(
+  () => import('../../chunks/Conference/ConferenceRoom'),
+);
 
 /**
  * Right-side panel with the live meeting: who's here, the trail of
@@ -39,7 +43,9 @@ function FollowSessionPanel() {
     return null;
   }
 
-  return <FollowSessionChat subject={chatroomSubject} />;
+  // Keyed so per-meeting state (like an ongoing call) resets when the
+  // panel switches to a different meeting.
+  return <FollowSessionChat subject={chatroomSubject} key={chatroomSubject} />;
 }
 
 function FollowSessionChat({ subject }: { subject: string }) {
@@ -49,6 +55,7 @@ function FollowSessionChat({ subject }: { subject: string }) {
   const presence = useDrivePresence();
   const [agent] = useCurrentAgent();
   const [ending, setEnding] = useState(false);
+  const [inCall, setInCall] = useState(false);
 
   // The panel header's action: the leader ends the meeting; a joined
   // attendee leaves it.
@@ -122,6 +129,13 @@ function FollowSessionChat({ subject }: { subject: string }) {
           )}
         </TitleRow>
         <ButtonRow center gap='0.5rem'>
+          <CallToggleButton
+            $active={inCall}
+            onClick={() => setInCall(current => !current)}
+            title={inCall ? 'Leave video call' : 'Start video call'}
+          >
+            <FaVideo />
+          </CallToggleButton>
           <NotesButton as={AtomicLink} subject={subject} clean title='Notes'>
             <FaNoteSticky />
           </NotesButton>
@@ -132,6 +146,11 @@ function FollowSessionChat({ subject }: { subject: string }) {
           )}
         </ButtonRow>
       </PanelHeader>
+      {inCall && (
+        <Suspense fallback={<CallFallback>Connecting to call…</CallFallback>}>
+          <ConferenceRoom subject={subject} onLeave={() => setInCall(false)} />
+        </Suspense>
+      )}
       <ChatRoomView resource={chatroom} noContainerPadding />
     </PanelWrapper>
   );
@@ -187,6 +206,24 @@ const NotesButton = styled(ButtonSubtle)`
       color: var(--button-text-color-hover);
     }
   }
+`;
+
+/** Icon-only toggle for the p2p video call; highlighted while in a call. */
+const CallToggleButton = styled(ButtonSubtle)<{ $active: boolean }>`
+  ${p =>
+    p.$active &&
+    css`
+      && {
+        color: ${p.theme.colors.main};
+      }
+    `}
+`;
+
+const CallFallback = styled.span`
+  font-size: 0.8rem;
+  color: ${p => p.theme.colors.textLight};
+  text-align: center;
+  padding-block: ${p => p.theme.size(2)};
 `;
 
 const Facepile = styled.span`
