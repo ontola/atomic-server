@@ -32,6 +32,50 @@ async function dndDrag(page: Page, source: Locator, target: Locator) {
   await page.mouse.up();
 }
 
+/**
+ * Like `dndDrag`, but for a `target` that only mounts once the drag is
+ * already active (the "No status" column is hidden while empty and appears
+ * for the duration of a drag) — its bounding box can't be read up front, so
+ * it's resolved from `targetTestId` only after the drag has activated.
+ */
+async function dndDragToLateMountedTarget(
+  page: Page,
+  source: Locator,
+  targetTestId: string,
+) {
+  const s = await source.boundingBox();
+
+  if (!s) {
+    throw new Error('drag source has no bounding box');
+  }
+
+  const sx = s.x + s.width / 2;
+  const sy = s.y + s.height / 2;
+
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  // Exceed the 10px activation distance to start the drag — only after this
+  // does the late-mounted target exist in the DOM.
+  await page.mouse.move(sx + 15, sy, { steps: 5 });
+
+  const target = page.getByTestId(targetTestId).last();
+  // Wait for the readiness signal (the target mounting post-activation),
+  // not a fixed delay — it doesn't exist until the drag state above commits.
+  await target.waitFor({ state: 'visible' });
+  const t = await target.boundingBox();
+
+  if (!t) {
+    throw new Error('drag target has no bounding box');
+  }
+
+  const tx = t.x + t.width / 2;
+  const ty = t.y + t.height / 2;
+
+  await page.mouse.move(tx, ty, { steps: 10 });
+  await page.mouse.move(tx, ty + 1, { steps: 2 });
+  await page.mouse.up();
+}
+
 const column = (page: Page, name: string) =>
   page.getByTestId('kanban-column').filter({ hasText: name });
 
@@ -47,10 +91,14 @@ async function createIssueTracker(page: Page, name: string) {
   await expect(page.getByTestId('kanban-board')).toBeVisible();
 }
 
-/** Adds a card with `title` to the given column via its inline "Add card". */
+/**
+ * Adds a card with `title` to the given column via its inline "Add …"
+ * button. The label is the table's row name — `createIssueTracker` always
+ * names the table "Bugs", which `NewTableDialog` auto-singularizes to "Bug".
+ */
 async function addCard(page: Page, col: Locator, title: string) {
-  await col.getByRole('button', { name: 'Add card' }).first().click();
-  const input = col.getByPlaceholder('Card title…');
+  await col.getByRole('button', { name: 'Add Bug' }).first().click();
+  const input = col.getByPlaceholder('Bug title…');
   await input.fill(title);
   await input.press('Enter');
   // Close the (rapid-entry) input so it doesn't overlap later interactions.
@@ -74,7 +122,41 @@ test.describe('kanban', () => {
       await expect(column(page, status)).toBeVisible();
     }
 
-    await expect(column(page, 'No status')).toBeVisible();
+    // A freshly created board has no uncategorized issues yet — the "No
+    // status" column stays hidden until one exists.
+    await expect(column(page, 'No status')).not.toBeVisible();
+  });
+
+  test('the "No status" column appears once an issue has no status, and hides again once it does', async ({
+    page,
+  }) => {
+    await createIssueTracker(page, 'Bugs');
+
+    await expect(column(page, 'No status')).not.toBeVisible();
+
+    const todo = column(page, 'todo');
+    await addCard(page, todo, 'Untriaged issue');
+
+    // Clear its status by dragging it into the "No status" column, which
+    // only mounts once the drag has activated.
+    await dndDragToLateMountedTarget(
+      page,
+      cardIn(todo, 'Untriaged issue'),
+      'kanban-column-body',
+    );
+
+    const noStatus = column(page, 'No status');
+    await expect(noStatus).toBeVisible();
+    await expect(cardIn(noStatus, 'Untriaged issue')).toBeVisible();
+
+    // Give it a status back — the column should hide again once it's empty.
+    await dndDrag(
+      page,
+      cardIn(noStatus, 'Untriaged issue'),
+      todo.getByTestId('kanban-column-body'),
+    );
+
+    await expect(column(page, 'No status')).not.toBeVisible();
   });
 
   test('add a card, drag it between columns, and it persists', async ({

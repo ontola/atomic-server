@@ -1,3 +1,6 @@
+import type { IconType } from 'react-icons';
+import { FaTable, FaTableColumns, FaCalendarDays } from 'react-icons/fa6';
+
 /**
  * The `view-kind` string stored on a View resource decides which renderer
  * displays the table's rows. Stored as a plain string in the ontology so new
@@ -21,4 +24,10 @@ export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
   table: 'Table',
   kanban: 'Kanban',
   calendar: 'Calendar',
+};
+
+export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
+  table: FaTable,
+  kanban: FaTableColumns,
+  calendar: FaCalendarDays,
 };

@@ -33,6 +33,7 @@ import {
   normalizeViewKind,
   VIEW_KINDS,
   VIEW_KIND_LABELS,
+  VIEW_KIND_ICONS,
   ViewKind,
 } from './tableViewKinds';
 
@@ -120,11 +121,16 @@ function AddViewMenu({
 }): JSX.Element {
   const items = useMemo(
     (): DropdownItem[] =>
-      VIEW_KINDS.map(kind => ({
-        id: kind,
-        label: VIEW_KIND_LABELS[kind],
-        onClick: () => createView(kind),
-      })),
+      VIEW_KINDS.map(kind => {
+        const Icon = VIEW_KIND_ICONS[kind];
+
+        return {
+          id: kind,
+          label: VIEW_KIND_LABELS[kind],
+          icon: <Icon />,
+          onClick: () => createView(kind),
+        };
+      }),
     [createView],
   );
 
@@ -189,6 +195,7 @@ function ViewTab({
   const [storedKind] = useString(resource, dataBrowser.properties.viewKind);
   const currentKind = normalizeViewKind(storedKind);
   const name = subject ? title || 'Untitled view' : (fallbackName ?? 'View');
+  const ViewKindIcon = VIEW_KIND_ICONS[currentKind];
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -294,6 +301,7 @@ function ViewTab({
         onContextMenu={openMenuAt}
         type='button'
       >
+        <ViewKindIcon />
         {name}
       </Tab>
       {menuPoint && (
@@ -434,6 +442,7 @@ const IconBtn = styled.button`
 const Tab = styled.button<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
+  gap: 0.4rem;
   height: 1.85rem;
   padding: 0.1rem 0.7rem;
   border: none;

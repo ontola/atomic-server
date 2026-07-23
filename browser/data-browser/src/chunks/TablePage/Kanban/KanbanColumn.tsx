@@ -5,6 +5,7 @@ import { useCallback, useRef, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa6';
 import { Tag } from '@components/Tag';
 import { IconButton } from '@components/IconButton/IconButton';
+import { SkeletonButton } from '@components/SkeletonButton';
 import { InputStyled } from '@components/forms/InputStyles';
 import { KanbanCard } from './KanbanCard';
 
@@ -18,6 +19,9 @@ interface KanbanColumnProps {
   tagSubject: string | undefined;
   cardSubjects: string[];
   fields: Property[];
+  /** Singular label for a row of this table (e.g. "Issue"), used in the
+   *  "Add …" affordances instead of a hardcoded "card". */
+  rowName: string;
   readOnly: boolean;
   /** True when the dragged card would drop into this column — highlights the
    *  whole column. Replaces the raw `isOver` flag, which never fired for a
@@ -34,6 +38,7 @@ export function KanbanColumn({
   tagSubject,
   cardSubjects,
   fields,
+  rowName,
   readOnly,
   isDropTarget = false,
   onAddCard,
@@ -70,13 +75,15 @@ export function KanbanColumn({
     <Column data-testid='kanban-column'>
       <ColumnHeader>
         {tagSubject ? (
-          <Tag subject={tagSubject} />
+          <ColumnHeaderTag>
+            <Tag subject={tagSubject} />
+          </ColumnHeaderTag>
         ) : (
           <NoStatus>No status</NoStatus>
         )}
         <Count data-testid='kanban-column-count'>{cardSubjects.length}</Count>
         {!readOnly && (
-          <HeaderAdd title='Add card' type='button' onClick={openAdder}>
+          <HeaderAdd title={`Add ${rowName}`} type='button' onClick={openAdder}>
             <FaPlus />
           </HeaderAdd>
         )}
@@ -101,7 +108,7 @@ export function KanbanColumn({
           (adding ? (
             <AddInput
               ref={inputRef}
-              placeholder='Card title…'
+              placeholder={`${rowName} title…`}
               value={draft}
               onChange={e => setDraft(e.target.value)}
               onKeyDown={e => {
@@ -123,7 +130,7 @@ export function KanbanColumn({
             />
           ) : (
             <AddButton type='button' onClick={openAdder}>
-              <FaPlus /> Add card
+              <FaPlus /> Add {rowName}
             </AddButton>
           ))}
       </CardList>
@@ -151,6 +158,11 @@ const ColumnHeader = styled.div`
   flex-shrink: 0;
 `;
 
+const ColumnHeaderTag = styled.div`
+  font-weight: bold;
+  font-size: 1.05em;
+`;
+
 const NoStatus = styled.span`
   color: ${p => p.theme.colors.textLight};
   font-style: italic;
@@ -167,22 +179,10 @@ const HeaderAdd = styled(IconButton)`
   width: 1.6rem;
 `;
 
-const AddButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem;
-  border: none;
-  border-radius: ${p => p.theme.radius};
-  background-color: transparent;
-  color: ${p => p.theme.colors.textLight};
-  cursor: pointer;
+const AddButton = styled(SkeletonButton)`
+  justify-content: flex-start;
+  padding: 0.6rem 0.75rem;
   font-size: 0.9em;
-
-  &:hover {
-    background-color: ${p => p.theme.colors.bg1};
-    color: ${p => p.theme.colors.text};
-  }
 `;
 
 const AddInput = styled(InputStyled)`
@@ -208,8 +208,7 @@ const CardList = styled.div<{ $over: boolean }>`
   min-height: 4rem;
   overflow-y: auto;
   border-radius: ${p => p.theme.radius};
-  background-color: ${p =>
-    p.$over ? p.theme.colors.bg1 : p.theme.colors.bgBody};
+  background-color: ${p => (p.$over ? p.theme.colors.bg2 : p.theme.colors.bg1)};
   border: 1px dashed ${p => (p.$over ? p.theme.colors.main : 'transparent')};
   transition:
     background-color 0.1s ease-in-out,

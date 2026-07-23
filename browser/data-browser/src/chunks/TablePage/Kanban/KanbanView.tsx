@@ -457,7 +457,16 @@ export function KanbanView({
     return <Center>Setting up the board…</Center>;
   }
 
-  const columnIds = [...columnTags, UNCATEGORIZED_COLUMN_ID];
+  // Hide the "No status" column when it's empty — but keep it around for the
+  // duration of any drag, so a card can still be dropped there to clear its
+  // status. It reappears the moment a row loses its tag.
+  const showUncategorized =
+    (buckets.get(UNCATEGORIZED_COLUMN_ID)?.length ?? 0) > 0 ||
+    !!draggingSubject;
+  const columnIds = [
+    ...columnTags,
+    ...(showUncategorized ? [UNCATEGORIZED_COLUMN_ID] : []),
+  ];
   // While dragging, render the preview order; the column holding the dragged
   // card is the drop target (highlighted).
   const displayBuckets = preview ?? buckets;
@@ -491,6 +500,7 @@ export function KanbanView({
                   tagSubject={isUncategorized ? undefined : columnId}
                   cardSubjects={displayBuckets.get(columnId) ?? []}
                   fields={cardFields}
+                  rowName={tableClass.title || 'Row'}
                   readOnly={readOnly}
                   isDropTarget={columnId === dropTargetColumn}
                   onAddCard={name =>
