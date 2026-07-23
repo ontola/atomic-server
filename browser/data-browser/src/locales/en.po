@@ -5260,8 +5260,9 @@ msgstr "Edit the body, then merge."
 msgid "Resource has no editable document content"
 msgstr "Resource has no editable document content"
 
-#~ msgid "New Meeting"
-#~ msgstr "New Meeting"
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New Meeting"
+msgstr "New Meeting"
 
 #: src/components/Presence/MeetingBanner.tsx
 msgid "Ending meeting"

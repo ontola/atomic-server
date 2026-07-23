@@ -5226,8 +5226,9 @@ msgstr ""
 msgid "Resource has no editable document content"
 msgstr ""
 
-#~ msgid "New Meeting"
-#~ msgstr ""
+#: src/components/NewInstanceButton/QuickCreateRow.tsx
+msgid "New Meeting"
+msgstr ""
 
 #: src/components/Presence/MeetingBanner.tsx
 msgid "Ending meeting"
