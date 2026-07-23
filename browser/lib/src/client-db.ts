@@ -106,6 +106,13 @@ type Role = 'initializing' | 'leader' | 'follower' | 'failed';
 // as a ghost.
 const LEADER_ELECTION_WAIT_MS = 2_000;
 
+// How long a steal gets to complete leader init before we park in degraded
+// mode. Distinct from (and larger than) the election wait: post-steal we're
+// no longer waiting on a possibly-dead peer, we're waiting on our OWN
+// worker's wasm import + OPFS open, which can take seconds on a cold dev
+// server. Ends early on success or on a definite failure.
+const STEAL_SETTLE_WAIT_MS = 15_000;
+
 // Lock stealing (`navigator.locks.request({ steal: true })`) is attempted on
 // every browser. Modern Firefox (and Zen) honors `steal` — verified manually
 // against a real ghost lease — despite older notes here claiming it was
@@ -276,16 +283,42 @@ export class ClientDbWorker {
       );
       this.requestLeaderLock(baseUrl, true);
 
-      // Wait for the steal callback to actually run `becomeLeader`. Cap the
-      // wait so a browser bug surfaces a real error instead of hanging.
+      // Wait for the steal callback to run `becomeLeader` TO COMPLETION —
+      // `leadershipGained` only resolves after the worker's wasm import and
+      // OPFS open, which legitimately takes several seconds on a cold dev
+      // server. The old cap reused LEADER_ELECTION_WAIT_MS (2s) here and
+      // produced false "reclaiming did not succeed" errors for steals that
+      // were succeeding, just slowly. The wait ends early on success, on
+      // another tab winning, or on a real init error (e.g. the ghost is a
+      // live throttled tab whose worker still holds the OPFS file handle —
+      // a stolen Web Lock can't take that).
       const stolen = await Promise.race([
         this.leadershipGained.then(() => 'stolen' as const),
-        new Promise<'still-stuck'>(resolve =>
-          setTimeout(() => resolve('still-stuck'), LEADER_ELECTION_WAIT_MS),
-        ),
+        this.leaderObserved.then(() => 'follower' as const),
+        (async () => {
+          const deadline = Date.now() + STEAL_SETTLE_WAIT_MS;
+
+          while (Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 250));
+            if (this._initError || this.destroyed)
+              return 'open-failed' as const;
+          }
+
+          return 'still-stuck' as const;
+        })(),
       ]);
 
       if (this.destroyed) return;
+
+      if (stolen === 'open-failed') {
+        // The steal took the lock but leader init failed — `_initError`
+        // carries the real cause (usually the OPFS handle still held by a
+        // live background tab). Surface that instead of a generic message.
+        this.role = 'failed';
+        console.warn('[ClientDb]', this._initError?.message);
+
+        return;
+      }
 
       if (stolen === 'still-stuck') {
         // Either the engine ignored `steal` (the request queued behind the
