@@ -19,6 +19,7 @@ import { useResource } from '@tomic/react';
 import NavBarContent from './NavBar';
 import { useLocation } from '@tanstack/react-router';
 import { useSettings } from '../helpers/AppSettings';
+import { ChromeTheme } from '../styling';
 import { paths } from '../routes/paths';
 import { useRootWelcomeLayout } from '../context/RootWelcomeLayoutContext';
 
@@ -111,9 +112,11 @@ const TopBar = React.memo(function TopBar({
   const resource = useResource(subject);
 
   return (
-    <NavBarStyled aria-label='navigation' top={top}>
-      <NavBarContent resource={resource} />
-    </NavBarStyled>
+    <ChromeTheme>
+      <NavBarStyled aria-label='navigation' top={top}>
+        <NavBarContent resource={resource} />
+      </NavBarStyled>
+    </ChromeTheme>
   );
 });
 

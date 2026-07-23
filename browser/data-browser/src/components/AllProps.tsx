@@ -88,7 +88,9 @@ function useSortedProps(
     return pA - pB;
   });
 
-  return all.filter(prop => !exept.includes(prop) && !isNeverEditableProp(prop));
+  return all.filter(
+    prop => !exept.includes(prop) && !isNeverEditableProp(prop),
+  );
 }
 
 const AllPropsWrapper = styled.div<{ basic: boolean | undefined }>`

@@ -22,6 +22,7 @@ import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
 import { CalculatedPageHeight } from '../../globalCssVars';
 import { AIChatsPanel } from './AIPanel';
+import { ChromeTheme } from '../../styling';
 
 /** Amount of pixels where the sidebar automatically shows */
 export const SIDEBAR_TOGGLE_WIDTH = 600;
@@ -77,49 +78,51 @@ export function SideBar(): JSX.Element {
 
   return (
     <SideBarContainer>
-      <StyledNav
-        ref={mountRefs}
-        size={size}
-        data-testid='sidebar'
-        locked={isWideScreen && sideBarLocked}
-        exposed={sidebarVisible}
-        {...listeners}
-      >
-        {/* The key is set to make sure the component is re-loaded when the baseURL changes */}
-        <SideBarDriveMemo
-          onItemClick={closeSideBar}
-          key={drive}
-          onIsRearangingChange={setIsRearanging}
-        />
-        <MenuWrapper>
-          <Column gap='0.5rem' align='stretch'>
-            <SideBarHomePanels onItemClick={closeSideBar} />
-            {enabledPanels.has(Panel.AIChats) && (
-              <SideBarPanel title='AI Chats' key={drive}>
-                <AIChatsPanel />
-              </SideBarPanel>
-            )}
-            {enabledPanels.has(Panel.Ontologies) && (
-              <SideBarPanel title='Ontologies' key={drive}>
-                <OntologiesPanel />
-              </SideBarPanel>
-            )}
-            <SideBarPanel title='App'>
-              <Column gap='0.5rem' align='stretch'>
-                <AppMenu onItemClick={closeSideBar} />
-              </Column>
-            </SideBarPanel>
-          </Column>
-        </MenuWrapper>
-        <OverlapSpacer />
-        {!isRearanging && (
-          <SideBarDragArea
-            ref={dragAreaRef}
-            isDragging={isDragging}
-            {...dragAreaListeners}
+      <ChromeTheme>
+        <StyledNav
+          ref={mountRefs}
+          size={size}
+          data-testid='sidebar'
+          locked={isWideScreen && sideBarLocked}
+          exposed={sidebarVisible}
+          {...listeners}
+        >
+          {/* The key is set to make sure the component is re-loaded when the baseURL changes */}
+          <SideBarDriveMemo
+            onItemClick={closeSideBar}
+            key={drive}
+            onIsRearangingChange={setIsRearanging}
           />
-        )}
-      </StyledNav>
+          <MenuWrapper>
+            <Column gap='0.5rem' align='stretch'>
+              <SideBarHomePanels onItemClick={closeSideBar} />
+              {enabledPanels.has(Panel.AIChats) && (
+                <SideBarPanel title='AI Chats' key={drive}>
+                  <AIChatsPanel />
+                </SideBarPanel>
+              )}
+              {enabledPanels.has(Panel.Ontologies) && (
+                <SideBarPanel title='Ontologies' key={drive}>
+                  <OntologiesPanel />
+                </SideBarPanel>
+              )}
+              <SideBarPanel title='App'>
+                <Column gap='0.5rem' align='stretch'>
+                  <AppMenu onItemClick={closeSideBar} />
+                </Column>
+              </SideBarPanel>
+            </Column>
+          </MenuWrapper>
+          <OverlapSpacer />
+          {!isRearanging && (
+            <SideBarDragArea
+              ref={dragAreaRef}
+              isDragging={isDragging}
+              {...dragAreaListeners}
+            />
+          )}
+        </StyledNav>
+      </ChromeTheme>
       <SideBarOverlay
         onClick={() => setSideBarLocked(false)}
         visible={sideBarLocked && !isWideScreen}

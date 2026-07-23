@@ -23,6 +23,7 @@ import {
   SettingsSection,
   SettingsSearchProvider,
 } from '@components/Settings';
+import { presetColors } from '../styling';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
 
@@ -42,6 +43,8 @@ const AppSettings: React.FunctionComponent = () => {
   const {
     darkModeSetting,
     setDarkMode,
+    colorfulMode,
+    setColorfulMode,
     viewTransitionsDisabled,
     setViewTransitionsDisabled,
     sidebarKeyboardDndEnabled,
@@ -153,6 +156,10 @@ const AppSettings: React.FunctionComponent = () => {
                   <SubLabel>Main color</SubLabel>
                   <MainColorPicker />
                 </Column>
+                <CheckboxLabel>
+                  <Checkbox checked={colorfulMode} onChange={setColorfulMode} />{' '}
+                  Colorful mode
+                </CheckboxLabel>
               </Column>
             </SettingsSection>
             <SettingsSection label='Panels & Templates'>
@@ -216,11 +223,77 @@ const AppSettings: React.FunctionComponent = () => {
 
 const MainColorPicker = () => {
   const { mainColor, setMainColor } = useSettings();
+  const [customizing, setCustomizing] = useState(
+    () => !presetColors.includes(mainColor),
+  );
 
   return (
-    <HexColorPicker color={mainColor} onChange={val => setMainColor(val)} />
+    <Column gap='0.5rem'>
+      <SwatchRow>
+        {presetColors.map(color => (
+          <ColorSwatch
+            key={color}
+            type='button'
+            color={color}
+            title={color}
+            $selected={!customizing && mainColor === color}
+            onClick={() => {
+              setMainColor(color);
+              setCustomizing(false);
+            }}
+          />
+        ))}
+        <CustomizeButton
+          type='button'
+          $selected={customizing}
+          onClick={() => setCustomizing(prev => !prev)}
+        >
+          Customize
+        </CustomizeButton>
+      </SwatchRow>
+      {customizing && (
+        <HexColorPicker color={mainColor} onChange={val => setMainColor(val)} />
+      )}
+    </Column>
   );
 };
+
+const SwatchRow = styled(Row)`
+  flex-wrap: wrap;
+  gap: 0.5rem;
+`;
+
+const ColorSwatch = styled.button<{ color: string; $selected: boolean }>`
+  background-color: ${p => p.color};
+  border: none;
+  height: 1.75rem;
+  width: 1.75rem;
+  border-radius: ${p => p.theme.radius};
+  cursor: pointer;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  ${p => p.$selected && `outline-color: ${p.theme.colors.textLight};`}
+  &:hover,
+  &:focus-visible {
+    outline-color: ${p => p.theme.colors.textLight};
+  }
+`;
+
+const CustomizeButton = styled.button<{ $selected: boolean }>`
+  height: 1.75rem;
+  padding-inline: 0.6rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  background-color: ${p =>
+    p.$selected ? p.theme.colors.bg1 : p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
+  font-size: 0.8rem;
+  cursor: pointer;
+  &:hover,
+  &:focus-visible {
+    border-color: ${p => p.theme.colors.textLight};
+  }
+`;
 
 const SettingsSearchWrapper = styled(InputWrapper)`
   margin-block: ${p => p.theme.margin}rem;

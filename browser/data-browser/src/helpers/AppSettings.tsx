@@ -39,6 +39,10 @@ export const AppSettingsContextProvider = (
   // == APPEARANCE ==
   const [darkMode, setDarkMode, darkModeSetting] = useDarkMode();
   const [mainColor, setMainColor] = useLocalStorage('mainColor', '#1b50d8');
+  const [colorfulMode, setColorfulMode] = useLocalStorage(
+    'colorfulMode',
+    false,
+  );
   const [hideTemplates, setHideTemplates] = useLocalStorage(
     'hideTemplates',
     false,
@@ -139,6 +143,8 @@ export const AppSettingsContextProvider = (
       setDarkMode,
       mainColor,
       setMainColor,
+      colorfulMode,
+      setColorfulMode,
       sideBarLocked,
       setSideBarLocked,
       agent,
@@ -165,6 +171,8 @@ export const AppSettingsContextProvider = (
       setDarkMode,
       mainColor,
       setMainColor,
+      colorfulMode,
+      setColorfulMode,
       sideBarLocked,
       setSideBarLocked,
       agent,
@@ -203,6 +211,9 @@ export interface AppSettings {
   /** CSS value for the primary color */
   mainColor: string;
   setMainColor: (s: string) => void;
+  /** If true, UI neutrals (backgrounds, text) are tinted with the main color */
+  colorfulMode: boolean;
+  setColorfulMode: (b: boolean) => void;
   /** The URL that points to the Drive shown in the SideBar */
   drive: string;
   /** Sets the current Drive (and therefore, server!) */
@@ -240,6 +251,8 @@ const initialState: AppSettings = {
   setDarkMode: () => undefined,
   mainColor: '',
   setMainColor: () => undefined,
+  colorfulMode: false,
+  setColorfulMode: () => undefined,
   drive: '',
   setDrive: () => undefined,
   sideBarLocked: false,

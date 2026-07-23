@@ -3,7 +3,13 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from 'styled-components';
-import { complement, darken, lighten, setLightness } from 'polished';
+import {
+  complement,
+  darken,
+  lighten,
+  setLightness,
+  setSaturation,
+} from 'polished';
 import './reset.css';
 import { useContext, type JSX } from 'react';
 import { SettingsContext } from './helpers/AppSettings';
@@ -19,15 +25,72 @@ interface ThemeWrapperProps {
  * SettingsContext
  */
 export const ThemeWrapper = ({ children }: ThemeWrapperProps): JSX.Element => {
-  const { mainColor, darkMode } = useContext(SettingsContext);
+  const { mainColor, darkMode, colorfulMode } = useContext(SettingsContext);
 
   return (
     <>
-      <ThemeProvider theme={buildTheme(darkMode, mainColor)}>
+      <ThemeProvider theme={buildTheme(darkMode, mainColor, colorfulMode)}>
         {children}
       </ThemeProvider>
     </>
   );
+};
+
+/**
+ * The app's muted color palette: the main-color presets in the appearance
+ * settings, and the default colors for new tags.
+ */
+export const presetColors = [
+  '#4C6FA5', // dusty blue
+  '#6E9B7B', // sage green
+  '#CC7B54', // terracotta
+  '#B5657A', // dusty rose
+  '#CC9A44', // mustard
+  '#7C7BB8', // periwinkle
+  '#4E9B96', // muted teal
+  '#A9825E', // warm taupe
+];
+
+/**
+ * Wraps the app chrome (sidebar, navbar). In colorful mode it swaps the
+ * neutral ramp for tones of the main color, so no grey ever sits on a colored
+ * surface. Outside colorful mode it changes nothing.
+ */
+export const ChromeTheme = ({ children }: ThemeWrapperProps): JSX.Element => (
+  <ThemeProvider theme={chromeTheme}>{children}</ThemeProvider>
+);
+
+const chromeTheme = (outer: DefaultTheme | undefined): DefaultTheme => {
+  // ChromeTheme is always nested inside ThemeWrapper, so outer is never
+  // actually undefined.
+  if (!outer || !outer.colorful) {
+    return outer!;
+  }
+
+  const tone = (lightness: number, saturation: number) =>
+    setLightness(lightness, setSaturation(saturation, outer.colors.main));
+
+  const colors = outer.darkMode
+    ? {
+        bg: tone(0.12, 0.35),
+        bg1: tone(0.18, 0.35),
+        bg2: tone(0.28, 0.3),
+        text: tone(0.92, 0.3),
+        text1: tone(0.85, 0.3),
+        textLight: tone(0.72, 0.25),
+        textLight2: tone(0.5, 0.25),
+      }
+    : {
+        bg: tone(0.93, 0.55),
+        bg1: tone(0.88, 0.5),
+        bg2: tone(0.8, 0.4),
+        text: tone(0.13, 0.4),
+        text1: tone(0.18, 0.4),
+        textLight: tone(0.35, 0.3),
+        textLight2: tone(0.55, 0.25),
+      };
+
+  return { ...outer, colors: { ...outer.colors, ...colors } };
 };
 
 /**
@@ -80,7 +143,11 @@ function size(index = 3): string {
 size.raw = (multiplier: number) => `${multiplier}rem`;
 
 /** Construct a StyledComponents theme object */
-export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
+export const buildTheme = (
+  darkMode: boolean,
+  mainIn: string,
+  colorful = false,
+): DefaultTheme => {
   // Guard against undefined during HMR re-initialization (e.g. useLocalStorage cold start)
   const safeMain = mainIn || '#1b50d8';
   const main = darkMode ? lighten(0.2, safeMain) : safeMain;
@@ -90,6 +157,13 @@ export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
     : complementaryIn;
   const bg = darkMode ? '#000000' : '#ffffff';
   const text = darkMode ? '#fff' : '#000';
+  // Colorful mode: content and text stay neutral for readability; the main
+  // color shows in the app chrome (sidebar, navbar) via ChromeTheme, with a
+  // barely-there tint on the body behind it. Tinting the full neutral ramp
+  // reads as a monochrome wash, not as color.
+  const bgBodyColorful = darkMode
+    ? setLightness(0.045, setSaturation(0.25, safeMain))
+    : setLightness(0.975, setSaturation(0.35, safeMain));
   const shadowColor = darkMode ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,0.07)';
   const shadowColorIntense = darkMode
     ? 'rgba(255,255,255,.3)'
@@ -97,6 +171,7 @@ export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
 
   return {
     darkMode,
+    colorful,
     fontFamilyHeader:
       "'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
     fontFamily:
@@ -127,7 +202,7 @@ export const buildTheme = (darkMode: boolean, mainIn: string): DefaultTheme => {
       complementary,
       bg: bg,
       // Use pitch black for dark mode
-      bgBody: darkMode ? bg : darken(0.02)(bg),
+      bgBody: colorful ? bgBodyColorful : darkMode ? bg : darken(0.02)(bg),
       mainSelectedBg: setLightness(darkMode ? 0.05 : 0.97, main),
       mainSelectedFg: setLightness(darkMode ? 0.7 : 0.25, main),
       bg1: darkMode ? lighten(0.1)(bg) : darken(0.05)(bg),
@@ -158,6 +233,8 @@ declare module 'styled-components' {
   export interface DefaultTheme {
     /** If true, make things dark */
     darkMode: boolean;
+    /** If true, the app chrome (via ChromeTheme) is tinted with the main color */
+    colorful: boolean;
     fontFamilyHeader: string;
     fontFamily: string;
     /** Body font size in rem */
