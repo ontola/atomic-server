@@ -1,11 +1,9 @@
 import { useCanWrite, useDrive, useResource, useStore } from '@tomic/react';
-import { useFollow } from '../components/Presence/FollowContext';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { useNewRoute } from '../helpers/useNewRoute';
 import { useFavorites } from '../hooks/useFavorites';
-import { useRightPanel } from '../components/RightPanel/RightPanelContext';
 import {
   newContextItem,
   useAISidebar,
@@ -38,8 +36,6 @@ export function useActionContext(
   const [favorites, addFavorite, removeFavorite] = useFavorites();
   const { setContextItems, isOpen, setIsOpen } = useAISidebar();
   const [drive] = useDrive();
-  const { activeMeeting, startMeeting, endMeeting } = useFollow();
-  const { openMeetingPanel } = useRightPanel();
 
   const addToChat = () => {
     setContextItems(prev => [
@@ -72,10 +68,6 @@ export function useActionContext(
     enableScope,
     addChild,
     drive,
-    activeMeeting,
-    startMeeting,
-    openMeetingPanel,
-    endMeeting,
     ...overrides,
   };
 }

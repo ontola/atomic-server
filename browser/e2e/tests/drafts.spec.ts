@@ -16,7 +16,10 @@ import {
 test.describe('drafts (unpublished new content)', () => {
   test.beforeEach(before);
 
-  test('New draft creates content in the drive’s Drafts folder', async ({
+  // The "New draft" context-menu action was removed; drafts are meant to be
+  // created through the New page instead, which doesn't offer them yet.
+  // Re-enable (and re-route) this test when the New page grows that flow.
+  test.fixme('New draft creates content in the drive’s Drafts folder', async ({
     page,
   }) => {
     // Start on a resource so the app has a drive context.

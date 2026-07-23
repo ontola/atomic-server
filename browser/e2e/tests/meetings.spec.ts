@@ -11,7 +11,7 @@ import {
  * Meetings (#1127): follow-mode with a front door, driven as two
  * sessions (browser contexts) of the same agent in one drive.
  *
- * 1. Leader A starts a meeting from the drive menu.
+ * 1. Leader A creates a meeting and starts it from its page.
  * 2. Follower B sees the top-bar Join banner and clicks it → follows A
  *    and the meeting chat opens, showing the "Started the meeting."
  *    marker.
@@ -29,39 +29,29 @@ const joinBanner = (page: Page) => page.getByTitle(/led by/);
 const meetingBanner = (page: Page) =>
   page.getByTitle(/led by|Open the meeting chat/);
 
-test('top-bar Meet starts a meeting and opens its panel', async ({ page }) => {
+test('top bar offers no Meet control when no meeting is live', async ({
+  page,
+}) => {
   await before({ page });
   await page.waitForLoadState('load');
 
-  const initialSubject = await getCurrentSubject(page);
-  await page
-    .getByRole('button', { name: 'Meet', exact: true })
-    .click({ timeout: 30_000 });
-
-  await expect(page.getByText('notes', { exact: true }).first()).toBeVisible({
+  // Wait until the bar is fully populated before asserting absences.
+  await expect(page.getByRole('button', { name: 'More' })).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByTestId('follow-session-panel')).toHaveAttribute(
-    'data-open',
-    '',
-    { timeout: 30_000 },
-  );
 
-  const firstMeeting = await getCurrentSubject(page);
-  expect(firstMeeting).not.toBe(initialSubject);
-
-  await page.getByRole('button', { name: 'End meeting' }).click();
+  // The top-bar "Meet" start button is gone — meetings start from the
+  // Meeting page. The banner spot only fills once a meeting is live.
   await expect(
-    page.getByText('minutes', { exact: true }).first(),
-  ).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Meet', exact: true })
-    .click({ timeout: 30_000 });
+    page.getByRole('button', { name: 'Meet', exact: true }),
+  ).toHaveCount(0);
 
-  await expect(page.getByText('notes', { exact: true }).first()).toBeVisible({
-    timeout: 30_000,
-  });
-  expect(await getCurrentSubject(page)).not.toBe(firstMeeting);
+  // The More menu no longer quick-starts meetings or drafts either; both
+  // go through the New page.
+  await page.getByRole('button', { name: 'More' }).click();
+  await expect(page.getByTestId('menu-item-favorite')).toBeVisible();
+  await expect(page.getByTestId('menu-item-meeting')).toHaveCount(0);
+  await expect(page.getByTestId('menu-item-newDraft')).toHaveCount(0);
 });
 
 test('prepare an agenda, start it, and preserve minutes', async ({ page }) => {
@@ -167,10 +157,13 @@ test('start a meeting, join it, follow along, and end it', async ({
     timeout: 30_000,
   });
 
-  // 1. A quick-starts from More. It navigates to the dedicated Meeting page,
-  // labels the shared body Notes, and opens that same Meeting's chat.
-  await pageA.getByRole('button', { name: 'More' }).click();
-  await pageA.getByTestId('menu-item-meeting').click();
+  // 1. A creates a meeting and starts it from the Meeting page — the only
+  // start affordance now that the top bar and More menu don't offer one.
+  await pageA.getByRole('button', { name: 'New Meeting' }).first().click();
+  await expect(pageA.getByText('agenda', { exact: true }).first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await pageA.getByRole('button', { name: 'Start meeting' }).click();
   await expect(pageA.getByText('notes', { exact: true }).first()).toBeVisible({
     timeout: 30_000,
   });
@@ -260,9 +253,12 @@ test('records join and leave in the meeting chat', async ({ browser }) => {
     timeout: 30_000,
   });
 
-  // A starts a meeting; its chat panel opens.
-  await pageA.getByRole('button', { name: 'More' }).click();
-  await pageA.getByTestId('menu-item-meeting').click();
+  // A creates a meeting and starts it from its page; the chat panel opens.
+  await pageA.getByRole('button', { name: 'New Meeting' }).first().click();
+  await expect(pageA.getByText('agenda', { exact: true }).first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await pageA.getByRole('button', { name: 'Start meeting' }).click();
   const leaderPanel = pageA.getByTestId('follow-session-panel');
   await expect(leaderPanel).toHaveAttribute('data-open', '', {
     timeout: 30_000,

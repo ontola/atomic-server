@@ -164,6 +164,7 @@ msgstr "Nom de l'agent"
 #: src/chunks/AI/SkillsConfigTab.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Name"
 msgstr "Nom"
 
@@ -337,6 +338,7 @@ msgid "No custom classes found on the current drive."
 msgstr "Aucune classe personnalisée trouvée sur le lecteur actuel."
 
 #: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
+#: src/chunks/Conference/ConferenceRoom.tsx
 msgid "You"
 msgstr "Vous"
 
@@ -1772,6 +1774,7 @@ msgstr "Cet appareil"
 msgid "Manage account & plan →"
 msgstr ""
 
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 msgid "Add"
 msgstr "Ajouter"
@@ -2418,6 +2421,7 @@ msgid "New Drive"
 msgstr "Nouveau lecteur"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "My Drive"
 msgstr "Mon lecteur"
 
@@ -3782,6 +3786,7 @@ msgid "Search"
 msgstr "Rechercher"
 
 #: src/helpers/managed/cloudSync.ts
+#: src/helpers/managed/reconcile.test.ts
 #: src/helpers/managed/reconcile.ts
 #: src/helpers/managed/reconcile.ts
 msgid "Disabled"
@@ -4071,25 +4076,12 @@ msgstr ""
 msgid "Status"
 msgstr ""
 
-#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
-msgid "No status"
-msgstr ""
-
 #: src/chunks/TablePage/Kanban/KanbanView.tsx
 msgid "Setting up the board…"
 msgstr ""
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Start from"
-msgstr ""
-
-#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
-#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
-msgid "Add card"
-msgstr ""
-
-#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
-msgid "Card title…"
 msgstr ""
 
 #: src/components/forms/ValueForm/ValueForm.tsx
@@ -4132,6 +4124,7 @@ msgstr ""
 msgid "New item…"
 msgstr ""
 
+#: src/chunks/TablePage/Kanban/KanbanView.tsx
 #: src/chunks/TablePage/createTableFromSpec.ts
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -4147,6 +4140,7 @@ msgid "Names the class of the rows — e.g. every row of an Employees table is a
 msgstr ""
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Drive created"
 msgstr ""
 
@@ -4733,22 +4727,12 @@ msgstr ""
 msgid "No matching shortcuts"
 msgstr ""
 
-#: src/actions/resourceActions.tsx
 #: src/views/Meeting/MeetingPage.tsx
 msgid "End meeting"
 msgstr ""
 
-#: src/actions/resourceActions.tsx
 #: src/views/Meeting/MeetingPage.tsx
 msgid "Start meeting"
-msgstr ""
-
-#: src/actions/resourceActions.tsx
-msgid "Stop leading; the meeting log stays in the drive."
-msgstr ""
-
-#: src/actions/resourceActions.tsx
-msgid "Invite everyone in this drive to follow you live."
 msgstr ""
 
 #: src/components/DemoExitButton.tsx
@@ -4810,11 +4794,6 @@ msgstr ""
 #: src/components/Presence/FollowSessionPanelContainer.tsx
 #: src/components/Presence/MeetingBanner.tsx
 msgid "Ending…"
-msgstr ""
-
-#: src/components/Presence/MeetingBanner.tsx
-#: src/components/Presence/MeetingBanner.tsx
-msgid "Meet"
 msgstr ""
 
 #: src/components/Presence/MeetingBanner.tsx
@@ -4991,6 +4970,7 @@ msgstr ""
 msgid "Recent activity {0}"
 msgstr ""
 
+#: src/chunks/Conference/ConferenceRoom.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connecting…"
 msgstr ""
@@ -5234,10 +5214,6 @@ msgstr ""
 msgid "Ending meeting"
 msgstr ""
 
-#: src/components/Presence/MeetingBanner.tsx
-msgid "Starting…"
-msgstr ""
-
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Meeting"
 msgstr ""
@@ -5303,14 +5279,6 @@ msgstr ""
 
 #: src/helpers/forksFolder.ts
 msgid "Forks"
-msgstr ""
-
-#: src/actions/resourceActions.tsx
-msgid "New draft"
-msgstr ""
-
-#: src/actions/resourceActions.tsx
-msgid "Create new, unpublished content in this drive’s Drafts folder."
 msgstr ""
 
 #: src/helpers/draftsFolder.ts
@@ -5496,16 +5464,10 @@ msgstr ""
 msgid "Localized Text"
 msgstr ""
 
-#~ msgid "Switch language"
-#~ msgstr ""
-
 #. 0: contentLanguage; 1: title
 #: src/components/LocalizedTextValue.tsx
 msgid "No {0} translation. {1}"
 msgstr ""
-
-#~ msgid "+ add"
-#~ msgstr ""
 
 #: src/chunks/TablePage/ColumnLanguageChip.tsx
 #: src/components/ContentLanguageSelect.tsx
@@ -5539,9 +5501,6 @@ msgstr ""
 msgid "Remove {0}"
 msgstr ""
 
-#~ msgid "The languages this drive publishes content in (BCP 47 tags, e.g. <0/> or <1/>). Language pickers offer these, and a missing translation is flagged against this set."
-#~ msgstr ""
-
 #: src/components/EditLanguagesDialog.tsx
 msgid "<0/> Add"
 msgstr ""
@@ -5559,5 +5518,116 @@ msgstr ""
 msgid "This property is server-managed and cannot be edited."
 msgstr ""
 
-#~ msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
-#~ msgstr ""
+#: src/routes/SyncRoute.tsx
+msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Could not create the drive."
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating…"
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Create drive"
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "New drive"
+msgstr ""
+
+#: src/helpers/knownPeers.test.ts
+#: src/helpers/knownPeers.test.ts
+#: src/helpers/knownPeers.test.ts
+#: src/helpers/knownPeers.test.ts
+msgid "Joep's phone"
+msgstr ""
+
+#: src/helpers/knownPeers.test.ts
+#: src/helpers/knownPeers.test.ts
+#: src/helpers/knownPeers.test.ts
+#: src/helpers/knownPeers.test.ts
+#: src/helpers/pairing.test.ts
+#: src/helpers/pairing.test.ts
+msgid "Tablet"
+msgstr ""
+
+#: src/helpers/knownPeers.test.ts
+#: src/helpers/knownPeers.test.ts
+msgid "Phone"
+msgstr ""
+
+#: src/helpers/knownPeers.test.ts
+msgid "Real"
+msgstr ""
+
+#: src/helpers/managedServer.test.ts
+#: src/helpers/pairing.test.ts
+msgid "Failed to fetch"
+msgstr ""
+
+#: src/helpers/pairing.test.ts
+#: src/helpers/pairing.test.ts
+msgid "Joep’s phone"
+msgstr ""
+
+#: src/helpers/managed/reconcile.test.ts
+msgid "Active"
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Customize"
+msgstr ""
+
+#. 0: rowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Add {0}"
+msgstr ""
+
+#. 0: rowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "{0} title…"
+msgstr ""
+
+#. 0: ' '
+#: src/routes/AppSettings.tsx
+msgid "<0/>{0} Colorful mode"
+msgstr ""
+
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "Leave video call"
+msgstr ""
+
+#: src/components/Presence/FollowSessionPanelContainer.tsx
+msgid "Start video call"
+msgstr ""
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Microphone access was denied — allow it in your browser to join the call."
+msgstr ""
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "No microphone or camera found."
+msgstr ""
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Mute microphone"
+msgstr ""
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Unmute microphone"
+msgstr ""
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Turn camera off"
+msgstr ""
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Turn camera on"
+msgstr ""
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Leave call"
+msgstr ""

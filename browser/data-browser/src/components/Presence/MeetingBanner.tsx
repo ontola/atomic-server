@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { styled, keyframes } from 'styled-components';
 import { FaVideo } from 'react-icons/fa6';
 import {
   dataBrowser,
   unknownSubject,
   useArray,
-  useCurrentAgent,
   useDrive,
   useDrivePresence,
   useNumber,
@@ -18,8 +17,9 @@ import { LabelButton } from '../NavBarButton';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 
 /**
- * The meeting's front door in the top bar. Three states, one spot:
- *  - No live meeting → a subtle "Start meeting" button.
+ * The meeting's front door in the top bar. Only shows while a meeting is
+ * happening (starting one lives on the Meeting page itself):
+ *  - No live meeting → nothing.
  *  - A live meeting you're not in → a vibrant Join pill.
  *  - You're in (leader or joined) → the pill opens the meeting chat;
  *    Leave / End live in the chat panel header.
@@ -35,10 +35,8 @@ export function MeetingBanner(): React.JSX.Element | null {
     dataBrowser.properties.currentMeetings,
   );
   const presence = useDrivePresence();
-  const [agent] = useCurrentAgent();
-  const { follow, followedAgent, activeMeeting, startMeeting } = useFollow();
+  const { follow, followedAgent, activeMeeting } = useFollow();
   const { setPanelOpen, activePanel, openMeetingPanel } = useRightPanel();
-  const [starting, setStarting] = useState(false);
   const panelOpen = activePanel === 'followSession';
   const [currentSubject] = useCurrentSubject();
   const locallyStartedMeeting = drive
@@ -112,35 +110,9 @@ export function MeetingBanner(): React.JSX.Element | null {
     );
   }
 
-  // No live meeting → offer to start one (same spot Join would appear).
+  // No live meeting → nothing; meetings are started from the Meeting page.
   if (meetingSubject === unknownSubject) {
-    if (!agent || !drive) return null;
-
-    const handleStart = () => {
-      setStarting(true);
-      void startMeeting().then(
-        subject => {
-          openMeetingPanel(subject);
-          setStarting(false);
-        },
-        error => {
-          console.error('[Meeting] could not start meeting:', error);
-          setStarting(false);
-        },
-      );
-    };
-
-    return (
-      <LabelButton
-        type='button'
-        onClick={handleStart}
-        disabled={starting}
-        title='Meet'
-      >
-        <FaVideo />
-        <span>{starting ? 'Starting…' : 'Meet'}</span>
-      </LabelButton>
-    );
+    return null;
   }
 
   // "Own" means I'm the LEADER of this meeting (I started it) — not

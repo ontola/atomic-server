@@ -7,7 +7,6 @@ import {
   FaCodeBranch,
   FaCodeMerge,
   FaDownload,
-  FaFilePen,
   FaMagnifyingGlass,
   FaMessage,
   FaPencil,
@@ -17,11 +16,8 @@ import {
   FaStar,
   FaTrash,
   FaTurnUp,
-  FaVideo,
-  FaVideoSlash,
 } from 'react-icons/fa6';
 import { getOrCreateForksFolder } from '../helpers/forksFolder';
-import { getOrCreateDraftsFolder } from '../helpers/draftsFolder';
 import {
   constructOpenURL,
   dataURL,
@@ -45,56 +41,6 @@ const getParent = (ctx: ActionContext): string | undefined =>
  * test ids stay valid.
  */
 export const resourceActions: ActionDefinition[] = [
-  {
-    id: 'meeting',
-    scope: 'app',
-    section: 'action',
-    label: ctx => (ctx.activeMeeting ? 'End meeting' : 'Start meeting'),
-    helper: ctx =>
-      ctx.activeMeeting
-        ? 'Stop leading; the meeting log stays in the drive.'
-        : 'Invite everyone in this drive to follow you live.',
-    keywords: ['meeting', 'present', 'tour', 'follow', 'call'],
-    icon: ctx => (ctx.activeMeeting ? <FaVideoSlash /> : <FaVideo />),
-    available: ctx => !!ctx.drive && !!ctx.startMeeting,
-    run: async ctx => {
-      if (ctx.activeMeeting) {
-        await ctx.endMeeting?.();
-      } else {
-        const meeting = await ctx.startMeeting?.();
-
-        if (meeting) ctx.openMeetingPanel?.(meeting);
-      }
-    },
-  },
-  {
-    id: 'newDraft',
-    scope: 'app',
-    section: 'action',
-    label: () => 'New draft',
-    // A draft is new content that isn't published yet. It is not a class, it is
-    // a place: a resource in the drive's Drafts folder, which carries no public
-    // read grant, so it stays private until you publish it by moving it out.
-    // (A Fork, by contrast, proposes a change to an *existing* resource.)
-    helper: () =>
-      'Create new, unpublished content in this drive’s Drafts folder.',
-    keywords: ['draft', 'new', 'create', 'unpublished', 'compose', 'post'],
-    icon: () => <FaFilePen />,
-    available: ctx => !!ctx.drive,
-    run: async ctx => {
-      try {
-        const draftsFolder = await getOrCreateDraftsFolder(
-          ctx.store,
-          ctx.drive!,
-        );
-        ctx.navigate(
-          `${paths.new}?parentSubject=${encodeURIComponent(draftsFolder)}`,
-        );
-      } catch (error) {
-        toast.error((error as Error).message);
-      }
-    },
-  },
   {
     id: 'view',
     scope: 'resource',
