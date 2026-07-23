@@ -19,6 +19,9 @@ import { SideBarHeader } from './SideBarHeader';
 import { SimpleErrorBlock } from '../ErrorLook';
 import { DriveSwitcher } from './DriveSwitcher';
 import { Row } from '../Row';
+import { IconButton } from '../IconButton/IconButton';
+import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
+import { FaSort } from 'react-icons/fa6';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { ScrollArea } from '../ScrollArea';
 import { useSidebarDnd } from './useSidebarDnd';
@@ -115,9 +118,7 @@ export function SideBarDrive({
         >
           <DriveTitle data-testid='current-drive-title'>{driveName}</DriveTitle>
         </TitleButton>
-        <HeadingButtonWrapper gap='0'>
-          <DriveSwitcher />
-        </HeadingButtonWrapper>
+        <DriveSwitcher Trigger={DriveSwitcherTrigger} />
       </SideBarHeader>
       <DndContext
         onDragStart={handleDragStart}
@@ -213,16 +214,27 @@ const DriveTitle = styled.h2`
   margin: 0;
   padding: 0;
   font-size: 1.4rem;
-  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `;
 
+/**
+ * The title and the drive-switcher caret form one segmented control: flush
+ * edges, shared rounding, each half highlighting on its own hover.
+ */
 const TitleButton = styled(Button)<{ current?: boolean }>`
   text-align: left;
+  /* Fill the header so the switcher caret is always pinned to the right;
+     the name truncates when longer than the sidebar. */
   flex: 1;
-  /* Left inset lines the title up with the tree rows below: ListWrapper's
+  min-width: 0;
+  /* Lines the title text up with the tree rows below: SideBarHeader's
      padding-inline plus SideBarItem's own padding. */
-  padding: 0.4rem calc(${props => props.theme.margin}rem + 0.2rem);
-  border-radius: ${props => props.theme.radius};
+  padding: 0.4rem 0.2rem;
+  border-radius: ${props => props.theme.radius} 0 0
+    ${props => props.theme.radius};
 
   ${({ current, theme }) =>
     current &&
@@ -238,6 +250,30 @@ const TitleButton = styled(Button)<{ current?: boolean }>`
   }
 `;
 
+const SwitcherButton = styled(IconButton)`
+  align-self: stretch;
+  height: auto;
+  width: auto;
+  padding-inline: 0.4rem;
+  border-radius: 0 ${p => p.theme.radius} ${p => p.theme.radius} 0;
+  color: ${p => p.theme.colors.textLight};
+
+  &:hover,
+  &:focus-visible {
+    background-color: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
+  }
+  &:active {
+    background-color: ${p => p.theme.colors.bg2};
+  }
+`;
+
+const DriveSwitcherTrigger = buildDefaultTrigger(
+  <FaSort />,
+  'Switch Drive',
+  SwitcherButton,
+);
+
 const SideBarErr = styled(SimpleErrorBlock)`
   margin-inline-end: ${props => props.theme.size()};
 `;
@@ -246,11 +282,6 @@ const ListWrapper = styled.div`
   overflow-x: hidden;
   position: relative;
   padding-inline: ${p => p.theme.margin}rem;
-`;
-
-const HeadingButtonWrapper = styled(Row)`
-  color: ${p => p.theme.colors.main};
-  font-size: 0.9rem;
 `;
 
 const StyledScrollArea = styled(ScrollArea)`
