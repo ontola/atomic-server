@@ -87,6 +87,25 @@
         --background-color: white;
       }
 
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --text-splash: white;
+          --background-color: black;
+        }
+      }
+
+      /* Set by the script below when the in-app dark mode setting overrides
+         the OS preference */
+      :root[data-splash-theme='dark'] {
+        --text-splash: white;
+        --background-color: black;
+      }
+
+      :root[data-splash-theme='light'] {
+        --text-splash: black;
+        --background-color: white;
+      }
+
       body {
         background-color: var(--background-color);
       }
@@ -111,6 +130,21 @@
   </head>
 
   <body>
+    <script>
+      // The app's dark mode setting ('always' | 'never' | 'auto', stored by
+      // useDarkMode) can override the OS preference. Apply it before first
+      // paint so the splash doesn't flash the wrong theme.
+      try {
+        var darkMode = JSON.parse(localStorage.getItem('darkMode'));
+
+        if (darkMode === 'always' || darkMode === 'never') {
+          document.documentElement.dataset.splashTheme =
+            darkMode === 'always' ? 'dark' : 'light';
+        }
+      } catch (e) {
+        // Broken localStorage value: fall back to the OS preference.
+      }
+    </script>
     <div id="root">
       <svg
         width="647"
@@ -190,19 +224,5 @@
     </div>
 
     <script type="module" src="/src/index.tsx"></script>
-
-    <!-- Dark mode for first few seconds  -->
-    <script>
-      const dark =
-        window.matchMedia &&
-        window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (dark) {
-        document.documentElement.style.setProperty('--text-splash', 'white');
-        document.documentElement.style.setProperty(
-          '--background-color',
-          'black',
-        );
-      }
-    </script>
   </body>
 </html>
