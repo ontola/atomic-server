@@ -66,22 +66,25 @@ The following features should not be treated as one toggle:
 
 ## Local cache and session isolation
 
+> **Status: shipped (2026-07).** The mechanism below is implemented — one
+> encrypted OPFS database per agent, keyed to the active session. See
+> [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md) for the
+> as-built design, key hierarchy, migration, and accepted gaps.
+
 "Local encryption at rest" (#2 above) is usually motivated by a lost or stolen
 device. There is a second, nearer-term motivation that the same mechanism must
 cover: **multiple agents — or none — sharing one browser/device.** When you log
 out, the private data you cached must stop being readable on that machine.
 
-### Current gap
+### The gap this closed
 
-The browser ClientDb is a single OPFS store **per origin**, not per agent
-(`data-browser/src/helpers/initClientDb.ts`: "Singleton per origin, so all tabs
-talk to one DB instance automatically"). Reading a private resource caches its
-plaintext there. Sign-out only clears the in-memory agent
-(`setAgent(undefined)` in `SettingsAgent.tsx`); it never touches OPFS, and there
-is currently **no clear/reset path on the ClientDb at all**. So after logout —
-or after switching to a different agent — the previous agent's private resources
-remain in OPFS as plaintext, readable locally with no server round-trip and
-therefore **no authorization check**.
+The browser ClientDb was a single plaintext OPFS store **per origin**, not per
+agent. Reading a private resource cached its plaintext there. Sign-out only
+cleared the in-memory agent (`setAgent(undefined)` in `SettingsAgent.tsx`),
+never touching OPFS, and there was no clear/reset path on the ClientDb at all.
+So after logout — or after switching to a different agent — the previous
+agent's private resources remained in OPFS as plaintext, readable locally with
+no server round-trip and therefore **no authorization check**.
 
 ### Requirement and chosen direction
 

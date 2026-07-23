@@ -6,6 +6,8 @@ mod encoding;
 pub mod kv_store;
 #[cfg(feature = "db-sled")]
 mod migrations;
+#[cfg(feature = "db-redb")]
+pub mod encrypted_backend;
 #[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
 pub mod opfs_backend;
 pub mod plugin_meta;
@@ -605,9 +607,17 @@ impl Db {
 
     /// Creates a Db backed by redb with OPFS persistent storage.
     /// Only available in WASM Workers. Data survives page reloads.
+    ///
+    /// `encryption_key` (32 bytes) enables at-rest encryption of the OPFS
+    /// file; the browser passes a per-agent key so one agent's cache is
+    /// unreadable to other sessions on the same origin.
     #[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
-    pub async fn init_redb_opfs(base_domain: Option<String>, filename: &str) -> AtomicResult<Db> {
-        let redb_store = redb_store::RedbStore::new_opfs(filename).await?;
+    pub async fn init_redb_opfs(
+        base_domain: Option<String>,
+        filename: &str,
+        encryption_key: Option<&[u8; 32]>,
+    ) -> AtomicResult<Db> {
+        let redb_store = redb_store::RedbStore::new_opfs(filename, encryption_key).await?;
 
         let store = Db {
             path: std::path::PathBuf::new(),

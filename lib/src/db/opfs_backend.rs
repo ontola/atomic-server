@@ -26,17 +26,121 @@ impl std::fmt::Debug for OpfsBackend {
 unsafe impl Send for OpfsBackend {}
 unsafe impl Sync for OpfsBackend {}
 
+/// The OPFS root directory of this origin.
+async fn opfs_root() -> Result<web_sys::FileSystemDirectoryHandle, JsValue> {
+    let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
+    let storage = global.navigator().storage();
+    Ok(JsFuture::from(storage.get_directory())
+        .await?
+        .unchecked_into())
+}
+
+/// Whether a file exists in the OPFS root. Errors other than NotFound
+/// propagate.
+pub async fn file_exists(filename: &str) -> Result<bool, JsValue> {
+    let root = opfs_root().await?;
+    match JsFuture::from(root.get_file_handle(filename)).await {
+        Ok(_) => Ok(true),
+        Err(e) => {
+            if e.clone()
+                .dyn_into::<web_sys::DomException>()
+                .is_ok_and(|ex| ex.name() == "NotFoundError")
+            {
+                Ok(false)
+            } else {
+                Err(e)
+            }
+        }
+    }
+}
+
+/// Delete a file from the OPFS root.
+pub async fn remove_file(filename: &str) -> Result<(), JsValue> {
+    let root = opfs_root().await?;
+    JsFuture::from(root.remove_entry(filename)).await?;
+    Ok(())
+}
+
+/// One-time migration of the pre-split single database file into a per-agent
+/// database. Copies `legacy` into `target` (encrypting when `key` is given),
+/// then deletes `legacy`. Returns whether a migration happened.
+///
+/// No-ops when `legacy` is missing or `target` already exists — the copy must
+/// never clobber an existing per-agent database. Both files' sync-access
+/// handles are closed before returning so the caller can open `target`
+/// normally afterwards (OPFS handles are exclusive per file).
+pub async fn migrate_legacy_db(
+    legacy: &str,
+    target: &str,
+    key: Option<&[u8; 32]>,
+) -> Result<bool, String> {
+    let err = |m: &str, e: JsValue| format!("{m}: {e:?}");
+
+    if !file_exists(legacy).await.map_err(|e| err("check legacy", e))? {
+        return Ok(false);
+    }
+    if file_exists(target).await.map_err(|e| err("check target", e))? {
+        return Ok(false);
+    }
+
+    let src = OpfsBackend::open(legacy)
+        .await
+        .map_err(|e| err("open legacy", e))?;
+    let len = redb::StorageBackend::len(&src).map_err(|e| e.to_string())?;
+    if len == 0 {
+        redb::StorageBackend::close(&src).map_err(|e| e.to_string())?;
+        remove_file(legacy).await.map_err(|e| err("remove legacy", e))?;
+        return Ok(false);
+    }
+
+    let dst_raw = OpfsBackend::open(target)
+        .await
+        .map_err(|e| err("open target", e))?;
+    let copy_result = match key {
+        Some(key) => {
+            let dst = super::encrypted_backend::EncryptedBackend::new(dst_raw, key)
+                .map_err(|e| e.to_string())?;
+            copy_backend(&src, &dst, len).and_then(|_| {
+                redb::StorageBackend::sync_data(&dst)?;
+                redb::StorageBackend::close(&dst)
+            })
+        }
+        None => copy_backend(&src, &dst_raw, len).and_then(|_| {
+            redb::StorageBackend::sync_data(&dst_raw)?;
+            redb::StorageBackend::close(&dst_raw)
+        }),
+    };
+    let _ = redb::StorageBackend::close(&src);
+    copy_result.map_err(|e| format!("copy legacy db: {e}"))?;
+
+    remove_file(legacy).await.map_err(|e| err("remove legacy", e))?;
+    Ok(true)
+}
+
+/// Copy `len` bytes between two storage backends in chunks.
+fn copy_backend(
+    src: &impl redb::StorageBackend,
+    dst: &impl redb::StorageBackend,
+    len: u64,
+) -> std::io::Result<()> {
+    const CHUNK: usize = 1 << 20;
+    let mut buf = vec![0u8; CHUNK];
+    let mut offset = 0u64;
+    while offset < len {
+        let n = CHUNK.min((len - offset) as usize);
+        src.read(offset, &mut buf[..n])?;
+        dst.write(offset, &buf[..n])?;
+        offset += n as u64;
+    }
+    Ok(())
+}
+
 impl OpfsBackend {
     /// Open (or create) a file in OPFS and return a synchronous access handle.
     /// This is async because getting the directory/file handle requires promises,
     /// but once created, all subsequent I/O is synchronous.
     pub async fn open(filename: &str) -> Result<Self, JsValue> {
-        let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
-        let navigator = global.navigator();
-        let storage = navigator.storage();
-        let root_dir: web_sys::FileSystemDirectoryHandle = JsFuture::from(storage.get_directory())
-            .await?
-            .unchecked_into();
+        let root_dir = opfs_root().await?;
 
         let opts = web_sys::FileSystemGetFileOptions::new();
         opts.set_create(true);

@@ -1,6 +1,7 @@
 import { Agent, SubtleCryptoProvider, JSCryptoProvider } from '@tomic/react';
 import { del, get, set } from 'idb-keyval';
 import { adoptAgentOnDevice } from './adoptAgent';
+import { clearSessionDbKeys, ensureDbKeyOnSignIn } from './localDbKey';
 
 const AGENT_IDB_KEY = 'atomic.agent';
 
@@ -109,6 +110,11 @@ export async function saveAgentToIDB(
   if (keyPairOrSecret === undefined) {
     await del(AGENT_IDB_KEY);
     await del(AGENT_FALLBACK_KEY);
+    // Sign-out: drop the session copies of the local-database encryption
+    // keys. The wrapped copies survive, so the encrypted OPFS caches become
+    // readable again on the owning agent's next sign-in — while this
+    // signed-out session can no longer open them.
+    await clearSessionDbKeys();
 
     return;
   }
@@ -137,6 +143,13 @@ export async function saveAgentToIDB(
 
 /** Persist the agent's key, preferring a non-extractable keypair. */
 async function storeSecret(secret: string): Promise<void> {
+  // The secret is a base64-encoded JSON containing { privateKey, subject }.
+  // The raw private key is needed below for the JS fallback record, and to
+  // derive the wrapping key for the local-database encryption key — this is
+  // the only moment it passes through JS once the keypair is stored
+  // non-extractably.
+  const decoded = JSON.parse(atob(secret));
+
   {
     // Prefer the non-extractable keypair. Once stored this way the private key
     // cannot be read back out of IndexedDB by anything running on this origin,
@@ -151,6 +164,8 @@ async function storeSecret(secret: string): Promise<void> {
         } satisfies StoredAgent);
         await del(AGENT_FALLBACK_KEY);
 
+        await ensureLocalDbKey(resolvedSubject, decoded.privateKey);
+
         return;
       } catch {
         // SubtleCrypto refused the key — fall through to the readable record.
@@ -161,14 +176,29 @@ async function storeSecret(secret: string): Promise<void> {
     // so a readable key is the only way to sign at all. The secret is no more
     // exposed than the unencrypted connection already carrying it.
     const [, newSubject] = JSCryptoProvider.fromSecret(secret);
-    // The secret is a base64-encoded JSON containing { privateKey, subject }.
-    // We extract the privateKey for the JS fallback.
-    const decoded = JSON.parse(atob(secret));
     await set(AGENT_FALLBACK_KEY, {
       privateKey: decoded.privateKey,
       subject: newSubject,
     } satisfies StoredAgentFallback);
     // Drop a keypair from a previous account, so it can't be loaded instead.
     await del(AGENT_IDB_KEY);
+
+    await ensureLocalDbKey(newSubject, decoded.privateKey);
+  }
+}
+
+/**
+ * Set up this agent's local-database encryption key (unwrap the durable copy,
+ * or create one). Best-effort: a failure here degrades to a fresh cache key,
+ * never blocks sign-in.
+ */
+async function ensureLocalDbKey(
+  subject: string,
+  privateKey: string,
+): Promise<void> {
+  try {
+    await ensureDbKeyOnSignIn(subject, privateKey);
+  } catch (e) {
+    console.warn('Failed to prepare local database key:', e);
   }
 }

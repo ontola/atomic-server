@@ -4,7 +4,7 @@
  * Multi-tab strategy: **leader-owns-DB + BroadcastChannel fanout**.
  *
  * - Every tab constructs a `ClientDbWorker`. Each tab `navigator.locks.request`s
- *   the `atomic-db-leader` lock.
+ *   the `atomic-db-leader:<dbName>` lock.
  * - One tab gets the lock — it becomes the **leader**. The leader spawns a
  *   dedicated worker, opens the OPFS handle, and answers DB calls locally.
  * - Other tabs are **followers**. They forward every DB call over a
@@ -53,13 +53,31 @@ export interface ClientDbQueryOpts {
   drive?: string;
 }
 
+/** Options for opening a specific (per-agent) local database. */
+export interface ClientDbOptions {
+  /** OPFS file name of the database. Defaults to the legacy shared name
+   *  (`atomic_data.redb`) so existing callers keep their current DB. */
+  dbName?: string;
+  /** Encryption key for the database file, passed through to the WASM layer. */
+  dbKey?: Uint8Array;
+  /** When true (and `dbName` differs from the legacy name), the worker asks
+   *  WASM to migrate the legacy shared DB file into `dbName` before opening. */
+  migrateLegacy?: boolean;
+}
+
 type PendingRequest = {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
 };
 
-const LEADER_LOCK = 'atomic-db-leader';
-const RPC_CHANNEL = 'atomic-db-rpc';
+/** Legacy shared database file name, used when no `dbName` is given. */
+const DEFAULT_DB_NAME = 'atomic_data.redb';
+
+// Lock/channel name prefixes. The instance-level names are suffixed with the
+// database name so two different-agent DBs never share a leader — a leader
+// only owns *its* OPFS file, and cross-tab RPC must stay within one DB.
+const LEADER_LOCK_PREFIX = 'atomic-db-leader';
+const RPC_CHANNEL_PREFIX = 'atomic-db-rpc';
 
 /**
  * `'failed'` means leader election timed out: the lock is held by a stale tab
@@ -88,22 +106,13 @@ type Role = 'initializing' | 'leader' | 'follower' | 'failed';
 // as a ghost.
 const LEADER_ELECTION_WAIT_MS = 2_000;
 
-/**
- * Whether `navigator.locks.request({ steal: true })` can reclaim a ghost
- * leader's lease. Steal is Chromium-only; `navigator.userAgentData` is likewise
- * Chromium-only (and available in the secure contexts we run in — https +
- * localhost), so its presence is a reliable proxy. On Firefox/Safari `steal` is
- * silently ignored (the request just queues behind the ghost), so attempting it
- * only burns another `LEADER_ELECTION_WAIT_MS`; we skip it and rely on the
- * already-pending plain queued request to recover when the ghost lease frees.
- */
-function lockStealSupported(): boolean {
-  return (
-    typeof navigator !== 'undefined' &&
-    'locks' in navigator &&
-    'userAgentData' in navigator
-  );
-}
+// Lock stealing (`navigator.locks.request({ steal: true })`) is attempted on
+// every browser. Modern Firefox (and Zen) honors `steal` — verified manually
+// against a real ghost lease — despite older notes here claiming it was
+// Chromium-only. On an engine that ignores the `steal` dictionary member the
+// request just queues behind the ghost, the capped wait below expires, and we
+// park in degraded mode — the same outcome the old skip produced, one
+// `LEADER_ELECTION_WAIT_MS` later.
 
 type BroadcastMessage =
   | { type: 'leader-ping' }
@@ -140,7 +149,16 @@ export class ClientDbWorker {
   private pending = new Map<string, PendingRequest>();
   private workerUrl: string;
   private wasmUrl: string;
+  private opts: ClientDbOptions;
+  /** Lock + channel names scoped to this instance's database. */
+  private leaderLockName: string;
+  private rpcChannelName: string;
   private ready = false;
+
+  /** Set by `destroy()`. An in-flight `doInit` (the election waits span
+   *  seconds) checks this after every await so a superseded instance goes
+   *  silent instead of parking in 'failed' and surfacing a stale error. */
+  private destroyed = false;
   private seeded = true;
   private initPromise: Promise<void> | null = null;
   private seedPromise: Promise<void> | null = null;
@@ -163,9 +181,13 @@ export class ClientDbWorker {
     return this._initError;
   }
 
-  constructor(wasmUrl: string, workerUrl?: string) {
+  constructor(wasmUrl: string, workerUrl?: string, opts?: ClientDbOptions) {
     this.wasmUrl = wasmUrl;
     this.workerUrl = workerUrl ?? '';
+    this.opts = opts ?? {};
+    const dbName = this.opts.dbName ?? DEFAULT_DB_NAME;
+    this.leaderLockName = `${LEADER_LOCK_PREFIX}:${dbName}`;
+    this.rpcChannelName = `${RPC_CHANNEL_PREFIX}:${dbName}`;
     this.leadershipGained = new Promise<void>(r => {
       this.onBecameLeader = r;
     });
@@ -211,7 +233,7 @@ export class ClientDbWorker {
       return;
     }
 
-    this.bc = new BroadcastChannel(RPC_CHANNEL);
+    this.bc = new BroadcastChannel(this.rpcChannelName);
     this.bc.onmessage = (event: MessageEvent<BroadcastMessage>) =>
       this.handleBroadcast(event.data);
 
@@ -240,28 +262,13 @@ export class ClientDbWorker {
     endElection({ winner });
 
     if (winner === 'timeout') {
-      if (!lockStealSupported()) {
-        // Firefox/Safari: no lock-steal, so a ghost lease can't be forced.
-        // Don't waste another `LEADER_ELECTION_WAIT_MS` on a steal that just
-        // queues — park in degraded (server-only) mode NOW. We stay
-        // recoverable: the plain queued request from `doInit` above is still
-        // pending, so `becomeLeader` runs the moment the holding tab/worker
-        // closes (→ leader), and a late `leader-announce` flips us to follower.
-        this.role = 'failed';
-        this._initError = new Error(
-          'ClientDb is running without its local cache: another tab — or a ' +
-            'leftover worker — on this site holds the local database, and ' +
-            "this browser can't reclaim it automatically (lock-stealing is " +
-            'Chromium-only). The app works normally meanwhile (reading from ' +
-            'the server directly), and recovers on its own when that tab ' +
-            'closes. To recover now, close other tabs of this site and reload.',
-        );
-        console.warn('[ClientDb]', this._initError.message);
+      // This instance may have been superseded while the election timer ran
+      // (agent switch / HMR teardown). A destroyed instance must not park
+      // itself in 'failed' or surface an error the replacement already
+      // resolved.
+      if (this.destroyed) return;
 
-        return;
-      }
-
-      // Chromium: forcibly take the lock from the ghost leader. The previous
+      // Forcibly take the lock from the ghost leader. The previous
       // callback gets aborted by the browser; we run `becomeLeader` from
       // this new callback.
       console.warn(
@@ -278,10 +285,22 @@ export class ClientDbWorker {
         ),
       ]);
 
+      if (this.destroyed) return;
+
       if (stolen === 'still-stuck') {
+        // Either the engine ignored `steal` (the request queued behind the
+        // ghost) or the steal callback hasn't run. We stay recoverable: the
+        // queued request fires `becomeLeader` the moment the holding
+        // tab/worker closes, and a late `leader-announce` flips us to
+        // follower.
         this.role = 'failed';
         this._initError = new Error(
-          `ClientDb leadership election failed: lock-steal did not yield ownership within ${LEADER_ELECTION_WAIT_MS}ms. Close other tabs of this origin and reload.`,
+          'ClientDb is running without its local cache: another tab — or a ' +
+            'leftover worker — on this site holds the local database, and ' +
+            'reclaiming the lock did not succeed. The app works normally ' +
+            'meanwhile (reading from the server directly), and recovers on ' +
+            'its own when that tab closes. To recover now, close other tabs ' +
+            'of this site and reload.',
         );
         console.warn('[ClientDb]', this._initError.message);
 
@@ -289,11 +308,13 @@ export class ClientDbWorker {
       }
     }
 
+    if (this.destroyed) return;
+
     this.ready = true;
   }
 
   /**
-   * Bid for `LEADER_LOCK`. Detached from the await chain — the callback's
+   * Bid for the db-scoped leader lock. Detached from the await chain — the callback's
    * "hold forever" promise (line below) is what keeps the lock owned
    * until tab close. `steal: true` is used by the recovery path in
    * `doInit` to forcibly take the lock from a ghost leader (a previous
@@ -317,7 +338,7 @@ export class ClientDbWorker {
     }
 
     void navigator.locks
-      .request(LEADER_LOCK, opts, async () => {
+      .request(this.leaderLockName, opts, async () => {
         try {
           await this.becomeLeader(baseUrl);
         } catch (e) {
@@ -342,8 +363,9 @@ export class ClientDbWorker {
         // Rejects if the callback throws OR if our hold was aborted by
         // another tab stealing the lock. The latter is fine if we're
         // already past `becomeLeader` (we just lost leadership); only
-        // surface as a hard error if init never completed.
-        if (!this.worker) {
+        // surface as a hard error if init never completed on a live
+        // instance — a destroyed one has been superseded.
+        if (!this.worker && !this.destroyed) {
           this._initError = e instanceof Error ? e : new Error(String(e));
         }
       });
@@ -384,6 +406,9 @@ export class ClientDbWorker {
       type: 'init',
       wasmUrl: this.wasmUrl,
       baseUrl,
+      dbName: this.opts.dbName,
+      dbKey: this.opts.dbKey,
+      migrateLegacy: this.opts.migrateLegacy,
     })) as ClientDbInitTimings | undefined;
     endWorkerInit(timings);
 
@@ -661,11 +686,12 @@ export class ClientDbWorker {
   }
 
   destroy(): void {
+    this.destroyed = true;
     // Release the leader lock FIRST. If we're the leader, resolving the hold
     // frees the `navigator.locks` lease; if we're still queued, abort the
     // pending request. Without this, `destroy()` (notably the HMR dispose
     // hook) leaks the lock for the page's lifetime — a ghost leader the next
-    // instance can't reclaim on Firefox/Safari (no lock-steal).
+    // instance can't reclaim until it steals.
     this.releaseLeaderHold?.();
     this.releaseLeaderHold = null;
     this.leaderLockAbort?.abort();

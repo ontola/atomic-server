@@ -198,15 +198,29 @@ impl RedbStore {
 
     /// Create a RedbStore backed by OPFS for persistent storage in WASM Workers.
     /// The file is created/opened in the Origin Private File System.
+    ///
+    /// With `encryption_key` set, all data is encrypted at rest via
+    /// [`super::encrypted_backend::EncryptedBackend`]. Opening an encrypted
+    /// file without the key (or with the wrong one) fails instead of exposing
+    /// or corrupting data, as does opening a plaintext file with a key.
     #[cfg(target_arch = "wasm32")]
-    pub async fn new_opfs(filename: &str) -> AtomicResult<Self> {
+    pub async fn new_opfs(filename: &str, encryption_key: Option<&[u8; 32]>) -> AtomicResult<Self> {
         let backend = super::opfs_backend::OpfsBackend::open(filename)
             .await
             .map_err(|e| format!("Failed to open OPFS backend: {:?}", e))?;
 
-        let db = Database::builder()
-            .create_with_backend(backend)
-            .map_err(|e| format!("Failed to create redb with OPFS: {e}"))?;
+        let db = match encryption_key {
+            Some(key) => {
+                let encrypted = super::encrypted_backend::EncryptedBackend::new(backend, key)
+                    .map_err(|e| format!("Failed to open encrypted OPFS backend: {e}"))?;
+                Database::builder()
+                    .create_with_backend(encrypted)
+                    .map_err(|e| format!("Failed to create encrypted redb with OPFS: {e}"))?
+            }
+            None => Database::builder()
+                .create_with_backend(backend)
+                .map_err(|e| format!("Failed to create redb with OPFS: {e}"))?,
+        };
 
         // Create all tables upfront
         {

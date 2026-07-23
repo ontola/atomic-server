@@ -32,17 +32,38 @@ impl ClientDb {
     /// Create a new ClientDb with OPFS persistence.
     /// `base_url` is the server URL, e.g. "https://myserver.com".
     ///
+    /// `db_name` selects the OPFS file (default `atomic_data.redb`); the
+    /// browser uses one file per agent. `db_key` (32 bytes) turns on at-rest
+    /// encryption of that file — without the right key an encrypted file
+    /// fails to open instead of exposing another agent's cache.
+    ///
     /// Expected runtime: a DedicatedWorker nested inside a per-origin
     /// SharedWorker. The SharedWorker fans tab ports into this single inner
     /// worker so exactly one OPFS sync access handle exists. If this fails,
     /// OPFS is genuinely broken (corrupt, quota, unsupported browser) — the
     /// error surfaces verbatim.
     #[wasm_bindgen(constructor)]
-    pub async fn new(base_url: Option<String>) -> Result<ClientDb, JsError> {
-        let db = Db::init_redb_opfs(base_url, "atomic_data.redb")
+    pub async fn new(
+        base_url: Option<String>,
+        db_name: Option<String>,
+        db_key: Option<Vec<u8>>,
+    ) -> Result<ClientDb, JsError> {
+        let name = validate_db_name(db_name)?;
+        let key = validate_db_key(db_key)?;
+        let db = Db::init_redb_opfs(base_url, &name, key.as_ref())
             .await
             .map_err(|e| to_js_err(format!("OPFS unavailable: {e}")))?;
-        web_sys::console::log_1(&"[ClientDb] Using OPFS persistent storage".into());
+        web_sys::console::log_1(
+            &format!(
+                "[ClientDb] Using OPFS persistent storage ({name}, {})",
+                if key.is_some() {
+                    "encrypted"
+                } else {
+                    "plaintext"
+                }
+            )
+            .into(),
+        );
         Ok(ClientDb { db })
     }
 
@@ -472,4 +493,50 @@ fn resource_to_json_ad(resource: &Resource) -> Result<String, JsError> {
 
 fn to_js_err(e: impl std::fmt::Display) -> JsError {
     JsError::new(&e.to_string())
+}
+
+const LEGACY_DB_NAME: &str = "atomic_data.redb";
+
+/// OPFS filenames come from our own JS, but reject anything that isn't a
+/// plain filename anyway — getFileHandle would take names like `..` verbatim.
+fn validate_db_name(db_name: Option<String>) -> Result<String, JsError> {
+    let name = db_name.unwrap_or_else(|| LEGACY_DB_NAME.to_string());
+    let valid = !name.is_empty()
+        && name != ".."
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+    if !valid {
+        return Err(to_js_err(format!("invalid database name: {name}")));
+    }
+    Ok(name)
+}
+
+fn validate_db_key(db_key: Option<Vec<u8>>) -> Result<Option<[u8; 32]>, JsError> {
+    db_key
+        .map(|key| {
+            key.as_slice()
+                .try_into()
+                .map_err(|_| to_js_err(format!("database key must be 32 bytes, got {}", key.len())))
+        })
+        .transpose()
+}
+
+/// One-time migration of the pre-split `atomic_data.redb` into the per-agent
+/// database `target`, encrypting when `key` is given. Returns whether a legacy
+/// file was migrated; no-ops (false) when there is no legacy file or `target`
+/// already exists. Call before constructing the ClientDb for `target`.
+#[wasm_bindgen(js_name = "migrateLegacyClientDb")]
+pub async fn migrate_legacy_client_db(
+    target: String,
+    key: Option<Vec<u8>>,
+) -> Result<bool, JsError> {
+    let target = validate_db_name(Some(target))?;
+    if target == LEGACY_DB_NAME {
+        return Ok(false);
+    }
+    let key = validate_db_key(key)?;
+    atomic_lib::db::opfs_backend::migrate_legacy_db(LEGACY_DB_NAME, &target, key.as_ref())
+        .await
+        .map_err(to_js_err)
 }

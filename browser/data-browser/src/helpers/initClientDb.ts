@@ -1,15 +1,39 @@
-import { ClientDbWorker, perfSpan, type Store } from '@tomic/lib';
+import { ClientDbWorker, perfSpan, StoreEvents, type Store } from '@tomic/lib';
 // Vite resolves the bundled worker from the lib's dist and gives us a URL
 // pointing at the asset it copies into the build output.
 import clientDbWorkerUrl from '@tomic/lib/client-db.worker.js?url';
 
-// Track the current worker so we can terminate it on HMR reload.
+import {
+  agentDbFingerprint,
+  getOrCreateSessionDbKey,
+  getSessionDbKey,
+  hasWrappedDbKey,
+} from './localDbKey';
+
+// Track the current worker so we can terminate it on HMR reload and on
+// agent switches.
 let currentWorker: ClientDbWorker | undefined;
+// The agent subject the current worker's database belongs to. `null` means
+// no start has happened yet (undefined is a real identity: signed out).
+let currentIdentity: string | undefined | null = null;
+// Identity switches are serialized so a rapid sign-out → sign-in can't
+// interleave two worker (re)starts against the same OPFS files.
+let restartChain: Promise<void> = Promise.resolve();
+let unsubscribeAgentListener: (() => void) | undefined;
+
+/** The shared plaintext database for signed-out browsing (public data only). */
+const ANON_DB_NAME = 'atomic_data.anon.redb';
 
 /**
- * Initialize the WASM ClientDb (a dedicated Worker; one leader per origin via
- * `navigator.locks` — see lib/src/client-db.ts) and attach it to the Store.
- * Uses OPFS for persistent storage — data survives page reloads.
+ * Initialize the WASM ClientDb (a dedicated Worker; one leader per origin and
+ * database via `navigator.locks` — see lib/src/client-db.ts) and attach it to
+ * the Store. Uses OPFS for persistent storage — data survives page reloads.
+ *
+ * Each agent gets its own database file, encrypted with a per-agent key
+ * (see `localDbKey.ts`), so one agent's cached private data is unreadable
+ * after sign-out or to a different agent on the same origin. Signed-out
+ * sessions use a shared plaintext database. On agent change the worker is
+ * torn down and restarted against the new identity's database.
  */
 export function initClientDb(store: Store): void {
   // NOT `SharedWorker`: the implementation moved to a dedicated Worker long
@@ -20,17 +44,107 @@ export function initClientDb(store: Store): void {
   // contexts is handled inside ClientDbWorker with a clear message.
   if (typeof Worker === 'undefined') return;
 
-  // Disconnect the previous port on HMR. The lib's leader election hands the
-  // database to another tab (or this one after reload); we just reattach.
+  scheduleStart(store, store.getAgent()?.subject);
+
+  unsubscribeAgentListener?.();
+  unsubscribeAgentListener = store.on(StoreEvents.AgentChanged, agent => {
+    scheduleStart(store, agent?.subject);
+  });
+
+  // Vite HMR: accept updates and re-initialize cleanly.
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      unsubscribeAgentListener?.();
+      unsubscribeAgentListener = undefined;
+      currentWorker?.destroy();
+      currentWorker = undefined;
+    });
+  }
+}
+
+function scheduleStart(store: Store, agentSubject: string | undefined): void {
+  restartChain = restartChain
+    .then(() => startForIdentity(store, agentSubject))
+    .catch(err => {
+      console.warn('[ClientDb] Failed to (re)start for identity:', err);
+    });
+}
+
+/**
+ * The database file for an agent: content-addressed by the agent subject so
+ * names stay valid OPFS filenames whatever characters a DID contains.
+ */
+async function dbNameForAgent(agentSubject: string): Promise<string> {
+  return `atomic_data.${await agentDbFingerprint(agentSubject)}.redb`;
+}
+
+/**
+ * The encryption key for an agent's database, preferring the active-session
+ * record. A wrapped record without a session record means a sign-in is
+ * unwrapping it right now (`ensureDbKeyOnSignIn` runs alongside the
+ * AgentChanged event) — wait for that instead of generating a fresh key that
+ * couldn't open the existing encrypted file.
+ */
+async function resolveDbKey(agentSubject: string): Promise<Uint8Array> {
+  const existing = await getSessionDbKey(agentSubject);
+
+  if (existing) return existing;
+
+  if (await hasWrappedDbKey(agentSubject)) {
+    for (let attempt = 0; attempt < 30; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const key = await getSessionDbKey(agentSubject);
+
+      if (key) return key;
+    }
+
+    // The sign-in never delivered the key (e.g. an agent restored from a
+    // non-extractable keypair, where no secret enters JS). Fall through: the
+    // generated key cannot open the old file, so the worker parks in
+    // server-only mode until the next sign-in with the secret heals it.
+    console.warn(
+      '[ClientDb] wrapped key present but no session key appeared; generating a new one',
+    );
+  }
+
+  return getOrCreateSessionDbKey(agentSubject);
+}
+
+async function startForIdentity(
+  store: Store,
+  agentSubject: string | undefined,
+): Promise<void> {
+  // AgentChanged also fires for same-identity re-signins; only an actual
+  // identity change warrants tearing down the worker.
+  if (currentIdentity !== null && currentIdentity === agentSubject) return;
+
+  const isFirstStart = currentIdentity === null;
+  currentIdentity = agentSubject;
+
   if (currentWorker) {
     currentWorker.destroy();
     currentWorker = undefined;
   }
 
+  let dbName = ANON_DB_NAME;
+  let dbKey: Uint8Array | undefined;
+
+  if (agentSubject) {
+    dbName = await dbNameForAgent(agentSubject);
+    dbKey = await resolveDbKey(agentSubject);
+  }
+
   const origin = window.location.origin;
   const wasmUrl = `${origin}/wasm/atomic_wasm.js`;
 
-  const clientDb = new ClientDbWorker(wasmUrl, clientDbWorkerUrl);
+  const clientDb = new ClientDbWorker(wasmUrl, clientDbWorkerUrl, {
+    dbName,
+    dbKey,
+    // Adopt the pre-split single `atomic_data.redb` (which may hold
+    // local-only data with no server fallback) into whichever identity is
+    // active at upgrade time. No-ops once it's gone.
+    migrateLegacy: true,
+  });
   currentWorker = clientDb;
 
   const serializeResource = (subject: string): string | undefined => {
@@ -97,7 +211,8 @@ export function initClientDb(store: Store): void {
     return `${subjects.length}:${(hash >>> 0).toString(16)}`;
   };
 
-  const FINGERPRINT_KEY = 'atomic.client-db.bootstrap-fingerprint';
+  // Per-database: each identity's database seeds independently.
+  const FINGERPRINT_KEY = `atomic.client-db.bootstrap-fingerprint.${dbName}`;
   const currentFingerprint = computeBootstrapFingerprint();
   const storedFingerprint =
     typeof localStorage !== 'undefined'
@@ -113,6 +228,16 @@ export function initClientDb(store: Store): void {
   const endClientDbInit = perfSpan('clientdb.init');
   const initPromise = clientDb.init(store.getServerUrl()).then(async () => {
     endClientDbInit();
+
+    // The memory seed may ONLY run on the very first start of this page
+    // load. On an identity switch, `store.resources` still holds the
+    // previous session's resources — seeding those would copy one agent's
+    // private data into another identity's (or the anonymous) database,
+    // exactly what the per-agent split exists to prevent. A fresh
+    // per-agent database gets its ~200 bundled defaults from the
+    // Rust-side `populate::bootstrap` instead.
+    if (!isFirstStart) return;
+
     const endPostInit = perfSpan('clientdb.postInit');
     // Skip the seed entirely when:
     //   - The WASM DB is already populated from OPFS (prior session), AND
@@ -249,6 +374,12 @@ export function initClientDb(store: Store): void {
 
   initPromise
     .then(() => {
+      // An identity switch may have superseded this worker while its init
+      // (leader election spans seconds) was still running. A destroyed
+      // worker must not re-attach itself over its replacement or surface
+      // errors the replacement already resolved.
+      if (currentWorker !== clientDb) return;
+
       // Re-emit so the sync page picks up clientDbReady: true.
       // The previous "safety net" reseed at this point — every
       // resource in `store.resources` re-pushed to the WASM index
@@ -270,18 +401,12 @@ export function initClientDb(store: Store): void {
       }
     })
     .catch(err => {
+      if (currentWorker !== clientDb) return;
+
       console.warn('[ClientDb] Failed to initialize:', err);
       // Re-emit so the Sync page can show the error (clientDbError).
       // clientDb.initError was populated in the send() catch inside doInit.
       store.setClientDb(clientDb);
       store.notifyError(clientDb.initError ?? err);
     });
-
-  // Vite HMR: accept updates and re-initialize cleanly.
-  if (import.meta.hot) {
-    import.meta.hot.dispose(() => {
-      currentWorker?.destroy();
-      currentWorker = undefined;
-    });
-  }
 }

@@ -5591,3 +5591,6 @@ msgstr "LanguageChipTrigger"
 #: src/components/forms/ResourceForm.tsx
 msgid "This property is server-managed and cannot be edited."
 msgstr "This property is server-managed and cannot be edited."
+
+#~ msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
+#~ msgstr "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."

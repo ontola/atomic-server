@@ -436,6 +436,13 @@ function SyncPage() {
   // lie for it, so the page leads with an honest, drive-specific state + the
   // option to start syncing it.
   const localOnlyDrive = !!status.drive && store.isLocalOnlyDrive(status.drive);
+  // Whether this device holds a usable copy of the data on its own: the
+  // embedded node (Tauri) or an enabled AND actually-running OPFS cache.
+  // `clientDbOn` alone isn't enough — the toggle only takes effect after a
+  // reload, and the worker can park in server-only mode (lock contention,
+  // insecure context), in which case the server is still the only source.
+  const hasWorkingLocalStore =
+    isNode || (clientDbOn && status.clientDbReady && !status.clientDbError);
   const serverHostname = status.serverUrl
     ? new URL(status.serverUrl).hostname
     : undefined;
@@ -890,7 +897,19 @@ function SyncPage() {
                             {statusLabel(nodes.server)}
                           </StatusPill>
                           {status.serverConnected ? (
-                            <NodeAction onClick={() => store.disconnect()}>
+                            // Without a working local store (embedded node or
+                            // ready OPFS cache), the server is the only data
+                            // source — disconnecting would leave the app with
+                            // no data at all.
+                            <NodeAction
+                              onClick={() => store.disconnect()}
+                              disabled={!hasWorkingLocalStore}
+                              title={
+                                hasWorkingLocalStore
+                                  ? undefined
+                                  : 'Local storage is off, so this server is the only data source. Enable local storage below to work disconnected.'
+                              }
+                            >
                               Disconnect
                             </NodeAction>
                           ) : (

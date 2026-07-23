@@ -13,7 +13,19 @@ let initPromise: Promise<ClientDbInitTimings> | null = null;
 
 /** Message types sent from main thread to worker */
 export type WorkerRequest =
-  | { id: number; type: 'init'; wasmUrl: string; baseUrl?: string }
+  | {
+      id: number;
+      type: 'init';
+      wasmUrl: string;
+      baseUrl?: string;
+      /** OPFS file name of the database; the WASM side defaults to the
+       *  legacy shared `atomic_data.redb` when omitted. */
+      dbName?: string;
+      /** Encryption key for the database file. */
+      dbKey?: Uint8Array;
+      /** Migrate the legacy shared DB into `dbName` before opening. */
+      migrateLegacy?: boolean;
+    }
   | { id: number; type: 'getResource'; subject: string }
   | { id: number; type: 'getResourceWithSnapshot'; subject: string }
   | { id: number; type: 'putResource'; jsonAd: string }
@@ -65,7 +77,13 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         return await initPromise;
       }
 
-      initPromise = doInit(msg.wasmUrl, msg.baseUrl);
+      initPromise = doInit(
+        msg.wasmUrl,
+        msg.baseUrl,
+        msg.dbName,
+        msg.dbKey,
+        msg.migrateLegacy,
+      );
 
       return await initPromise;
     }
@@ -268,6 +286,9 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 async function doInit(
   wasmUrl: string,
   baseUrl?: string,
+  dbName?: string,
+  dbKey?: Uint8Array,
+  migrateLegacy?: boolean,
 ): Promise<ClientDbInitTimings> {
   // Dynamic import of the WASM glue code.
   // The URL should point to the directory containing atomic_wasm.js and atomic_wasm_bg.wasm
@@ -277,9 +298,26 @@ async function doInit(
   // Compile + instantiate the WASM module.
   await wasm.default();
   const t2 = performance.now();
+
+  // One-time migration of the legacy shared DB file into the per-agent
+  // `dbName`. Must run BEFORE `new ClientDb` takes the OPFS handle. A failed
+  // migration must not block opening the new DB — the legacy file is left in
+  // place for a later attempt.
+  if (migrateLegacy && dbName && dbName !== 'atomic_data.redb') {
+    try {
+      await wasm.migrateLegacyClientDb(dbName, dbKey ?? undefined);
+    } catch (e) {
+      console.warn('[ClientDb] legacy DB migration failed:', e);
+    }
+  }
+
   // `new ClientDb` opens the OPFS-backed database (acquire OPFS handle, open
   // redb, run migrations).
-  db = await new wasm.ClientDb(baseUrl ?? null);
+  db = await new wasm.ClientDb(
+    baseUrl ?? undefined,
+    dbName ?? undefined,
+    dbKey ?? undefined,
+  );
   const t3 = performance.now();
 
   return {
