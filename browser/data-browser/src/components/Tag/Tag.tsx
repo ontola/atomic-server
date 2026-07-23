@@ -17,7 +17,9 @@ interface TagProps {
   selected?: boolean;
 }
 
-const useTagData = (subject: string) => {
+/** The tag's raw color + display text, for consumers that render their own
+ *  UI around a tag instead of the pill (e.g. a kanban column header). */
+export const useTagData = (subject: string) => {
   const resource = useResource(subject);
   const [title] = useTitle(resource);
   const [color, setColor] = useString(resource, urls.properties.color, {

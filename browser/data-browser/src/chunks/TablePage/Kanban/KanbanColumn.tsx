@@ -1,13 +1,18 @@
 import { Property } from '@tomic/react';
 import { useDroppable } from '@dnd-kit/core';
 import { styled } from 'styled-components';
+import { mix, setLightness } from 'polished';
 import { useCallback, useRef, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa6';
-import { Tag } from '@components/Tag';
+import { useTagData } from '@components/Tag';
 import { IconButton } from '@components/IconButton/IconButton';
 import { SkeletonButton } from '@components/SkeletonButton';
 import { InputStyled } from '@components/forms/InputStyles';
 import { KanbanCard } from './KanbanCard';
+
+/** Placeholder subject passed to `useTagData` for the uncategorized column,
+ *  which has no tag — its data is loaded but never rendered. */
+const NO_TAG_SUBJECT = 'unknown-subject';
 
 /** Column id used for the bucket of cards that have no group-by value set. */
 export const UNCATEGORIZED_COLUMN_ID = '__uncategorized__';
@@ -49,6 +54,11 @@ export function KanbanColumn({
     data: { tagSubject },
   });
 
+  const { color: tagColor, text: tagText } = useTagData(
+    tagSubject ?? NO_TAG_SUBJECT,
+  );
+  const headerColor = tagSubject ? setLightness(0.38, tagColor) : undefined;
+
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,11 +83,9 @@ export function KanbanColumn({
 
   return (
     <Column data-testid='kanban-column'>
-      <ColumnHeader>
+      <ColumnHeader $bg={headerColor}>
         {tagSubject ? (
-          <ColumnHeaderTag>
-            <Tag subject={tagSubject} />
-          </ColumnHeaderTag>
+          <ColumnHeaderTitle>{tagText}</ColumnHeaderTitle>
         ) : (
           <NoStatus>No status</NoStatus>
         )}
@@ -91,6 +99,7 @@ export function KanbanColumn({
       <CardList
         ref={setNodeRef}
         $over={isDropTarget}
+        $tint={headerColor}
         data-testid='kanban-column-body'
         data-kanban-column-id={columnId}
       >
@@ -147,36 +156,47 @@ const Column = styled.div`
   /* Allow the inner card list to own the overflow instead of the column. */
   min-height: 0;
   height: 100%;
+  /* Header + card list are one continuous rounded card; this clips both to
+   * match the outer radius instead of each rounding its own corners. */
+  border-radius: ${p => p.theme.radius};
+  overflow: hidden;
 `;
 
-const ColumnHeader = styled.div`
+const ColumnHeader = styled.div<{ $bg: string | undefined }>`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.25rem 0.25rem 0.5rem;
+  padding: 0.6rem 0.75rem;
   /* Stays put while the card list below scrolls. */
   flex-shrink: 0;
+  background-color: ${p => p.$bg ?? p.theme.colors.bg2};
+  color: ${p => (p.$bg ? 'white' : p.theme.colors.textLight)};
 `;
 
-const ColumnHeaderTag = styled.div`
+const ColumnHeaderTitle = styled.span`
   font-weight: bold;
   font-size: 1.05em;
 `;
 
 const NoStatus = styled.span`
-  color: ${p => p.theme.colors.textLight};
   font-style: italic;
 `;
 
 const Count = styled.span`
-  color: ${p => p.theme.colors.textLight};
   font-size: 0.85em;
+  opacity: 0.8;
 `;
 
 const HeaderAdd = styled(IconButton)`
   margin-left: auto;
   height: 1.6rem;
   width: 1.6rem;
+  color: inherit;
+
+  &:not([disabled]):hover,
+  &:not([disabled]):focus-visible {
+    background-color: rgba(255, 255, 255, 0.25);
+  }
 `;
 
 const AddButton = styled(SkeletonButton)`
@@ -196,7 +216,7 @@ const AddInput = styled(InputStyled)`
   background-color: ${p => p.theme.colors.bg};
 `;
 
-const CardList = styled.div<{ $over: boolean }>`
+const CardList = styled.div<{ $over: boolean; $tint: string | undefined }>`
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -207,8 +227,18 @@ const CardList = styled.div<{ $over: boolean }>`
   flex: 1;
   min-height: 4rem;
   overflow-y: auto;
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => (p.$over ? p.theme.colors.bg2 : p.theme.colors.bg1)};
+  background-color: ${p => {
+    if (p.$over) {
+      return p.theme.colors.bg2;
+    }
+
+    // A faint wash of the header's hue over the usual grey — close enough
+    // to bg1 that it still reads as neutral, but ties the card list to its
+    // column.
+    return p.$tint
+      ? mix(0.08, p.$tint, p.theme.colors.bg1)
+      : p.theme.colors.bg1;
+  }};
   border: 1px dashed ${p => (p.$over ? p.theme.colors.main : 'transparent')};
   transition:
     background-color 0.1s ease-in-out,
