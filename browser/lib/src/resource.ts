@@ -28,6 +28,7 @@ import {
 } from './ontology.js';
 import type { ChangeSource, Store } from './store.js';
 import {
+  copyResource,
   forkResource,
   isFork,
   mergeFork,
@@ -2758,6 +2759,16 @@ export class Resource<C extends OptionalClass = any> {
    */
   public fork(parent: string): Promise<Resource> {
     return forkResource(this.store, this, parent);
+  }
+
+  /**
+   * Duplicate this resource into a new, independent resource under `parent`,
+   * carrying its content but not its identity, ACL, or history. Unlike
+   * {@link fork}, the copy has no link back and cannot be merged in. See
+   * {@link copyResource}.
+   */
+  public copyTo(parent: string): Promise<Resource> {
+    return copyResource(this.store, this, parent);
   }
 
   /**

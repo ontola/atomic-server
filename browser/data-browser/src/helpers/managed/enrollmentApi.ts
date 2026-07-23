@@ -19,6 +19,11 @@ export type ManagedEnrollmentSummary = {
   blob_bytes?: number;
   loro_bytes?: number;
   quota_bytes?: number | null;
+  /** HTTP origin of the managed node currently hosting this drive, e.g.
+   *  `https://node1.atomicserver.eu`. Already present on the control plane's
+   *  `SyncEnrollment` response — this type just hadn't picked it up. Used to
+   *  keep `store.serverUrl` pointed at the right node; see reconcile.ts. */
+  http_origin?: string | null;
 };
 
 /**

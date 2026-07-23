@@ -178,6 +178,55 @@ export async function forkResource(
   return fork;
 }
 
+/**
+ * Copy a resource into a new, independent resource under `parent`, carrying its
+ * content (propvals and classes) but not its identity, ACL, or history.
+ *
+ * Unlike {@link forkResource}, the copy is not a Fork: it has no link back to the
+ * source and cannot be merged into it — it is simply a duplicate. Copying a fork
+ * yields a plain resource (the fork marker and its bookkeeping are dropped, just
+ * like the original's identity and grants). This backs the "copy / paste" and
+ * "duplicate" actions.
+ *
+ * The copy's name gets a " (copy)" suffix when the source has one, so a duplicate
+ * sitting next to its source is tellable apart.
+ */
+export async function copyResource(
+  store: Store,
+  source: Resource,
+  parent: string,
+): Promise<Resource> {
+  const name = source.get(core.properties.name);
+
+  const copy = await store.newResource({
+    parent,
+    isA: contentClassesOf(source),
+    propVals: {
+      ...contentPropsOf(source),
+      ...(typeof name === 'string' && name.length > 0
+        ? { [core.properties.name]: `${name} (copy)` }
+        : {}),
+    },
+  });
+
+  // A document/canvas body lives in a Loro container, not in propvals, so
+  // `newResource` gave the copy an empty body. Seed it from the source. Seeding
+  // overwrites the copy's propvals with the source's, so snapshot the copy's own
+  // identity/propvals first and re-assert them afterward (mirrors forkResource).
+  if (source.hasLoroBody()) {
+    const identity = copy.getPropVals();
+    copy.seedLoroBodyFrom(source);
+
+    for (const [prop, value] of Object.entries(identity)) {
+      await copy.set(prop, value as AtomicValue, false);
+    }
+  }
+
+  await copy.save();
+
+  return copy;
+}
+
 export interface MergeForkOptions {
   /**
    * What to do when a property was edited on both the fork and the original

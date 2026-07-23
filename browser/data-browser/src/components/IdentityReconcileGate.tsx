@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useSettings } from '../helpers/AppSettings';
 import {
   evaluateIdentityReconciliation,
+  evaluateServerReconciliation,
   syncDeviceDirectory,
   writeManagedAccountBinding,
 } from '../helpers/managed';
@@ -33,7 +34,7 @@ export function IdentityReconcileGate({
   children,
 }: GateProps): React.JSX.Element {
   const store = useStore();
-  const { agent } = useSettings();
+  const { agent, setServer } = useSettings();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
@@ -83,6 +84,21 @@ export function IdentityReconcileGate({
       );
     }
 
+    // Keep `serverUrl` pointed at the node actually hosting the active
+    // drive — silently, like the agent check above. Needed once the app is
+    // served from a fixed origin instead of the node's own domain: a fresh
+    // device has no stored server yet, and a migrated drive's stored value
+    // goes stale. See reconcile.ts for why this can't be derived from the
+    // drive's `did:` subject directly.
+    const serverResult = await evaluateServerReconciliation(
+      store.getServerUrl(),
+      store.getDrive(),
+    );
+
+    if (!serverResult.ok) {
+      setServer(serverResult.expectedOrigin);
+    }
+
     // Announce this device to the account's device directory, seed KnownPeers
     // from it, and auto-connect the account's other devices with the active
     // drive (zero-scan pairing — no manual "Sync now"). Fire-and-forget:
@@ -91,7 +107,7 @@ export function IdentityReconcileGate({
 
     setChecking(false);
     hasCheckedOnceRef.current = true;
-  }, [agent?.subject, skip, store, navigate]);
+  }, [agent?.subject, skip, store, navigate, setServer]);
 
   useEffect(() => {
     void converge();

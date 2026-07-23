@@ -137,6 +137,73 @@ export async function evaluateIdentityReconciliation(
   return { ok: true, managedAccount };
 }
 
+export type ServerReconcileResult =
+  | { ok: true }
+  | { ok: false; expectedOrigin: string };
+
+/**
+ * Returns whether the Store's current `serverUrl` origin matches the node
+ * actually hosting the active drive, per the signed-in account's
+ * enrollments. When there is no Managed session, always ok (self-hosted /
+ * local-only) — mirrors `evaluateIdentityReconciliation`'s short-circuit.
+ *
+ * This exists because `serverUrl` is a single client-side setting (see
+ * `Store.setServerUrl`) that isn't derived from a drive's `did:` subject —
+ * once the app is served from a fixed origin instead of the node's own
+ * domain, nothing else keeps it pointed at the right node across a fresh
+ * device (no stored value yet) or a drive migration (stored value goes
+ * stale). `enrollment.http_origin` is the source of truth for "where does
+ * this drive actually live right now."
+ */
+export async function evaluateServerReconciliation(
+  currentServerUrl: string,
+  currentDriveSubject: string | undefined,
+): Promise<ServerReconcileResult> {
+  const managedAccount = await getManagedAccount().catch(() => null);
+
+  if (!managedAccount) {
+    return { ok: true };
+  }
+
+  const enrollments = await getManagedEnrollments().catch(
+    () => [] as ManagedEnrollmentSummary[],
+  );
+
+  const withOrigin = enrollments.filter(
+    e => e.status !== 'Disabled' && e.http_origin,
+  );
+
+  // Match by the drive currently in view; with no drive in view yet, only
+  // resolve when there's exactly one candidate — with several, guessing
+  // wrong is worse than waiting for a drive subject to disambiguate.
+  const match = currentDriveSubject
+    ? withOrigin.find(e => e.drive_subject === currentDriveSubject)
+    : withOrigin.length === 1
+      ? withOrigin[0]
+      : undefined;
+
+  if (!match?.http_origin) {
+    return { ok: true };
+  }
+
+  let expectedOrigin: string;
+  let actualOrigin: string;
+
+  try {
+    expectedOrigin = new URL(match.http_origin).origin;
+    actualOrigin = new URL(currentServerUrl).origin;
+  } catch {
+    // A malformed URL on either side isn't this function's problem to fix.
+    return { ok: true };
+  }
+
+  if (expectedOrigin === actualOrigin) {
+    return { ok: true };
+  }
+
+  return { ok: false, expectedOrigin };
+}
+
 export async function assertAgentMatchesManagedAccount(
   agentSubject: string,
 ): Promise<void> {

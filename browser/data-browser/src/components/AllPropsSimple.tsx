@@ -10,6 +10,7 @@ import {
 import { useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { InlineFormattedResourceList } from './InlineFormattedResourceList';
+import { isNeverEditableProp } from '../helpers/hiddenProperties';
 
 export interface AllPropsSimpleProps {
   resource: Resource;
@@ -21,7 +22,10 @@ export function AllPropsSimple({ resource }: AllPropsSimpleProps): JSX.Element {
     <ul>
       {resource
         .getEntries()
-        .filter(([_, val]) => !(val instanceof Uint8Array))
+        .filter(
+          ([prop, val]) =>
+            !(val instanceof Uint8Array) && !isNeverEditableProp(prop),
+        )
         .map(([prop, val]) => (
           <Row key={prop} prop={prop} val={val} />
         ))}

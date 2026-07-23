@@ -3,6 +3,7 @@ import { Resource, useResource, type Core } from '@tomic/react';
 import { styled, css } from 'styled-components';
 import PropVal from './PropVal';
 import { ALL_PROPS_CONTAINER } from '../helpers/containers';
+import { isNeverEditableProp } from '../helpers/hiddenProperties';
 
 import type { JSX } from 'react';
 
@@ -87,7 +88,7 @@ function useSortedProps(
     return pA - pB;
   });
 
-  return all.filter(prop => !exept.includes(prop));
+  return all.filter(prop => !exept.includes(prop) && !isNeverEditableProp(prop));
 }
 
 const AllPropsWrapper = styled.div<{ basic: boolean | undefined }>`

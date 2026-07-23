@@ -29,7 +29,38 @@ import { PerformanceProfiler, attachStoreToProfiler } from './helpers/profiler';
 const defaultServerUrl = isRunningInTauri()
   ? 'http://localhost:9883'
   : (import.meta.env.VITE_ATOMIC_SERVER_URL ?? window.location.origin);
-const storedServerUrl = serverURLStorage.get();
+
+// `?server=` on the entry URL (set by drive links once the app is served
+// from a fixed shared origin instead of the hosting node's own domain — see
+// planning/AUTOSCALING_AND_MIGRATION.md Part 2C in atomic-saas) takes
+// precedence over the stored value: it's resolved fresh by the control
+// plane at link-generation time, so it's more authoritative than whatever
+// was last stored (which goes stale across a drive migration). Must be read
+// here, synchronously, before `new Store(...)` below — `adoptDriveFromDeepLink`
+// (further down this file) fetches against the Store's `serverUrl`
+// immediately and runs before any async reconciliation
+// (`IdentityReconcileGate`) would get a chance to fix it.
+const searchServerUrl = (() => {
+  const raw = new URLSearchParams(window.location.search).get('server');
+
+  if (!raw) return undefined;
+
+  try {
+    const url = new URL(raw);
+
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.origin
+      : undefined;
+  } catch {
+    return undefined;
+  }
+})();
+
+if (searchServerUrl) {
+  serverURLStorage.set(searchServerUrl);
+}
+
+const storedServerUrl = searchServerUrl ?? serverURLStorage.get();
 // Reject obviously-invalid stored URLs (e.g. `tauri://localhost` left behind
 // by an earlier buggy release). The Store requires http(s) URLs.
 const storedIsValid =

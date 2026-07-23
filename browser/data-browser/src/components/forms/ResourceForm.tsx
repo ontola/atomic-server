@@ -31,6 +31,7 @@ import {
   ResourceFormContext,
 } from './ResourceFormContext';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { isNeverEditableProp } from '../../helpers/hiddenProperties';
 
 export enum ResourceFormVariant {
   Default,
@@ -121,7 +122,10 @@ export function ResourceForm({
       // Non essential properties are not very useful in most cases, only show them if explicitly set
       const isEssential = !nonEssentialProps.includes(prop);
 
-      return propIsNotRenderedYet && isEssential;
+      // Server-managed, immutable properties (e.g. the genesis certificate) are
+      // never shown here, not even in the Advanced section — they cannot be
+      // edited by hand.
+      return propIsNotRenderedYet && isEssential && !isNeverEditableProp(prop);
     });
 
     return [...prps, ...tempOtherProps];
@@ -176,6 +180,14 @@ export function ResourceForm({
     }
 
     if (!newProp) {
+      return;
+    }
+
+    if (isNeverEditableProp(newProp)) {
+      setNewPropErr(
+        new Error('This property is server-managed and cannot be edited.'),
+      );
+
       return;
     }
 

@@ -3783,6 +3783,7 @@ msgstr "Buscar"
 
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/reconcile.ts
+#: src/helpers/managed/reconcile.ts
 msgid "Disabled"
 msgstr ""
 
@@ -5551,4 +5552,8 @@ msgstr ""
 
 #: src/chunks/TablePage/ColumnLanguageChip.tsx
 msgid "LanguageChipTrigger"
+msgstr ""
+
+#: src/components/forms/ResourceForm.tsx
+msgid "This property is server-managed and cannot be edited."
 msgstr ""
