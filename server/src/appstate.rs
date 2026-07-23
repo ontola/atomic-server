@@ -151,7 +151,19 @@ impl AppState {
             // so this only adds new/changed default resources (e.g. a freshly
             // added Class) and leaves user data untouched. Triggered by
             // `ATOMIC_REPOPULATE_DEFAULTS=true`.
+            //
+            // `populate_base_models` must run too: `bootstrap()` only calls it
+            // once, on the very first init (`should_init` above), gated on
+            // `has_stored_resource(SHORTNAME)`. A store seeded before a new
+            // base-model property/class was added (e.g. `genesis`, `drive`,
+            // the `Commit` class) never gets it — `populate_default_store`
+            // alone only covers the JSON ontology imports, not this fixed set.
+            // Both writers use `overwrite_existing: true` / upsert import, so
+            // re-running them here is idempotent and safe on live data.
             tracing::info!("Repopulating built-in ontologies and default resources...");
+            atomic_lib::populate::populate_base_models(&store)
+                .await
+                .map_err(|e| format!("Failed to repopulate base models. {}", e))?;
             atomic_lib::populate::populate_default_store(&store)
                 .await
                 .map_err(|e| format!("Failed to repopulate defaults. {}", e))?;
