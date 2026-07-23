@@ -23,9 +23,12 @@
 //! **Invariant for callers:** do not acquire a subject's lock while already
 //! holding it. In particular a `before_commit` class extender must not commit
 //! the subject whose commit it is inspecting — that would deadlock the write
-//! path. Nothing does this today: the only registered handlers are the plugin
-//! bridges, and the plugin ABI is handed `(commit, snapshot, is_new)` with no
-//! store, so a plugin cannot commit at all.
+//! path, since `before_commit` handlers run before `Db::apply_commit` releases
+//! its guard. `after_commit` handlers run *after* the guard is released
+//! precisely so they're exempt from this: a plugin's `after_commit` may issue
+//! its own follow-up commit to the same subject (`atomic_plugin::commit`, via
+//! the `commit` host function in `server/src/plugins/wasm.rs`) without
+//! deadlocking, because by then there is nothing left to re-enter.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

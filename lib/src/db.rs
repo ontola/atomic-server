@@ -2303,7 +2303,7 @@ impl Storelike for Db {
         // peer update landing in that window would be overwritten and lost, so the
         // whole span is exclusive per subject. See `subject_lock` for why this is
         // a lock rather than a merge, and for the no-reentrancy invariant.
-        let _subject_guard = store.subject_locks.lock(&commit.subject.pure_id()).await;
+        let subject_guard = store.subject_locks.lock(&commit.subject.pure_id()).await;
 
         let commit_response = commit.validate_and_build_response(opts, store).await?;
 
@@ -2442,6 +2442,18 @@ impl Storelike for Db {
         let _ = store.db_events.send(event);
 
         store.handle_commit(&commit_response);
+
+        // The read-modify-write this lock protects (read snapshot, apply ops,
+        // write back the transaction above) is done. Release it before running
+        // AFTER APPLY COMMIT HANDLERS: an `after_commit` extender is allowed to
+        // issue its own follow-up commit to the same subject (see
+        // `atomic_plugin::commit` / `server/src/plugins/wasm.rs`'s `commit`
+        // host function), which re-enters `apply_commit` and tries to lock the
+        // same subject again. Holding the guard across that call would be the
+        // exact self-reentrancy `subject_lock` warns against and deadlocks the
+        // request forever, since nothing else can ever release a lock this
+        // task already holds.
+        drop(subject_guard);
 
         // AFTER APPLY COMMIT HANDLERS
         // Commit has been checked and saved.
