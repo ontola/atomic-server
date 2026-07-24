@@ -174,20 +174,50 @@ edit 2.96ms/op, history 1.24ms/op, query median 131.2ms. NextGraph
 comparison: create 14.53ms/op, edit 2.10ms/op, history 0.28ms/op, query
 ~6.4ms.
 
-### Post-rework results (2026-07-24, Criterion `lifecycle_bench`, paired against same-day pre-rework baseline)
+### Post-rework results (2026-07-24, fully paired: `f235561e` vs `3578d080`, same machine/session, Rust + HTTP level)
 
-| Benchmark | Before | After | Δ |
+**Queries — verified, the headline win:**
+
+| Level | Before | After | Δ |
 | --- | --- | --- | --- |
-| `query_collection_1000` (Sudo, nested bodies) | 62.1ms | **5.9ms** | **−90.5%** |
-| `query_collection_1000_non_sudo_agent` (real agent, per-member rights) | 62.6ms | **7.1ms** | **−88.8%** |
-| `create_1000` | 929ms | 817ms | −12% |
-| `edit_1000` | 997ms | 856ms | −14% |
-| `history_100x6_commits` | 9.4ms | 8.5ms | −10% |
+| Rust, 1000 members, Sudo | 51.8ms | **5.9ms** | **−88.5%** |
+| Rust, 1000 members, real agent (per-member rights) | 52.8ms | **7.3ms** | **−86.2%** |
+| HTTP, single round trip (`page_size=1000`) | ~101–107ms | **~29–32ms** | **~−70%** |
+| HTTP, default client `page_size=30` (34 round trips) | 124.6ms | 60.4ms | −51.5% |
 
-The write-path gains come from `(drive, property)`-routed watched-filter
-matching (commits no longer evaluate every filter in the drive per atom) plus
-the cheaper `QueryMembers` ops; treat the exact create/edit deltas as
-same-machine indicative, not lab-isolated.
+At the single-request level atomic-server went from ~20–25× slower than
+NextGraph's ~6.4ms comparison query to **~5×**. With the client default
+`page_size=30`, the remaining gap is now dominated by pagination round trips,
+not server work — a client calling `.setPageSize(1000)` already gets close to
+the single-request number with no further server changes.
+
+**Write path — neutral on a fresh store; earlier claimed gains did NOT
+reproduce.** The same paired run measured create +10.1% / edit +6.2% /
+history +3.3% at the Rust level and +3.1% / +1.5% (≈ noise) at the HTTP
+level. An earlier draft of this section claimed create −12% / edit −14%
+based on a Criterion baseline recorded while other work was running on the
+machine — the same stale-baseline class of error the methodology note below
+warns about. Treat write-path impact on a fresh store as flat-to-slightly-
+negative, within noise at the HTTP level.
+
+**Where the filter-routing win actually lives:** commits on a store with
+*accumulated* watched filters (the real-world case routing was built for —
+leaked filters have historically reached 13k+ and slowed rapid saves). A
+paired scaling measurement (`lib/tests/watched_filter_scaling.rs`, 200
+creates per round, 0 → 2k → 10k bystander filters on the drive, debug
+build):
+
+| Watched filters | Before (`f235561e`), per create | After (`3578d080`), per create |
+| --- | --- | --- |
+| 0 | 14.5ms | 15.1ms |
+| 2,000 | 22.3ms (+54%) | 16.8ms |
+| 10,000 | 52.6ms (+263%) | 16.3ms |
+
+Before: per-commit cost grows linearly with unrelated watched filters
+(~3.8µs per filter per create). After: flat — 3.2× faster at 10k accumulated
+filters. So the routing win is real but conditional on filter accumulation;
+it simply doesn't exist on a fresh store, which is why clean lifecycle
+benchmarks show no write-path gain.
 
 The remaining ~6ms is dominated by row decode + response assembly for 1000
 nested bodies, not CRDT work — this is now in the same order of magnitude as
