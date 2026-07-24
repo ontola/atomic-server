@@ -289,7 +289,9 @@ impl VectorSearchState {
         if enabled {
             tracing::info!("Starting vector search service");
         } else {
-            tracing::info!("Vector search disabled (skip_vector_index)");
+            tracing::info!(
+                "Vector search disabled (opt in with --enable-vector-index / ATOMIC_ENABLE_VECTOR_INDEX)"
+            );
         }
 
         let (db, table_exists) = connect_vector_db(config).await?;

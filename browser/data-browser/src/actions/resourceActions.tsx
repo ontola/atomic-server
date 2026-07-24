@@ -106,12 +106,23 @@ export const resourceActions: ActionDefinition[] = [
     scope: 'resource',
     section: 'action',
     label: ctx =>
-      ctx.resource.get(dataBrowser.properties.emoji)
+      (ctx.resource.get(dataBrowser.properties.emoji) ??
+      ctx.resource.get(dataBrowser.properties.icon))
         ? 'Change icon'
         : 'Add icon',
     helper: () =>
-      'Pick an emoji shown next to this resource wherever it appears.',
-    keywords: ['emoji', 'icon', 'glyph', 'smiley', 'decorate'],
+      'Pick an emoji or image shown next to this resource wherever it appears.',
+    keywords: [
+      'emoji',
+      'icon',
+      'glyph',
+      'smiley',
+      'avatar',
+      'image',
+      'picture',
+      'profile',
+      'decorate',
+    ],
     icon: () => <FaFaceSmile />,
     searchOnly: true,
     available: ctx => ctx.canWrite && ctx.openEmojiPicker !== undefined,

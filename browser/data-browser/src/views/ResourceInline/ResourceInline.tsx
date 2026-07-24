@@ -1,5 +1,6 @@
 import {
   useString,
+  useSubject,
   useResource,
   Client,
   useArray,
@@ -8,6 +9,8 @@ import {
   server,
   getMessageForErrorType,
 } from '@tomic/react';
+import { styled } from 'styled-components';
+import { ResourceGlyph } from '../../components/ResourceGlyph';
 import { AtomicLink } from '../../components/AtomicLink';
 import { ErrorLook } from '../../components/ErrorLook';
 import { LoaderInline } from '../../components/Loader';
@@ -71,13 +74,25 @@ function DefaultInline({ subject }: ResourceInlineInstanceProps): JSX.Element {
   const resource = useResource(subject);
   const [description] = useString(resource, core.properties.description);
   const [emoji] = useString(resource, dataBrowser.properties.emoji);
+  const [iconImage] = useSubject(resource, dataBrowser.properties.icon);
 
   return (
-    <span title={description ? description : ''}>
-      {emoji ? `${emoji} ${resource.title}` : resource.title}
-    </span>
+    <InlineText title={description ? description : ''}>
+      {(emoji || iconImage) && (
+        <ResourceGlyph resource={resource} requireCustom />
+      )}
+      {emoji && !iconImage ? ' ' : ''}
+      {resource.title}
+    </InlineText>
   );
 }
+
+/** Space between an icon image and the title (emoji get a text space). */
+const InlineText = styled.span`
+  & > img {
+    margin-right: 0.35ch;
+  }
+`;
 
 const classMap = new Map<
   string,

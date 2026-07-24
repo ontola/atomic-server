@@ -2,15 +2,14 @@ import { forwardRef, memo } from 'react';
 import { styled, css, keyframes } from 'styled-components';
 import { SideBarItem } from '../SideBarItem';
 import { FloatingActions, floatingHoverStyles } from './FloatingActions';
-import { getIconForClass } from '../../../helpers/iconMap';
 import {
   useResource,
-  useArray,
   useString,
-  core,
+  useSubject,
   dataBrowser,
   useTitle,
 } from '@tomic/react';
+import { ResourceGlyph } from '../../ResourceGlyph';
 import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { DraggableAttributes } from '@dnd-kit/core';
 import { StyledLink, TextWrapper } from './shared';
@@ -63,14 +62,15 @@ export const SidebarItemTitle = memo(
     ): React.JSX.Element => {
       const resource = useResource(subject);
       const { sidebarKeyboardDndEnabled } = useSettings();
-      const [classType] = useArray(resource, core.properties.isA);
       const [emoji] = useString(resource, dataBrowser.properties.emoji);
-      const Icon = getIconForClass(classType[0]!);
-      // A resource's own emoji takes precedence over its class icon.
-      const glyph = emoji ? (
-        <GlyphEmoji aria-hidden>{emoji}</GlyphEmoji>
-      ) : (
-        <Icon />
+      const [iconImage] = useSubject(resource, dataBrowser.properties.icon);
+      // A resource's own icon image or emoji takes precedence over its
+      // class icon (the precedence lives in ResourceGlyph).
+      const hasCustomGlyph = !!(emoji || iconImage);
+      const glyph = (
+        <GlyphSlot aria-hidden>
+          <ResourceGlyph resource={resource} />
+        </GlyphSlot>
       );
       // Reactive title via `useTitle` (subscribes to `name`/`shortname`/
       // `filename` LocalChange events through `useValue`'s
@@ -82,12 +82,14 @@ export const SidebarItemTitle = memo(
 
       const expandLabel = expanded ? 'Collapse folder' : 'Expand folder';
 
-      // Expandable rows have no icon slot (the caret occupies it), so the
-      // emoji rests in the caret's place and yields to it on hover/focus —
-      // same swap pattern as the drag grip below.
-      const expandControl = emoji ? (
+      // Expandable rows have no icon slot (the caret occupies it), so a
+      // custom glyph rests in the caret's place and yields to it on
+      // hover/focus — same swap pattern as the drag grip below.
+      const expandControl = hasCustomGlyph ? (
         <>
-          <GlyphEmoji aria-hidden>{emoji}</GlyphEmoji>
+          <GlyphSlot aria-hidden>
+            <ResourceGlyph resource={resource} requireCustom />
+          </GlyphSlot>
           <ExpandCaret $open={expanded} />
         </>
       ) : (
@@ -243,8 +245,11 @@ const StyledIconButton = styled(IconButton)`
   --button-padding: 0;
 `;
 
-/** Emoji stand-in for the class icon; sized to line up with the svg icons. */
-const GlyphEmoji = styled.span`
+/** Wraps the resource glyph; sized to line up with the svg class icons. */
+const GlyphSlot = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 0.9rem;
   line-height: 1;
 `;
@@ -365,21 +370,23 @@ const ActionWrapper = styled.div<{ isDragging?: boolean }>`
       visibility: visible;
       cursor: grab;
     }
-    /* When an emoji stands in for the class icon it must also make way
-       for the drag grip (the svg swap rules above don't match a span). */
-    ${StyledIconButton} ${GlyphEmoji} {
+    /* The glyph (emoji / icon image / class icon, wrapped in GlyphSlot)
+       makes way for the drag grip on hover (the svg swap rules above
+       only match direct svg children). */
+    ${StyledIconButton} ${GlyphSlot} {
       display: none;
     }
-    /* Same for the expand caret: emoji rests in its slot, caret on hover. */
-    ${ExpandToggleButton} ${GlyphEmoji} {
+    /* Same for the expand caret: the glyph rests in its slot, caret on
+       hover. */
+    ${ExpandToggleButton} ${GlyphSlot} {
       display: none;
     }
-    ${ExpandToggleButton} ${GlyphEmoji} + svg {
+    ${ExpandToggleButton} ${GlyphSlot} + svg {
       display: block;
     }
   }
 
-  ${ExpandToggleButton} ${GlyphEmoji} + svg {
+  ${ExpandToggleButton} ${GlyphSlot} + svg {
     display: none;
   }
 `;

@@ -76,9 +76,9 @@ sudo apt-get install -y build-essential pkg-config libssl-dev --fix-missing
 - A directory is made: `~/.config/atomic`, which stores your newly created Agent keys, the HTTPS certificates other configuration. Depending on your OS, the actual data is stored in different locations. See use the `show-config` command to find out where, if you need the files.
 - Visit `http://localhost:9883/setup` to **register your first (admin) user**. You can use an existing Agent, or create a new one. Note that if you create a `localhost` agent, it cannot be used on the web (since, well, it's local). More info and steps in [getting started with the GUI](gui.md).
 
-## Vector search embeddings (OpenRouter)
+## Vector search embeddings (opt-in)
 
-Semantic search uses vector embeddings. By default the server runs [fastembed](https://github.com/Anush008/fastembed-rs) locally. To use [OpenRouter](https://openrouter.ai/) embeddings instead, pass **`--openrouter-api-key`** and **`--openrouter-embedding-model`** (or set **`OPENROUTER_API_KEY`** and **`OPENROUTER_EMBEDDING_MODEL`** in your environment or `.env`). **`--openrouter-embedding-dimensions`** / **`OPENROUTER_EMBEDDING_DIMENSIONS`** is optional (some models ignore it). **`--gpu-indexing`** / **`ATOMIC_GPU_INDEXING`** uses GPU acceleration for the default local embedding and reranker, not for OpenRouter.
+Semantic search uses vector embeddings, which is an opt-in feature: pass **`--enable-vector-index`** (or set **`ATOMIC_ENABLE_VECTOR_INDEX`**) to turn it on, since loading embedding models and indexing every write has a real performance cost. Once enabled, the server runs [fastembed](https://github.com/Anush008/fastembed-rs) locally by default. To use [OpenRouter](https://openrouter.ai/) embeddings instead, pass **`--openrouter-api-key`** and **`--openrouter-embedding-model`** (or set **`OPENROUTER_API_KEY`** and **`OPENROUTER_EMBEDDING_MODEL`** in your environment or `.env`). **`--openrouter-embedding-dimensions`** / **`OPENROUTER_EMBEDDING_DIMENSIONS`** is optional (some models ignore it). **`--gpu-indexing`** / **`ATOMIC_GPU_INDEXING`** uses GPU acceleration for the default local embedding and reranker, not for OpenRouter.
 
 ## Running using a tunneling service (easy mode)
 
@@ -311,6 +311,16 @@ Options:
           Use the GPU (if available) for processing vector search embeddings
 
           [env: ATOMIC_GPU_INDEXING=]
+
+      --enable-vector-index
+          Opt in to vector embedding models and Lance index builds for semantic search. Off by default: loading embedding models and indexing every write has a real performance cost, so it should be a deliberate choice rather than the default.
+
+          [env: ATOMIC_ENABLE_VECTOR_INDEX=]
+
+      --skip-vector-index
+          Deprecated: vector indexing is now off by default. Kept only so existing scripts/deployments that pass this flag keep working; it is a no-op unless combined with `--enable-vector-index`, in which case it forces indexing off again.
+
+          [env: ATOMIC_SKIP_VECTOR_INDEX=]
 
       --openrouter-api-key <OPENROUTER_API_KEY>
           OpenRouter API key for remote embeddings instead of local fastembed

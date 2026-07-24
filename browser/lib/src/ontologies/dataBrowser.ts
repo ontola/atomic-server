@@ -54,6 +54,7 @@ export const dataBrowser = {
     displayStyle: 'https://atomicdata.dev/property/display-style',
     elements: 'https://atomicdata.dev/properties/documents/elements',
     emoji: 'https://atomicdata.dev/properties/emoji',
+    icon: 'https://atomicdata.dev/properties/icon',
     image: 'https://atomicdata.dev/ontology/data-browser/property/image',
     imageUrl: 'https://atomicdata.dev/properties/imageUrl',
     max: 'https://atomicdata.dev/properties/max',
@@ -406,6 +407,7 @@ declare module '../index.js' {
     [dataBrowser.properties.displayStyle]: string;
     [dataBrowser.properties.elements]: string[];
     [dataBrowser.properties.emoji]: string;
+    [dataBrowser.properties.icon]: string;
     [dataBrowser.properties.image]: string;
     [dataBrowser.properties.imageUrl]: string;
     [dataBrowser.properties.max]: number;
@@ -458,6 +460,7 @@ declare module '../index.js' {
     [dataBrowser.properties.displayStyle]: 'displayStyle';
     [dataBrowser.properties.elements]: 'elements';
     [dataBrowser.properties.emoji]: 'emoji';
+    [dataBrowser.properties.icon]: 'icon';
     [dataBrowser.properties.image]: 'image';
     [dataBrowser.properties.imageUrl]: 'imageUrl';
     [dataBrowser.properties.max]: 'max';

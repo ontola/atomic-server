@@ -17,7 +17,7 @@ import { Flex } from './Row';
 import {
   AffordanceRow,
   TitleDecorationAffordances,
-  TitleEmoji,
+  TitleIcon,
 } from './ResourceDecorations';
 
 export interface EditableTitleProps {
@@ -124,7 +124,7 @@ export function EditableTitle({
 
   const titleElement = isEditing ? (
     <EditingRow>
-      <TitleEmoji resource={resource} />
+      <TitleIcon resource={resource} />
       <TitleInput
         ref={ref}
         data-testid='editable-title'
@@ -157,7 +157,7 @@ export function EditableTitle({
       className={className}
     >
       <>
-        <TitleEmoji resource={resource} />
+        <TitleIcon resource={resource} />
         <span>
           {text || placeholder}
           <UnsavedIndicator resource={resource} />

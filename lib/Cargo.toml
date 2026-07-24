@@ -141,3 +141,8 @@ required-features = ["db-redb"]
 name = "query_subscription_bench"
 harness = false
 required-features = ["db-redb"]
+
+[[bench]]
+name = "lifecycle_bench"
+harness = false
+required-features = ["db-redb"]

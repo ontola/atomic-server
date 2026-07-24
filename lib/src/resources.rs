@@ -257,6 +257,25 @@ impl Resource {
     /// Replace property state from a materialized versioned doc (sync / import).
     pub fn apply_state_doc(&mut self, doc: crate::loro::AtomicLoroDoc) -> AtomicResult<()> {
         let snapshot = doc.export_snapshot();
+        self.apply_state_doc_with_snapshot(doc, snapshot)
+    }
+
+    /// Like [`Self::apply_state_doc`], but for the common case where the
+    /// caller already holds the exact snapshot bytes `doc` was imported from
+    /// (e.g. a snapshot just read out of `Tree::LoroSnapshots`). Skips the
+    /// redundant `doc.export_snapshot()` re-serialization — every plain
+    /// resource read (`Db::get_resource`) goes through this path, so on a
+    /// collection query touching N resources this avoided one full
+    /// CRDT-snapshot export per member.
+    ///
+    /// Callers must guarantee `snapshot` is exactly the bytes `doc` was
+    /// built from (no mutation of `doc` in between), otherwise the stored
+    /// `loroUpdate` propval would silently diverge from `doc`'s real state.
+    pub(crate) fn apply_state_doc_with_snapshot(
+        &mut self,
+        doc: crate::loro::AtomicLoroDoc,
+        snapshot: Vec<u8>,
+    ) -> AtomicResult<()> {
         let mut propvals = Self::materialize_propvals_from_loro_doc(&doc);
         propvals.insert(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
         self.propvals = propvals;

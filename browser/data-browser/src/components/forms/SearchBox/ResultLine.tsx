@@ -1,6 +1,5 @@
 import {
   core,
-  dataBrowser,
   useArray,
   useResource,
   useString,
@@ -8,7 +7,8 @@ import {
 } from '@tomic/react';
 import React, { useEffect, useRef, type JSX } from 'react';
 import { styled, css } from 'styled-components';
-import { dataTypeIconMap, getIconForClass } from '../../../helpers/iconMap';
+import { dataTypeIconMap } from '../../../helpers/iconMap';
+import { ResourceGlyph } from '../../ResourceGlyph';
 import { FaAtom } from 'react-icons/fa6';
 import { Row } from '../../Row';
 
@@ -83,21 +83,15 @@ type IconProps = {
 };
 
 function Icon({ resource }: IconProps): React.ReactElement {
-  const [emoji] = useString(resource, dataBrowser.properties.emoji);
   const [isA] = useArray(resource, core.properties.isA);
   const [datatype] = useString(resource, core.properties.datatype);
 
-  if (emoji) {
-    return <span aria-hidden>{emoji}</span>;
-  }
+  // Properties show their datatype icon unless they carry a custom glyph.
+  const fallback = isA.includes(core.classes.property)
+    ? (dataTypeIconMap.get(datatype ?? '') ?? FaAtom)
+    : undefined;
 
-  let IconComp = getIconForClass(isA[0] ?? '');
-
-  if (isA.includes(core.classes.property)) {
-    IconComp = dataTypeIconMap.get(datatype ?? '') ?? FaAtom;
-  }
-
-  return <IconComp />;
+  return <ResourceGlyph resource={resource} fallbackIcon={fallback} />;
 }
 
 const Description = styled.span`

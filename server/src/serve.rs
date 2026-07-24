@@ -87,6 +87,10 @@ async fn rebuild_indexes(
                 .vector_search_state
                 .add_all_resources(&appstate.store)
                 .await?;
+        } else {
+            tracing::warn!(
+                "Vector index rebuild requested but vector search is disabled; pass --enable-vector-index too"
+            );
         }
     }
 

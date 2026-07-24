@@ -128,7 +128,15 @@ pub struct Opts {
     #[clap(long, env = "OPENROUTER_EMBEDDING_DIMENSIONS")]
     pub openrouter_embedding_dimensions: Option<String>,
 
-    /// Skip vector embedding models and Lance index builds (faster startup for tests).
+    /// Opt in to vector embedding models and Lance index builds for semantic search.
+    /// Off by default: loading embedding models and indexing every write has a real
+    /// performance cost, so it should be a deliberate choice rather than the default.
+    #[clap(long, env = "ATOMIC_ENABLE_VECTOR_INDEX")]
+    pub enable_vector_index: bool,
+
+    /// Deprecated: vector indexing is now off by default. Kept only so existing
+    /// scripts/deployments that pass this flag keep working; it is a no-op unless
+    /// combined with `--enable-vector-index`, in which case it forces indexing off again.
     #[clap(long, env = "ATOMIC_SKIP_VECTOR_INDEX")]
     pub skip_vector_index: bool,
 }
@@ -424,8 +432,10 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         }
     };
 
-    let skip_vector_index =
-        opts.skip_vector_index || cfg!(test) || store_path_looks_like_test_harness(&store_path);
+    let skip_vector_index = !opts.enable_vector_index
+        || opts.skip_vector_index
+        || cfg!(test)
+        || store_path_looks_like_test_harness(&store_path);
 
     Ok(Config {
         initialize,

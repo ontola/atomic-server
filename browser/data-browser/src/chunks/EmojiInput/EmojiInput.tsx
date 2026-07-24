@@ -1,10 +1,10 @@
 import { useCallback, useState, type JSX, type ReactNode } from 'react';
 import Picker from '@emoji-mart/react';
-import { styled } from 'styled-components';
+import { styled, useTheme } from 'styled-components';
 import * as RadixPopover from '@radix-ui/react-popover';
+import { FaImage, FaTrash } from 'react-icons/fa6';
 import { transition } from '../../helpers/transition';
 import { Popover } from '../../components/Popover';
-import { Button } from '../../components/Button';
 
 export interface EmojiInputProps {
   initialValue?: string;
@@ -14,6 +14,19 @@ export interface EmojiInputProps {
    * Defaults to a small button showing the current emoji.
    */
   Trigger?: ReactNode;
+  /**
+   * Offers an "Upload image" option for image icons/avatars. Called with no
+   * arguments — the caller opens its own (always-mounted) file input. The
+   * input must NOT live inside this popover: opening the native file chooser
+   * dismisses the popover, and a file picked into an unmounted input is
+   * silently dropped.
+   */
+  onUploadImage?: () => void;
+  /**
+   * Force the remove option to show (e.g. when an image icon is set, which
+   * this component doesn't know about).
+   */
+  showRemove?: boolean;
 }
 
 const EMOJI_DATA_URL = 'https://cdn.jsdelivr.net/npm/@emoji-mart/data';
@@ -56,7 +69,10 @@ export default function EmojiInputASYNC({
   initialValue,
   onChange,
   Trigger,
+  onUploadImage,
+  showRemove,
 }: EmojiInputProps): JSX.Element {
+  const theme = useTheme();
   const [showPicker, setShowPicker] = useState(false);
   const [emoji, setEmoji] = useState<string | undefined>(initialValue);
 
@@ -92,12 +108,25 @@ export default function EmojiInputASYNC({
       }
     >
       <PickerWrapper>
-        {emoji && (
-          <RemoveRow>
-            <Button subtle onClick={handleRemove}>
-              Remove emoji
-            </Button>
-          </RemoveRow>
+        {(emoji || showRemove || onUploadImage) && (
+          <HeaderRow>
+            {onUploadImage && (
+              <HeaderButton
+                type='button'
+                onClick={() => {
+                  setShowPicker(false);
+                  onUploadImage();
+                }}
+              >
+                <FaImage aria-hidden /> Upload image
+              </HeaderButton>
+            )}
+            {(emoji || showRemove) && (
+              <HeaderButton type='button' onClick={handleRemove}>
+                <FaTrash aria-hidden /> Remove
+              </HeaderButton>
+            )}
+          </HeaderRow>
         )}
         <Picker
           autoFocus
@@ -105,6 +134,7 @@ export default function EmojiInputASYNC({
           onEmojiSelect={handleEmojiSelect}
           maxFrequentRows={2}
           dynamicWidth={true}
+          theme={theme.darkMode ? 'dark' : 'light'}
         />
       </PickerWrapper>
     </PickerPopover>
@@ -149,8 +179,34 @@ const PickerWrapper = styled.div`
   }
 `;
 
-const RemoveRow = styled.div`
+const HeaderRow = styled.div`
   display: flex;
   justify-content: flex-end;
-  padding: ${p => p.theme.size(1)};
+  gap: ${p => p.theme.size(1)};
+  padding: ${p => p.theme.size(2)};
+  padding-bottom: ${p => p.theme.size(1)};
+`;
+
+/** Quiet toolbar buttons so the picker itself stays the focal point. */
+const HeaderButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5ch;
+  border: none;
+  background: transparent;
+  padding: 0.3rem 0.5rem;
+  border-radius: ${p => p.theme.radius};
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.85rem;
+  cursor: pointer;
+
+  & svg {
+    font-size: 0.8em;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background-color: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
+  }
 `;

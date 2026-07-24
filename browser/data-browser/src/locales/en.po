@@ -264,6 +264,7 @@ msgid "Automatically compact the conversation when input tokens exceed this perc
 msgstr "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled."
 
 #: src/chunks/AI/MessageContextItem.tsx
+#: src/chunks/EmojiInput/EmojiInput.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
@@ -5690,17 +5691,14 @@ msgstr "Add icon"
 msgid "Add cover"
 msgstr "Add cover"
 
-#: src/chunks/EmojiInput/EmojiInput.tsx
-#: src/components/ResourceDecorations.tsx
-msgid "Remove emoji"
-msgstr "Remove emoji"
+#~ msgid "Remove emoji"
+#~ msgstr "Remove emoji"
 
 #~ msgid "<0/> Add cover"
 #~ msgstr "<0/> Add cover"
 
-#: src/actions/resourceActions.tsx
-msgid "Pick an emoji shown next to this resource wherever it appears."
-msgstr "Pick an emoji shown next to this resource wherever it appears."
+#~ msgid "Pick an emoji shown next to this resource wherever it appears."
+#~ msgstr "Pick an emoji shown next to this resource wherever it appears."
 
 #: src/actions/resourceActions.tsx
 msgid "Pick an image shown as a banner at the top of this resource."
@@ -5709,3 +5707,33 @@ msgstr "Pick an image shown as a banner at the top of this resource."
 #: src/components/ResourceDecorations.tsx
 msgid "Icon"
 msgstr "Icon"
+
+#: src/components/AvatarCropper.tsx
+msgid "Adjust image"
+msgstr "Adjust image"
+
+#: src/components/AvatarCropper.tsx
+msgid "Zoom"
+msgstr "Zoom"
+
+#: src/components/ResourceDecorations.tsx
+msgid "Remove icon"
+msgstr "Remove icon"
+
+#: src/actions/resourceActions.tsx
+msgid "Pick an emoji or image shown next to this resource wherever it appears."
+msgstr "Pick an emoji or image shown next to this resource wherever it appears."
+
+#: src/components/ResourceDecorations.tsx
+#: src/components/forms/UploadImageButton.tsx
+msgid "<0/> Upload image"
+msgstr "<0/> Upload image"
+
+#: src/chunks/EmojiInput/EmojiInput.tsx
+msgid "Upload image"
+msgstr "Upload image"
+
+#. 0: file.name
+#: src/components/AvatarCropper.tsx
+msgid "Could not display \"{0}\" — it may not be a supported image format"
+msgstr "Could not display \"{0}\" — it may not be a supported image format"

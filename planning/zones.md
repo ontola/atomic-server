@@ -159,3 +159,11 @@ model fails.
   primitive for followers-only audiences.
 - **OQ4 — Snapshot-publish mechanics.** `derivedFrom` linkage, and whether the
   private original tracks its published copy for re-publishing diffs.
+- **OQ5 — Does the zone index remove query-side resource fetches too?**
+  [`index-performance.md`](./index-performance.md) found that collection
+  queries pay for a full resource decode per match (not just per permission
+  check) even when the client only wants subjects. Once the zone index makes
+  `check_rights` walk-free, can `query_basic` answer "is this subject visible
+  to `for_agent`" from the index alone, with zero resource fetches for the
+  subjects-only case? If so this proposal fixes that bottleneck too, not just
+  the walk itself.

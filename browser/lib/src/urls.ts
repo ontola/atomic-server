@@ -161,6 +161,7 @@ export const properties = {
   color: 'https://atomicdata.dev/properties/color',
   coverImage: 'https://atomicdata.dev/properties/coverImage',
   emoji: 'https://atomicdata.dev/properties/emoji',
+  icon: 'https://atomicdata.dev/properties/icon',
   classes: 'https://atomicdata.dev/properties/classes',
   properties: 'https://atomicdata.dev/properties/properties',
   instances: 'https://atomicdata.dev/properties/instances',

@@ -1478,6 +1478,17 @@
     "https://atomicdata.dev/properties/shortname": "preview"
   },
   {
+    "@id": "https://atomicdata.dev/properties/icon",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/File",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "A small square image File shown as this resource's icon or avatar wherever its name appears. Takes precedence over an emoji.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "icon"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/coverImage",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/File",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",

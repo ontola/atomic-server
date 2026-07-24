@@ -49,7 +49,7 @@
 
 Notion/Loop-style per-resource decoration: an emoji "icon" shown next to the title everywhere the resource appears, and a full-width cover image at the top of the resource page.
 
-## Avatars / image icons (planned, July 2026)
+## Avatars / image icons (implemented July 2026)
 
 Profile pictures for Drives and Users (Agents), doubling as "custom emoji"
 image icons for any resource — one concept, one property, shown in the same

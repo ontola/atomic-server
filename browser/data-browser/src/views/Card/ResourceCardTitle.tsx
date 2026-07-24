@@ -1,4 +1,4 @@
-import { Resource, core, dataBrowser, useArray, useString } from '@tomic/react';
+import { Resource } from '@tomic/react';
 import { FC, PropsWithChildren } from 'react';
 import { styled } from 'styled-components';
 import { AtomicLink } from '../../components/AtomicLink';
@@ -7,7 +7,7 @@ import {
   PAGE_TITLE_TRANSITION_TAG,
   transitionName,
 } from '../../helpers/transitionName';
-import { getIconForClass } from '../../helpers/iconMap';
+import { ResourceGlyph } from '../../components/ResourceGlyph';
 import { Row } from '../../components/Row';
 
 interface ResourceCardTitleProps {
@@ -18,14 +18,10 @@ interface ResourceCardTitleProps {
 export const ResourceCardTitle: FC<
   PropsWithChildren<ResourceCardTitleProps>
 > = ({ resource, children, alternateTitle }) => {
-  const [isA] = useArray(resource, core.properties.isA);
-  const [emoji] = useString(resource, dataBrowser.properties.emoji);
-  const Icon = getIconForClass(isA[0]);
-
   return (
     <TitleRow center gap='1ch' justify='space-between' wrapItems>
       <Row center gap='1ch'>
-        {emoji ? <span aria-hidden>{emoji}</span> : <Icon />}
+        <ResourceGlyph resource={resource} />
         <AtomicLink subject={resource.subject}>
           <Title subject={resource.subject}>
             {alternateTitle ?? resource.title}

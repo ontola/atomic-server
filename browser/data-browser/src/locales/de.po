@@ -264,6 +264,7 @@ msgid "Automatically compact the conversation when input tokens exceed this perc
 msgstr "Die Konversation automatisch komprimieren, wenn die Eingabe-Tokens diesen Prozentsatz des Kontextfensters des ausgewählten Modells überschreiten. Manuelles /compact funktioniert auch bei Deaktivierung."
 
 #: src/chunks/AI/MessageContextItem.tsx
+#: src/chunks/EmojiInput/EmojiInput.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
@@ -5656,17 +5657,14 @@ msgstr ""
 msgid "Add cover"
 msgstr ""
 
-#: src/chunks/EmojiInput/EmojiInput.tsx
-#: src/components/ResourceDecorations.tsx
-msgid "Remove emoji"
-msgstr ""
+#~ msgid "Remove emoji"
+#~ msgstr ""
 
 #~ msgid "<0/> Add cover"
 #~ msgstr ""
 
-#: src/actions/resourceActions.tsx
-msgid "Pick an emoji shown next to this resource wherever it appears."
-msgstr ""
+#~ msgid "Pick an emoji shown next to this resource wherever it appears."
+#~ msgstr ""
 
 #: src/actions/resourceActions.tsx
 msgid "Pick an image shown as a banner at the top of this resource."
@@ -5674,4 +5672,34 @@ msgstr ""
 
 #: src/components/ResourceDecorations.tsx
 msgid "Icon"
+msgstr ""
+
+#: src/components/AvatarCropper.tsx
+msgid "Adjust image"
+msgstr ""
+
+#: src/components/AvatarCropper.tsx
+msgid "Zoom"
+msgstr ""
+
+#: src/components/ResourceDecorations.tsx
+msgid "Remove icon"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Pick an emoji or image shown next to this resource wherever it appears."
+msgstr ""
+
+#: src/components/ResourceDecorations.tsx
+#: src/components/forms/UploadImageButton.tsx
+msgid "<0/> Upload image"
+msgstr ""
+
+#: src/chunks/EmojiInput/EmojiInput.tsx
+msgid "Upload image"
+msgstr ""
+
+#. 0: file.name
+#: src/components/AvatarCropper.tsx
+msgid "Could not display \"{0}\" — it may not be a supported image format"
 msgstr ""

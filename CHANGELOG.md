@@ -7,6 +7,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Vector search is now opt-in (pass `--enable-vector-index` / `ATOMIC_ENABLE_VECTOR_INDEX`) instead of on by default. Loading embedding models and indexing every write on a plain create/edit had a real, measured performance cost that most deployments don't need.
+
 ## [v0.41.0-beta.1] - 2026-07-22
 
 - [#1069](https://github.com/atomicdata-dev/atomic-server/issues/1069) Internationalization / content localization: new `LocalizedText` datatype storing per-language values as a native Loro map, with a fallback-chain resolver (exact locale → primary subtag → configured default language → first available).

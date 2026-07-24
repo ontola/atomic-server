@@ -2548,7 +2548,13 @@ impl Storelike for Db {
                 subject_str.as_bytes(),
             ) {
                 if let Ok(doc) = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot) {
-                    let _ = resource.apply_state_doc(doc);
+                    // We already hold the exact bytes `doc` was just imported
+                    // from — reuse them instead of having `apply_state_doc`
+                    // re-export an equivalent snapshot. This is the hot path
+                    // for every resource read (including once per member of
+                    // a collection query), so the saved export is per-read,
+                    // not one-off.
+                    let _ = resource.apply_state_doc_with_snapshot(doc, snapshot);
                 }
             }
             Ok(resource)
