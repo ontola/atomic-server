@@ -283,11 +283,64 @@ fn build_filter_query(
 ) -> AtomicResult<Box<dyn Query>> {
     let query_parser = QueryParser::for_index(index, vec![fields.propvals]);
 
+    let qualified = qualify_propvals_clauses(tantivy_query_syntax);
     let query = query_parser
-        .parse_query(tantivy_query_syntax)
+        .parse_query(&qualified)
         .map_err(|e| format!("Error parsing query: {}", e))?;
 
     Ok(query)
+}
+
+/// The `filters` param is documented (and built by our own client, see
+/// `escapeTantivyKey`/`buildFilterString` in `browser/lib/src/search.ts`) as
+/// bare `<property-uri>:<value>` clauses, e.g.
+/// `https\://atomicdata.dev/properties/isA:"https://atomicdata.dev/classes/File"`.
+/// `propvals` is a JSON field, and tantivy only resolves a JSON path when the
+/// clause is qualified with the field's own name (`propvals.<path>:<value>`)
+/// -- an unqualified clause parses without error but silently fails to scope
+/// the match to that path (in testing it either matched nothing, or matched
+/// on token content anywhere under the field). Rewrite each `AND`/`OR`-joined
+/// clause to add that prefix so the documented, unqualified syntax works.
+/// Clauses without an unescaped `:` (bare terms, no field given) are left
+/// alone -- those are meant to hit the default fields as free text.
+fn qualify_propvals_clauses(filter: &str) -> String {
+    let separator = regex::Regex::new(r" (AND|OR) ").expect("valid regex");
+
+    let mut result = String::new();
+    let mut last_end = 0;
+    for m in separator.find_iter(filter) {
+        result.push_str(&qualify_clause(&filter[last_end..m.start()]));
+        result.push_str(m.as_str());
+        last_end = m.end();
+    }
+    result.push_str(&qualify_clause(&filter[last_end..]));
+
+    result
+}
+
+fn qualify_clause(clause: &str) -> String {
+    if clause.trim_start().starts_with("propvals.") || !has_unescaped_colon(clause) {
+        return clause.to_string();
+    }
+
+    format!("propvals.{clause}")
+}
+
+/// True if `s` contains a `:` not preceded by a backslash escape.
+fn has_unescaped_colon(s: &str) -> bool {
+    let mut escaped = false;
+    for c in s.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match c {
+            '\\' => escaped = true,
+            ':' => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 #[tracing::instrument(skip(store))]
