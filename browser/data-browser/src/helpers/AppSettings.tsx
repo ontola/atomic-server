@@ -22,6 +22,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { errorHandler } from '../handlers/errorHandler';
 import { isDev } from '../config';
 import { getLocalServerOrigin } from './tauri';
+import { fetchManagedInfo, isAtomicServer } from './managedServer';
 
 interface ProviderProps {
   children: ReactNode;
@@ -83,12 +84,27 @@ export const AppSettingsContextProvider = (
   const [sidebarKeyboardDndEnabled, setSidebarKeyboardDndEnabled] =
     useLocalStorage('sidebarKeyboardDndEnabled', false);
 
+  // The origin serving this app is usually a node worth listing on /sync — a
+  // self-hosted atomic-server serves its own data-browser. But not always: the
+  // managed deployment serves the SPA from a shared app origin (the portal's
+  // process, not an atomic-server), and listing that as a device would be a
+  // lie — "Switch" would point the store at something that can't answer. So
+  // ask `/server` first and register only a real node. A non-answer also
+  // *removes* the origin, cleaning up entries older builds added blindly; a
+  // wrongly-removed node (transient fetch failure) re-adds itself on the next
+  // load that reaches it.
   useEffect(() => {
     const currentOrigin = isDev()
       ? 'http://localhost:9883'
       : getLocalServerOrigin();
 
-    serverURLStorage.addKnownServer(currentOrigin);
+    fetchManagedInfo(currentOrigin).then(info => {
+      if (isAtomicServer(info)) {
+        serverURLStorage.addKnownServer(currentOrigin);
+      } else {
+        serverURLStorage.removeKnownServer(currentOrigin);
+      }
+    });
   }, []);
 
   const setServer = useCallback(

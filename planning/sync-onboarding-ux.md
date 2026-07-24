@@ -97,6 +97,19 @@ Keep these in step. A change to one is usually a change to its twin.
 | what a machine says about itself | `data-browser/src/helpers/managedServer.ts` | `flutter/lib/atomic/server_info.dart` |
 | push a workspace up | `browser/lib/src/store.ts` (`promoteLocalDrive`) | `AtomicClient.syncDriveToServer` |
 
+**Which servers the browser's Devices list shows.** `SyncRoute` renders every
+origin in `serverURLStorage`'s known-servers list. Origins get in through
+`setServer` (switching, Cloud Sync enrollment) and through `AppSettings`
+registering the origin the app itself was served from — but only after
+`/server` answers like a node (`isAtomicServer` in `managedServer.ts`). That
+guard exists because of atomic-saas's shared app origin
+(`app.atomicserver.eu`): it serves the SPA but is not an atomic-server, and
+without the check it appeared on /sync as a phantom "always-on device" next to
+the real node (`node1.atomicserver.eu`) — with a Switch action that would
+point the store at a non-server. A failed check also removes the origin, so
+entries registered blindly by older builds clean themselves up. Browser-only:
+the Flutter app has no equivalent auto-registration.
+
 Shared, and authoritative over all of the above:
 
 - `lib/src/sync/peer.rs` — pairing, AUTH, and the rule that rights decide

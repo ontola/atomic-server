@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   accountCreationTarget,
   forgetServerPeer,
+  isAtomicServer,
+  EMPTY_NODE_INFO,
   type ManagedInfo,
 } from './managedServer';
 
@@ -44,6 +46,31 @@ describe('accountCreationTarget', () => {
         portalUrl: 'https://portal.example/',
       }),
     ).toEqual({ kind: 'local' });
+  });
+});
+
+describe('isAtomicServer', () => {
+  it('a node reporting its version is a server', () => {
+    expect(
+      isAtomicServer({ managed: false, portalUrl: null, version: '0.42.0' }),
+    ).toBe(true);
+  });
+
+  it('a node id alone also counts (version parse could regress separately)', () => {
+    expect(
+      isAtomicServer({
+        managed: false,
+        portalUrl: null,
+        nodeId: `did:ad:node:${'a'.repeat(64)}`,
+      }),
+    ).toBe(true);
+  });
+
+  it('an origin that never answered /server is not a server', () => {
+    // What the managed deployment's shared app host produces: it serves this
+    // SPA (404 or index.html at /server), which fetchManagedInfo collapses to
+    // EMPTY_NODE_INFO — it must not be listed as a device.
+    expect(isAtomicServer(EMPTY_NODE_INFO)).toBe(false);
   });
 });
 

@@ -102,6 +102,18 @@ export async function fetchManagedInfo(
 }
 
 /**
+ * Whether `/server` actually answered like an atomic-server node. Every
+ * current node reports its version there (the node id additionally requires
+ * the p2p transport to be running); anything else living at an origin —
+ * notably the managed deployment's shared app host, which serves this SPA but
+ * is not a node — yields {@link EMPTY_NODE_INFO}. Used to keep non-nodes out
+ * of the known-servers list on the /sync page.
+ */
+export function isAtomicServer(info: ManagedInfo): boolean {
+  return Boolean(info.version || info.nodeId);
+}
+
+/**
  * Where the welcome screen's "Create account" should go, given a node's
  * {@link ManagedInfo}:
  *  - a managed node with a dashboard URL → the managed portal (which handles

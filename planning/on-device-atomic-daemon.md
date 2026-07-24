@@ -2,6 +2,10 @@
 
 > Status: draft / design. No code yet. Owns the "multiple apps on one device
 > share Atomic user data" question raised while building device sync.
+> **Android update:** [`android-data-reuse.md`](./android-data-reuse.md)
+> supersedes the localhost-HTTP transport on Android with Binder IPC
+> (on-demand ContentProvider/AIDL + cert-bound caller identity); the daemon
+> shape below may still fit desktop.
 
 ## Goal
 
