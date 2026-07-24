@@ -84,11 +84,19 @@ export const createRenderFunction =
       },
 
       onUpdate(props) {
+        if (!component) {
+          return;
+        }
+
         component.updateProps(props);
         updatePosition(props);
       },
 
       onKeyDown(props) {
+        if (!component) {
+          return false;
+        }
+
         if (props.event.key === 'Escape') {
           component.destroy();
 
@@ -103,6 +111,14 @@ export const createRenderFunction =
       },
 
       onExit() {
+        // `onStart` (which assigns `component`) runs after an internal
+        // `await` in @tiptap/suggestion's plugin view update. If the editor
+        // is destroyed in that window, `onExit` can fire before `onStart`
+        // ever ran.
+        if (!component) {
+          return;
+        }
+
         component.destroy();
       },
     };
