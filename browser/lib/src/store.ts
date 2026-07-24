@@ -1012,9 +1012,20 @@ export class Store {
             );
           }
 
-          // Best-effort: refetch the resource so the local copy
-          // aligns with whatever the server already has.
-          this.fetchResourceFromServer(entry.subject).catch(() => undefined);
+          // Best-effort: refetch the resource so the local copy aligns with
+          // whatever the server already has. Skip client-only placeholder
+          // subjects (`_new:`/`_local:`) — they never exist on the server, so
+          // there's nothing to align with, and merging back a "not found"
+          // response would reset `Resource.new`, re-arming
+          // `subscribeLocalUpdates`'s dirty-tracking for the next edit and
+          // looping this exact drop (see the `_new:` guard in
+          // `resource.ts`'s `subscribeLocalUpdates`).
+          if (
+            !entry.subject.startsWith('_new:') &&
+            !entry.subject.startsWith('_local:')
+          ) {
+            this.fetchResourceFromServer(entry.subject).catch(() => undefined);
+          }
         },
         isBlockingError: (_entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);

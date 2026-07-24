@@ -3,6 +3,8 @@ import { encodeB64Url } from './base64.js';
 import { encodeGenesisCert, genesisSignerDid } from './genesis.js';
 import { normalizeLoroChangeTimestampMs, Resource } from './resource.js';
 import type { JSONValue } from './value.js';
+import { testStore } from './test-store.js';
+import { core } from './index.js';
 
 describe('resource.ts', () => {
   it('push propvals', ({ expect }) => {
@@ -606,5 +608,54 @@ describe('getLoroHistory', () => {
     r.pushListItem(strokeData, { color: 1, width: 2, path: [[0, 0]] });
 
     expect(r.getCreatedBy()).toBeUndefined();
+  });
+});
+
+describe('subscribeLocalUpdates does not mark a `_new:` placeholder dirty', () => {
+  // Regression: the interactive New-Resource form (`useNewForm.ts`) mints a
+  // client-only `_new:` placeholder subject via `store.createSubject()` and
+  // relies on `Resource.new` to stay true until an explicit `.save()` derives
+  // the resource's real subject (see `_saveInner`'s genesis handling). If
+  // something resets `.new` to false first (e.g. reconciling a fetch
+  // response), the plain incremental dirty-tracking path used to enqueue an
+  // outbox entry for the literal `_new:...` subject — a commit the server can
+  // never accept — which then gets terminally dropped, refetched, and
+  // re-armed on the next edit: an infinite "Dropped stuck commit" loop.
+  it('does not enqueue an outbox entry for a `_new:` subject even if `new` is falsely false', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+
+    const subject = `_new:${Math.random().toString(36).slice(2)}`;
+    const resource = new Resource(subject, true);
+    resource.setStore(store);
+
+    // Simulate the reconciliation bug: something reset `new` before the
+    // resource ever completed its genesis save.
+    resource.new = false;
+
+    await resource.set(core.properties.name, 'Incomplete Meeting', false);
+    // `subscribeLocalUpdates` fires on the LoroDoc's commit boundary, not on
+    // the buffered `.set()` itself — force it, mirroring what the real
+    // debounced-save / drain path eventually does.
+    resource.getLoroDoc()?.commit();
+
+    expect(store.outbox.hasPending(subject)).toBe(false);
+  });
+
+  it('does enqueue a dirty entry for a real (non-`_new:`) subject once `new` is false', async ({
+    expect,
+  }) => {
+    const { store, agentDID } = await testStore();
+
+    const subject = `${agentDID}/some-resource`;
+    const resource = new Resource(subject, true);
+    resource.setStore(store);
+    resource.new = false;
+
+    await resource.set(core.properties.name, 'Real resource', false);
+    resource.getLoroDoc()?.commit();
+
+    expect(store.outbox.hasPending(subject)).toBe(true);
   });
 });

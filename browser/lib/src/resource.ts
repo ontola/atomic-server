@@ -538,6 +538,19 @@ export class Resource<C extends OptionalClass = any> {
         // Keyed on `new` (cleared once the genesis is signed), NOT on a subject
         // scheme — the resource carries its real `did:ad:` from birth.
         if (this.new) return;
+        // `_new:` placeholders (the interactive New-Resource form / any
+        // `store.createSubject()` caller, as opposed to `store.newResource()`
+        // which mints a real DID up front) can only be synced by first
+        // deriving their real subject via `signChanges` — that's what
+        // `_saveInner`'s explicit-save path does. `this.new` is supposed to
+        // gate that window, but it can be reset by unrelated reconciliation
+        // (e.g. `applyToStore` merging in a fetch response) before the
+        // resource is actually complete. Without this, a `_new:` subject
+        // reaches the plain incremental-commit path, the server rejects it
+        // (it was never genesis'd — often missing required properties too),
+        // the terminal-drop handler refetches it, that refetch can reset
+        // `new` again, and the next local edit repeats the cycle.
+        if (this.subject.startsWith('_new:')) return;
         if (!this._store.isOwnedSubject(this.subject)) return;
         // Local-only drives never drain — their saves persist to
         // clientDb directly (see `saveLocalOnly`). Marking dirty here
