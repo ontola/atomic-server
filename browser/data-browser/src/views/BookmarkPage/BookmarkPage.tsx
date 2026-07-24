@@ -2,6 +2,7 @@ import { ResourcePageProps } from '../ResourcePage';
 import { useCallback, type JSX } from 'react';
 import { urls, useCanWrite, useString } from '@tomic/react';
 import { EditableTitle } from '../../components/EditableTitle';
+import { ResourceCoverImage } from '../../components/ResourceDecorations';
 import { styled } from 'styled-components';
 import { ContainerFull, ContainerNarrow } from '../../components/Containers';
 import { BookmarkPreview } from './BookmarkPreview';
@@ -32,9 +33,10 @@ export function BookmarkPage({ resource }: ResourcePageProps): JSX.Element {
 
   return (
     <>
+      <ResourceCoverImage resource={resource} />
       <Wrapper>
         <ContainerFull>
-          <EditableTitle resource={resource} />
+          <EditableTitle resource={resource} withDecorations />
         </ContainerFull>
         <ControlWrapper>
           <ContainerFull>

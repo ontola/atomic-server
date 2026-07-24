@@ -159,6 +159,7 @@ export const properties = {
       'https://atomicdata.dev/properties/custom-node-positioning',
   },
   color: 'https://atomicdata.dev/properties/color',
+  coverImage: 'https://atomicdata.dev/properties/coverImage',
   emoji: 'https://atomicdata.dev/properties/emoji',
   classes: 'https://atomicdata.dev/properties/classes',
   properties: 'https://atomicdata.dev/properties/properties',

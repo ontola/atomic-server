@@ -1,4 +1,5 @@
 import { EditableTitle } from '@components/EditableTitle';
+import { ResourceCoverImage } from '@components/ResourceDecorations';
 import { dataBrowser, useLoroDoc, useLoroReady } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { lazy, Suspense, useEffect, useState } from 'react';
@@ -81,8 +82,13 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
 
   return (
     <FullPageWrapper>
+      <ResourceCoverImage resource={resource} />
       <DocumentContainer>
-        <EditableTitle resource={resource} onCommit={focusEditor} />
+        <EditableTitle
+          resource={resource}
+          onCommit={focusEditor}
+          withDecorations
+        />
 
         <Suspense fallback={<div>Loading...</div>}>
           <CollaborativeEditor

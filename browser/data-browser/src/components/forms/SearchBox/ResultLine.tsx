@@ -1,6 +1,7 @@
 import {
   core,
   dataBrowser,
+  useArray,
   useResource,
   useString,
   type Resource,
@@ -82,15 +83,18 @@ type IconProps = {
 };
 
 function Icon({ resource }: IconProps): React.ReactElement {
-  let IconComp = getIconForClass(resource.getClasses()[0] ?? '');
+  const [emoji] = useString(resource, dataBrowser.properties.emoji);
+  const [isA] = useArray(resource, core.properties.isA);
+  const [datatype] = useString(resource, core.properties.datatype);
 
-  if (resource.hasClasses(dataBrowser.classes.tag)) {
-    const emoji = resource.get(dataBrowser.properties.emoji);
+  if (emoji) {
+    return <span aria-hidden>{emoji}</span>;
+  }
 
-    return emoji ? <span>{emoji}</span> : <IconComp />;
-  } else if (resource.hasClasses(core.classes.property)) {
-    IconComp =
-      dataTypeIconMap.get(resource.get(core.properties.datatype)) ?? FaAtom;
+  let IconComp = getIconForClass(isA[0] ?? '');
+
+  if (isA.includes(core.classes.property)) {
+    IconComp = dataTypeIconMap.get(datatype ?? '') ?? FaAtom;
   }
 
   return <IconComp />;

@@ -42,6 +42,11 @@ export type MenuItemMinimial = {
   shortcut?: string;
   /** Extra search terms for searchable menus. */
   keywords?: string[];
+  /**
+   * Hidden from the default listing; only appears in searchable menus while
+   * the filter query matches its label/keywords.
+   */
+  searchOnly?: boolean;
 };
 
 export type DropdownItem = typeof DIVIDER | MenuItemMinimial;
@@ -170,7 +175,8 @@ export function DropdownMenu({
 
   const filteredItems = useMemo(() => {
     if (!searchable || !search) {
-      return items;
+      // Search-only items surface exclusively through the filter query.
+      return items.filter(item => !isItem(item) || !item.searchOnly);
     }
 
     // Dividers are dropped while filtering.

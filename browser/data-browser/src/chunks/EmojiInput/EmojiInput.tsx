@@ -1,13 +1,19 @@
-import { useCallback, useState, type JSX } from 'react';
+import { useCallback, useState, type JSX, type ReactNode } from 'react';
 import Picker from '@emoji-mart/react';
 import { styled } from 'styled-components';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { transition } from '../../helpers/transition';
 import { Popover } from '../../components/Popover';
+import { Button } from '../../components/Button';
 
 export interface EmojiInputProps {
   initialValue?: string;
   onChange: (value: string | undefined) => void;
+  /**
+   * Custom popover trigger (must be a RadixPopover.Trigger element).
+   * Defaults to a small button showing the current emoji.
+   */
+  Trigger?: ReactNode;
 }
 
 const EMOJI_DATA_URL = 'https://cdn.jsdelivr.net/npm/@emoji-mart/data';
@@ -25,9 +31,31 @@ const fetchAndCacheData = async () => {
   return data;
 };
 
+export interface EmojiPickerPanelProps {
+  onEmojiSelect: (e: { native: string }) => void;
+}
+
+/** The bare emoji-mart picker, for embedding outside the popover (dialogs). */
+export function EmojiPickerPanel({
+  onEmojiSelect,
+}: EmojiPickerPanelProps): JSX.Element {
+  return (
+    <PickerWrapper>
+      <Picker
+        autoFocus
+        data={fetchAndCacheData}
+        onEmojiSelect={onEmojiSelect}
+        maxFrequentRows={2}
+        dynamicWidth={true}
+      />
+    </PickerWrapper>
+  );
+}
+
 export default function EmojiInputASYNC({
   initialValue,
   onChange,
+  Trigger,
 }: EmojiInputProps): JSX.Element {
   const [showPicker, setShowPicker] = useState(false);
   const [emoji, setEmoji] = useState<string | undefined>(initialValue);
@@ -41,18 +69,36 @@ export default function EmojiInputASYNC({
     [onChange],
   );
 
+  const handleRemove = useCallback(() => {
+    setEmoji(undefined);
+    setShowPicker(false);
+    onChange(undefined);
+  }, [onChange]);
+
   return (
     <PickerPopover
       noArrow
       open={showPicker}
       onOpenChange={setShowPicker}
       Trigger={
-        <PickerButton onClick={() => setShowPicker(true)} title='Pick an emoji'>
-          {emoji ? <Preview>{emoji}</Preview> : <Placeholder>😎</Placeholder>}
-        </PickerButton>
+        Trigger ?? (
+          <PickerButton
+            onClick={() => setShowPicker(true)}
+            title='Pick an emoji'
+          >
+            {emoji ? <Preview>{emoji}</Preview> : <Placeholder>😎</Placeholder>}
+          </PickerButton>
+        )
       }
     >
       <PickerWrapper>
+        {emoji && (
+          <RemoveRow>
+            <Button subtle onClick={handleRemove}>
+              Remove emoji
+            </Button>
+          </RemoveRow>
+        )}
         <Picker
           autoFocus
           data={fetchAndCacheData}
@@ -94,10 +140,17 @@ const PickerPopover = styled(Popover)`
 `;
 
 const PickerWrapper = styled.div`
-  display: contents;
+  display: flex;
+  flex-direction: column;
 
   & em-emoji-picker {
     height: 400px;
     width: min(90vw, 20rem);
   }
+`;
+
+const RemoveRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  padding: ${p => p.theme.size(1)};
 `;

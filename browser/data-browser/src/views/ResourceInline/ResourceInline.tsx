@@ -70,8 +70,13 @@ export function ResourceInline({
 function DefaultInline({ subject }: ResourceInlineInstanceProps): JSX.Element {
   const resource = useResource(subject);
   const [description] = useString(resource, core.properties.description);
+  const [emoji] = useString(resource, dataBrowser.properties.emoji);
 
-  return <span title={description ? description : ''}>{resource.title}</span>;
+  return (
+    <span title={description ? description : ''}>
+      {emoji ? `${emoji} ${resource.title}` : resource.title}
+    </span>
+  );
 }
 
 const classMap = new Map<

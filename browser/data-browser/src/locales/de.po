@@ -5631,3 +5631,47 @@ msgstr ""
 #: src/chunks/Conference/ConferenceRoom.tsx
 msgid "Leave call"
 msgstr ""
+
+#: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+msgid "Change cover"
+msgstr ""
+
+#: src/components/ResourceDecorations.tsx
+msgid "Remove cover"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+msgid "Change icon"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+msgid "Add icon"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+msgid "Add cover"
+msgstr ""
+
+#: src/chunks/EmojiInput/EmojiInput.tsx
+#: src/components/ResourceDecorations.tsx
+msgid "Remove emoji"
+msgstr ""
+
+#~ msgid "<0/> Add cover"
+#~ msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Pick an emoji shown next to this resource wherever it appears."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Pick an image shown as a banner at the top of this resource."
+msgstr ""
+
+#: src/components/ResourceDecorations.tsx
+msgid "Icon"
+msgstr ""

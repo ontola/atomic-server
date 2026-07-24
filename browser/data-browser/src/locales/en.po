@@ -5665,3 +5665,47 @@ msgstr "Turn camera on"
 #: src/chunks/Conference/ConferenceRoom.tsx
 msgid "Leave call"
 msgstr "Leave call"
+
+#: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+msgid "Change cover"
+msgstr "Change cover"
+
+#: src/components/ResourceDecorations.tsx
+msgid "Remove cover"
+msgstr "Remove cover"
+
+#: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+msgid "Change icon"
+msgstr "Change icon"
+
+#: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+msgid "Add icon"
+msgstr "Add icon"
+
+#: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+msgid "Add cover"
+msgstr "Add cover"
+
+#: src/chunks/EmojiInput/EmojiInput.tsx
+#: src/components/ResourceDecorations.tsx
+msgid "Remove emoji"
+msgstr "Remove emoji"
+
+#~ msgid "<0/> Add cover"
+#~ msgstr "<0/> Add cover"
+
+#: src/actions/resourceActions.tsx
+msgid "Pick an emoji shown next to this resource wherever it appears."
+msgstr "Pick an emoji shown next to this resource wherever it appears."
+
+#: src/actions/resourceActions.tsx
+msgid "Pick an image shown as a banner at the top of this resource."
+msgstr "Pick an image shown as a banner at the top of this resource."
+
+#: src/components/ResourceDecorations.tsx
+msgid "Icon"
+msgstr "Icon"

@@ -1,6 +1,7 @@
 import { useId, useMemo, useState, type JSX } from 'react';
 import { ContainerFull } from '@components/Containers';
 import { EditableTitle } from '@components/EditableTitle';
+import { ResourceCoverImage } from '@components/ResourceDecorations';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { Row as FlexRow, Column } from '@components/Row';
 import { FaFileCsv } from 'react-icons/fa6';
@@ -46,22 +47,26 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
   };
 
   return (
-    <ContainerFull>
-      <Column>
-        <FlexRow justify='space-between'>
-          <EditableTitle
-            resource={resource}
-            id={titleId}
-            onCommit={focusTable}
-          />
-        </FlexRow>
-        <TableResource resource={resource} />
-      </Column>
-      <TableExportDialog
-        subject={resource.subject}
-        show={showExportDialog}
-        bindShow={setShowExportDialog}
-      />
-    </ContainerFull>
+    <>
+      <ResourceCoverImage resource={resource} />
+      <ContainerFull>
+        <Column>
+          <FlexRow justify='space-between'>
+            <EditableTitle
+              resource={resource}
+              id={titleId}
+              onCommit={focusTable}
+              withDecorations
+            />
+          </FlexRow>
+          <TableResource resource={resource} />
+        </Column>
+        <TableExportDialog
+          subject={resource.subject}
+          show={showExportDialog}
+          bindShow={setShowExportDialog}
+        />
+      </ContainerFull>
+    </>
   );
 }

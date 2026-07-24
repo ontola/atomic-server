@@ -14,6 +14,11 @@ import {
 } from '../helpers/transitionName';
 import { UnsavedIndicator } from './UnsavedIndicator';
 import { Flex } from './Row';
+import {
+  AffordanceRow,
+  TitleDecorationAffordances,
+  TitleEmoji,
+} from './ResourceDecorations';
 
 export interface EditableTitleProps {
   resource: Resource;
@@ -30,6 +35,11 @@ export interface EditableTitleProps {
    * two elements sharing a view-transition-name skips the transition.
    */
   transitionTag?: string;
+  /**
+   * Show the "Add icon" / "Add cover" affordances above the title (revealed on
+   * hover). Set on main page views; leave off in bars and panels.
+   */
+  withDecorations?: boolean;
 }
 
 const opts = {
@@ -44,6 +54,7 @@ export function EditableTitle({
   className,
   onCommit,
   transitionTag = PAGE_TITLE_TRANSITION_TAG,
+  withDecorations,
   ...props
 }: EditableTitleProps): JSX.Element {
   const store = useStore();
@@ -111,24 +122,27 @@ export function EditableTitle({
     }
   };
 
-  return isEditing ? (
-    <TitleInput
-      ref={ref}
-      data-testid='editable-title'
-      type='text'
-      {...props}
-      onFocus={handleClick}
-      placeholder={placeholder}
-      onChange={e => setText(e.target.value)}
-      value={text || ''}
-      onKeyDown={handleKeyDown}
-      onBlur={() => {
-        flushPending();
-        setIsEditing(false);
-        onCommit?.();
-      }}
-      className={className}
-    />
+  const titleElement = isEditing ? (
+    <EditingRow>
+      <TitleEmoji resource={resource} />
+      <TitleInput
+        ref={ref}
+        data-testid='editable-title'
+        type='text'
+        {...props}
+        onFocus={handleClick}
+        placeholder={placeholder}
+        onChange={e => setText(e.target.value)}
+        value={text || ''}
+        onKeyDown={handleKeyDown}
+        onBlur={() => {
+          flushPending();
+          setIsEditing(false);
+          onCommit?.();
+        }}
+        className={className}
+      />
+    </EditingRow>
   ) : (
     <Title
       disabled={!canEdit}
@@ -143,6 +157,7 @@ export function EditableTitle({
       className={className}
     >
       <>
+        <TitleEmoji resource={resource} />
         <span>
           {text || placeholder}
           <UnsavedIndicator resource={resource} />
@@ -150,6 +165,19 @@ export function EditableTitle({
         {canEdit && <Icon />}
       </>
     </Title>
+  );
+
+  if (!withDecorations) {
+    return titleElement;
+  }
+
+  return (
+    <TitleWrapper>
+      {titleElement}
+      {/* Hidden while editing: the input's width differs from the rendered
+          title, which would make these buttons jump around. */}
+      {!isEditing && <TitleDecorationAffordances resource={resource} />}
+    </TitleWrapper>
   );
 }
 
@@ -214,5 +242,42 @@ const Icon = styled(FaPencil)`
   font-size: 0.8em;
   ${Title}:hover & {
     opacity: 0.5;
+  }
+`;
+
+/** Keeps the emoji next to the input while the title is being edited. */
+const EditingRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${p => p.theme.size()};
+  font-size: ${p => p.theme.fontSizeH1}rem;
+
+  /* Hug the typed text like the rendered title does (progressive
+     enhancement; browsers without field-sizing keep the default width),
+     and drop the input's legacy standalone margin — the box must match
+     the rendered title exactly, whatever the surrounding view. */
+  & > input {
+    field-sizing: content;
+    min-width: 8ch;
+    max-width: 100%;
+    margin: 0;
+  }
+`;
+
+const TitleWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${p => p.theme.size()};
+  min-width: 0;
+
+  /* Both modes must occupy the same box or everything below shifts when
+     editing starts: the input has no margin, so the h1 must not either.
+     Vertical rhythm comes from the surrounding Column gap. */
+  & > h1 {
+    margin-block: 0;
+  }
+
+  &:hover ${AffordanceRow} {
+    opacity: 1;
   }
 `;

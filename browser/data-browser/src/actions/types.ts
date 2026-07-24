@@ -41,6 +41,10 @@ export interface ActionContext {
   /** The subject lives on another server (e.g. shown via an AtomicLink). */
   external?: boolean;
   showCodeUsageDialog?: () => void;
+  /** Opens the emoji picker dialog for this resource's icon. */
+  openEmojiPicker?: () => void;
+  /** Opens the pick-or-upload dialog for this resource's cover image. */
+  openCoverPicker?: () => void;
   onAfterDelete?: () => void;
 }
 
@@ -68,6 +72,12 @@ export interface ActionDefinition {
   shortcut?: string;
   /** Extra search terms for searchable surfaces (⌘M filter, ⌘K palette). */
   keywords?: string[];
+  /**
+   * Hidden from the default menu listing; only surfaces in searchable menus
+   * while the filter query matches. For secondary actions that would clutter
+   * the list.
+   */
+  searchOnly?: boolean;
   /** Surfaces must confirm before running (unless explicitly bypassed). */
   danger?: boolean;
   /** Label shown while the confirmation bypass (shift) is held. */

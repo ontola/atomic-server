@@ -14,6 +14,7 @@ import { ResourcePageProps } from './ResourcePage';
 import { CommitDetail } from '../components/CommitDetail';
 import { Details } from '../components/Detail';
 import { EditableTitle } from '../components/EditableTitle';
+import { ResourceCoverImage } from '../components/ResourceDecorations';
 import { FaPencil } from 'react-icons/fa6';
 import {
   IconButton,
@@ -48,6 +49,9 @@ export const defaultHiddenProps = [
   commits.properties.lastCommit,
   dataBrowser.properties.subResources,
   dataBrowser.properties.tags,
+  // Shown as page decorations (icon + cover banner)
+  dataBrowser.properties.emoji,
+  dataBrowser.properties.coverImage,
 ];
 
 /**
@@ -62,35 +66,38 @@ export function ResourcePageDefault({
   const navigate = useNavigateWithTransition();
 
   return (
-    <ContainerNarrow>
-      <Column>
-        <Row justify='space-between'>
-          <EditableTitle resource={resource} />
-          {canEdit && (
-            <IconButton
-              title='Edit'
-              variant={IconButtonVariant.Square}
-              onClick={() => navigate(editURL(resource.subject))}
-            >
-              <FaPencil />
-            </IconButton>
-          )}
-        </Row>
-        <Details>
-          <ClassDetail resource={resource} />
-          <CommitDetail commitSubject={lastCommit} />
-        </Details>
-        <ValueForm
-          resource={resource}
-          propertyURL={core.properties.description}
-        />
-        <AllProps
-          resource={resource}
-          except={defaultHiddenProps}
-          editable
-          columns
-        />
-      </Column>
-    </ContainerNarrow>
+    <>
+      <ResourceCoverImage resource={resource} />
+      <ContainerNarrow>
+        <Column>
+          <Row justify='space-between'>
+            <EditableTitle resource={resource} withDecorations />
+            {canEdit && (
+              <IconButton
+                title='Edit'
+                variant={IconButtonVariant.Square}
+                onClick={() => navigate(editURL(resource.subject))}
+              >
+                <FaPencil />
+              </IconButton>
+            )}
+          </Row>
+          <Details>
+            <ClassDetail resource={resource} />
+            <CommitDetail commitSubject={lastCommit} />
+          </Details>
+          <ValueForm
+            resource={resource}
+            propertyURL={core.properties.description}
+          />
+          <AllProps
+            resource={resource}
+            except={defaultHiddenProps}
+            editable
+            columns
+          />
+        </Column>
+      </ContainerNarrow>
+    </>
   );
 }

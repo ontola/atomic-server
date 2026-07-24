@@ -15,7 +15,7 @@ import { NewCard } from '../../components/NewCard';
 import { Column } from '../../components/Row';
 import ResourceCard from '../Card/ResourceCard';
 import { ResourcePageProps } from '../ResourcePage';
-import { ArticleCover } from './ArticleCover';
+import { ResourceCoverImage } from '../../components/ResourceDecorations';
 import { ArticleDescription } from './ArticleDescription';
 import { useNewResourceUI } from '../../components/forms/NewForm/useNewResourceUI';
 
@@ -33,13 +33,13 @@ export function ArticlePage({ resource }: ResourcePageProps): JSX.Element {
 
   return (
     <>
+      <ResourceCoverImage resource={resource} />
       <Column gap='2rem'>
         <ArticleContainer>
           <Content>
             <Column>
-              <ArticleCover resource={resource} canEdit={canEdit} />
               <HeadingWrapper>
-                <EditableTitle resource={resource} />
+                <EditableTitle resource={resource} withDecorations />
                 <CommitDetail commitSubject={lastCommit} />
               </HeadingWrapper>
               <ArticleDescription resource={resource} canEdit={canEdit} />

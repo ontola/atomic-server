@@ -15,6 +15,8 @@ import type { ActionContext } from './types';
 export interface ActionContextOverrides {
   external?: boolean;
   showCodeUsageDialog?: () => void;
+  openEmojiPicker?: () => void;
+  openCoverPicker?: () => void;
   onAfterDelete?: () => void;
 }
 

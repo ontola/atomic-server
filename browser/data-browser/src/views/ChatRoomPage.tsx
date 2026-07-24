@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { styled } from 'styled-components';
 import { Column } from '../components/Row';
 import { EditableTitle } from '../components/EditableTitle';
+import { ResourceCoverImage } from '../components/ResourceDecorations';
 import { ResourcePageProps } from './ResourcePage';
 import { ChatRoomView } from './ChatRoom/ChatRoomView';
 
@@ -10,22 +11,36 @@ export function ChatRoomPage({ resource }: ResourcePageProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   return (
-    <FullPageWrapper>
-      <Column fullHeight>
-        <EditableTitle
-          resource={resource}
-          onCommit={() => inputRef.current?.focus()}
-        />
-        <ChatRoomView resource={resource} inputRef={inputRef} viewTransition />
-      </Column>
-    </FullPageWrapper>
+    <PageWrapper>
+      <ResourceCoverImage resource={resource} />
+      <FullPageWrapper>
+        <Column fullHeight>
+          <EditableTitle
+            resource={resource}
+            onCommit={() => inputRef.current?.focus()}
+            withDecorations
+          />
+          <ChatRoomView
+            resource={resource}
+            inputRef={inputRef}
+            viewTransition
+          />
+        </Column>
+      </FullPageWrapper>
+    </PageWrapper>
   );
 }
+
+const PageWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+`;
 
 const FullPageWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 0;
   padding: 1rem;
   flex: 1;
 `;

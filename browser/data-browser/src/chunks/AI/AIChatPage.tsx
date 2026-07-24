@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { type AIMessageContext, type AtomicUIMessage } from './types';
 import { Column, Row } from '@components/Row';
 import { EditableTitle } from '@components/EditableTitle';
+import { ResourceCoverImage } from '@components/ResourceDecorations';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 import { useGenerativeData } from './useGenerativeData';
 import {
@@ -211,8 +212,9 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
       onRegenerateMessage={removeFollowingMessages}
     >
       <Column gap='0.5rem'>
+        <ResourceCoverImage resource={resource} />
         <Row>
-          <SmallTitle resource={resource} />
+          <SmallTitle resource={resource} withDecorations />
         </Row>
       </Column>
     </RealAIChat>

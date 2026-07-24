@@ -3,7 +3,14 @@ import { styled, css, keyframes } from 'styled-components';
 import { SideBarItem } from '../SideBarItem';
 import { FloatingActions, floatingHoverStyles } from './FloatingActions';
 import { getIconForClass } from '../../../helpers/iconMap';
-import { useResource, useArray, core, useTitle } from '@tomic/react';
+import {
+  useResource,
+  useArray,
+  useString,
+  core,
+  dataBrowser,
+  useTitle,
+} from '@tomic/react';
 import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { DraggableAttributes } from '@dnd-kit/core';
 import { StyledLink, TextWrapper } from './shared';
@@ -57,7 +64,14 @@ export const SidebarItemTitle = memo(
       const resource = useResource(subject);
       const { sidebarKeyboardDndEnabled } = useSettings();
       const [classType] = useArray(resource, core.properties.isA);
+      const [emoji] = useString(resource, dataBrowser.properties.emoji);
       const Icon = getIconForClass(classType[0]!);
+      // A resource's own emoji takes precedence over its class icon.
+      const glyph = emoji ? (
+        <GlyphEmoji aria-hidden>{emoji}</GlyphEmoji>
+      ) : (
+        <Icon />
+      );
       // Reactive title via `useTitle` (subscribes to `name`/`shortname`/
       // `filename` LocalChange events through `useValue`'s
       // `useSyncExternalStore`). Reading the bare `resource.title` getter
@@ -67,6 +81,18 @@ export const SidebarItemTitle = memo(
       const [title] = useTitle(resource);
 
       const expandLabel = expanded ? 'Collapse folder' : 'Expand folder';
+
+      // Expandable rows have no icon slot (the caret occupies it), so the
+      // emoji rests in the caret's place and yields to it on hover/focus —
+      // same swap pattern as the drag grip below.
+      const expandControl = emoji ? (
+        <>
+          <GlyphEmoji aria-hidden>{emoji}</GlyphEmoji>
+          <ExpandCaret $open={expanded} />
+        </>
+      ) : (
+        <ExpandCaret $open={expanded} />
+      );
 
       return (
         <ActionWrapper
@@ -89,7 +115,7 @@ export const SidebarItemTitle = memo(
                   {...(listeners ?? {})}
                   {...(attributes ?? {})}
                 >
-                  <ExpandCaret $open={expanded} />
+                  {expandControl}
                 </ExpandToggleButton>
                 <RowBody>
                   <NavResourceLink subject={subject} clean ref={ref}>
@@ -121,7 +147,7 @@ export const SidebarItemTitle = memo(
                       {...(attributes ?? {})}
                       role='link'
                     >
-                      <Icon />
+                      {glyph}
                       <FaGripVertical />
                     </StyledIconButton>
                     <TreeRowTitle>{title}</TreeRowTitle>
@@ -144,7 +170,7 @@ export const SidebarItemTitle = memo(
                   onToggleExpand?.();
                 }}
               >
-                <ExpandCaret $open={expanded} />
+                {expandControl}
               </ExpandToggleButton>
               <RowBody>
                 <NavResourceLink
@@ -182,9 +208,7 @@ export const SidebarItemTitle = memo(
                 resource={subject}
               >
                 <TextWrapper>
-                  <LeadingSlot>
-                    <Icon />
-                  </LeadingSlot>
+                  <LeadingSlot>{glyph}</LeadingSlot>
                   <TreeRowTitle>{title}</TreeRowTitle>
                   <UnsavedIndicator resource={resource} />
                   <SidebarPresence subject={subject} />
@@ -217,6 +241,12 @@ const lift = keyframes`
 
 const StyledIconButton = styled(IconButton)`
   --button-padding: 0;
+`;
+
+/** Emoji stand-in for the class icon; sized to line up with the svg icons. */
+const GlyphEmoji = styled.span`
+  font-size: 0.9rem;
+  line-height: 1;
 `;
 
 /** Same width as expand control so class icons line up with carets. */
@@ -335,5 +365,21 @@ const ActionWrapper = styled.div<{ isDragging?: boolean }>`
       visibility: visible;
       cursor: grab;
     }
+    /* When an emoji stands in for the class icon it must also make way
+       for the drag grip (the svg swap rules above don't match a span). */
+    ${StyledIconButton} ${GlyphEmoji} {
+      display: none;
+    }
+    /* Same for the expand caret: emoji rests in its slot, caret on hover. */
+    ${ExpandToggleButton} ${GlyphEmoji} {
+      display: none;
+    }
+    ${ExpandToggleButton} ${GlyphEmoji} + svg {
+      display: block;
+    }
+  }
+
+  ${ExpandToggleButton} ${GlyphEmoji} + svg {
+    display: none;
   }
 `;

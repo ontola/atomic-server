@@ -1,4 +1,4 @@
-import { Resource, core, useArray } from '@tomic/react';
+import { Resource, core, dataBrowser, useArray, useString } from '@tomic/react';
 import { FC, PropsWithChildren } from 'react';
 import { styled } from 'styled-components';
 import { AtomicLink } from '../../components/AtomicLink';
@@ -19,12 +19,13 @@ export const ResourceCardTitle: FC<
   PropsWithChildren<ResourceCardTitleProps>
 > = ({ resource, children, alternateTitle }) => {
   const [isA] = useArray(resource, core.properties.isA);
+  const [emoji] = useString(resource, dataBrowser.properties.emoji);
   const Icon = getIconForClass(isA[0]);
 
   return (
     <TitleRow center gap='1ch' justify='space-between' wrapItems>
       <Row center gap='1ch'>
-        <Icon />
+        {emoji ? <span aria-hidden>{emoji}</span> : <Icon />}
         <AtomicLink subject={resource.subject}>
           <Title subject={resource.subject}>
             {alternateTitle ?? resource.title}

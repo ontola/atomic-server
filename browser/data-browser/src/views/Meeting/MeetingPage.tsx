@@ -8,6 +8,7 @@ import {
 } from '@tomic/react';
 import type { ResourcePageProps } from '../ResourcePage';
 import { EditableTitle } from '../../components/EditableTitle';
+import { ResourceCoverImage } from '../../components/ResourceDecorations';
 import { Button } from '../../components/Button';
 import { Row, Column } from '../../components/Row';
 import { useFollow } from '../../components/Presence/FollowContext';
@@ -51,42 +52,49 @@ export function MeetingPage({
   };
 
   return (
-    <Page>
-      <MeetingHeader>
-        <Column gap='0.4rem'>
-          <Phase>{phase}</Phase>
-          <EditableTitle resource={resource} onCommit={focusEditor} />
-        </Column>
-        <Row gap='0.5rem' center>
-          <Button subtle onClick={() => openMeetingPanel(resource.subject)}>
-            Open chat
-          </Button>
-          {phase === 'agenda' && (
-            <Button onClick={handleStart} disabled={changing}>
-              Start meeting
+    <>
+      <ResourceCoverImage resource={resource} />
+      <Page>
+        <MeetingHeader>
+          <Column gap='0.4rem'>
+            <Phase>{phase}</Phase>
+            <EditableTitle
+              resource={resource}
+              onCommit={focusEditor}
+              withDecorations
+            />
+          </Column>
+          <Row gap='0.5rem' center>
+            <Button subtle onClick={() => openMeetingPanel(resource.subject)}>
+              Open chat
             </Button>
-          )}
-          {phase === 'notes' && leading && (
-            <Button alert onClick={handleEnd} disabled={changing}>
-              End meeting
-            </Button>
-          )}
-        </Row>
-      </MeetingHeader>
+            {phase === 'agenda' && (
+              <Button onClick={handleStart} disabled={changing}>
+                Start meeting
+              </Button>
+            )}
+            {phase === 'notes' && leading && (
+              <Button alert onClick={handleEnd} disabled={changing}>
+                End meeting
+              </Button>
+            )}
+          </Row>
+        </MeetingHeader>
 
-      {doc ? (
-        <Suspense fallback={<div>Loading meeting notes…</div>}>
-          <CollaborativeEditor
-            id='meeting-editor'
-            resource={resource}
-            doc={doc}
-            property={dataBrowser.properties.documentContent}
-          />
-        </Suspense>
-      ) : (
-        <div>Loading meeting notes…</div>
-      )}
-    </Page>
+        {doc ? (
+          <Suspense fallback={<div>Loading meeting notes…</div>}>
+            <CollaborativeEditor
+              id='meeting-editor'
+              resource={resource}
+              doc={doc}
+              property={dataBrowser.properties.documentContent}
+            />
+          </Suspense>
+        ) : (
+          <div>Loading meeting notes…</div>
+        )}
+      </Page>
+    </>
   );
 }
 

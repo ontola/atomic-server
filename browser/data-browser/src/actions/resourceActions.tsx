@@ -1,5 +1,5 @@
 import toast from 'react-hot-toast';
-import { canvas, core, forks, server } from '@tomic/react';
+import { canvas, core, dataBrowser, forks, server } from '@tomic/react';
 import {
   FaArrowUpRightFromSquare,
   FaClock,
@@ -7,6 +7,8 @@ import {
   FaCodeBranch,
   FaCodeMerge,
   FaDownload,
+  FaFaceSmile,
+  FaImage,
   FaMagnifyingGlass,
   FaMessage,
   FaPencil,
@@ -17,6 +19,7 @@ import {
   FaTrash,
   FaTurnUp,
 } from 'react-icons/fa6';
+import { atomicArgu } from '../ontologies/atomic-argu';
 import { getOrCreateForksFolder } from '../helpers/forksFolder';
 import {
   constructOpenURL,
@@ -97,6 +100,39 @@ export const resourceActions: ActionDefinition[] = [
     shortcut: shortcuts.edit,
     available: ctx => ctx.canWrite,
     run: ctx => ctx.navigate(editURL(ctx.subject)),
+  },
+  {
+    id: 'setEmoji',
+    scope: 'resource',
+    section: 'action',
+    label: ctx =>
+      ctx.resource.get(dataBrowser.properties.emoji)
+        ? 'Change icon'
+        : 'Add icon',
+    helper: () =>
+      'Pick an emoji shown next to this resource wherever it appears.',
+    keywords: ['emoji', 'icon', 'glyph', 'smiley', 'decorate'],
+    icon: () => <FaFaceSmile />,
+    searchOnly: true,
+    available: ctx => ctx.canWrite && ctx.openEmojiPicker !== undefined,
+    run: ctx => ctx.openEmojiPicker?.(),
+  },
+  {
+    id: 'setCover',
+    scope: 'resource',
+    section: 'action',
+    label: ctx =>
+      (ctx.resource.get(dataBrowser.properties.coverImage) ??
+      ctx.resource.get(atomicArgu.properties.coverImage))
+        ? 'Change cover'
+        : 'Add cover',
+    helper: () =>
+      'Pick an image shown as a banner at the top of this resource.',
+    keywords: ['cover', 'banner', 'image', 'header', 'photo', 'decorate'],
+    icon: () => <FaImage />,
+    searchOnly: true,
+    available: ctx => ctx.canWrite && ctx.openCoverPicker !== undefined,
+    run: ctx => ctx.openCoverPicker?.(),
   },
   {
     id: 'editAsFork',

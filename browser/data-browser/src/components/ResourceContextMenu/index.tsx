@@ -15,6 +15,7 @@ import { resourceActions } from '../../actions/resourceActions';
 import { useActionContext } from '../../actions/useActionContext';
 import type { ActionDefinition } from '../../actions/types';
 import { useCustomContextItemsContext } from './CustomContextItemsContext';
+import { CoverPickerDialog, EmojiPickerDialog } from '../ResourceDecorations';
 
 export {
   CustomContextItemsProvider,
@@ -47,6 +48,8 @@ export const ContextMenuOptions = {
   EditAsFork: 'editAsFork',
   MergeFork: 'mergeFork',
   OpenOriginal: 'openOriginal',
+  SetEmoji: 'setEmoji',
+  SetCover: 'setCover',
 } as const;
 
 export type ContextMenuOptionsUnion =
@@ -98,10 +101,17 @@ export function ResourceContextMenu({
     () => setShowCodeUsageDialog(true),
     [],
   );
+  // undefined = never opened (dialog not mounted), boolean = mounted.
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState<boolean>();
+  const [coverPickerOpen, setCoverPickerOpen] = useState<boolean>();
+  const openEmojiPicker = useCallback(() => setEmojiPickerOpen(true), []);
+  const openCoverPicker = useCallback(() => setCoverPickerOpen(true), []);
   const ctx = useActionContext(subject, {
     external,
     onAfterDelete,
     showCodeUsageDialog: openCodeUsageDialog,
+    openEmojiPicker,
+    openCoverPicker,
   });
   const { items: customItems } = useCustomContextItemsContext();
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
@@ -174,6 +184,7 @@ export function ResourceContextMenu({
       shortcut: simple ? undefined : action.shortcut,
       disabled: action.disabled?.(ctx),
       keywords: action.keywords,
+      searchOnly: action.searchOnly,
       onClick: () => {
         // Shift skips the confirmation dialog for danger actions.
         if (action.danger && action.confirmation && !shiftHeld) {
@@ -241,6 +252,21 @@ export function ResourceContextMenu({
         show={showCodeUsageDialog}
         bindShow={setShowCodeUsageDialog}
       />
+      {/* Mounted lazily on first use — most menus never open these. */}
+      {emojiPickerOpen !== undefined && (
+        <EmojiPickerDialog
+          resource={ctx.resource}
+          show={emojiPickerOpen}
+          onShowChange={setEmojiPickerOpen}
+        />
+      )}
+      {coverPickerOpen !== undefined && (
+        <CoverPickerDialog
+          resource={ctx.resource}
+          show={coverPickerOpen}
+          onShowChange={setCoverPickerOpen}
+        />
+      )}
     </>
   );
 }

@@ -8,6 +8,7 @@ import {
 import { useMemo } from 'react';
 import { styled } from 'styled-components';
 import { EditableTitle } from '../../components/EditableTitle';
+import { ResourceCoverImage } from '../../components/ResourceDecorations';
 import { FileDropZone } from '../../components/forms/FileDropzone/FileDropzone';
 import { useNewRoute } from '../../helpers/useNewRoute';
 import { ResourcePageProps } from '../ResourcePage';
@@ -66,30 +67,33 @@ export function FolderPage({
   const canEdit = useCanWrite(resource);
 
   return (
-    <FullPageWrapper view={displayStyle!}>
-      <Column>
-        <div>
-          <TitleBarInner justify='space-between'>
-            <EditableTitle resource={resource} />
-            <DisplayStyleButton
-              onClick={setPreferedDisplayStyle}
-              displayStyle={displayStyle}
-            />
-          </TitleBarInner>
-        </div>
+    <>
+      <ResourceCoverImage resource={resource} />
+      <FullPageWrapper view={displayStyle!}>
+        <Column>
+          <div>
+            <TitleBarInner justify='space-between'>
+              <EditableTitle resource={resource} withDecorations />
+              <DisplayStyleButton
+                onClick={setPreferedDisplayStyle}
+                displayStyle={displayStyle}
+              />
+            </TitleBarInner>
+          </div>
 
-        <Wrapper>
-          <FileDropZone parentResource={resource}>
-            <View
-              subResources={subResources}
-              onNewClick={navigateToNewRoute}
-              showNewButton={canEdit!}
-              parent={resource.subject}
-            />
-          </FileDropZone>
-        </Wrapper>
-      </Column>
-    </FullPageWrapper>
+          <Wrapper>
+            <FileDropZone parentResource={resource}>
+              <View
+                subResources={subResources}
+                onNewClick={navigateToNewRoute}
+                showNewButton={canEdit!}
+                parent={resource.subject}
+              />
+            </FileDropZone>
+          </Wrapper>
+        </Column>
+      </FullPageWrapper>
+    </>
   );
 }
 

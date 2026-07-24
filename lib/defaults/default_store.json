@@ -1478,6 +1478,17 @@
     "https://atomicdata.dev/properties/shortname": "preview"
   },
   {
+    "@id": "https://atomicdata.dev/properties/coverImage",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/File",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "An image File shown as a decorative banner at the top of this resource's page.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "cover-image"
+  },
+  {
     "@id": "https://atomicdata.dev/property/url",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
     "https://atomicdata.dev/properties/description": "An absolute URL pointing to an external web resource.",
