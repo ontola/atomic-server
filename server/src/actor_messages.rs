@@ -199,8 +199,9 @@ pub struct SendFrame {
 #[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
 pub struct MembershipNotification {
-    /// Filter the subject moved into/out of (encoded `QueryFilter` bytes).
-    pub filter_bytes: Vec<u8>,
+    /// Filter the subject moved into/out of (compact query id — see
+    /// `atomic_lib::db::query_index::query_id`).
+    pub query_id: Vec<u8>,
     /// Subject whose membership changed.
     pub subject: String,
     /// True iff the subject is now a member; false iff it left.

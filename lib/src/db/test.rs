@@ -711,7 +711,12 @@ async fn test_collection_update_value(
 ) {
     let irrelevant_property_url = urls::DESCRIPTION;
     let filter_prop = urls::DATATYPE_PROP;
-    let filter_val = Value::AtomicUrl(urls::DATATYPE_CLASS.into());
+    // Unique per invocation: this helper runs several times against one
+    // shared store, and members that *lack* the sort property are still part
+    // of a sorted collection (they sort first, under the no-value key).
+    // Reusing one filter value across invocations would therefore accumulate
+    // earlier invocations' resources into later result sets.
+    let filter_val = Value::AtomicUrl(property_url.into());
     assert_ne!(
         property_url, irrelevant_property_url,
         "property_url should be different from urls::DESCRIPTION"

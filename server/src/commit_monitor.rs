@@ -203,7 +203,7 @@ impl Actor for CommitMonitor {
                     }
 
                     if let DbEvent::QueryMembershipChanged {
-                        filter_bytes,
+                        query_id,
                         subject,
                         added,
                         source_id,
@@ -252,7 +252,7 @@ impl Actor for CommitMonitor {
                         };
 
                         addr.do_send(MembershipNotification {
-                            filter_bytes,
+                            query_id,
                             subject,
                             added,
                             loro_snapshot,
@@ -616,7 +616,7 @@ impl Handler<MembershipNotification> for CommitMonitor {
     /// (for `added`, using the pre-fetched snapshot + commit_id) or a
     /// `DESTROY` (for removed).
     fn handle(&mut self, msg: MembershipNotification, _ctx: &mut Context<Self>) {
-        let Some(subscribers) = self.query_subscriptions.get(&msg.filter_bytes) else {
+        let Some(subscribers) = self.query_subscriptions.get(&msg.query_id) else {
             return;
         };
         if subscribers.is_empty() {
@@ -668,8 +668,10 @@ impl CommitMonitor {
             drive_subject,
         );
 
-        let filter_bytes = match q_filter.encode() {
-            Ok(b) => b,
+        // Subscriptions are keyed by the same compact id `QueryMembershipChanged`
+        // events carry (a hash of the filter's canonical encoding).
+        let query_id = match atomic_lib::db::query_id(&q_filter) {
+            Ok(id) => id.to_vec(),
             Err(e) => {
                 tracing::warn!("SUBSCRIBE_QUERY: failed to encode QueryFilter: {e}");
                 return;
@@ -680,7 +682,7 @@ impl CommitMonitor {
             tracing::warn!("SUBSCRIBE_QUERY: failed to register in WatchedQueries: {e}");
         }
 
-        let entry = self.query_subscriptions.entry(filter_bytes).or_default();
+        let entry = self.query_subscriptions.entry(query_id).or_default();
         entry.insert(addr, source_id);
     }
 }

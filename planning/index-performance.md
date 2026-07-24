@@ -1,334 +1,296 @@
 # Query & Index Performance
 
-> **Status:** Diagnosis (2026-07-24). A comparative benchmark against NextGraph
-> surfaced collection queries as disproportionately slow. Root-caused to two
-> independent issues in the read/query path; one fix shipped, the structural
-> fix for the other is already designed in [`zones.md`](./zones.md) but not yet
-> built. Related: [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md)
-> (write-path / on-disk growth — this doc is the read-path counterpart) and
-> [`authorization-sync.md`](./authorization-sync.md) (the rights model this
-> doc's permission-check cost is part of).
+> **Status:** Design adopted + first tranche implemented (2026-07-24).
+> Started as a diagnosis after a comparative benchmark against NextGraph
+> surfaced collection queries as disproportionately slow (~100µs of server
+> work *per matching resource*). The root causes are understood and verified
+> (see Findings below); this doc now also records the **target architecture**
+> for the index/query layer and tracks which pieces are built.
+> Related: [`zones.md`](./zones.md) (structural authorization fix),
+> [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md)
+> (write-path counterpart), [`authorization-sync.md`](./authorization-sync.md).
 
-## Thesis
+## Target architecture
 
-A 1000-resource collection query costs **~100 microseconds of real server-side
-work per matching resource**, and that cost scales linearly with match count —
-confirmed empirically, not assumed. Two independent causes:
+**Loro for authoritative state, materialized rows for reads, generic indexes
+for candidate selection, and an intersection-based planner for query
+execution.**
 
-1. Every matching resource is **fully materialized** (a complete Loro CRDT
-   decode) even when the client only asked for a bare list of subject URLs.
-2. The **permission check** performed on each of those resources itself does a
-   second full resource decode (the drive resource, to evaluate rights), and
-   falls back to a recursive parent walk on denial.
+Loro stays the canonical merge/history representation. Everything queryable is
+a derived, rebuildable projection:
 
-Neither is a JSON/HTTP/pagination artifact — both were isolated and confirmed
-at the Rust level, independent of the client or the network.
+1. **Materialized rows** — `Tree::Resources` (subject → msgpack `PropVals`)
+   *is already exactly this*: every write path persists the propvals
+   materialized from the merged Loro doc, in the same transaction as (or
+   immediately after) the snapshot write. The read/query layer just wasn't
+   using it (`get_resource_shallow` existed, unused). Queries must never
+   decode a Loro snapshot; they read rows.
+   The one wire requirement that seemed to force full materialization —
+   clients seed their editing LoroDoc from a `loroUpdate` propval on each
+   member — does **not** require a decode: the raw snapshot bytes from
+   `Tree::LoroSnapshots` are attached verbatim as the `loroUpdate` value.
+   Row + raw bytes reproduce the exact response the old decode path built.
+2. **Generic indexes** — `PropValSub` / `ValPropSub` remain the candidate
+   selectors. Their sort segments (and `QueryMembers`') move to an
+   **order-preserving typed encoding** (tag byte + memcomparable payload:
+   null < bool < f64-keyed numbers/timestamps < case-folded strings) so
+   numeric/date ordering is correct at the byte level (fixes #287) and range
+   operators can execute as index range scans.
+3. **Materialized query results** — `Tree::QueryMembers` holds sorted member
+   sets only for *watched* (live-subscribed or reused) filters. Its keys are
+   `query_id(16B blake3 of the canonical filter encoding) || typed sort key
+   || 0x00 0x00 || subject` instead of embedding the full serialized filter
+   per entry.
+4. **Planner** — multi-constraint (AND) queries pick the most selective
+   constraint via bounded index-prefix counting (scan-capped cardinality
+   estimate), iterate that candidate set, and verify remaining constraints
+   against materialized rows. Intersection of candidate subject sets, not
+   N full materializations.
+5. **Live-query routing** — the in-memory watched-filter registry is keyed
+   by `(drive, property)`, so a changed atom only evaluates filters that
+   reference that property (or value-only filters), not every filter in the
+   drive.
+6. **Authorization on rows** — `check_rights` reads only propvals, so it
+   runs on shallow rows; a per-query memo caches per-subject outcomes so an
+   N-member listing does one ancestor walk, not N. (The zones index in
+   [`zones.md`](./zones.md) remains the structural end-state; the memo is the
+   architecture-compatible stopgap.)
+7. **Counts** — exact `totalMembers` still requires walking the full index
+   range (entries are cheap to walk now, but it's still O(matches)). The
+   planned next step is cursor pagination + `hasMore` on the wire, replacing
+   exact counts for large sets. Not built; needs `@tomic/lib` API changes.
+
+### Implementation status
+
+| Piece | Status |
+| --- | --- |
+| Shallow-row reads in `query_basic` / `query_sorted_indexed` (no Loro decode per member; raw-snapshot `loroUpdate` attach for nested bodies; subjects-only skips bodies) | **built (this pass)** |
+| Per-query rights memo (`hierarchy::RightsCache`) | **built (this pass)** |
+| Typed order-preserving sort keys in `QueryMembers` (+ correct numeric sort, #287) | **built (this pass)** |
+| Compact `query_id` keys in `QueryMembers` + id-keyed live `QUERY_UPDATE` routing | **built (this pass)** |
+| `(drive, property)`-routed watched-filter matching | **built (this pass)** |
+| Most-selective-constraint planner for AND filters (bounded cardinality estimates) | **built (this pass)** |
+| Typed sort keys in `PropValSub`/`ValPropSub` sort segment | not built (their sort segment is currently unused by ordering-sensitive paths) |
+| Cursor pagination / `hasMore` instead of exact counts | not built (wire + client change) |
+| Batched KV reads (one read txn per query) | not built (`KvStore` trait change; per-`get` redb txns remain) |
+| Zones index (walk-free auth) | see [`zones.md`](./zones.md) |
 
 ## Benchmark context
 
 An external comparative benchmark (`@tomic/lib` vs. the NextGraph JS SDK,
 1000 resources, create/edit/history-traversal/query, both against local
 servers) flagged the asymmetry: a single query fetching all 1000 members of a
-collection took ~130–160ms, vs. ~6ms for NextGraph's equivalent SPARQL query
-over its "entire user site" scope. Caveat carried over from that benchmark:
-NextGraph's data model is per-document CRDT branches, not one global store, so
-this is not a fully apples-to-apples comparison of index architectures — but
-the absolute cost on the atomic-server side turned out to be real and
-independently reproducible regardless of what NextGraph is doing.
+collection took ~130–160ms, vs. ~6ms for NextGraph's equivalent SPARQL query.
+Caveat: NextGraph's data model is per-document CRDT branches, not one global
+store — not apples-to-apples — but the absolute cost on the atomic-server
+side was real and independently reproducible.
 
-## Benchmarking methodology (how these numbers were produced)
+Criterion benchmarks live at `lib/benches/lifecycle_bench.rs`
+(`cargo bench -p atomic_lib --bench lifecycle_bench --features db-redb`).
 
-Three different measurement layers were used, each to answer a different
-question. Recording the exact method here so any of this is reproducible and
-so future measurement doesn't repeat the mistake noted below.
+## Findings (history)
 
-1. **External HTTP-level harness** (outside this repo, in the sibling
-   `atomic-nextgraph` project's `benchmark/atomic/bench.mjs`): drives a real
-   local `atomic-server` release build over plain HTTP via `@tomic/lib`,
-   timing four phases at N=1000 — sequential create, sequential edit,
-   commit-history traversal for a 100-resource sample (each given 5 extra
-   edits first), and a `CollectionBuilder` query fetching all matches. This is
-   the layer that first surfaced the asymmetry and that produced the
-   NextGraph comparison numbers. It answers "what does a real client
-   observe."
-2. **Rust-level Criterion benchmarks** (`lib/benches/lifecycle_bench.rs`, new
-   in this pass — run with `cargo bench -p atomic_lib --bench lifecycle_bench
-   --features db-redb`): the same four phases, but calling `Db`/`Resource`
-   directly with no HTTP, no actix, no JSON. This isolates library-level cost
-   from network/webserver overhead, and is what let finding 2's fix be
-   verified independent of the HTTP layer's noise.
-3. **Targeted diagnostic HTTP probes** (ad hoc, not committed — see below):
-   small scripts that varied one variable at a time against a live server to
-   attribute the ~130ms query cost to a specific cause rather than guessing.
-   Two were used for finding 3:
-   - A **zero-match query** (`.setValue('https://doesnotexist.example/nothing')`)
-     to isolate fixed per-request overhead (connection, auth, JSON parsing)
-     from per-member cost. Result: ~1.7ms warm — ruling out fixed overhead as
-     the story.
-   - A **`page_size` sweep** (30 default / 100 / 1000 / 2000) on the same
-     1000-match query, to isolate pagination round-trip count from per-member
-     server cost. Result: single-page (`page_size=1000`) still cost
-     ~101–107ms vs. ~125ms at the default `page_size=30` — pagination is a
-     ~15–20ms factor, not the ~100ms+ story.
-   These two probes together are what pinned the cost to genuine O(N)
-   per-member server work rather than transport or pagination artifacts.
+### Finding 1 — vector search indexed every write by default (fixed)
 
-**Methodology pitfall worth flagging for future measurement passes:** an
-earlier before/after comparison (superseded, see finding 2) computed its
-"before" by diffing against a *stale historical benchmark run* instead of a
-freshly re-measured baseline on the same machine state — same code path,
-different point in time, different system load. The deltas looked plausible
-(create −14.8%, query −16.3%) but weren't a controlled comparison. Caught by
-noticing the "before" JSON was byte-identical (down to floating-point noise)
-to a run from hours earlier. Fixed by re-measuring both sides back-to-back
-(`git stash` the change under test → build → benchmark → `git stash pop` →
-build → benchmark again), on identical data-dir/config setup, same session.
-**Any future before/after claim in this codebase should use that paired
-protocol, not a diff against an old results file.**
+Semantic search (fastembed/ONNX + LanceDB) ran on every commit. Now opt-in
+via `--enable-vector-index` / `ATOMIC_ENABLE_VECTOR_INDEX` (default off).
+See `server/src/config.rs`, `server/src/vector_search/enabled.rs`,
+`server/src/serve.rs`.
 
-## Finding 1 — vector search indexed every write by default (fixed)
+### Finding 2 — redundant Loro snapshot re-export on every read (fixed)
 
-Semantic search (fastembed/ONNX embeddings + LanceDB) ran on every commit,
-unconditionally, before this fix. Now opt-in via `--enable-vector-index` /
-`ATOMIC_ENABLE_VECTOR_INDEX` (default off). See `server/src/config.rs`
-(`enable_vector_index` / `skip_vector_index`), `server/src/vector_search/enabled.rs`,
-`server/src/serve.rs`. Loading embedding models and writing to a second store
-on every plain edit has a real cost that most deployments don't need; it's
-now a deliberate choice.
+`Db::get_resource()` imported a snapshot then unconditionally re-exported it.
+Fix: `apply_state_doc_with_snapshot` reuses the bytes in hand
+(`lib/src/resources.rs`, `lib/src/db.rs`). Verified paired impact: edit −11%,
+history −12%, 1000-member query −7.7% (142.2ms → 131.2ms).
 
-## Finding 2 — redundant Loro snapshot re-export on every read (fixed)
+### Finding 3 — collection queries fully materialized every match (fixed this pass)
 
-`Db::get_resource()` read a resource's Loro snapshot from disk, imported it
-into a `LoroDoc`, then called `apply_state_doc(doc)`, which **unconditionally
-re-`export_snapshot()`s** the doc it had just imported — re-serializing bytes
-the caller already held, on every single read. On a collection query this was
-paid once per member.
+`query_basic` / `query_sorted_indexed` called `get_resource_extended` — a
+full Loro decode + permission walk + extender scan — per member, per query,
+even for subjects-only requests. Empirically ~100µs/member, linear in match
+count; pagination was a minor factor (~15–20ms of the ~130ms).
 
-Fix: `apply_state_doc_with_snapshot(doc, snapshot)` reuses the bytes already
-in hand instead of re-exporting (`lib/src/resources.rs`, `lib/src/db.rs`).
-27 lines, no other call sites affected.
+The blocker for using `get_resource_shallow` was confirming that
+`Tree::Resources` and `Tree::LoroSnapshots` stay in sync on every write path.
+**Audited 2026-07-24 — the invariant holds:**
 
-**Verified impact** (controlled, paired before/after per the protocol in
-"Benchmarking methodology" above — the naive diff-against-an-old-run version
-of this comparison overstated the effect, see that section): create sees no
-measurable benefit (~0%, within noise — create is write-dominated, not
-read-dominated); edit **−11%**; history traversal **−12%**; a 1000-member
-collection query **−7.7%** (median 142.2ms → 131.2ms). Modest, real, but
-nowhere near enough to close the gap with NextGraph — expected, since this
-only removes one redundant serialization, not the per-member decode itself.
+- `apply_commit`: `resource_new`'s propvals are materialized from the
+  post-commit doc; row + snapshot written in one transaction.
+- `add_resource_opts`: snapshot derived from the resource's doc
+  (`build_state_doc`) and written with the row in one transaction;
+  `loroUpdate` stripped from the row.
+- `ws_apply::persist_update` and `sync::engine::import_sync_push`: merge into
+  the stored doc under the subject lock, then funnel through
+  `add_resource_opts` — row and snapshot both reflect the merged doc.
+- All other `LoroSnapshots` touch points are reads.
 
-## Finding 3 — collection queries fully materialize every match, even when only subjects are requested (not fixed)
+Queries now read rows; when nested bodies are requested the raw snapshot is
+attached undecoded (see Target architecture §1). If a row is missing
+(defensive), the old full path is the fallback.
 
-`lib/src/db/query_index.rs:546`:
+### Finding 4 — permission check re-fetches the drive per member (mitigated; zones is the real fix)
 
-```rust
-pub fn should_include_resource(query: &Query) -> bool {
-    query.include_nested || query.for_agent != ForAgent::Sudo
-}
-```
+`check_rights`'s drive fast-path (`lib/src/hierarchy.rs`) did a full decode
+of the drive resource per checked member, with a recursive parent walk on
+denial. Mitigated this pass by the per-query `RightsCache`: each distinct
+subject in the ancestry is resolved once per query, and per-member work is a
+hashmap hit + explicit-ACL scan on the row. [`zones.md`](./zones.md) remains
+the structural fix (walk-free, index-lookup auth), and its open question —
+whether the zone index also makes member-row *reads* skippable for
+subjects-only queries — still stands.
 
-`ForAgent::Sudo` is an internal-only bypass; every real, authenticated HTTP
-request is `ForAgent::Agent(...)`, so this is `true` for every real client
-regardless of whether it set `include_nested`. `query_basic`
-(`lib/src/db.rs:1835`) therefore calls `get_resource_extended` — a full
-`get_resource` (Loro decode) plus a full permission check plus a class-extender
-scan — for **every** matching subject, sequentially, in a plain `for` loop
-with no concurrency, then throws the materialized resource away if the client
-only wanted its URL.
+### Finding 5 — `QueryMembers` keys embedded the full serialized filter (fixed this pass)
 
-**Empirical confirmation** (isolated from pagination and fixed per-request
-overhead by direct measurement against a live server):
+Every member entry carried the whole encoded `QueryFilter` (drive URL +
+msgpack, easily 100–200+ bytes) as its key prefix, and `apply_transaction`
+re-parsed it per write to emit `QueryMembershipChanged`. Keys now start with
+a 16-byte blake3-derived `query_id`; `Tree::WatchedQueries` still stores the
+full filter (keyed by its canonical encoding) as the id ↔ filter mapping, and
+the live `QUERY_UPDATE` fan-out (`server/src/commit_monitor.rs`) subscribes
+by id.
+
+### Finding 6 — every watched filter in a drive was evaluated per atom (fixed this pass)
+
+`check_if_atom_matches_watched_query_filters` iterated all of a drive's
+filters for every indexable atom of every commit. The registry now routes by
+`(drive, property)`: a filter is registered under each constraint property and
+its `sort_by`; only value-only filters stay in a per-drive catch-all bucket.
+
+## Empirical numbers (pre-rework reference)
+
+Isolated measurements against a live server (fixed overhead vs. per-member
+cost), before this pass's rework:
 
 | Query shape | Result | Time |
 | --- | --- | --- |
-| 0 matches (isolates fixed per-request overhead) | 0 members | ~1.7ms (warm) |
-| 1000 matches, single page (`page_size=1000`, one round trip) | 1000 members | ~101–107ms |
-| 1000 matches, default `page_size=30` (34 round trips) | 1000 members | ~125ms |
+| 0 matches (fixed per-request overhead) | 0 members | ~1.7ms warm |
+| 1000 matches, single page (`page_size=1000`) | 1000 members | ~101–107ms |
+| 1000 matches, `page_size=30` (34 round trips) | 1000 members | ~125ms |
 | 1000 matches, `page_size=100` (10 round trips) | 1000 members | ~93ms |
 
-Pagination (default client `page_size` is 30 — `browser/lib/src/collectionBuilder.ts:9`)
-only accounts for ~15–20ms of the gap, not the dominant factor. The
-~100–105ms remaining, even in a single round trip, is genuine O(N) per-member
-server work: ~100 microseconds/member.
+Paired lifecycle benchmark (finding 2's fix isolated): create 3.48ms/op,
+edit 2.96ms/op, history 1.24ms/op, query median 131.2ms. NextGraph
+comparison: create 14.53ms/op, edit 2.10ms/op, history 0.28ms/op, query
+~6.4ms.
 
-`Db::get_resource_shallow` (`lib/src/db.rs:1531`) already exists, is fully
-built, and its own docstring says exactly this:
+### Post-rework results (2026-07-24, Criterion `lifecycle_bench`, paired against same-day pre-rework baseline)
 
-> \[the Loro decode\] can cost tens of milliseconds each — fine for a single
-> fetch, ruinous when a directory listing reads hundreds of resources just to
-> project their names and sizes.
+| Benchmark | Before | After | Δ |
+| --- | --- | --- | --- |
+| `query_collection_1000` (Sudo, nested bodies) | 62.1ms | **5.9ms** | **−90.5%** |
+| `query_collection_1000_non_sudo_agent` (real agent, per-member rights) | 62.6ms | **7.1ms** | **−88.8%** |
+| `create_1000` | 929ms | 817ms | −12% |
+| `edit_1000` | 997ms | 856ms | −14% |
+| `history_100x6_commits` | 9.4ms | 8.5ms | −10% |
 
-It is **completely unused** — never wired into `query_basic` or
-`query_sorted_indexed`. It wasn't adopted directly in this pass because
-`Tree::Resources` (propvals) and `Tree::LoroSnapshots` are *usually* kept in
-sync by `add_resource_tx`, but every write path (sync/WS merge, iroh) wasn't
-fully verified to preserve that invariant, and the function's own docstring
-warns "do not use this where CRDT-authoritative state matters." Query listing
-is exactly the case it was built for, but wiring it in needs that invariant
-confirmed first.
+The write-path gains come from `(drive, property)`-routed watched-filter
+matching (commits no longer evaluate every filter in the drive per atom) plus
+the cheaper `QueryMembers` ops; treat the exact create/edit deltas as
+same-machine indicative, not lab-isolated.
 
-## Finding 4 — permission check re-fetches the drive resource per member (not fixed; `zones.md` is the designed structural fix)
+The remaining ~6ms is dominated by row decode + response assembly for 1000
+nested bodies, not CRDT work — this is now in the same order of magnitude as
+NextGraph's ~6.4ms comparison query. The non-sudo overhead (rights memo) is
+~1.2ms for 1000 members (~1.2µs/member) vs. the former full drive-decode per
+member.
 
-`lib/src/hierarchy.rs:229-238`, inside `check_rights` (called once per member
-via finding 3's `get_resource_extended`):
+### Behavior changes shipped with the rework
 
-```rust
-if let Ok(drive_val) = resource.get(urls::DRIVE_PROP) {
-    let drive_subject = crate::Subject::from(drive_val.to_string());
-    if let Ok(drive_res) = store.get_resource(&drive_subject).await {
-        // full Loro decode of the drive resource, on every check
+1. **Members lacking the sort property are now included in sorted
+   collections**, ordered first (the no-value key sorts before every typed
+   value). The old key layout dropped them by accident (their empty-value
+   separator byte sorted past the default range end) even though `NO_VALUE`
+   and the `sortOrder → createdAt` fallback were built to keep them.
+   `totalMembers` can therefore grow for collections whose members don't all
+   carry the sort property.
+2. **Subjects-only queries (`include_nested == false`) no longer return
+   resource bodies** in `QueryResult::resources`. The only consumer that read
+   them (`collect_members`) already ignored them unless `include_nested` was
+   set; per-member authorization is still enforced.
+
+## Design details (as built)
+
+### Shallow query reads
+
+- `Db::get_resource_query_fast(subject, for_agent, attach_snapshot, cache)`:
+  row read (`get_resource_shallow`) → memoized `check_read` → optional raw
+  `loroUpdate` attach → class-extender `incomplete` marking (same semantics
+  as `get_resource_extended(skip_dynamic=true)`). Falls back to
+  `get_resource_extended` when no row exists (endpoints, network subjects,
+  defensive invariant break).
+- Subjects-only queries (`include_nested == false`) never build bodies at
+  all — row + rights memo only. Note the old
+  `should_include_resource` conflated "needs auth" with "needs bodies";
+  these are now separate.
+
+### Rights memo
+
+`hierarchy::RightsCache` — per-query, per `(agent, right)` map of subject
+pure-id → allow/deny. Consulted and populated at every recursion boundary of
+`check_rights` (self, drive fast-path, parent ascent), so ancestry cost is
+paid once per distinct ancestor per query. Public `check_read`/`check_write`
+signatures unchanged (they thread `None`).
+
+### QueryMembers key format (`members_index_v6`)
+
+```
+[query_id: 16B blake3(filter encoding)]
+[typed sort key: tag byte + memcomparable payload, 0x00-escaped]
+[0x00 0x00 terminator]
+[subject bytes]
 ```
 
-This is a second full resource decode per member (the drive, not the member
-itself), with a recursive parent walk as fallback on denial. For a 1000-member
-query this compounds finding 3: up to 1000 additional full decodes purely for
-authorization, with no caching across the request.
+- Tags: `0x05` no-value < `0x10` bool < `0x20` number (i64/f64/timestamp via
+  order-preserving f64 bit-flip) < `0x30` string (case-folded, truncated to
+  120 chars, `0x00` → `0x00 0xFF` escape). Mixed-type columns order by tag,
+  deterministically. ISO dates are strings and order correctly; numeric
+  strings are *not* coerced.
+- Prefix correctness: `"a"` sorts before `"ab"` (the old `0xff`-separator
+  layout got this wrong, and msgpack bytes containing `0xff` could corrupt
+  key parsing — both eliminated).
+- Range bounds: start = `id || key(start)`, end = `id || key(end) || 0xFF`
+  (inclusive), whole-filter scan = `id` .. `id || 0xFF`.
+- Old `members_index_v5` entries are stranded caches; they rebuild on next
+  query (same policy as previous bumps).
 
-This is precisely the problem [`zones.md`](./zones.md) (proposal,
-2026-07-17, not yet built) is designed to remove. Its impact inventory states
-it directly:
+### Planner
 
-> `check_rights` becomes walk-free: preludes (sudo/server/self/commits) →
-> zone lookup → ACL check. Drive fast-path, recursive walk, and 401-cascade
-> warn deleted.
+`query_complex`'s index build picks its candidate iterator by estimating each
+`(property, value)` constraint's cardinality with a scan-capped prefix count
+over `PropValSub` (cap 512), starting from the smallest; the remaining
+constraints verify against rows. Single-constraint queries behave as before.
 
-The zones proposal replaces today's "rights can live on any resource,
-requiring a walk" model with a locally-maintained derived index
-(`subject → zone`), making a permission check an index lookup instead of a
-resource fetch. That's a large migration (new index in Rust + browser TS,
-`lib/src/sync/engine.rs` zone-scoped BFS, `lib/src/sync/policy.rs` admission
-re-keying, query index drive-scoping, share UI, invites) — see that doc's own
-impact inventory and migration plan; not repeated here.
+## Remaining work / open questions
 
-**Open question this doc adds to `zones.md`'s list:** once the zone index
-exists, does it also let `query_basic` skip `get_resource` entirely for the
-subjects-only case (finding 3), not just make `check_rights` cheaper (finding
-4)? If a permission decision can be made from the zone index alone, without
-touching the member resource at all, findings 3 and 4 collapse into a single
-fix rather than two.
-
-## Other levers noted, not pursued this pass
-
-- **No concurrency across members.** `query_basic`'s loop `await`s
-  `get_resource_extended` one member at a time. Current work is CPU-bound
-  (KV reads are local, not network I/O), so async concurrency alone won't
-  help without also spreading work across threads (e.g. rayon) — noted, not
-  attempted.
-- **Per-KV-call transaction overhead.** `KvStore::get()` opens a fresh
-  `begin_read()` transaction per call (`lib/src/db/redb_store.rs:270`); a
-  collection query does ~2 KV gets per member (propvals + snapshot), each in
-  its own transaction. Batching reads into one shared transaction per query
-  is plausible but requires a `KvStore` trait change touching all three
-  backends (redb/sled/btreemap).
-- **Class-extender scan per member** inside `get_resource_extended` — cheap
-  when no extenders are registered, non-zero when they are; not measured in
-  isolation.
-
-## Recommendations (rough ROI order)
-
-1. **Request-scoped drive-resource cache** (stopgap for finding 4): memoize
-   the drive resource fetch for the lifetime of one query call. Small,
-   contained change in `query_basic`/`hierarchy.rs`, captures a real slice of
-   the N+1 cost without waiting on the zones migration.
-2. **Verify the `Tree::Resources` / `Tree::LoroSnapshots` sync invariant**
-   across all write paths (sync, WS merge, iroh), then wire
-   `get_resource_shallow` into `query_basic`/`query_sorted_indexed` for the
-   subjects-only case (finding 3). Highest single-fix ROI once the invariant
-   is confirmed safe.
-3. **Build the `zones.md` zone index** — the structural fix for finding 4,
-   and (per the open question above) possibly for finding 3 as well.
-4. **Batch KV reads per query into one transaction** instead of one per
-   member (needs the `KvStore` trait change).
-5. **Bounded parallelism across members**, once/if per-member cost is low
-   enough that thread-spreading (not just async concurrency) is worth the
-   complexity.
-
-## Benchmark plan (next steps for measurement, not just fixes)
-
-Each recommendation above needs its own measurement to confirm it did what it
-claims, and the diagnostic probes used for finding 3 were throwaway scripts,
-not committed — turning them into permanent benchmarks is itself part of the
-plan, not an afterthought:
-
-1. **Promote the finding-3 diagnostic probes into `lib/benches/lifecycle_bench.rs`.**
-   A zero-match query case and a page-size/limit sweep, as committed Criterion
-   benchmarks, so the O(N) per-member cost is tracked over time instead of
-   re-discovered by hand each time someone asks "why is query slow."
-2. **Add a permission-check-only benchmark** isolating `check_rights` cost
-   in isolation from `get_resource` (e.g. query a pre-warmed resource so the
-   member decode is cached/cheap, vary only the rights-check depth: root,
-   1-level-nested, deeply-nested-with-parent-walk). This is what would
-   validate recommendation 1 (request-scoped drive cache) and, later,
-   recommendation 3 (zone index) — right now findings 3 and 4's costs are
-   measured together, not separately.
-3. **Add a shallow-vs-full-decode benchmark** for `get_resource_shallow` vs.
-   `get_resource`, once recommendation 2's sync-invariant question is
-   resolved — this is the number that would justify wiring it into
-   `query_basic`, and should exist *before* that change lands, not after, so
-   the improvement is measured rather than assumed.
-4. **Re-run the full external HTTP benchmark (`atomic-nextgraph/benchmark`)
-   and the NextGraph comparison** after each structural fix (findings 3, 4,
-   and eventually the zones migration) to track whether the gap to NextGraph
-   actually closes, not just whether the Rust-level micro-benchmark improves —
-   a library-level win doesn't automatically mean the end-to-end number moves
-   by the same amount (see finding 2, where an 11-13% Rust-level gain via
-   Criterion showed as an even smaller HTTP-level gain).
-5. **Test at larger N** (10k, 100k members) once any of findings 3/4 are
-   fixed, to check whether the remaining per-member cost is genuinely
-   constant or degrades further at scale (e.g. redb transaction contention,
-   index iterator cost) — 1000 was chosen for benchmark turnaround time, not
-   because it's representative of a real large collection.
-6. **Consider a CI perf gate** once `lifecycle_bench.rs` covers the cases
-   above: fail (or at least flag) a PR that regresses create/edit/query
-   Criterion numbers by more than some threshold, so a future change doesn't
-   silently reintroduce a per-write or per-read cost the way vector-search
-   indexing did (finding 1) before this investigation caught it.
-
-## Benchmark numbers (reference)
-
-Controlled, paired, same machine, vector search off in both (finding 2's fix
-isolated):
-
-| Phase | Before | After | Δ |
-| --- | --- | --- | --- |
-| create (1000, HTTP) | 3.470ms/op | 3.479ms/op | ~0% |
-| edit (1000, HTTP) | 3.323ms/op | 2.957ms/op | −11% |
-| history (100×6 commits, HTTP) | 1.418ms/op | 1.243ms/op | −12% |
-| query (1000 members, HTTP, median) | 142.2ms | 131.2ms | −7.7% |
-
-Original baseline, for context (vector search **on** by default, pre-any-fix):
-create 3.907ms/op, edit 3.723ms/op, history 1.431ms/op, query median 158.7ms.
-
-NextGraph comparison (same 1000-resource benchmark, own local `ngd` broker,
-caveats on data-model mismatch noted above): create 14.53ms/op (slower — its
-own per-doc-repo creation cost), edit 2.10ms/op, history 0.277ms/op, query
-median ~6.4ms (SPARQL over `entire_user_site()`).
-
-## Open questions
-
-- Does the `zones.md` zone index, once built, let a permission decision be
-  made without *any* resource fetch — collapsing findings 3 and 4 into one
-  fix? (Added to `zones.md`'s own open-questions list.)
-- What's the exact per-member cost split between Loro decode, the drive
-  permission fetch, and the class-extender scan? Not isolated with tracing
-  spans/flamegraph in this pass — would sharpen prioritization between
-  recommendations 1 and 2.
-- Is ~100 microseconds/member (post finding-2 fix, pre findings 3/4 fix)
-  acceptable at realistic list sizes, or does the target need to be
-  materially lower even after the zones fix lands?
+- **Counts / pagination**: exact counts still walk the full match range.
+  Move the wire contract to cursors + `hasMore` (client default page_size 30,
+  `browser/lib/src/collectionBuilder.ts:9`), keep exact counts only under a
+  size threshold or on request.
+- **Typed keys for `PropValSub`/`ValPropSub` sort segments** once something
+  order-sensitive reads them (they're membership indexes today).
+- **Batched reads**: one KV read transaction per query (needs `KvStore`
+  trait change across redb/sled/btreemap; `redb_store.rs` opens a txn per
+  `get`).
+- **Watched-filter lifecycle**: every distinct AND-filter query shape creates
+  a persistent watched index (`query_complex`). Startup clears them
+  (`clear_watched_queries`), but a long-running server accumulates all
+  shapes queried since boot. Consider LRU eviction / only materializing on
+  second use.
+- **Zones** ([`zones.md`](./zones.md)): replaces the rights walk entirely;
+  revisit whether it obsoletes the RightsCache and lets subjects-only
+  queries skip row reads.
+- Per-member cost split post-rework (row decode vs. rights memo hit vs.
+  extender scan) hasn't been re-profiled with tracing spans.
 
 ## Code references
 
-- `server/src/config.rs` — `enable_vector_index` / `skip_vector_index` (finding 1).
-- `server/src/vector_search/enabled.rs`, `server/src/serve.rs` — vector search
-  gating and rebuild-index warning (finding 1).
-- `lib/src/db.rs:2546-2560` (`get_resource`), `lib/src/resources.rs`
-  (`apply_state_doc` / `apply_state_doc_with_snapshot`) — finding 2's fix.
-- `lib/src/db.rs:1531` (`get_resource_shallow`, unused) — finding 3.
-- `lib/src/db.rs:1835` (`query_basic`), `lib/src/db/query_index.rs:546`
-  (`should_include_resource`) — finding 3.
-- `lib/src/hierarchy.rs:229-238` (`check_rights` drive fast-path) — finding 4.
-- `lib/src/db/redb_store.rs:270` — per-call KV transaction overhead.
-- `lib/benches/lifecycle_bench.rs` — new Criterion benchmarks (create/edit/
-  history/query, N=1000), for tracking regressions on this class of issue.
+- `lib/src/db.rs` — `query_basic`, `query_complex`, `get_resource_query_fast`,
+  `get_resource_shallow`, `build_index_for_atom`.
+- `lib/src/db/query_index.rs` — key encoding, `query_id`, typed sort keys,
+  `query_sorted_indexed`, property-routed matching.
+- `lib/src/db/trees.rs` — tree version constants.
+- `lib/src/hierarchy.rs` — `RightsCache`, `check_rights`.
+- `server/src/commit_monitor.rs` — id-keyed query subscriptions.
+- `lib/benches/lifecycle_bench.rs` — Criterion benchmarks.
 - `browser/lib/src/collectionBuilder.ts:9` — client default `page_size: '30'`.

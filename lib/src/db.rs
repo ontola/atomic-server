@@ -15,7 +15,7 @@ mod prop_val_sub_index;
 mod query_index;
 #[cfg(feature = "db-redb")]
 pub mod redb_store;
-pub use query_index::{drive_prefix_from_subject, QueryFilter};
+pub use query_index::{drive_prefix_from_subject, query_id, QueryFilter};
 #[cfg(feature = "db-sled")]
 pub mod sled_store;
 #[cfg(test)]
@@ -43,16 +43,15 @@ use crate::{
     db::{
         encoding::{decode_propvals, encode_propvals},
         plugin_meta::{PluginMeta, PluginMetaKey},
-        query_index::{requires_query_index, NO_VALUE},
+        query_index::requires_query_index,
         val_prop_sub_index::find_in_val_prop_sub_index,
     },
+    hierarchy::RightsCache,
     endpoints::{Endpoint, HandleGetContext},
     errors::{AtomicError, AtomicResult},
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
-    urls,
-    values::SortableValue,
-    Atom, Commit, Resource, Subject, Value,
+    urls, Atom, Commit, Resource, Subject, Value,
 };
 use async_trait::async_trait;
 use tracing::{info, instrument};
@@ -62,8 +61,8 @@ use self::{
     kv_store::KvStore,
     prop_val_sub_index::{add_atom_to_prop_val_sub_index, find_in_prop_val_sub_index},
     query_index::{
-        check_if_atom_matches_watched_query_filters, query_sorted_indexed, should_include_resource,
-        update_indexed_member, IndexIterator,
+        check_if_atom_matches_watched_query_filters, query_sorted_indexed, update_indexed_member,
+        IndexIterator,
     },
     val_prop_sub_index::add_atom_to_valpropsub_index,
 };
@@ -103,16 +102,17 @@ pub enum DbEvent {
     },
     /// A resource entered or left the result set of a watched query. Emitted
     /// from `apply_transaction` after a successful write that touches
-    /// `Tree::QueryMembers`. `filter_bytes` is the encoded `QueryFilter`
-    /// (the same key used in `Tree::WatchedQueries`).
+    /// `Tree::QueryMembers`. `query_id` is the compact filter id
+    /// ([`query_index::query_id`] of the encoded `QueryFilter`); subscribers
+    /// derive the same id from the filter they registered.
     ///
     /// Note: a sort-key change on an already-matching resource produces a
-    /// (Removed, Added) pair for the same `(filter_bytes, subject)` within a
+    /// (Removed, Added) pair for the same `(query_id, subject)` within a
     /// single commit. Consumers that want true add/remove semantics should
     /// dedup; consumers that want every membership-touching event (the
     /// current text `QUERY_UPDATE` model) can pass them through.
     QueryMembershipChanged {
-        filter_bytes: Vec<u8>,
+        query_id: Vec<u8>,
         subject: String,
         added: bool,
         /// Optional transport/source identity for echo suppression.
@@ -177,6 +177,58 @@ fn replication_key(drive: &str) -> String {
     format!("{REPLICATION_PREFIX}{drive}")
 }
 
+/// One drive's watched query filters, routed by the properties they touch so
+/// a changed atom only evaluates filters that could care about it.
+#[derive(Default, Debug)]
+struct DriveFilters {
+    /// Every watched filter for this drive. Kept alongside the routed views
+    /// so rebuilds and full enumerations stay simple.
+    all: Vec<Arc<query_index::QueryFilter>>,
+    /// Filters indexed under every property they reference: each constraint's
+    /// property plus `sort_by`. A filter appears once per distinct property.
+    by_property: HashMap<String, Vec<Arc<query_index::QueryFilter>>>,
+    /// Filters with at least one value-only constraint (no property) — an
+    /// atom of *any* property can flip their membership, so they are
+    /// consulted for every atom.
+    unrouted: Vec<Arc<query_index::QueryFilter>>,
+}
+
+impl DriveFilters {
+    fn insert(&mut self, filter: Arc<query_index::QueryFilter>) {
+        self.all.push(filter.clone());
+        if filter.filters.iter().any(|c| c.property.is_none()) {
+            self.unrouted.push(filter);
+            return;
+        }
+        let mut props: HashSet<&String> = filter
+            .filters
+            .iter()
+            .filter_map(|c| c.property.as_ref())
+            .collect();
+        if let Some(sort) = &filter.sort_by {
+            props.insert(sort);
+        }
+        let props: Vec<String> = props.into_iter().cloned().collect();
+        for prop in props {
+            self.by_property
+                .entry(prop)
+                .or_default()
+                .push(filter.clone());
+        }
+    }
+
+    /// The filters a changed atom with `property` must be checked against.
+    fn for_property(&self, property: &str) -> Vec<Arc<query_index::QueryFilter>> {
+        let mut out: Vec<Arc<query_index::QueryFilter>> = self
+            .by_property
+            .get(property)
+            .cloned()
+            .unwrap_or_default();
+        out.extend(self.unrouted.iter().cloned());
+        out
+    }
+}
+
 /// The Db is a persistent on-disk Atomic Data store.
 /// It's an implementation of [Storelike].
 /// It uses a [KvStore] backend for key-value storage (sled, BTreeMap, etc.).
@@ -201,12 +253,13 @@ pub struct Db {
     db_events: tokio::sync::broadcast::Sender<DbEvent>,
     /// In-memory authoritative map of watched query filters, keyed by drive
     /// prefix (e.g. `"https://example.com"` for HTTP drives, the DID for
-    /// DID-form drives). The KV `Tree::WatchedQueries` is the persistence
+    /// DID-form drives) and routed by property within each drive (see
+    /// [`DriveFilters`]). The KV `Tree::WatchedQueries` is the persistence
     /// layer; this map is the runtime lookup. Populated from the KV at Db
     /// open, kept in sync by `Db::register_watched_query`. The hot path in
     /// `check_if_atom_matches_watched_query_filters` reads from here and
     /// never touches msgpack on a commit.
-    watched_queries_by_drive: Arc<RwLock<HashMap<String, Vec<Arc<query_index::QueryFilter>>>>>,
+    watched_queries_by_drive: Arc<RwLock<HashMap<String, DriveFilters>>>,
     /// Serialises writers that read-modify-write the same subject's state, so
     /// a commit and a sync apply cannot replace each other's snapshot. Per
     /// store, not global — see [`crate::subject_lock`].
@@ -1635,55 +1688,69 @@ impl Db {
         Ok(())
     }
 
-    async fn build_index_for_atom(
-        &self,
-        atom: &IndexAtom,
-        query_filter: &QueryFilter,
-        transaction: &mut Transaction,
-    ) -> AtomicResult<()> {
-        // Get the SortableValue either from the Atom or the Resource.
-        let sort_val: SortableValue = if let Some(sort) = &query_filter.sort_by {
-            if &atom.property == sort {
-                atom.sort_value.clone()
-            } else {
-                // Find the sort value in the store
-                match self.get_value(atom.subject.as_str(), sort).await {
-                    Ok(val) => val.to_sortable_string(),
-                    // `sortOrder` defaults to `createdAt` — see
-                    // `query_index::sortable_value_for`.
-                    Err(_) if sort == urls::SORT_ORDER => {
-                        match self
-                            .get_value(atom.subject.as_str(), urls::CREATED_AT)
-                            .await
-                        {
-                            Ok(val) => val.to_sortable_string(),
-                            Err(_) => NO_VALUE.to_string(),
-                        }
-                    }
-                    // If we try sorting on a value that does not exist,
-                    // we'll use an empty string as the sortable value.
-                    Err(_) => NO_VALUE.to_string(),
-                }
-            }
-        } else {
-            atom.sort_value.clone()
-        };
-
-        update_indexed_member(
-            query_filter,
-            atom.subject.as_str(),
-            &sort_val,
-            false,
-            transaction,
-        )?;
-        Ok(())
-    }
-
     fn get_index_iterator_for_query(&self, q: &Query) -> IndexIterator {
         match (&q.property, q.value.as_ref()) {
             (Some(prop), val) => find_in_prop_val_sub_index(self, prop, val),
             (None, None) => self.all_index_atoms(q.include_external),
             (None, Some(val)) => find_in_val_prop_sub_index(self, val, None),
+        }
+    }
+
+    /// Bounded cardinality estimate for a `(property, value?)` prefix in the
+    /// PropValSub index. Scans at most `cap` entries — enough to rank
+    /// constraints by selectivity without paying for exact counts.
+    fn estimate_prop_val_count(&self, prop: &str, val: Option<&Value>, cap: usize) -> usize {
+        let mut prefix: Vec<u8> = [prop.as_bytes(), &[query_index::SEPARATION_BIT]].concat();
+        if let Some(value) = val {
+            prefix.extend(value.to_sortable_string().as_bytes());
+            prefix.extend([query_index::SEPARATION_BIT]);
+        }
+        self.kv
+            .scan_prefix(Tree::PropValSub, &prefix)
+            .take(cap)
+            .count()
+    }
+
+    /// Picks the candidate iterator for building a [QueryFilter]'s member
+    /// index: the most selective property-bearing constraint by a scan-capped
+    /// cardinality estimate. Every candidate is verified against the full
+    /// filter afterwards, so any constraint's index entries are a valid
+    /// starting set — the estimate only decides how few resources get row-
+    /// checked. Constraints with non-equality operators can't be point-
+    /// scanned; they contribute a whole-property scan as their candidate set.
+    fn plan_candidate_iterator(&self, q: &Query, q_filter: &QueryFilter) -> IndexIterator {
+        const PLANNER_SCAN_CAP: usize = 512;
+
+        let mut best: Option<(usize, &crate::storelike::PropVal)> = None;
+        for constraint in &q_filter.filters {
+            let Some(prop) = &constraint.property else {
+                continue;
+            };
+            let scan_val = match (constraint.operator, &constraint.value) {
+                (crate::storelike::FilterOperator::Equal, Some(v)) => Some(v),
+                _ => None,
+            };
+            let estimate = self.estimate_prop_val_count(prop, scan_val, PLANNER_SCAN_CAP);
+            if best.is_none_or(|(current, _)| estimate < current) {
+                best = Some((estimate, constraint));
+            }
+        }
+
+        match best {
+            Some((_, constraint)) => {
+                let prop = constraint
+                    .property
+                    .as_ref()
+                    .expect("planner only ranks property-bearing constraints");
+                let val = match constraint.operator {
+                    crate::storelike::FilterOperator::Equal => constraint.value.as_ref(),
+                    _ => None,
+                };
+                find_in_prop_val_sub_index(self, prop, val)
+            }
+            // No property-bearing constraint (value-only filters): fall back
+            // to the query's own iterator (value index or full scan).
+            None => self.get_index_iterator_for_query(q),
         }
     }
 
@@ -1713,8 +1780,8 @@ impl Db {
         let drive_key = filter.drive.as_str().to_string();
         if let Ok(mut map) = self.watched_queries_by_drive.write() {
             map.entry(drive_key)
-                .or_insert_with(Vec::new)
-                .push(Arc::new(filter));
+                .or_default()
+                .insert(Arc::new(filter));
         }
         Ok(())
     }
@@ -1724,7 +1791,7 @@ impl Db {
     /// authoritative on first commit. Subsequent `register_watched_query`
     /// calls keep both stores in sync.
     pub(crate) fn populate_watched_queries_cache(&self) -> AtomicResult<()> {
-        let mut new_map: HashMap<String, Vec<Arc<query_index::QueryFilter>>> = HashMap::new();
+        let mut new_map: HashMap<String, DriveFilters> = HashMap::new();
         for entry in self.kv.iter_tree(crate::db::trees::Tree::WatchedQueries) {
             let (k, _v) = match entry {
                 Ok(pair) => pair,
@@ -1744,7 +1811,7 @@ impl Db {
                 }
             };
             let drive_key = qf.drive.as_str().to_string();
-            new_map.entry(drive_key).or_default().push(Arc::new(qf));
+            new_map.entry(drive_key).or_default().insert(Arc::new(qf));
         }
         if let Ok(mut map) = self.watched_queries_by_drive.write() {
             *map = new_map;
@@ -1752,28 +1819,37 @@ impl Db {
         Ok(())
     }
 
-    /// Look up the watched filters for a given drive prefix string. Returns
-    /// a cheap-cloned `Vec<Arc<QueryFilter>>`; iterating it doesn't hold the
-    /// map lock.
-    pub(crate) fn watched_queries_for_drive(
+    /// The watched filters a changed atom in `drive_key` with `property` must
+    /// be checked against: the drive's filters that reference that property
+    /// (constraint or `sort_by`) plus its value-only filters. Returns
+    /// cheap-cloned `Arc`s; iterating doesn't hold the map lock.
+    pub(crate) fn watched_queries_for_atom(
         &self,
         drive_key: &str,
+        property: &str,
     ) -> Vec<Arc<query_index::QueryFilter>> {
         self.watched_queries_by_drive
             .read()
             .ok()
-            .and_then(|m| m.get(drive_key).cloned())
+            .and_then(|m| m.get(drive_key).map(|df| df.for_property(property)))
             .unwrap_or_default()
     }
 
-    /// All watched filters across every drive. Used as a fallback for
-    /// DID-subject atoms whose drive prefix can't be derived (their
-    /// `drive_prefix_from_subject` returns the subject itself, which won't
-    /// match an HTTP-drive filter's bucket).
-    pub(crate) fn all_watched_queries(&self) -> Vec<Arc<query_index::QueryFilter>> {
+    /// Property-routed filters across every drive. Used for DID-subject atoms
+    /// whose drive prefix can't be derived (their `drive_prefix_from_subject`
+    /// returns the subject itself, which won't match an HTTP-drive filter's
+    /// bucket).
+    pub(crate) fn all_watched_queries_for_property(
+        &self,
+        property: &str,
+    ) -> Vec<Arc<query_index::QueryFilter>> {
         self.watched_queries_by_drive
             .read()
-            .map(|m| m.values().flat_map(|v| v.iter().cloned()).collect())
+            .map(|m| {
+                m.values()
+                    .flat_map(|df| df.for_property(property))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -1799,31 +1875,15 @@ impl Db {
             if op.tree != Tree::QueryMembers {
                 continue;
             }
-            // Op key layout: `[encoded_filter] || 0xff || [sortable_value] || 0xff || [subject]`.
-            // We need filter_bytes (raw) and subject — skip the value entirely.
-            // Splitting on 0xff (SEPARATION_BIT) is safe because the encoded
-            // filter prefix never contains 0xff in practice (drive URL bytes are
-            // ASCII/UTF-8, drive_len LE-bytes for sub-16M lengths have a 0x00
-            // high byte, msgpack output for the QueryFilterRest fields doesn't
-            // hit 0xff for typical Option<String>/Option<Value> contents).
-            // Same invariant `parse_collection_members_key` already relies on.
-            let mut iter = op.key.split(|b| b == &query_index::SEPARATION_BIT);
-            let filter_bytes = match iter.next() {
-                Some(b) if !b.is_empty() => b.to_vec(),
-                _ => continue,
-            };
-            let _value = iter.next();
-            let subject_bytes = match iter.next() {
-                Some(b) => b,
-                None => continue,
-            };
-            let subject = match std::str::from_utf8(subject_bytes) {
-                Ok(s) => s.to_string(),
-                Err(_) => continue,
+            // Op key layout: `query_id(16B) || sort_key || 0x00 0x00 || subject`.
+            let Some((query_id, subject)) =
+                query_index::parse_members_key_id_subject(&op.key)
+            else {
+                continue;
             };
             let added = matches!(op.method, crate::db::trees::Method::Insert);
             let _ = self.db_events.send(DbEvent::QueryMembershipChanged {
-                filter_bytes,
+                query_id,
                 subject,
                 added,
                 source_id: source_id.map(str::to_string),
@@ -1832,10 +1892,107 @@ impl Db {
         Ok(())
     }
 
+    /// Resolve one query-index hit against the materialized row and the
+    /// requesting agent's rights, without decoding any Loro snapshot.
+    ///
+    /// Returns `None` when the member must be hidden (auth-denied or
+    /// unresolvable), `Some(None)` when it's included subjects-only, and
+    /// `Some(Some(resource))` when the query asked for nested bodies.
+    ///
+    /// Bodies are built from the row plus the resource's *raw* snapshot bytes
+    /// attached as `loroUpdate` — byte-for-byte what the old full-decode path
+    /// serialized, since the row **is** the snapshot's materialization (see
+    /// planning/index-performance.md, finding 3). Subjects without a row
+    /// (endpoints, never-stored externals, defensive invariant breaks) fall
+    /// back to the full `get_resource_extended` path.
+    pub(crate) async fn resolve_query_member(
+        &self,
+        subject: &Subject,
+        q: &Query,
+        rights_cache: &std::sync::Mutex<RightsCache>,
+    ) -> Option<Option<Resource>> {
+        let mut resource = match self.get_resource_shallow(subject) {
+            Ok(resource) => resource,
+            Err(_) => {
+                // No materialized row — take the slow, complete path.
+                return match self.get_resource_extended(subject, true, &q.for_agent).await {
+                    Ok(response) => {
+                        if q.include_nested {
+                            Some(Some(response.to_single()))
+                        } else {
+                            Some(None)
+                        }
+                    }
+                    Err(_) => None,
+                };
+            }
+        };
+
+        if q.for_agent != ForAgent::Sudo
+            && crate::hierarchy::check_rights_cached(
+                self,
+                &resource,
+                &q.for_agent,
+                crate::hierarchy::Right::Read,
+                Some(rights_cache),
+            )
+            .await
+            .is_err()
+        {
+            return None;
+        }
+
+        if !q.include_nested {
+            return Some(None);
+        }
+
+        // Commit rows keep their `loroUpdate` payload in the row itself;
+        // everything else gets the stored snapshot attached undecoded.
+        if !resource.get_subject().is_commit_did() {
+            let pure_id = resource.get_subject().pure_id();
+            if let Ok(Some(snapshot)) = self.kv.get(Tree::LoroSnapshots, pure_id.as_bytes()) {
+                resource.insert_propval_raw(
+                    crate::urls::LORO_UPDATE.into(),
+                    Value::LoroDoc(snapshot),
+                );
+            }
+        }
+
+        // Same `incomplete` marking as `get_resource_extended(skip_dynamic)`:
+        // tells clients the member may have dynamic properties that a direct
+        // GET would compute.
+        let extenders = match self.class_extenders.read() {
+            Ok(guard) => guard.clone(),
+            Err(_) => return None,
+        };
+        for extender in extenders.iter() {
+            if !extender.can_extend(&resource) {
+                continue;
+            }
+            match extender.resource_has_extender(&resource) {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(_) => return None,
+            }
+            match extender.check_scope(&resource, self, None).await {
+                Ok((true, _)) => {
+                    resource
+                        .insert_propval_raw(crate::urls::INCOMPLETE.into(), Value::Boolean(true));
+                    break;
+                }
+                Ok((false, _)) => continue,
+                Err(_) => return None,
+            }
+        }
+
+        Some(Some(resource))
+    }
+
     async fn query_basic(&self, q: &Query) -> AtomicResult<QueryResult> {
         let mut subjects: Vec<Subject> = vec![];
         let mut resources: Vec<Resource> = vec![];
         let mut total_count = 0;
+        let rights_cache = std::sync::Mutex::new(RightsCache::default());
 
         let atoms = self.get_index_iterator_for_query(q);
 
@@ -1852,27 +2009,33 @@ impl Db {
             }
 
             if q.limit.is_none() || subjects.len() < q.limit.unwrap() {
-                if !should_include_resource(q) {
+                // Sudo without nested bodies needs no per-member work at all.
+                if q.for_agent == ForAgent::Sudo && !q.include_nested {
                     subjects.push(atom.subject.clone());
                     continue;
                 }
 
-                if let Ok(resource) = self
-                    .get_resource_extended(&atom.subject.clone(), true, &q.for_agent)
+                match self
+                    .resolve_query_member(&atom.subject, q, &rights_cache)
                     .await
                 {
-                    subjects.push(atom.subject.clone());
-                    resources.push(resource.to_single());
-                } else {
-                    // The index has an entry for this subject but the
-                    // requesting agent can't resolve it — auth-filtered,
-                    // destroyed-with-stale-index, or otherwise invisible.
-                    // Roll back the count bump so it doesn't outrun the
-                    // returned subjects and produce a
-                    // `totalMembers: N, members: []` drift. We only do
-                    // this for in-page hits; entries past the limit stay
-                    // counted blindly (issue #286).
-                    total_count -= 1;
+                    Some(body) => {
+                        subjects.push(atom.subject.clone());
+                        if let Some(resource) = body {
+                            resources.push(resource);
+                        }
+                    }
+                    None => {
+                        // The index has an entry for this subject but the
+                        // requesting agent can't resolve it — auth-filtered,
+                        // destroyed-with-stale-index, or otherwise invisible.
+                        // Roll back the count bump so it doesn't outrun the
+                        // returned subjects and produce a
+                        // `totalMembers: N, members: []` drift. We only do
+                        // this for in-page hits; entries past the limit stay
+                        // counted blindly (issue #286).
+                        total_count -= 1;
+                    }
                 }
             }
         }
@@ -1892,34 +2055,32 @@ impl Db {
         if total_count == 0 && !q_filter.is_watched(self) {
             info!(filter = ?q_filter, "Building query index");
             crate::metrics::query_indexed();
-            let atoms = self.get_index_iterator_for_query(q);
+            let atoms = self.plan_candidate_iterator(q, &q_filter);
             q_filter.watch(self)?;
 
             let mut transaction = Transaction::new();
-            // Build indexes. The candidate atoms come from the primary
-            // (property/value) sub-index; for multi-constraint filters we must
-            // additionally check each candidate's resource against ALL
-            // constraints so the combined index only holds AND-matches.
-            let multi = q_filter.filters.len() > 1;
+            // Every candidate is verified against ALL of the filter's
+            // constraints on its materialized row (no Loro decode), so the
+            // member index only holds true AND-matches — including for
+            // non-equality operators, whose candidate sets are supersets.
             for atom in atoms.flatten() {
-                if multi {
-                    match self
-                        .get_resource_extended(&atom.subject, true, &ForAgent::Sudo)
-                        .await
-                    {
-                        Ok(resource) => {
-                            if !query_index::resource_matches_filter(
-                                &resource.to_single(),
-                                &q_filter,
-                            ) {
-                                continue;
-                            }
-                        }
-                        Err(_) => continue,
-                    }
+                let Ok(resource) = self.get_resource_shallow(&atom.subject) else {
+                    // No row to verify against (external/never-stored) —
+                    // don't index what we can't confirm.
+                    continue;
+                };
+                if !query_index::resource_matches_filter(&resource, &q_filter) {
+                    continue;
                 }
-                self.build_index_for_atom(&atom, &q_filter, &mut transaction)
-                    .await?;
+                let prop = query_index::index_key_property(&q_filter, &atom);
+                let sort_key = query_index::sort_key_for(&resource, prop);
+                update_indexed_member(
+                    &q_filter,
+                    atom.subject.as_str(),
+                    &sort_key,
+                    false,
+                    &mut transaction,
+                )?;
             }
             self.apply_transaction(&mut transaction)?;
 

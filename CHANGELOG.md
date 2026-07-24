@@ -8,6 +8,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 ## UNRELEASED
 
 - Vector search is now opt-in (pass `--enable-vector-index` / `ATOMIC_ENABLE_VECTOR_INDEX`) instead of on by default. Loading embedding models and indexing every write on a plain create/edit had a real, measured performance cost that most deployments don't need.
+- Query/index performance rework (`atomic-lib`): collection queries now read materialized rows instead of decoding a Loro CRDT snapshot per member, permission checks are memoized per request, and the query-members index uses compact query ids with typed, order-preserving sort keys. A 1000-member collection query dropped ~90% (62ms → ~6-7ms at the Rust level). See `planning/index-performance.md`.
+- [#287](https://github.com/atomicdata-dev/atomic-server/issues/287) Sorting collections by numeric properties (integers, floats, timestamps) now orders numerically instead of lexicographically ("2" no longer sorts after "10").
+- Sorted collections now include members that lack the sort property (they sort first). Previously such members were silently dropped from sorted listings.
+- Live-query index updates are routed by `(drive, property)`, and multi-constraint (AND) queries pick their starting index by estimated selectivity — commits and first-time index builds touch far fewer filters/resources.
 
 ## [v0.41.0-beta.1] - 2026-07-22
 

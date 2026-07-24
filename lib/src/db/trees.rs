@@ -38,7 +38,10 @@ const VALPROPSUB: &str = "reference_index_v1";
 // multi-property filtering), which changes the msgpack `rest` encoding.
 // Old entries are unreadable with the new decoder — leaving them stranded under
 // their old tree name is fine; they're pure caches and rebuild on next query.
-const QUERY_MEMBERS: &str = "members_index_v5";
+// v6: key layout `query_id(16B blake3) || typed sort key || 0x00 0x00 ||
+// subject` — compact ids instead of the full serialized filter, and
+// order-preserving typed sort keys (numbers finally sort numerically, #287).
+const QUERY_MEMBERS: &str = "members_index_v6";
 const PROPVALSUB: &str = "prop_val_sub_index";
 const QUERIES_WATCHED: &str = "watched_queries_v5";
 const PLUGIN_META: &str = "plugin_meta";

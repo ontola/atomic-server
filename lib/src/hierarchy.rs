@@ -109,6 +109,72 @@ pub fn check_read<'a>(
     Box::pin(check_rights(store, resource, for_agent, Right::Read))
 }
 
+/// Memo of rights outcomes for one agent, scoped to a single request/query.
+///
+/// A collection query permission-checks every member, and every one of those
+/// checks ascends the same parent/drive chain. The memo caches the outcome
+/// per `(right, subject)` at every recursion boundary of [`check_rights`], so
+/// the ancestry is resolved once per query instead of once per member.
+///
+/// Must not outlive a request (rights can change between requests) and must
+/// not be shared across agents — it does not key on the agent.
+#[derive(Default)]
+pub struct RightsCache {
+    outcomes: std::collections::HashMap<(u8, String), bool>,
+}
+
+fn right_discriminant(right: Right) -> u8 {
+    match right {
+        Right::Read => 0,
+        Right::Write => 1,
+        Right::Append => 2,
+    }
+}
+
+/// [`check_rights`] with an optional per-request [`RightsCache`]. The cache is
+/// consulted and populated for every subject the check touches (the resource
+/// itself, its drive, each ancestor), collapsing the repeated hierarchy walks
+/// of a many-member listing into hashmap hits.
+pub fn check_rights_cached<'a, S: Storelike>(
+    store: &'a S,
+    resource: &'a Resource,
+    for_agent_enum: &'a ForAgent,
+    right: Right,
+    cache: Option<&'a std::sync::Mutex<RightsCache>>,
+) -> AsyncResult<'a, AtomicResult<String>> {
+    Box::pin(async move {
+        let key = (
+            right_discriminant(right),
+            resource.get_subject().pure_id(),
+        );
+        if let Some(cache) = cache {
+            let hit = cache
+                .lock()
+                .ok()
+                .and_then(|guard| guard.outcomes.get(&key).copied());
+            match hit {
+                Some(true) => return Ok("Allowed (cached for this request)".into()),
+                Some(false) => {
+                    return Err(crate::errors::AtomicError::unauthorized(format!(
+                        "No {} right found for {} (cached for this request)",
+                        right, for_agent_enum
+                    )))
+                }
+                None => {}
+            }
+        }
+
+        let result = check_rights_impl(store, resource, for_agent_enum, right, cache).await;
+
+        if let Some(cache) = cache {
+            if let Ok(mut guard) = cache.lock() {
+                guard.outcomes.insert(key, result.is_ok());
+            }
+        }
+        result
+    })
+}
+
 /// Does the Agent have the right to _append_ to its parent?
 /// This checks the `append` rights, and if that fails, checks the `write` right.
 /// Throws if not allowed.
@@ -154,6 +220,16 @@ pub fn check_rights<'a>(
     for_agent_enum: &'a ForAgent,
     right: Right,
 ) -> AsyncResult<'a, AtomicResult<String>> {
+    check_rights_impl(store, resource, for_agent_enum, right, None)
+}
+
+fn check_rights_impl<'a, S: Storelike>(
+    store: &'a S,
+    resource: &'a Resource,
+    for_agent_enum: &'a ForAgent,
+    right: Right,
+    cache: Option<&'a std::sync::Mutex<RightsCache>>,
+) -> AsyncResult<'a, AtomicResult<String>> {
     Box::pin(async move {
         if for_agent_enum == &ForAgent::Sudo {
             return Ok("Sudo has root access, and can edit anything.".into());
@@ -179,7 +255,7 @@ pub fn check_rights<'a>(
                     let target = store
                         .get_resource(&commit_subject.to_string().as_str().into())
                         .await?;
-                    check_rights(store, &target, for_agent_enum, right).await
+                    check_rights_cached(store, &target, for_agent_enum, right, cache).await
                 }
                 Right::Write => Err("Commits cannot be edited.".into()),
                 Right::Append => {
@@ -229,10 +305,19 @@ pub fn check_rights<'a>(
         if let Ok(drive_val) = resource.get(urls::DRIVE_PROP) {
             let drive_subject = crate::Subject::from(drive_val.to_string());
             if &drive_subject != resource.get_subject() {
-                if let Ok(drive_res) = store.get_resource(&drive_subject).await {
-                    if let Ok(reason) = check_rights(store, &drive_res, for_agent_enum, right).await
-                    {
-                        return Ok(reason);
+                // A cached deny short-circuits the drive fetch entirely.
+                let cached_deny = cache.and_then(|c| {
+                    let key = (right_discriminant(right), drive_subject.pure_id());
+                    c.lock().ok().and_then(|g| g.outcomes.get(&key).copied())
+                }) == Some(false);
+                if !cached_deny {
+                    if let Ok(drive_res) = store.get_resource(&drive_subject).await {
+                        if let Ok(reason) =
+                            check_rights_cached(store, &drive_res, for_agent_enum, right, cache)
+                                .await
+                        {
+                            return Ok(reason);
+                        }
                     }
                 }
             }
@@ -250,7 +335,7 @@ pub fn check_rights<'a>(
                     parent = %parent.get_subject(),
                     "rights walk: ascending"
                 );
-                return check_rights(store, &parent, for_agent_enum, right).await;
+                return check_rights_cached(store, &parent, for_agent_enum, right, cache).await;
             }
             Err(parent_err) => {
                 tracing::warn!(

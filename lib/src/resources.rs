@@ -453,6 +453,18 @@ impl Resource {
         self.propvals = Self::materialize_propvals_from_loro_doc(self.loro());
     }
 
+    /// Insert a propval directly, bypassing the Loro doc entirely.
+    ///
+    /// For response-shaping only: attaching already-exported raw snapshot
+    /// bytes as `loroUpdate`, or marking `incomplete` on a listing member.
+    /// Going through `set`/`set_unsafe` would call `ensure_materialized`,
+    /// which decodes the CRDT snapshot — the exact cost the shallow query
+    /// path exists to avoid. Never use this for state that must be merged
+    /// or persisted; the doc will not know about it.
+    pub(crate) fn insert_propval_raw(&mut self, property: String, value: Value) {
+        self.propvals.insert(property, value);
+    }
+
     /// Persisted or in-memory materialized state bytes (for sync and signing).
     pub fn materialized_state(&self) -> Option<Vec<u8>> {
         if let Some(doc) = &self.loro {
