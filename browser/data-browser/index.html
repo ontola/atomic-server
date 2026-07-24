@@ -35,6 +35,18 @@
     />
     <meta content="yes" name="apple-mobile-web-app-capable" />
     <meta content="yes" name="mobile-web-app-capable" />
+    <!-- OS/browser chrome color (titlebar of installed PWAs, mobile UI).
+         Overrides the manifest's single theme_color per color scheme. -->
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#ffffff"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#000000"
+    />
     <!--
       Warm the cache for the OPFS worker's WASM module. The
       ClientDbWorker spawns a Worker that does `import('/wasm/atomic_wasm.js')`,
