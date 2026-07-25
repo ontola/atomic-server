@@ -25,6 +25,7 @@ import {
 import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { styled } from 'styled-components';
+import { consumePendingFirstMessage } from './pendingFirstMessage';
 
 const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const store = useStore();
@@ -40,6 +41,7 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     new Map<AtomicUIMessage, Resource>(),
   );
   const [title, setTitle] = useTitle(resource);
+  const [autoSubmitMessage, setAutoSubmitMessage] = useState<string>();
 
   const canWrite = useCanWrite(resource);
   const { generateTitleFromConversation } = useGenerativeData();
@@ -189,7 +191,14 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
 
       setMessageToResourceMap(map);
       setLoading(false);
+
+      // A brand-new chat (e.g. from the search overlay's "Start AI Chat
+      // with ..." action) may have a first message waiting to be sent.
+      if (allMessages.length === 0) {
+        setAutoSubmitMessage(consumePendingFirstMessage(resource.subject));
+      }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading) {
@@ -205,6 +214,7 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
       externalContextItems={contextItems}
       setExternalContextItems={setContextItems}
       chatSubject={resource.subject}
+      autoSubmitMessage={autoSubmitMessage}
       onNewMessage={addNewMessage}
       onCompacted={handleCompacted}
       onSummaryDeleted={handleSummaryDeleted}

@@ -74,6 +74,13 @@ interface RealAIChatProps {
   initialMessages?: AtomicUIMessage[];
   /** Messages that predate the latest compaction — shown in UI but not sent to the LLM. */
   historicalMessages?: AtomicUIMessage[];
+  /**
+   * Sent as the first user message as soon as the chat mounts, once, when
+   * there are no existing messages — e.g. the search overlay's "Start AI
+   * Chat with ..." action wants its query sent as a message, not just used
+   * as the chat's title.
+   */
+  autoSubmitMessage?: string;
   onNewMessage: (message: AtomicUIMessage) => void;
   /**
    * Called after compaction. All prior messages move to historical UI state;
@@ -110,6 +117,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   readonly = false,
   initialMessages,
   historicalMessages,
+  autoSubmitMessage,
   externalContextItems,
   chatSubject,
   setExternalContextItems,
@@ -591,6 +599,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     }
   }, [defaultChatModel]);
 
+  const autoSubmittedRef = useRef(false);
+
+  useEffect(() => {
+    if (autoSubmittedRef.current || !autoSubmitMessage) return;
+    if (messages.length > 0) return;
+
+    autoSubmittedRef.current = true;
+    handleSubmit(autoSubmitMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSubmitMessage]);
+
   const handleSelectAgent = (agent: AIAgent) => {
     setSelectedAgent(agent);
     setActiveModel(agent.model ?? defaultChatModel);
@@ -954,7 +973,7 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
   display: grid;
   grid-template-rows: ${p =>
     p.empty && p.fullView ? 'auto 1fr auto 1fr' : 'auto 1fr auto'};
-  height: ${p => (p.fullView ? '90vh' : '100%')};
+  height: '100%';
   width: min(100%, 70rem);
   margin-inline: auto;
   gap: 1rem;

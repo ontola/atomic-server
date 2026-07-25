@@ -29,6 +29,8 @@ import { InlineFormattedResourceList } from './InlineFormattedResourceList';
 import { FaMagnifyingGlass, FaComments } from 'react-icons/fa6';
 import ResourceCard from '../views/Card/ResourceCard';
 import ResourceRow from '@views/ResourceRow';
+import { DEFAULT_AICHAT_NAME } from './AI/aiContstants';
+import { setPendingFirstMessage } from '@chunks/AI/pendingFirstMessage';
 
 // ─── Module-level overlay state ────────────────────────────────────────────────
 
@@ -286,11 +288,20 @@ function SearchOverlay(): JSX.Element {
       parent: d,
       isA: ai.classes.aiChat,
       propVals: {
-        [core.properties.name]: q.slice(0, 50) || 'New Chat',
+        [core.properties.name]: DEFAULT_AICHAT_NAME,
       },
     });
 
     await chatResource.save();
+
+    // The chat has no messages yet, so the query can't be attached to one
+    // until AIChatPage mounts — hand it off via the pending-first-message
+    // map instead of (incorrectly) using it as the chat's title.
+    const trimmed = q.trim();
+
+    if (trimmed) {
+      setPendingFirstMessage(chatResource.subject, trimmed);
+    }
 
     n(constructOpenURL(chatResource.subject));
   };
