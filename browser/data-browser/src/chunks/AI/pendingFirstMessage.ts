@@ -9,7 +9,10 @@
  */
 const pendingFirstMessages = new Map<string, string>();
 
-export function setPendingFirstMessage(chatSubject: string, text: string): void {
+export function setPendingFirstMessage(
+  chatSubject: string,
+  text: string,
+): void {
   pendingFirstMessages.set(chatSubject, text);
 }
 
