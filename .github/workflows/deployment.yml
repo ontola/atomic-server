@@ -18,7 +18,8 @@ on:
 jobs:
   deploy:
     environment: ${{ inputs.environment }}
-    runs-on: ubuntu-latest
+    # See main.yml for what CI_RUNNER is and how to switch it off.
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     env:
       REMOTE_USER: ${{ secrets.REMOTE_USER }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}

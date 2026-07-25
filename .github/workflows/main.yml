@@ -1,10 +1,29 @@
 on: [push, workflow_dispatch]
 
+# Which machine the Linux jobs run on is a repository variable, not a literal,
+# so switching between the self-hosted runner and GitHub's takes one settings
+# change instead of an edit to every workflow.
+#
+#   Settings -> Secrets and variables -> Actions -> Variables
+#   CI_RUNNER = ["self-hosted", "Linux", "X64"]
+#
+# Unset or delete it and everything falls back to `ubuntu-latest`. There is no
+# automatic failover: if the self-hosted runner is offline, jobs QUEUE (GitHub
+# gives up after 24h) rather than moving to a hosted runner. Clearing
+# CI_RUNNER is the manual escape hatch.
+#
+# SECURITY: this repo is public, and self-hosted runners must never run
+# untrusted code. That is safe today only because nothing here triggers on
+# `pull_request`/`pull_request_target` -- every trigger is push,
+# workflow_dispatch or workflow_call, all of which need write access. Adding a
+# pull_request trigger while CI_RUNNER points at a self-hosted machine would
+# let any fork execute arbitrary code on it.
+
 name: "Main pipeline: build, lint, test"
 jobs:
   Main:
     name: Main
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     env:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
     steps:

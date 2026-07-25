@@ -12,7 +12,8 @@ on:
 jobs:
   release-plz:
     name: Release-plz
-    runs-on: ubuntu-latest
+    # See main.yml for what CI_RUNNER is and how to switch it off.
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

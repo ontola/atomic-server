@@ -10,7 +10,8 @@ on:
 jobs:
   crates:
     name: Publish crates to crates.io
-    runs-on: ubuntu-latest
+    # See main.yml for what CI_RUNNER is and how to switch it off.
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -32,7 +33,7 @@ jobs:
   # I'd like to skip this one, as the publish-tauri action already creates a release
   create-release:
     name: Create Release on GitHub
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v2
       - uses: pnpm/action-setup@v2.0.1
@@ -58,6 +59,10 @@ jobs:
           - macos-latest
           # Currently not supported
           # - windows-latest
+    # Deliberately NOT switched to CI_RUNNER: this job exists to build release
+    # assets per platform, and the self-hosted runner is Linux/X64 only, so it
+    # cannot serve the macos-latest leg. Pinning the whole matrix to it would
+    # silently stop producing macOS binaries.
     runs-on: ${{ matrix.os }}
     steps:
       - uses: pnpm/action-setup@v2.0.1
