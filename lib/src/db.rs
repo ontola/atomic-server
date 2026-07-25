@@ -3,11 +3,11 @@
 
 pub mod btreemap_store;
 mod encoding;
+#[cfg(feature = "db-redb")]
+pub mod encrypted_backend;
 pub mod kv_store;
 #[cfg(feature = "db-sled")]
 mod migrations;
-#[cfg(feature = "db-redb")]
-pub mod encrypted_backend;
 #[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
 pub mod opfs_backend;
 pub mod plugin_meta;
@@ -46,9 +46,9 @@ use crate::{
         query_index::requires_query_index,
         val_prop_sub_index::find_in_val_prop_sub_index,
     },
-    hierarchy::RightsCache,
     endpoints::{Endpoint, HandleGetContext},
     errors::{AtomicError, AtomicResult},
+    hierarchy::RightsCache,
     resources::PropVals,
     storelike::{Query, QueryResult, ResourceResponse, Storelike},
     urls, Atom, Commit, Resource, Subject, Value,
@@ -219,11 +219,8 @@ impl DriveFilters {
 
     /// The filters a changed atom with `property` must be checked against.
     fn for_property(&self, property: &str) -> Vec<Arc<query_index::QueryFilter>> {
-        let mut out: Vec<Arc<query_index::QueryFilter>> = self
-            .by_property
-            .get(property)
-            .cloned()
-            .unwrap_or_default();
+        let mut out: Vec<Arc<query_index::QueryFilter>> =
+            self.by_property.get(property).cloned().unwrap_or_default();
         out.extend(self.unrouted.iter().cloned());
         out
     }
@@ -1779,9 +1776,7 @@ impl Db {
             .insert(crate::db::trees::Tree::WatchedQueries, &filter_bytes, b"")?;
         let drive_key = filter.drive.as_str().to_string();
         if let Ok(mut map) = self.watched_queries_by_drive.write() {
-            map.entry(drive_key)
-                .or_default()
-                .insert(Arc::new(filter));
+            map.entry(drive_key).or_default().insert(Arc::new(filter));
         }
         Ok(())
     }
@@ -1876,8 +1871,7 @@ impl Db {
                 continue;
             }
             // Op key layout: `query_id(16B) || sort_key || 0x00 0x00 || subject`.
-            let Some((query_id, subject)) =
-                query_index::parse_members_key_id_subject(&op.key)
+            let Some((query_id, subject)) = query_index::parse_members_key_id_subject(&op.key)
             else {
                 continue;
             };
@@ -1915,7 +1909,10 @@ impl Db {
             Ok(resource) => resource,
             Err(_) => {
                 // No materialized row — take the slow, complete path.
-                return match self.get_resource_extended(subject, true, &q.for_agent).await {
+                return match self
+                    .get_resource_extended(subject, true, &q.for_agent)
+                    .await
+                {
                     Ok(response) => {
                         if q.include_nested {
                             Some(Some(response.to_single()))
@@ -1951,10 +1948,8 @@ impl Db {
         if !resource.get_subject().is_commit_did() {
             let pure_id = resource.get_subject().pure_id();
             if let Ok(Some(snapshot)) = self.kv.get(Tree::LoroSnapshots, pure_id.as_bytes()) {
-                resource.insert_propval_raw(
-                    crate::urls::LORO_UPDATE.into(),
-                    Value::LoroDoc(snapshot),
-                );
+                resource
+                    .insert_propval_raw(crate::urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
             }
         }
 

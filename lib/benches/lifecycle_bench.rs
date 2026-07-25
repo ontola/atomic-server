@@ -69,7 +69,12 @@ fn bench_lifecycle(c: &mut Criterion) {
                     let start = std::time::Instant::now();
                     for j in 0..N {
                         store
-                            .create_resource(BENCH_CLASS, &drive, &format!("item {j}"), bench_props(j))
+                            .create_resource(
+                                BENCH_CLASS,
+                                &drive,
+                                &format!("item {j}"),
+                                bench_props(j),
+                            )
                             .await
                             .unwrap();
                     }
@@ -93,7 +98,12 @@ fn bench_lifecycle(c: &mut Criterion) {
                     let mut subjects = Vec::with_capacity(N);
                     for j in 0..N {
                         let did = store
-                            .create_resource(BENCH_CLASS, &drive, &format!("item {j}"), bench_props(j))
+                            .create_resource(
+                                BENCH_CLASS,
+                                &drive,
+                                &format!("item {j}"),
+                                bench_props(j),
+                            )
                             .await
                             .unwrap();
                         subjects.push(did);
@@ -101,8 +111,10 @@ fn bench_lifecycle(c: &mut Criterion) {
 
                     let start = std::time::Instant::now();
                     for subj in &subjects {
-                        let mut resource =
-                            store.get_resource(&Subject::from(subj.clone())).await.unwrap();
+                        let mut resource = store
+                            .get_resource(&Subject::from(subj.clone()))
+                            .await
+                            .unwrap();
                         resource
                             .set(
                                 urls::DESCRIPTION.into(),
@@ -133,7 +145,12 @@ fn bench_lifecycle(c: &mut Criterion) {
                     let mut subjects = Vec::with_capacity(100);
                     for j in 0..100 {
                         let did = store
-                            .create_resource(BENCH_CLASS, &drive, &format!("item {j}"), bench_props(j))
+                            .create_resource(
+                                BENCH_CLASS,
+                                &drive,
+                                &format!("item {j}"),
+                                bench_props(j),
+                            )
                             .await
                             .unwrap();
                         for k in 0..5 {
@@ -161,7 +178,11 @@ fn bench_lifecycle(c: &mut Criterion) {
                             .await
                             .unwrap();
                         let versions = atomic_lib::history::versions(&resource).unwrap();
-                        assert!(versions.len() >= 6, "expected >=6 commits, got {}", versions.len());
+                        assert!(
+                            versions.len() >= 6,
+                            "expected >=6 commits, got {}",
+                            versions.len()
+                        );
                     }
                     total += start.elapsed();
                 }
@@ -185,7 +206,12 @@ fn bench_lifecycle(c: &mut Criterion) {
 
                     for j in 0..N {
                         store
-                            .create_resource(BENCH_CLASS, &drive, &format!("item {j}"), bench_props(j))
+                            .create_resource(
+                                BENCH_CLASS,
+                                &drive,
+                                &format!("item {j}"),
+                                bench_props(j),
+                            )
                             .await
                             .unwrap();
                     }
@@ -234,7 +260,12 @@ fn bench_lifecycle(c: &mut Criterion) {
 
                     for j in 0..N {
                         store
-                            .create_resource(BENCH_CLASS, &drive, &format!("item {j}"), bench_props(j))
+                            .create_resource(
+                                BENCH_CLASS,
+                                &drive,
+                                &format!("item {j}"),
+                                bench_props(j),
+                            )
                             .await
                             .unwrap();
                     }

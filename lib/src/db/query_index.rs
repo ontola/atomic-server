@@ -185,7 +185,11 @@ fn encode_number(f: f64) -> Vec<u8> {
     let bits = f.to_bits();
     // Standard order-preserving f64 mapping: flip all bits for negatives,
     // flip only the sign bit for positives.
-    let ordered = if bits >> 63 == 1 { !bits } else { bits ^ (1 << 63) };
+    let ordered = if bits >> 63 == 1 {
+        !bits
+    } else {
+        bits ^ (1 << 63)
+    };
     let mut out = Vec::with_capacity(9);
     out.push(TAG_NUMBER);
     out.extend_from_slice(&ordered.to_be_bytes());
@@ -711,8 +715,7 @@ pub mod test {
             );
             let subject = "https://example.com/subject";
             let sort_key = encode_sort_value(Some(&val));
-            let key =
-                create_query_index_key(&collection, Some(&sort_key), Some(subject)).unwrap();
+            let key = create_query_index_key(&collection, Some(&sort_key), Some(subject)).unwrap();
             let (id, sort, sub_out) = parse_members_key(&key).unwrap();
             assert_eq!(id, query_id(&collection).unwrap());
             assert_eq!(sort, sort_key.as_slice());
@@ -755,8 +758,19 @@ pub mod test {
         let mid3 = key(Some(&Value::String("hi there".into())));
 
         let expected = vec![
-            &no_value, &bool_false, &bool_true, &num_neg, &num_1, &num_2, &num_10, &num_1000,
-            &str_1, &a_downcase, &ab, &b_upcase, &mid3,
+            &no_value,
+            &bool_false,
+            &bool_true,
+            &num_neg,
+            &num_1,
+            &num_2,
+            &num_10,
+            &num_1000,
+            &str_1,
+            &a_downcase,
+            &ab,
+            &b_upcase,
+            &mid3,
         ];
         let mut sorted = expected.clone();
         sorted.reverse();

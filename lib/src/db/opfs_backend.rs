@@ -76,10 +76,16 @@ pub async fn migrate_legacy_db(
 ) -> Result<bool, String> {
     let err = |m: &str, e: JsValue| format!("{m}: {e:?}");
 
-    if !file_exists(legacy).await.map_err(|e| err("check legacy", e))? {
+    if !file_exists(legacy)
+        .await
+        .map_err(|e| err("check legacy", e))?
+    {
         return Ok(false);
     }
-    if file_exists(target).await.map_err(|e| err("check target", e))? {
+    if file_exists(target)
+        .await
+        .map_err(|e| err("check target", e))?
+    {
         return Ok(false);
     }
 
@@ -89,7 +95,9 @@ pub async fn migrate_legacy_db(
     let len = redb::StorageBackend::len(&src).map_err(|e| e.to_string())?;
     if len == 0 {
         redb::StorageBackend::close(&src).map_err(|e| e.to_string())?;
-        remove_file(legacy).await.map_err(|e| err("remove legacy", e))?;
+        remove_file(legacy)
+            .await
+            .map_err(|e| err("remove legacy", e))?;
         return Ok(false);
     }
 
@@ -113,7 +121,9 @@ pub async fn migrate_legacy_db(
     let _ = redb::StorageBackend::close(&src);
     copy_result.map_err(|e| format!("copy legacy db: {e}"))?;
 
-    remove_file(legacy).await.map_err(|e| err("remove legacy", e))?;
+    remove_file(legacy)
+        .await
+        .map_err(|e| err("remove legacy", e))?;
     Ok(true)
 }
 

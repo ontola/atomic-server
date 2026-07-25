@@ -143,10 +143,7 @@ pub fn check_rights_cached<'a, S: Storelike>(
     cache: Option<&'a std::sync::Mutex<RightsCache>>,
 ) -> AsyncResult<'a, AtomicResult<String>> {
     Box::pin(async move {
-        let key = (
-            right_discriminant(right),
-            resource.get_subject().pure_id(),
-        );
+        let key = (right_discriminant(right), resource.get_subject().pure_id());
         if let Some(cache) = cache {
             let hit = cache
                 .lock()
