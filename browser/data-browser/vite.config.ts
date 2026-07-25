@@ -17,6 +17,13 @@ import { execSync } from 'node:child_process';
 const isTauri = process.env.TAURI === '1';
 const isVitest = process.env.VITEST === 'true';
 
+// Source maps are 28MB of the 48MB dist -- and that dist is compiled into the
+// atomic-server binary by build.rs, so every user downloads ~60% debugging
+// artifacts they will never open. `vite dev` serves maps regardless of this
+// setting, so day-to-day debugging is unaffected; set SOURCEMAP=1 to put them
+// back into a production build when you need to read a minified stack trace.
+const wantSourcemaps = process.env.SOURCEMAP === '1';
+
 const repoLibDefaults = path.resolve(__dirname, '../../lib/defaults');
 const ciLibDefaults = path.resolve(__dirname, '../lib-defaults');
 const libDefaultsDir = fs.existsSync(
@@ -399,7 +406,7 @@ export default defineConfig({
   build: {
     target: 'baseline-widely-available',
     outDir: isTauri ? 'dist-tauri' : 'dist',
-    sourcemap: true,
+    sourcemap: wantSourcemaps,
     // Don't inline worker scripts as `data:` URLs — the production CSP is
     // `worker-src 'self'` and would block them, killing the ClientDb. Below
     // the default 4096-byte limit, Vite would otherwise inline our 1.7KB

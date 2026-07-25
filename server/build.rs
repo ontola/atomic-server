@@ -33,6 +33,17 @@ fn main() -> std::io::Result<()> {
                 PathBuf::from("../browser/data-browser/src"),
                 PathBuf::from("../browser/lib/src"),
                 PathBuf::from("../browser/react/src"),
+                // Not just sources: how the bundle is *built* decides what
+                // ends up embedded. A vite.config.ts change (say, turning
+                // source maps off) leaves every file under src/ untouched, so
+                // without these the mtime check below sees no change, keeps
+                // the stale dist, and links assets that don't match the
+                // config -- silently, and only in whichever build ran first.
+                // WalkDir yields a plain file as a single entry, so listing
+                // files here works the same as listing directories.
+                PathBuf::from("../browser/data-browser/vite.config.ts"),
+                PathBuf::from("../browser/data-browser/package.json"),
+                PathBuf::from("../browser/pnpm-lock.yaml"),
             ],
             browser_root: PathBuf::from(BROWSER_ROOT),
         }
