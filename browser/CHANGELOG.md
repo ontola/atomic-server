@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+## [v0.41.0-beta.2] - 2026-07-25
+
 ### Atomic Browser
 
 - Passkey-first account backup. Managed onboarding no longer hands you a second secret to write down: a passkey (WebAuthn PRF) wraps the backup by default, so the common path is a single prompt. The agent secret isn't shown at all when a backup exists, since it stays recoverable from Settings. Only a device-bound passkey (BE flag clear) interrupts to offer a recovery code — the one case where losing the device really does lose the account. PRF is evaluated during credential creation, so enrolling costs one prompt on browsers that support it, falling back to a second assertion where they don't.

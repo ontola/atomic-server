@@ -7,6 +7,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+## [v0.41.0-beta.2] - 2026-07-25
+
 ### Security
 
 All four fixes documented under [v0.40.3](#v0403---2026-07-06) are present here — they reached this line through the `develop` merge, not through that tag. One deliberate divergence:
