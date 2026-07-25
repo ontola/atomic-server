@@ -10,6 +10,7 @@ import { pathNames, paths } from './paths';
 // import { TanStackRouterDevtools } from '@tanstack/router-devtools';
 import { Providers } from '../Providers';
 import { IdentityReconcileGate } from '../components/IdentityReconcileGate';
+import { DeviceLockWatcher } from '../components/DeviceLockWatcher';
 import { PairingLinkHandler } from '../components/PairingLinkHandler';
 import { PairingFlowProvider } from '../components/pairing/PairingFlowProvider';
 import ResourcePage from '../views/ResourcePage';
@@ -41,6 +42,9 @@ export const rootRoute = createRootRoute({
         </IdentityReconcileGate>
         {/* Consumes scanned/tapped atomic://pair deep links (QR pairing). */}
         <PairingLinkHandler />
+        {/* Keeps the device-lock heartbeat alive and enforces idle policies
+            while the app is open (no-op unless a policy is set). */}
+        <DeviceLockWatcher />
       </PairingFlowProvider>
       {/* Uncomment to get Tanstack Router Devtools */}
       {/* <TanStackRouterDevtools position='bottom-right' /> */}

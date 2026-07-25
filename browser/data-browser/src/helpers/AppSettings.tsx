@@ -94,8 +94,13 @@ export const AppSettingsContextProvider = (
   // wrongly-removed node (transient fetch failure) re-adds itself on the next
   // load that reaches it.
   useEffect(() => {
+    // In dev the server runs on its own port, which is configured — not a
+    // constant. Hardcoding one meant this probe re-added that origin to the
+    // known-servers list on *every* mount, so removing it from the sync page
+    // never stuck, and pointing `VITE_ATOMIC_SERVER_URL` somewhere else left
+    // a permanent ghost entry for a server the app doesn't use.
     const currentOrigin = isDev()
-      ? 'http://localhost:9883'
+      ? (import.meta.env.VITE_ATOMIC_SERVER_URL ?? getLocalServerOrigin())
       : getLocalServerOrigin();
 
     fetchManagedInfo(currentOrigin).then(info => {

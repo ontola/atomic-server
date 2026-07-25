@@ -12,6 +12,7 @@ import {
   useResource,
 } from '@tomic/react';
 import { SyncMenuItem } from './SyncMenuItem';
+import { ResourceGlyph } from '../ResourceGlyph';
 import { DemoExitMenuItem } from '../DemoExitButton';
 
 // Non standard event type so we have to type it ourselfs for now.
@@ -57,7 +58,18 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
   return (
     <AppMenuSection aria-label='App menu'>
       <SideBarMenuItem
-        icon={<FaUser />}
+        icon={
+          agent ? (
+            // Your own avatar, by the same precedence every other resource
+            // row uses (icon image > emoji > class icon). `fallbackIcon`
+            // keeps the plain person glyph for agents without a picture.
+            <AgentGlyphSlot aria-hidden>
+              <ResourceGlyph resource={agentResource} fallbackIcon={FaUser} />
+            </AgentGlyphSlot>
+          ) : (
+            <FaUser />
+          )
+        }
         label={
           agent
             ? (agentResource.get(core.properties.name) ?? 'User Settings')
@@ -100,4 +112,17 @@ const AppMenuSection = styled.section`
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
+`;
+
+/**
+ * Sizes the avatar to the row rather than letting it inherit: `IconImg` is
+ * `1.2em`, and `SideBarMenuRowIcon` only shrinks `svg` children, so an image
+ * glyph would otherwise sit noticeably larger than the icons beside it.
+ */
+const AgentGlyphSlot = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  line-height: 1;
 `;

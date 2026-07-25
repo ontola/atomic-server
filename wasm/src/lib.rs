@@ -10,6 +10,7 @@ use atomic_lib::{
     commit::CommitOpts,
     parse::ParseOpts,
     storelike::{Query, QueryResult, Storelike},
+    vault::keys::{argon2id_derive_key, Argon2Params},
     Commit, Db, Resource, Subject, Value,
 };
 use wasm_bindgen::prelude::*;
@@ -520,6 +521,30 @@ fn validate_db_key(db_key: Option<Vec<u8>>) -> Result<Option<[u8; 32]>, JsError>
                 .map_err(|_| to_js_err(format!("database key must be 32 bytes, got {}", key.len())))
         })
         .transpose()
+}
+
+/// Derive a 32-byte key-encryption-key (KEK) via Argon2id, for wrapping the
+/// recovery-blob DEK with a generated recovery code (or a discouraged
+/// password wrapper). This is the one primitive missing from WebCrypto —
+/// AES-GCM itself is used directly via `SubtleCrypto` in the browser and
+/// needs no Rust/WASM support. Never called server-side: the recovery code
+/// and the derived key never leave the browser. See
+/// `atomic-saas/planning/BACKUP_SECURITY.md`.
+#[wasm_bindgen(js_name = "argon2idDeriveKey")]
+pub fn argon2id_derive_key_js(
+    secret: &str,
+    salt: &[u8],
+    mem_kib: u32,
+    iterations: u32,
+    parallelism: u32,
+) -> Result<Vec<u8>, JsError> {
+    let params = Argon2Params {
+        mem_kib,
+        iterations,
+        parallelism,
+    };
+    let key = argon2id_derive_key(secret.as_bytes(), salt, params).map_err(to_js_err)?;
+    Ok(key.to_vec())
 }
 
 /// One-time migration of the pre-split `atomic_data.redb` into the per-agent

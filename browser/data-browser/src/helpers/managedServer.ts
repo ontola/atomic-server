@@ -132,7 +132,19 @@ export function accountCreationTarget(
   info: ManagedInfo,
 ): AccountCreationTarget {
   if (info.managed && info.portalUrl) {
-    return { kind: 'portal', url: info.portalUrl };
+    // `/signin`, not the portal root: the root is the landing page, so
+    // someone who just clicked "Create account" would arrive at a sales
+    // pitch and have to find the form. That path renders the bare
+    // magic-link form directly. `new URL` so a portalUrl with or without a
+    // trailing slash both resolve cleanly.
+    try {
+      return {
+        kind: 'portal',
+        url: new URL('/signin', info.portalUrl).toString(),
+      };
+    } catch {
+      return { kind: 'portal', url: info.portalUrl };
+    }
   }
 
   return { kind: 'local' };

@@ -10,6 +10,11 @@ version = "0.41.0-beta.1"
 
 
 [dependencies]
+# Argon2id KDF for envelope-v2 recovery wrappers (planning/BACKUP_SECURITY.md
+# in atomic-saas) — deriving a KEK from a recovery code/password. Pure Rust,
+# no OS RNG dependency in the low-level `hash_password_into` API used here,
+# so it compiles for wasm32 like the rest of this crate's WASM-facing code.
+argon2 = "0.5"
 base64 = "0.22"
 rmp-serde = { version = "1.3.1", optional = true }
 # Needed for migration to messagepack

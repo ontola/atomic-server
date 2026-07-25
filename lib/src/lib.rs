@@ -107,6 +107,7 @@ pub mod urls;
 pub mod utils;
 pub mod validate;
 pub mod values;
+pub mod vault;
 
 pub use atoms::Atom;
 pub use commit::Commit;

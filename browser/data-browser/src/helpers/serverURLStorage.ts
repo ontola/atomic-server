@@ -45,26 +45,37 @@ export const serverURLStorage = {
       // Not a valid URL, ignore
     }
   },
-  getKnownServers(): string[] {
+  /** Everything actually stored, unfiltered — the basis for any write. */
+  getStoredServers(): string[] {
     try {
       const val = localStorage.getItem(KnownServersKEY);
+
       if (!val) return [];
-      const servers = (JSON.parse(val) as string[]).filter(isValidServerUrl);
 
-      if (!isDev()) {
-        return servers;
-      }
-
-      return servers.filter(server => server !== window.location.origin);
+      return (JSON.parse(val) as string[]).filter(isValidServerUrl);
     } catch (e) {
       return [];
     }
   },
+  getKnownServers(): string[] {
+    const servers = this.getStoredServers();
+
+    if (!isDev()) {
+      return servers;
+    }
+
+    // In dev the app is served from vite's own origin, which is not a server
+    // worth listing. A display concern only — see `removeKnownServer`.
+    return servers.filter(server => server !== window.location.origin);
+  },
   removeKnownServer(url: string) {
-    const known = this.getKnownServers();
+    // Reads raw storage, not `getKnownServers()`: that applies the dev-only
+    // display filter above, so writing its result back silently deleted the
+    // current origin from storage as a side effect of removing something else.
+    const stored = this.getStoredServers();
     localStorage.setItem(
       KnownServersKEY,
-      JSON.stringify(known.filter((s: string) => s !== url)),
+      JSON.stringify(stored.filter((s: string) => s !== url)),
     );
   },
 };

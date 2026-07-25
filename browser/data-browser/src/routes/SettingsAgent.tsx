@@ -1,10 +1,9 @@
 import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
-import { core, urls, useCurrentAgent, useStore } from '@tomic/react';
+import { core, server, urls, useCurrentAgent, useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { Button } from '../components/Button';
 import { Margin } from '../components/Card';
-import { ResourceInline } from '../views/ResourceInline';
 import { ContainerNarrow } from '../components/Containers';
 import { editURL } from '../helpers/navigation';
 import { Main } from '../components/Main';
@@ -15,7 +14,7 @@ import { createRoute } from '@tanstack/react-router';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
 import { saveAgentToIDB } from '@helpers/agentStorage';
-import { FaCircleInfo, FaUser } from 'react-icons/fa6';
+import { FaCircleInfo } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import {
   InputStyled,
@@ -24,12 +23,20 @@ import {
 } from '../components/forms/InputStyles';
 import { ErrorLook } from '../components/ErrorLook';
 import { DrivesCard } from '../components/Drives/DrivesCard';
+import { AccountRecoveryCard } from '../components/AccountRecoveryCard';
+import { AgentProfileHeader } from '../components/AgentProfileHeader';
+import { DeviceLockCard } from '../components/DeviceLockCard';
+import { NewInstanceButton } from '../components/NewInstanceButton';
 import { useSavedDrives } from '../hooks/useSavedDrives';
 import { useDriveHistory } from '../hooks/useDriveHistory';
 import { usePersonalDrive } from '../hooks/usePersonalDrive';
 import { constructOpenURL } from '../helpers/navigation';
 import { paths } from './paths';
-import { logoutManagedSession } from '../helpers/managed';
+import {
+  forgetCachedRecoverySecret,
+  logoutManagedSession,
+} from '../helpers/managed';
+import { clearHeartbeat } from '../helpers/deviceLock';
 
 export const AgentSettingsRoute = createRoute({
   path: pathNames.agentSettings,
@@ -59,6 +66,7 @@ const SettingsAgent: React.FunctionComponent = () => {
   const driveUrlId = useId();
   const [driveInput, setDriveInput] = useState('');
   const [driveErr, setDriveErr] = useState<Error | undefined>();
+  const [showDriveUrl, setShowDriveUrl] = useState(false);
 
   // Signed out → there is a single canonical sign-in / onboarding surface at
   // /app/welcome (GettingStartedFlow). Redirect there rather than rendering a
@@ -68,6 +76,31 @@ const SettingsAgent: React.FunctionComponent = () => {
       navigate({ to: paths.welcome, replace: true });
     }
   }, [effectiveAgent]);
+
+  /**
+   * Sign out, and also drop this device's cached copy of the encrypted
+   * backup — so signing back in needs the full route again (email, then a
+   * passkey or recovery code) rather than just a fingerprint. For shared or
+   * borrowed machines.
+   */
+  function handleSignOutAndForget() {
+    forgetCachedRecoverySecret(effectiveAgent?.subject);
+    handleSignOut();
+  }
+
+  /**
+   * Lock, not sign out: drops the usable agent from this device so the next
+   * load needs a passkey (or the secret), while deliberately keeping the
+   * control-plane session and the cached backup — it's still your machine and
+   * your account, you're just closing the door behind you.
+   */
+  function handleLockNow() {
+    clearHeartbeat();
+    setAgent(undefined);
+    setDrive('');
+    void saveAgentToIDB(undefined);
+    navigate({ to: paths.welcome, replace: true });
+  }
 
   function handleSignOut() {
     const currentDrive = drive;
@@ -137,25 +170,29 @@ const SettingsAgent: React.FunctionComponent = () => {
                   }
                 </WarningBlock>
               )}
-              <div>
-                <LabelStyled>
-                  <FaUser /> You{"'"}re signed in as
-                </LabelStyled>
-                <ResourceInline subject={effectiveAgent.subject!} />
-              </div>
+              <AgentProfileHeader subject={effectiveAgent.subject!} />
               <Row>
                 <Button
+                  subtle
                   onClick={() => navigate(editURL(effectiveAgent.subject!))}
                 >
-                  Edit profile
+                  More profile fields
                 </Button>
                 <Button
                   subtle
-                  title='Sign out with current Agent and reset this form'
+                  title='Sign out. You can get back in on this device with your passkey.'
                   onClick={handleSignOut}
                   data-test='sign-out'
                 >
-                  Sign Out
+                  Sign out
+                </Button>
+                <Button
+                  subtle
+                  title='Sign out and remove this device’s copy of your encrypted backup'
+                  onClick={handleSignOutAndForget}
+                  data-test='sign-out-forget'
+                >
+                  Sign out &amp; forget this device
                 </Button>
               </Row>
 
@@ -175,15 +212,62 @@ const SettingsAgent: React.FunctionComponent = () => {
                 </>
               )}
 
-              <Row center gap='1ch'>
-                <Heading as='h2'>My drives</Heading>
-                <InfoHint title='Unstar a drive to move it back to recently visited.' />
-              </Row>
-              <DrivesCard
-                showNewOption
-                drives={myDrives}
-                onDriveSelect={handleSetDrive}
-              />
+              {/* Both drive actions live on the heading row, so the list
+                  isn't bracketed by a card-row button above and a standalone
+                  form below. The URL field stays hidden until asked for — it's
+                  the rarer of the two by a wide margin. */}
+              <SectionHeader>
+                <Row center gap='1ch'>
+                  <Heading as='h2'>My drives</Heading>
+                  <InfoHint title='Unstar a drive to move it back to recently visited.' />
+                </Row>
+                <Row gap='0.5rem'>
+                  <NewInstanceButton
+                    klass={server.classes.drive}
+                    subtle
+                    icon
+                    label='New drive'
+                  />
+                  <Button
+                    subtle
+                    onClick={() => setShowDriveUrl(open => !open)}
+                    aria-expanded={showDriveUrl}
+                    data-test='open-drive-by-url'
+                  >
+                    Open by URL
+                  </Button>
+                </Row>
+              </SectionHeader>
+
+              {showDriveUrl && (
+                <div>
+                  <LabelStyled htmlFor={driveUrlId}>
+                    Open a drive by URL or DID
+                  </LabelStyled>
+                  <Row>
+                    <InputWrapper>
+                      <InputStyled
+                        id={driveUrlId}
+                        data-testid='drive-url-input'
+                        value={driveInput}
+                        onChange={e => setDriveInput(e.target.value)}
+                        placeholder='Enter a Drive DID or URL'
+                        autoFocus
+                      />
+                    </InputWrapper>
+                    <Button
+                      onClick={handleOpenDriveInput}
+                      disabled={!driveInput || drive === driveInput}
+                      data-test='drive-url-save'
+                    >
+                      Open
+                    </Button>
+                  </Row>
+                  {driveErr && <ErrorLook>{driveErr.message}</ErrorLook>}
+                </div>
+              )}
+
+              <DrivesCard drives={myDrives} onDriveSelect={handleSetDrive} />
 
               {recentDrives.length > 0 && (
                 <>
@@ -199,30 +283,24 @@ const SettingsAgent: React.FunctionComponent = () => {
                 </>
               )}
 
-              <div>
-                <LabelStyled htmlFor={driveUrlId}>
-                  Open a drive by URL or DID
-                </LabelStyled>
-                <Row>
-                  <InputWrapper>
-                    <InputStyled
-                      id={driveUrlId}
-                      data-testid='drive-url-input'
-                      value={driveInput}
-                      onChange={e => setDriveInput(e.target.value)}
-                      placeholder='Enter a Drive DID or URL'
-                    />
-                  </InputWrapper>
-                  <Button
-                    onClick={handleOpenDriveInput}
-                    disabled={!driveInput || drive === driveInput}
-                    data-test='drive-url-save'
-                  >
-                    Open
-                  </Button>
-                </Row>
-                {driveErr && <ErrorLook>{driveErr.message}</ErrorLook>}
-              </div>
+              <Margin />
+
+              <Row center gap='1ch'>
+                <Heading as='h2'>Account recovery</Heading>
+                <InfoHint title='How you get back in on a new device — and where to find your agent secret.' />
+              </Row>
+              <AccountRecoveryCard agentSubject={effectiveAgent.subject} />
+
+              <Margin />
+
+              <Row center gap='1ch'>
+                <Heading as='h2'>This device</Heading>
+                <InfoHint title='Whether this browser stays signed in as you when anyone opens it.' />
+              </Row>
+              <DeviceLockCard
+                agentSubject={effectiveAgent.subject}
+                onLockNow={handleLockNow}
+              />
             </Column>
           </>
         ) : null}
@@ -233,6 +311,15 @@ const SettingsAgent: React.FunctionComponent = () => {
 
 const Heading = styled.h1`
   margin: 0;
+`;
+
+/** Section title on the left, its actions on the right, one row. */
+const SectionHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
 `;
 
 /** Hover-for-details icon next to a section heading, replacing hint prose. */

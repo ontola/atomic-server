@@ -2,7 +2,8 @@ import { StoreContext, Store, enableLoro } from '@tomic/react';
 
 import { isDev } from './config';
 import { registerHandlers } from './handlers';
-import { getAgentFromIDB } from './helpers/agentStorage';
+import { getAgentFromIDB, saveAgentToIDB } from './helpers/agentStorage';
+import { shouldLock } from './helpers/deviceLock';
 import { registerCustomCreateActions } from './components/forms/NewForm/CustomCreateActions';
 import { serverURLStorage } from './helpers/serverURLStorage';
 import { driveStorage } from './helpers/driveStorage';
@@ -87,7 +88,20 @@ enableLoro().catch(e =>
   console.warn('[Loro] init failed, edit/history features disabled:', e),
 );
 
-const initalAgent = await getAgentFromIDB();
+const storedAgent = await getAgentFromIDB();
+
+// Device lock: withhold the stored agent when the gap since this app was
+// last open exceeds the user's policy (see `deviceLock.ts`). Enforced on the
+// way *in*, because nothing runs reliably when a browser is killed. The user
+// then meets the normal sign-in screen, where their passkey (or secret) lets
+// them back in.
+const locked = shouldLock(storedAgent?.subject);
+
+if (locked) {
+  await saveAgentToIDB(undefined);
+}
+
+const initalAgent = locked ? undefined : storedAgent;
 
 // Initialize the store
 const store = new Store({

@@ -1009,7 +1009,11 @@ function SyncPage() {
                   {isCloud && managedInfo.portalUrl && (
                     <ConnActions>
                       <ManagedLink
-                        href={managedInfo.portalUrl}
+                        // The dashboard, not the portal root: signed-in
+                        // visitors get the marketing page at `/`, so the
+                        // link landed on a sales pitch rather than the
+                        // account it promises to manage.
+                        href={`${managedInfo.portalUrl}/dashboard`}
                         target='_blank'
                         rel='noopener noreferrer'
                       >

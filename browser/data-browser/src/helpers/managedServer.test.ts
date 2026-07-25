@@ -15,16 +15,39 @@ vi.mock('@tomic/react', () => ({
 }));
 
 describe('accountCreationTarget', () => {
-  it('managed node with a portal URL → the managed portal', () => {
+  it("managed node with a portal URL → the portal's sign-in form", () => {
     const info: ManagedInfo = {
       managed: true,
       portalUrl: 'https://portal.example/',
     };
 
+    // Not the root: that's the landing page, so "Create account" would drop
+    // the user on a sales pitch instead of the form.
     expect(accountCreationTarget(info)).toEqual({
       kind: 'portal',
-      url: 'https://portal.example/',
+      url: 'https://portal.example/signin',
     });
+  });
+
+  it('a portal URL without a trailing slash resolves the same', () => {
+    expect(
+      accountCreationTarget({
+        managed: true,
+        portalUrl: 'https://portal.example',
+      }),
+    ).toEqual({ kind: 'portal', url: 'https://portal.example/signin' });
+  });
+
+  it('a portal URL with a sub-path is not appended to', () => {
+    // `/signin` is absolute on the origin — a portal hosted under a path
+    // would need its own handling, and silently producing
+    // `…/portal/signin` here would be a guess.
+    expect(
+      accountCreationTarget({
+        managed: true,
+        portalUrl: 'https://example.com/portal/',
+      }),
+    ).toEqual({ kind: 'portal', url: 'https://example.com/signin' });
   });
 
   it('self-hosted / FOSS node → local identity (keeps the FOSS UX)', () => {
