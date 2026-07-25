@@ -13,8 +13,6 @@ members = [
 ]
 exclude = ["flutter/rust"]
 
-# Tauri build is deprecated, see
-
 # Debuginfo dominates target/ size: with ~1460 deps (tauri, actix, iroh) the
 # default `debug = true` produces a multi-GB tree per build flavor, and this
 # workspace builds several (debug, rust-analyzer, wasm-pack). Keep line tables

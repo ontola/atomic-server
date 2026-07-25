@@ -6,8 +6,7 @@ Desktop release for Atomic-Server.
 ```sh
 # install tauri
 cargo install tauri-cli
-# make sure that `atomic-data-browser` is running on port 5173 (see ## Running in development)
-# run dev server
+# from this directory: run the dev server
 cargo tauri dev
 # build an installer for your OS
 cargo tauri build
@@ -15,8 +14,10 @@ cargo tauri build
 
 ## Running in development
 
-By default, the dev server points to `localhost:5173`, which is the server for [`atomic-data-browser`](https://github.com/atomicdata-dev/atomic-data-browser/), which you'll probably want to run.
-If you only want to work on the _server side_ of things, you can remove `devPath` in `tauri.conf.json`.
+`cargo tauri dev` starts the front-end for you — `beforeDevCommand` in `tauri.conf.json` runs `pnpm -C browser/data-browser dev:tauri`, and the app points at `localhost:6747` (`devUrl`).
+If you only want to work on the _server side_ of things, you can remove `devUrl` in `tauri.conf.json`.
+
+`cargo tauri build` likewise runs `beforeBuildCommand` to produce `browser/data-browser/dist-tauri` before bundling.
 
 ## Limitations
 
