@@ -13,10 +13,21 @@ impl VectorSearchState {
     }
 
     pub async fn new(
-        _config: &Config,
+        config: &Config,
         _index_notifier: Option<Arc<dyn Fn(&str, bool) + Send + Sync>>,
     ) -> AtomicServerResult<Self> {
-        tracing::info!("Vector search disabled (compiled without vector-search feature)");
+        // `skip_vector_index` is false only when the operator explicitly passed
+        // `--enable-vector-index`. Saying nothing there would leave them waiting
+        // on semantic search that can never arrive, since `vector-search` is not
+        // a default feature.
+        if config.skip_vector_index {
+            tracing::info!("Vector search disabled (compiled without vector-search feature)");
+        } else {
+            tracing::warn!(
+                "--enable-vector-index was passed, but this build was compiled without the `vector-search` feature, so semantic search is unavailable. Rebuild with `--features vector-search`."
+            );
+        }
+
         Ok(Self)
     }
 

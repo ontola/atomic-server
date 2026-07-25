@@ -201,7 +201,16 @@ futures-util = "0.3.32"
 
 [features]
 # Embedded builds: cargo build -p atomic-server --no-default-features --features <needed>
-default = ["https", "telemetry", "img", "wasm-plugins", "vector-search"]
+#
+# `vector-search` is deliberately NOT default. It is opt-in at runtime
+# (`--enable-vector-index`), so compiling in fastembed/lancedb/arrow/ort by
+# default made every `cargo install atomic-server` pay a very large build --
+# needing `protoc`, and failing outright on musl, where `ort`'s `cuda` feature
+# has no prebuilt binary -- for a feature that stays switched off unless asked
+# for. Released binaries never contained it either (see the musl carve-out in
+# `.dagger/src/index.ts`), so default now matches both the runtime default and
+# what actually ships. Build with `--features vector-search` for semantic search.
+default = ["https", "telemetry", "img", "wasm-plugins"]
 light = ["https"]
 telemetry = [
   "tracing-opentelemetry",

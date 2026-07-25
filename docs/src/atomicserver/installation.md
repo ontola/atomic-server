@@ -78,7 +78,17 @@ sudo apt-get install -y build-essential pkg-config libssl-dev --fix-missing
 
 ## Vector search embeddings (opt-in)
 
-Semantic search uses vector embeddings, which is an opt-in feature: pass **`--enable-vector-index`** (or set **`ATOMIC_ENABLE_VECTOR_INDEX`**) to turn it on, since loading embedding models and indexing every write has a real performance cost. Once enabled, the server runs [fastembed](https://github.com/Anush008/fastembed-rs) locally by default. To use [OpenRouter](https://openrouter.ai/) embeddings instead, pass **`--openrouter-api-key`** and **`--openrouter-embedding-model`** (or set **`OPENROUTER_API_KEY`** and **`OPENROUTER_EMBEDDING_MODEL`** in your environment or `.env`). **`--openrouter-embedding-dimensions`** / **`OPENROUTER_EMBEDDING_DIMENSIONS`** is optional (some models ignore it). **`--gpu-indexing`** / **`ATOMIC_GPU_INDEXING`** uses GPU acceleration for the default local embedding and reranker, not for OpenRouter.
+Semantic search is opt-in twice over: it has to be **compiled in**, and then **switched on**.
+
+The official release binaries and the default `cargo install atomic-server` build do **not** include it, because the embedding stack (fastembed, lancedb, arrow, ort) is a very large dependency for something most deployments never turn on. To get it, build from source with the feature enabled:
+
+```sh
+cargo install atomic-server --features vector-search
+```
+
+That build needs `protoc` (`protobuf-compiler`) available. It does not currently work for musl targets, where `ort` has no prebuilt ONNX Runtime binary.
+
+With such a build, pass **`--enable-vector-index`** (or set **`ATOMIC_ENABLE_VECTOR_INDEX`**) to turn it on, since loading embedding models and indexing every write has a real performance cost. Passing the flag to a build that lacks the feature logs a warning and does nothing. Once enabled, the server runs [fastembed](https://github.com/Anush008/fastembed-rs) locally by default. To use [OpenRouter](https://openrouter.ai/) embeddings instead, pass **`--openrouter-api-key`** and **`--openrouter-embedding-model`** (or set **`OPENROUTER_API_KEY`** and **`OPENROUTER_EMBEDDING_MODEL`** in your environment or `.env`). **`--openrouter-embedding-dimensions`** / **`OPENROUTER_EMBEDDING_DIMENSIONS`** is optional (some models ignore it). **`--gpu-indexing`** / **`ATOMIC_GPU_INDEXING`** uses GPU acceleration for the default local embedding and reranker, not for OpenRouter.
 
 ## Running using a tunneling service (easy mode)
 
