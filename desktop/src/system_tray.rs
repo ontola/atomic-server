@@ -5,6 +5,13 @@ use tauri::{
 };
 use tauri_plugin_shell::ShellExt;
 
+/// The app's ONLY tray icon.
+///
+/// Deliberately not declared in `tauri.conf.json` as well: an `app.trayIcon`
+/// block makes Tauri build its own icon at startup, and this builder then adds
+/// a second one. You get two identical icons in the tray, only this one having
+/// a menu (the config can't attach one), and both vanish together when the
+/// process dies — which reads as a rendering glitch rather than two real icons.
 pub fn setup(app: &mut App, config: &atomic_server_lib::config::Config) -> tauri::Result<()> {
   let open = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
   let browser = MenuItem::with_id(app, "browser", "Open in browser", true, None::<&str>)?;
