@@ -1,5 +1,7 @@
 import { signRequest, type Agent } from '@tomic/react';
 import { serverProps, peerProps } from './serverOntology';
+import { rememberManagedPortalUrl } from './managed/api';
+import { isRunningInTauri } from './tauri';
 
 /** A device the server syncs with directly, from `/server`'s `peers`. */
 export type ServerPeer = {
@@ -65,7 +67,14 @@ export async function fetchManagedInfo(
     // In local dev the user-facing portal runs on localhost, but a managed node
     // reports its public dashboard URL (typically a tunnel that isn't reachable
     // locally). Point account/plan management at the local portal instead.
+    //
+    // Browsers only. Inside Tauri `window.location` is `tauri://localhost`, so
+    // hostname is `localhost` in EVERY desktop build, shipped ones included —
+    // without this guard an installed app rewrites the real portal to a dev
+    // port. A desktop dev run overrides via VITE_MANAGED_PORTAL_URL instead
+    // (see getManagedPortalUrl in managed/cloudSync.ts).
     const onLocalhost =
+      !isRunningInTauri() &&
       typeof window !== 'undefined' &&
       (window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1');
@@ -87,10 +96,16 @@ export async function fetchManagedInfo(
           .filter((p): p is ServerPeer => p !== null)
       : [];
 
+    const portalUrl =
+      rawPortalUrl && onLocalhost ? 'http://localhost:49237' : rawPortalUrl;
+
+    // The desktop app learns where the control plane lives ONLY from here —
+    // `tauri://localhost` has no same-origin `/api`. See rememberManagedPortalUrl.
+    rememberManagedPortalUrl(portalUrl);
+
     return {
       managed: Boolean(data?.[serverProps.managed]),
-      portalUrl:
-        rawPortalUrl && onLocalhost ? 'http://localhost:49237' : rawPortalUrl,
+      portalUrl,
       nodeId: readString(data?.[serverProps.nodeId]),
       version: readString(data?.[serverProps.version]),
       peers,
