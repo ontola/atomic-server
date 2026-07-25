@@ -128,11 +128,24 @@ const config: PlaywrightTestConfig = {
       : []),
   ],
   fullyParallel: true,
-  // 2 workers for speed. CI uses 1 worker + retries=2; locally we
-  // prefer the speed and depend on the tests themselves to be
-  // robust against the contention storms the shared atomic-server
-  // produces.
-  workers: process.env.CI ? 1 : 2,
+  // 2 workers for speed. CI defaults to 1 worker + retries=2; locally we
+  // prefer the speed and depend on the tests themselves to be robust
+  // against the contention storms the shared atomic-server produces.
+  //
+  // PLAYWRIGHT_WORKERS overrides both. The CI default of 1 was chosen for
+  // GitHub-hosted runners, which have 2 vCPUs -- a self-hosted machine with
+  // real cores is being wasted at one worker. Raise it there rather than
+  // changing the default, because the limit is contention on the SHARED
+  // atomic-server, not CPU alone: more workers means more of the WS,
+  // search-index and multi-context-sync races the retries above exist to
+  // absorb, and `retries: 2` would quietly convert them into slow passes.
+  // Start at 2 (what local dev already survives) and only go higher with
+  // the trace to show it is actually the long pole.
+  workers: process.env.PLAYWRIGHT_WORKERS
+    ? Number(process.env.PLAYWRIGHT_WORKERS)
+    : process.env.CI
+      ? 1
+      : 2,
 };
 
 export default config;

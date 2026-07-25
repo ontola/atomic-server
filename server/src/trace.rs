@@ -56,9 +56,10 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
                     Resource,
                 };
 
-                // Install ring as the rustls 0.23 crypto provider (required by tonic TLS).
-                // Ignore the error — it just means another provider was already installed.
-                let _ = rustls::crypto::ring::default_provider().install_default();
+                // The rustls provider tonic's TLS needs is installed at the top of
+                // `serve_with_hook`, before this runs. It used to be installed here,
+                // which meant a build without OpenTelemetry tracing never installed
+                // one at all and panicked as soon as ACME touched rustls.
 
                 let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
                     .or_else(|_| std::env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"))
