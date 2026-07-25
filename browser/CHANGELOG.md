@@ -4,6 +4,32 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+### Atomic Browser
+
+- Passkey-first account backup. Managed onboarding no longer hands you a second secret to write down: a passkey (WebAuthn PRF) wraps the backup by default, so the common path is a single prompt. The agent secret isn't shown at all when a backup exists, since it stays recoverable from Settings. Only a device-bound passkey (BE flag clear) interrupts to offer a recovery code — the one case where losing the device really does lose the account. PRF is evaluated during credential creation, so enrolling costs one prompt on browsers that support it, falling back to a second assertion where they don't.
+- Device lock (Settings → This device): never, on browser close, or after 15 minutes or 1 hour of inactivity. Enforced by withholding the stored keypair at boot rather than via `sessionStorage`, which browsers restore along with tabs — a restart used to come back unlocked.
+- Per-agent encrypted local databases. The single per-origin `atomic_data.redb` is split into one OPFS database per agent (a shared plaintext anonymous DB when signed out), each encrypted at rest with XChaCha20-Poly1305. A random 256-bit key per agent is wrapped by HKDF of the agent's private key — the agent key wraps, it never encrypts bulk data. After sign-out or an agent switch a session can no longer read the previous agent's cached private data, without wiping the cache.
+- Peer-to-peer video and audio calls in the meeting panel, via Trystero (WebRTC with Nostr signaling). The meeting subject is hashed into the room id and doubles as the signaling password, so only participants can join or read the handshake, and media never touches a server. The call UI ships in a lazy chunk, so the ~24 kB gzipped library is only fetched when someone starts a call. Mentioned in [#1127](https://github.com/atomicdata-dev/atomic-server/issues/1127).
+- [#1235](https://github.com/atomicdata-dev/atomic-server/issues/1235) Emoji v1: give any resource an emoji glyph from its context menu or title, shown in the sidebar, search results, cards and inline references.
+- Cover images: set an image File as a decorative banner at the top of a resource's page, with an avatar cropper and client-side image resizing. Drag the banner to reposition it and release to save — a wide crop rarely has its subject in the middle — and pick an image you've already uploaded instead of adding a new one.
+- The search overlay's "Start AI Chat with ..." now sends your query as the chat's first message. It previously used the query as the chat's title and opened an empty chat, so the thing you asked for was never actually asked.
+- Fix: the table grid is sized to the space actually below it rather than a flat `80vh`, which overflowed the viewport and pushed the last rows out of reach once a cover image sat above the table.
+- Colorful mode — a new appearance setting that tints the sidebar and navbar with tones of the main color instead of the neutral grey ramp, so no grey sits on a colored surface. Content and text stay neutral for readability. Off, the theme is byte-identical to before. The main-color presets are now also the default tag palette, replacing the neon tag colours.
+- Dark mode for the static loading screen, and dark-aware `theme-color` metas so OS and browser chrome match the app.
+- The sidebar drive header is unified into a single component.
+- Meetings now start from their own page rather than the top bar or the More menu.
+- Added an `/app/new-drive` route, for the managed portal's "+ New drive".
+- Copy / duplicate a resource. New `copyResource` in `@tomic/lib` carries a resource's content (propvals and classes) into an independent new resource under a chosen parent, without its identity, ACL or history. Unlike `forkResource` the copy has no link back to the source and can't be merged into it; copying a fork yields a plain resource. The name gets a " (copy)" suffix so a duplicate sitting next to its source is tellable apart.
+- Fix: only origins that answer `/server` are registered as known servers. The managed deployment serves the SPA from a shared app origin that isn't a node, and listing it offered a "Switch" pointing the store at something that couldn't answer. A non-answer also removes entries that older builds added blindly.
+- Fix: Kanban view polish — the column header is merged into one rounded card, plus icons, a header pill, a clearer add-card affordance and an empty-column state.
+- Fix: restored the New Meeting quick-create button.
+- Fix: genesis and other internal properties are hidden from the resource form and property lists.
+- Fix: the slash-menu suggestion handlers are guarded against an unset component.
+- Fix: DOM prop leaks, missing list keys, and Enter-to-submit in New Table.
+- Fix: editor state updates that ran during the render phase moved into effects.
+- Fix: the ClientDb's lock-steal recovery got a realistic settle budget.
+- Patched 45 real npm vulnerabilities via scoped pnpm overrides.
+
 ## [v0.41.0-beta.1] - 2026-07-22
 
 ### Atomic Browser

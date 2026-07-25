@@ -7,11 +7,37 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+### Security
+
+All four fixes documented under [v0.40.3](#v0403---2026-07-06) are present here — they reached this line through the `develop` merge, not through that tag. One deliberate divergence:
+
+- The commit-level `check_server_managed_properties` guard that accompanied the `/download` arbitrary-file-read fix is **not** part of this line. It rejected any commit writing `internalId`, which breaks local-first uploads — here the client legitimately assigns that content hash at genesis. `/download` resolves `internalId` as an opaque content-addressed blob key rather than a filesystem path, so the path-traversal primitive the guard defended against does not exist. The `download.rs` hardening itself is retained.
+
+### Added
+
+- Argon2id key derivation in `atomic-lib` as `vault::keys` (`argon2id_derive_key`), exposed to the browser as `argon2idDeriveKey`. This backs the passkey-wrapped ("envelope v2") backup of the agent secret: AES-GCM runs natively in WebCrypto, and Argon2id is the one primitive the Web platform's crypto API is missing. Defaults to ~64 MiB / 3 iterations / 1 lane.
+- `EncryptedBackend` wraps any redb `StorageBackend` and encrypts data at rest with XChaCha20-Poly1305 (4 KiB blocks, a fresh random nonce per write, block-index AAD, key-check header), so resources, Loro snapshots, blobs and derived indexes are all ciphertext. Backs the browser's per-agent OPFS databases.
+- A `coverImage` property in the default store — an image File shown as a decorative banner at the top of a resource's page — and a `coverImageFocus` float (0-1) holding that banner's vertical focal point, since a wide crop of a photo rarely has its subject in the middle.
+
+### Changed
+
 - Vector search is now opt-in (pass `--enable-vector-index` / `ATOMIC_ENABLE_VECTOR_INDEX`) instead of on by default. Loading embedding models and indexing every write on a plain create/edit had a real, measured performance cost that most deployments don't need.
 - Query/index performance rework (`atomic-lib`): collection queries now read materialized rows instead of decoding a Loro CRDT snapshot per member, permission checks are memoized per request, and the query-members index uses compact query ids with typed, order-preserving sort keys. Verified paired before/after: a 1000-member collection query dropped ~88% at the Rust level (52ms → 6–7ms) and ~70% over HTTP in a single round trip (~104ms → ~30ms). See `planning/index-performance.md`.
-- [#287](https://github.com/atomicdata-dev/atomic-server/issues/287) Sorting collections by numeric properties (integers, floats, timestamps) now orders numerically instead of lexicographically ("2" no longer sorts after "10").
-- Sorted collections now include members that lack the sort property (they sort first). Previously such members were silently dropped from sorted listings.
 - Live-query index updates are routed by `(drive, property)`, and multi-constraint (AND) queries pick their starting index by estimated selectivity — commits and first-time index builds touch far fewer filters/resources.
+- Sorted collections now include members that lack the sort property (they sort first). Previously such members were silently dropped from sorted listings.
+
+### Fixed
+
+- [#287](https://github.com/atomicdata-dev/atomic-server/issues/287) Sorting collections by numeric properties (integers, floats, timestamps) now orders numerically instead of lexicographically ("2" no longer sorts after "10").
+- `/search?filters=` actually filters again. Tantivy only scopes a JSON-field query to a path when the clause carries the field's own name, so the documented bare `<property-uri>:<value>` syntax silently matched nothing (no parse error) — `filters=isA:File`, used by the file picker, never found anything. Each AND/OR clause is now rewritten with the `propvals.` prefix before parsing, so the documented syntax works without any client change.
+- Fixed a deadlock in `Db::apply_commit`: the per-subject lock was held across the after-commit handler loop, so a plugin's `after_commit` issuing its own follow-up commit to the same subject re-entered `apply_commit` and waited forever on a lock only it could release. The lock is now released before handlers run.
+- `ATOMIC_REPOPULATE_DEFAULTS` now repopulates the base models (genesis, drive, the Commit class and the other fixed base-model properties/classes) as well as the JSON ontologies. Previously a store seeded before a base model was added could never receive it short of wiping the database.
+- `_new:` placeholder resources no longer loop stuck-commit drops. If anything cleared `Resource.new` before a client-only `_new:<random>` subject completed its genesis save, the next local edit reached the outbox's incremental-commit path with an unresolved subject, which the server rejects.
+- `atomic-cli` compiles again: the interactive `new` prompt's exhaustive `DataType` match had no arm for `LocalizedText` (added for #1069). Like the existing `LoroDoc` arm it now returns `Ok(None)`, since a per-language map isn't something a CLI prompt can collect as one string.
+
+### Dependencies
+
+- Bumped wasmtime/wasmtime-wasi/wasmtime-wasi-http (45.0.0 → 45.0.3, RUSTSEC-2026-0182 and -0188, the WASM plugin sandbox), quinn-proto (0.11.14 → 0.11.16, RUSTSEC-2026-0185), crossbeam-epoch (0.9.18 → 0.9.20, RUSTSEC-2026-0204) and plist (1.9.0 → 1.10.0, RUSTSEC-2026-0194 and -0195). The remaining cargo-audit findings (hickory-proto, rustls-webpki) trace to the deferred iroh 0.35 transport migration — see `planning/rust-dependency-upgrade-audit.md`.
 
 ## [v0.41.0-beta.1] - 2026-07-22
 
@@ -58,11 +84,23 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   BREAKING: [#1107](https://github.com/ontola/atomic-server/issues/1107) Named nested resources are no longer supported. Value::Resource and SubResource::Resource have been removed. If you need to include multiple resources in a response use an array.
   BREAKING: `store.get_resource_extended()` now returns a `ResourceResponse` instead of a `Resource` due to the removal of named nested resources. Use `.into()` or `.to_single()` to convert to a `Resource`.
 - [#415](https://github.com/ontola/atomic-server/issues/415) Mutli-filter queries.
-
-## [v0.40.2]
-
 - fix property sort order when importing + add tests #980
 - auto-run `initialize` if server URL has changed #273
+
+## [v0.40.3] - 2026-07-06
+
+Security patch release, tagged from `develop` — so it carries the 0.41 development line's code, not v0.40.0's, despite the version number. All four fixes below are included, and all four are also present in the 0.41 line (see UNRELEASED for the one deliberate divergence).
+
+- Guard outbound fetches (`/bookmark`, `/import`) against SSRF: reject loopback, RFC1918/CGNAT, and link-local (incl. cloud metadata) targets on every connection and redirect hop, plus a scheme check. Escape hatch: `ATOMIC_ALLOW_PRIVATE_FETCH=1`. Reported by Ray Sabee / Whitehat Security (@raysabee).
+- Close two bugs undermining the single-use guarantee of the bootstrap `/setup` invite: an inverted expiry check that rejected valid invites and let expired ones through, and a TOCTOU race on `usagesLeft` that let concurrent requests both redeem what's meant to be a single-use invite. Reported by luuhung1217.
+- Block arbitrary file read via `internalId`: a signed Commit could set this server-managed property directly, and `/download` trusted it verbatim as a filesystem path (traversal / absolute path). `internalId` is now denied in externally-submitted commits, and `/download` independently sanitizes and confines the resolved path to the uploads directory. GHSA-8vc4-8hjq-988p, reported by luuhung1217.
+- Prevent stored XSS via uploaded files: `/download` now forces `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`, so an uploaded HTML/SVG file can no longer render inline in the app's own origin. GHSA-x277-3wcg-g9r2, reported by luuhung1217.
+
+## [v0.40.2] - 2026-07-03
+
+Security patch release on the **v0.40.0 stable line** (tagged from the v0.40.0 commit), superseded three days later by v0.40.3. Note that v0.40.3 is *not* a descendant of this tag — the two were cut from divergent lines, so v0.40.2 contains none of the 0.41 development work that v0.40.3 does.
+
+- Guard outbound fetches (`/bookmark`, `/import`) against SSRF. Reported by Ray Sabee / Whitehat Security (@raysabee). Superseded by v0.40.3, which carries this fix plus three more.
 
 ## [v0.40.0] - 2024-10-07
 
