@@ -12,18 +12,25 @@ on: [push, workflow_dispatch]
 # gives up after 24h) rather than moving to a hosted runner. Clearing
 # CI_RUNNER is the manual escape hatch.
 #
-# SECURITY: this repo is public, and self-hosted runners must never run
-# untrusted code. That is safe today only because nothing here triggers on
-# `pull_request`/`pull_request_target` -- every trigger is push,
-# workflow_dispatch or workflow_call, all of which need write access. Adding a
-# pull_request trigger while CI_RUNNER points at a self-hosted machine would
-# let any fork execute arbitrary code on it.
+# SECURITY: this repo is public, and a self-hosted runner must never execute
+# untrusted code -- a fork's PR branch is code anyone can write, and running it
+# on your own machine hands over arbitrary code execution, plus any secret and
+# any cached credential that machine can reach.
+#
+# So `pull_request` and `pull_request_target` are forced onto GitHub-hosted
+# runners in the expression itself, whatever CI_RUNNER says. Today nothing here
+# triggers on either, and this stays correct if someone adds one later: the
+# guard is structural, not a convention to remember. Trusted events (push,
+# workflow_dispatch, workflow_call -- all requiring write access) still get
+# CI_RUNNER and its warm Dagger cache.
+#
+# Do not "simplify" this back to a bare `vars.CI_RUNNER` lookup.
 
 name: "Main pipeline: build, lint, test"
 jobs:
   Main:
     name: Main
-    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["ubuntu-latest"]')) }}
     env:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
     steps:
