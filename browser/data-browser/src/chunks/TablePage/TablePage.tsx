@@ -1,4 +1,5 @@
 import { useId, useMemo, useState, type JSX } from 'react';
+import { styled } from 'styled-components';
 import { ContainerFull } from '@components/Containers';
 import { EditableTitle } from '@components/EditableTitle';
 import { ResourceCoverImage } from '@components/ResourceDecorations';
@@ -49,7 +50,7 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
   return (
     <>
       <ResourceCoverImage resource={resource} />
-      <ContainerFull>
+      <BoundedHeightContainer>
         <Column>
           <FlexRow justify='space-between'>
             <EditableTitle
@@ -66,7 +67,16 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
           show={showExportDialog}
           bindShow={setShowExportDialog}
         />
-      </ContainerFull>
+      </BoundedHeightContainer>
     </>
   );
 }
+
+/**
+ * Every view on this page sizes itself to the page rather than to its content,
+ * so the 10rem of scroll room `ContainerFull` keeps below a document would be
+ * empty space you can scroll the table's header row out of view to reach.
+ */
+const BoundedHeightContainer = styled(ContainerFull)`
+  padding-bottom: ${p => p.theme.size()};
+`;

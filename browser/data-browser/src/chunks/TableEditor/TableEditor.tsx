@@ -37,6 +37,7 @@ import { DndWrapper } from './DndWrapper';
 import { VisuallyHidden } from '@components/VisuallyHidden';
 import { useClickAwayListener } from '../../hooks/useClickAwayListener';
 import { KeyboardInteraction } from './helpers/keyboardHandlers';
+import { useAvailableHeight } from './hooks/useAvailableHeight';
 
 const ARIA_TABLE_USAGE =
   'Use the arrow keys to navigate the table. Press enter to edit a cell. Press escape to exit edit mode.';
@@ -148,6 +149,8 @@ function FancyTableInner<T>({
   }, [disabledKeyboardInteractions, setCursorMode]);
 
   useClickAwayListener([tableRef], handleClickOutside, true);
+
+  useAvailableHeight(tableRef, headerRef);
 
   const triggerCopyCommand = useCopyCommand(columns, onCopyCommand);
   const triggerPasteCommand = usePasteCommand(columns, onPasteCommand);
@@ -360,6 +363,8 @@ const Table = styled.div.attrs<TableProps>(p => ({
     ),
   } as Record<string, string>,
 }))`
+  /* Replaced with the real space below the grid by useAvailableHeight, before
+   * the first paint. Only a fallback for the measurement never running. */
   --table-height: 80vh;
   --table-row-height: ${p => p.rowHeight}px;
   --table-inner-padding: 0.5rem;
