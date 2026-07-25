@@ -20,7 +20,6 @@ msgid "Failed to regenerate AI chat message"
 msgstr "Fehler beim Neuerstellen der KI-Chat-Nachricht"
 
 #: src/chunks/AI/AISidebar.tsx
-#: src/components/OverlayContainer.tsx
 #: src/components/SideBar/AIPanel.tsx
 msgid "New Chat"
 msgstr "Neuer Chat"
@@ -128,6 +127,7 @@ msgstr "<0/> Neuen Agenten erstellen"
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
@@ -318,7 +318,6 @@ msgstr "Ollama"
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
-#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Continue"
 msgstr "Weiter"
 
@@ -1513,6 +1512,7 @@ msgstr "Textuelle Beschreibung <0/>"
 
 #: src/chunks/RTE/ImagePicker.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/components/AvatarCropper.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/views/Article/ArticleDescription.tsx
@@ -1687,22 +1687,17 @@ msgstr "Warnung:"
 msgid "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
 msgstr "Sie verwenden einen lokalen Agenten, der sich nicht in anderen Domänen authentifizieren kann, da seine URL nicht aufgelöst werden kann."
 
-#. 0: "'"
-#: src/routes/SettingsAgent.tsx
-msgid "<0/> You{0}re signed in as"
-msgstr "<0/> Sie sind angemeldet als"
+#~ msgid "<0/> You{0}re signed in as"
+#~ msgstr "<0/> Sie sind angemeldet als"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Edit profile"
-msgstr "Profil bearbeiten"
+#~ msgid "Edit profile"
+#~ msgstr "Profil bearbeiten"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Sign Out"
-msgstr "Abmelden"
+#~ msgid "Sign Out"
+#~ msgstr "Abmelden"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Sign out with current Agent and reset this form"
-msgstr "Mit aktuellem Agenten abmelden und dieses Formular zurücksetzen"
+#~ msgid "Sign out with current Agent and reset this form"
+#~ msgstr "Mit aktuellem Agenten abmelden und dieses Formular zurücksetzen"
 
 #: src/routes/ShortcutsRoute.tsx
 msgid "Global"
@@ -1767,6 +1762,7 @@ msgstr "{0} Ressource{1} mit {2} synchronisiert"
 msgid "Synced {0} resource{1}"
 msgstr "{0} Ressource{1} synchronisiert"
 
+#: src/routes/SettingsAgent.tsx
 #: src/routes/SyncRoute.tsx
 msgid "This device"
 msgstr "Dieses Gerät"
@@ -2241,7 +2237,6 @@ msgstr "<0/> Dieses Feld wird serverseitig berechnet."
 msgid "Could not parse that secret."
 msgstr "Dieses Geheimnis konnte nicht geparst werden."
 
-#: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Agent secret"
 msgstr "Agenten-Geheimnis"
@@ -2998,9 +2993,8 @@ msgstr "Erstellt: {0}"
 msgid "Backup file downloaded — move it out of Downloads if you share this computer"
 msgstr "Sicherungsdatei heruntergeladen – verschieben Sie sie aus den Downloads, wenn Sie diesen Computer teilen"
 
-#: src/components/NewIdentitySection.tsx
-msgid "Safely store your secret"
-msgstr "Bewahren Sie Ihr Geheimnis sicher auf"
+#~ msgid "Safely store your secret"
+#~ msgstr "Bewahren Sie Ihr Geheimnis sicher auf"
 
 #: src/components/NewIdentitySection.tsx
 msgid "<0/> Save backup file…"
@@ -3011,6 +3005,8 @@ msgid "Yes, I've stored it — sign me out to verify"
 msgstr "Ja, ich habe es gespeichert – melden Sie mich ab, um es zu überprüfen"
 
 #: src/components/NewIdentitySection.tsx
+#: src/components/NewIdentitySection.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Yes, I've stored it safely"
 msgstr "Ja, ich habe es sicher gespeichert"
 
@@ -3261,6 +3257,7 @@ msgstr "Wähle eine Klasse"
 msgid "Empty"
 msgstr "Leer"
 
+#: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 msgid "Hide"
 msgstr "Ausblenden"
@@ -3984,6 +3981,7 @@ msgid "Setting up your account…"
 msgstr ""
 
 #: src/components/NewIdentitySection.tsx
+#: src/components/NewIdentitySection.tsx
 msgid "Could not back up your secret. You can still save it yourself."
 msgstr ""
 
@@ -3991,24 +3989,21 @@ msgstr ""
 msgid "Back up your secret?"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Choose a recovery password"
-msgstr ""
+#~ msgid "Choose a recovery password"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery password"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Backing up…"
-msgstr ""
+#~ msgid "Backing up…"
+#~ msgstr ""
+
+#~ msgid "Back up & continue"
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
-msgid "Back up & continue"
-msgstr ""
-
 #: src/components/NewIdentitySection.tsx
 msgid "Skip, I'll save it myself"
 msgstr ""
@@ -4017,9 +4012,8 @@ msgstr ""
 msgid "Could not restore your account."
 msgstr ""
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Forgot your secret?"
-msgstr ""
+#~ msgid "Forgot your secret?"
+#~ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restore account"
@@ -4256,14 +4250,11 @@ msgstr ""
 msgid "Create a new Agent on this server. We will set your username and create a private drive as your home."
 msgstr "Erstellen Sie einen neuen Agenten auf diesem Server. Wir werden Ihren Benutzernamen festlegen und ein privates Laufwerk als Ihr Zuhause erstellen."
 
-#: src/components/NewIdentitySection.tsx
-msgid "<0>IMPORTANT:</0> You need this secret to sign in again. We do not store a copy you can reset like a normal password."
-msgstr "<0>WICHTIG:</0> Sie benötigen dieses Geheimnis, um sich erneut anzumelden. Wir speichern keine Kopie, die Sie wie ein normales Passwort zurücksetzen können."
+#~ msgid "<0>IMPORTANT:</0> You need this secret to sign in again. We do not store a copy you can reset like a normal password."
+#~ msgstr "<0>WICHTIG:</0> Sie benötigen dieses Geheimnis, um sich erneut anzumelden. Wir speichern keine Kopie, die Sie wie ein normales Passwort zurücksetzen können."
 
-#. 0: ' '
-#: src/components/NewIdentitySection.tsx
-msgid "<0>Ways to keep it:</0> a password manager (best),{0} <1>Save as file</1> below and move it to a private folder, or copy into a <2>locked note</2> (Apple Notes, Google Keep, etc.)—not email or chat."
-msgstr "<0>Möglichkeiten, es aufzubewahren:</0> einen Passwort-Manager (am besten),{0} <1>Als Datei speichern</1> unten und in einen privaten Ordner verschieben oder in eine <2>gesperrte Notiz</2> kopieren (Apple Notes, Google Keep, etc.) – nicht E-Mail oder Chat."
+#~ msgid "<0>Ways to keep it:</0> a password manager (best),{0} <1>Save as file</1> below and move it to a private folder, or copy into a <2>locked note</2> (Apple Notes, Google Keep, etc.)—not email or chat."
+#~ msgstr "<0>Möglichkeiten, es aufzubewahren:</0> einen Passwort-Manager (am besten),{0} <1>Als Datei speichern</1> unten und in einen privaten Ordner verschieben oder in eine <2>gesperrte Notiz</2> kopieren (Apple Notes, Google Keep, etc.) – nicht E-Mail oder Chat."
 
 #: src/components/NewIdentitySection.tsx
 msgid "Are you sure you've stored this secret somewhere safe? You cannot recover it if you lose it."
@@ -4273,9 +4264,8 @@ msgstr "Sind Sie sicher, dass Sie dieses Geheimnis an einem sicheren Ort gespeic
 msgid "You have been signed out to verify that you saved your secret. Enter it below to sign in."
 msgstr "Sie wurden abgemeldet, um zu überprüfen, ob Sie Ihr Geheimnis gespeichert haben. Geben Sie es unten ein, um sich anzumelden."
 
-#: src/components/NewIdentitySection.tsx
-msgid "This lets you recover your account if you lose your secret. We won't get access to your data — your secret is encrypted with the recovery password below before it leaves your device."
-msgstr ""
+#~ msgid "This lets you recover your account if you lose your secret. We won't get access to your data — your secret is encrypted with the recovery password below before it leaves your device."
+#~ msgstr ""
 
 #. 0: classTitle
 #: src/hooks/useCreateAndNavigate.ts
@@ -4893,9 +4883,8 @@ msgstr ""
 msgid "Recently visited"
 msgstr ""
 
-#: src/routes/SettingsAgent.tsx
-msgid "Open a drive by URL or DID"
-msgstr ""
+#~ msgid "Open a drive by URL or DID"
+#~ msgstr ""
 
 #: src/routes/DemoRoute.tsx
 msgid "Setting up your demo…"
@@ -5150,21 +5139,18 @@ msgstr ""
 msgid "Could not enable {0} backup."
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Back up my secret"
-msgstr ""
+#~ msgid "Back up my secret"
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Skip anyway"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Skip the recovery backup?"
-msgstr ""
+#~ msgid "Skip the recovery backup?"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "<0>This can’t be undone.</0> Without a recovery backup, no one can restore your account if you lose your secret — not even the sync service. Your data would be permanently inaccessible. Only skip if you’re certain you’ll keep your secret somewhere safe."
-msgstr ""
+#~ msgid "<0>This can’t be undone.</0> Without a recovery backup, no one can restore your account if you lose your secret — not even the sync service. Your data would be permanently inaccessible. Only skip if you’re certain you’ll keep your secret somewhere safe."
+#~ msgstr ""
 
 #: src/actions/resourceActions.tsx
 msgid "Open original"
@@ -5414,9 +5400,8 @@ msgstr ""
 msgid "An always-on device has an address — add it and your workspace appears."
 msgstr ""
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Paste from clipboard"
-msgstr ""
+#~ msgid "Paste from clipboard"
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Error: could not disconnect that device"
@@ -5536,6 +5521,7 @@ msgid "Create drive"
 msgstr ""
 
 #: src/routes/NewDriveRoute.tsx
+#: src/routes/SettingsAgent.tsx
 msgid "New drive"
 msgstr ""
 
@@ -5702,4 +5688,399 @@ msgstr ""
 #. 0: file.name
 #: src/components/AvatarCropper.tsx
 msgid "Could not display \"{0}\" — it may not be a supported image format"
+msgstr ""
+
+#: src/chunks/EmojiInput/EmojiInput.tsx
+msgid "Pick existing"
+msgstr ""
+
+#: src/components/ResourceDecorations.tsx
+msgid "<0/> Pick existing"
+msgstr ""
+
+#: src/components/ResourceDecorations.tsx
+msgid "Reposition"
+msgstr ""
+
+#: src/components/ResourceDecorations.tsx
+msgid "Drag to reposition · release to save"
+msgstr ""
+
+#. 0: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Enter the recovery code you saved for {0}."
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+#: src/components/AccountRecoveryCard.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Recovery code"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Copy the code to continue"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Save your new recovery code"
+msgstr ""
+
+#~ msgid "Your old recovery password has been upgraded to a stronger, generated code. Anyone with this code can restore your account — {0} does not store it and cannot show it to you again."
+#~ msgstr ""
+
+#. 0: new Date().toISOString().slice(0, 10)
+#: src/helpers/managed/recovery.ts
+msgid "Recovery code saved {0}"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Save your recovery code"
+msgstr ""
+
+#~ msgid "<0>IMPORTANT:</0> Anyone with this code can restore your account. {0} does not store it and cannot show it to you again."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Are you sure you've stored this code somewhere safe? You cannot recover your account without it."
+msgstr ""
+
+#~ msgid "This lets you recover your account if you lose your secret. We generate a recovery code on this device — it's never sent to {0}, and we can't recover your account without it."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+#: src/components/NewIdentitySection.tsx
+msgid "Generating…"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Generate my recovery code"
+msgstr ""
+
+#: src/helpers/managed/recovery.ts
+msgid "PrfUnsupportedError"
+msgstr ""
+
+#. 0: new Date().toISOString().slice(0, 10)
+#: src/helpers/managed/recovery.ts
+msgid "Passkey added {0}"
+msgstr ""
+
+#: src/helpers/managed/recovery.ts
+msgid "That passkey could not unlock this backup."
+msgstr ""
+
+#: src/helpers/managed/recovery.ts
+msgid "Wrong recovery code"
+msgstr ""
+
+#. 0: e.message
+#: src/components/NewIdentitySection.tsx
+msgid "{0} You can save a recovery code instead."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Checking what this device supports…"
+msgstr ""
+
+#~ msgid "This device can’t protect a backup with a passkey, so we’ll generate a recovery code instead. It’s created here and never sent to {0} — we can’t recover your account without it."
+#~ msgstr ""
+
+#~ msgid "We generate a recovery code on this device — it’s never sent to {0}, and we can’t recover your account without it."
+#~ msgstr ""
+
+#~ msgid "Protect your account with a passkey — your fingerprint, face, or screen lock. It unlocks your backup on any device your passkeys sync to, and there's nothing to write down. {0} never sees your secret."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Waiting for your passkey…"
+msgstr ""
+
+#~ msgid "Protect with a passkey"
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use a recovery code instead"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Atomic account"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Could not unlock with your passkey."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Unlock with your passkey"
+msgstr ""
+
+#~ msgid "Unlock the backup for {0} with your passkey — your fingerprint, face, or screen lock."
+#~ msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use your passkey instead"
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+#: src/components/NewIdentitySection.tsx
+msgid "Could not add a recovery code."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "This passkey only works on this device"
+msgstr ""
+
+#~ msgid "It isn't synced to your other devices, so if you lose this one you'd lose access. A recovery code is a backup you can keep somewhere safe."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Give me a recovery code"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Continue without one"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "How you get back in on a new device — and where to find your agent secret."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Account recovery"
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Could not show your secret."
+msgstr ""
+
+#~ msgid "This account has no encrypted backup, so your secret can't be shown or recovered here. If you saved it during setup, keep it safe — it's the only copy."
+#~ msgstr ""
+
+#~ msgid "Unlocked by:{0} {1} ."
+#~ msgstr ""
+
+#~ msgid "<0>Keep this private.</0> Anyone with it can sign in as you. {0} never sees it."
+#~ msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Unlocking…"
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Show my agent secret"
+msgstr ""
+
+#~ msgid "<0>Save this recovery code.</0> It opens your account if you ever lose your passkey. It can't be shown again."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "This is your account"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/NewIdentitySection.tsx
+msgid "Anyone who has this <0>is</0> you — on any device, forever. It can't be changed or revoked. It's also the only thing that still works if {0} disappears."
+msgstr ""
+
+#. 0: ' '
+#: src/components/NewIdentitySection.tsx
+msgid "Store it like a passport, not a password: a password manager, or{0} <0>Save backup file</0> below and move it somewhere private. Never email or chat it."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Protect your account"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Use your fingerprint, face, or screen lock — the same one that unlocks this device. Nothing to write down, and it works on your other devices too."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Use a passkey"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "This device can’t use passkeys, so we’ll give you a recovery code instead — a spare key for your account."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "A spare key for your account."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Save a recovery code"
+msgstr ""
+
+#. 0: passkeySupported === false ? 'This device can’t use passkeys, so we’ll give you a recovery code instead — a spare key for your account.' \\: 'A spare key for your account.'; 1: ' '
+#: src/components/NewIdentitySection.tsx
+msgid "{0}{1} You'll also need to sign in to your email to use it, so it's safe to keep in a password manager or on paper."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "It isn't synced to your other devices, so losing this one would lock you out. A recovery code is a spare key — you'll need your email to use it, so it's safe to keep on paper."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Keep this somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Protect my account"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Skip this?"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "<0>Then it's all on you.</0> We'll show you your secret next — it's the only copy that will ever exist, nobody can reset it for you, and losing it means losing your account and everything in it. Fine if you'll genuinely keep it safe."
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Nothing protects this account but the secret you saved during setup. That copy is the only one — we can't show it here, and we can't reset it. Keep it safe."
+msgstr ""
+
+#. 0: ' '; 1: [hasPasskey && 'your passkey', hasCode && 'your recovery code'] .filter(Boolean) .join(' or ') || 'your recovery password'
+#: src/components/AccountRecoveryCard.tsx
+msgid "You can get back in with:{0} {1} ."
+msgstr ""
+
+#. 0: PRODUCT_NAME; 1: ' '
+#: src/components/AccountRecoveryCard.tsx
+msgid "This <0>is</0> your account — anyone holding it is you, on any device, forever. It can't be changed or revoked, and it's the only thing that still works if {0}{1} disappears. Store it like a passport, not a password."
+msgstr ""
+
+#. 0: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Unlock {0} with your fingerprint, face, or screen lock."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Signed out of your account here — that secret belongs to a different one."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "More profile fields"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Sign out"
+msgstr ""
+
+#: src/components/AgentProfileHeader.tsx
+msgid "Change your picture"
+msgstr ""
+
+#: src/components/AgentProfileHeader.tsx
+msgid "Add your name"
+msgstr ""
+
+#: src/components/AgentProfileHeader.tsx
+msgid "Your name"
+msgstr ""
+
+#: src/components/AgentProfileHeader.tsx
+msgid "Others can see this. Change it whenever."
+msgstr ""
+
+#: src/components/AgentProfileHeader.tsx
+msgid "Add a picture"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use your fingerprint, face, or screen lock."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "or sign in another way"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Sign out. You can get back in on this device with your passkey."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Sign out and remove this device’s copy of your encrypted backup"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Sign out & forget this device"
+msgstr ""
+
+#. 0: account.email; 1: PRODUCT_NAME
+#: src/components/AgentProfileHeader.tsx
+msgid "Manage {0} on {1}"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open by URL"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Continue as"
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Could not reach your backup. Try again."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Paste your agent secret"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use my account instead"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "That doesn’t look like a valid agent secret."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Whether this browser stays signed in as you when anyone opens it."
+msgstr ""
+
+#~ msgid "This device stays locked until you unlock it with your passkey. Closing the browser locks it again."
+#~ msgstr ""
+
+#~ msgid "This device stays locked until you enter your agent secret. Closing the browser locks it again."
+#~ msgstr ""
+
+#~ msgid "Anyone who opens this browser is signed in as you. Lock the device to require your "
+#~ msgstr ""
+
+#~ msgid "Stop locking this device"
+#~ msgstr ""
+
+#~ msgid "Lock this device"
+#~ msgstr ""
+
+#: src/components/DeviceLockCard.tsx
+msgid "Lock now"
+msgstr ""
+
+#: src/components/DeviceLockCard.tsx
+msgid "Anyone who opens this browser is signed in as you."
+msgstr ""
+
+#. 0: hasPasskey ? 'your passkey' \\: 'your agent secret'
+#: src/components/DeviceLockCard.tsx
+msgid "You’ll unlock with {0}."
+msgstr ""
+
+#: src/components/DeviceLockCard.tsx
+msgid "When to lock this device"
 msgstr ""
