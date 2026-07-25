@@ -6,6 +6,7 @@ import {
   useCanWrite,
   dataBrowser,
 } from '@tomic/react';
+import { styled } from 'styled-components';
 import AllProps from '../components/AllProps';
 import { ClassDetail } from '../components/ClassDetail';
 import { ContainerNarrow } from '../components/Containers';
@@ -16,10 +17,7 @@ import { Details } from '../components/Detail';
 import { EditableTitle } from '../components/EditableTitle';
 import { ResourceCoverImage } from '../components/ResourceDecorations';
 import { FaPencil } from 'react-icons/fa6';
-import {
-  IconButton,
-  IconButtonVariant,
-} from '../components/IconButton/IconButton';
+import { Button } from '../components/Button';
 import { Column, Row } from '../components/Row';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { editURL } from '../helpers/navigation';
@@ -70,22 +68,21 @@ export function ResourcePageDefault({
       <ResourceCoverImage resource={resource} />
       <ContainerNarrow>
         <Column>
-          <Row justify='space-between'>
+          <Row justify='space-between' align='flex-start'>
             <EditableTitle resource={resource} withDecorations />
             {canEdit && (
-              <IconButton
-                title='Edit'
-                variant={IconButtonVariant.Square}
+              <EditButton
+                ghost
                 onClick={() => navigate(editURL(resource.subject))}
               >
-                <FaPencil />
-              </IconButton>
+                <FaPencil aria-hidden /> Edit
+              </EditButton>
             )}
           </Row>
-          <Details>
+          <CompactDetails>
             <ClassDetail resource={resource} />
-            <CommitDetail commitSubject={lastCommit} />
-          </Details>
+            <CommitDetail commitSubject={lastCommit} short />
+          </CompactDetails>
           <ValueForm
             resource={resource}
             propertyURL={core.properties.description}
@@ -101,3 +98,17 @@ export function ResourcePageDefault({
     </>
   );
 }
+
+/** Never let a long/wrapped title squash the Edit button down to nothing. */
+const EditButton = styled(Button)`
+  flex-shrink: 0;
+`;
+
+/** `Details`' shared `space-between` reads badly with only 2 children once
+ *  they wrap on narrow screens (big uneven gaps) — this page wants a
+ *  compact, left-aligned row instead. Local override: `Details` is also
+ *  used by MessageCard/MessagePage, where space-between is intentional. */
+const CompactDetails = styled(Details)`
+  justify-content: flex-start;
+  gap: ${p => p.theme.size(4)};
+`;

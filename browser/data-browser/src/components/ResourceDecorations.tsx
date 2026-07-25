@@ -4,19 +4,28 @@ import {
   dataBrowser,
   useArray,
   useCanWrite,
+  useNumber,
   useString,
   useSubject,
   type Resource,
 } from '@tomic/react';
-import { lazy, Suspense, useEffect, useRef, useState, type JSX } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type JSX,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { styled, css } from 'styled-components';
 import * as RadixPopover from '@radix-ui/react-popover';
-import { FaFaceSmile, FaImage } from 'react-icons/fa6';
+import { FaFaceSmile, FaFolderOpen, FaImage } from 'react-icons/fa6';
 import { EmojiInput } from './forms/EmojiInput';
 import { FilePickerDialog } from './forms/FilePicker/FilePickerDialog';
 import { useUpload } from '../hooks/useUpload';
 import { atomicArgu } from '../ontologies/atomic-argu';
-import { Button } from './Button';
+import { Button, ghostButtonStyles } from './Button';
 import { Column, Row } from './Row';
 import { ErrorBoundary } from '../views/ErrorPage';
 import { Dialog, DialogContent, DialogTitle, useDialog } from './Dialog';
@@ -39,7 +48,7 @@ const valueOpts = {
 };
 
 /** Mimetypes the server can resize & re-encode, plus formats browsers render natively. */
-const COVER_MIMES = new Set([
+const IMAGE_MIMES = new Set([
   'image/png',
   'image/jpeg',
   'image/webp',
@@ -82,6 +91,27 @@ function useCoverImage(
   return [cover ?? legacyCover, applyCover];
 }
 
+/**
+ * The cover's vertical focal point (0–1, default 0.5/centered), rendered as
+ * `object-position: 50% ${focus * 100}%`. Lives on the decorated resource,
+ * not the File: framing is a property of the usage (the same photo can be
+ * someone else's cover with different framing, and picking their file as a
+ * cover mustn't require write rights on it), not the image.
+ */
+function useCoverFocus(
+  resource: Resource,
+): [focus: number, setFocus: (v: number) => void] {
+  const [focus, setFocus] = useNumber(
+    resource,
+    dataBrowser.properties.coverImageFocus,
+    valueOpts,
+  );
+
+  const setClamped = (v: number) => setFocus(Math.min(1, Math.max(0, v)));
+
+  return [focus ?? 0.5, setClamped];
+}
+
 interface CoverPickerProps {
   resource: Resource;
   show: boolean;
@@ -112,7 +142,7 @@ function CoverPicker({
       onShowChange={onShowChange}
       onResourcePicked={onPicked}
       onNewFilePicked={handleNewFilePicked}
-      allowedMimes={COVER_MIMES}
+      allowedMimes={IMAGE_MIMES}
     />
   );
 }
@@ -130,22 +160,70 @@ export function ResourceCoverImage({
 }: ResourceDecorationProps): JSX.Element | null {
   const canEdit = useCanWrite(resource);
   const [cover, applyCover] = useCoverImage(resource);
+  const [focus, setFocus] = useCoverFocus(resource);
   const [showPicker, setShowPicker] = useState(false);
+  const [repositioning, setRepositioning] = useState(false);
+  // Live value while dragging; undefined outside a drag (renders `focus`).
+  const [dragFocus, setDragFocus] = useState<number>();
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   if (!cover) {
     return null;
   }
 
+  const effectiveFocus = dragFocus ?? focus;
+
+  const focusFromPointer = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect || rect.height === 0) return effectiveFocus;
+
+    return Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
+  };
+
+  const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragFocus(focusFromPointer(e));
+  };
+
+  const handlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragFocus === undefined) return;
+    setDragFocus(focusFromPointer(e));
+  };
+
+  const handlePointerUp = () => {
+    if (dragFocus !== undefined) {
+      setFocus(dragFocus);
+    }
+
+    setDragFocus(undefined);
+    setRepositioning(false);
+  };
+
   return (
-    <CoverWrapper>
+    <CoverWrapper
+      ref={wrapperRef}
+      $repositioning={repositioning}
+      onPointerDown={repositioning ? handlePointerDown : undefined}
+      onPointerMove={repositioning ? handlePointerMove : undefined}
+      onPointerUp={repositioning ? handlePointerUp : undefined}
+      onPointerCancel={repositioning ? handlePointerUp : undefined}
+    >
       <ErrorBoundary FallBackComponent={NothingOnError}>
-        <CoverImage subject={cover} alt='' sizeIndication={100} />
+        <CoverImage
+          subject={cover}
+          alt=''
+          sizeIndication={100}
+          style={{ objectPosition: `50% ${effectiveFocus * 100}%` }}
+        />
       </ErrorBoundary>
-      {canEdit && (
+      {canEdit && !repositioning && (
         <>
           <CoverActions gap='0.5rem'>
             <Button subtle onClick={() => setShowPicker(true)}>
               Change cover
+            </Button>
+            <Button subtle onClick={() => setRepositioning(true)}>
+              Reposition
             </Button>
             <Button subtle onClick={() => applyCover(undefined)}>
               Remove cover
@@ -159,20 +237,38 @@ export function ResourceCoverImage({
           />
         </>
       )}
+      {repositioning && (
+        <RepositionOverlay aria-hidden>
+          Drag to reposition · release to save
+        </RepositionOverlay>
+      )}
     </CoverWrapper>
   );
 }
 
 /**
- * The upload-an-image flow for the icon slot: pick a file → crop/zoom in the
- * AvatarCropper → bake a small square webp client-side → upload → set `icon`
- * (which replaces any emoji).
+ * The image-icon flow for the icon slot, with two entry points:
  *
- * Returns `openImagePicker` (opens the native file chooser) and `elements`
- * to mount: an always-mounted hidden file input plus the cropper dialog.
- * The input deliberately lives OUTSIDE any popover — opening the native
- * chooser dismisses popovers, and a file picked into an unmounted input is
- * silently dropped.
+ * - `openImagePicker`: pick a file from disk → crop/zoom in the
+ *   AvatarCropper → bake a small square webp client-side → upload → set
+ *   `icon` (which replaces any emoji).
+ * - `openFilePicker`: pick an EXISTING File resource via the same
+ *   file-search dialog covers use → set `icon` directly, no crop step
+ *   (mirrors `CoverPicker`'s `onResourcePicked`). Skipping the crop is fine
+ *   here: `ResourceGlyph`'s `GlyphImage` already renders icons with
+ *   `object-fit: cover`, so an uncropped existing file still renders
+ *   correctly. `FilePickerDialog` is mounted here with no `onNewFilePicked`,
+ *   so its own "Upload" button doesn't appear — upload-with-crop already
+ *   has its own entry point via `openImagePicker`, and a second, crop-less
+ *   upload path would just be confusing.
+ *
+ * Returns both openers and `elements` to mount: an always-mounted hidden
+ * file input, the cropper dialog, and the file-picker dialog. All of this
+ * deliberately lives OUTSIDE any popover — closing a Radix Popover unmounts
+ * its contents, and a file picked (or dialog opened) into an
+ * about-to-unmount tree is silently dropped. `Dialog` itself renders via
+ * `createPortal` into its own portal root, so mounting `FilePickerDialog`
+ * here is safe regardless of where `elements` ends up in the tree.
  */
 function useIconImageUpload(resource: Resource) {
   const { upload } = useUpload(resource);
@@ -188,9 +284,11 @@ function useIconImageUpload(resource: Resource) {
   );
   const [isA] = useArray(resource, core.properties.isA);
   const [pendingFile, setPendingFile] = useState<File>();
+  const [showFilePicker, setShowFilePicker] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const openImagePicker = () => inputRef.current?.click();
+  const openFilePicker = () => setShowFilePicker(true);
 
   const handleCropped = async (cropped: File) => {
     // Upload failures toast via useUpload's own errorHandler.
@@ -200,6 +298,15 @@ function useIconImageUpload(resource: Resource) {
       return;
     }
 
+    try {
+      await setIconImage(subject);
+      await setEmoji(undefined);
+    } catch (e) {
+      errorHandler(e as Error);
+    }
+  };
+
+  const handleExistingPicked = async (subject: string) => {
     try {
       await setIconImage(subject);
       await setEmoji(undefined);
@@ -238,10 +345,16 @@ function useIconImageUpload(resource: Resource) {
           onCropped={handleCropped}
         />
       )}
+      <FilePickerDialog
+        show={showFilePicker}
+        onShowChange={setShowFilePicker}
+        onResourcePicked={handleExistingPicked}
+        allowedMimes={IMAGE_MIMES}
+      />
     </>
   );
 
-  return { openImagePicker, elements };
+  return { openImagePicker, openFilePicker, elements };
 }
 
 /**
@@ -263,7 +376,8 @@ export function TitleIcon({
     dataBrowser.properties.icon,
     valueOpts,
   );
-  const { openImagePicker, elements } = useIconImageUpload(resource);
+  const { openImagePicker, openFilePicker, elements } =
+    useIconImageUpload(resource);
 
   if (!emoji && !iconImage) {
     return null;
@@ -282,6 +396,7 @@ export function TitleIcon({
         initialValue={emoji}
         showRemove
         onUploadImage={openImagePicker}
+        onPickExisting={openFilePicker}
         onChange={value => {
           // Picking an emoji replaces an image icon; Remove clears both.
           setEmoji(value);
@@ -318,7 +433,8 @@ export function TitleDecorationAffordances({
   const [iconImage] = useSubject(resource, dataBrowser.properties.icon);
   const [cover, applyCover] = useCoverImage(resource);
   const [showPicker, setShowPicker] = useState(false);
-  const { openImagePicker, elements } = useIconImageUpload(resource);
+  const { openImagePicker, openFilePicker, elements } =
+    useIconImageUpload(resource);
 
   const hasIcon = !!(emoji || iconImage);
 
@@ -334,6 +450,7 @@ export function TitleDecorationAffordances({
             key={resource.subject}
             onChange={setEmoji}
             onUploadImage={openImagePicker}
+            onPickExisting={openFilePicker}
             Trigger={
               <AffordanceTrigger>
                 <FaFaceSmile aria-hidden /> Add icon
@@ -342,9 +459,9 @@ export function TitleDecorationAffordances({
           />
         )}
         {!cover && (
-          <AffordanceButton onClick={() => setShowPicker(true)}>
+          <Button ghost onClick={() => setShowPicker(true)}>
             <FaImage aria-hidden /> Add cover
-          </AffordanceButton>
+          </Button>
         )}
       </AffordanceRow>
       {!cover && (
@@ -382,7 +499,8 @@ export function EmojiPickerDialog({
     dataBrowser.properties.icon,
     valueOpts,
   );
-  const { openImagePicker, elements } = useIconImageUpload(resource);
+  const { openImagePicker, openFilePicker, elements } =
+    useIconImageUpload(resource);
   const [dialogProps, showDialog, closeDialog] = useDialog({
     bindShow: onShowChange,
   });
@@ -412,6 +530,15 @@ export function EmojiPickerDialog({
                     }}
                   >
                     <FaImage aria-hidden /> Upload image
+                  </Button>
+                  <Button
+                    subtle
+                    onClick={() => {
+                      closeDialog(true);
+                      openFilePicker();
+                    }}
+                  >
+                    <FaFolderOpen aria-hidden /> Pick existing
                   </Button>
                   {(emoji || iconImage) && (
                     <Button
@@ -472,10 +599,18 @@ const ClickFence = styled.span`
   display: contents;
 `;
 
-const CoverWrapper = styled.div`
+const CoverWrapper = styled.div<{ $repositioning?: boolean }>`
   position: relative;
   width: 100%;
   flex-shrink: 0;
+
+  ${p =>
+    p.$repositioning &&
+    css`
+      cursor: ns-resize;
+      touch-action: none;
+      user-select: none;
+    `}
 `;
 
 // The className ends up on the inner <img> element, so style it directly.
@@ -503,6 +638,19 @@ const CoverActions = styled(Row)`
   }
 `;
 
+const RepositionOverlay = styled.div`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.25);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 500;
+  pointer-events: none;
+`;
+
 const glyphStyles = css`
   font-size: 1em;
   line-height: 1;
@@ -527,32 +675,10 @@ const GlyphTrigger = styled(RadixPopover.Trigger)`
   }
 `;
 
-const affordanceStyles = css`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5ch;
-  border: none;
-  background: transparent;
-  padding: 0.3rem 0.5rem;
-  border-radius: ${p => p.theme.radius};
-  color: ${p => p.theme.colors.textLight};
-  font-size: 0.9rem;
+const AffordanceTrigger = styled(RadixPopover.Trigger)`
+  ${ghostButtonStyles}
   font-weight: normal;
   cursor: pointer;
-
-  &:hover,
-  &:focus-visible {
-    background-color: ${p => p.theme.colors.bg1};
-    color: ${p => p.theme.colors.text};
-  }
-`;
-
-const AffordanceTrigger = styled(RadixPopover.Trigger)`
-  ${affordanceStyles}
-`;
-
-const AffordanceButton = styled.button`
-  ${affordanceStyles}
 `;
 
 /**

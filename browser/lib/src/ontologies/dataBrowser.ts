@@ -39,6 +39,7 @@ export const dataBrowser = {
     color: 'https://atomicdata.dev/properties/color',
     commentsFolder: 'https://atomicdata.dev/properties/commentsFolder',
     coverImage: 'https://atomicdata.dev/properties/coverImage',
+    coverImageFocus: 'https://atomicdata.dev/properties/coverImageFocus',
     followSessionsChatroom:
       'https://atomicdata.dev/properties/followSessionsChatroom',
     currentMeetings: 'https://atomicdata.dev/properties/currentMeetings',
@@ -391,6 +392,7 @@ declare module '../index.js' {
     [dataBrowser.properties.color]: string;
     [dataBrowser.properties.commentsFolder]: string;
     [dataBrowser.properties.coverImage]: string;
+    [dataBrowser.properties.coverImageFocus]: number;
     [dataBrowser.properties.followSessionsChatroom]: string;
     [dataBrowser.properties.currentMeetings]: string[];
     [dataBrowser.properties.meetingsFolder]: string;
@@ -447,6 +449,7 @@ declare module '../index.js' {
     [dataBrowser.properties.color]: 'color';
     [dataBrowser.properties.commentsFolder]: 'commentsFolder';
     [dataBrowser.properties.coverImage]: 'coverImage';
+    [dataBrowser.properties.coverImageFocus]: 'coverImageFocus';
     [dataBrowser.properties.followSessionsChatroom]: 'followSessionsChatroom';
     [dataBrowser.properties.currentMeetings]: 'currentMeetings';
     [dataBrowser.properties.meetingsFolder]: 'meetingsFolder';

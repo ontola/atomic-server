@@ -12,6 +12,8 @@ import {
   PAGE_TITLE_TRANSITION_TAG,
   transitionName,
 } from '../helpers/transitionName';
+import { LAYOUT_CONTAINER } from '../helpers/containers';
+import { transition } from '../helpers/transition';
 import { UnsavedIndicator } from './UnsavedIndicator';
 import { Flex } from './Row';
 import {
@@ -158,10 +160,10 @@ export function EditableTitle({
     >
       <>
         <TitleIcon resource={resource} />
-        <span>
+        <TitleText>
           {text || placeholder}
           <UnsavedIndicator resource={resource} />
-        </span>
+        </TitleText>
         {canEdit && <Icon />}
       </>
     </Title>
@@ -193,6 +195,14 @@ interface TitleProps {
   $subject?: string;
 }
 
+/** Shrinks the title on narrow containers (phones) instead of letting the
+ *  full-size heading force aggressive mid-word wrapping. */
+const narrowTitleFontSize = css`
+  @container ${LAYOUT_CONTAINER} (max-width: 500px) {
+    font-size: 1.5rem;
+  }
+`;
+
 const Title = styled.h1<TitleProps>`
   ${TitleShared}
   display: flex;
@@ -205,8 +215,25 @@ const Title = styled.h1<TitleProps>`
      the whole content width mid-morph before snapping back. */
   width: fit-content;
   max-width: 100%;
+  /* Lets the flex children below actually shrink (and their text wrap)
+     instead of overflowing at their max-content width. */
+  min-width: 0;
+  /* Wrap at word boundaries where possible; only break a word that
+     genuinely doesn't fit. The global h1 word-break: break-word rule
+     (styling.tsx) is the legacy alias for "break anywhere," which also
+     shrinks min-content size — combined with a squeezed flex ancestor
+     that produced the mid-word 3-line wraps, this overrides it. */
+  overflow-wrap: break-word;
+  word-break: normal;
+  ${narrowTitleFontSize}
 
   ${props => transitionName(props.$transitionTag, props.$subject)};
+`;
+
+/** The rendered title text — needs its own `min-width: 0` so it can shrink
+ *  inside `Title`'s flex row rather than staying at its max-content width. */
+const TitleText = styled.span`
+  min-width: 0;
 `;
 
 const TitleInput = styled.input`
@@ -226,6 +253,7 @@ const TitleInput = styled.input`
   word-wrap: break-word;
   word-break: break-all;
   overflow: visible;
+  ${narrowTitleFontSize}
 
   &:focus {
     outline: none;
@@ -238,10 +266,13 @@ const TitleInput = styled.input`
 `;
 
 const Icon = styled(FaPencil)`
+  color: ${p => p.theme.colors.textLight};
   opacity: 0;
   font-size: 0.8em;
+  ${transition('opacity', 'color')};
+
   ${Title}:hover & {
-    opacity: 0.5;
+    opacity: 1;
   }
 `;
 
@@ -251,6 +282,7 @@ const EditingRow = styled.div`
   align-items: center;
   gap: ${p => p.theme.size()};
   font-size: ${p => p.theme.fontSizeH1}rem;
+  ${narrowTitleFontSize}
 
   /* Hug the typed text like the rendered title does (progressive
      enhancement; browsers without field-sizing keep the default width),

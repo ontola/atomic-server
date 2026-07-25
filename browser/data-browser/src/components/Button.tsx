@@ -1,5 +1,5 @@
 import { forwardRef, PropsWithChildren, type JSX } from 'react';
-import { styled } from 'styled-components';
+import { styled, css } from 'styled-components';
 import { transition } from '../helpers/transition';
 import { Spinner } from './Spinner';
 
@@ -13,6 +13,8 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   icon?: boolean;
   /** Minimal styling */
   clean?: boolean;
+  /** Ghost pill: transparent until hover, icon+label secondary action (e.g. "Add cover", "Edit"). */
+  ghost?: boolean;
   /** Shows loading text + a spinner */
   loading?: string;
   /** Add a bottom margin */
@@ -26,7 +28,7 @@ interface ButtonPropsStyled {
   $gutter?: boolean;
 }
 
-const getButtonComp = ({ clean, icon, subtle, alert }: ButtonProps) => {
+const getButtonComp = ({ clean, icon, subtle, alert, ghost }: ButtonProps) => {
   let Comp = ButtonDefault;
 
   if (subtle) {
@@ -39,6 +41,10 @@ const getButtonComp = ({ clean, icon, subtle, alert }: ButtonProps) => {
 
   if (icon) {
     Comp = ButtonIcon;
+  }
+
+  if (ghost) {
+    Comp = ButtonGhost;
   }
 
   if (clean) {
@@ -59,6 +65,7 @@ export const Button = forwardRef<
     subtle: _subtle,
     alert: _alert,
     clean: _clean,
+    ghost: _ghost,
     gutter,
     ...buttonProps
   } = props;
@@ -205,6 +212,43 @@ export const ButtonAlert = styled(ButtonDefault)`
   --button-bg-color-hover: ${p => p.theme.colors.alertLight};
   --button-border-color: ${p => p.theme.colors.alert};
   --button-border-color-hover: ${p => p.theme.colors.alertLight};
+`;
+
+/**
+ * Ghost pill: transparent until hover, then a soft background — for
+ * secondary icon+label actions (e.g. "Add cover", "Edit") that shouldn't
+ * compete visually with primary buttons. Exported as a standalone css block
+ * (not just the styled component below) so call sites that can't literally
+ * render `<Button>` — e.g. a Radix `Popover.Trigger`, which must stay a
+ * real Radix component — can still apply the identical style.
+ */
+export const ghostButtonStyles = css`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5ch;
+  border: none;
+  background-color: transparent;
+  padding: 0.3rem 0.5rem;
+  border-radius: ${p => p.theme.radius};
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.9rem;
+  cursor: pointer;
+  ${transition('background-color', 'color')};
+
+  &:hover:not([disabled]),
+  &:focus-visible:not([disabled]) {
+    background-color: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+`;
+
+export const ButtonGhost = styled(ButtonClean)<ButtonPropsStyled>`
+  ${ghostButtonStyles}
 `;
 
 /** Button that only shows an icon */

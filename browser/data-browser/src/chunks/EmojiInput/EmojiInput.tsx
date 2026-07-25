@@ -2,7 +2,7 @@ import { useCallback, useState, type JSX, type ReactNode } from 'react';
 import Picker from '@emoji-mart/react';
 import { styled, useTheme } from 'styled-components';
 import * as RadixPopover from '@radix-ui/react-popover';
-import { FaImage, FaTrash } from 'react-icons/fa6';
+import { FaFolderOpen, FaImage, FaTrash } from 'react-icons/fa6';
 import { transition } from '../../helpers/transition';
 import { Popover } from '../../components/Popover';
 
@@ -22,6 +22,13 @@ export interface EmojiInputProps {
    * silently dropped.
    */
   onUploadImage?: () => void;
+  /**
+   * Offers a "Pick existing" option for image icons/avatars, reusing the
+   * same file-search dialog covers use. Called with no arguments — the
+   * caller owns its own (always-mounted) dialog, for the same reason as
+   * `onUploadImage`: closing this popover unmounts its contents.
+   */
+  onPickExisting?: () => void;
   /**
    * Force the remove option to show (e.g. when an image icon is set, which
    * this component doesn't know about).
@@ -70,6 +77,7 @@ export default function EmojiInputASYNC({
   onChange,
   Trigger,
   onUploadImage,
+  onPickExisting,
   showRemove,
 }: EmojiInputProps): JSX.Element {
   const theme = useTheme();
@@ -108,7 +116,7 @@ export default function EmojiInputASYNC({
       }
     >
       <PickerWrapper>
-        {(emoji || showRemove || onUploadImage) && (
+        {(emoji || showRemove || onUploadImage || onPickExisting) && (
           <HeaderRow>
             {onUploadImage && (
               <HeaderButton
@@ -119,6 +127,17 @@ export default function EmojiInputASYNC({
                 }}
               >
                 <FaImage aria-hidden /> Upload image
+              </HeaderButton>
+            )}
+            {onPickExisting && (
+              <HeaderButton
+                type='button'
+                onClick={() => {
+                  setShowPicker(false);
+                  onPickExisting();
+                }}
+              >
+                <FaFolderOpen aria-hidden /> Pick existing
               </HeaderButton>
             )}
             {(emoji || showRemove) && (

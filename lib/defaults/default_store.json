@@ -1500,6 +1500,16 @@
     "https://atomicdata.dev/properties/shortname": "cover-image"
   },
   {
+    "@id": "https://atomicdata.dev/properties/coverImageFocus",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "Vertical focal point (0-1) of the cover image, used as the CSS object-position Y value when rendering the banner. Default 0.5 (centered).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "cover-image-focus"
+  },
+  {
     "@id": "https://atomicdata.dev/property/url",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
     "https://atomicdata.dev/properties/description": "An absolute URL pointing to an external web resource.",
