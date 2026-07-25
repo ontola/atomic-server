@@ -17,6 +17,7 @@
     "lint": "oxlint -c ../.oxlintrc.json . && pnpm format-check",
     "lint-fix": "oxlint -c ../.oxlintrc.json --fix . && pnpm format",
     "playwright-install": "playwright install chromium",
+    "playwright-install-webkit": "playwright install webkit",
     "upload-report": "netlify deploy --dir playwright-report --prod --site atomic-tests",
     "test-e2e": "playwright test --config=./playwright.config.ts",
     "test-debug": "PWDEBUG=1 playwright test",

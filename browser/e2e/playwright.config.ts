@@ -105,6 +105,27 @@ const config: PlaywrightTestConfig = {
             use: { ...devices['Desktop Firefox'] },
           },
         ]),
+    // WebKit is the engine the Tauri desktop app actually runs on (WKWebView on
+    // macOS, WebKitGTK on Linux) — the whole suite otherwise proves things only
+    // about Chromium, so every WebKit-specific storage difference (OPFS sync
+    // access handles, IndexedDB eviction, CryptoKey serialisation) reaches
+    // users unmeasured. Scoped to the storage round-trip spec, same pattern as
+    // the firefox project above; running the full suite here is a separate,
+    // much larger job.
+    //
+    // Opt-in via ATOMIC_TEST_WEBKIT=1 because it needs `pnpm playwright-install
+    // --webkit`, which the default `playwright-install` script does not fetch.
+    // This is NOT a substitute for driving the real Tauri binary — same engine,
+    // but an http:// origin instead of tauri://, and no embedded node.
+    ...(process.env.ATOMIC_TEST_WEBKIT
+      ? [
+          {
+            name: 'webkit',
+            testMatch: /signout-signin-data\.spec\.ts/,
+            use: { ...devices['Desktop Safari'] },
+          },
+        ]
+      : []),
   ],
   fullyParallel: true,
   // 2 workers for speed. CI uses 1 worker + retries=2; locally we
