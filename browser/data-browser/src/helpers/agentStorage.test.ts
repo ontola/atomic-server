@@ -8,12 +8,15 @@ vi.mock('idb-keyval', () => ({
   get: async (key: string) => store.get(key),
   set: async (key: string, value: unknown) => void store.set(key, value),
   del: async (key: string) => void store.delete(key),
+  keys: async () => [...store.keys()],
 }));
 
 const { getAgentFromIDB, saveAgentToIDB } = await import('./agentStorage');
 
 const AGENT_IDB_KEY = 'atomic.agent';
 const AGENT_FALLBACK_KEY = 'atomic.agent.fallback';
+const SESSION_KEY_PREFIX = 'atomic.clientdb.session-key.';
+const WRAPPED_KEY_PREFIX = 'atomic.clientdb.wrapped-key.';
 
 async function makeSecret(): Promise<string> {
   const keys = await Agent.generateKeyPair();
@@ -81,12 +84,21 @@ describe('agent key storage', () => {
     });
   });
 
-  it('signs out by removing both key records', async () => {
+  it('signs out by removing both key records, and the session db keys', async () => {
     await saveAgentToIDB(await makeSecret());
     store.set(AGENT_FALLBACK_KEY, { privateKey: 'x', subject: 'y' });
+    store.set(`${SESSION_KEY_PREFIX}fingerprint`, 'session-copy');
+    store.set(`${WRAPPED_KEY_PREFIX}fingerprint`, 'wrapped-copy');
 
     await saveAgentToIDB(undefined);
 
-    expect(store.size).toBe(0);
+    expect(store.has(AGENT_IDB_KEY)).toBe(false);
+    expect(store.has(AGENT_FALLBACK_KEY)).toBe(false);
+    // The session copy of the local-database key goes, so this signed-out
+    // session can no longer open the encrypted OPFS cache...
+    expect(store.has(`${SESSION_KEY_PREFIX}fingerprint`)).toBe(false);
+    // ...while the wrapped copy survives, so the owning agent's cache becomes
+    // readable again on their next sign-in rather than being wiped.
+    expect(store.has(`${WRAPPED_KEY_PREFIX}fingerprint`)).toBe(true);
   });
 });
