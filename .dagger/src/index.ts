@@ -779,6 +779,15 @@ export class AtomicServer {
           '/code/.config/nextest.toml',
           source.file('.config/nextest.toml'),
         )
+        // server/tests/it/iroh_pairing.rs reads the pairing contract fixture
+        // relative to CARGO_MANIFEST_DIR (`../testdata/pairing-request.json`
+        // from /code/server). It is the shared Rust/TS contract file, so the
+        // JS container mounts it too — see the identical mount in
+        // `jsBuild()`. Without it the test fails with a bare NotFound.
+        .withFile(
+          '/code/testdata/pairing-request.json',
+          source.file('testdata/pairing-request.json'),
+        )
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/lib', source.directory('lib'))
         .withDirectory('/code/cli', source.directory('cli'))
