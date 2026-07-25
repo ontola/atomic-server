@@ -41,9 +41,7 @@ const WRAPPED_KEY_PREFIX = 'atomic.clientdb.wrapped-key.';
  * that broke would prove nothing. `keyval-store`/`keyval` are idb-keyval's
  * defaults, which `helpers/localDbKey.ts` uses unmodified.
  */
-async function readKeyvalEntries(
-  page: Page,
-): Promise<Record<string, unknown>> {
+async function readKeyvalEntries(page: Page): Promise<Record<string, unknown>> {
   return page.evaluate(
     () =>
       new Promise<Record<string, unknown>>((resolve, reject) => {
@@ -80,7 +78,9 @@ async function readKeyvalEntries(
               // these assertions need.
               entries[key] =
                 value instanceof Uint8Array
-                  ? [...value].map(b => b.toString(16).padStart(2, '0')).join('')
+                  ? [...value]
+                      .map(b => b.toString(16).padStart(2, '0'))
+                      .join('')
                   : value;
             });
 
