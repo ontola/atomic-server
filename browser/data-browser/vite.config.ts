@@ -447,9 +447,11 @@ export default defineConfig({
         './src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx',
       ],
     },
+    // Kept in step with VITE_ATOMIC_SERVER_URL in .env.development — these
+    // proxy to the same server the app talks to.
     proxy: {
-      '/server': 'http://localhost:9883',
-      '/iroh-sync': 'http://localhost:9883',
+      '/server': 'http://localhost:9885',
+      '/iroh-sync': 'http://localhost:9885',
     },
   },
 });
