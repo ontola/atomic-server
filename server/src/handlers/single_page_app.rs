@@ -29,7 +29,7 @@ pub async fn single_page(
     let script = format!(
         "<script nonce=\"{}\">{}{}</script>",
         csp_nonce,
-        home_drive_script(appstate.config.opts.home_drive.as_deref()),
+        home_drive_script(appstate.config.opts.home_drive.as_deref(), &origin),
         appstate.config.opts.script
     );
 
@@ -196,15 +196,28 @@ fn escape_html(s: &str) -> String {
 /// never sees a tag-closing sequence at all. The value is
 /// operator-supplied rather than user-supplied, but it lands inside a script
 /// tag either way.
-fn home_drive_script(home_drive: Option<&str>) -> String {
+///
+/// The subject is resolved against this server's origin before being injected.
+///
+/// The natural thing to configure for a Drive at the server root is what the
+/// store actually holds — `internal:/`. But the browser cannot fetch a bare
+/// `internal:` subject: it has no host to send the request to, so it issues no
+/// request at all and the page waits forever on "Still loading…", with nothing
+/// in the console. Resolving here turns `internal:/` into
+/// `https://example.com/`, which the client can fetch, while a `did:ad:`
+/// subject resolves to itself and is unaffected.
+fn home_drive_script(home_drive: Option<&str>, origin: &str) -> String {
     match home_drive.map(str::trim) {
-        Some(drive) if !drive.is_empty() => match serde_json::to_string(drive) {
-            Ok(encoded) => {
-                let safe = encoded.replace('<', "\\u003C");
-                format!("window.__ATOMIC_HOME_DRIVE__={safe};")
+        Some(drive) if !drive.is_empty() => {
+            let resolved = atomic_lib::Subject::from_raw(drive, Some(origin)).resolve(origin);
+            match serde_json::to_string(&resolved) {
+                Ok(encoded) => {
+                    let safe = encoded.replace('<', "\\u003C");
+                    format!("window.__ATOMIC_HOME_DRIVE__={safe};")
+                }
+                Err(_) => String::new(),
             }
-            Err(_) => String::new(),
-        },
+        }
         _ => String::new(),
     }
 }
@@ -224,28 +237,48 @@ fn generate_nonce() -> Result<String, ring::error::Unspecified> {
 mod test {
     use super::{home_drive_script, MetaTags};
 
+    const ORIGIN: &str = "https://example.com";
+
     #[test]
     fn no_home_drive_by_default() {
         // Every install starts without one; `/` keeps the welcome flow.
-        assert_eq!(home_drive_script(None), "");
-        assert_eq!(home_drive_script(Some("")), "");
-        assert_eq!(home_drive_script(Some("   ")), "");
+        assert_eq!(home_drive_script(None, ORIGIN), "");
+        assert_eq!(home_drive_script(Some(""), ORIGIN), "");
+        assert_eq!(home_drive_script(Some("   "), ORIGIN), "");
+    }
+
+    /// A browser cannot fetch a bare `internal:` subject — it has no host to
+    /// send the request to, so it silently issues none and the page hangs on
+    /// "Still loading…". `internal:/` is the natural thing to configure for a
+    /// Drive at the server root, so resolve it to something fetchable.
+    #[test]
+    fn root_drive_is_resolved_to_a_fetchable_url() {
+        assert_eq!(
+            home_drive_script(Some("internal:/"), ORIGIN),
+            r#"window.__ATOMIC_HOME_DRIVE__="https://example.com/";"#
+        );
+        assert!(!home_drive_script(Some("internal:/"), ORIGIN).contains("internal:"));
+    }
+
+    #[test]
+    fn did_subjects_are_left_alone() {
+        // A DID resolves to itself: it is already globally addressable.
+        assert_eq!(
+            home_drive_script(Some("did:ad:drive:abc"), ORIGIN),
+            r#"window.__ATOMIC_HOME_DRIVE__="did:ad:drive:abc";"#
+        );
     }
 
     #[test]
     fn declares_the_configured_drive() {
         assert_eq!(
-            home_drive_script(Some("did:ad:drive:abc")),
+            home_drive_script(Some("did:ad:drive:abc"), ORIGIN),
             r#"window.__ATOMIC_HOME_DRIVE__="did:ad:drive:abc";"#
         );
-        // A Drive at the server root — the atomicdata.dev case.
+        // Whitespace is trimmed before resolution.
         assert_eq!(
-            home_drive_script(Some("internal:/")),
-            r#"window.__ATOMIC_HOME_DRIVE__="internal:/";"#
-        );
-        assert_eq!(
-            home_drive_script(Some("  internal:/  ")),
-            r#"window.__ATOMIC_HOME_DRIVE__="internal:/";"#
+            home_drive_script(Some("  internal:/  "), ORIGIN),
+            r#"window.__ATOMIC_HOME_DRIVE__="https://example.com/";"#
         );
     }
 
@@ -253,7 +286,7 @@ mod test {
     fn cannot_break_out_of_the_script_tag() {
         // Operator-supplied, but it still lands inside a <script>. JSON escaping
         // alone leaves `<` intact, so `</script>` would end the element early.
-        let out = home_drive_script(Some(r#"a"</script><script>alert(1)</script>"#));
+        let out = home_drive_script(Some(r#"a"</script><script>alert(1)</script>"#), ORIGIN);
         assert!(
             !out.contains("</script>"),
             "closed the script tag early: {out}"

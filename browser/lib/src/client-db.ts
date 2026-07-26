@@ -31,7 +31,27 @@ import type {
   ClientDbInitTimings,
 } from './client-db.worker.js';
 import { perfMark, perfSpan } from './perf-trace.js';
-import { isStorageBlockedDbError } from './client-db-open.js';
+
+/**
+ * Duplicated from `client-db-open.ts` on purpose — do NOT import it here.
+ *
+ * That module is imported by `client-db.worker.ts`. Importing it from this
+ * file too makes it a module shared across the worker boundary, and Vite then
+ * hoists it into a common chunk that its worker build references but never
+ * emits. The worker's `import` then resolves to the SPA's HTML fallback,
+ * fails to parse, and dies with an empty `onerror` — taking the whole local
+ * database with it.
+ *
+ * `client-db-open.test.ts` asserts this literal still matches the exported
+ * constant, so the two cannot drift apart silently.
+ */
+const STORAGE_BLOCKED_MARKER = 'ATOMIC_DB_STORAGE_BLOCKED';
+
+function isStorageBlockedDbError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return message.includes(STORAGE_BLOCKED_MARKER);
+}
 
 /**
  * Normalizes a leader-init failure into the error we keep on `_initError`.

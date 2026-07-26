@@ -218,3 +218,19 @@ describe('isStorageBlockedDbError', () => {
     expect(isStorageBlockedDbError(undefined)).toBe(false);
   });
 });
+
+describe('worker boundary', () => {
+  it('keeps the marker in client-db.ts in sync with the exported one', async () => {
+    // `client-db.ts` deliberately duplicates this literal instead of importing
+    // it: sharing a module across the worker boundary makes Vite hoist it into
+    // a chunk its worker build references but never emits, so the worker ends
+    // up importing the SPA's HTML fallback and dies with an empty error.
+    // The duplication is safe only while this assertion holds.
+    const source = await import('node:fs').then(fs =>
+      fs.promises.readFile(new URL('./client-db.ts', import.meta.url), 'utf-8'),
+    );
+
+    expect(source).toContain(`'${STORAGE_BLOCKED_MARKER}'`);
+    expect(source).not.toContain("from './client-db-open.js'");
+  });
+});

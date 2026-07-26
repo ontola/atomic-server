@@ -97,7 +97,7 @@ ATOMIC_HOME_DRIVE=internal:/
 Visiting `/` then opens that Drive directly, for signed-out visitors too.
 Signed-in users still reach their own Drives from the sidebar.
 
-Two things worth knowing:
+Three things worth knowing:
 
 - **Make the Drive readable by the public Agent.** Otherwise signed-out
   visitors get an authorization error instead of your front page. Open the
@@ -105,6 +105,10 @@ Two things worth knowing:
 - **It costs nothing at runtime.** The subject is written into the HTML the
   server already serves, so the browser routes to it on the first render —
   no extra request, and no wait.
+- **`internal:` subjects are resolved for you.** The server rewrites
+  `internal:/` to its own absolute URL before handing it to the browser,
+  because a browser has no host to fetch a bare `internal:` subject from. You
+  can configure whichever form you have; both end up working.
 
 You can read the current setting back from the `/server` endpoint, under
 `https://atomicdata.dev/properties/server/homeDrive`.
