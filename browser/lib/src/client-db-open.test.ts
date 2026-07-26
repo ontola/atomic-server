@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  isStorageBlockedDbError,
   isWrongKeyDbError,
   openClientDb,
+  STORAGE_BLOCKED_MARKER,
   WRONG_KEY_MARKER,
 } from './client-db-open.js';
 
@@ -168,5 +170,51 @@ describe('openClientDb', () => {
     await expect(
       openClientDb(withoutDelete, { dbName: DB_NAME, dbKey: DB_KEY }),
     ).rejects.toBe(failure);
+  });
+});
+
+describe('isStorageBlockedDbError', () => {
+  /** What `ClientDb::new` produces when the browser withholds storage. */
+  const blocked = new Error(
+    `OPFS unavailable [${STORAGE_BLOCKED_MARKER}]: Failed to open OPFS ` +
+      'backend: JsValue(SecurityError: Security error when calling ' +
+      'GetDirectory)',
+  );
+
+  it('recognises the marker the wasm layer splices in', () => {
+    expect(isStorageBlockedDbError(blocked)).toBe(true);
+  });
+
+  it('does not match an undecryptable database', () => {
+    // The two recoverable-ish states must stay distinct: a blocked browser
+    // has nothing to delete, and deleting on it would be wrong.
+    const wrongKey = new Error(
+      `OPFS unavailable [${WRONG_KEY_MARKER}]: wrong encryption key for ` +
+        'local database',
+    );
+    expect(isStorageBlockedDbError(wrongKey)).toBe(false);
+    expect(isWrongKeyDbError(blocked)).toBe(false);
+  });
+
+  it('does not match unrelated open failures', () => {
+    // These are real faults and must keep their full stack, not be quietly
+    // reported as "your browser blocks storage".
+    for (const message of [
+      'OPFS unavailable: not an encrypted atomic database (bad magic bytes)',
+      'OPFS unavailable: unsupported encrypted database version 2',
+      'NoModificationAllowedError: file is locked',
+      'SecurityErrorish but not really',
+    ]) {
+      expect(isStorageBlockedDbError(new Error(message))).toBe(
+        message.includes(STORAGE_BLOCKED_MARKER),
+      );
+    }
+  });
+
+  it('handles non-Error values', () => {
+    expect(isStorageBlockedDbError(`boom [${STORAGE_BLOCKED_MARKER}]`)).toBe(
+      true,
+    );
+    expect(isStorageBlockedDbError(undefined)).toBe(false);
   });
 });

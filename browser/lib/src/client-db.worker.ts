@@ -5,7 +5,7 @@
  * The WASM module URL is passed as the first message after creation.
  */
 
-import { openClientDb } from './client-db-open.js';
+import { openClientDb, isStorageBlockedDbError } from './client-db-open.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WasmModule = any;
@@ -309,7 +309,13 @@ async function doInit(
     try {
       await wasm.migrateLegacyClientDb(dbName, dbKey ?? undefined);
     } catch (e) {
-      console.warn('[ClientDb] legacy DB migration failed:', e);
+      // When the browser is withholding storage there is no legacy file to
+      // migrate and never will be, so this failure is expected and says
+      // nothing the open below won't say better. Staying quiet here avoids
+      // reporting the same condition twice, with a stack trace, per load.
+      if (!isStorageBlockedDbError(e)) {
+        console.warn('[ClientDb] legacy DB migration failed:', e);
+      }
     }
   }
 

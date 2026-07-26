@@ -40,6 +40,23 @@ impl Drop for OpfsBackend {
     }
 }
 
+/// Whether an OPFS failure means the browser is refusing storage to this
+/// origin outright, rather than something being wrong with our file.
+///
+/// `navigator.storage.getDirectory()` throws `SecurityError` (or
+/// `NotAllowedError`) when the origin has no access to storage at all —
+/// Safari private browsing, "Prevent cross-site tracking" on an embedded or
+/// partitioned origin, or site data blocked by the user. It is a property of
+/// the browsing session, not of the data: retrying cannot help, and there is
+/// nothing to repair or delete.
+///
+/// Callers use this to degrade to server-only mode with one plain sentence,
+/// instead of surfacing a wasm stack trace on every page load for a condition
+/// the user may well have chosen deliberately.
+pub fn is_storage_blocked_error(error: &str) -> bool {
+    error.contains("SecurityError") || error.contains("NotAllowedError")
+}
+
 /// The OPFS root directory of this origin.
 async fn opfs_root() -> Result<web_sys::FileSystemDirectoryHandle, JsValue> {
     let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();

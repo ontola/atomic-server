@@ -63,6 +63,29 @@ export function isWrongKeyDbError(error: unknown): boolean {
 }
 
 /**
+ * Token spliced into the error message by `ClientDb::new` when the browser
+ * refuses this origin storage outright. Keep in sync with
+ * `STORAGE_BLOCKED_MARKER` in `wasm/src/lib.rs`.
+ */
+export const STORAGE_BLOCKED_MARKER = 'ATOMIC_DB_STORAGE_BLOCKED';
+
+/**
+ * Whether the local database is unavailable because the browser is withholding
+ * storage from this origin — Safari private browsing, tracking prevention on a
+ * partitioned origin, or site data blocked by the user.
+ *
+ * This is a property of the browsing session, not of our data: there is
+ * nothing to repair, nothing to delete, and retrying cannot help. Callers
+ * degrade to server-only mode and say so in one sentence, rather than logging
+ * a wasm stack trace on every page load for a state the user may have chosen.
+ */
+export function isStorageBlockedDbError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return message.includes(STORAGE_BLOCKED_MARKER);
+}
+
+/**
  * Open the OPFS-backed ClientDb, recreating it once if the existing file is
  * undecryptable. Any other failure — and any failure of the retry itself —
  * propagates to the caller.

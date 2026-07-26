@@ -31,6 +31,12 @@ pub fn init() {
 /// unmarked so it can never trigger a delete.
 const WRONG_KEY_MARKER: &str = "ATOMIC_DB_WRONG_KEY";
 
+/// Marks the other explainable open failure: the browser refuses this origin
+/// storage at all (private browsing, tracking prevention, site data blocked).
+/// Nothing is wrong with the data and retrying cannot help, so JS reports it
+/// as a plain degraded-mode sentence rather than a wasm stack trace.
+const STORAGE_BLOCKED_MARKER: &str = "ATOMIC_DB_STORAGE_BLOCKED";
+
 /// A client-side Atomic Data database backed by redb (in-memory, future OPFS).
 /// Provides indexed queries, resource storage, and commit application.
 #[wasm_bindgen]
@@ -71,6 +77,10 @@ impl ClientDb {
                 // pattern-matching on prose. See `WRONG_KEY_MARKER`.
                 if atomic_lib::db::encrypted_backend::is_wrong_key_error(&msg) {
                     to_js_err(format!("OPFS unavailable [{WRONG_KEY_MARKER}]: {msg}"))
+                } else if atomic_lib::db::opfs_backend::is_storage_blocked_error(&msg) {
+                    to_js_err(format!(
+                        "OPFS unavailable [{STORAGE_BLOCKED_MARKER}]: {msg}"
+                    ))
                 } else {
                     to_js_err(format!("OPFS unavailable: {msg}"))
                 }

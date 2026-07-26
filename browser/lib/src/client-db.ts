@@ -31,6 +31,32 @@ import type {
   ClientDbInitTimings,
 } from './client-db.worker.js';
 import { perfMark, perfSpan } from './perf-trace.js';
+import { isStorageBlockedDbError } from './client-db-open.js';
+
+/**
+ * Normalizes a leader-init failure into the error we keep on `_initError`.
+ *
+ * A browser withholding storage from this origin (private browsing, tracking
+ * prevention, blocked site data) is a known, permanent-for-this-session state,
+ * not a fault to debug — so it gets the same treatment as the other explained
+ * degraded modes here: one actionable sentence. Left raw, it surfaced a wasm
+ * stack trace on every single page load. Every other failure passes through
+ * untouched, because those we DO want to see in full.
+ */
+function asInitError(e: unknown): Error {
+  if (isStorageBlockedDbError(e)) {
+    return new Error(
+      'Local caching and offline support are disabled: this browser is not ' +
+        'giving this site access to storage. That is usually private ' +
+        'browsing, or a setting that blocks site data or cross-site ' +
+        'tracking. The app still works, reading directly from the server — ' +
+        'but nothing is kept locally between reloads. To enable it, open the ' +
+        'site in a normal window and allow site data.',
+    );
+  }
+
+  return e instanceof Error ? e : new Error(String(e));
+}
 
 export interface ClientDbQueryResult {
   subjects: string[];
@@ -375,7 +401,7 @@ export class ClientDbWorker {
         try {
           await this.becomeLeader(baseUrl);
         } catch (e) {
-          this._initError = e instanceof Error ? e : new Error(String(e));
+          this._initError = asInitError(e);
           // Release the lock so another tab can try.
           throw e;
         }
@@ -399,7 +425,7 @@ export class ClientDbWorker {
         // surface as a hard error if init never completed on a live
         // instance — a destroyed one has been superseded.
         if (!this.worker && !this.destroyed) {
-          this._initError = e instanceof Error ? e : new Error(String(e));
+          this._initError = asInitError(e);
         }
       });
   }
