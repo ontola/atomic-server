@@ -5,6 +5,8 @@
  * The WASM module URL is passed as the first message after creation.
  */
 
+import { openClientDb } from './client-db-open.js';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WasmModule = any;
 
@@ -312,12 +314,16 @@ async function doInit(
   }
 
   // `new ClientDb` opens the OPFS-backed database (acquire OPFS handle, open
-  // redb, run migrations).
-  db = await new wasm.ClientDb(
-    baseUrl ?? undefined,
-    dbName ?? undefined,
-    dbKey ?? undefined,
-  );
+  // redb, run migrations). `openClientDb` adds one recovery step: an existing
+  // file this agent's key can no longer decrypt is deleted and recreated,
+  // because it is a cache whose contents are unreadable either way. Every
+  // other open failure still propagates.
+  const opened = await openClientDb(wasm, {
+    baseUrl: baseUrl ?? undefined,
+    dbName: dbName ?? undefined,
+    dbKey: dbKey ?? undefined,
+  });
+  db = opened.db;
   const t3 = performance.now();
 
   return {

@@ -45,6 +45,22 @@ const PHYS_BLOCK: usize = NONCE_LEN + BLOCK + TAG_LEN;
 const LEN_FIELD_OFFSET: u64 = 16;
 const KEY_CHECK_AAD: &[u8] = b"atomic-encdb-keycheck-v1";
 
+/// Raised when the header key check fails: the file is a valid encrypted
+/// database, but not one this key opens.
+pub const WRONG_KEY_MESSAGE: &str = "wrong encryption key for local database";
+
+/// Whether an open failure means "this file is undecryptable with the key we
+/// have" — the one case a caller may treat as recoverable by throwing the file
+/// away (the browser's OPFS cache does; see `wasm/src/lib.rs`).
+///
+/// Deliberately narrow: a corrupt file, a plaintext file under an encrypted
+/// name, an unsupported version, or an OPFS-level failure all produce
+/// *different* messages and must NOT match, because deleting on those would
+/// destroy data we might still recover.
+pub fn is_wrong_key_error(error: &str) -> bool {
+    error.contains(WRONG_KEY_MESSAGE)
+}
+
 pub struct EncryptedBackend<B: StorageBackend> {
     inner: B,
     cipher: XChaCha20Poly1305,
@@ -142,7 +158,7 @@ impl<B: StorageBackend> EncryptedBackend<B> {
                     aad: KEY_CHECK_AAD,
                 },
             )
-            .map_err(|_| err_data("wrong encryption key for local database"))?;
+            .map_err(|_| err_data(WRONG_KEY_MESSAGE))?;
 
         Ok(EncryptedBackend {
             inner,
@@ -496,6 +512,49 @@ mod tests {
 
         let err = EncryptedBackend::new(mem, &[8u8; 32]).unwrap_err();
         assert!(err.to_string().contains("wrong encryption key"));
+    }
+
+    /// The browser deletes and recreates an OPFS file whose open failed the
+    /// key check (it is a cache, and unreadable without the key anyway). That
+    /// is only safe while `is_wrong_key_error` matches *exactly* that failure,
+    /// so classify real produced errors rather than string literals — and
+    /// assert both directions, since widening the predicate would delete
+    /// recoverable data and narrowing it would strand the cache forever.
+    #[test]
+    fn only_the_key_check_failure_is_classified_as_wrong_key() {
+        // A real wrong-key failure: valid encrypted db, different key.
+        let mem = SharedMem::default();
+        EncryptedBackend::new(mem.clone(), &KEY)
+            .unwrap()
+            .write(0, b"secret")
+            .unwrap();
+        let wrong_key = EncryptedBackend::new(mem, &[8u8; 32]).unwrap_err();
+        assert!(is_wrong_key_error(&wrong_key.to_string()));
+
+        // Survives the wrapping the browser sees:
+        // "OPFS unavailable: Failed to open encrypted OPFS backend: ..."
+        assert!(is_wrong_key_error(&format!(
+            "OPFS unavailable: Failed to open encrypted OPFS backend: {wrong_key}"
+        )));
+
+        // A real corrupt/plaintext file must NOT be classified as wrong-key:
+        // deleting on this would destroy data that might still be recovered.
+        let plain = SharedMem::default();
+        plain.set_len(1024).unwrap();
+        plain.write(0, b"just some plaintext redb bytes").unwrap();
+        let corrupt = EncryptedBackend::new(plain, &KEY).unwrap_err();
+        assert!(!is_wrong_key_error(&corrupt.to_string()));
+
+        // Guard the breadth of the predicate itself, not just this module's
+        // own errors. The message is matched inside strings that have been
+        // wrapped by the wasm and OPFS layers, so a loose predicate (say,
+        // anything containing "wrong") would classify unrelated failures as
+        // "throw the database away".
+        assert!(!is_wrong_key_error("wrong number of arguments"));
+        assert!(!is_wrong_key_error("something went wrong reading the file"));
+        assert!(!is_wrong_key_error(
+            "NoModificationAllowedError: file is locked"
+        ));
     }
 
     #[test]

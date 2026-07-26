@@ -21,6 +21,16 @@ pub fn init() {
     console_error_panic_hook::set_once();
 }
 
+/// Marker spliced into the `new ClientDb` error message when the existing OPFS
+/// file is a well-formed encrypted database that this key cannot decrypt.
+///
+/// The local database is a pure cache, so JS self-heals that one case by
+/// deleting the file and recreating it (`browser/lib/src/client-db-open.ts`).
+/// It matches on this token rather than on the prose message, and every other
+/// open failure — corrupt file, unsupported version, OPFS unavailable — stays
+/// unmarked so it can never trigger a delete.
+const WRONG_KEY_MARKER: &str = "ATOMIC_DB_WRONG_KEY";
+
 /// A client-side Atomic Data database backed by redb (in-memory, future OPFS).
 /// Provides indexed queries, resource storage, and commit application.
 #[wasm_bindgen]
@@ -42,7 +52,8 @@ impl ClientDb {
     /// SharedWorker. The SharedWorker fans tab ports into this single inner
     /// worker so exactly one OPFS sync access handle exists. If this fails,
     /// OPFS is genuinely broken (corrupt, quota, unsupported browser) — the
-    /// error surfaces verbatim.
+    /// error surfaces verbatim, except that an undecryptable file is tagged
+    /// with `WRONG_KEY_MARKER` so the caller can drop and recreate the cache.
     #[wasm_bindgen(constructor)]
     pub async fn new(
         base_url: Option<String>,
@@ -53,7 +64,17 @@ impl ClientDb {
         let key = validate_db_key(db_key)?;
         let db = Db::init_redb_opfs(base_url, &name, key.as_ref())
             .await
-            .map_err(|e| to_js_err(format!("OPFS unavailable: {e}")))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                // Tag the one recoverable failure so JS can tell it apart from
+                // a corrupt file or a genuinely unavailable OPFS without
+                // pattern-matching on prose. See `WRONG_KEY_MARKER`.
+                if atomic_lib::db::encrypted_backend::is_wrong_key_error(&msg) {
+                    to_js_err(format!("OPFS unavailable [{WRONG_KEY_MARKER}]: {msg}"))
+                } else {
+                    to_js_err(format!("OPFS unavailable: {msg}"))
+                }
+            })?;
         web_sys::console::log_1(
             &format!(
                 "[ClientDb] Using OPFS persistent storage ({name}, {})",
@@ -545,6 +566,29 @@ pub fn argon2id_derive_key_js(
     };
     let key = argon2id_derive_key(secret.as_bytes(), salt, params).map_err(to_js_err)?;
     Ok(key.to_vec())
+}
+
+/// Delete one OPFS database file. Returns whether a file was actually removed.
+///
+/// Only ever called for the *current* identity's file, and only after that
+/// file failed to open with `WRONG_KEY_MARKER` — i.e. its contents are already
+/// unreadable, and everything it held is re-fetchable from the server. Other
+/// agents' files are untouched: the caller passes the name it was about to
+/// open, and `validate_db_name` keeps that a plain filename in the OPFS root.
+#[wasm_bindgen(js_name = "deleteClientDb")]
+pub async fn delete_client_db(db_name: String) -> Result<bool, JsError> {
+    let name = validate_db_name(Some(db_name))?;
+    let exists = atomic_lib::db::opfs_backend::file_exists(&name)
+        .await
+        .map_err(|e| to_js_err(format!("checking {name}: {e:?}")))?;
+    if !exists {
+        return Ok(false);
+    }
+    atomic_lib::db::opfs_backend::remove_file(&name)
+        .await
+        .map_err(|e| to_js_err(format!("deleting {name}: {e:?}")))?;
+    web_sys::console::warn_1(&format!("[ClientDb] deleted undecryptable database {name}").into());
+    Ok(true)
 }
 
 /// One-time migration of the pre-split `atomic_data.redb` into the per-agent

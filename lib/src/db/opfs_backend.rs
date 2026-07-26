@@ -26,6 +26,20 @@ impl std::fmt::Debug for OpfsBackend {
 unsafe impl Send for OpfsBackend {}
 unsafe impl Sync for OpfsBackend {}
 
+impl Drop for OpfsBackend {
+    /// A `FileSystemSyncAccessHandle` holds an exclusive lock on the file until
+    /// it is closed — an unclosed handle survives until GC, and while it lives
+    /// `removeEntry` fails with `NoModificationAllowedError` and a re-open
+    /// fails to acquire the handle. Every open that does NOT end in a live
+    /// redb `Database` (a bad header, the wrong encryption key, a redb open
+    /// error) would otherwise leak the lock, which is exactly the state the
+    /// wrong-key self-heal needs to delete the file from. `close()` is
+    /// idempotent, so the explicit `StorageBackend::close` calls stay valid.
+    fn drop(&mut self) {
+        self.handle.close();
+    }
+}
+
 /// The OPFS root directory of this origin.
 async fn opfs_root() -> Result<web_sys::FileSystemDirectoryHandle, JsValue> {
     let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
