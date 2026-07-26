@@ -2776,9 +2776,34 @@ impl Storelike for Db {
             // Only attempt a network fetch for external subjects.
             // Fetching a local URL would cause the server to request itself,
             // creating an infinite loop.
-            let resolved_subject_obj =
-                Subject::from_raw(&resolved_url, self.get_base_domain().as_deref());
-            if resolved_subject_obj.is_local() {
+            //
+            // `is_local()` alone is not enough: the canonical atomicdata.dev
+            // vocabulary is deliberately kept `External` even on its own host
+            // (see `Subject::CANONICAL_VOCABULARY_PREFIXES`), so on
+            // atomicdata.dev a miss for `/properties/*` would fall through to a
+            // network fetch of this very server. Anything served from our own
+            // authority is ours whether or not it is `Internal`, so compare
+            // authorities too — and ignore the scheme, since a store migrated
+            // as `https://` must not self-fetch when served over `http://`.
+            let base_domain = self.get_base_domain();
+            let resolved_subject_obj = Subject::from_raw(&resolved_url, base_domain.as_deref());
+            let is_own_authority = base_domain
+                .as_deref()
+                .map(|base| {
+                    let strip = |s: &str| {
+                        s.trim_start_matches("https://")
+                            .trim_start_matches("http://")
+                            .trim_end_matches('/')
+                            .to_string()
+                    };
+                    let base_authority = strip(base);
+                    let resolved = strip(&resolved_url);
+                    resolved == base_authority
+                        || resolved.starts_with(&format!("{}/", base_authority))
+                })
+                .unwrap_or(false);
+
+            if resolved_subject_obj.is_local() || is_own_authority {
                 return self
                     .handle_not_found(
                         &resolved_url,

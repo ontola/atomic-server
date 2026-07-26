@@ -925,6 +925,51 @@ async fn test_migration_v2_to_v3() {
         .any(|n| n == "resources_v2".as_bytes()));
 }
 
+/// On `atomicdata.dev` itself, the canonical vocabulary must still RESOLVE
+/// LOCALLY — not trigger a network fetch.
+///
+/// The vocabulary is deliberately kept `Subject::External` there (see
+/// `Subject::CANONICAL_VOCABULARY_PREFIXES`) so the absolute `urls::` constants
+/// keep working. But `get_resource` only network-fetches non-local subjects, so
+/// if these fell through to that branch the server would issue a request to
+/// ITSELF for its own ontology — an infinite loop in production, and a 500 for
+/// every `/properties/*` and `/classes/*` URL.
+#[cfg(feature = "db-sled")]
+#[tokio::test]
+async fn canonical_vocabulary_resolves_locally_on_its_own_host() {
+    let tmp_dir_path = ".temp/db/canonical_vocab_serving";
+    let _try_remove_existing = std::fs::remove_dir_all(tmp_dir_path);
+
+    // Exactly production's origin.
+    let store = Db::init(
+        std::path::Path::new(tmp_dir_path),
+        Some("https://atomicdata.dev".to_string()),
+    )
+    .await
+    .unwrap();
+
+    for canonical in [
+        crate::urls::DESCRIPTION,
+        crate::urls::SHORTNAME,
+        crate::urls::IS_A,
+    ] {
+        let subject = crate::Subject::from_raw(canonical, Some("https://atomicdata.dev"));
+        assert!(
+            matches!(subject, crate::Subject::External(_)),
+            "{canonical} should be External (kept canonical), got {subject:?}"
+        );
+
+        let resource = store.get_resource(&subject).await;
+        assert!(
+            resource.is_ok(),
+            "{canonical} must resolve from the local store on its own host, \
+             but failed with: {:?}. If this says 'Error when fetching', the \
+             server is trying to request its own ontology over the network.",
+            resource.err()
+        );
+    }
+}
+
 /// A `resources_v1` store must migrate all the way to `resources_v3` in ONE
 /// `migrate_maybe` call.
 ///
