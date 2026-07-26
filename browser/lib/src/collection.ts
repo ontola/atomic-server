@@ -703,8 +703,9 @@ export class Collection {
    * Resolve a page from the local WASM DB. Returns:
    *   - `'ok'` — query ran and the page is populated (possibly with zero
    *     members, which is a legitimate empty result for this filter).
-   *   - `'no-db'` — local DB isn't available (no clientDb, or query failed).
-   *     Caller may fall back to a server `/query`.
+   *   - `'no-db'` — local DB can't answer (no clientDb, query failed, or an
+   *     indexed query with no drive scope to run it under). Caller may fall
+   *     back to a server `/query`.
    *
    * After the first drive-sync the WASM index is the source of truth for
    * `parent=…` queries; an empty result means "this parent really has no
@@ -739,16 +740,34 @@ export class Collection {
     const hasExtraFilters =
       !!this.params.filters && this.params.filters.length > 0;
 
+    // Resolve the drive scope at query time, not at construction time.
+    // `CollectionBuilder` snapshots `store.getDrive()` in its constructor, and
+    // a Collection built during cold start — before `setDrive` ran, or while
+    // an async drive adoption (deep link) is still resolving — would keep
+    // `drive: undefined` for the rest of its life even once the drive is
+    // known. Falling back to the store's current drive here is the same value
+    // the builder would have captured a moment later.
+    const drive = this.params.drive ?? this.store.getDrive();
+
+    // Extra AND constraints route through the indexed path
+    // (`query_complex`), which REQUIRES a drive scope: the query index is
+    // keyed by drive. Without one the worker can only answer with
+    // "Indexed queries require a drive scope", so don't ask — fall back to
+    // the server `/query` instead of burning a worker round-trip on a
+    // guaranteed error.
+    if (hasExtraFilters && !drive) {
+      return 'no-db';
+    }
+
     const result = await this.store.queryLocalDb({
       property: this.params.property,
       value: this.params.value,
       filters: this.params.filters,
-      // Extra AND constraints route through the indexed path
-      // (`query_complex`), which requires a drive scope. Single
-      // property/value queries use the basic path and intentionally omit
-      // `drive` (see the sort note above). We still don't pass `sort_by`, so
-      // the indexed query stays drive-scoped without the DID-sort issue.
-      drive: hasExtraFilters ? this.params.drive : undefined,
+      // Single property/value queries use the basic path and intentionally
+      // omit `drive` (see the sort note above). We still don't pass
+      // `sort_by`, so the indexed query stays drive-scoped without the
+      // DID-sort issue.
+      drive: hasExtraFilters ? drive : undefined,
       includeResources: true,
     });
 
