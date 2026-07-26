@@ -240,6 +240,26 @@ export interface AddResourcesOpts {
  *  generated ontology). Serves the drive on its own subdomain. */
 const SUBDOMAIN_PROP = 'https://atomicdata.dev/properties/subdomain';
 
+/**
+ * Opt-in tracing for search, mirroring `ws-debug`:
+ * `localStorage.setItem('search-debug', '1')`.
+ *
+ * These lines used to be bare `console.debug`, on the assumption that browsers
+ * hide that behind a "Verbose" log level. Chrome does; Safari's Web Inspector
+ * shows Debug messages by default, so every visitor there saw the query, the
+ * full search URL and the result count for each search — several per page
+ * load. Diagnostics have to be asked for, not opted out of.
+ */
+const SEARCH_DEBUG =
+  typeof localStorage !== 'undefined' &&
+  localStorage.getItem('search-debug') === '1';
+
+function searchDebug(...args: unknown[]): void {
+  if (SEARCH_DEBUG) {
+    console.debug(...args);
+  }
+}
+
 export interface CreateDriveOpts {
   /** Shown on the drive page. Personal drives default to 'Your personal drive.'. */
   description?: string;
@@ -905,7 +925,7 @@ export class Store {
       }
 
       endIndex({ indexed });
-      console.debug(
+      searchDebug(
         `[search] drive index built — drive=${drive} indexed=${indexed}`,
       );
     } catch (e) {
@@ -2176,7 +2196,7 @@ export class Store {
       : opts.parents;
     const searchDrive = this.driveOf(parentScope ?? this.getDrive() ?? '');
     const hasFilters = Object.keys(opts.filters ?? {}).length > 0;
-    console.debug('[search] search()', {
+    searchDebug('[search] search()', {
       query,
       hasFilters,
       parents: opts.parents,
@@ -2201,7 +2221,7 @@ export class Store {
         : [];
 
     if (localResults.length > 0) {
-      console.debug('[search] local →', localResults.length);
+      searchDebug('[search] local →', localResults.length);
     }
 
     // When offline, the server's filtered Tantivy search is unreachable.
@@ -2221,7 +2241,7 @@ export class Store {
         opts.limit ?? 30,
         parentScope,
       );
-      console.debug(
+      searchDebug(
         '[search] OFFLINE local fallback →',
         offline.subjects.length,
         offline.subjects,
@@ -2232,7 +2252,7 @@ export class Store {
 
     // Fall back to server search (Tantivy)
     const searchSubject = buildSearchSubject(this.serverUrl, query, opts);
-    console.debug('[search] server search →', searchSubject);
+    searchDebug('[search] server search →', searchSubject);
     // Search URLs are dynamic query resources without commit identities. Keeping
     // one in the normal resource cache makes a later retry merge against the
     // previous response and discard it as "unchanged", even when Tantivy now
@@ -2243,7 +2263,7 @@ export class Store {
       noWebSocket: true,
     });
     const results = searchResource.get(server.properties.results) ?? [];
-    console.debug('[search] server search returned', results.length);
+    searchDebug('[search] server search returned', results.length);
 
     return [...new Set([...localResults, ...results])].slice(
       0,
