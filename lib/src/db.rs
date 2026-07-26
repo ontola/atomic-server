@@ -358,7 +358,7 @@ impl Db {
         let sled_store = sled_store::SledStore::open(path)?;
 
         // Run migrations before wrapping in Arc (migrations need direct sled access)
-        migrations::migrate_maybe(&sled_store)
+        migrations::migrate_maybe(&sled_store, base_domain.as_deref())
             .map(|e| format!("Error during migration of database: {:?}", e))?;
 
         let store = Db {
@@ -563,7 +563,7 @@ impl Db {
         // `.bak`. `migrate_maybe` chains v0→v1→v2→v3 in place so the read sees
         // every resource. (Verified against a real v2 backup: 61,804 resources
         // were invisible without this call.)
-        migrations::migrate_maybe(&sled_store)?;
+        migrations::migrate_maybe(&sled_store, base_domain)?;
 
         let redb_store = redb_store::RedbStore::new_file(redb_path)?;
 

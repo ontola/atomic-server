@@ -359,6 +359,62 @@ impl Subject {
         }
     }
 
+    /// The `atomicdata.dev` namespaces that [crate::urls] hardcodes as absolute
+    /// `const` strings — the shared vocabulary every Atomic server refers to by
+    /// absolute URL.
+    ///
+    /// These must never be localized, *including on `atomicdata.dev` itself*.
+    /// Code looks properties and classes up by these exact constants
+    /// (`urls::PUBLIC_KEY`, ...), so if a store localized them to `internal:/...`
+    /// the constants would stop resolving and every validation against a
+    /// built-in class would fail with "Property internal:/properties/publicKey
+    /// missing. Is required in class internal:/classes/Agent".
+    ///
+    /// On any server other than `atomicdata.dev` this is a no-op: those URLs
+    /// already don't match the base domain, so they stay [Subject::External].
+    ///
+    /// Prefix-matched, so it covers nested paths like
+    /// `/ontology/server/property/status`. Compared without a scheme so both
+    /// `http://` and `https://` forms are caught.
+    const CANONICAL_VOCABULARY_PREFIXES: &'static [&'static str] = &[
+        "atomicdata.dev/properties/",
+        "atomicdata.dev/classes/",
+        "atomicdata.dev/datatypes/",
+        // Singular variants — a handful of older constants use these.
+        "atomicdata.dev/class/",
+        "atomicdata.dev/property/",
+        "atomicdata.dev/methods/",
+        "atomicdata.dev/ontology/",
+        // The AI-message ontology lives under a ULID drive rather than a named
+        // namespace, but `urls::TEXT_PART` / `urls::REASONING_PART` still point
+        // at it by absolute URL.
+        "atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/",
+    ];
+
+    /// Exact canonical resources outside the vocabulary namespaces above.
+    ///
+    /// Deliberately NOT a `/agents/` prefix rule: `urls::PUBLIC_AGENT` is the
+    /// only canonical agent, while a real `atomicdata.dev` store holds
+    /// thousands of genuine user agents under that namespace which must
+    /// localize like any other user data.
+    const CANONICAL_VOCABULARY_EXACT: &'static [&'static str] =
+        &["atomicdata.dev/agents/publicAgent"];
+
+    /// Whether `s` is part of the shared atomicdata.dev vocabulary and so must
+    /// keep its absolute URL. See [Self::CANONICAL_VOCABULARY_PREFIXES].
+    fn is_canonical_vocabulary(s: &str) -> bool {
+        let bare = s
+            .trim_start_matches("https://")
+            .trim_start_matches("http://");
+
+        Self::CANONICAL_VOCABULARY_PREFIXES
+            .iter()
+            .any(|p| bare.starts_with(p))
+            || Self::CANONICAL_VOCABULARY_EXACT
+                .iter()
+                .any(|e| bare == *e || bare.trim_end_matches('/') == *e)
+    }
+
     /// Normalizes a subject string based on a base domain.
     /// If the URL matches the base domain or its subdomains, it becomes an Internal subject.
     pub fn from_raw(s: &str, base_domain: Option<&str>) -> Self {
@@ -418,6 +474,12 @@ impl Subject {
         }
 
         if let Ok(u) = Url::parse(s) {
+            // Shared vocabulary keeps its absolute URL even when it matches the
+            // base domain — see `CANONICAL_VOCABULARY_PREFIXES`.
+            if Self::is_canonical_vocabulary(s) {
+                return Subject::External(u);
+            }
+
             if let Some(base) = base_domain {
                 let trimmed_base = base
                     .trim_start_matches("http://")
@@ -813,5 +875,59 @@ mod tests {
             "Expected Internal subject"
         );
         assert_eq!(subject.resolve(origin), raw);
+    }
+
+    /// On `atomicdata.dev` itself, the shared vocabulary must NOT localize.
+    ///
+    /// `urls::PUBLIC_KEY` and friends are hardcoded absolute constants, so if
+    /// these became `internal:/properties/...` every lookup by constant would
+    /// miss and validation against built-in classes would fail with
+    /// "Property internal:/properties/publicKey missing. Is required in class
+    /// internal:/classes/Agent" — which is exactly what a real migration of the
+    /// atomicdata.dev store hit.
+    #[test]
+    fn canonical_vocabulary_is_not_localized_on_its_own_host() {
+        let base = Some("https://atomicdata.dev");
+
+        for raw in [
+            crate::urls::PUBLIC_KEY,
+            crate::urls::DESCRIPTION,
+            crate::urls::AGENT,
+            crate::urls::INSERT,
+            crate::urls::URL,
+            crate::urls::BOOKMARK,
+            crate::urls::STATUS,
+            crate::urls::TEXT_PART,
+            crate::urls::PUBLIC_AGENT,
+            "https://atomicdata.dev/datatypes/string",
+        ] {
+            assert!(
+                matches!(Subject::from_raw(raw, base), Subject::External(_)),
+                "{raw} must stay External on its own host, got {:?}",
+                Subject::from_raw(raw, base)
+            );
+        }
+    }
+
+    /// The carve-out must not swallow real user data that merely lives under a
+    /// similar path. `atomicdata.dev` hosts thousands of genuine user agents,
+    /// and only `publicAgent` is canonical.
+    #[test]
+    fn user_data_on_atomicdata_dev_still_localizes() {
+        let base = Some("https://atomicdata.dev");
+
+        for raw in [
+            "https://atomicdata.dev/agents/QmfpRIBn2JYEatT0MjSkMNoBJzstz19orwnT5oT2rcQ=",
+            "https://atomicdata.dev/01jd9n5hc9dpwm8ygf2vh3mprf",
+            "https://atomicdata.dev/commits/abc123",
+            "https://atomicdata.dev/drive/xyz",
+            "https://atomicdata.dev/",
+        ] {
+            assert!(
+                matches!(Subject::from_raw(raw, base), Subject::Internal { .. }),
+                "{raw} is user data and must localize, got {:?}",
+                Subject::from_raw(raw, base)
+            );
+        }
     }
 }

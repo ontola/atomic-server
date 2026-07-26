@@ -836,7 +836,11 @@ async fn test_collection_update_value(
 async fn test_migration_v2_to_v3() {
     let tmp_dir_path = ".temp/db/migration_v2_v3";
     let _try_remove_existing = std::fs::remove_dir_all(tmp_dir_path);
-    let server_url = "https://localhost";
+    // Deliberately NOT `localhost`. `resources_v2_to_v3` used to hardcode
+    // "localhost" as the base domain, so a test on `https://localhost` passed
+    // while every real deployment migrated its own resources to `External` and
+    // kept them as HTTP URLs. A realistic domain here is what catches that.
+    let server_url = "https://staging.example.com";
     let store = Db::init(
         std::path::Path::new(tmp_dir_path),
         Some(server_url.to_string()),
@@ -874,7 +878,7 @@ async fn test_migration_v2_to_v3() {
     }
 
     // Run migration
-    super::migrations::migrate_maybe(&sled_store).unwrap();
+    super::migrations::migrate_maybe(&sled_store, Some(server_url)).unwrap();
     drop(sled_store);
 
     // Re-open the Db to pick up the migrated data
@@ -919,6 +923,105 @@ async fn test_migration_v2_to_v3() {
         .tree_names()
         .into_iter()
         .any(|n| n == "resources_v2".as_bytes()));
+}
+
+/// A `resources_v1` store must migrate all the way to `resources_v3` in ONE
+/// `migrate_maybe` call.
+///
+/// `migrate_maybe` used to iterate a single `tree_names()` snapshot, so on a v1
+/// store it ran v1→v2, created `resources_v2`, and then never consumed it —
+/// because that tree didn't exist when the work list was built. `Tree::Resources`
+/// (`resources_v3`) stayed empty, `migrate_from_sled` copied from that empty
+/// tree, and the process exited 0. A real production store migrated 271 of
+/// 184,843 resources this way, silently.
+#[cfg(feature = "db-sled")]
+#[tokio::test]
+async fn test_migration_v1_chains_all_the_way_to_v3() {
+    let tmp_dir_path = ".temp/db/migration_v1_chain";
+    let _try_remove_existing = std::fs::remove_dir_all(tmp_dir_path);
+    // Not `localhost` — see test_migration_v2_to_v3.
+    let server_url = "https://staging.example.com";
+    let store = Db::init(
+        std::path::Path::new(tmp_dir_path),
+        Some(server_url.to_string()),
+    )
+    .await
+    .unwrap();
+    drop(store);
+
+    let subject_url = format!("{}/v1-resource", server_url);
+
+    // Seed a v1-encoded resource (bincode) directly into `resources_v1`.
+    let sled_store =
+        super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
+    {
+        let mut propvals = crate::db::v1_types::PropValsV1::new();
+        propvals.insert(
+            crate::urls::DESCRIPTION.to_string(),
+            crate::db::v1_types::ValueV1::String("from v1".to_string()),
+        );
+        propvals.insert(
+            crate::urls::PARENT.to_string(),
+            crate::db::v1_types::ValueV1::AtomicUrl(subject_url.clone()),
+        );
+
+        let v1_tree = sled_store.raw_db().open_tree("resources_v1").unwrap();
+        v1_tree
+            .insert(
+                subject_url.as_bytes(),
+                bincode1::serialize(&propvals).unwrap(),
+            )
+            .unwrap();
+        v1_tree.flush().unwrap();
+    }
+
+    // A single call must chain v1 → v2 → v3.
+    super::migrations::migrate_maybe(&sled_store, Some(server_url)).unwrap();
+
+    // Both intermediate trees must be gone, and the data must have landed in v3.
+    let names: Vec<String> = sled_store
+        .raw_db()
+        .tree_names()
+        .iter()
+        .map(|n| String::from_utf8_lossy(n).to_string())
+        .collect();
+    assert!(
+        !names.iter().any(|n| n == "resources_v1"),
+        "resources_v1 should have been dropped, trees: {names:?}"
+    );
+    assert!(
+        !names.iter().any(|n| n == "resources_v2"),
+        "resources_v2 should have been consumed by the v2→v3 step in the SAME call \
+         (this is the regression: it used to be left behind, stranding all data), \
+         trees: {names:?}"
+    );
+
+    // Scope the tree handle: a sled `Tree` keeps the `Db` alive, so holding it
+    // across the reopen below would fail to acquire the file lock.
+    {
+        let v3 = sled_store.raw_db().open_tree("resources_v3").unwrap();
+        assert_eq!(v3.len(), 1, "the v1 resource should be in resources_v3");
+    }
+    drop(sled_store);
+
+    // And it must be readable, with its subject localized against the real
+    // base domain rather than the old "localhost" placeholder.
+    let store = crate::Db::init(
+        std::path::Path::new(tmp_dir_path),
+        Some(server_url.to_string()),
+    )
+    .await
+    .unwrap();
+    let resource = store.get_resource(&subject_url.into()).await.unwrap();
+    assert!(
+        matches!(resource.get_subject(), crate::Subject::Internal { .. }),
+        "Subject should be Internal, but is {:?}",
+        resource.get_subject()
+    );
+    assert_eq!(
+        resource.get(crate::urls::DESCRIPTION).unwrap().to_string(),
+        "from v1"
+    );
 }
 
 /// Test that resources added via add_resource_opts with update_index=true
