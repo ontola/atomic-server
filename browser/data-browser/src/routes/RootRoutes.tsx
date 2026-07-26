@@ -19,6 +19,7 @@ import { isDev } from '../config';
 import { getLocalServerOrigin, isRunningInTauri } from '../helpers/tauri';
 import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
 import { constructOpenURL } from '../helpers/navigation';
+import { getHomeDrive } from '../helpers/homeDrive';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 
 export const appRoute = createRoute({
@@ -60,15 +61,31 @@ const TopRouteComponent: React.FC = () => {
 
   // When the URL is the bare root, we shouldn't assume the server root IS a
   // drive — often it isn't, or the user isn't authorized to see it. Prefer:
+  //   0. server declares a home drive → open it, for everyone
   //   1. signed-in agent with a personal drive → open that drive
   //   2. no agent → go to the welcome / sign-in flow
   //   3. otherwise → fall through to whatever lives at `/`
+  //
+  // Step 0 is deliberately first and deliberately ignores the Agent: the
+  // operator has said "this Drive is my front page", and a front page is the
+  // same for everyone. That is also what makes it instant — it comes from the
+  // served HTML, so it needs neither a request nor the async IndexedDB read
+  // that answering "is anyone signed in?" would require.
   const isRoot = pathname === '/' || pathname === '';
+  const homeDrive = getHomeDrive();
   const [resolvingRoot, setResolvingRoot] = useState(isRoot);
 
   useEffect(() => {
     if (!isRoot) {
       setResolvingRoot(false);
+
+      return;
+    }
+
+    if (homeDrive) {
+      // `replace`, so Back leaves the site instead of returning to `/` and
+      // being bounced straight back to the home Drive.
+      navigate({ to: constructOpenURL(homeDrive), replace: true });
 
       return;
     }
@@ -107,7 +124,7 @@ const TopRouteComponent: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [isRoot, agent, drive, baseURL, store, navigate]);
+  }, [isRoot, homeDrive, agent, drive, baseURL, store, navigate]);
 
   // In dev, the UI is often on :6747 while JSON-AD is served from the Atomic
   // server (e.g. :9883). In Tauri, the UI is on a custom protocol while the

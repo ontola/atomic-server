@@ -27,8 +27,10 @@ pub async fn single_page(
     };
 
     let script = format!(
-        "<script nonce=\"{}\">{}</script>",
-        csp_nonce, appstate.config.opts.script
+        "<script nonce=\"{}\">{}{}</script>",
+        csp_nonce,
+        home_drive_script(appstate.config.opts.home_drive.as_deref()),
+        appstate.config.opts.script
     );
 
     let body = template
@@ -174,6 +176,39 @@ fn escape_html(s: &str) -> String {
         .replace('/', "&#x2F;")
 }
 
+/// Declares the configured home Drive to the app, inside the HTML we are
+/// already serving.
+///
+/// The browser must know this before its first render, and it cannot be asked
+/// for asynchronously: the Agent lives in IndexedDB, which has no synchronous
+/// API, so "is anyone signed in?" is only answerable after an await. A home
+/// Drive is shown to everyone regardless of sign-in state, which is exactly
+/// what lets the decision be made here — no request, nothing to wait for.
+///
+/// Empty when unset, which is the default: `/` then keeps sending visitors
+/// without an Agent to the welcome flow.
+///
+/// The subject goes through `serde_json` rather than string interpolation. That
+/// alone is not enough: JSON escaping leaves `<` untouched, so a value
+/// containing `</script>` would close the tag and everything after it would be
+/// markup. Every `<` is therefore rewritten to its unicode escape, which the
+/// JS parser reads back as `<` inside the string literal while the HTML parser
+/// never sees a tag-closing sequence at all. The value is
+/// operator-supplied rather than user-supplied, but it lands inside a script
+/// tag either way.
+fn home_drive_script(home_drive: Option<&str>) -> String {
+    match home_drive.map(str::trim) {
+        Some(drive) if !drive.is_empty() => match serde_json::to_string(drive) {
+            Ok(encoded) => {
+                let safe = encoded.replace('<', "\\u003C");
+                format!("window.__ATOMIC_HOME_DRIVE__={safe};")
+            }
+            Err(_) => String::new(),
+        },
+        _ => String::new(),
+    }
+}
+
 fn generate_nonce() -> Result<String, ring::error::Unspecified> {
     use base64::{engine::general_purpose, Engine as _};
     use ring::rand::{SecureRandom, SystemRandom};
@@ -187,7 +222,51 @@ fn generate_nonce() -> Result<String, ring::error::Unspecified> {
 
 #[cfg(test)]
 mod test {
-    use super::MetaTags;
+    use super::{home_drive_script, MetaTags};
+
+    #[test]
+    fn no_home_drive_by_default() {
+        // Every install starts without one; `/` keeps the welcome flow.
+        assert_eq!(home_drive_script(None), "");
+        assert_eq!(home_drive_script(Some("")), "");
+        assert_eq!(home_drive_script(Some("   ")), "");
+    }
+
+    #[test]
+    fn declares_the_configured_drive() {
+        assert_eq!(
+            home_drive_script(Some("did:ad:drive:abc")),
+            r#"window.__ATOMIC_HOME_DRIVE__="did:ad:drive:abc";"#
+        );
+        // A Drive at the server root — the atomicdata.dev case.
+        assert_eq!(
+            home_drive_script(Some("internal:/")),
+            r#"window.__ATOMIC_HOME_DRIVE__="internal:/";"#
+        );
+        assert_eq!(
+            home_drive_script(Some("  internal:/  ")),
+            r#"window.__ATOMIC_HOME_DRIVE__="internal:/";"#
+        );
+    }
+
+    #[test]
+    fn cannot_break_out_of_the_script_tag() {
+        // Operator-supplied, but it still lands inside a <script>. JSON escaping
+        // alone leaves `<` intact, so `</script>` would end the element early.
+        let out = home_drive_script(Some(r#"a"</script><script>alert(1)</script>"#));
+        assert!(
+            !out.contains("</script>"),
+            "closed the script tag early: {out}"
+        );
+        assert!(
+            !out.contains('<'),
+            "left a raw `<` in the script body: {out}"
+        );
+        assert!(
+            out.starts_with("window.__ATOMIC_HOME_DRIVE__=\""),
+            "should still be a plain string assignment: {out}"
+        );
+    }
 
     #[test]
     // Malicious test: try escaping html and adding script tag

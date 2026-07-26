@@ -96,6 +96,13 @@ impl AppState {
         let server_info = plugins::server_info::ServerInfo {
             managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             managed_dashboard_url: Arc::new(std::sync::RwLock::new(None)),
+            home_drive: config
+                .opts
+                .home_drive
+                .as_deref()
+                .map(str::trim)
+                .filter(|d| !d.is_empty())
+                .map(str::to_string),
         };
 
         // Register all built-in endpoints
