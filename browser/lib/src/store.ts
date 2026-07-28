@@ -3503,15 +3503,57 @@ export class Store {
    * already-signed-in case, where a bare Agent is sitting at the DID and needs
    * merging into rather than replacing.
    */
+  /**
+   * Finds a pre-DID Agent's resource, given the subject its secret was issued
+   * under.
+   *
+   * The secret records where the identity was *created*, which is not
+   * necessarily where its data lives now — migrating a store moves every
+   * resource onto the new server's origin. A secret issued by
+   * `https://atomicdata.dev` is used to sign in to a staging or local copy of
+   * that same data, and the old absolute URL then resolves to nothing (or, on
+   * a machine with network access, to the real production server — which is
+   * worse).
+   *
+   * So the path is what carries over, not the origin: `/agents/{pubkey}` on
+   * *this* server is tried first. The original is kept as a fallback for the
+   * case the secret really does describe another, still-live server.
+   */
+  private async fetchLegacyAgentResource(
+    legacySubject: string,
+  ): Promise<Resource | undefined> {
+    const onThisServer = legacySubject.replace(
+      /^https?:\/\/[^/]+/,
+      this.serverUrl,
+    );
+
+    const candidates =
+      onThisServer === legacySubject
+        ? [legacySubject]
+        : [onThisServer, legacySubject];
+
+    for (const candidate of candidates) {
+      try {
+        const resource = await this.getResource(candidate);
+
+        if (!resource.error) return resource;
+      } catch {
+        // Try the next candidate.
+      }
+    }
+
+    return undefined;
+  }
+
   private async adoptLegacyAgentIdentity(agent: Agent): Promise<void> {
     const legacySubject = agent.legacySubject;
 
     if (!legacySubject || !agent.subject) return;
 
     try {
-      const legacy = await this.getResource(legacySubject);
+      const legacy = await this.fetchLegacyAgentResource(legacySubject);
 
-      if (legacy.error) return;
+      if (!legacy) return;
 
       const current = await this.getResource(agent.subject);
 
