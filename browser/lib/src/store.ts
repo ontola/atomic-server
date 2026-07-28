@@ -3468,6 +3468,11 @@ export class Store {
           this.notifyError(e);
         });
       });
+
+      // Fire-and-forget: a returning pre-DID user should get their name and
+      // drives back, but signing in must not block on it or fail because of
+      // it.
+      void this.adoptLegacyAgentIdentity(agent);
     } else {
       if (hasBrowserAPI()) {
         removeCookieAuthentication();
@@ -3475,6 +3480,78 @@ export class Store {
     }
 
     this.eventManager.emit(StoreEvents.AgentChanged, agent);
+  }
+
+  /**
+   * Carries a pre-DID identity's own details onto its DID.
+   *
+   * Before DIDs, an Agent lived at `https://server/agents/{pubkey}` — and that
+   * resource is what holds the user's `name` and, crucially, the `drives` they
+   * own. Signing in derives `did:ad:agent:{pubkey}` from the key and mints a
+   * fresh Agent there: correct identity, empty resource. It then shadows the
+   * real one permanently, so the user is not shown an error — they are shown
+   * an account that looks brand new, with no name and no drives, which is what
+   * empties the sidebar.
+   *
+   * The old subject survives only inside the secret ({@link
+   * legacySubjectFromSecret}), so this runs on the client: the server never
+   * sees a secret and cannot do this itself.
+   *
+   * Only ever FILLS IN. A property already set on the DID Agent is left alone,
+   * so this converges after one run and a user who renames themselves later is
+   * never reverted on the next sign-in. That also makes it safe for the
+   * already-signed-in case, where a bare Agent is sitting at the DID and needs
+   * merging into rather than replacing.
+   */
+  private async adoptLegacyAgentIdentity(agent: Agent): Promise<void> {
+    const legacySubject = agent.legacySubject;
+
+    if (!legacySubject || !agent.subject) return;
+
+    try {
+      const legacy = await this.getResource(legacySubject);
+
+      if (legacy.error) return;
+
+      const current = await this.getResource(agent.subject);
+
+      if (current.error) return;
+
+      // `drives` is the one that matters for the sidebar; the rest is identity.
+      const carried: [string, unknown][] = [];
+
+      for (const prop of [
+        core.properties.name,
+        server.properties.drives,
+        core.properties.personalDrive,
+      ]) {
+        const existing = current.get(prop);
+        const isEmpty =
+          existing === undefined ||
+          existing === null ||
+          existing === '' ||
+          (Array.isArray(existing) && existing.length === 0);
+
+        if (!isEmpty) continue;
+
+        const inherited = legacy.get(prop);
+
+        if (inherited === undefined || inherited === null) continue;
+
+        carried.push([prop, inherited]);
+      }
+
+      if (carried.length === 0) return;
+
+      for (const [prop, value] of carried) {
+        await current.set(prop, value as never, false);
+      }
+
+      await current.save();
+    } catch {
+      // Best effort. A failure here leaves the user signed in with an empty
+      // profile — bad, but not as bad as failing the sign-in itself.
+    }
   }
 
   /** Sets the Server base URL, without the trailing slash. */

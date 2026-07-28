@@ -206,6 +206,35 @@ export const decodeSecret = (secret: string): DecodedSecret => {
   return { privateKey, subject, initialDrive: parsed.initialDrive };
 };
 
+/**
+ * The subject a pre-DID secret was issued under, if it is one.
+ *
+ * This is the only place that information survives. A modern secret carries
+ * `did:ad:agent:{pubkey}`, which is derivable from the private key and so says
+ * nothing new — but an older one carries `https://server/agents/{pubkey}`,
+ * which names *the server the identity came from*. That cannot be recovered
+ * from the key, and {@link decodeSecret} rewrites it to the DID and drops it.
+ *
+ * Without it the Agent's real resource — its name, and the `drives` it owns —
+ * is unreachable, because nothing links the DID to where the old server
+ * actually stored the Agent.
+ *
+ * Returns undefined for a modern secret, or for anything unparseable: this
+ * runs on a sign-in path that must not fail because of it.
+ */
+export const legacySubjectFromSecret = (secret: string): string | undefined => {
+  try {
+    const parsed = JSON.parse(atob(secret)) as { subject?: string };
+    const subject = parsed?.subject;
+
+    if (typeof subject !== 'string') return undefined;
+
+    return /^https?:\/\/[^/]+\/agents\/.+$/.test(subject) ? subject : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export interface KeyPair {
   publicKey: string;
   privateKey: string;
