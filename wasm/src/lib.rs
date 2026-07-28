@@ -124,10 +124,14 @@ impl ClientDb {
     /// Get a resource by its subject URL. Returns JSON-AD string or null.
     #[wasm_bindgen(js_name = "getResource")]
     pub async fn get_resource(&self, subject: &str) -> Result<JsValue, JsError> {
-        let subject = Subject::from(subject);
+        // Localized in, localized out: the caller addresses resources by the
+        // URL it was served, while the store is keyed by `internal:`.
+        // `Subject::from` drops the base domain and would look up an
+        // `External` subject that does not exist here.
+        let subject = Subject::from_raw(subject, self.db.get_base_domain().as_deref());
         match self.db.get_resource(&subject).await {
             Ok(resource) => {
-                let json = resource_to_json_ad(&resource)?;
+                let json = resource_to_json_ad(&resource, &self.origin())?;
                 Ok(JsValue::from_str(&json))
             }
             Err(_) => Ok(JsValue::NULL),
@@ -234,7 +238,9 @@ impl ClientDb {
             operator: Option<String>,
         }
 
-        let extra: Vec<atomic_lib::storelike::PropVal> =
+        let base_domain = self.db.get_base_domain();
+
+        let mut extra: Vec<atomic_lib::storelike::PropVal> =
             if filters.is_null() || filters.is_undefined() {
                 Vec::new()
             } else {
@@ -252,9 +258,38 @@ impl ClientDb {
                     .collect()
             };
 
+        // The caller only ever saw localized subjects, but this database is
+        // keyed by the raw `internal:` form — exactly the asymmetry the server
+        // handles in `collections::collect_members`. Without it a `parent=`
+        // filter matches nothing locally.
+        for filter in extra.iter_mut() {
+            let (Some(property), Some(Value::String(raw))) =
+                (filter.property.as_deref(), filter.value.as_ref())
+            else {
+                continue;
+            };
+            let raw = raw.clone();
+            filter.value = Some(
+                atomic_lib::collections::delocalize_filter_value(&self.db, Some(property), &raw)
+                    .await,
+            );
+        }
+
+        let value = match value {
+            Some(raw) => Some(
+                atomic_lib::collections::delocalize_filter_value(
+                    &self.db,
+                    property.as_deref(),
+                    &raw,
+                )
+                .await,
+            ),
+            None => None,
+        };
+
         let q = Query {
             property,
-            value: value.map(Value::String),
+            value,
             filters: extra,
             sort_by,
             sort_desc: sort_desc.unwrap_or(false),
@@ -265,12 +300,24 @@ impl ClientDb {
             include_external: false,
             include_nested: include_resources.unwrap_or(false),
             for_agent: atomic_lib::agents::ForAgent::Sudo,
-            drive: drive.map(Subject::from),
+            // `Subject::from` drops the base domain, leaving a localized drive
+            // as an `External` subject that matches no stored drive prefix.
+            drive: drive.map(|d| Subject::from_raw(&d, base_domain.as_deref())),
         };
 
         let result = self.db.query(&q).await.map_err(to_js_err)?;
-        let response = QueryResponse::from_result(&result)?;
+        let response = QueryResponse::from_result(&result, &self.origin())?;
         serde_wasm_bindgen::to_value(&response).map_err(|e| JsError::new(&e.to_string()))
+    }
+
+    /// The absolute origin this database's subjects are addressed by in the
+    /// browser. `internal:` is a storage detail: everything handed back across
+    /// the wasm boundary must be a URL (or a DID) the client can actually
+    /// fetch, matching what the server sends over HTTP.
+    fn origin(&self) -> String {
+        self.db
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".to_string())
     }
 
     /// Store a Loro CRDT snapshot (raw bytes) for a resource subject.
@@ -502,13 +549,20 @@ struct QueryResponse {
 }
 
 impl QueryResponse {
-    fn from_result(result: &QueryResult) -> Result<Self, JsError> {
-        let subjects: Vec<String> = result.subjects.iter().map(|s| s.to_string()).collect();
+    /// `origin` localizes every subject on the way out, the same way
+    /// [atomic_lib::serialize] does for the server's HTTP responses.
+    ///
+    /// Without it `Subject::Internal` stringifies to its raw storage form and
+    /// the client receives `internal:/01k4sg…` as a member subject. The
+    /// browser cannot fetch that — there is no host to send a request to — so
+    /// the resource never resolves and the row renders with no name.
+    fn from_result(result: &QueryResult, origin: &str) -> Result<Self, JsError> {
+        let subjects: Vec<String> = result.subjects.iter().map(|s| s.resolve(origin)).collect();
 
         let resources: Vec<String> = result
             .resources
             .iter()
-            .map(resource_to_json_ad)
+            .map(|r| resource_to_json_ad(r, origin))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(QueryResponse {
@@ -519,8 +573,8 @@ impl QueryResponse {
     }
 }
 
-fn resource_to_json_ad(resource: &Resource) -> Result<String, JsError> {
-    resource.to_json_ad(None).map_err(to_js_err)
+fn resource_to_json_ad(resource: &Resource, origin: &str) -> Result<String, JsError> {
+    resource.to_json_ad(Some(origin)).map_err(to_js_err)
 }
 
 fn to_js_err(e: impl std::fmt::Display) -> JsError {
