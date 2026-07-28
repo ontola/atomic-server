@@ -1204,6 +1204,24 @@ impl Db {
             || subject_string.starts_with("/query")
     }
 
+    /// Where a pre-DID server stored the Agent that `did:ad:agent:{pubkey}`
+    /// now identifies. `None` for anything that isn't an Agent DID.
+    ///
+    /// The inverse of [crate::agents::migrate_legacy_agent_subject]. The
+    /// pubkey is standard base64 and contains `/` and `+`, so the whole
+    /// remainder is carried across untouched.
+    fn legacy_agent_subject(subject: &Subject) -> Option<Subject> {
+        let pubkey = subject
+            .as_str()
+            .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)?;
+
+        if pubkey.is_empty() {
+            return None;
+        }
+
+        Some(Subject::new_local(&format!("/agents/{pubkey}"), None))
+    }
+
     pub async fn fetch_resource_with_did_fallback(
         &self,
         subject: &Subject,
@@ -1218,6 +1236,40 @@ impl Db {
         }
 
         let store = self.clone_with_url(origin.to_string());
+
+        // A user from before the DID migration signs in as
+        // `did:ad:agent:{pubkey}`, but their Agent resource is still stored
+        // where the old server put it — `internal:/agents/{pubkey}` (the
+        // localized form of `https://server/agents/{pubkey}`). Nothing links
+        // the two.
+        //
+        // Resolving an Agent DID does not fail when there is no stored
+        // resource: it synthesizes a minimal Agent from the key. So the user
+        // isn't met with an error — they're met with an account that looks
+        // brand new. Their name is gone, and because the Agent carries
+        // `drives`, so is every drive they own, which is what empties the
+        // sidebar.
+        //
+        // Same key, same identity, so serve the stored resource under the DID
+        // that asked for it. Gated on the DID having nothing of its own, which
+        // makes it self-healing: it applies only to identities that predate the
+        // migration, and stops the moment a real Agent exists at the DID.
+        // Read-only — the legacy resource is left exactly as it is.
+        if !self.has_stored_resource(subject) {
+            if let Some(legacy) = Self::legacy_agent_subject(subject) {
+                if self.has_stored_resource(&legacy) {
+                    let mut response = store
+                        .get_resource_extended(&legacy, false, for_agent)
+                        .await?;
+                    // Answer under the subject that was requested, so the
+                    // client caches it against the DID rather than
+                    // re-introducing the legacy spelling.
+                    response.set_subject(subject.clone());
+
+                    return Ok(response);
+                }
+            }
+        }
 
         store.get_resource_extended(subject, false, for_agent).await
     }

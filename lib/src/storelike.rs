@@ -41,6 +41,21 @@ impl ResourceResponse {
         }
     }
 
+    /// Re-label the main resource, so a response served from one stored
+    /// subject can answer under the subject the client actually asked for.
+    /// No-op for Redirects.
+    pub fn set_subject(&mut self, subject: Subject) {
+        match self {
+            ResourceResponse::Resource(resource) => {
+                resource.set_subject(subject.to_string());
+            }
+            ResourceResponse::ResourceWithReferenced(resource, _) => {
+                resource.set_subject(subject.to_string());
+            }
+            ResourceResponse::Redirect(_) => {}
+        }
+    }
+
     /// Get the subject of the main resource.
     /// Returns None for Redirects.
     pub fn get_subject(&self) -> Option<&Subject> {
