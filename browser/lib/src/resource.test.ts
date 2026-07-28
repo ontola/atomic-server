@@ -1,7 +1,11 @@
 import { describe, it, vi } from 'vitest';
 import { encodeB64Url } from './base64.js';
 import { encodeGenesisCert, genesisSignerDid } from './genesis.js';
-import { normalizeLoroChangeTimestampMs, Resource } from './resource.js';
+import {
+  localizeInternalSubject,
+  normalizeLoroChangeTimestampMs,
+  Resource,
+} from './resource.js';
 import type { JSONValue } from './value.js';
 import { testStore } from './test-store.js';
 import { core } from './index.js';
@@ -657,5 +661,59 @@ describe('subscribeLocalUpdates does not mark a `_new:` placeholder dirty', () =
     resource.getLoroDoc()?.commit();
 
     expect(store.outbox.hasPending(subject)).toBe(true);
+  });
+});
+
+describe('localizeInternalSubject', () => {
+  const origin = 'https://atomicdata.dev';
+
+  it('resolves internal subjects the way the server resolves them', ({
+    expect,
+  }) => {
+    // The root drive keeps its trailing slash — this is the exact subject the
+    // server serves for `internal:/`, so both spellings converge on one key.
+    expect(localizeInternalSubject('internal:/', origin)).toBe(
+      'https://atomicdata.dev/',
+    );
+    expect(
+      localizeInternalSubject('internal:/01k4sg74k81tf8rr7d1m86vbkx', origin),
+    ).toBe('https://atomicdata.dev/01k4sg74k81tf8rr7d1m86vbkx');
+    expect(
+      localizeInternalSubject('internal:/commits/FWAKdxeEs+w/Q==', origin),
+    ).toBe('https://atomicdata.dev/commits/FWAKdxeEs+w/Q==');
+    // A trailing slash on the origin must not double up.
+    expect(localizeInternalSubject('internal:/abc', 'https://x.com/')).toBe(
+      'https://x.com/abc',
+    );
+  });
+
+  it('routes a tenant subject to its subdomain', ({ expect }) => {
+    expect(localizeInternalSubject('internal:acme:/docs', origin)).toBe(
+      'https://acme.atomicdata.dev/docs',
+    );
+  });
+
+  it('leaves everything that is not an internal subject alone', ({
+    expect,
+  }) => {
+    for (const value of [
+      'https://atomicdata.dev/properties/parent',
+      'did:ad:agent:abc',
+      '_new:draft',
+      '_local:thing',
+      'Joep Meindertsma',
+      '',
+      // Prose that merely starts with the word — the guard requires a real
+      // subject shape and no whitespace, so this is untouched.
+      'internal: use the staging box for this',
+      'internal:notasubject',
+    ]) {
+      expect(localizeInternalSubject(value, origin)).toBe(value);
+    }
+  });
+
+  it('is idempotent', ({ expect }) => {
+    const once = localizeInternalSubject('internal:/abc', origin);
+    expect(localizeInternalSubject(once, origin)).toBe(once);
   });
 });

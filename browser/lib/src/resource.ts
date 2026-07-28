@@ -711,9 +711,20 @@ export class Resource<C extends OptionalClass = any> {
       | Record<string, string>
       | undefined;
 
+    // Loro snapshots arrive with their subject-valued props still in the
+    // server's `internal:` storage form — see `localizeInternalSubject`. This
+    // is the single point where doc values become propvals, so it is the one
+    // place that has to resolve them.
+    // The `store` getter throws when unset (a bare `new Resource()` in tests,
+    // or a resource built before it's attached), so read the field directly.
+    const origin = this._store?.getServerUrl();
+
     if (json && typeof json === 'object') {
       for (const [key, value] of Object.entries(json)) {
-        nextCache[key] = normalizeLoroValue(datatypesJson?.[key], value);
+        const normalized = normalizeLoroValue(datatypesJson?.[key], value);
+        nextCache[key] = origin
+          ? localizeInternalSubjects(normalized, origin)
+          : normalized;
       }
     }
 
@@ -3447,6 +3458,88 @@ export class Resource<C extends OptionalClass = any> {
 
     return parent.new;
   }
+}
+
+/**
+ * A subject that is `internal:` and nothing else — no whitespace, and either
+ * `internal:/path` (server root) or `internal:tenant:/path` (subdomain drive).
+ *
+ * Deliberately strict so a prose propval that merely begins with the word
+ * "internal:" is never rewritten. Any real subject matches; a sentence does
+ * not, because it contains a space.
+ */
+const INTERNAL_SUBJECT = /^internal:(?:\/|[A-Za-z0-9-]+:\/)\S*$/;
+
+/**
+ * Resolves an `internal:` subject against this server's origin — the client
+ * side of what {@link https://docs.atomicdata.dev | serialize.rs} does for
+ * HTTP responses.
+ *
+ * `internal:` is the server's *storage* scheme. It reaches the browser only
+ * through Loro snapshots: a WebSocket frame carries the CRDT bytes verbatim,
+ * and while the frame's subject header is resolved server-side, the AtomicUrl
+ * values *inside* the document are not. (They can't be — the snapshot is
+ * covered by the commit signature, so the server must not rewrite it.)
+ *
+ * Left raw, such a value is unusable: the browser has no host to send a
+ * request to, so `useResource` on it issues no request at all and hangs in
+ * `loading` forever, with nothing in the console. That is why a migrated
+ * drive's tables render no rows — the table dereferences its `classtype`,
+ * which arrives as `internal:/…` — and why the same resource ends up in the
+ * store under two keys at once.
+ *
+ * Resolving unconditionally is safe here in a way it would not be on the
+ * server: the client never mints an `internal:` subject of its own. Its
+ * temporary subjects are `_new:`/`_local:` and its local-only drives are
+ * DIDs, so an `internal:` string in the browser is always a leaked storage
+ * subject.
+ */
+export function localizeInternalSubject(value: string, origin: string): string {
+  if (!INTERNAL_SUBJECT.test(value)) return value;
+
+  const rest = value.slice('internal:'.length);
+  const base = origin.replace(/\/+$/, '');
+
+  // `internal:/path` → `<origin>/path`. Root (`internal:/`) keeps its slash,
+  // matching the subject the server serves for a root drive.
+  if (rest.startsWith('/')) return `${base}${rest}`;
+
+  // `internal:tenant:/path` → `<proto>tenant.<host>/path`
+  const separator = rest.indexOf(':/');
+
+  if (separator === -1) return value;
+
+  const subdomain = rest.slice(0, separator);
+  const path = rest.slice(separator + 1);
+  const withProtocol = /^(\w+:\/\/)(.*)$/.exec(base);
+
+  return withProtocol
+    ? `${withProtocol[1]}${subdomain}.${withProtocol[2]}${path}`
+    : `${subdomain}.${base}${path}`;
+}
+
+/** Applies {@link localizeInternalSubject} to a propval, including arrays. */
+function localizeInternalSubjects(value: JSONValue, origin: string): JSONValue {
+  if (typeof value === 'string') {
+    return localizeInternalSubject(value, origin);
+  }
+
+  if (Array.isArray(value)) {
+    let changed = false;
+    const next = value.map(item => {
+      if (typeof item !== 'string') return item;
+
+      const localized = localizeInternalSubject(item, origin);
+
+      if (localized !== item) changed = true;
+
+      return localized;
+    });
+
+    return changed ? (next as JSONValue) : value;
+  }
+
+  return value;
 }
 
 function normalizeLoroValue(
