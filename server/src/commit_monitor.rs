@@ -440,7 +440,28 @@ impl Handler<SubscribeQuery> for CommitMonitor {
                 )
                 .await
                 {
-                    Ok(_) => Some(msg),
+                    Ok(_) => {
+                        // Same de-localization the HTTP `/query` path applies
+                        // (`collections::collect_members`). Both sides must
+                        // agree: the subscription is keyed by `query_id`, a
+                        // hash over the filter, so a client that subscribes
+                        // with the localized subject it was served would
+                        // register under a different id than the one the
+                        // index fires membership events for, and never
+                        // receive an update.
+                        let mut msg = msg;
+                        if let Some(raw) = msg.query.value.as_deref() {
+                            let delocalized = atomic_lib::collections::delocalize_filter_value(
+                                &store,
+                                msg.query.property.as_deref(),
+                                raw,
+                            )
+                            .await;
+                            msg.query.value = Some(delocalized.to_string());
+                        }
+
+                        Some(msg)
+                    }
                     Err(e) => {
                         tracing::debug!(
                             "Rejecting SUBSCRIBE_QUERY: {agent} cannot read drive {drive_subject}: {e}"

@@ -161,6 +161,52 @@ impl CollectionBuilder {
     }
 }
 
+/// Turns a filter value that arrived over the wire back into the form the
+/// store is actually keyed by.
+///
+/// Subjects go out localized (`internal:/x` is served as `https://example.com/x`,
+/// see [crate::serialize]) but are indexed raw, so a client filtering on
+/// `parent` sends back a URL that matches nothing. This is invisible on a
+/// DID-era server — `did:` subjects resolve to themselves — and total on a
+/// store migrated from the pre-DID era, where every subject is `internal:`:
+/// the sidebar, folder listings and every other `parent=` query come back
+/// empty while the resources are perfectly intact.
+///
+/// Gated on the property's datatype rather than on "does this look like one of
+/// our URLs". Only `AtomicUrl` and `ResourceArray` hold subjects, and only
+/// those are localized on the way out. A `String` or `Uri` property is stored
+/// verbatim — rewriting a filter for the literal text `https://example.com/x`
+/// would break a query that works today. An unknown property (or a lookup
+/// failure) is left alone for the same reason.
+pub async fn delocalize_filter_value(
+    store: &impl Storelike,
+    property: Option<&str>,
+    raw: &str,
+) -> Value {
+    let unchanged = Value::String(raw.to_string());
+
+    let Some(property) = property else {
+        return unchanged;
+    };
+
+    let holds_subjects = matches!(
+        store.get_property(property).await,
+        Ok(p) if matches!(
+            p.data_type,
+            crate::datatype::DataType::AtomicUrl | crate::datatype::DataType::ResourceArray
+        )
+    );
+
+    if !holds_subjects {
+        return unchanged;
+    }
+
+    match Subject::delocalize(raw, store.get_base_domain().as_deref()) {
+        Some(internal) => Value::String(internal),
+        None => unchanged,
+    }
+}
+
 /// Dynamic resource used for ordering, filtering and querying content.
 /// Contains members / results. Use CollectionBuilder if you don't (yet) need the results.
 /// Features pagination.
@@ -241,15 +287,28 @@ impl Collection {
         // Warning: this _assumes_ that the Value is a string.
         // This will work for most datatypes, but not for things like resource arrays!
         // We could improve this by taking the datatype of the `property`, and parsing the string.
-        let value_filter = collection_builder
-            .value
-            .as_ref()
-            .map(|val| Value::String(val.clone()));
+        let value_filter = match collection_builder.value.as_ref() {
+            Some(val) => Some(
+                delocalize_filter_value(store, collection_builder.property.as_deref(), val).await,
+            ),
+            None => None,
+        };
+
+        let mut filters = collection_builder.filters.clone();
+        for filter in filters.iter_mut() {
+            let (Some(property), Some(Value::String(raw))) =
+                (filter.property.as_deref(), filter.value.as_ref())
+            else {
+                continue;
+            };
+            let raw = raw.clone();
+            filter.value = Some(delocalize_filter_value(store, Some(property), &raw).await);
+        }
 
         let q = Query {
             property: collection_builder.property.clone(),
             value: value_filter,
-            filters: collection_builder.filters.clone(),
+            filters,
             limit: Some(collection_builder.page_size),
             start_val: None,
             end_val: None,
@@ -671,6 +730,133 @@ mod test {
                 .members
                 .contains(&tag_b.get_subject().to_string()),
             "tag_b only matches isA, not shortname, so should be excluded: {:?}",
+            collection.members
+        );
+    }
+
+    /// Subjects are stored (and indexed) as `internal:/…` but served
+    /// localized, so a client filtering on `parent` sends back the absolute
+    /// URL it was given. Both spellings must find the same members.
+    ///
+    /// Regression: on a store migrated from the pre-DID era every subject is
+    /// `internal:`, so this mismatch emptied the sidebar and every folder
+    /// listing while the resources themselves were intact. Invisible on a
+    /// DID-era server, where subjects resolve to themselves.
+    #[tokio::test]
+    async fn localized_subject_filter_finds_internally_stored_members() {
+        let store = crate::db::Db::init_temp("delocalize_query_value")
+            .await
+            .unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
+
+        let mut child = Resource::new_instance(urls::TAG, &store).await.unwrap();
+        child
+            .set(urls::SHORTNAME.into(), Value::Slug("child".into()), &store)
+            .await
+            .unwrap();
+        child
+            .set(
+                urls::PARENT.into(),
+                Value::AtomicUrl("internal:/".into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        child.save(&store).await.unwrap();
+
+        let members_for = |value: &str| {
+            let value = value.to_string();
+            async {
+                Collection::collect_members(
+                    &store,
+                    CollectionBuilder {
+                        subject: "test_subject".into(),
+                        property: Some(urls::PARENT.into()),
+                        value: Some(value),
+                        filters: Vec::new(),
+                        sort_by: None,
+                        sort_desc: false,
+                        page_size: DEFAULT_PAGE_SIZE,
+                        current_page: 0,
+                        name: None,
+                        include_nested: false,
+                        include_external: false,
+                        drive: None,
+                    },
+                    &ForAgent::Sudo,
+                )
+                .await
+                .unwrap()
+                .members
+            }
+        };
+
+        // `init_temp` configures the base domain as `https://localhost`, so
+        // this is exactly what a browser is served for `internal:/`.
+        let stored = members_for("internal:/").await;
+        let localized = members_for("https://localhost/").await;
+
+        assert!(
+            stored.contains(&child.get_subject().to_string()),
+            "the stored spelling should find the child: {stored:?}"
+        );
+        assert_eq!(
+            stored, localized,
+            "a client filtering with the localized subject it was served must \
+             get the same members as the stored `internal:` spelling"
+        );
+    }
+
+    /// The de-localization above is gated on the property's datatype. A
+    /// text-valued property holds text, not a subject, and is never
+    /// localized on the way out — rewriting a filter for text that merely
+    /// looks like one of our URLs would break a query that works today.
+    #[tokio::test]
+    async fn text_valued_filters_are_left_alone() {
+        let store = crate::db::Db::init_temp("delocalize_leaves_strings")
+            .await
+            .unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
+
+        let text = "https://localhost/not-a-subject";
+        let mut tag = Resource::new_instance(urls::TAG, &store).await.unwrap();
+        tag.set(urls::SHORTNAME.into(), Value::Slug("texty".into()), &store)
+            .await
+            .unwrap();
+        tag.set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown(text.to_string()),
+            &store,
+        )
+        .await
+        .unwrap();
+        tag.save(&store).await.unwrap();
+
+        let collection = Collection::collect_members(
+            &store,
+            CollectionBuilder {
+                subject: "test_subject".into(),
+                property: Some(urls::DESCRIPTION.into()),
+                value: Some(text.to_string()),
+                filters: Vec::new(),
+                sort_by: None,
+                sort_desc: false,
+                page_size: DEFAULT_PAGE_SIZE,
+                current_page: 0,
+                name: None,
+                include_nested: false,
+                include_external: false,
+                drive: None,
+            },
+            &ForAgent::Sudo,
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            collection.members.contains(&tag.get_subject().to_string()),
+            "a String-valued property stores the text verbatim, so filtering \
+             for it must still match: {:?}",
             collection.members
         );
     }

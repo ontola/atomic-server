@@ -359,6 +359,40 @@ impl Subject {
         }
     }
 
+    /// Undoes [Subject::resolve] for a subject this server serves itself.
+    ///
+    /// Resources are stored — and the query index is keyed — by the raw
+    /// `internal:` subject, but they are localized to absolute URLs on the way
+    /// out ([crate::serialize]). A client therefore only ever sees
+    /// `https://example.com/x`, and echoes exactly that back when it filters on
+    /// a subject-valued property such as `parent`. Compared byte-for-byte
+    /// against the stored `internal:/x`, it never matches, and the query
+    /// silently returns nothing.
+    ///
+    /// Returns `None` — leave the caller's string alone — for anything that is
+    /// not one of ours:
+    ///   - not an absolute URL at all (a plain string filter value, which
+    ///     [Subject::from_raw] would otherwise happily turn into a bogus
+    ///     `internal:` subject via its trailing path fallback),
+    ///   - a `did:` subject, which is already globally addressable,
+    ///   - another server's URL, or the shared `atomicdata.dev` vocabulary,
+    ///     which stays absolute even on `atomicdata.dev` itself.
+    ///
+    /// Idempotent: an `internal:` string passed in comes back unchanged, so
+    /// callers that normalize twice — or that receive an already-internal
+    /// value from an in-process caller — are unaffected.
+    pub fn delocalize(raw: &str, base_domain: Option<&str>) -> Option<String> {
+        // Guard the fallback in `from_raw`: it treats an unparseable string as
+        // a local path, so without this a filter for the literal value "hello"
+        // would be rewritten to `internal:/hello`.
+        Url::parse(raw).ok()?;
+
+        match Subject::from_raw(raw, base_domain) {
+            internal @ Subject::Internal { .. } => Some(internal.to_string()),
+            Subject::External(_) | Subject::Did { .. } => None,
+        }
+    }
+
     /// The `atomicdata.dev` namespaces that [crate::urls] hardcodes as absolute
     /// `const` strings — the shared vocabulary every Atomic server refers to by
     /// absolute URL.
@@ -929,5 +963,90 @@ mod tests {
                 Subject::from_raw(raw, base)
             );
         }
+    }
+
+    /// The query index is keyed by the stored `internal:` subject, but clients
+    /// only ever see the localized URL and filter with that. Without this, a
+    /// `parent=` query on a store migrated from the pre-DID era matches
+    /// nothing and the sidebar renders empty.
+    #[test]
+    fn delocalize_undoes_resolve_for_our_own_subjects() {
+        let base = Some("https://atomicdata.dev");
+
+        assert_eq!(
+            Subject::delocalize("https://atomicdata.dev/", base).as_deref(),
+            Some("internal:/")
+        );
+        assert_eq!(
+            Subject::delocalize("https://atomicdata.dev/01jd9n5hc9dpwm8ygf2vh3mprf", base)
+                .as_deref(),
+            Some("internal:/01jd9n5hc9dpwm8ygf2vh3mprf")
+        );
+        // Ports are part of the authority, so a dev server on :9883 matches too.
+        assert_eq!(
+            Subject::delocalize("http://localhost:9883/abc", Some("localhost:9883")).as_deref(),
+            Some("internal:/abc")
+        );
+    }
+
+    #[test]
+    fn delocalize_round_trips_with_resolve() {
+        let origin = "https://atomicdata.dev";
+        for internal in ["internal:/", "internal:/abc", "internal:/abc/def"] {
+            let resolved = Subject::from(internal).resolve(origin);
+            assert_eq!(
+                Subject::delocalize(&resolved, Some(origin)).as_deref(),
+                Some(internal),
+                "{internal} did not survive resolve -> delocalize (via {resolved})"
+            );
+        }
+    }
+
+    #[test]
+    fn delocalize_leaves_everything_else_alone() {
+        let base = Some("https://atomicdata.dev");
+
+        for raw in [
+            // Not a URL at all: a plain string filter value. `from_raw` would
+            // turn this into `internal:/hello` via its local-path fallback.
+            "hello",
+            "some free text",
+            "",
+            // Already globally addressable.
+            "did:ad:drive:abc",
+            // Another server.
+            "https://example.com/thing",
+            // Shared vocabulary stays absolute even on atomicdata.dev itself.
+            "https://atomicdata.dev/properties/parent",
+            "https://atomicdata.dev/classes/Drive",
+            "https://atomicdata.dev/agents/publicAgent",
+        ] {
+            assert_eq!(
+                Subject::delocalize(raw, base),
+                None,
+                "{raw} must be left untouched"
+            );
+        }
+    }
+
+    #[test]
+    fn delocalize_is_idempotent() {
+        let base = Some("https://atomicdata.dev");
+        // An in-process caller may already hand us the stored form.
+        assert_eq!(
+            Subject::delocalize("internal:/abc", base).as_deref(),
+            Some("internal:/abc")
+        );
+        let once = Subject::delocalize("https://atomicdata.dev/abc", base).unwrap();
+        assert_eq!(Subject::delocalize(&once, base), Some(once.clone()));
+    }
+
+    #[test]
+    fn delocalize_without_a_base_domain_changes_nothing() {
+        // No base domain configured: we cannot know what is ours.
+        assert_eq!(
+            Subject::delocalize("https://atomicdata.dev/abc", None),
+            None
+        );
     }
 }
