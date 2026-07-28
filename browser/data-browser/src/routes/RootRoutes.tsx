@@ -55,7 +55,7 @@ export const rootRoute = createRootRoute({
 
 const TopRouteComponent: React.FC = () => {
   const { pathname } = useLocation();
-  const { baseURL, agent, drive } = useSettings();
+  const { baseURL, agent, drive, setDrive } = useSettings();
   const store = useStore();
   const navigate = useNavigateWithTransition();
 
@@ -83,9 +83,38 @@ const TopRouteComponent: React.FC = () => {
     }
 
     if (homeDrive) {
+      // Adopt the Drive the server actually named. `AppSettings` otherwise
+      // defaults to `baseURL`, which is the origin *without* a trailing slash
+      // and so is not the root Drive's subject (`http://host/`). Both spellings
+      // answer over HTTP, so the split is invisible server-side — but on the
+      // client they are two different cache keys, producing two separate
+      // Collections. The sidebar reads the one keyed by `drive` and finds it
+      // empty while the correctly-keyed one holds the children.
+      if (drive !== homeDrive) {
+        setDrive(homeDrive);
+      }
+
+      const target = constructOpenURL(homeDrive);
+
+      // The home Drive is usually the server root itself, and
+      // `constructOpenURL` maps a same-origin subject back to a bare path —
+      // so `target` is `/`, the page we are already on. Navigating there is a
+      // no-op, which would leave `resolvingRoot` set forever and render
+      // `null`: no resource, no error, no loader, just an empty page with a
+      // working sidebar around it. Nothing left to resolve — fall through and
+      // render `/` as the resource it is.
+      if (
+        target === `${pathname}${window.location.search}` ||
+        target === pathname
+      ) {
+        setResolvingRoot(false);
+
+        return;
+      }
+
       // `replace`, so Back leaves the site instead of returning to `/` and
       // being bounced straight back to the home Drive.
-      navigate({ to: constructOpenURL(homeDrive), replace: true });
+      navigate({ to: target, replace: true });
 
       return;
     }
@@ -124,7 +153,17 @@ const TopRouteComponent: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [isRoot, homeDrive, agent, drive, baseURL, store, navigate]);
+  }, [
+    isRoot,
+    homeDrive,
+    pathname,
+    agent,
+    drive,
+    setDrive,
+    baseURL,
+    store,
+    navigate,
+  ]);
 
   // In dev, the UI is often on :6747 while JSON-AD is served from the Atomic
   // server (e.g. :9883). In Tauri, the UI is on a custom protocol while the
