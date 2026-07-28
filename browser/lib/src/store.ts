@@ -3517,14 +3517,13 @@ export class Store {
 
       if (current.error) return;
 
-      // `drives` is the one that matters for the sidebar; the rest is identity.
+      // Identity only. `drives` is deliberately NOT carried onto the Agent:
+      // the two models keep that list in different places, and putting it back
+      // where the old one had it is actively harmful — see
+      // `adoptLegacyDriveList`.
       const carried: [string, unknown][] = [];
 
-      for (const prop of [
-        core.properties.name,
-        server.properties.drives,
-        core.properties.personalDrive,
-      ]) {
+      for (const prop of [core.properties.name, core.properties.description]) {
         const existing = current.get(prop);
         const isEmpty =
           existing === undefined ||
@@ -3541,17 +3540,78 @@ export class Store {
         carried.push([prop, inherited]);
       }
 
-      if (carried.length === 0) return;
+      if (carried.length > 0) {
+        for (const [prop, value] of carried) {
+          await current.set(prop, value as never, false);
+        }
 
-      for (const [prop, value] of carried) {
-        await current.set(prop, value as never, false);
+        await current.save();
       }
 
-      await current.save();
+      await this.adoptLegacyDriveList(agent, legacy, current);
     } catch {
       // Best effort. A failure here leaves the user signed in with an empty
       // profile — bad, but not as bad as failing the sign-in itself.
     }
+  }
+
+  /**
+   * Restores the drives a pre-DID user owned, into the list the app actually
+   * reads.
+   *
+   * The two models disagree on where that list lives. The old server kept
+   * `drives` on the Agent; the current one keeps it on the user's private
+   * drive — the per-user home index — which is what `useSavedDrives` reads.
+   * Copying the old list onto the Agent therefore restores nothing: "My
+   * drives" stays empty because nothing looks there.
+   *
+   * Worse, it actively misleads. With no `personalDrive` set,
+   * `fetchPersonalDriveSubject` falls back to `drives[0]` on the Agent — so
+   * one arbitrary drive out of the whole list gets promoted to "Private
+   * drive" and the other 52 vanish. These are ordinary drives the user owns,
+   * not their private one.
+   *
+   * So the list goes on the private drive, and `personalDrive` is left for the
+   * user to choose. Union, never replace: drives already in the list stay, and
+   * one that was deliberately unstarred is not resurrected on the next sign-in
+   * — only genuinely-missing ones are added.
+   */
+  private async adoptLegacyDriveList(
+    agent: Agent,
+    legacy: Resource,
+    didAgent: Resource,
+  ): Promise<void> {
+    // An earlier build parked the list on the Agent. Treat that as a source
+    // too, so an account migrated by that version is repaired rather than
+    // stranded.
+    const inherited = [
+      ...legacy.getSubjects(server.properties.drives),
+      ...didAgent.getSubjects(server.properties.drives),
+    ];
+
+    if (inherited.length === 0) return;
+
+    const personalDriveSubject =
+      (didAgent.get(core.properties.personalDrive) as string | undefined) ??
+      agent.initialDrive;
+
+    if (!personalDriveSubject) return;
+
+    const personalDrive = await this.getResource(personalDriveSubject);
+
+    if (personalDrive.error) return;
+
+    const already = new Set(
+      personalDrive.getSubjects(server.properties.drives),
+    );
+    const missing = inherited.filter(
+      subject => subject !== personalDriveSubject && !already.has(subject),
+    );
+
+    if (missing.length === 0) return;
+
+    personalDrive.push(server.properties.drives, missing, true);
+    await personalDrive.save();
   }
 
   /** Sets the Server base URL, without the trailing slash. */
