@@ -259,7 +259,8 @@ test.describe('Ontology', async () => {
       .getByRole('button', { name: 'add an item to the allows-only list' })
       .nth(0)
       .click();
-    await page.getByRole('button', { name: 'Search for a arrow-kind' }).click();
+    // Adding the row opens its search directly — no second click on the
+    // trigger (which the open dropdown now covers anyway).
     await page
       .getByPlaceholder('Search for a arrow-kind ')
       .fill('red arrow with circle');
@@ -271,7 +272,6 @@ test.describe('Ontology', async () => {
       .getByRole('button', { name: 'add an item to the allows-only list' })
       .nth(0)
       .click();
-    await page.getByRole('button', { name: 'Search for a arrow-kind' }).click();
     await page
       .getByPlaceholder('Search for a arrow-kind ')
       .fill('green arrow with black border');

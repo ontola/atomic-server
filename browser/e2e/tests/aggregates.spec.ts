@@ -1,0 +1,169 @@
+import { test, expect, type Page } from '@playwright/test';
+import { before, inDialog, newResource } from './test-utils';
+
+/** The grid row containing `text`. */
+const row = (page: Page, text: string) =>
+  page.getByRole('row').filter({ hasText: text });
+
+/** Types a value into one grid cell, addressed by its row and column index. */
+async function setCell(
+  page: Page,
+  rowIndex: number,
+  columnIndex: number,
+  value: string,
+  opts: { replace?: boolean } = {},
+) {
+  const cell = page.locator(
+    `[aria-rowindex="${rowIndex}"] > [aria-colindex="${columnIndex}"]`,
+  );
+  // `click` scrolls into view AND re-resolves the locator if the grid remounts
+  // the cell under us; `scrollIntoViewIfNeeded` fails outright on that.
+  await cell.click();
+  await expect(cell).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  if (opts.replace) {
+    // Typing appends to what the cell already holds.
+    await page.keyboard.press('ControlOrMeta+a');
+  }
+
+  await page.keyboard.type(value);
+  // Tab commits the edit (Escape would revert it) — same as the table tests.
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(300);
+}
+
+test.describe('table totals', () => {
+  test.beforeEach(before);
+
+  test('sums and counts every matching row, and breaks them down', async ({
+    page,
+  }) => {
+    test.slow();
+
+    // Wide enough that the whole table fits: the totals row is clicked cell by
+    // cell, and a cell clipped by the window edge can't be.
+    await page.setViewportSize({ width: 1800, height: 900 });
+
+    // The Time tracker template gives a timestamp column and a fast way to make
+    // rows: start an entry and stop it.
+    await newResource('table', page);
+    await page.getByRole('button', { name: /Time tracker/ }).click();
+    await page.getByPlaceholder('New Table').fill('Totals');
+    await page.getByRole('button', { name: 'Create' }).click();
+
+    await expect(page.getByTestId('timer-new-input')).toBeVisible();
+    await expect(page.getByRole('grid')).toBeVisible();
+    await page.waitForTimeout(500);
+
+    for (const name of ['Alpha', 'Beta']) {
+      await page.getByTestId('timer-new-input').fill(name);
+      await page.getByTestId('timer-start-new').click();
+      await expect(row(page, name)).toBeVisible();
+      await row(page, name).getByTestId('timer-stop').click();
+      await expect(row(page, name).getByTestId('timer-resume')).toBeVisible();
+    }
+
+    // Do the rest in the plain table view: totals are not a timer feature.
+    await page.getByRole('tab', { name: 'All entries' }).click();
+    await expect(page.getByTestId('timer-new-input')).toHaveCount(0);
+    await expect(page.getByRole('grid')).toBeVisible();
+
+    // A number column to add up.
+    await page.getByRole('button', { name: 'Add column' }).click();
+    await page.click('text=Number');
+    await inDialog(page, async (dialog, closeDialogWith) => {
+      await dialog.getByPlaceholder('New Column').fill('Hours');
+      await closeDialogWith('Create');
+    });
+    await expect(
+      page.getByRole('button', { name: 'Hours', exact: true }),
+    ).toBeVisible();
+
+    // Columns: name, Start, End, Project, Hours — Hours is the 6th, counting the
+    // row-number gutter. Data rows start at aria-rowindex 2 (1 is the header).
+    await setCell(page, 2, 6, '2');
+    await setCell(page, 3, 6, '3');
+
+    // Total the Hours column from its own footer cell — the totals live under
+    // the columns they describe.
+    const footer = page.getByTestId('table-totals');
+    await footer.locator('[aria-colindex="6"]').click();
+    await page.getByTestId('menu-item-sum').click();
+
+    // The store computed it over every matching row.
+    await expect(footer).toContainText('5', { timeout: 15_000 });
+
+    // It follows an edit, without a reload: 2 + 4 = 6.
+    await setCell(page, 3, 6, '4', { replace: true });
+    await expect(footer).toContainText('6', { timeout: 15_000 });
+
+    // The menu must come back on the same cell, again and again: a cell whose
+    // menu opens once and then goes dead is the failure this covers.
+    await footer.locator('[aria-colindex="6"]').click();
+    await expect(page.getByTestId('menu-item-avg')).toBeVisible();
+    await page.getByTestId('menu-item-avg').click();
+    await expect(footer).toContainText('Average', { timeout: 15_000 });
+
+    // ...including after visiting another column's cell in between.
+    await footer.locator('[aria-colindex="2"]').click();
+    await expect(page.getByTestId('menu-item-count')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await footer.locator('[aria-colindex="6"]').click();
+    await expect(page.getByTestId('menu-item-sum')).toBeVisible();
+    await page.getByTestId('menu-item-sum').click();
+    await expect(footer).toContainText('Sum', { timeout: 15_000 });
+
+    // A second totals row: the same column can show a sum and an average.
+    await footer.locator('[aria-colindex="1"]').click();
+    await page.getByTestId('menu-item-add-row').click();
+    const secondRow = page.getByTestId('table-totals-1');
+    await expect(secondRow).toBeVisible();
+    await secondRow.locator('[aria-colindex="6"]').click();
+    await page.getByTestId('menu-item-avg').click();
+
+    // 2 and 4 → sum 6, average 3, each in its own row under Hours.
+    await expect(footer).toContainText('6', { timeout: 15_000 });
+    await expect(secondRow).toContainText('3', { timeout: 15_000 });
+
+    // Break the totals down per day, from the row-count cell's menu. (Its menu
+    // was used a moment ago, so let that one finish closing first.)
+    await expect(page.locator('[role="menu"]')).toHaveCount(0);
+    await footer.locator('[aria-colindex="1"]').click();
+    await page.getByTestId('menu-item-breakdown').click();
+    await inDialog(page, async () => {
+      await page
+        .getByTestId('breakdown-column')
+        .selectOption({ label: 'Start' });
+      await page.getByTestId('breakdown-save').click();
+    });
+
+    // Both entries started today, so one bucket of 2 rows.
+    const breakdown = page.getByTestId('table-breakdown');
+    await expect(breakdown).toBeVisible({ timeout: 15_000 });
+    await expect(breakdown).toContainText('2 rows');
+
+    // A filter narrows the rows AND the total with them — the totals describe
+    // what you are looking at, not the whole table.
+    await page.getByTitle('Filter', { exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Hours', exact: true }).click();
+    await page.getByPlaceholder('Value…').fill('4');
+    await page.keyboard.press('Escape');
+
+    await expect(row(page, 'Alpha')).toHaveCount(0);
+    // Only Beta's 4 hours are left, so the total says 4 over 1 row.
+    await expect(footer).toContainText('4', { timeout: 15_000 });
+    await expect(footer.locator('[aria-colindex="1"]')).toHaveText('1');
+
+    // The configuration lives on the View, so it survives a reload.
+    await page.reload();
+    await expect(page.getByRole('grid')).toBeVisible();
+    await expect(page.getByTestId('table-totals')).toContainText('Sum', {
+      timeout: 15_000,
+    });
+    // Both totals rows are configuration on the View, so both come back.
+    await expect(page.getByTestId('table-totals-1')).toContainText('Average', {
+      timeout: 15_000,
+    });
+  });
+});
