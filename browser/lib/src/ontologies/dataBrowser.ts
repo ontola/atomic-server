@@ -105,6 +105,7 @@ export const dataBrowser = {
     blockQuery: 'https://atomicdata.dev/properties/block-query',
     blockAggregate: 'https://atomicdata.dev/properties/block-aggregate',
     blockChartSpec: 'https://atomicdata.dev/properties/block-chart-spec',
+    blockQuickAdd: 'https://atomicdata.dev/properties/block-quick-add',
     tags: 'https://atomicdata.dev/properties/tags',
     tagList: 'https://atomicdata.dev/ontology/data-browser/property/tag-list',
     url: 'https://atomicdata.dev/property/url',
@@ -218,6 +219,7 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/block-query',
       'https://atomicdata.dev/properties/block-aggregate',
       'https://atomicdata.dev/properties/block-chart-spec',
+      'https://atomicdata.dev/properties/block-quick-add',
       'https://atomicdata.dev/properties/description',
     ],
     ['https://atomicdata.dev/classes/Tag']: [
@@ -431,6 +433,7 @@ declare module '../index.js' {
         | typeof dataBrowser.properties.blockQuery
         | typeof dataBrowser.properties.blockAggregate
         | typeof dataBrowser.properties.blockChartSpec
+        | typeof dataBrowser.properties.blockQuickAdd
         | 'https://atomicdata.dev/properties/description';
     };
     [dataBrowser.classes.tag]: {
@@ -564,6 +567,12 @@ declare module '../index.js' {
       property?: string;
       derived?: string;
     };
+    [dataBrowser.properties.blockQuickAdd]: {
+      label?: string;
+      field?: string;
+      placeholder?: string;
+      presets?: { kind?: string; property?: string; value?: string | number }[];
+    };
     [dataBrowser.properties.blockChartSpec]: {
       mark?: string;
       field?: string;
@@ -639,6 +648,7 @@ declare module '../index.js' {
     [dataBrowser.properties.blockQuery]: 'blockQuery';
     [dataBrowser.properties.blockAggregate]: 'blockAggregate';
     [dataBrowser.properties.blockChartSpec]: 'blockChartSpec';
+    [dataBrowser.properties.blockQuickAdd]: 'blockQuickAdd';
     [dataBrowser.properties.tags]: 'tags';
     [dataBrowser.properties.tagList]: 'tagList';
     [dataBrowser.properties.url]: 'url';

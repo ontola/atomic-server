@@ -38,6 +38,21 @@ export interface DashboardBlockSpec {
   };
   /** For text blocks: the markdown body. */
   text?: string;
+  /**
+   * For a `create` block: what its button does. Presets reuse the row-action
+   * verbs, applied to the row being created, and name their column by name.
+   */
+  button?: {
+    label: string;
+    /** A column to type into first, by name. Omit for a press-only button. */
+    field?: string;
+    placeholder?: string;
+    presets?: {
+      kind: 'setNow' | 'setValue' | 'toggle' | 'increment';
+      column: string;
+      value?: string | number;
+    }[];
+  };
   /** Width in twelfths. Defaults to something sensible for the kind. */
   width?: number;
 }
@@ -168,6 +183,47 @@ export async function buildDashboardFromSpec(
 
           if (aggregate) {
             propVals[dataBrowser.properties.blockAggregate] = aggregate;
+          }
+        }
+
+        if (kind === 'create') {
+          const button = blockSpec.button;
+
+          if (!button) {
+            warnings.push(
+              `"${blockSpec.title}": a button block needs a \`button\`, so it is empty.`,
+            );
+          } else {
+            propVals[dataBrowser.properties.blockQuickAdd] = {
+              label: button.label,
+              ...(button.field
+                ? { field: columnSubject(map, button.field) ?? button.field }
+                : {}),
+              ...(button.placeholder
+                ? { placeholder: button.placeholder }
+                : {}),
+              presets: (button.presets ?? []).flatMap(preset => {
+                const property = columnSubject(map, preset.column);
+
+                if (!property) {
+                  warnings.push(
+                    `"${blockSpec.title}": no column called "${preset.column}" to preset.`,
+                  );
+
+                  return [];
+                }
+
+                return [
+                  {
+                    kind: preset.kind,
+                    property,
+                    ...(preset.value === undefined
+                      ? {}
+                      : { value: preset.value }),
+                  },
+                ];
+              }),
+            };
           }
         }
 

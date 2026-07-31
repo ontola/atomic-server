@@ -5,13 +5,20 @@ import type { AggregateFunction, JSONValue } from '@tomic/react';
  * View's `view-kind` uses — one class with a kind, rather than a class per kind,
  * so adding a kind is a renderer and a label rather than an ontology change.
  */
-export type BlockKind = 'view' | 'stat' | 'chart' | 'text';
+export type BlockKind = 'view' | 'stat' | 'chart' | 'create' | 'text';
 
-export const BLOCK_KINDS: BlockKind[] = ['stat', 'chart', 'view', 'text'];
+export const BLOCK_KINDS: BlockKind[] = [
+  'stat',
+  'chart',
+  'create',
+  'view',
+  'text',
+];
 
 export const BLOCK_KIND_LABELS: Record<BlockKind, string> = {
   stat: 'Number',
   chart: 'Chart',
+  create: 'Button',
   view: 'Table',
   text: 'Text',
 };
@@ -19,6 +26,7 @@ export const BLOCK_KIND_LABELS: Record<BlockKind, string> = {
 export const BLOCK_KIND_DESCRIPTIONS: Record<BlockKind, string> = {
   stat: 'One number over the rows a view matches.',
   chart: 'A number per category, day or month, drawn as bars.',
+  create: 'A button that adds a row — "Log a feed", "Add expense".',
   view: 'A table, board or calendar, embedded and editable.',
   text: 'A heading or a note.',
 };
@@ -165,6 +173,8 @@ export interface BlockPlacement {
 const DEFAULT_SIZE: Record<BlockKind, { w: number; h: number }> = {
   stat: { w: 3, h: 1 },
   chart: { w: 6, h: 2 },
+  // The thing you press wants to be reachable, not clever: a third of a row.
+  create: { w: 4, h: 1 },
   view: { w: 12, h: 3 },
   text: { w: 12, h: 1 },
 };

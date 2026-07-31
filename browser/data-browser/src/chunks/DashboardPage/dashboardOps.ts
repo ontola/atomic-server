@@ -1,4 +1,10 @@
-import { core, dataBrowser, type Resource, type Store } from '@tomic/react';
+import {
+  core,
+  dataBrowser,
+  type JSONValue,
+  type Resource,
+  type Store,
+} from '@tomic/react';
 import { readTableColumns, resolveView } from '../TablePage/tableOps';
 import { parseDerivedColumnSpecs } from '../TablePage/derivedColumns';
 import {
@@ -21,6 +27,7 @@ export interface DescribedBlock {
   measure?: { function: string; column?: string };
   chartBy?: { column?: string; bucket?: string };
   text?: string;
+  button?: JSONValue;
   width?: number;
 }
 
@@ -78,6 +85,7 @@ export async function describeDashboard(
     const chart = parseBlockChartSpec(
       block.get(dataBrowser.properties.blockChartSpec),
     );
+    const button = block.get(dataBrowser.properties.blockQuickAdd);
 
     // A computed column is named by its label on the view that declares it; a
     // stored one by its property name.
@@ -116,6 +124,7 @@ export async function describeDashboard(
             },
           }
         : {}),
+      ...(button !== undefined ? { button: button as JSONValue } : {}),
       ...(block.get(core.properties.description)
         ? {
             text: block.get(core.properties.description) as string,

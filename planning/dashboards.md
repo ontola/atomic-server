@@ -358,7 +358,10 @@ Built to the design above, with the deviations noted.
   block an assistant added without writing a layout is never invisible.
 - **Blocks**: `stat` (the table's own `useTableAggregates` — one implementation of
   "a number over a filtered set", not two), `chart`, `view` (the real
-  `TableResource`, editable), `text` (markdown).
+  `TableResource`, editable), `text` (markdown), and `create` — the button
+  (2026-07-31), which stores the same `{ label, field?, presets? }` shape a View's
+  `view-quick-add` holds and renders through the same `QuickAddBar` and the same
+  form. One capability, one representation.
 - **Chart**: horizontal bars, drawn with a CSS grid rather than a chart library.
   Horizontal because bucket labels are category names, dates and tag names, which
   read at any width. The *spec* is Vega-Lite-shaped and parsed from either the flat
@@ -425,11 +428,14 @@ above. What is left, in order:
    `view-quick-add` — a label, an optional field, and presets reusing the same four
    verbs applied to the new row. Five of the six verbs the template survey found
    are now built; only the set-level "clear every matching row" is missing.
-   **Still to do:** offer both as dashboard **block kinds** — a create button and
-   an action button over a whole view rather than one per row. That is now a
-   renderer over existing configuration rather than new vocabulary, and it is what
-   turns the Time tracker dashboard (one button, today's total, today's entries)
-   into the proof this document asks for.
+   The **create block** shipped the same day, which is the shell's primary
+   button: press it and the numbers beside it move, on the page you are already
+   looking at. A per-row action block turned out to be unnecessary — an embedded
+   `view` block renders the real table, so its row-action buttons and its quick-add
+   bar are already there. **Still to do:** the set-level verb ("clear every
+   matching row"), which is the last of the six and the one that needs a
+   confirmation model (open question 8), plus a **parameters** model for one control
+   narrowing several blocks.
 2. **The three filter gaps** the template survey kept hitting, none of them
    dashboard features: relative date windows (`today`, `this month`,
    `last 7 days`), week/quarter buckets, and "this field is empty".
@@ -458,6 +464,15 @@ above. What is left, in order:
   string as well as an object — see the two traps above.
 - A config UI must keep whatever is already stored in its option lists, even when
   it would not offer that choice itself.
+- **A number updates live; a listed row does not.** A stat or chart re-reads on
+  `ResourceSaved`, so pressing a create block moves them immediately. An embedded
+  `view` block will not show the new row until it is reloaded: the grid freezes its
+  member count at first load and treats anything past it as a session draft, and
+  nothing lets one block bump another's count. Worth fixing if a dashboard is ever
+  the primary place rows are added; the create block's own e2e documents it.
+- The row class is not the table. `QuickAddBar` takes the class a row is an
+  instance of, and passing the Table resource instead creates rows that match no
+  view's `isA` filter — so they save fine and are simply never listed.
 
 **Filtered queries are safe to lean on.** The two bugs that were meant to block
 this work (recorded 2026-07-31 in [[table-templates-and-mini-apps]]'s gaps) are

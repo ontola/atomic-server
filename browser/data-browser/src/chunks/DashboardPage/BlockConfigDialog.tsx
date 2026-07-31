@@ -41,6 +41,13 @@ import {
   type BlockKind,
 } from './dashboardBlocks';
 import { useClassProperties } from './useClassProperties';
+import {
+  QuickAddFields,
+  draftFromSpec,
+  specFromDraft,
+  type QuickAddDraft,
+} from '../TablePage/QuickAddFields';
+import { parseQuickAdd } from '../TablePage/quickAdd';
 
 interface Props {
   blockSubject: string;
@@ -74,6 +81,10 @@ export function BlockConfigDialog({
     dataBrowser.properties.blockAggregate,
   );
   const [storedChart] = useValue(block, dataBrowser.properties.blockChartSpec);
+  const [storedQuickAdd] = useValue(
+    block,
+    dataBrowser.properties.blockQuickAdd,
+  );
 
   const blockKind = (kind ?? 'text') as BlockKind;
 
@@ -88,6 +99,9 @@ export function BlockConfigDialog({
   const [target, setTarget] = useState('');
   const [chartField, setChartField] = useState('');
   const [granularity, setGranularity] = useState<GroupGranularity>('exact');
+  const [quickAdd, setQuickAdd] = useState<QuickAddDraft>(() =>
+    draftFromSpec(undefined),
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -109,6 +123,7 @@ export function BlockConfigDialog({
     );
     setChartField(chart?.field ?? '');
     setGranularity(chart?.granularity ?? 'exact');
+    setQuickAdd(draftFromSpec(parseQuickAdd(storedQuickAdd as JSONValue)));
     // Deliberately only on open: re-syncing while the dialog is up would
     // overwrite what is being typed whenever a commit lands.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -178,6 +193,15 @@ export function BlockConfigDialog({
       await block.set(
         dataBrowser.properties.blockAggregate,
         aggregate as unknown as never,
+      );
+    }
+
+    if (blockKind === 'create') {
+      // Same shape a View's `view-quick-add` holds, written through the same
+      // form — one capability, one representation.
+      await block.set(
+        dataBrowser.properties.blockQuickAdd,
+        specFromDraft(quickAdd) as unknown as never,
       );
     }
 
@@ -267,6 +291,14 @@ export function BlockConfigDialog({
                 </StyledSelect>
               </Field>
             </>
+          )}
+
+          {blockKind === 'create' && (
+            <QuickAddFields
+              draft={quickAdd}
+              onChange={setQuickAdd}
+              classProperties={classProperties}
+            />
           )}
 
           {(blockKind === 'stat' || blockKind === 'chart') && (

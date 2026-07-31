@@ -145,6 +145,7 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
       blocks: 'https://atomicdata.dev/properties/dashboard-blocks',
       layout: 'https://atomicdata.dev/properties/dashboard-layout',
       kind: 'https://atomicdata.dev/properties/block-kind',
+      quickAdd: 'https://atomicdata.dev/properties/block-quick-add',
       source: 'https://atomicdata.dev/properties/block-source',
       aggregate: 'https://atomicdata.dev/properties/block-aggregate',
       chart: 'https://atomicdata.dev/properties/block-chart-spec',
@@ -197,8 +198,22 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
       [D.kind]: 'view',
       [D.source]: f.table,
     });
+    const add = await block({
+      [NAME]: 'Quick add',
+      [D.kind]: 'create',
+      [D.source]: f.table,
+      [D.quickAdd]: {
+        label: 'Add expense',
+        field: 'https://atomicdata.dev/properties/name',
+        placeholder: 'What did you buy?',
+      },
+    });
 
-    await dashboard.set(D.blocks, [total, count, chart, note, list], false);
+    await dashboard.set(
+      D.blocks,
+      [total, count, chart, note, list, add],
+      false,
+    );
     await dashboard.set(
       D.layout,
       [
@@ -207,6 +222,7 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
         { subject: chart, x: 6, y: 0, w: 6, h: 2 },
         { subject: note, x: 0, y: 1, w: 6, h: 1 },
         { subject: list, x: 0, y: 2, w: 12, h: 3 },
+        { subject: add, x: 0, y: 5, w: 4, h: 1 },
       ] as never,
       false,
     );
@@ -289,6 +305,47 @@ test.describe('dashboards', () => {
     await expect(list.getByRole('grid')).toBeVisible();
   });
 
+  test('a button block adds a row, and the numbers beside it follow', async ({
+    page,
+  }) => {
+    const fixture = await createSpendingTable(page);
+    await createDashboard(page, fixture);
+
+    await expect(block(page, 'Expenses')).toContainText('4', {
+      timeout: 15_000,
+    });
+
+    // The whole point of a dashboard as an app shell: press the thing, and the
+    // page you are already looking at updates.
+    const bar = block(page, 'Quick add');
+    await expect(bar.getByTestId('quick-add-input')).toHaveAttribute(
+      'placeholder',
+      'What did you buy?',
+    );
+    await bar.getByTestId('quick-add-input').fill('Notebook');
+    await bar.getByTestId('quick-add-button').click();
+
+    // Count goes 4 → 5 without a reload: the row's save is what the numbers
+    // re-read on.
+    await expect(block(page, 'Expenses')).toContainText('5', {
+      timeout: 15_000,
+    });
+
+    // The row is really there — but only after a reload in the embedded table
+    // beside it. That grid freezes its member count at first load and treats
+    // anything past it as a session draft, and a create block has no way to bump
+    // another block's count. The numbers update live; a listed row does not.
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 15_000 },
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(
+      block(page, 'All expenses').getByRole('gridcell', { name: 'Notebook' }),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
   test('a person can reconfigure a block, and it survives a reload', async ({
     page,
   }) => {
@@ -330,7 +387,7 @@ test.describe('dashboards', () => {
   }) => {
     const fixture = await createSpendingTable(page);
     await createDashboard(page, fixture);
-    await expect(page.getByTestId('dashboard-block')).toHaveCount(5, {
+    await expect(page.getByTestId('dashboard-block')).toHaveCount(6, {
       timeout: 15_000,
     });
 
@@ -348,6 +405,6 @@ test.describe('dashboards', () => {
     await expect(block(page, 'Biggest expense')).toContainText('900', {
       timeout: 15_000,
     });
-    await expect(page.getByTestId('dashboard-block')).toHaveCount(6);
+    await expect(page.getByTestId('dashboard-block')).toHaveCount(7);
   });
 });

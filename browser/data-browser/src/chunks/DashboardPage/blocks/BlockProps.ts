@@ -18,6 +18,8 @@ export interface BlockConfig {
   query: JSONValue | undefined;
   aggregate: JSONValue | undefined;
   chartSpec: JSONValue | undefined;
+  /** A `create` block's button: label, optional field, presets. */
+  quickAdd: JSONValue | undefined;
   /** A text block's body. */
   text: string | undefined;
 }

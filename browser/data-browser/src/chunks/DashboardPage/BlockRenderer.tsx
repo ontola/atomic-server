@@ -11,6 +11,7 @@ import { isBlockKind, type BlockKind } from './dashboardBlocks';
 import { StatBlock } from './blocks/StatBlock';
 import { ChartBlock } from './blocks/ChartBlock';
 import { ViewBlock } from './blocks/ViewBlock';
+import { CreateBlock } from './blocks/CreateBlock';
 import { TextBlock } from './blocks/TextBlock';
 import { BlockShell } from './blocks/BlockShell';
 import type { BlockConfig } from './blocks/BlockProps';
@@ -33,12 +34,14 @@ export function BlockRenderer({ subject }: { subject: string }): JSX.Element {
   const [query] = useValue(block, dataBrowser.properties.blockQuery);
   const [aggregate] = useValue(block, dataBrowser.properties.blockAggregate);
   const [chartSpec] = useValue(block, dataBrowser.properties.blockChartSpec);
+  const [quickAdd] = useValue(block, dataBrowser.properties.blockQuickAdd);
 
   // Serialized deps: `useValue` hands back freshly parsed JSON, and these reach
   // a query's identity through the block's aggregation.
   const queryKey = JSON.stringify(query ?? null);
   const aggregateKey = JSON.stringify(aggregate ?? null);
   const chartSpecKey = JSON.stringify(chartSpec ?? null);
+  const quickAddKey = JSON.stringify(quickAdd ?? null);
 
   const config: BlockConfig = useMemo(
     () => ({
@@ -50,8 +53,19 @@ export function BlockRenderer({ subject }: { subject: string }): JSX.Element {
       query: JSON.parse(queryKey),
       aggregate: JSON.parse(aggregateKey),
       chartSpec: JSON.parse(chartSpecKey),
+      quickAdd: JSON.parse(quickAddKey),
     }),
-    [kind, label, source, view, text, queryKey, aggregateKey, chartSpecKey],
+    [
+      kind,
+      label,
+      source,
+      view,
+      text,
+      queryKey,
+      aggregateKey,
+      chartSpecKey,
+      quickAddKey,
+    ],
   );
 
   if (kind !== undefined && !isBlockKind(kind)) {
@@ -71,6 +85,8 @@ export function BlockRenderer({ subject }: { subject: string }): JSX.Element {
       return <StatBlock block={block} config={config} />;
     case 'chart':
       return <ChartBlock block={block} config={config} />;
+    case 'create':
+      return <CreateBlock block={block} config={config} />;
     case 'view':
       return <ViewBlock block={block} config={config} />;
     default:

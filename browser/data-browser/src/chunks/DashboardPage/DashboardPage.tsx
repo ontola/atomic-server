@@ -1,6 +1,7 @@
 import { useId, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import {
+  FaBolt,
   FaChartBar,
   FaFont,
   FaHashtag,
@@ -28,6 +29,7 @@ const AddBlockTrigger = buildDefaultTrigger(<FaPlus />, 'Add block');
 const KIND_ICONS: Record<BlockKind, JSX.Element> = {
   stat: <FaHashtag />,
   chart: <FaChartBar />,
+  create: <FaBolt />,
   view: <FaTable />,
   text: <FaFont />,
 };

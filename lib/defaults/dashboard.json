@@ -17,7 +17,7 @@
   },
   {
     "@id": "https://atomicdata.dev/classes/Block",
-    "https://atomicdata.dev/properties/description": "One widget of a Dashboard. What it shows is decided by its block-kind ('view', 'stat', 'chart' or 'text') and the configuration properties that kind reads, in the same way a View's view-kind decides which of its config properties matter. A Block is a resource of its own so it can also be embedded outside a Dashboard later.",
+    "https://atomicdata.dev/properties/description": "One widget of a Dashboard. What it shows is decided by its block-kind ('view', 'stat', 'chart', 'create' or 'text') and the configuration properties that kind reads, in the same way a View's view-kind decides which of its config properties matter. A Block is a resource of its own so it can also be embedded outside a Dashboard later.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Class"
     ],
@@ -28,6 +28,7 @@
       "https://atomicdata.dev/properties/block-query",
       "https://atomicdata.dev/properties/block-aggregate",
       "https://atomicdata.dev/properties/block-chart-spec",
+      "https://atomicdata.dev/properties/block-quick-add",
       "https://atomicdata.dev/properties/description"
     ],
     "https://atomicdata.dev/properties/requires": [
@@ -59,7 +60,7 @@
   {
     "@id": "https://atomicdata.dev/properties/block-kind",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-    "https://atomicdata.dev/properties/description": "Which kind of widget a Block is: 'view' (an embedded table/kanban/calendar), 'stat' (one number over a filtered set), 'chart' (a number per bucket, drawn) or 'text' (a heading or a note). An unknown kind renders as a placeholder rather than breaking the page.",
+    "https://atomicdata.dev/properties/description": "Which kind of widget a Block is: 'view' (an embedded table/kanban/calendar), 'stat' (one number over a filtered set), 'chart' (a number per bucket, drawn), 'create' (a button that makes a row) or 'text' (a heading or a note). An unknown kind renders as a placeholder rather than breaking the page.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],
@@ -115,5 +116,15 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "block-chart-spec"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/block-quick-add",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "What a 'create' block's button does, as a JSON object { label, field?, placeholder?, presets? } — the same shape a View's view-quick-add holds, so the table and the dashboard describe a create button identically. Each preset is { kind, property, value? } from the row-action verb vocabulary, applied to the row being created.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "block-quick-add"
   }
 ]

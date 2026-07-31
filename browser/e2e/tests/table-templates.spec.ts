@@ -92,6 +92,26 @@ async function reloadGrid(page: Page) {
 test.describe('table templates', () => {
   test.beforeEach(before);
 
+  test('the Create button carries the wait', async ({ page }) => {
+    // A template is ~20 commits. The dialog used to close on submit and build
+    // afterwards, which left the user on the previous page with no sign that
+    // anything was happening.
+    await newResource('table', page);
+    await page.getByRole('button', { name: /Project tasks/ }).click();
+    await page.getByPlaceholder('New Table').fill('Busy check');
+    await page.getByRole('button', { name: 'Create' }).click();
+
+    const busy = page.getByRole('button', { name: 'Creating table…' });
+    await expect(busy).toBeVisible();
+    await expect(busy).toHaveAttribute('aria-busy', 'true');
+    await expect(busy).toBeDisabled();
+
+    await expect(
+      page.getByRole('heading', { name: 'Busy check' }).first(),
+    ).toBeVisible({ timeout: 60_000 });
+    await expect(busy).toHaveCount(0);
+  });
+
   test('Expenses arrives with its order, its decimals and its totals', async ({
     page,
   }) => {

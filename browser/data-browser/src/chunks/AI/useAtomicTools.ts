@@ -250,9 +250,9 @@ const chartBySchema = z.object({
 
 const blockSpecSchema = z.object({
   kind: z
-    .enum(['stat', 'chart', 'view', 'text'])
+    .enum(['stat', 'chart', 'create', 'view', 'text'])
     .describe(
-      "'stat' is one number, 'chart' a number per bucket, 'view' an embedded editable table, 'text' a heading or note.",
+      "'stat' is one number, 'chart' a number per bucket, 'create' a button that adds a row, 'view' an embedded editable table, 'text' a heading or note.",
     ),
   title: z.string().describe("The block's heading."),
   table: z
@@ -272,6 +272,22 @@ const blockSpecSchema = z.object({
     .describe("What a 'stat' or 'chart' block measures."),
   chartBy: chartBySchema.optional().describe("Required for a 'chart' block."),
   text: z.string().optional().describe("A 'text' block's markdown body."),
+  button: quickAddSchema
+    .extend({
+      presets: z
+        .array(
+          z.object({
+            kind: z.enum(['setNow', 'setValue', 'toggle', 'increment']),
+            column: z.string(),
+            value: z.union([z.string(), z.number()]).optional(),
+          }),
+        )
+        .optional(),
+    })
+    .optional()
+    .describe(
+      "Required for a 'create' block: what its button does. Omit `field` for a press-only button, which is what a one-tap logger wants.",
+    ),
   width: z
     .number()
     .optional()
