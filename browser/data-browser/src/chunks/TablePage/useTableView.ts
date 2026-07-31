@@ -483,7 +483,11 @@ export function useTableView(table: Resource): UseTableViewResult {
         );
         await v.save();
         lastPersistedRef.current = snapshot;
-      })().catch(() => undefined);
+      })().catch(error => {
+        // Never swallow this: a filter or sort that fails to persist is silently
+        // lost on the next reload, and the user has no way to know.
+        console.error('Could not persist the view configuration:', error);
+      });
     }, 600);
 
     return () => clearTimeout(timer);

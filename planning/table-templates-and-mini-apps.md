@@ -194,13 +194,26 @@ configuration, not a renderer.
 
 - ~~The timer's day totals~~ and ~~aggregates over a derived column~~: closed by
   step 7 below — the store evaluates a computed column as it aggregates.
-- **A computed-column filter does not survive a reload.** Setting one narrows the
-  rows immediately (`derived-columns.spec.ts` covers that), but after a reload the
-  chip is gone. The stored shape is `{derived, operator, value}` in `view-filters`
-  next to the `{property, …}` entries, written by the same debounced persist path
-  and hydrated by the same parse — so it is one of those two dropping the entry,
-  and I did not get to which. This is the next thing to fix in that feature, and
-  the e2e deliberately asserts only what works rather than asserting the bug.
+- **No filter persists on a table created from a template.** Investigated
+  2026-07-31 after a computed-column filter failed to survive a reload; it turned
+  out not to be about computed columns at all. What the instrumentation showed, on
+  the Time tracker template's timer view:
+  - a filter on a *stored* column is lost the same way, so this is pre-existing —
+    the new computed-column e2e only surfaced it;
+  - the persist effect's gate passes (`hydratedFor === activeView`,
+    `canWrite === true`, non-empty filters), so it does reach its debounced write;
+  - after the debounce, **no resource in the store has `view-filters` set at all** —
+    not the timer view, not the table view, not a stray one;
+  - the write throws nothing (its `catch` used to swallow everything; it now logs,
+    and stayed quiet).
+  That leaves the write itself silently not happening. Prime suspect:
+  `ensureView()` returns `store.getResourceLoading(activeView)`, so the config is
+  set on a resource that may still be loading, and the `set` + `save` go nowhere.
+  `table-views-filters.spec.ts` passes because it builds its table by hand rather
+  than from a template, which is worth understanding before fixing — the
+  difference is the whole bug.
+  The computed-column e2e asserts only what works (narrowing, the unit, removal)
+  rather than asserting the bug.
 - ~~**Filters on a computed column: the store can, the UI can't yet.**~~ Shipped
   2026-07-31, apart from the persistence bug above. `Query` takes
   `expression_filters`, evaluated over the set the index narrows to, with paging
