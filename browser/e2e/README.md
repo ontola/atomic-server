@@ -25,12 +25,15 @@ pnpm test-server-fresh   # same, but wipes that store first
 
 It prints the URL it chose and the matching `SERVER_URL=… pnpm test-e2e` to run.
 
-Sharing your own store costs more than it looks like it saves. Every run adds
-drives, tables and rows to the store you work in, and once it has a few hundred
-runs' worth the suite starts failing on timing instead of on bugs — the totals
-footer and the template specs lose races there that they win in isolation. A red
-run then tells you nothing. Keep them separate, and reach for
-`test-server-fresh` when a failure smells like load.
+Sharing your own store costs more than it looks like it saves, and the store goes
+stale faster than you would expect. Measured on this repo: `aggregates.spec.ts`
+passes in 10s against a fresh store and fails outright against a 324MB one — which
+is roughly two full suite runs' worth of accumulated drives, tables and rows. The
+failure looks like a bug in the totals footer and is not one.
+
+So: keep the store separate from your dev one, and reach for `test-server-fresh`
+whenever a failure does not reproduce in isolation. The script warns once the
+store passes ~150MB.
 
 If a spec does fail, **reproduce it alone before believing it**:
 

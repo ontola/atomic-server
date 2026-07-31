@@ -240,10 +240,12 @@ configuration, not a renderer.
     reads exactly like a code bug and is not one — verified by stashing an entire
     feature branch and re-running to an identical failure set.
   `browser/e2e/scripts/e2e-server.sh` (`pnpm test-server` / `test-server-fresh`)
-  now serves the port the app is configured for, from `<repo>/.e2e-store`. On a
-  clean store `aggregates.spec.ts` passes, and the nine table/timer/template/
-  dashboard/row-action specs run 33–35 of 36 with two workers; the stragglers pass
-  run alone. So: **reproduce a failure alone before believing it**, and compare
+  now serves the port the app is configured for, from `<repo>/.e2e-store`, and
+  warns once that store passes ~150MB. Measured: `aggregates.spec.ts` passes in
+  10s on a fresh store and fails outright on a 324MB one — and 324MB is only about
+  two full suite runs, so this degrades much faster than "a well-used store"
+  suggested. On a clean store the nine table/timer/template/dashboard/row-action
+  specs run 33–35 of 36 with two workers; the stragglers pass run alone. So: **reproduce a failure alone before believing it**, and compare
   failure *sets* rather than expecting all-green. If the totals footer's menu is
   worth hardening against its own debounced refresh, that is still open — but it
   is no longer what makes the suite red.
@@ -275,33 +277,38 @@ configuration, not a renderer.
   commit path. Guarded by `lib/tests/query_index_eviction.rs` (leaving a filter,
   entering one, and an unrelated edit that must not evict) plus the Inventory
   e2e, which fails against a wasm build without the fix.
-- **A computed cell never refreshes in place — diagnosed 2026-07-31, not fixed.**
-  Edit the column a computed column derives from and the derived cell keeps
-  whatever it computed at mount; only a reload updates it. The earlier note here
-  blamed the draft row, which was wrong: it happens to a saved row created
-  through the store too.
-  The cause is the React Compiler. `DerivedCell` calls
-  `generator.compute(resource, args, now)` during render; the Compiler memoizes
-  that on the identities it can see, and a `Resource` proxy's identity **never
-  changes** — the store mutates resources in place and notifies. Instrumented
-  proof: the cell re-renders (a version counter went 4 → 5), `resource.get(...)`
-  in the same render returns the new value, an unmemoized `compute(...)` call in
-  the same render returns `0`, and the memoized `value` is still `undefined`.
-  Two fixes were tried and **both failed** — don't repeat them:
-  1. `useValue` per argument. The arg count varies by generator, so this meant
-     hooks inside `.map()` — a rules-of-hooks violation the Compiler is entitled
-     to break, and does.
-  2. A `useResourceVersion()` counter added to the `useMemo` dep array. The
-     Compiler infers a memo's dependencies from what the callback *reads* and
-     ignores the hand-written array, so a cache-busting dep is inert.
-  What should work: make the generators pure functions of their **resolved
-  values** rather than of the resource, and have the cell read those values
-  through a fixed number of top-level `useValue` calls (every generator takes at
-  most two arguments, so two calls with `''` for an absent one). Then the memo's
-  real inputs change when the data does.
-  The same trap applies to anything reading a resource during render —
-  `useRowActions` reads its button state through `useValue` for exactly this
-  reason. See the `react-compiler-resource-proxy-pitfall` rule.
+- ~~**A computed cell never refreshes in place.**~~ Fixed 2026-07-31. Editing the
+  column a computed column derived from left the derived cell showing whatever it
+  computed at mount; only a reload updated it. The note that used to be here
+  blamed the draft row, which was wrong — it happened to saved rows too.
+  The cause was the React Compiler: `DerivedCell` called
+  `generator.compute(resource, args, now)` during render, and the Compiler
+  memoizes that on the identities it can see. A `Resource` proxy's identity
+  **never changes** — the store mutates resources in place and notifies — so the
+  result was computed once and cached forever. Instrumented proof at the time: the
+  cell re-rendered, `resource.get(...)` returned the new value in that same
+  render, an unmemoized `compute(...)` returned the right answer, and the memoized
+  value was still `undefined`.
+  Two fixes failed before the third worked, and the failures are the useful part:
+  1. `useValue` per argument — the arg count varies by generator, so this meant
+     hooks inside `.map()`. A rules-of-hooks violation, and the Compiler broke it.
+  2. A version counter added to the `useMemo` dep array. **The Compiler infers a
+     memo's dependencies from what the callback reads and ignores the written
+     array**, so a cache-busting dep is inert. Worth remembering generally: under
+     the Compiler, a dep array is not a lever.
+  What worked: the generators are now pure functions of their **resolved argument
+  values** (`ArgValues`) rather than of the row, and the cell reads those through a
+  *fixed* two top-level `useValue` calls — two because no generator takes more
+  than `MAX_DERIVED_ARGS` arguments, which a unit test now enforces so a future
+  three-argument generator fails loudly instead of silently losing reactivity in
+  its third. The memo's real inputs then change when the data does.
+  `TimerActionCell` had the same latent bug and reads through `useValue` now too.
+  Guarded by an e2e that edits a factor of Inventory's `Quantity × Unit price` and
+  expects the product to follow with no reload — verified to fail without the fix.
+  Still open, and a different thing: **a computed cell does not render at all on
+  the trailing draft row** you are typing into. The draft is local until it
+  materializes, and its cells stay bound to that state, so a value appears only
+  once the row is rendered as a saved one.
 - No template can seed a default value, so a "date added" column starts empty
   even though `createdAt` is stamped on every row.
 

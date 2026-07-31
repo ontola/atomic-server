@@ -6,6 +6,7 @@ import {
   core,
   useResource,
   useStore,
+  useValue,
   type Store,
   type Collection,
 } from '@tomic/react';
@@ -40,9 +41,14 @@ async function stopAllRunning(
 
     const row = store.getResourceLoading(subject);
 
+    const values = {
+      [startProp]: row.get(startProp) as JSONValue | undefined,
+      [endProp]: row.get(endProp) as JSONValue | undefined,
+    };
+
     if (
-      readInstant(row, startProp) !== undefined &&
-      readInstant(row, endProp) === undefined
+      readInstant(values, startProp) !== undefined &&
+      readInstant(values, endProp) === undefined
     ) {
       await row.set(endProp, stamp, false);
       await row.save();
@@ -286,8 +292,13 @@ function TimerActionCell({
   onResume: (subject: string) => void;
 }): JSX.Element | null {
   const resource = useResource(subject);
-  const start = readInstant(resource, startProp);
-  const end = readInstant(resource, endProp);
+  // Subscribing reads, not `resource.get(...)`: a render-time read is memoized by
+  // the React Compiler on the resource proxy's identity, which never changes. See
+  // `useDerivedColumns`.
+  const [startValue] = useValue(resource, startProp);
+  const [endValue] = useValue(resource, endProp);
+  const start = readInstant({ [startProp]: startValue }, startProp);
+  const end = readInstant({ [endProp]: endValue }, endProp);
   const running = start !== undefined && end === undefined;
 
   if (readOnly) {

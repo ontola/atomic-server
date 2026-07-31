@@ -1,16 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import {
-  Datatype,
-  type JSONValue,
-  type Property,
-  type Resource,
-} from '@tomic/react';
+import { Datatype, type JSONValue, type Property } from '@tomic/react';
 import {
   DERIVED_COLUMN_GENERATORS,
+  DERIVED_COLUMN_KINDS,
+  MAX_DERIVED_ARGS,
   isDerivedColumnComplete,
   parseDerivedColumnSpecs,
   propertyFitsArg,
 } from './derivedColumns';
+
+/**
+ * Generators are pure functions of their resolved argument values, so a "row" in
+ * these tests is just that object — no Resource, no `get`. That is the point of
+ * the shape: it is what lets a cell subscribe to exactly these values.
+ */
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -23,21 +26,31 @@ const QUANTITY = 'https://example.com/property/quantity';
 const PRICE = 'https://example.com/property/price';
 const LAST_DONE = 'https://example.com/property/last-done';
 
-/** A row, seen the only way a generator sees one: `get(property)`. */
-function row(values: Record<string, JSONValue>): Resource {
-  return {
-    get: (property: string) => values[property],
-  } as unknown as Resource;
-}
-
 const NOW = Date.parse('2026-07-30T12:00:00.000Z');
+
+describe('the generator contract', () => {
+  it('declares no more arguments than a cell subscribes to', () => {
+    // `DerivedCell` calls `useValue` a FIXED number of times — a loop would be a
+    // rules-of-hooks violation the React Compiler breaks. So a generator with a
+    // third argument would silently stop being reactive in that argument. Fail
+    // here instead, loudly.
+    for (const kind of DERIVED_COLUMN_KINDS) {
+      const count = Object.keys(DERIVED_COLUMN_GENERATORS[kind].args).length;
+
+      expect(
+        count,
+        `${kind} takes ${count} arguments; raise MAX_DERIVED_ARGS and add a subscription in DerivedCell`,
+      ).toBeLessThanOrEqual(MAX_DERIVED_ARGS);
+    }
+  });
+});
 
 describe('difference', () => {
   const { compute, format } = DERIVED_COLUMN_GENERATORS.difference;
 
   it('is the span between the two properties', () => {
     const value = compute(
-      row({ [START]: NOW - HOUR, [END]: NOW }),
+      { [START]: NOW - HOUR, [END]: NOW },
       { from: START, to: END },
       NOW,
     );
@@ -48,8 +61,8 @@ describe('difference', () => {
 
   it('is empty while either end is missing', () => {
     const args = { from: START, to: END };
-    expect(compute(row({ [START]: NOW }), args, NOW)).toBeUndefined();
-    expect(compute(row({ [END]: NOW }), args, NOW)).toBeUndefined();
+    expect(compute({ [START]: NOW }, args, NOW)).toBeUndefined();
+    expect(compute({ [END]: NOW }, args, NOW)).toBeUndefined();
   });
 });
 
@@ -58,14 +71,14 @@ describe('elapsed', () => {
   const args = { from: START, until: END };
 
   it('counts from `from` to now while `until` is unset', () => {
-    const entry = row({ [START]: NOW - 5 * MINUTE });
+    const entry = { [START]: NOW - 5 * MINUTE };
 
     expect(compute(entry, args, NOW)).toBe(5 * MINUTE);
     expect(live!(entry, args)).toBe(true);
   });
 
   it('stops at `until` once it is stamped', () => {
-    const entry = row({ [START]: NOW - HOUR, [END]: NOW - 30 * MINUTE });
+    const entry = { [START]: NOW - HOUR, [END]: NOW - 30 * MINUTE };
 
     // Still 30 minutes an hour later: a stopped entry does not keep growing.
     expect(compute(entry, args, NOW + HOUR)).toBe(30 * MINUTE);
@@ -73,7 +86,7 @@ describe('elapsed', () => {
   });
 
   it('is empty, and not live, without a start', () => {
-    const entry = row({});
+    const entry = {};
 
     expect(compute(entry, args, NOW)).toBeUndefined();
     expect(live!(entry, args)).toBe(false);
@@ -85,9 +98,9 @@ describe('daysSince', () => {
   const args = { from: LAST_DONE };
 
   it('counts whole days, and reads DATE properties too', () => {
-    expect(compute(row({ [LAST_DONE]: NOW - 3 * DAY }), args, NOW)).toBe(3);
+    expect(compute({ [LAST_DONE]: NOW - 3 * DAY }, args, NOW)).toBe(3);
     // A DATE property stores an ISO day rather than a number of millis.
-    expect(compute(row({ [LAST_DONE]: '2026-07-27' }), args, NOW)).toBe(3);
+    expect(compute({ [LAST_DONE]: '2026-07-27' }, args, NOW)).toBe(3);
   });
 
   it('reads as a distance', () => {
@@ -102,18 +115,12 @@ describe('product', () => {
 
   it('multiplies two properties', () => {
     expect(
-      compute(
-        row({ [QUANTITY]: 3, [PRICE]: 25 }),
-        { a: QUANTITY, b: PRICE },
-        NOW,
-      ),
+      compute({ [QUANTITY]: 3, [PRICE]: 25 }, { a: QUANTITY, b: PRICE }, NOW),
     ).toBe(75);
   });
 
   it('accepts a literal factor, so a rate needs no column', () => {
-    expect(compute(row({ [QUANTITY]: 4 }), { a: QUANTITY, b: 85 }, NOW)).toBe(
-      340,
-    );
+    expect(compute({ [QUANTITY]: 4 }, { a: QUANTITY, b: 85 }, NOW)).toBe(340);
   });
 
   it('keeps two decimals unless the amount is whole', () => {
@@ -127,13 +134,13 @@ describe('offset', () => {
 
   it('is the date plus the interval', () => {
     expect(
-      compute(row({ [LAST_DONE]: NOW }), { from: LAST_DONE, days: 14 }, NOW),
+      compute({ [LAST_DONE]: NOW }, { from: LAST_DONE, days: 14 }, NOW),
     ).toBe(NOW + 14 * DAY);
   });
 
   it('is empty without an interval', () => {
     expect(
-      compute(row({ [LAST_DONE]: NOW }), { from: LAST_DONE }, NOW),
+      compute({ [LAST_DONE]: NOW }, { from: LAST_DONE }, NOW),
     ).toBeUndefined();
   });
 });

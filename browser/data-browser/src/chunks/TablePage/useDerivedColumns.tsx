@@ -1,9 +1,11 @@
-import { useResource } from '@tomic/react';
+import { useResource, useValue } from '@tomic/react';
 import { useEffect, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import type { TableColumn } from './useTableColumns';
 import {
   DERIVED_COLUMN_GENERATORS,
+  argProperties,
+  type ArgValues,
   type DerivedColumnSpec,
 } from './derivedColumns';
 
@@ -100,9 +102,33 @@ function DerivedCell({
 }): JSX.Element {
   const resource = useResource(subject);
   const generator = DERIVED_COLUMN_GENERATORS[spec.kind];
-  const live = generator.live?.(resource, spec.args) ?? false;
+
+  // Subscribing reads of exactly the properties this column derives from.
+  //
+  // Two calls, unconditionally, because no generator declares more than
+  // `MAX_DERIVED_ARGS` arguments (`derivedColumns.test.ts` holds that, so a third
+  // one fails there rather than here) — and a *fixed* number
+  // of hook calls is what the rules of hooks require. Looping over the spec's
+  // arguments instead is a violation the React Compiler is free to break, and
+  // does.
+  //
+  // These values, not the resource, are what `compute` is a function of. Reading
+  // `resource.get(...)` during render made the Compiler memoize the result on the
+  // proxy's identity — which never changes, because the store mutates resources
+  // in place — so a computed column showed whatever it computed at mount until
+  // the page was reloaded.
+  const [firstProperty = '', secondProperty = ''] = argProperties(spec);
+  const [firstValue] = useValue(resource, firstProperty);
+  const [secondValue] = useValue(resource, secondProperty);
+
+  const values: ArgValues = useMemo(
+    () => ({ [firstProperty]: firstValue, [secondProperty]: secondValue }),
+    [firstProperty, firstValue, secondProperty, secondValue],
+  );
+
+  const live = generator.live?.(values, spec.args) ?? false;
   const now = useNow(live);
-  const value = generator.compute(resource, spec.args, now);
+  const value = generator.compute(values, spec.args, now);
 
   return (
     <Value $live={live} data-testid={`derived-${spec.id}`}>

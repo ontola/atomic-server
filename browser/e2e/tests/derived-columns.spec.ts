@@ -38,6 +38,35 @@ async function addComputedColumn(
   });
 }
 
+/** Types a value into one grid cell, addressed by its row and column index. */
+async function setCell(
+  page: Page,
+  rowIndex: number,
+  columnIndex: number,
+  value: string,
+  opts: { replace?: boolean } = {},
+) {
+  const cell = page.locator(
+    `[aria-rowindex="${rowIndex}"] > [aria-colindex="${columnIndex}"]`,
+  );
+  await cell.click();
+
+  if ((await cell.locator('input').count()) === 0) {
+    await expect(cell).toBeFocused();
+    await page.keyboard.press('Enter');
+  }
+
+  if (opts.replace) {
+    await page.keyboard.press('ControlOrMeta+a');
+  }
+
+  await page.keyboard.type(value);
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(200);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+}
+
 test.describe('computed columns', () => {
   test.beforeEach(before);
 
@@ -141,6 +170,51 @@ test.describe('computed columns', () => {
     await expect(
       page.getByRole('gridcell', { name: 'Write docs' }),
     ).toBeVisible();
+  });
+
+  test('a computed column follows an edit to the column it derives from', async ({
+    page,
+  }) => {
+    test.slow();
+
+    // Inventory's Value is Quantity × Unit price, so typing either one has to
+    // move it — in place, without a reload. A computed cell used to keep
+    // whatever it computed when it mounted, because reading the row during
+    // render let the React Compiler cache the result on a resource identity
+    // that never changes.
+    await newResource('table', page);
+    await page.getByRole('button', { name: /Inventory/ }).click();
+    await page.getByPlaceholder('New Table').fill('Live values');
+    await page.getByRole('button', { name: 'Create' }).click();
+    await expect(page.getByRole('grid')).toBeVisible();
+    await page.waitForTimeout(1000);
+
+    await setCell(page, 2, 2, 'Bolts');
+    await setCell(page, 2, 4, '4');
+    await setCell(page, 2, 5, '0.25');
+
+    // Reload once, so the row under test is a saved row rather than the trailing
+    // draft — a draft's cells are a separate story (see the gaps list).
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 15_000 },
+    );
+    await page.reload();
+    await expect(page.getByRole('grid')).toBeVisible();
+    await page.waitForTimeout(1000);
+
+    const bolts = row(page, 'Bolts');
+    await expect(bolts.getByTestId('derived-value')).toHaveText('1', {
+      timeout: 15_000,
+    });
+
+    // Change one factor: the product follows, in place, with no reload. This is
+    // the assertion the old behaviour could not pass.
+    await setCell(page, 2, 4, '8', { replace: true });
+    await expect(bolts.getByTestId('derived-value')).toHaveText('2', {
+      timeout: 15_000,
+    });
   });
 
   test('a computed column can be resized, and the width sticks', async ({

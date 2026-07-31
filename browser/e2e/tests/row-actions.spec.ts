@@ -113,18 +113,19 @@ test.describe('row actions', () => {
     await expect(watered).toHaveAttribute('data-active', 'true', {
       timeout: 15_000,
     });
-    // The date itself lands in the column, so the press is visibly a write and
-    // not just a button that lit up.
-    await expect(plant.getByRole('gridcell').nth(2)).not.toBeEmpty();
+    // And the column computed from that date follows, without a reload: a
+    // computed cell subscribes to the properties it derives from.
+    await expect(plant.getByTestId('derived-thirsty-for')).toHaveText('today', {
+      timeout: 15_000,
+    });
 
     await reloadGrid(page);
     await expect(
       row(page, 'Monstera').getByTestId('row-action-watered'),
     ).toHaveAttribute('data-active', 'true');
-    // The computed column derived from that date fills in too — after a reload,
-    // because a computed cell does not yet refresh in place. See the
-    // React-Compiler gap in `planning/table-templates-and-mini-apps.md`.
-    await expect(row(page, 'Monstera')).toContainText('today');
+    await expect(
+      row(page, 'Monstera').getByTestId('derived-thirsty-for'),
+    ).toHaveText('today');
   });
 
   test('Inventory counts up and down without opening a cell', async ({
@@ -181,9 +182,9 @@ test.describe('row actions', () => {
       await page.getByTestId('action-config-save').click();
     });
 
-    await expect(page.getByRole('columnheader', { name: /Two more/ })).toBeVisible(
-      { timeout: 15_000 },
-    );
+    await expect(
+      page.getByRole('columnheader', { name: /Two more/ }),
+    ).toBeVisible({ timeout: 15_000 });
 
     const milk = row(page, 'Milk');
     await milk.getByTestId('row-action-two-more').click();
@@ -198,12 +199,7 @@ test.describe('row actions', () => {
 
   test('the template toggle flips a checkbox on and off', async ({ page }) => {
     await page.setViewportSize({ width: 1800, height: 900 });
-    await createFromTemplate(
-      page,
-      /Grocery list/,
-      'Shopping toggles',
-      'List',
-    );
+    await createFromTemplate(page, /Grocery list/, 'Shopping toggles', 'List');
 
     await setCell(page, 2, 2, 'Bread');
     await reloadGrid(page);

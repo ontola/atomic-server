@@ -79,9 +79,12 @@ interface DerivedColumnGenerator {
   /**
    * The value to show, or undefined for an empty cell. `now` is only read by
    * generators that measure against the present.
+   *
+   * A pure function of the resolved argument values — see {@link ArgValues} for
+   * why it does not take the row.
    */
   compute: (
-    row: Resource,
+    values: ArgValues,
     args: Record<string, DerivedColumnArg>,
     now: number,
   ) => number | undefined;
@@ -90,17 +93,50 @@ interface DerivedColumnGenerator {
    * True while this row's value keeps changing on its own, so its cell
    * subscribes to the 1s ticker (and is emphasised as live).
    */
-  live?: (row: Resource, args: Record<string, DerivedColumnArg>) => boolean;
+  live?: (values: ArgValues, args: Record<string, DerivedColumnArg>) => boolean;
 }
 
 const DAY_MS = 86_400_000;
 
 /**
- * Reads an instant off a row: a TIMESTAMP is already a number of millis, a DATE
- * is an ISO day string — both place the row in time, so both are usable.
+ * The values of the properties a spec's arguments name, by property subject.
+ *
+ * Generators are functions of *this* rather than of the row, so that a cell can
+ * subscribe to exactly these values and recompute when one changes. Passing the
+ * `Resource` instead looks simpler and is the bug it used to have: the React
+ * Compiler memoizes a render-time read on the resource proxy's identity, and the
+ * store mutates resources in place, so that identity never changes and the value
+ * is computed once and cached forever.
+ */
+export type ArgValues = Record<string, JSONValue | undefined>;
+
+/** Every generator's argument list, so a cell knows how many to subscribe to. */
+export const MAX_DERIVED_ARGS = 2;
+
+/** The property subjects a spec reads, in declaration order. */
+export function argProperties(spec: DerivedColumnSpec): string[] {
+  return Object.values(spec.args).filter(
+    (arg): arg is string => typeof arg === 'string' && arg !== '',
+  );
+}
+
+/** Pulls the argument's values off a row — for callers outside of render. */
+export function argValuesOf(row: Resource, spec: DerivedColumnSpec): ArgValues {
+  return Object.fromEntries(
+    argProperties(spec).map(property => [
+      property,
+      row.get(property) as JSONValue | undefined,
+    ]),
+  );
+}
+
+/**
+ * Reads an instant: a TIMESTAMP is already a number of millis, a DATE is an ISO
+ * day string — both place the row in time, so both are usable. A literal number
+ * argument is the instant itself.
  */
 export function readInstant(
-  row: Resource,
+  values: ArgValues,
   arg: DerivedColumnArg | undefined,
 ): number | undefined {
   if (typeof arg === 'number') {
@@ -111,7 +147,7 @@ export function readInstant(
     return undefined;
   }
 
-  const value = row.get(arg) as JSONValue | undefined;
+  const value = values[arg];
 
   if (typeof value === 'number') {
     return value;
@@ -126,9 +162,9 @@ export function readInstant(
   return undefined;
 }
 
-/** Reads a plain number: the literal itself, or the row's value for a property. */
+/** Reads a plain number: the literal itself, or the value for a property. */
 function readNumber(
-  row: Resource,
+  values: ArgValues,
   arg: DerivedColumnArg | undefined,
 ): number | undefined {
   if (typeof arg === 'number') {
@@ -139,7 +175,7 @@ function readNumber(
     return undefined;
   }
 
-  const value = row.get(arg) as JSONValue | undefined;
+  const value = values[arg];
 
   return typeof value === 'number' ? value : undefined;
 }
@@ -178,9 +214,9 @@ export const DERIVED_COLUMN_GENERATORS: Record<
     },
     valueKind: 'duration',
     width: 130,
-    compute: (row, args) => {
-      const from = readInstant(row, args.from);
-      const to = readInstant(row, args.to);
+    compute: (values, args) => {
+      const from = readInstant(values, args.from);
+      const to = readInstant(values, args.to);
 
       return from === undefined || to === undefined ? undefined : to - from;
     },
@@ -201,19 +237,19 @@ export const DERIVED_COLUMN_GENERATORS: Record<
     },
     valueKind: 'duration',
     width: 130,
-    compute: (row, args, now) => {
-      const from = readInstant(row, args.from);
+    compute: (values, args, now) => {
+      const from = readInstant(values, args.from);
 
       if (from === undefined) {
         return undefined;
       }
 
-      return (readInstant(row, args.until) ?? now) - from;
+      return (readInstant(values, args.until) ?? now) - from;
     },
     format: formatClock,
-    live: (row, args) =>
-      readInstant(row, args.from) !== undefined &&
-      readInstant(row, args.until) === undefined,
+    live: (values, args) =>
+      readInstant(values, args.from) !== undefined &&
+      readInstant(values, args.until) === undefined,
   },
   /** Whole days between `from` and now — "days since last contact". */
   daysSince: {
@@ -223,8 +259,8 @@ export const DERIVED_COLUMN_GENERATORS: Record<
     args: { from: { label: 'Date', accepts: 'instant' } },
     valueKind: 'days',
     width: 110,
-    compute: (row, args, now) => {
-      const from = readInstant(row, args.from);
+    compute: (values, args, now) => {
+      const from = readInstant(values, args.from);
 
       return from === undefined ? undefined : Math.floor((now - from) / DAY_MS);
     },
@@ -242,9 +278,9 @@ export const DERIVED_COLUMN_GENERATORS: Record<
     },
     valueKind: 'number',
     width: 110,
-    compute: (row, args) => {
-      const a = readNumber(row, args.a);
-      const b = readNumber(row, args.b);
+    compute: (values, args) => {
+      const a = readNumber(values, args.a);
+      const b = readNumber(values, args.b);
 
       return a === undefined || b === undefined ? undefined : a * b;
     },
@@ -262,9 +298,9 @@ export const DERIVED_COLUMN_GENERATORS: Record<
     },
     valueKind: 'date',
     width: 130,
-    compute: (row, args) => {
-      const from = readInstant(row, args.from);
-      const days = readNumber(row, args.days);
+    compute: (values, args) => {
+      const from = readInstant(values, args.from);
+      const days = readNumber(values, args.days);
 
       return from === undefined || days === undefined
         ? undefined
