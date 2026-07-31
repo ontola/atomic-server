@@ -302,6 +302,7 @@ export interface ViewDescription {
   timerExclusive?: boolean;
   derivedColumns?: JSONValue;
   aggregates?: JSONValue;
+  rowActions?: JSONValue;
   breakdownColumn?: string;
   breakdownGranularity?: string;
 }
@@ -403,6 +404,12 @@ export async function describeTable(
 
       if (Array.isArray(derived) && derived.length > 0) {
         described.derivedColumns = derived as JSONValue;
+      }
+
+      const rowActions = read(dataBrowser.properties.viewRowActions);
+
+      if (Array.isArray(rowActions) && rowActions.length > 0) {
+        described.rowActions = rowActions as JSONValue;
       }
 
       const aggregates = read(dataBrowser.properties.viewAggregates);

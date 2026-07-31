@@ -8,6 +8,7 @@ import {
   commits,
   core,
   dataBrowser,
+  perfSpan,
   server,
   urls,
 } from '@tomic/react';
@@ -19,7 +20,9 @@ import {
   type DerivedColumnSpec,
 } from './derivedColumns';
 import { stringToSlug } from '@helpers/stringToSlug';
+import type { RowActionKind, RowActionSpec } from './rowActions';
 import {
+  attachPropertiesToClass,
   createPropertyOnClass,
   createSelectPropertyOnClass,
 } from './Kanban/createSelectProperty';
@@ -106,6 +109,8 @@ export interface TableViewSpec {
   derivedColumns?: TableDerivedColumnSpec[];
   /** Statistics shown under the rows (sum, count, average, min, max). */
   aggregates?: TableAggregateSpec[];
+  /** Buttons this view puts on each row. */
+  rowActions?: TableRowActionSpec[];
   /** A column to break those statistics down by — one subtotal per value. */
   breakdownColumn?: string;
   /** For a date or timestamp breakdown column: the bucket size. */
@@ -125,6 +130,31 @@ export interface TableViewSpec {
    */
   columnOrder?: string[];
   default?: boolean;
+}
+
+/**
+ * One button on every row, in the caller's column-name vocabulary. `kind` is a
+ * closed vocabulary of patches — see `rowActions.ts`.
+ */
+export interface TableRowActionSpec {
+  /**
+   * A stable id for this action, used as its column key. Defaults to a slug of
+   * the label — worth setting explicitly when the label is symbols ("+1" and
+   * "-1" both slug to "1"), and it is how a later `configure_view` addresses
+   * this action rather than guessing.
+   */
+  id?: string;
+  /** What the button says. */
+  label: string;
+  kind: RowActionKind;
+  /** The column it writes, by name. */
+  column: string;
+  /**
+   * What to write: the option name for `setValue` on a select column (or the
+   * literal for a text/number one), the step for `increment`. Not used by
+   * `setNow` or `toggle`.
+   */
+  value?: string | number;
 }
 
 /** One row constraint, in the caller's column-name vocabulary. */
@@ -218,15 +248,22 @@ export async function createColumnOnClass(
   store: Store,
   tableClass: Resource,
   column: TableColumnSpec,
+  /**
+   * Leave the property off the ontology and the row class; the caller attaches
+   * every column of the table in one go. See `attachPropertiesToClass`.
+   */
+  deferAttach = false,
 ): Promise<{ subject: string; tags?: Record<string, string> }> {
   if (column.type === 'select') {
     return createSelectPropertyOnClass(store, tableClass, {
       name: column.name,
       tags: (column.options ?? []).map(name => ({ name })),
+      deferAttach,
     });
   }
 
   const subject = await createPropertyOnClass(store, tableClass, {
+    deferAttach,
     name: column.name,
     datatype: DATATYPE_BY_TYPE[column.type],
     // A money or measurement column renders with two decimals rather than as a
@@ -312,6 +349,50 @@ function rowToPropVals(
  * still works; anything else must name a column, or the caller silently gets a
  * column that computes nothing.
  */
+/**
+ * Turns row actions in the caller's vocabulary into the stored shape: column
+ * names become property subjects, and a select column's option name becomes its
+ * tag subject. An action naming a column that doesn't exist is an error rather
+ * than a silently dead button.
+ */
+function resolveRowActions(
+  actions: TableRowActionSpec[],
+  require: (reference: string, context: string) => string,
+  tagsByColumn: Record<string, Record<string, string>>,
+): RowActionSpec[] {
+  const taken = new Set<string>();
+
+  return actions.map(action => {
+    const property = require(action.column, `row action "${action.label}"`);
+
+    const base = stringToSlug(action.id ?? action.label) || action.kind;
+    let id = base;
+    let n = 2;
+
+    while (taken.has(id)) {
+      id = `${base}-${n++}`;
+    }
+
+    taken.add(id);
+
+    // A select column's options are resources; the caller names them ("Done"),
+    // the same way a filter value does.
+    const options = tagsByColumn[action.column.toLowerCase()] ?? {};
+    const value =
+      typeof action.value === 'string'
+        ? (options[action.value.toLowerCase()] ?? action.value)
+        : action.value;
+
+    return {
+      id,
+      label: action.label,
+      kind: action.kind,
+      property,
+      ...(value === undefined ? {} : { value }),
+    };
+  });
+}
+
 function resolveDerivedColumns(
   specs: TableDerivedColumnSpec[],
   resolve: (reference: string, role: string) => string,
@@ -558,6 +639,14 @@ export function buildViewPropVals(
     ) as unknown as JSONValue;
   }
 
+  if (view.rowActions !== undefined) {
+    propVals[dataBrowser.properties.viewRowActions] = resolveRowActions(
+      view.rowActions,
+      require,
+      tagsByColumn,
+    ) as unknown as JSONValue;
+  }
+
   const breakdown = column(view.breakdownColumn);
 
   if (breakdown) {
@@ -569,13 +658,19 @@ export function buildViewPropVals(
   return propVals;
 }
 
-async function createView(
+/**
+ * Creates one view under `table` and returns it. Linking it into the table's
+ * `tableViews` is the caller's job — a table's views are all written to the
+ * same two properties, so a table built from a spec links them in a single
+ * commit rather than one per view.
+ */
+async function createViewResource(
   store: Store,
   table: Resource,
   view: TableViewSpec,
   columnSubjectByName: Record<string, string>,
   tagsByColumn: Record<string, Record<string, string>>,
-): Promise<void> {
+): Promise<Resource> {
   const viewResource = await store.newResource({
     parent: table.subject,
     isA: dataBrowser.classes.view,
@@ -583,20 +678,7 @@ async function createView(
   });
   await viewResource.save();
 
-  await table.push(
-    dataBrowser.properties.tableViews,
-    [viewResource.subject],
-    true,
-  );
-
-  if (view.default) {
-    await table.set(
-      dataBrowser.properties.tableDefaultView,
-      viewResource.subject,
-    );
-  }
-
-  await table.save();
+  return viewResource;
 }
 
 /**
@@ -617,27 +699,44 @@ export async function buildTableFromSpec(
     addToOntology: (resource: Resource) => Promise<void>;
   },
 ): Promise<BuildTableResult> {
-  const ontologyParent = await resolveOntologyParent(store, opts.driveSubject);
+  const closeBuild = perfSpan('table.build', { name: spec.name });
 
+  const closeParent = perfSpan('table.resolveOntologyParent');
+  const ontologyParent = await resolveOntologyParent(store, opts.driveSubject);
+  closeParent();
+
+  const closeClass = perfSpan('table.rowClass');
   const rowClass = await createRowClass(store, {
     parent: ontologyParent,
     tableName: spec.name,
     rowName: spec.rowName,
   });
   await opts.addToOntology(rowClass);
+  closeClass();
 
   const columns: Record<string, string> = {};
   const tags: Record<string, Record<string, string>> = {};
 
+  const columnSubjects: string[] = [];
+
   for (const column of spec.columns) {
-    const created = await createColumnOnClass(store, rowClass, column);
+    const closeColumn = perfSpan('table.column', { type: column.type });
+    // `true`: hold off registering each column on the ontology and the row
+    // class — those are the same two resources for every column, so one
+    // attach at the end costs two commits instead of two per column.
+    const created = await createColumnOnClass(store, rowClass, column, true);
+    closeColumn();
     columns[column.name] = created.subject;
+    columnSubjects.push(created.subject);
 
     if (created.tags) {
       tags[column.name] = created.tags;
     }
   }
 
+  await attachPropertiesToClass(store, rowClass, columnSubjects);
+
+  const closeTable = perfSpan('table.tableResource');
   const table = await store.newResource({
     parent: opts.parent,
     isA: dataBrowser.classes.table,
@@ -647,22 +746,52 @@ export async function buildTableFromSpec(
     },
   });
   await table.save();
+  closeTable();
+
+  const viewSubjects: string[] = [];
+  let defaultViewSubject: string | undefined;
 
   for (const view of spec.views ?? []) {
-    await createView(store, table, view, columns, tags);
+    const closeView = perfSpan('table.view');
+    const created = await createViewResource(store, table, view, columns, tags);
+    closeView();
+    viewSubjects.push(created.subject);
+
+    if (view.default) {
+      defaultViewSubject = created.subject;
+    }
+  }
+
+  if (viewSubjects.length > 0) {
+    const closeLink = perfSpan('table.linkViews', { n: viewSubjects.length });
+    await table.push(dataBrowser.properties.tableViews, viewSubjects, true);
+
+    if (defaultViewSubject) {
+      await table.set(
+        dataBrowser.properties.tableDefaultView,
+        defaultViewSubject,
+      );
+    }
+
+    await table.save();
+    closeLink();
   }
 
   const rowSubjects: string[] = [];
 
   for (const row of spec.rows ?? []) {
+    const closeRow = perfSpan('table.row');
     const rowResource = await store.newResource({
       parent: table.subject,
       isA: rowClass.subject,
       propVals: rowToPropVals(row, columns, tags),
     });
     await rowResource.save();
+    closeRow();
     rowSubjects.push(rowResource.subject);
   }
+
+  closeBuild();
 
   return {
     tableSubject: table.subject,

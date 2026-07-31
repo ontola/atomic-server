@@ -290,7 +290,8 @@
       "https://atomicdata.dev/properties/view-aggregates",
       "https://atomicdata.dev/properties/view-group-by-column",
       "https://atomicdata.dev/properties/view-group-granularity",
-      "https://atomicdata.dev/properties/view-column-order"
+      "https://atomicdata.dev/properties/view-column-order",
+      "https://atomicdata.dev/properties/view-row-actions"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/name",
@@ -422,6 +423,16 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "view-aggregates"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-row-actions",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The buttons a view puts on each row, as a JSON array of { id, label, kind, property, value } specs. `kind` is one of setNow / setValue / toggle / increment — a closed vocabulary of patches, not code, so a person can edit one in a dialog and an assistant can write one. Pressing a button is an ordinary commit on that row, so it is rights-checked, synced and in history.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-row-actions"
   },
   {
     "@id": "https://atomicdata.dev/properties/view-group-by-column",

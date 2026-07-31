@@ -9,6 +9,7 @@ import { TableSorting } from './tableSorting';
 import { AddItemToHistoryStack } from './helpers/useTableHistory';
 import { TableFilter, FilterOperator } from './tableFiltering';
 import type { DerivedColumnSpec } from './derivedColumns';
+import type { RowActionSpec } from './rowActions';
 import type { GroupGranularity, TableAggregate } from './tableAggregates';
 
 /**
@@ -79,6 +80,14 @@ export interface TablePageContextType {
   updateDerivedColumn: (spec: DerivedColumnSpec) => void;
   /** Drop a computed column from the active view. */
   removeDerivedColumn: (id: string) => void;
+  /** The buttons this view puts on each row. */
+  rowActions: RowActionSpec[];
+  /** Add a row action to the active view. */
+  addRowAction: (spec: RowActionSpec) => void;
+  /** Replace a row action (matched on its id) in the active view. */
+  updateRowAction: (spec: RowActionSpec) => void;
+  /** Drop a row action from the active view. */
+  removeRowAction: (id: string) => void;
   addItemsToHistoryStack: AddItemToHistoryStack;
 }
 
@@ -112,5 +121,9 @@ export const TablePageContext = createContext<TablePageContextType>({
   addDerivedColumn: () => undefined,
   updateDerivedColumn: () => undefined,
   removeDerivedColumn: () => undefined,
+  rowActions: [],
+  addRowAction: () => undefined,
+  updateRowAction: () => undefined,
+  removeRowAction: () => undefined,
   addItemsToHistoryStack: () => undefined,
 });

@@ -155,6 +155,29 @@ const aggregateSchema = z.object({
     ),
 });
 
+/** One button a view puts on every row. */
+const rowActionSchema = z.object({
+  id: z
+    .string()
+    .optional()
+    .describe(
+      'A stable id for this action. Defaults to a slug of the label; set it when the label is symbols ("+1" and "-1" both slug to "1").',
+    ),
+  label: z.string().describe('What the button says, e.g. "Watered" or "+1".'),
+  kind: z
+    .enum(['setNow', 'setValue', 'toggle', 'increment'])
+    .describe(
+      "What pressing it does: 'setNow' stamps the current time into a date column, 'setValue' writes one fixed value, 'toggle' flips a checkbox, 'increment' adds a fixed amount to a number.",
+    ),
+  column: z.string().describe('The column it writes, by name.'),
+  value: z
+    .union([z.string(), z.number()])
+    .optional()
+    .describe(
+      "What to write: the option name for 'setValue' on a select column (or the literal for a text/number one), the step for 'increment' (use -1 for a 'one fewer' button). Not used by 'setNow' or 'toggle'.",
+    ),
+});
+
 const filterSchema = z.object({
   column: z.string().describe('The column to constrain, by name.'),
   operator: z
@@ -278,6 +301,12 @@ const viewConfigShape = {
     .optional()
     .describe(
       'Computed columns, shown next to the stored ones but read off each row rather than out of it. Use these instead of asking for a renderer: a duration, a days-since, an amount and a next-due date are all configuration.',
+    ),
+  rowActions: z
+    .array(rowActionSchema)
+    .optional()
+    .describe(
+      'Buttons this view puts on every row — the thing a person presses constantly. A closed set of patches, so each press is an ordinary commit: rights-checked, synced and in history. Replaces the whole list when given.',
     ),
   aggregates: z
     .array(aggregateSchema)

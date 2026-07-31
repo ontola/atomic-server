@@ -74,9 +74,9 @@ async function setCell(
 /**
  * Reloads and waits for the grid.
  *
- * Computed columns are blank on the row you are typing into: the trailing row is
- * a local draft, and its cells stay mounted as the draft's after it saves. They
- * fill in as soon as the row is rendered as a saved one.
+ * Needed because a computed cell does not refresh in place — it keeps whatever it
+ * computed at mount until the row is rendered afresh. See the React-Compiler gap
+ * in `planning/table-templates-and-mini-apps.md`.
  */
 async function reloadGrid(page: Page) {
   await page.waitForFunction(
@@ -145,6 +145,7 @@ test.describe('table templates', () => {
 
     await createFromTemplate(page, /Plant care/, 'Plants');
 
+    // The template's own column order, then the button it puts on each row.
     expect(await headings(page)).toEqual([
       'name',
       'Species',
@@ -154,6 +155,7 @@ test.describe('table templates', () => {
       'Next water',
       'Location',
       'Notes',
+      'Watered',
     ]);
 
     await setCell(page, 2, 2, 'Monstera');
@@ -187,6 +189,7 @@ test.describe('table templates', () => {
 
     await createFromTemplate(page, /Inventory/, 'Stockroom');
 
+    // The template's own column order, then the buttons it puts on each row.
     expect(await headings(page)).toEqual([
       'name',
       'SKU',
@@ -195,6 +198,8 @@ test.describe('table templates', () => {
       'Value',
       'Category',
       'Location',
+      '+1',
+      '-1',
     ]);
 
     await setCell(page, 2, 2, 'Bolts');

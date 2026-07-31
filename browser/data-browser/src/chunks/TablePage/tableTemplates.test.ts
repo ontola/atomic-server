@@ -237,6 +237,68 @@ describe('table templates', () => {
             }
           });
 
+          it('points every row action at a column its verb can write', () => {
+            for (const action of view.rowActions ?? []) {
+              const type = typeOf(action.column);
+
+              expect(
+                type,
+                `${action.label} writes "${action.column}", which is not a column`,
+              ).toBeDefined();
+
+              // The verbs are typed: stamping now needs somewhere to put a
+              // date, toggling needs a checkbox, counting needs a number.
+              if (action.kind === 'setNow') {
+                expect(
+                  ['date', 'datetime'],
+                  `${action.label} stamps now into a ${type} column`,
+                ).toContain(type);
+              }
+
+              if (action.kind === 'toggle') {
+                expect(type, `${action.label} toggles a ${type} column`).toBe(
+                  'checkbox',
+                );
+              }
+
+              if (action.kind === 'increment') {
+                expect(
+                  ['number', 'decimal'],
+                  `${action.label} increments a ${type} column`,
+                ).toContain(type);
+                // A step is what makes it an increment rather than a no-op.
+                expect(
+                  typeof action.value,
+                  `${action.label} needs a step`,
+                ).toBe('number');
+              }
+
+              if (action.kind === 'setValue') {
+                expect(
+                  action.value,
+                  `${action.label} needs a value to write`,
+                ).toBeDefined();
+
+                // On a select column the value has to be one of its options,
+                // or the button writes a tag that doesn't exist.
+                if (type === 'select') {
+                  const options =
+                    spec.columns.find(c => c.name === action.column)?.options ??
+                    [];
+                  expect(
+                    options,
+                    `${action.label} sets "${action.value}", not an option of ${action.column}`,
+                  ).toContain(action.value);
+                }
+              }
+            }
+
+            // Two buttons with the same label would produce two columns a
+            // person cannot tell apart.
+            const labels = (view.rowActions ?? []).map(a => a.label);
+            expect(new Set(labels).size).toBe(labels.length);
+          });
+
           it('orders columns that exist', () => {
             for (const reference of view.columnOrder ?? []) {
               const known =

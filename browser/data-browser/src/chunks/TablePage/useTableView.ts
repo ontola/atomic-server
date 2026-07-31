@@ -38,6 +38,7 @@ import {
   type GroupGranularity,
   type TableAggregate,
 } from './tableAggregates';
+import { parseRowActions, type RowActionSpec } from './rowActions';
 import { TableSorting, DEFAULT_SORT_PROP } from './tableSorting';
 import {
   ViewKind,
@@ -155,6 +156,14 @@ export interface UseTableViewResult {
   viewAggregates: TableAggregate[];
   /** Persist the statistics to the active View (lazy-creates it). */
   setViewAggregates: (aggregates: TableAggregate[]) => void;
+  /**
+   * The buttons this view puts on each row — "Watered", "Mark done", "+1".
+   * Configuration, like the computed columns: a closed set of patches the store
+   * can execute, never code. See `rowActions.ts`.
+   */
+  viewRowActions: RowActionSpec[];
+  /** Persist the row actions to the active View (lazy-creates it). */
+  setViewRowActions: (actions: RowActionSpec[]) => void;
   /** The property the statistics are broken down by, if any. */
   viewGroupByColumn: string | undefined;
   /** Persist the breakdown property (empty string clears it). */
@@ -240,6 +249,10 @@ export function useTableView(
     view,
     dataBrowser.properties.viewAggregates,
   );
+  const [storedRowActions] = useValue(
+    view,
+    dataBrowser.properties.viewRowActions,
+  );
   const [storedGroupByColumn] = useString(
     view,
     dataBrowser.properties.viewGroupByColumn,
@@ -272,6 +285,14 @@ export function useTableView(
   const viewAggregates = useMemo(
     () => parseAggregates(JSON.parse(aggregatesKey)),
     [aggregatesKey],
+  );
+
+  // Same reason as the aggregates: this reaches the rendered column list, and a
+  // fresh array every render would remount every action button.
+  const rowActionsKey = JSON.stringify(storedRowActions ?? null);
+  const viewRowActions = useMemo(
+    () => parseRowActions(JSON.parse(rowActionsKey)),
+    [rowActionsKey],
   );
 
   const [filters, setFilters] = useState<TableFilter[]>([]);
@@ -706,6 +727,22 @@ export function useTableView(
     [ensureView],
   );
 
+  const setViewRowActions = useCallback(
+    (actions: RowActionSpec[]) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        await v.set(dataBrowser.properties.viewRowActions, actions, false);
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
   const setViewGroupByColumn = useCallback(
     (property: string) => {
       void (async () => {
@@ -780,6 +817,7 @@ export function useTableView(
           dataBrowser.properties.viewDerivedColumns,
           dataBrowser.properties.viewColumnOrder,
           dataBrowser.properties.viewAggregates,
+          dataBrowser.properties.viewRowActions,
           dataBrowser.properties.viewGroupByColumn,
           dataBrowser.properties.viewGroupGranularity,
         ]) {
@@ -878,6 +916,8 @@ export function useTableView(
     setViewColumnOrder,
     viewAggregates,
     setViewAggregates,
+    viewRowActions,
+    setViewRowActions,
     viewGroupByColumn: storedGroupByColumn || undefined,
     setViewGroupByColumn,
     viewGroupGranularity: (storedGroupGranularity as GroupGranularity) || 'day',

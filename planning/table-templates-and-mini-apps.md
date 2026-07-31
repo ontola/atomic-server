@@ -69,7 +69,12 @@ appearing. None of them is specific to one app:
   capability — see below.)*
 - **Grouping with subtotals.** by day, category, month, stage. *(Shipped as a
   breakdown under the grid; not as rows inside it.)*
-- **Row actions.** start/stop, mark done, log-today, clear-completed.
+- **Row actions.** start/stop, mark done, log-today, clear-completed. *(Shipped
+  2026-07-31 as `view-row-actions`: a closed vocabulary of four patches —
+  `setNow`, `setValue`, `toggle`, `increment` — configured per view, offered in
+  the Add-column menu and to the assistant. Not yet: the timer's own start/stop,
+  which needs a two-property patch and an exclusivity sweep, and the set-level
+  "clear completed".)*
 - **A quick-add bar.** one field that creates a row with sensible defaults.
   Wanted by timer, grocery, tasks.
 - **Relations and rollups.** invoice → line items, recipe → ingredients,
@@ -116,9 +121,12 @@ That seam is the precursor to derived columns and row actions above; when they
 land as configuration, the timer view kind collapses into a template and the
 `case` disappears.
 
-Half of that has happened: the Duration is a derived column (step 3), leaving
-the timer with its start/stop row action, its toolbar and its "one at a time"
-sweep. Row actions as configuration would finish it.
+Two thirds of that has happened: the Duration is a derived column (step 3), and
+row actions are configuration (2026-07-31) — so an ordinary "stamp the end
+column" button is now config rather than code. What still keeps the timer a view
+kind is the part its start/stop does *beyond* one patch: starting an entry writes
+two properties and clears a third, and "one at a time" sweeps every other running
+row. A fifth verb could cover the first; the sweep is a set-level action.
 
 Day totals are still open, but for a narrower reason than "grouping isn't built":
 aggregation (step 4) reads stored properties, and a duration is derived. See the
@@ -230,6 +238,14 @@ configuration, not a renderer.
   500ms) landing on top of the click. Fixing it properly means the footer's menu
   surviving a refresh, not a longer timeout. The day totals are proven by
   `timer.spec.ts` meanwhile.
+  **The sensitivity is not unique to that spec.** Every table / timer / template /
+  dashboard / row-action spec passes run alone or in a small serial batch; run nine
+  of them together — especially with more than one worker — and one or two of the
+  template-heavy ones fail on timing (`table-templates`' Inventory joined the list
+  once row actions gave a third template rows to create). So a red result from a
+  big parallel run means little on a well-used store: **reproduce a failure alone
+  before believing it**, and compare failure *sets* rather than expecting
+  all-green. A fresh data dir is the cheap way to get a clean signal.
 - Aggregation has no per-aggregate filter ("sum of Amount **where** Status =
   Done"); a total follows the view's own filters instead.
 - Subtotals render under the grid, not as rows between groups inside it.
@@ -258,11 +274,33 @@ configuration, not a renderer.
   commit path. Guarded by `lib/tests/query_index_eviction.rs` (leaving a filter,
   entering one, and an unrelated edit that must not evict) plus the Inventory
   e2e, which fails against a wasm build without the fix.
-- Computed columns are blank on the row you are typing into. The trailing row is
-  a local draft whose cells stay mounted as the draft's after it saves, so a
-  duration or a next-due date only appears once the row is rendered as a saved
-  one (a reload, or navigating back). A template full of computed columns makes
-  this obvious in a way the timer never did.
+- **A computed cell never refreshes in place — diagnosed 2026-07-31, not fixed.**
+  Edit the column a computed column derives from and the derived cell keeps
+  whatever it computed at mount; only a reload updates it. The earlier note here
+  blamed the draft row, which was wrong: it happens to a saved row created
+  through the store too.
+  The cause is the React Compiler. `DerivedCell` calls
+  `generator.compute(resource, args, now)` during render; the Compiler memoizes
+  that on the identities it can see, and a `Resource` proxy's identity **never
+  changes** — the store mutates resources in place and notifies. Instrumented
+  proof: the cell re-renders (a version counter went 4 → 5), `resource.get(...)`
+  in the same render returns the new value, an unmemoized `compute(...)` call in
+  the same render returns `0`, and the memoized `value` is still `undefined`.
+  Two fixes were tried and **both failed** — don't repeat them:
+  1. `useValue` per argument. The arg count varies by generator, so this meant
+     hooks inside `.map()` — a rules-of-hooks violation the Compiler is entitled
+     to break, and does.
+  2. A `useResourceVersion()` counter added to the `useMemo` dep array. The
+     Compiler infers a memo's dependencies from what the callback *reads* and
+     ignores the hand-written array, so a cache-busting dep is inert.
+  What should work: make the generators pure functions of their **resolved
+  values** rather than of the resource, and have the cell read those values
+  through a fixed number of top-level `useValue` calls (every generator takes at
+  most two arguments, so two calls with `''` for an absent one). Then the memo's
+  real inputs change when the data does.
+  The same trap applies to anything reading a resource during render —
+  `useRowActions` reads its button state through `useValue` for exactly this
+  reason. See the `react-compiler-resource-proxy-pitfall` rule.
 - No template can seed a default value, so a "date added" column starts empty
   even though `createdAt` is stamped on every row.
 

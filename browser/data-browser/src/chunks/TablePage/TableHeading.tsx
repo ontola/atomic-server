@@ -10,6 +10,7 @@ import {
 import type { TableColumn } from './useTableColumns';
 import { ColumnLanguageChip } from './ColumnLanguageChip';
 import { DerivedColumnHeading } from './DerivedColumnHeading';
+import { RowActionHeading } from './RowActionHeading';
 
 import {
   FaAngleDown,
@@ -79,6 +80,18 @@ export const TableHeading: TableHeadingComponent<TableColumn> = ({
     return (
       <DerivedColumnHeading
         spec={column.derived}
+        readOnly={!canWriteClass}
+        dragListeners={dragListeners}
+        dragAttributes={dragAttributes}
+      />
+    );
+  }
+
+  // A configured row action — its label plus a menu to edit or remove it.
+  if (!property && column.rowAction) {
+    return (
+      <RowActionHeading
+        spec={column.rowAction}
         readOnly={!canWriteClass}
         dragListeners={dragListeners}
         dragAttributes={dragAttributes}

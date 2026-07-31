@@ -285,7 +285,8 @@ What falls out of doing this thirteen times:
   rather than hand-authoring thirteen of them — and for a template shipping a
   dashboard the way it already ships views.
 - **The action vocabulary closes at six** (above). Nothing in the catalogue needed
-  a seventh.
+  a seventh. Four of them shipped as row actions on 2026-07-31; the two that are
+  not per-row ("create with defaults", "clear every matching row") remain.
 - **The same three gaps keep appearing**, and none of them is a dashboard
   feature: relative date windows, week/quarter buckets, and "this field is
   empty". Fixing those pays off in tables first and dashboards second.
@@ -417,10 +418,14 @@ a UI to a tool, since a dashboard block repeats that path exactly.
 `create_dashboard` → block-config UI → bar chart~~ — all shipped; see the section
 above. What is left, in order:
 
-1. **Row actions and one-tap create, in the table** (see Interactivity). This is
-   the slice that makes a dashboard an app rather than a report, and it belongs in
-   the table first, where it also deletes the timer's last bespoke code. Then
-   offer them as block kinds.
+1. ~~**Row actions**, in the table~~ — shipped 2026-07-31 as `view-row-actions`
+   (four verbs: `setNow`, `setValue`, `toggle`, `increment`), with a config dialog
+   and tool support, and shipped on the Plant care, Inventory and Grocery
+   templates. **Still to do:** offer them as a dashboard block kind (a big button
+   over a whole view rather than one per row), and **one-tap create** — the
+   quick-add bar generalised, which is the other half of what makes a dashboard an
+   app. Of the six verbs the template survey found, four are done; "create with
+   defaults" and the set-level "clear every matching row" are not.
 2. **The three filter gaps** the template survey kept hitting, none of them
    dashboard features: relative date windows (`today`, `this month`,
    `last 7 days`), week/quarter buckets, and "this field is empty".

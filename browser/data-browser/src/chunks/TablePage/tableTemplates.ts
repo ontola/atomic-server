@@ -416,6 +416,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
             'Aisle',
             'Bought',
           ],
+          rowActions: [{ label: 'Got it', kind: 'toggle', column: 'Bought' }],
         },
       ],
     },
@@ -538,6 +539,10 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
             'Next water',
             'Location',
           ],
+          // The whole app in one button: you water a plant, you press Watered.
+          rowActions: [
+            { label: 'Watered', kind: 'setNow', column: 'Last watered' },
+          ],
           default: true,
         },
         { name: 'By room', kind: 'kanban', groupByColumn: 'Location' },
@@ -591,6 +596,24 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
             'Value',
             'Category',
             'Location',
+          ],
+          // Ids spelled out: "+1" and "-1" both slug to "1", so the labels
+          // alone would collide.
+          rowActions: [
+            {
+              id: 'plus',
+              label: '+1',
+              kind: 'increment',
+              column: 'Quantity',
+              value: 1,
+            },
+            {
+              id: 'minus',
+              label: '-1',
+              kind: 'increment',
+              column: 'Quantity',
+              value: -1,
+            },
           ],
           default: true,
         },

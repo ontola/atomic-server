@@ -92,6 +92,7 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/view-derived-columns',
     viewColumnOrder: 'https://atomicdata.dev/properties/view-column-order',
     viewAggregates: 'https://atomicdata.dev/properties/view-aggregates',
+    viewRowActions: 'https://atomicdata.dev/properties/view-row-actions',
     viewGroupByColumn: 'https://atomicdata.dev/properties/view-group-by-column',
     viewGroupGranularity:
       'https://atomicdata.dev/properties/view-group-granularity',
@@ -198,6 +199,7 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/view-derived-columns',
       'https://atomicdata.dev/properties/view-column-order',
       'https://atomicdata.dev/properties/view-aggregates',
+      'https://atomicdata.dev/properties/view-row-actions',
       'https://atomicdata.dev/properties/view-group-by-column',
       'https://atomicdata.dev/properties/view-group-granularity',
     ],
@@ -405,6 +407,7 @@ declare module '../index.js' {
         | typeof dataBrowser.properties.viewDerivedColumns
         | typeof dataBrowser.properties.viewColumnOrder
         | typeof dataBrowser.properties.viewAggregates
+        | typeof dataBrowser.properties.viewRowActions
         | typeof dataBrowser.properties.viewGroupByColumn
         | typeof dataBrowser.properties.viewGroupGranularity;
     };
@@ -521,6 +524,13 @@ declare module '../index.js' {
       property?: string;
       function?: string;
     }>;
+    [dataBrowser.properties.viewRowActions]: Array<{
+      id?: string;
+      label?: string;
+      kind?: string;
+      property?: string;
+      value?: string | number;
+    }>;
     [dataBrowser.properties.viewGroupByColumn]: string;
     [dataBrowser.properties.viewGroupGranularity]: string;
     [dataBrowser.properties.dashboardBlocks]: string[];
@@ -608,6 +618,7 @@ declare module '../index.js' {
     [dataBrowser.properties.viewDerivedColumns]: 'viewDerivedColumns';
     [dataBrowser.properties.viewColumnOrder]: 'viewColumnOrder';
     [dataBrowser.properties.viewAggregates]: 'viewAggregates';
+    [dataBrowser.properties.viewRowActions]: 'viewRowActions';
     [dataBrowser.properties.viewGroupByColumn]: 'viewGroupByColumn';
     [dataBrowser.properties.viewGroupGranularity]: 'viewGroupGranularity';
     [dataBrowser.properties.dashboardBlocks]: 'dashboardBlocks';

@@ -51,6 +51,8 @@ import { CalendarView } from './Calendar/CalendarView';
 import { TimerToolbar } from './Timer/TimerToolbar';
 import { useTimerColumns } from './Timer/useTimerColumns';
 import { useDerivedColumns } from './useDerivedColumns';
+import { useRowActions } from './useRowActions';
+import { rowActionKey, type RowActionSpec } from './rowActions';
 import { useTableAggregates } from './useTableAggregates';
 import { TableTotalsFooter } from './TableTotalsFooter';
 import { toAggregation } from './tableAggregates';
@@ -133,6 +135,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setViewGroupByColumn,
     viewGroupGranularity,
     setViewGroupGranularity,
+    viewRowActions,
+    setViewRowActions,
     queryFilters,
     queryExpressionFilters,
   } = useTableData(resource, viewSubject);
@@ -341,11 +345,59 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [derivedSpecs, setViewDerivedColumns],
   );
 
-  // Computed columns first, then the timer's action button, so the button stays
-  // the last thing in the row.
+  // Configured row-action buttons. Hidden entirely from a viewer who cannot
+  // write: a button that is going to be rejected is worse than no button.
+  const actionColumns = useRowActions(viewRowActions, allColumns, !canWrite);
+
+  const addRowAction = useCallback(
+    (spec: RowActionSpec) => {
+      // Same id minting as a computed column: derived from the label, and
+      // suffixed until it is unique within the view.
+      const base = stringToSlug(spec.label) || 'action';
+      const taken = new Set(viewRowActions.map(existing => existing.id));
+      let id = base;
+      let n = 2;
+
+      while (taken.has(id)) {
+        id = `${base}-${n++}`;
+      }
+
+      setViewRowActions([...viewRowActions, { ...spec, id }]);
+    },
+    [viewRowActions, setViewRowActions],
+  );
+
+  const updateRowAction = useCallback(
+    (spec: RowActionSpec) => {
+      setViewRowActions(
+        viewRowActions.map(existing =>
+          existing.id === spec.id ? spec : existing,
+        ),
+      );
+    },
+    [viewRowActions, setViewRowActions],
+  );
+
+  const removeRowAction = useCallback(
+    (id: string) => {
+      setViewRowActions(viewRowActions.filter(spec => spec.id !== id));
+      // Its placement in the column order would otherwise linger as dead config
+      // that a later drag writes back forever.
+      setViewColumnOrder(
+        viewColumnOrder.filter(key => key !== rowActionKey(id)),
+      );
+    },
+    [viewRowActions, setViewRowActions, viewColumnOrder, setViewColumnOrder],
+  );
+
+  // Computed columns, then configured buttons, then the timer's Start/Stop — so
+  // the buttons stay at the end of the row where a thumb can find them.
   const virtualColumns = useMemo(
-    () => (isTimer ? [...derivedColumns, ...timer.columns] : derivedColumns),
-    [isTimer, derivedColumns, timer.columns],
+    () =>
+      isTimer
+        ? [...derivedColumns, ...actionColumns, ...timer.columns]
+        : [...derivedColumns, ...actionColumns],
+    [isTimer, derivedColumns, actionColumns, timer.columns],
   );
 
   // The default order: stored columns, then the ones the view adds — except in a
@@ -786,6 +838,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
       splitLanguageSubjects: viewSplitLanguages,
       toggleSplitLanguages,
       classProperties: allColumns,
+      rowActions: viewRowActions,
+      addRowAction,
+      updateRowAction,
+      removeRowAction,
       aggregates: viewAggregates,
       aggregateOutcomes,
       rowCount: collection.totalMembers,

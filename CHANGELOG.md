@@ -9,6 +9,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ### Added
 
+- A `view-row-actions` property in the default store: the buttons a view puts on each row, as a JSON array of `{ id, label, kind, property, value }`. `kind` is a closed vocabulary of patches (`setNow` / `setValue` / `toggle` / `increment`) rather than code, so a person can edit one in a dialog and an assistant can write one, and each press stays an ordinary commit.
 - `Dashboard` and `Block` classes in the default store, with `dashboard-blocks` / `dashboard-layout` and `block-kind` / `block-source` / `block-view` / `block-query` / `block-aggregate` / `block-chart-spec`. One `Block` class carrying a kind string, the way `View` does, so a new block kind needs no ontology change. This is the schema behind the browser's new dashboards; the numbers themselves come from the aggregation engine already in `Query`.
 
 ### Fixed

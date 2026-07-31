@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { reorderArray } from '@chunks/TableEditor';
 import { useDeclaredLanguages } from '../../hooks/useDeclaredLanguages';
 import type { DerivedColumnSpec } from './derivedColumns';
+import type { RowActionSpec } from './rowActions';
 
 /**
  * A column the view renders itself rather than reading off a Property —
@@ -50,6 +51,8 @@ export type TableColumn = {
    * this is the view's own (a timer's Start/Stop button) and isn't editable.
    */
   derived?: DerivedColumnSpec;
+  /** Set when this column is a configured row action, for the same reason. */
+  rowAction?: RowActionSpec;
 };
 
 type UseTableColumnsReturnType = {
