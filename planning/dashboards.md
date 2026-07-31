@@ -328,6 +328,53 @@ mostly not dashboard work: **one-tap create and a row action, built in the table
 A Time tracker dashboard — one Start/Stop button, today's total, today's entries —
 is the smallest thing that proves the whole idea, and it is one action away.
 
+### Handover: what to read, what exists, what to build
+
+Written 2026-07-31 so this can be picked up cold.
+
+**Read first**, in this order: the Analytics section above (the engine is built,
+and knowing its shape stops you rebuilding it), then step 4 and step 7 of
+[[table-templates-and-mini-apps]] for how a capability got from a `Query` field to
+a UI to a tool, since a dashboard block repeats that path exactly.
+
+**What already exists, and where:**
+
+| Need | Use |
+| --- | --- |
+| A stat's number | `CollectionBuilder` + `setAggregation` — copy `chunks/TablePage/useTableAggregates.ts`, which asks for one row plus the numbers and re-reads on save/delete with a debounce |
+| A number over a computed value (a duration, qty × price) | `Aggregate.expression`; build it with `toExpression(spec)` from `chunks/TablePage/derivedColumns.ts` |
+| A block filtered to a subset | `QueryFilter.filters` (indexed) and `expression_filters` (computed); `splitFilters` in `chunks/TablePage/tableFiltering.ts` already translates view config into both |
+| Bars per category/day/month | the same call with `group_by`; buckets are `exact` / `day` / `month` + a timezone offset |
+| An embedded editable table/kanban/calendar | `chunks/TablePage/TableResource.tsx` renders from a Table + a View subject |
+| Ontology plumbing for a new class | `lib/defaults/table.json` + `browser/lib/src/ontologies/dataBrowser.ts` (regenerate, then `pnpm build` in lib **and** react) |
+| A new page for a class | dispatch in `views/ResourcePage.tsx`, like `TablePage` |
+| The tool surface | `chunks/AI/useAtomicTools.ts` + the skill in `chunks/AI/skills/tables/` |
+
+**Order of work.** Ontology (`Dashboard`, `Block`) → `DashboardPage` rendering a
+CSS grid from `layout` → the view block (free: embed the table) → the stat block →
+`create_dashboard` → the block-config UI → the bar chart last, since it is the
+least urgent and the only new drawing code.
+
+**Constraints that are not negotiable** (each one was learned the hard way):
+
+- JSON-shaped config uses the JSON datatype natively, never a stringified string.
+  See the `json-property-native-storage` rule.
+- A capability lands with **both** its tool and its UI, or the assistant builds
+  dashboards their owner cannot edit.
+- Anything derived from a query must key its React deps on the *serialized* shape
+  of that query, not on object identity — parsed JSON config gets a new identity
+  every render, and the grid taught us what that costs.
+- If a value depends on `now`, quantize it (the tables use a minute) before it
+  enters a query, or the query re-runs on every render.
+- Malformed stored config is dropped, never thrown on: a person or an LLM can
+  write it, and one bad block must not take a page down.
+
+**Two bugs to know about before you lean on filtered queries**, both in
+[[table-templates-and-mini-apps]]'s gaps: no filter persists on a table created
+from a template, and a row whose value stops matching a filter can stay in a
+view's results. A dashboard leans on filtered queries much harder than a table
+does, so fix them first — that is the sequencing decision made on 2026-07-31.
+
 ## Open questions
 
 1. One `Block` class with `block-kind`, or a class per kind? (`View` uses a
