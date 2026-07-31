@@ -298,9 +298,39 @@ test.describe('computed columns', () => {
     // The chip says what it filtered by, in the unit it asked for.
     await expect(page.getByTestId('filter-chip')).toContainText('1 hours');
 
-    // NOTE: this filter does not yet survive a reload — see the gap recorded in
-    // `planning/table-templates-and-mini-apps.md`. Asserting it here would be
-    // asserting a bug.
+    // The constraint lives on the View like any other filter, so it survives a
+    // reload — including the unit it was typed in.
+    //
+    // Wait for the View resource to actually hold the constraint before waiting
+    // on the sync queue: the write is debounced, and `pendingDirtyCount` is
+    // still 0 in the window before the commit is queued at all.
+    await page.waitForFunction(
+      () => {
+        for (const res of window.store.resources.values()) {
+          const stored = res?.get?.(
+            'https://atomicdata.dev/properties/view-filters',
+          ) as { derived?: string }[] | undefined;
+
+          if (stored?.some(f => f.derived !== undefined)) {
+            return true;
+          }
+        }
+
+        return false;
+      },
+      undefined,
+      { timeout: 30_000 },
+    );
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 30_000 },
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('grid')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('filter-chip')).toContainText('1 hours');
+    await expect(row(page, 'Short task')).toHaveCount(0);
+    await expect(row(page, 'Long task')).toHaveCount(0);
 
     // Removing it brings both entries back, the running one included.
     await page.getByTestId('filter-chip').click();
