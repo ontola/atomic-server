@@ -5,11 +5,20 @@
  *
  * Usage:
  *   node scripts/bump-version.mjs <old-version> <new-version>
+ *   node scripts/bump-version.mjs --check <version>
+ *
+ * `--check` verifies every site already declares <version> and exits non-zero
+ * listing the ones that don't. Run it in CI and before tagging: a release
+ * where one package.json lagged behind publishes a broken version pair to npm,
+ * and nothing else in the pipeline compares these files to each other.
  *
  * Does NOT touch:
  * - Lockfiles (Cargo.lock, pnpm-lock.yaml) — regenerate separately:
- *     cargo metadata --format-version 1 --no-deps
+ *     cargo update --workspace
  *     cd browser && pnpm install --lockfile-only
+ *   NOT `cargo metadata --no-deps`, which CONTRIBUTING.md used to recommend:
+ *   it skips dependency resolution and so leaves the workspace members' own
+ *   versions stale in Cargo.lock. Verified — it silently no-ops.
  * - CHANGELOG.md files — update those by hand.
  * - Historical version mentions in prose docs (e.g. docs/src/svelte.md,
  *   CONTRIBUTING.md's own examples) — those describe a specific past
@@ -21,10 +30,13 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-const [oldVersion, newVersion] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const checkMode = args[0] === '--check';
+const [oldVersion, newVersion] = checkMode ? [null, args[1]] : args;
 
-if (!oldVersion || !newVersion) {
+if (checkMode ? !newVersion : !oldVersion || !newVersion) {
   console.error('Usage: node scripts/bump-version.mjs <old-version> <new-version>');
+  console.error('       node scripts/bump-version.mjs --check <version>');
   process.exit(1);
 }
 
@@ -60,6 +72,48 @@ const VERSION_ONLY_JSON_FILES = ['desktop/tauri.conf.json'];
 
 let changedFiles = 0;
 
+/**
+ * Every place a release version is declared, and how to read it back. Kept
+ * beside the writers above so a new site cannot be added to one and forgotten
+ * in the other -- which is the failure this check exists to catch.
+ */
+const DECLARED_VERSION_SITES = [
+  ...RUST_FILES.map(f => ({ file: f, re: /^version = "([^"]+)"/m })),
+  ...JS_PACKAGE_FILES.map(f => ({ file: f, re: /"version":\s*"([^"]+)"/ })),
+  ...VERSION_ONLY_JSON_FILES.map(f => ({ file: f, re: /"version":\s*"([^"]+)"/ })),
+];
+
+function runCheck(expected) {
+  const mismatches = [];
+
+  for (const { file, re } of DECLARED_VERSION_SITES) {
+    const found = fs.readFileSync(path.join(ROOT, file), 'utf8').match(re)?.[1];
+
+    if (found !== expected) {
+      mismatches.push(`  ${file}: ${found ?? '(no version field)'}`);
+    }
+  }
+
+  // Templates carry their own app version, so only their @tomic/* constraints
+  // are release-coupled.
+  for (const file of TEMPLATE_PACKAGE_FILES) {
+    const content = fs.readFileSync(path.join(ROOT, file), 'utf8');
+
+    for (const [, dep, ver] of content.matchAll(/"(@tomic\/[a-z-]+)":\s*"\^?([^"]+)"/g)) {
+      if (ver !== expected) mismatches.push(`  ${file}: ${dep} -> ${ver}`);
+    }
+  }
+
+  if (mismatches.length > 0) {
+    console.error(`Expected every site to declare ${expected}, but:`);
+    console.error(mismatches.join('\n'));
+    process.exit(1);
+  }
+
+  console.log(`All ${DECLARED_VERSION_SITES.length} version sites agree on ${expected}.`);
+  process.exit(0);
+}
+
 function replaceInFile(relPath, transform) {
   const absPath = path.join(ROOT, relPath);
   const before = fs.readFileSync(absPath, 'utf8');
@@ -74,6 +128,8 @@ function replaceInFile(relPath, transform) {
   changedFiles += 1;
   console.log(`  ${relPath}`);
 }
+
+if (checkMode) runCheck(newVersion);
 
 console.log(`Rust crates: ${oldVersion} -> ${newVersion}`);
 for (const relPath of RUST_FILES) {

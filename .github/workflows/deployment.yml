@@ -33,3 +33,30 @@ jobs:
           verb: call
           args: deploy-server --remote-host ${{ inputs.remote_host }} --remote-user env://REMOTE_USER --ssh-private-key env://SSH_PRIVATE_KEY
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+
+      # A deploy that copies a binary and restarts a unit reports success as
+      # soon as systemd accepts the restart -- it does not wait to find out
+      # whether the process stayed up. On 2026-07-25 this job went green while
+      # staging panicked on boot, restarted five times, and was left dead for
+      # over an hour; the outage was found by hand, not by CI.
+      #
+      # `/server` is the cheapest endpoint that proves the store opened and the
+      # thing is actually serving. Retried because a real start takes a few
+      # seconds, and a database migration can take considerably longer.
+      - name: Wait for the deployed server to answer
+        run: |
+          for attempt in $(seq 1 30); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+              "https://${{ inputs.remote_host }}/server" || echo 000)
+
+            if [ "$code" = "200" ]; then
+              echo "${{ inputs.remote_host }} answered 200 after ${attempt} attempt(s)."
+              exit 0
+            fi
+
+            echo "attempt ${attempt}: HTTP ${code}"
+            sleep 10
+          done
+
+          echo "::error::${{ inputs.remote_host }} never returned 200 — the deploy landed but the server is not serving."
+          exit 1

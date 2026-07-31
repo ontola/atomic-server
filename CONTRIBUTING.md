@@ -215,14 +215,33 @@ So please first send an e-mail to <joep@ontola.io> describing the issue, and the
 1. Commit changes
 1. Make sure all tests run properly
 1. Pick one version for the release, including pre-release suffixes when needed (for example `0.41.0-beta.0`).
-1. Test, build and update the `/browser` versions (`package.json` files, see `./browser/CONTRIBUTING.md`). Keep the `@tomic/*` package versions aligned with the Rust release version.
-1. Update the Rust package versions in `lib`, `cli`, `server`, and desktop to the same version. Also update internal `atomic_lib` dependency constraints. `cargo workspaces version <patch|minor|major> --no-git-commit` can help for regular semver bumps, but pre-releases may need manual edits.
+1. Bump every version site in lockstep — 15 of them across the Rust crates, the
+   `@tomic/*` packages, the starter templates' dependency constraints and
+   `desktop/tauri.conf.json`:
+
+   ```sh
+   node scripts/bump-version.mjs <old-version> <new-version>
+   ```
+
+   Do not do this by hand. The sites do not share a single source of truth, and
+   a `grep` for the old version has been observed to silently miss one
+   (`browser/lib/package.json`), which would publish a mismatched set to npm.
 1. Regenerate lockfiles after version changes:
-   - `cargo metadata --format-version 1 --no-deps`
+   - `cargo update --workspace` — **not** `cargo metadata --no-deps`, which
+     skips resolution and leaves the workspace members' own versions stale in
+     `Cargo.lock`.
    - `cd browser && pnpm install --lockfile-only`
+1. Confirm nothing lagged behind:
+
+   ```sh
+   node scripts/bump-version.mjs --check <new-version>
+   ```
+1. Update the `CHANGELOG.md` files (browser and root). Only ever add a section
+   for a version you are actually about to tag — a section for a release that
+   never shipped is worse than no section, see the `[v0.40.2]` entry for how
+   confusing that gets.
 1. Publish to cargo: `cargo publish`. First `lib`, then `cli` and `server`.
 1. Publish to `npm` (see `browser/CONTRIBUTING.md`)
-1. Update the `CHANGELOG.md` files (browser and root)
 
 The following should be triggered automatically:
 

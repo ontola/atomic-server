@@ -25,6 +25,14 @@ jobs:
           version: 8
           run_install: false
 
+      # Runs BEFORE publishing, because crates.io is append-only: a version
+      # pushed with (say) browser/lib/package.json still on the previous
+      # number cannot be withdrawn, only yanked, and the mismatched pair stays
+      # visible forever. The 15 version sites share no single source of truth,
+      # so nothing else in this pipeline compares them to the tag.
+      - name: Version sites must match the tag
+        run: node scripts/bump-version.mjs --check "${GITHUB_REF_NAME#v}"
+
       - name: publish crates
         uses: katyo/publish-crates@v1
         with:
