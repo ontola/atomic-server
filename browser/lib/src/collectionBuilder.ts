@@ -98,9 +98,7 @@ export class CollectionBuilder {
    * Constrains members by a value computed per resource — "logged more than an
    * hour", "overdue". Evaluated by the store; see {@link ExpressionFilter}.
    */
-  public setExpressionFilters(
-    filters: ExpressionFilter[],
-  ): CollectionBuilder {
+  public setExpressionFilters(filters: ExpressionFilter[]): CollectionBuilder {
     this.params.expression_filters = filters;
 
     return this;

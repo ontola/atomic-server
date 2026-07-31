@@ -6061,9 +6061,8 @@ msgstr "Stop the running entry when another starts"
 msgid "Duration"
 msgstr "Duration"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Filter rows by a property"
-msgstr "Filter rows by a property"
+#~ msgid "Filter rows by a property"
+#~ msgstr "Filter rows by a property"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
@@ -6309,3 +6308,19 @@ msgstr "Ollama{0}"
 #: src/chunks/TablePage/TableTotalsFooter.tsx
 msgid "This column holds an action, not a value, so there is nothing to total."
 msgstr "This column holds an action, not a value, so there is nothing to total."
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "now"
+msgstr "now"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "a date"
+msgstr "a date"
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Compare against"
+msgstr "Compare against"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Filter rows by a column"
+msgstr "Filter rows by a column"

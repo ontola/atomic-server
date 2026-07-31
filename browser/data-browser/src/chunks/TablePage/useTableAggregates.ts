@@ -4,6 +4,7 @@ import {
   useStore,
   type AggregateOutcome,
   type Aggregation,
+  type ExpressionFilter,
   type PropVal,
 } from '@tomic/react';
 import { useEffect, useState } from 'react';
@@ -25,6 +26,9 @@ export function useTableAggregates(opts: {
   property: string;
   value: string;
   filters: PropVal[];
+  /** Constraints on computed values, so the totals cover the same rows the grid
+   *  shows rather than every row the index hit. */
+  expressionFilters?: ExpressionFilter[];
   drive?: string;
   server?: string;
   /** Undefined when the view asks for no totals — then nothing is fetched. */
@@ -37,6 +41,7 @@ export function useTableAggregates(opts: {
   // re-run when the question actually changed.
   const aggregationKey = JSON.stringify(opts.aggregation ?? null);
   const filtersKey = JSON.stringify(opts.filters ?? []);
+  const expressionFiltersKey = JSON.stringify(opts.expressionFilters ?? []);
   const { property, value, drive, server } = opts;
 
   useEffect(() => {
@@ -56,6 +61,9 @@ export function useTableAggregates(opts: {
       builder.setProperty(property);
       builder.setValue(value);
       builder.setFilters(JSON.parse(filtersKey) as PropVal[]);
+      builder.setExpressionFilters(
+        JSON.parse(expressionFiltersKey) as ExpressionFilter[],
+      );
       // One member is enough — the rows come from the grid's own query. The
       // totals cover every matching row regardless of this page size.
       builder.setPageSize(1);
@@ -94,7 +102,16 @@ export function useTableAggregates(opts: {
       offSaved();
       offRemoved();
     };
-  }, [store, property, value, filtersKey, aggregationKey, drive, server]);
+  }, [
+    store,
+    property,
+    value,
+    filtersKey,
+    expressionFiltersKey,
+    aggregationKey,
+    drive,
+    server,
+  ]);
 
   return outcomes;
 }

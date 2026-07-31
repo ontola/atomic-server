@@ -194,7 +194,15 @@ configuration, not a renderer.
 
 - ~~The timer's day totals~~ and ~~aggregates over a derived column~~: closed by
   step 7 below — the store evaluates a computed column as it aggregates.
-- **Filters on a computed column: the store can, the UI can't yet.** `Query` takes
+- **A computed-column filter does not survive a reload.** Setting one narrows the
+  rows immediately (`derived-columns.spec.ts` covers that), but after a reload the
+  chip is gone. The stored shape is `{derived, operator, value}` in `view-filters`
+  next to the `{property, …}` entries, written by the same debounced persist path
+  and hydrated by the same parse — so it is one of those two dropping the entry,
+  and I did not get to which. This is the next thing to fix in that feature, and
+  the e2e deliberately asserts only what works rather than asserting the bug.
+- ~~**Filters on a computed column: the store can, the UI can't yet.**~~ Shipped
+  2026-07-31, apart from the persistence bug above. `Query` takes
   `expression_filters`, evaluated over the set the index narrows to, with paging
   and `count` computed after them (see step 8). What is missing is the UI and the
   view config: the table's filter machinery is keyed by property subject from end

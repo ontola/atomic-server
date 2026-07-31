@@ -25,6 +25,8 @@ import {
 } from '@components/ConfirmationDialog';
 import { InputStyled } from '@components/forms/InputStyles';
 import { TablePageContext } from './tablePageContext';
+import type { DerivedColumnSpec } from './derivedColumns';
+import { derivedFilterKey, filterKey } from './tableFiltering';
 import { usePropertyTitles } from './helpers/usePropertyTitles';
 import {
   normalizeViewKind,
@@ -46,6 +48,8 @@ interface TableViewTabsProps {
   renameView: (name: string) => void;
   allColumns: Property[];
   columns: Property[];
+  /** The view's computed columns — filterable, like the stored ones. */
+  derivedColumns: DerivedColumnSpec[];
   showColumn: (subject: string) => void;
   hideColumn: (subject: string) => void;
   /**
@@ -76,6 +80,7 @@ export function TableViewTabs({
   renameView,
   allColumns,
   columns,
+  derivedColumns,
   showColumn,
   hideColumn,
   lockedColumns,
@@ -105,7 +110,7 @@ export function TableViewTabs({
         {canWrite && <AddViewMenu createView={createView} />}
       </Tabs>
       <Actions>
-        <FilterMenu columns={columns} />
+        <FilterMenu columns={columns} derivedColumns={derivedColumns} />
         <ColumnsMenu
           allColumns={allColumns}
           columns={columns}
@@ -149,23 +154,33 @@ function AddViewMenu({
 const FilterTrigger = buildDefaultTrigger(<FaFilter />, 'Filter');
 
 /** Dropdown that adds a filter for one of the table's columns. */
-function FilterMenu({ columns }: { columns: Property[] }): JSX.Element {
+function FilterMenu({
+  columns,
+  derivedColumns,
+}: {
+  columns: Property[];
+  derivedColumns: DerivedColumnSpec[];
+}): JSX.Element {
   const { filters, addFilter } = useContext(TablePageContext);
   const titles = usePropertyTitles(columns);
 
   const items = useMemo((): DropdownItem[] => {
-    const available = columns.filter(
-      c => !filters.some(f => f.property === c.subject),
+    const taken = new Set(filters.map(filterKey));
+    const available = columns.filter(c => !taken.has(c.subject));
+    // A computed column narrows rows too — the store evaluates it per row, so
+    // "logged more than an hour" or "due" is a filter like any other.
+    const availableDerived = derivedColumns.filter(
+      spec => !taken.has(derivedFilterKey(spec.id)),
     );
 
-    if (available.length === 0) {
+    if (available.length === 0 && availableDerived.length === 0) {
       return [];
     }
 
     return [
       {
         id: 'filter-header',
-        label: 'Filter rows by a property',
+        label: 'Filter rows by a column',
         header: true,
         onClick: () => undefined,
       },
@@ -174,8 +189,13 @@ function FilterMenu({ columns }: { columns: Property[] }): JSX.Element {
         label: titles.get(c.subject) ?? c.shortname,
         onClick: () => addFilter(c.subject),
       })),
+      ...availableDerived.map(spec => ({
+        id: derivedFilterKey(spec.id),
+        label: spec.label,
+        onClick: () => addFilter(derivedFilterKey(spec.id)),
+      })),
     ];
-  }, [columns, filters, addFilter, titles]);
+  }, [columns, derivedColumns, filters, addFilter, titles]);
 
   // `DropdownMenu` with an empty item list recurses forever in its
   // index-finder, so render a disabled button when there's nothing to filter

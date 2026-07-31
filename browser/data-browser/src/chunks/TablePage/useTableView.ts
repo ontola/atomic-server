@@ -22,7 +22,12 @@ import {
   useState,
 } from 'react';
 import { ShowRoute } from '../../routes/ShowRoute';
-import { TableFilter, FilterOperator } from './tableFiltering';
+import {
+  filterKey,
+  parseFilterKey,
+  type FilterOperator,
+  type TableFilter,
+} from './tableFiltering';
 import {
   parseDerivedColumnSpecs,
   type DerivedColumnSpec,
@@ -66,10 +71,12 @@ function sortReducer(state: TableSorting, action: SortAction): TableSorting {
 
 export interface UseTableViewResult {
   filters: TableFilter[];
-  addFilter: (property: string) => void;
-  setFilterValue: (property: string, value: string) => void;
-  setFilterOperator: (property: string, operator: FilterOperator) => void;
-  removeFilter: (property: string) => void;
+  /** Adds an empty filter for a target (`filterKey`: a property subject, or
+   *  `derived:<id>` for a computed column). No-op if one already exists. */
+  addFilter: (key: string) => void;
+  setFilterValue: (key: string, value: string) => void;
+  setFilterOperator: (key: string, operator: FilterOperator) => void;
+  removeFilter: (key: string) => void;
   clearFilters: () => void;
   sorting: TableSorting;
   setSortBy: (property: string) => void;
@@ -483,31 +490,44 @@ export function useTableView(table: Resource): UseTableViewResult {
   }, [filters, sorting, canWrite, ensureView, store, activeView]);
 
   // --- Filter mutators (same shape as the old `useTableFilters`). ---
-  const addFilter = useCallback((property: string) => {
+  // Keyed by `filterKey`: a property subject, or `derived:<id>` for a constraint
+  // on a computed column. One key keeps every setter working for both kinds.
+  const addFilter = useCallback((key: string) => {
     setFilters(prev =>
-      prev.some(f => f.property === property)
+      prev.some(f => filterKey(f) === key)
         ? prev
-        : [...prev, { property, operator: 'eq', value: '' }],
+        : [
+            ...prev,
+            {
+              ...parseFilterKey(key),
+              // A computed column's value is a number, so the useful default is
+              // a comparison rather than equality.
+              operator: key.startsWith('derived:')
+                ? ('gte' as FilterOperator)
+                : ('eq' as FilterOperator),
+              value: '',
+            },
+          ],
     );
   }, []);
 
-  const setFilterValue = useCallback((property: string, value: string) => {
+  const setFilterValue = useCallback((key: string, value: string) => {
     setFilters(prev =>
-      prev.map(f => (f.property === property ? { ...f, value } : f)),
+      prev.map(f => (filterKey(f) === key ? { ...f, value } : f)),
     );
   }, []);
 
   const setFilterOperator = useCallback(
-    (property: string, operator: FilterOperator) => {
+    (key: string, operator: FilterOperator) => {
       setFilters(prev =>
-        prev.map(f => (f.property === property ? { ...f, operator } : f)),
+        prev.map(f => (filterKey(f) === key ? { ...f, operator } : f)),
       );
     },
     [],
   );
 
-  const removeFilter = useCallback((property: string) => {
-    setFilters(prev => prev.filter(f => f.property !== property));
+  const removeFilter = useCallback((key: string) => {
+    setFilters(prev => prev.filter(f => filterKey(f) !== key));
   }, []);
 
   const clearFilters = useCallback(() => setFilters([]), []);

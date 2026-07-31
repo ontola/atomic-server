@@ -255,4 +255,58 @@ test.describe('computed columns', () => {
 
     expect(await headings()).toEqual(reordered);
   });
+  test('a computed column can be filtered on, in a unit that reads', async ({
+    page,
+  }) => {
+    test.slow();
+
+    // Two entries: one logged for a moment, one still running. Their Duration is
+    // computed, so the store has to evaluate it to answer this filter.
+    await newResource('table', page);
+    await page.getByRole('button', { name: /Time tracker/ }).click();
+    await page.getByPlaceholder('New Table').fill('Filtered durations');
+    await page.getByRole('button', { name: 'Create' }).click();
+
+    await expect(page.getByTestId('timer-new-input')).toBeVisible();
+    await expect(page.getByRole('grid')).toBeVisible();
+    await page.waitForTimeout(500);
+
+    // Log the short one and stop it...
+    await page.getByTestId('timer-new-input').fill('Short task');
+    await page.getByTestId('timer-start-new').click();
+    await expect(row(page, 'Short task')).toBeVisible();
+    await row(page, 'Short task').getByTestId('timer-stop').click();
+    await expect(
+      row(page, 'Short task').getByTestId('timer-resume'),
+    ).toBeVisible();
+
+    // ...then start one that keeps running, so its duration grows on its own.
+    // (Starting it first would have stopped the other: "one at a time" is on.)
+    await page.getByTestId('timer-new-input').fill('Long task');
+    await page.getByTestId('timer-start-new').click();
+    await expect(row(page, 'Long task')).toBeVisible();
+
+    // Filter for entries logged for at least an hour. Neither qualifies, which is
+    // the point: the value is asked for in HOURS, not milliseconds.
+    await page.getByTitle('Filter', { exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Duration', exact: true }).click();
+    await page.getByTestId('derived-filter-value').fill('1');
+    await page.keyboard.press('Escape');
+
+    await expect(row(page, 'Short task')).toHaveCount(0, { timeout: 15_000 });
+    await expect(row(page, 'Long task')).toHaveCount(0);
+    // The chip says what it filtered by, in the unit it asked for.
+    await expect(page.getByTestId('filter-chip')).toContainText('1 hours');
+
+    // NOTE: this filter does not yet survive a reload — see the gap recorded in
+    // `planning/table-templates-and-mini-apps.md`. Asserting it here would be
+    // asserting a bug.
+
+    // Removing it brings both entries back, the running one included.
+    await page.getByTestId('filter-chip').click();
+    await page.getByTitle('Remove filter').click();
+
+    await expect(row(page, 'Short task')).toBeVisible({ timeout: 15_000 });
+    await expect(row(page, 'Long task')).toBeVisible();
+  });
 });

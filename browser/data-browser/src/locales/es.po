@@ -6027,9 +6027,8 @@ msgstr ""
 msgid "Duration"
 msgstr ""
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Filter rows by a property"
-msgstr ""
+#~ msgid "Filter rows by a property"
+#~ msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
@@ -6274,4 +6273,20 @@ msgstr ""
 
 #: src/chunks/TablePage/TableTotalsFooter.tsx
 msgid "This column holds an action, not a value, so there is nothing to total."
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "now"
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "a date"
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Compare against"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Filter rows by a column"
 msgstr ""

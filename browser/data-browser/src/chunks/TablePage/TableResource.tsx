@@ -117,6 +117,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     viewGroupGranularity,
     setViewGroupGranularity,
     queryFilters,
+    queryExpressionFilters,
   } = useTableData(resource);
 
   const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
@@ -382,6 +383,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     property: core.properties.parent,
     value: resource.subject,
     filters: queryFilters,
+    expressionFilters: queryExpressionFilters,
     aggregation: toAggregation(
       viewAggregates,
       viewGroupByColumn,
@@ -953,6 +955,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
           renameView={renameView}
           allColumns={allColumns}
           columns={uniqueColumnProperties}
+          derivedColumns={derivedSpecs}
           showColumn={showColumn}
           hideColumn={hideColumn}
           lockedColumns={lockedColumns}
@@ -963,7 +966,10 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
          * dropdown in the tab bar is offered for every view kind, so a kanban /
          * calendar / timer view could add a filter that then had nowhere to
          * render its chip — the filter silently did nothing. */}
-        <TableFilterBar columns={uniqueColumnProperties} />
+        <TableFilterBar
+          columns={uniqueColumnProperties}
+          derivedColumns={derivedSpecs}
+        />
         {viewKind === 'kanban' ? (
           <KanbanView
             tableSubject={resource.subject}

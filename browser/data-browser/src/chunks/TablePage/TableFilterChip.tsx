@@ -1,4 +1,4 @@
-import { Property, useResource, useTitle } from '@tomic/react';
+import { Property, unknownSubject, useResource, useTitle } from '@tomic/react';
 import { useContext, useState, type JSX } from 'react';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { styled } from 'styled-components';
@@ -9,32 +9,51 @@ import { BasicSelect } from '@components/forms/BasicSelect';
 import { ResourceInline } from '@views/ResourceInline';
 import { TablePageContext } from './tablePageContext';
 import {
-  TableFilter,
-  FilterOperator,
+  DERIVED_FILTER_OPERATORS,
+  derivedFilterUnit,
+  filterKey,
+  NOW_VALUE,
+  operatorLabel,
   operatorLabelForColumn,
   operatorsForDatatype,
+  type DerivedFilterUnit,
+  type FilterOperator,
+  type TableFilter,
 } from './tableFiltering';
+import type { DerivedColumnSpec } from './derivedColumns';
+import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { TableFilterValueInput } from './TableFilterValueInput';
 
 interface TableFilterChipProps {
   filter: TableFilter;
-  column: Property;
+  /** The stored column this constrains, when it constrains one. */
+  column?: Property;
+  /** The computed column this constrains instead. Exactly one of the two. */
+  derived?: DerivedColumnSpec;
 }
 
 export function TableFilterChip({
   filter,
   column,
+  derived,
 }: TableFilterChipProps): JSX.Element {
   const { setFilterValue, setFilterOperator, removeFilter } =
     useContext(TablePageContext);
-  const propResource = useResource(column.subject);
+  // A computed column has no property resource to read a title from.
+  const propResource = useResource(column?.subject ?? unknownSubject);
   const [title] = useTitle(propResource);
   // Newly added filters (no value yet) open their editor straight away.
   const [open, setOpen] = useState(filter.value === '');
+  const key = filterKey(filter);
 
-  const label = title || column.shortname;
-  const operators = operatorsForDatatype(column.datatype);
-  const chipOperator = operatorLabelForColumn(filter.operator, column.datatype);
+  const label = derived ? derived.label : title || column!.shortname;
+  const operators = derived
+    ? DERIVED_FILTER_OPERATORS
+    : operatorsForDatatype(column!.datatype);
+  const chipOperator = derived
+    ? operatorLabel(filter.operator)
+    : operatorLabelForColumn(filter.operator, column!.datatype);
+  const unit = derived ? derivedFilterUnit(derived.kind) : undefined;
 
   return (
     <Popover
@@ -48,7 +67,7 @@ export function TableFilterChip({
             {filter.value === '' ? (
               <Placeholder>…</Placeholder>
             ) : (
-              <FilterValueSummary value={filter.value} />
+              <FilterValueSummary value={filter.value} suffix={unit?.suffix} />
             )}
           </ChipValue>
         </ChipTrigger>
@@ -58,7 +77,7 @@ export function TableFilterChip({
         <Row center justify='space-between' gap='1rem'>
           <Header>{label}</Header>
           <RemoveButton
-            onClick={() => removeFilter(filter.property)}
+            onClick={() => removeFilter(key)}
             title='Remove filter'
             type='button'
           >
@@ -70,38 +89,108 @@ export function TableFilterChip({
             value={filter.operator}
             aria-label='Filter operator'
             onChange={e =>
-              setFilterOperator(
-                filter.property,
-                e.target.value as FilterOperator,
-              )
+              setFilterOperator(key, e.target.value as FilterOperator)
             }
           >
             {operators.map(op => (
               <option key={op} value={op}>
-                {operatorLabelForColumn(op, column.datatype)}
+                {derived
+                  ? operatorLabel(op)
+                  : operatorLabelForColumn(op, column!.datatype)}
               </option>
             ))}
           </BasicSelect>
         )}
-        <TableFilterValueInput
-          property={column}
-          value={filter.value}
-          autoFocus
-          onChange={value => setFilterValue(filter.property, value)}
-        />
+        {derived && unit ? (
+          <DerivedValueInput
+            unit={unit}
+            value={filter.value}
+            onChange={value => setFilterValue(key, value)}
+          />
+        ) : (
+          <TableFilterValueInput
+            property={column!}
+            value={filter.value}
+            autoFocus
+            onChange={value => setFilterValue(key, value)}
+          />
+        )}
       </PopoverInner>
     </Popover>
   );
 }
 
 /** Renders the chosen value: a resource link for references, raw text else. */
-function FilterValueSummary({ value }: { value: string }): JSX.Element {
+function FilterValueSummary({
+  value,
+  suffix,
+}: {
+  value: string;
+  suffix?: string;
+}): JSX.Element {
   if (value.startsWith('http') || value.startsWith('did:')) {
     return <ResourceInline subject={value} untabbable />;
   }
 
-  return <span>{value}</span>;
+  return <span>{suffix ? `${value} ${suffix}` : value}</span>;
 }
+
+/**
+ * The value side of a computed column's filter, in the unit a person thinks in:
+ * hours for a duration, days for a days-since, and for a date the choice between
+ * a fixed day and `now` — "due" has to mean *now* when the query runs, or it goes
+ * stale tomorrow.
+ */
+function DerivedValueInput({
+  unit,
+  value,
+  onChange,
+}: {
+  unit: DerivedFilterUnit;
+  value: string;
+  onChange: (value: string) => void;
+}): JSX.Element {
+  const isNow = value === NOW_VALUE;
+
+  return (
+    <Column gap='0.5rem'>
+      {unit.allowsNow && (
+        <BasicSelect
+          aria-label='Compare against'
+          value={isNow ? NOW_VALUE : 'date'}
+          onChange={e =>
+            onChange(e.target.value === NOW_VALUE ? NOW_VALUE : '')
+          }
+        >
+          <option value={NOW_VALUE}>now</option>
+          <option value='date'>a date</option>
+        </BasicSelect>
+      )}
+      {!isNow && (
+        <Row center gap='0.5ch'>
+          <InputWrapper>
+            <InputStyled
+              autoFocus
+              data-testid='derived-filter-value'
+              onChange={e => onChange(e.target.value)}
+              placeholder={unit.allowsNow ? 'yyyy-mm-dd' : '0'}
+              step='any'
+              type={unit.allowsNow ? 'date' : 'number'}
+              value={value}
+            />
+          </InputWrapper>
+          {unit.suffix && <Suffix>{unit.suffix}</Suffix>}
+        </Row>
+      )}
+    </Column>
+  );
+}
+
+const Suffix = styled.span`
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.85rem;
+  white-space: nowrap;
+`;
 
 const ChipTrigger = styled(RadixPopover.Trigger)<{ $active: boolean }>`
   display: inline-flex;

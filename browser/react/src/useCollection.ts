@@ -57,6 +57,11 @@ export type UseCollectionOptions = {
 const aggregationKey = (aggregation: QueryFilter['aggregation']): string =>
   aggregation?.aggregates.length ? JSON.stringify(aggregation) : '';
 
+/** Constraints on computed values are baked into the query, like the filters. */
+const expressionFiltersKey = (
+  filters: QueryFilter['expression_filters'],
+): string => (filters && filters.length > 0 ? JSON.stringify(filters) : '');
+
 /** Stable key for an array of extra AND filters, used as a memo/rebuild dep. */
 const filtersKey = (filters: QueryFilter['filters']): string =>
   filters && filters.length > 0 ? JSON.stringify(filters) : '';
@@ -72,6 +77,7 @@ const buildCollection = (
     sort_desc,
     drive,
     aggregation,
+    expression_filters,
   }: QueryFilter,
   pageSize?: number,
   includeNested?: boolean,
@@ -90,6 +96,8 @@ const buildCollection = (
   // server.
   if (drive) builder.setDrive(drive);
   if (aggregation?.aggregates.length) builder.setAggregation(aggregation);
+  if (expression_filters?.length)
+    builder.setExpressionFilters(expression_filters);
 
   return builder.build();
 };
@@ -159,7 +167,9 @@ export function useCollection(
       // Baked into the page subject the store answers, like sort — a changed
       // aggregation needs a new collection, not a refresh.
       aggregationKey(col.aggregation) !==
-        aggregationKey(queryFilterMemo.aggregation)
+        aggregationKey(queryFilterMemo.aggregation) ||
+      expressionFiltersKey(col.expressionFilters) !==
+        expressionFiltersKey(queryFilterMemo.expression_filters)
     ) {
       const built = buildCollection(
         store,
@@ -277,6 +287,9 @@ export function useCollection(
 function useQueryFilterMemo(queryFilter: QueryFilter) {
   const filtersDep = filtersKey(queryFilter.filters);
   const aggregationDep = aggregationKey(queryFilter.aggregation);
+  const expressionFiltersDep = expressionFiltersKey(
+    queryFilter.expression_filters,
+  );
 
   return useMemo(
     () => queryFilter,
@@ -289,6 +302,7 @@ function useQueryFilterMemo(queryFilter: QueryFilter) {
       queryFilter.sort_desc,
       queryFilter.drive,
       aggregationDep,
+      expressionFiltersDep,
     ],
   );
 }

@@ -333,6 +333,11 @@ export class Collection {
     return Math.ceil(this.totalMembers / this.pageSize);
   }
 
+  /** The constraints on computed values this collection was built with. */
+  public get expressionFilters(): ExpressionFilter[] {
+    return this.params.expression_filters ?? [];
+  }
+
   /** The aggregation this collection was built with, if any. */
   public get aggregation(): Aggregation | undefined {
     return this.params.aggregation;

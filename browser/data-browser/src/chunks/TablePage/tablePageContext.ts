@@ -26,10 +26,12 @@ export interface TablePageContextType {
   sorting: TableSorting;
   setSortBy: React.Dispatch<string>;
   filters: TableFilter[];
-  addFilter: (property: string) => void;
-  setFilterValue: (property: string, value: string) => void;
-  setFilterOperator: (property: string, operator: FilterOperator) => void;
-  removeFilter: (property: string) => void;
+  /** Keyed by `filterKey`: a property subject, or `derived:<id>` for a computed
+   *  column. */
+  addFilter: (key: string) => void;
+  setFilterValue: (key: string, value: string) => void;
+  setFilterOperator: (key: string, operator: FilterOperator) => void;
+  removeFilter: (key: string) => void;
   hideColumn: (property: string) => void;
   /**
    * Adds a property to the active view's visible columns. Needed after creating
