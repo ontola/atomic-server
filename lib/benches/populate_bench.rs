@@ -45,6 +45,7 @@ async fn seed_watched_queries_with_drive(store: &atomic_lib::Db, count: usize, d
             include_nested: false,
             for_agent: atomic_lib::agents::ForAgent::Sudo,
             drive: Some(drive.clone()),
+            aggregation: None,
         };
         // Ignore the result — we only care about the side-effect (a new
         // entry in Tree::WatchedQueries).

@@ -312,6 +312,7 @@ impl Storelike for Store {
         let subjects: Vec<Subject> = resources.iter().map(|r| r.get_subject().clone()).collect();
 
         Ok(QueryResult {
+            aggregates: Vec::new(),
             count: atoms.len(),
             subjects,
             resources,

@@ -2090,8 +2090,159 @@ impl Db {
         Ok(QueryResult {
             subjects,
             resources,
+            aggregates: Vec::new(),
             count: total_count,
         })
+    }
+
+    /// Computes a query's aggregates over every row it matches.
+    ///
+    /// Re-runs the same filter unpaged and reads each row's value locally: the
+    /// whole point is that the numbers travel instead of the rows. Values come
+    /// from the materialized row (`get_resource_shallow`) — the same source the
+    /// filters are matched against, so a total can never disagree with the set
+    /// it claims to summarize.
+    async fn compute_aggregation(
+        &self,
+        q: &Query,
+        aggregation: &crate::aggregate::Aggregation,
+    ) -> AtomicResult<Vec<crate::aggregate::AggregateOutcome>> {
+        use crate::aggregate::{
+            Accumulator, AggregateGroup, AggregateOutcome, DEFAULT_GROUP_LIMIT,
+        };
+        use std::collections::HashMap;
+
+        // The same query, unpaged. `sort_by` is kept so this takes the exact
+        // same index path as the paged query above — a different path could
+        // disagree about which rows match, and then the total would summarize a
+        // different set than the one on screen.
+        let scan = Query {
+            property: q.property.clone(),
+            value: q.value.clone(),
+            filters: q.filters.clone(),
+            limit: None,
+            offset: 0,
+            start_val: q.start_val.clone(),
+            end_val: q.end_val.clone(),
+            sort_by: q.sort_by.clone(),
+            sort_desc: q.sort_desc,
+            include_external: q.include_external,
+            // Bodies are never needed here; the values are read straight off
+            // the local row below.
+            include_nested: false,
+            for_agent: q.for_agent.clone(),
+            drive: q.drive.clone(),
+            aggregation: None,
+        };
+
+        // Subjects, not the count: these are the rows that actually resolved for
+        // this agent. `QueryResult::count` deliberately counts raw index hits
+        // (including unauthorized and stale-index entries, see issue #286), so a
+        // `count` aggregate can legitimately come out lower than
+        // `totalMembers` — it counts what the reader can see, which is the only
+        // number a sum over the same rows can agree with.
+        let subjects = if requires_query_index(&scan) {
+            self.query_complex(&scan).await?.subjects
+        } else {
+            self.query_basic(&scan).await?.subjects
+        };
+
+        let mut totals: Vec<Accumulator> =
+            vec![Accumulator::default(); aggregation.aggregates.len()];
+        let mut per_group: Vec<HashMap<String, Accumulator>> =
+            vec![HashMap::new(); aggregation.aggregates.len()];
+
+        for subject in subjects {
+            let Ok(resource) = self.get_resource_shallow(&subject) else {
+                continue;
+            };
+
+            let group = aggregation.group_by.as_ref().map(|grouping| {
+                crate::aggregate::group_key(&resource, grouping).unwrap_or_default()
+            });
+
+            for (index, aggregate) in aggregation.aggregates.iter().enumerate() {
+                let stored = aggregate
+                    .property
+                    .as_ref()
+                    .map(|property| resource.get(property).ok());
+
+                // `count` counts rows: every matching row when it names no
+                // property, only the rows that HAVE the property when it does
+                // (so "count of Paid date" answers "how many are paid"). The
+                // other functions need a number, and a row without one simply
+                // doesn't contribute — it must not land in `count` either, or a
+                // sum would report a denominator it never added up.
+                let accumulate = |acc: &mut Accumulator| {
+                    if aggregate.function == crate::aggregate::AggregateFunction::Count {
+                        if !matches!(stored, Some(None)) {
+                            acc.count_row();
+                        }
+
+                        return;
+                    }
+
+                    if let Some(number) =
+                        stored.flatten().and_then(crate::aggregate::value_as_number)
+                    {
+                        acc.add(number);
+                    }
+                };
+
+                accumulate(&mut totals[index]);
+
+                if let Some(group) = &group {
+                    accumulate(per_group[index].entry(group.clone()).or_default());
+                }
+            }
+        }
+
+        let mut outcomes = Vec::with_capacity(aggregation.aggregates.len());
+
+        for (index, aggregate) in aggregation.aggregates.iter().enumerate() {
+            let mut groups: Vec<AggregateGroup> = per_group[index]
+                .iter()
+                .map(|(key, acc)| AggregateGroup {
+                    key: key.clone(),
+                    value: acc.finish(aggregate.function),
+                    count: acc.count,
+                })
+                .collect();
+
+            // Day and month buckets read chronologically; anything else reads
+            // biggest-first, which is what a breakdown is usually scanned for.
+            match aggregation.group_by.as_ref().map(|g| g.granularity) {
+                Some(crate::aggregate::GroupGranularity::Exact) | None => {
+                    groups.sort_by(|a, b| {
+                        b.value
+                            .unwrap_or(f64::MIN)
+                            .partial_cmp(&a.value.unwrap_or(f64::MIN))
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then_with(|| a.key.cmp(&b.key))
+                    });
+                }
+                _ => groups.sort_by(|a, b| a.key.cmp(&b.key)),
+            }
+
+            let limit = aggregation
+                .group_by
+                .as_ref()
+                .and_then(|g| g.limit)
+                .unwrap_or(DEFAULT_GROUP_LIMIT);
+            let groups_truncated = groups.len() > limit;
+            groups.truncate(limit);
+
+            outcomes.push(AggregateOutcome {
+                property: aggregate.property.clone(),
+                function: aggregate.function,
+                value: totals[index].finish(aggregate.function),
+                count: totals[index].count,
+                groups,
+                groups_truncated,
+            });
+        }
+
+        Ok(outcomes)
     }
 
     async fn query_complex(&self, q: &Query) -> AtomicResult<QueryResult> {
@@ -2138,6 +2289,7 @@ impl Db {
         Ok(QueryResult {
             subjects,
             resources,
+            aggregates: Vec::new(),
             count: total_count,
         })
     }
@@ -3006,11 +3158,22 @@ impl Storelike for Db {
     /// Tries `query_cache`, which you should implement yourself.
     #[instrument(skip_all)]
     async fn query(&self, q: &Query) -> AtomicResult<QueryResult> {
-        if requires_query_index(q) {
-            return self.query_complex(q).await;
+        let mut result = if requires_query_index(q) {
+            self.query_complex(q).await?
+        } else {
+            self.query_basic(q).await?
+        };
+
+        // Aggregates run over the whole matching set, so they need their own
+        // pass — the one above is limited to the requested page. Only when
+        // asked: a query without aggregates pays nothing for this.
+        if let Some(aggregation) = &q.aggregation {
+            if !aggregation.is_empty() {
+                result.aggregates = self.compute_aggregation(q, aggregation).await?;
+            }
         }
 
-        self.query_basic(q).await
+        Ok(result)
     }
 
     #[instrument(skip_all)]

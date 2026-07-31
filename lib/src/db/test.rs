@@ -269,6 +269,7 @@ async fn destroy_clears_parent_index_count() {
         include_nested: false,
         for_agent: ForAgent::Sudo,
         drive: None,
+        aggregation: None,
     };
 
     let before = store.query(&q).await.unwrap();
@@ -354,6 +355,7 @@ async fn unauthorized_query_count_matches_subjects() {
         // each one and `subjects` will end up empty.
         for_agent: urls::PUBLIC_AGENT.into(),
         drive: None,
+        aggregation: None,
     };
 
     let res = store.query(&q).await.unwrap();
@@ -483,6 +485,7 @@ async fn queries() {
         include_nested: false,
         for_agent: ForAgent::Sudo,
         drive: None,
+        aggregation: None,
     };
     let res = store.query(&q).await.unwrap();
     assert_eq!(
@@ -620,6 +623,7 @@ async fn query_include_external() {
         include_nested: false,
         for_agent: ForAgent::Sudo,
         drive: None,
+        aggregation: None,
     };
     let res_include = store.query(&q).await.unwrap();
     q.include_external = false;
@@ -769,6 +773,7 @@ async fn test_collection_update_value(
         include_nested: true,
         for_agent: ForAgent::Sudo,
         drive: Some(Subject::from("internal:/")),
+        aggregation: None,
     };
     let mut res = store.query(&q).await.unwrap();
     assert_eq!(

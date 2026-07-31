@@ -63,6 +63,8 @@ pub struct CollectionBuilder {
     /// Scope results to a specific drive. When set, the query index is drive-scoped so watched
     /// queries only trigger for resources in this drive.
     pub drive: Option<Subject>,
+    /// Statistics to compute over every matching row, not just this page.
+    pub aggregation: Option<crate::aggregate::Aggregation>,
 }
 
 impl CollectionBuilder {
@@ -148,6 +150,7 @@ impl CollectionBuilder {
             include_nested: true,
             include_external: false,
             drive: None,
+            aggregation: None,
         })
     }
 
@@ -240,6 +243,9 @@ pub struct Collection {
     pub include_nested: bool,
     /// Include resources from other servers
     pub include_external: bool,
+    /// The computed statistics, one per requested aggregate. Over every matching
+    /// row, so these do not change as you page through.
+    pub aggregates: Vec<crate::aggregate::AggregateOutcome>,
 }
 
 /// Sorts a vector or resources by some property.
@@ -319,6 +325,7 @@ impl Collection {
             include_nested: collection_builder.include_nested,
             for_agent: for_agent.clone(),
             drive: collection_builder.drive.clone(),
+            aggregation: collection_builder.aggregation.clone(),
         };
 
         let query_result = store.query(&q).await?;
@@ -358,6 +365,7 @@ impl Collection {
             name: collection_builder.name,
             include_nested: collection_builder.include_nested,
             include_external: collection_builder.include_external,
+            aggregates: query_result.aggregates,
         };
         Ok(collection)
     }
@@ -416,6 +424,22 @@ impl Collection {
                 store,
             )
             .await?;
+        if !self.aggregates.is_empty() {
+            // As JSON rather than a resource per statistic: these are a computed
+            // read of the collection, not stored data anyone can address.
+            //
+            // `set_unsafe` skips the property lookup on purpose. The value is
+            // already typed here, this resource is never stored or validated,
+            // and a store seeded before this property existed in the defaults
+            // would otherwise fail the whole query with a 404 for the property
+            // instead of answering it.
+            resource.set_unsafe(
+                crate::urls::COLLECTION_AGGREGATES.into(),
+                Value::Json(serde_json::to_value(&self.aggregates).map_err(|e| {
+                    format!("Could not serialize the collection's aggregates: {e}")
+                })?),
+            )?;
+        }
         let classes: Vec<String> = vec![crate::urls::COLLECTION.into()];
         resource
             .set(crate::urls::IS_A.into(), classes.into(), store)
@@ -474,6 +498,7 @@ pub async fn construct_collection_from_params(
     let mut include_nested = false;
     let mut include_external = false;
     let mut drive: Option<Subject> = None;
+    let mut aggregation: Option<crate::aggregate::Aggregation> = None;
 
     if let Ok(val) = resource.get(urls::COLLECTION_PROPERTY) {
         property = Some(val.to_string());
@@ -527,6 +552,18 @@ pub async fn construct_collection_from_params(
             "include_nested" => include_nested = v.parse::<bool>()?,
             "include_external" => include_external = v.parse::<bool>()?,
             "drive" => drive = Some(Subject::from(v.as_ref())),
+            // Statistics over every matching row, as JSON:
+            // `{"aggregates":[{"property":"…","function":"sum"}],
+            //   "group_by":{"property":"…","granularity":"day","tz_offset_minutes":120}}`
+            "aggregation" => {
+                let parsed: crate::aggregate::Aggregation =
+                    serde_json::from_str(v.as_ref()).map_err(|e| {
+                        format!(
+                            "Invalid `aggregation` param (expected JSON {{aggregates: [{{property?, function}}], group_by?}}): {e}"
+                        )
+                    })?;
+                aggregation = Some(parsed);
+            }
             e => {
                 return Err(format!("Invalid query param: {}", e).into());
             }
@@ -545,6 +582,7 @@ pub async fn construct_collection_from_params(
         include_nested,
         include_external,
         drive: Some(drive.unwrap_or_else(|| drive_prefix_from_subject(resource.get_subject()))),
+        aggregation,
     };
     let collection = Collection::collect_members(store, collection_builder, for_agent).await?;
     collection.add_to_resource(resource, store).await
@@ -635,6 +673,7 @@ mod test {
             include_nested: false,
             include_external: false,
             drive: None,
+            aggregation: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -659,6 +698,7 @@ mod test {
             include_nested: false,
             include_external: false,
             drive: None,
+            aggregation: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -713,6 +753,7 @@ mod test {
             include_nested: false,
             include_external: false,
             drive: Some(drive),
+            aggregation: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -782,6 +823,7 @@ mod test {
                         include_nested: false,
                         include_external: false,
                         drive: None,
+                        aggregation: None,
                     },
                     &ForAgent::Sudo,
                 )
@@ -847,6 +889,7 @@ mod test {
                 include_nested: false,
                 include_external: false,
                 drive: None,
+                aggregation: None,
             },
             &ForAgent::Sudo,
         )
@@ -897,6 +940,7 @@ mod test {
             include_nested: false,
             include_external: false,
             drive: None,
+            aggregation: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -932,6 +976,7 @@ mod test {
             include_nested: false,
             include_external: false,
             drive: None,
+            aggregation: None,
         };
 
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
@@ -965,6 +1010,7 @@ mod test {
             include_nested: false,
             include_external: false,
             drive: None,
+            aggregation: None,
         };
 
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
@@ -1019,6 +1065,7 @@ mod test {
                 include_nested: false,
                 include_external: false,
                 drive: None,
+                aggregation: None,
             },
             &ForAgent::Sudo,
         )
@@ -1057,6 +1104,7 @@ mod test {
                 include_nested: false,
                 include_external: false,
                 drive: None,
+                aggregation: None,
             },
             &ForAgent::Sudo,
         )
@@ -1085,6 +1133,7 @@ mod test {
                 include_nested: false,
                 include_external: false,
                 drive: None,
+                aggregation: None,
             },
             &ForAgent::Sudo,
         )
@@ -1124,6 +1173,7 @@ mod test {
                     include_nested: false,
                     include_external: false,
                     drive: None,
+                    aggregation: None,
                 },
                 &ForAgent::Sudo,
             )
@@ -1168,6 +1218,7 @@ mod test {
                     include_nested: false,
                     include_external: false,
                     drive: None,
+                    aggregation: None,
                 },
                 &ForAgent::Sudo,
             )
@@ -1198,6 +1249,7 @@ mod test {
                 include_nested: false,
                 include_external: false,
                 drive: None,
+                aggregation: None,
             },
             &ForAgent::Sudo,
         )
@@ -1229,6 +1281,7 @@ mod test {
             include_nested: true,
             include_external: false,
             drive: None,
+            aggregation: None,
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await

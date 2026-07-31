@@ -63,6 +63,7 @@ tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().bloc
 */
 
 pub mod agents;
+pub mod aggregate;
 pub mod atoms;
 pub mod authentication;
 #[cfg(feature = "db")]

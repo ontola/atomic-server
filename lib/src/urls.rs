@@ -137,6 +137,7 @@ pub const COLLECTION_INCLUDE_EXTERNAL: &str =
 pub const COLLECTION_PAGE_SIZE: &str = "https://atomicdata.dev/properties/collection/pageSize";
 pub const COLLECTION_SORT_BY: &str = "https://atomicdata.dev/properties/collection/sortBy";
 pub const COLLECTION_SORT_DESC: &str = "https://atomicdata.dev/properties/collection/sortDesc";
+pub const COLLECTION_AGGREGATES: &str = "https://atomicdata.dev/properties/collection/aggregates";
 // ... for Endpoints
 pub const ENDPOINT_PARAMETERS: &str = "https://atomicdata.dev/properties/endpoint/parameters";
 pub const ENDPOINT_RESULTS: &str = "https://atomicdata.dev/properties/endpoint/results";

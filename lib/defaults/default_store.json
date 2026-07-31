@@ -490,6 +490,16 @@
     "https://atomicdata.dev/properties/shortname": "sort-desc"
   },
   {
+    "@id": "https://atomicdata.dev/properties/collection/aggregates",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Statistics computed over every resource this collection matches, not just the current page: a JSON array of { property?, function, value, count, groups?, groups_truncated? }. `function` is one of sum / count / avg / min / max. Requested with the `aggregation` query parameter; the store computes them where the data is, so a client can show a total without fetching every member. `groups` holds the per-bucket breakdown when one was asked for.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "aggregates"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/collection/totalMembers",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
     "https://atomicdata.dev/properties/description": "The count of items (members) in the collection.",
@@ -994,6 +1004,7 @@
       "https://atomicdata.dev/properties/collection/sortDesc",
       "https://atomicdata.dev/properties/collection/totalMembers",
       "https://atomicdata.dev/properties/collection/totalPages",
+      "https://atomicdata.dev/properties/collection/aggregates",
       "https://atomicdata.dev/properties/collection/value",
       "https://atomicdata.dev/properties/collection/includeExternal",
       "https://atomicdata.dev/properties/incomplete"

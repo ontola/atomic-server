@@ -754,6 +754,10 @@ pub struct Query {
     /// start with the drive's prefix are included. Also scopes the query index so watched queries
     /// are drive-specific, preventing spurious cross-tenant index updates.
     pub drive: Option<Subject>,
+    /// Statistics to compute over **every** matching row, independent of
+    /// `limit`/`offset`. `None` (the default) costs nothing. See
+    /// [crate::aggregate].
+    pub aggregation: Option<crate::aggregate::Aggregation>,
 }
 
 impl Query {
@@ -772,6 +776,7 @@ impl Query {
             include_nested: true,
             for_agent: ForAgent::Sudo,
             drive: None,
+            aggregation: None,
         }
     }
 
@@ -821,4 +826,7 @@ pub struct QueryResult {
     pub resources: Vec<Resource>,
     /// The amount of hits that were found, including the ones that were out of bounds or not authorized.
     pub count: usize,
+    /// One outcome per requested aggregate, in the order they were asked for.
+    /// Empty unless the query carried an [crate::aggregate::Aggregation].
+    pub aggregates: Vec<crate::aggregate::AggregateOutcome>,
 }

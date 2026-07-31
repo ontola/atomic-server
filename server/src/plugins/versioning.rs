@@ -142,6 +142,7 @@ fn handle_all_versions_request<'a>(
             name: Some(format!("Versions of {target}")),
             include_nested: false,
             include_external: false,
+            aggregates: Vec::new(),
         };
 
         collection.to_resource(store).await

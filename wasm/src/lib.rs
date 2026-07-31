@@ -228,6 +228,7 @@ impl ClientDb {
         include_resources: Option<bool>,
         drive: Option<String>,
         filters: JsValue,
+        aggregation: JsValue,
     ) -> Result<JsValue, JsError> {
         // Extra `(property, value)` AND constraints from JS. `null`/`undefined`
         // → none, keeping single-filter callers unchanged.
@@ -287,10 +288,21 @@ impl ClientDb {
             None => None,
         };
 
+        // Statistics over every matching row. The same computation the server
+        // does — this is the same crate — so an offline table shows the same
+        // totals rather than none.
+        let aggregation: Option<atomic_lib::aggregate::Aggregation> =
+            if aggregation.is_null() || aggregation.is_undefined() {
+                None
+            } else {
+                Some(serde_wasm_bindgen::from_value(aggregation).map_err(to_js_err)?)
+            };
+
         let q = Query {
             property,
             value,
             filters: extra,
+            aggregation,
             sort_by,
             sort_desc: sort_desc.unwrap_or(false),
             limit,
@@ -546,6 +558,9 @@ struct QueryResponse {
     subjects: Vec<String>,
     resources: Vec<String>,
     count: usize,
+    /// One per requested aggregate; empty when none were asked for.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    aggregates: Vec<atomic_lib::aggregate::AggregateOutcome>,
 }
 
 impl QueryResponse {
@@ -569,6 +584,7 @@ impl QueryResponse {
             subjects,
             resources,
             count: result.count,
+            aggregates: result.aggregates.clone(),
         })
     }
 }
