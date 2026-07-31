@@ -1,7 +1,15 @@
 # Dashboards: user- and LLM-composable views over data
 
-> Status: **Proposal (2026-07-15)**. Builds on the Table View pattern
-> ([[table-view-filters]]) and the `create_table` LLM-authoring precedent.
+> Status: **Proposal (2026-07-15)**, with its analytics half already built
+> (2026-07-30). Builds on the Table View pattern ([[table-view-filters]]) and the
+> `create_table` LLM-authoring precedent.
+>
+> The aggregation engine this plan specified shipped for table totals instead —
+> see step 4 of [[table-templates-and-mini-apps]]. It landed as designed here (an
+> aggregate clause on the shared `Query`, one implementation serving both the
+> server and the browser's WASM DB), so a stat block's number is now a call, not
+> a project. What remains is what this document said was genuinely new: the
+> `Dashboard`/`Block` ontology, a layout model, and chart rendering.
 
 ## Motivation
 
@@ -87,7 +95,7 @@ Where do count/sum/avg/group-by actually run? Findings (2026-07-15):
   lazily built per `QueryFilter` and maintained incrementally on commit.
   Even today's pagination `count` is computed by iterating the index range —
   nothing is materialized.
-- There is **no aggregation anywhere** in lib/server/wasm/@tomic; we add it
+- There was **no aggregation anywhere** in lib/server/wasm/@tomic; we added it
   from scratch.
 
 Decision: extend the shared `Query` in `atomic_lib` with an optional
@@ -98,6 +106,31 @@ executed as the same iterate-the-`QueryMembers`-range pass that computes
 paths: exposed through the WASM bridge (`ClientDb.query` result gains an
 `aggregates` field) and as extra params on the server `/query` endpoint,
 mirroring how multi-property filter operators were threaded full-stack.
+
+**Built, 2026-07-30** — driven by table totals rather than by dashboards, but to
+this design:
+
+- `lib/src/aggregate.rs`: `Aggregation { aggregates, group_by }` on `Query`,
+  `AggregateOutcome` (with per-group values) on `QueryResult`. `db.rs` runs it as
+  a second unpaged pass over the same filter and index path as the page query, so
+  a number can never summarize a different set than the rows it claims to.
+- `AggregateGrouping { property, granularity, tz_offset_minutes, limit }` with
+  `GroupGranularity::{Exact, Day, Month}` — the date bucketing open question 3
+  asked about, answered: one level, caller-supplied timezone offset, and a
+  bucket limit that reports when it truncated. A select property groups by tag
+  subject.
+- Wire: the `aggregation` query param, results on `collection/aggregates` (JSON).
+  WASM: `ClientDb.query` takes `aggregation` and its result carries `aggregates`
+  (`ClientDbQueryOpts.aggregation` in `@tomic/lib`), so the local DB answers the
+  same question offline.
+
+A stat block is therefore a `CollectionBuilder` call with `setAggregation` — see
+`useTableAggregates.ts`, which does exactly that (one row plus the numbers,
+re-read on save/delete). A chart block is the same call with a `group_by`.
+
+One caveat inherited from that work: aggregates read **stored** properties, so a
+computed column can't be summed. A dashboard over derived values (a total
+duration, qty × price) hits the same wall.
 
 Consequences:
 
@@ -153,15 +186,26 @@ over a filtered source), one chart type (bar) — in a simple grid, plus the
 (total drops per ingredient across batches, batches by status, shopping-list
 count) before investing in a drag-and-drop editor.
 
+Since the numbers arrived early, the slice is smaller than it was written: the
+stat block is a `CollectionBuilder` with `setAggregation`, and the bar chart is
+the same call with a `group_by` plus something to draw bars with. What is
+untouched is the ontology, the layout, the renderer and the tool — and the rule
+step 3 of [[table-templates-and-mini-apps]] established applies here too: **a
+capability lands with both its tool and its UI**, or the assistant can build a
+dashboard its owner cannot then change.
+
 ## Open questions
 
 1. One `Block` class with `block-kind`, or a class per kind? (`View` uses a
    kind string; per-kind classes give better schema validation for the LLM.)
 2. Exact Vega-Lite subset: which marks/encodings in v1, and how to validate
    (zod schema in the tool + renderer-side clamp).
-3. Aggregate clause shape: one `group_by` level or nested? How do date
-   bucketing (per day/week/month for time charts) and select-property
-   buckets encode in the `aggregate` JSON?
+3. ~~Aggregate clause shape: one `group_by` level or nested? How do date
+   bucketing and select-property buckets encode in the `aggregate` JSON?~~
+   Answered by the built engine: one `group_by` level, a `granularity` of
+   `exact` / `day` / `month` with a caller-supplied timezone offset, select
+   properties bucketed by tag subject. Week and quarter buckets are not built,
+   and a time chart will want them.
 4. Should the Drive homepage become a default Dashboard resource
    (replacing the fixed `DrivePage` layout), and if so, when is it created?
 5. Document embeds: what does a Block need so TipTap (DocumentV2) can host
