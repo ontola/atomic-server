@@ -223,29 +223,30 @@ configuration, not a renderer.
   to end — the chips, the value input, `view-filters` — so a filter that names a
   computed column needs that key generalized to a target, plus a value input that
   asks for hours rather than milliseconds.
-- **`aggregates.spec.ts` is load-sensitive and currently fails on a well-used dev
-  store.** Two sightings, probably the same cause. First: configuring the Time
-  tracker's "All entries" view in the template (a sort, the Duration column, a
-  preconfigured total) made it thrash — 13s to a timeout, with an open dropdown
-  detaching from the DOM repeatedly. Reverting that view's config fixed it, and the
-  same fields on other templates' views are fine. Second, 2026-07-31: it fails
-  deterministically at the "add a second totals row" click ("element is not stable
-  … detached from the DOM") on a dev store that has accumulated tens of e2e runs,
-  while every other table/timer/template/dashboard spec passes. Verified not to be
-  a code regression by stashing an entire feature branch's worth of changes and
-  re-running: the failure set is identical with and without them. The shape fits
-  the totals footer re-rendering (it refreshes on every store event, debounced
-  500ms) landing on top of the click. Fixing it properly means the footer's menu
-  surviving a refresh, not a longer timeout. The day totals are proven by
-  `timer.spec.ts` meanwhile.
-  **The sensitivity is not unique to that spec.** Every table / timer / template /
-  dashboard / row-action spec passes run alone or in a small serial batch; run nine
-  of them together — especially with more than one worker — and one or two of the
-  template-heavy ones fail on timing (`table-templates`' Inventory joined the list
-  once row actions gave a third template rows to create). So a red result from a
-  big parallel run means little on a well-used store: **reproduce a failure alone
-  before believing it**, and compare failure *sets* rather than expecting
-  all-green. A fresh data dir is the cheap way to get a clean signal.
+- ~~**`aggregates.spec.ts` is load-sensitive**~~ — fixed by isolating the e2e
+  store (2026-07-31). Two earlier sightings blamed the wrong thing, so the
+  correction is worth keeping:
+  - **The suite talks to the server named in
+    `browser/data-browser/.env.development` (`VITE_ATOMIC_SERVER_URL`, currently
+    9885), not to 9883.** The suite's own `SERVER_URL` only points the test
+    *helpers*. Get this wrong and every test fails on a connection refused that
+    names neither port. This is what made the earlier diagnosis attribute the
+    failures to the 3.9 GB store at `~/Library/Application Support/atomic-data`,
+    which the tests never touch.
+  - The store they *did* use was a scratch one that had collected a session's
+    worth of manual debugging tables alongside every previous run's drives. On a
+    store like that `aggregates.spec.ts` failed at the "add a second totals row"
+    click ("element is not stable … detached from the DOM") every time, which
+    reads exactly like a code bug and is not one — verified by stashing an entire
+    feature branch and re-running to an identical failure set.
+  `browser/e2e/scripts/e2e-server.sh` (`pnpm test-server` / `test-server-fresh`)
+  now serves the port the app is configured for, from `<repo>/.e2e-store`. On a
+  clean store `aggregates.spec.ts` passes, and the nine table/timer/template/
+  dashboard/row-action specs run 33–35 of 36 with two workers; the stragglers pass
+  run alone. So: **reproduce a failure alone before believing it**, and compare
+  failure *sets* rather than expecting all-green. If the totals footer's menu is
+  worth hardening against its own debounced refresh, that is still open — but it
+  is no longer what makes the suite red.
 - Aggregation has no per-aggregate filter ("sum of Amount **where** Status =
   Done"); a total follows the view's own filters instead.
 - Subtotals render under the grid, not as rows between groups inside it.

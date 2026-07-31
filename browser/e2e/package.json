@@ -19,6 +19,8 @@
     "playwright-install": "playwright install chromium",
     "playwright-install-webkit": "playwright install webkit",
     "upload-report": "netlify deploy --dir playwright-report --prod --site atomic-tests",
+    "test-server": "./scripts/e2e-server.sh",
+    "test-server-fresh": "./scripts/e2e-server.sh --fresh",
     "test-e2e": "playwright test --config=./playwright.config.ts",
     "test-debug": "PWDEBUG=1 playwright test",
     "test-update": "playwright test --update-snapshots",
