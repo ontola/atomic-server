@@ -53,6 +53,7 @@ pub fn construct_chatroom<'a>(
             for_agent: for_agent.clone(),
             drive: Some(drive_prefix_from_subject(resource.get_subject())),
             aggregation: None,
+            expression_filters: Vec::new(),
         };
 
         let QueryResult {

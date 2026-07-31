@@ -108,6 +108,52 @@ impl Expression {
     }
 }
 
+/// A constraint on a computed value: "logged more than an hour", "overdue by at
+/// least a day".
+///
+/// The comparison is numeric, against the expression's own unit — milliseconds
+/// for a duration, days for a days-since, an instant for a next-due date. A row
+/// whose value can't be computed never matches: "overdue" is not a claim you can
+/// make about a plant with no last-watered date.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExpressionFilter {
+    pub expression: Expression,
+    #[serde(default)]
+    pub operator: crate::storelike::FilterOperator,
+    pub value: f64,
+    /// The instant to measure "now" against, for the expressions that do. Set by
+    /// the caller so a filter agrees with the cells it is filtering; every filter
+    /// in one query should carry the same one.
+    #[serde(default)]
+    pub now_ms: Option<i64>,
+}
+
+impl ExpressionFilter {
+    /// Whether this row satisfies the constraint.
+    pub fn matches(&self, resource: &Resource) -> bool {
+        use crate::storelike::FilterOperator;
+
+        let now = self.now_ms.unwrap_or_else(crate::utils::now);
+
+        let Some(value) = self.expression.evaluate(resource, now) else {
+            return false;
+        };
+
+        match self.operator {
+            FilterOperator::GreaterThan => value > self.value,
+            FilterOperator::GreaterThanOrEqual => value >= self.value,
+            FilterOperator::LessThan => value < self.value,
+            FilterOperator::LessThanOrEqual => value <= self.value,
+            // Equality on a float is a trap, and a duration in milliseconds is
+            // never typed exactly: treat it as "the same to the unit given".
+            FilterOperator::Equal => (value - self.value).abs() < 1.0,
+            // String operators mean nothing here. Matching everything would
+            // silently widen a view the user thought they had narrowed.
+            FilterOperator::StartsWith | FilterOperator::Contains => false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

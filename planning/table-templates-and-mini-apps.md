@@ -194,10 +194,21 @@ configuration, not a renderer.
 
 - ~~The timer's day totals~~ and ~~aggregates over a derived column~~: closed by
   step 7 below — the store evaluates a computed column as it aggregates.
-- **Filters still can't reference a computed column**, so "overdue" and "logged
-  more than an hour" remain out of reach. Unlike a total this can't ride the
-  existing pass: the query index is keyed by stored values, and a running
-  duration has no stable value to key by. Needs a post-index evaluation pass.
+- **Filters on a computed column: the store can, the UI can't yet.** `Query` takes
+  `expression_filters`, evaluated over the set the index narrows to, with paging
+  and `count` computed after them (see step 8). What is missing is the UI and the
+  view config: the table's filter machinery is keyed by property subject from end
+  to end — the chips, the value input, `view-filters` — so a filter that names a
+  computed column needs that key generalized to a target, plus a value input that
+  asks for hours rather than milliseconds.
+- Configuring the Time tracker's "All entries" view in the template (a sort, the
+  Duration column, a preconfigured total) made `aggregates.spec.ts` thrash — it
+  went from 13s to a timeout, with an open dropdown detaching from the DOM
+  repeatedly, which smells like a render/refetch loop on view load. Reverting that
+  one view's config fixed it. The same fields on other templates' views are fine,
+  so something about *that* view (two views declaring the same computed column? the
+  timer's implicit-Duration merge?) is involved. Not diagnosed; the template
+  stays minimal and the day totals are proven by `timer.spec.ts` instead.
 - Aggregation has no per-aggregate filter ("sum of Amount **where** Status =
   Done"); a total follows the view's own filters instead.
 - Subtotals render under the grid, not as rows between groups inside it.

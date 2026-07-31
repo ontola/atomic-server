@@ -56,6 +56,9 @@ export type WorkerRequest =
       /** Statistics over every matching resource — computed in WASM by the same
        *  Rust code the server runs. */
       aggregation?: unknown;
+      /** Constraints on values computed per resource, evaluated in the same WASM
+       *  pass. */
+      expressionFilters?: unknown;
     }
   | { id: number; type: 'allSubjects' }
   | { id: number; type: 'populate' }
@@ -203,6 +206,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.drive ?? null,
         msg.filters ?? null,
         msg.aggregation ?? null,
+        msg.expressionFilters ?? null,
       );
     }
 

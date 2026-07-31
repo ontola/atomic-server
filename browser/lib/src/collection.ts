@@ -118,6 +118,27 @@ export interface QueryFilter {
    * one number rather than a fetch of every member.
    */
   aggregation?: Aggregation;
+  /**
+   * Constraints on values *computed* per resource — a duration, an amount, a
+   * days-since — rather than stored on it. ANDed with `filters`.
+   *
+   * These can't use the query index (a running duration has no stable value to
+   * key by), so the store evaluates them over the set the index narrows to. The
+   * count and any aggregates describe the filtered set.
+   */
+  expression_filters?: ExpressionFilter[];
+}
+
+/** One constraint on a computed value: "logged more than an hour". */
+export interface ExpressionFilter {
+  expression: Expression;
+  /** Numeric comparison, in the expression's own unit (milliseconds for a
+   *  duration, days for a days-since). Defaults to `eq`. */
+  operator?: 'eq' | 'gt' | 'gte' | 'lt' | 'lte';
+  value: number;
+  /** The instant to measure "now" against, for expressions that do. Send the
+   *  same one for every filter in a query. */
+  now_ms?: number;
 }
 
 /** One statistic to compute. `count` needs no property. */
@@ -705,7 +726,11 @@ export class Collection {
       // `filters` and `aggregation` are structured — serialised as JSON
       // below, not via the scalar `set()` (which would stringify to
       // "[object Object]").
-      if (key === 'filters' || key === 'aggregation') {
+      if (
+        key === 'filters' ||
+        key === 'aggregation' ||
+        key === 'expression_filters'
+      ) {
         continue;
       }
 
@@ -725,6 +750,14 @@ export class Collection {
       url.searchParams.set(
         'aggregation',
         JSON.stringify(this.params.aggregation),
+      );
+    }
+
+    // Constraints the index can't answer, evaluated by the store per row.
+    if (this.params.expression_filters?.length) {
+      url.searchParams.set(
+        'expression_filters',
+        JSON.stringify(this.params.expression_filters),
       );
     }
 
@@ -888,6 +921,9 @@ export class Collection {
       includeResources: true,
       // Aggregated in WASM over the whole matching set, exactly as the server
       // would — the local DB is not a lesser source here.
+      expressionFilters: this.params.expression_filters?.length
+        ? this.params.expression_filters
+        : undefined,
       aggregation: this.params.aggregation?.aggregates.length
         ? this.params.aggregation
         : undefined,

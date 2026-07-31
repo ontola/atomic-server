@@ -25,6 +25,7 @@ fn query_for(table: &str, aggregation: Aggregation, limit: Option<usize>) -> Que
         property: Some(urls::PARENT.into()),
         value: Some(Value::AtomicUrl(table.to_string().into())),
         filters: Vec::new(),
+        expression_filters: Vec::new(),
         limit,
         start_val: None,
         end_val: None,

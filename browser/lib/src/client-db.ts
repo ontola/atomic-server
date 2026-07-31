@@ -25,7 +25,11 @@
  * ```
  */
 
-import type { Aggregation, AggregateOutcome } from './collection.js';
+import type {
+  Aggregation,
+  AggregateOutcome,
+  ExpressionFilter,
+} from './collection.js';
 import type {
   WorkerRequest,
   WorkerResponse,
@@ -103,6 +107,9 @@ export interface ClientDbQueryOpts {
   drive?: string;
   /** Statistics to compute over every matching resource, not just this page. */
   aggregation?: Aggregation;
+  /** Constraints on values computed per resource, evaluated by the store over the
+   *  set the index narrows to. */
+  expressionFilters?: ExpressionFilter[];
 }
 
 /** Options for opening a specific (per-agent) local database. */

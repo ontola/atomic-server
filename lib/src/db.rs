@@ -2102,20 +2102,21 @@ impl Db {
     /// from the materialized row (`get_resource_shallow`) — the same source the
     /// filters are matched against, so a total can never disagree with the set
     /// it claims to summarize.
-    async fn compute_aggregation(
-        &self,
-        q: &Query,
-        aggregation: &crate::aggregate::Aggregation,
-    ) -> AtomicResult<Vec<crate::aggregate::AggregateOutcome>> {
-        use crate::aggregate::{
-            Accumulator, AggregateGroup, AggregateOutcome, DEFAULT_GROUP_LIMIT,
-        };
-        use std::collections::HashMap;
-
+    /// Every row the query matches, unpaged and in order.
+    ///
+    /// Subjects, not a count: these are the rows that actually resolved for this
+    /// agent. `QueryResult::count` deliberately counts raw index hits (including
+    /// unauthorized and stale-index entries, see issue #286), so a `count`
+    /// aggregate can legitimately come out lower than `totalMembers` — it counts
+    /// what the reader can see, which is the only number a sum over the same rows
+    /// can agree with.
+    ///
+    /// Shared by the paging path and the aggregation pass, so a total can never
+    /// summarize a different set than the rows on screen.
+    async fn matching_subjects(&self, q: &Query) -> AtomicResult<Vec<Subject>> {
         // The same query, unpaged. `sort_by` is kept so this takes the exact
-        // same index path as the paged query above — a different path could
-        // disagree about which rows match, and then the total would summarize a
-        // different set than the one on screen.
+        // same index path as the paged query — a different path could disagree
+        // about which rows match.
         let scan = Query {
             property: q.property.clone(),
             value: q.value.clone(),
@@ -2127,25 +2128,83 @@ impl Db {
             sort_by: q.sort_by.clone(),
             sort_desc: q.sort_desc,
             include_external: q.include_external,
-            // Bodies are never needed here; the values are read straight off
-            // the local row below.
+            // Bodies are never needed here; values are read straight off the
+            // local row.
             include_nested: false,
             for_agent: q.for_agent.clone(),
             drive: q.drive.clone(),
             aggregation: None,
+            expression_filters: Vec::new(),
         };
 
-        // Subjects, not the count: these are the rows that actually resolved for
-        // this agent. `QueryResult::count` deliberately counts raw index hits
-        // (including unauthorized and stale-index entries, see issue #286), so a
-        // `count` aggregate can legitimately come out lower than
-        // `totalMembers` — it counts what the reader can see, which is the only
-        // number a sum over the same rows can agree with.
         let subjects = if requires_query_index(&scan) {
             self.query_complex(&scan).await?.subjects
         } else {
             self.query_basic(&scan).await?.subjects
         };
+
+        if q.expression_filters.is_empty() {
+            return Ok(subjects);
+        }
+
+        Ok(subjects
+            .into_iter()
+            .filter(|subject| {
+                let Ok(resource) = self.get_resource_shallow(subject) else {
+                    // Nothing to evaluate against: a row we can't read can't be
+                    // shown to satisfy a constraint.
+                    return false;
+                };
+
+                q.expression_filters
+                    .iter()
+                    .all(|filter| filter.matches(&resource))
+            })
+            .collect())
+    }
+
+    /// The paged answer to a query with a constraint on a computed value.
+    ///
+    /// The index can't narrow by such a value, so the whole matching set is
+    /// evaluated and *then* paged — which also makes `count` the number of rows
+    /// that really matched, rather than the index's hit count.
+    async fn query_with_expression_filters(&self, q: &Query) -> AtomicResult<QueryResult> {
+        let matching = self.matching_subjects(q).await?;
+        let count = matching.len();
+
+        let page: Vec<Subject> = matching
+            .into_iter()
+            .skip(q.offset)
+            .take(q.limit.unwrap_or(usize::MAX))
+            .collect();
+
+        let resources = if q.include_nested {
+            page.iter()
+                .filter_map(|subject| self.get_resource_shallow(subject).ok())
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        Ok(QueryResult {
+            subjects: page,
+            resources,
+            aggregates: Vec::new(),
+            count,
+        })
+    }
+
+    async fn compute_aggregation(
+        &self,
+        q: &Query,
+        aggregation: &crate::aggregate::Aggregation,
+    ) -> AtomicResult<Vec<crate::aggregate::AggregateOutcome>> {
+        use crate::aggregate::{
+            Accumulator, AggregateGroup, AggregateOutcome, DEFAULT_GROUP_LIMIT,
+        };
+        use std::collections::HashMap;
+
+        let subjects = self.matching_subjects(q).await?;
 
         let mut totals: Vec<Accumulator> =
             vec![Accumulator::default(); aggregation.aggregates.len()];
@@ -3178,7 +3237,12 @@ impl Storelike for Db {
     /// Tries `query_cache`, which you should implement yourself.
     #[instrument(skip_all)]
     async fn query(&self, q: &Query) -> AtomicResult<QueryResult> {
-        let mut result = if requires_query_index(q) {
+        // A constraint on a computed value can't come from the index, so it is
+        // applied to the set the index narrows to — which means paging has to
+        // happen after it, not in it.
+        let mut result = if !q.expression_filters.is_empty() {
+            self.query_with_expression_filters(q).await?
+        } else if requires_query_index(q) {
             self.query_complex(q).await?
         } else {
             self.query_basic(q).await?

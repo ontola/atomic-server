@@ -270,6 +270,7 @@ async fn destroy_clears_parent_index_count() {
         for_agent: ForAgent::Sudo,
         drive: None,
         aggregation: None,
+        expression_filters: Vec::new(),
     };
 
     let before = store.query(&q).await.unwrap();
@@ -356,6 +357,7 @@ async fn unauthorized_query_count_matches_subjects() {
         for_agent: urls::PUBLIC_AGENT.into(),
         drive: None,
         aggregation: None,
+        expression_filters: Vec::new(),
     };
 
     let res = store.query(&q).await.unwrap();
@@ -486,6 +488,7 @@ async fn queries() {
         for_agent: ForAgent::Sudo,
         drive: None,
         aggregation: None,
+        expression_filters: Vec::new(),
     };
     let res = store.query(&q).await.unwrap();
     assert_eq!(
@@ -624,6 +627,7 @@ async fn query_include_external() {
         for_agent: ForAgent::Sudo,
         drive: None,
         aggregation: None,
+        expression_filters: Vec::new(),
     };
     let res_include = store.query(&q).await.unwrap();
     q.include_external = false;
@@ -774,6 +778,7 @@ async fn test_collection_update_value(
         for_agent: ForAgent::Sudo,
         drive: Some(Subject::from("internal:/")),
         aggregation: None,
+        expression_filters: Vec::new(),
     };
     let mut res = store.query(&q).await.unwrap();
     assert_eq!(

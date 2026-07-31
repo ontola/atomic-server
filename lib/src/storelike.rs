@@ -758,6 +758,16 @@ pub struct Query {
     /// `limit`/`offset`. `None` (the default) costs nothing. See
     /// [crate::aggregate].
     pub aggregation: Option<crate::aggregate::Aggregation>,
+    /// Constraints on values *computed* per row — a duration, an amount, a
+    /// days-since — rather than stored on it. ANDed with `filters`.
+    ///
+    /// These can't be answered by the query index, which is keyed by stored
+    /// values (and a running duration has no stable value to key by), so they are
+    /// evaluated over the set the index narrows to. That costs a pass over the
+    /// matching rows, the same pass an aggregation already makes — which is why
+    /// they're a separate field rather than folded into `filters`: nothing else
+    /// should silently lose its index.
+    pub expression_filters: Vec<crate::expression::ExpressionFilter>,
 }
 
 impl Query {
@@ -766,6 +776,7 @@ impl Query {
             property: None,
             value: None,
             filters: Vec::new(),
+            expression_filters: Vec::new(),
             limit: None,
             start_val: None,
             end_val: None,

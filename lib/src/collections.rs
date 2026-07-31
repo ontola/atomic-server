@@ -65,6 +65,9 @@ pub struct CollectionBuilder {
     pub drive: Option<Subject>,
     /// Statistics to compute over every matching row, not just this page.
     pub aggregation: Option<crate::aggregate::Aggregation>,
+    /// Constraints on values computed per row (a duration, an amount) rather than
+    /// stored on it. Evaluated over the set the index narrows to.
+    pub expression_filters: Vec<crate::expression::ExpressionFilter>,
 }
 
 impl CollectionBuilder {
@@ -151,6 +154,7 @@ impl CollectionBuilder {
             include_external: false,
             drive: None,
             aggregation: None,
+            expression_filters: Vec::new(),
         })
     }
 
@@ -315,6 +319,7 @@ impl Collection {
             property: collection_builder.property.clone(),
             value: value_filter,
             filters,
+            expression_filters: collection_builder.expression_filters.clone(),
             limit: Some(collection_builder.page_size),
             start_val: None,
             end_val: None,
@@ -499,6 +504,7 @@ pub async fn construct_collection_from_params(
     let mut include_external = false;
     let mut drive: Option<Subject> = None;
     let mut aggregation: Option<crate::aggregate::Aggregation> = None;
+    let mut expression_filters: Vec<crate::expression::ExpressionFilter> = Vec::new();
 
     if let Ok(val) = resource.get(urls::COLLECTION_PROPERTY) {
         property = Some(val.to_string());
@@ -564,6 +570,16 @@ pub async fn construct_collection_from_params(
                     })?;
                 aggregation = Some(parsed);
             }
+            // Constraints on computed values, as JSON:
+            // `[{"expression":{"kind":"elapsed","from":"…","until":"…"},
+            //    "operator":"gt","value":3600000}]`
+            "expression_filters" => {
+                expression_filters = serde_json::from_str(v.as_ref()).map_err(|e| {
+                    format!(
+                        "Invalid `expression_filters` param (expected JSON array of {{expression, operator?, value}}): {e}"
+                    )
+                })?;
+            }
             e => {
                 return Err(format!("Invalid query param: {}", e).into());
             }
@@ -583,6 +599,7 @@ pub async fn construct_collection_from_params(
         include_external,
         drive: Some(drive.unwrap_or_else(|| drive_prefix_from_subject(resource.get_subject()))),
         aggregation,
+        expression_filters,
     };
     let collection = Collection::collect_members(store, collection_builder, for_agent).await?;
     collection.add_to_resource(resource, store).await
@@ -674,6 +691,7 @@ mod test {
             include_external: false,
             drive: None,
             aggregation: None,
+            expression_filters: Vec::new(),
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -699,6 +717,7 @@ mod test {
             include_external: false,
             drive: None,
             aggregation: None,
+            expression_filters: Vec::new(),
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -754,6 +773,7 @@ mod test {
             include_external: false,
             drive: Some(drive),
             aggregation: None,
+            expression_filters: Vec::new(),
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -824,6 +844,7 @@ mod test {
                         include_external: false,
                         drive: None,
                         aggregation: None,
+                        expression_filters: Vec::new(),
                     },
                     &ForAgent::Sudo,
                 )
@@ -890,6 +911,7 @@ mod test {
                 include_external: false,
                 drive: None,
                 aggregation: None,
+                expression_filters: Vec::new(),
             },
             &ForAgent::Sudo,
         )
@@ -941,6 +963,7 @@ mod test {
             include_external: false,
             drive: None,
             aggregation: None,
+            expression_filters: Vec::new(),
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -977,6 +1000,7 @@ mod test {
             include_external: false,
             drive: None,
             aggregation: None,
+            expression_filters: Vec::new(),
         };
 
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
@@ -1011,6 +1035,7 @@ mod test {
             include_external: false,
             drive: None,
             aggregation: None,
+            expression_filters: Vec::new(),
         };
 
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
@@ -1066,6 +1091,7 @@ mod test {
                 include_external: false,
                 drive: None,
                 aggregation: None,
+                expression_filters: Vec::new(),
             },
             &ForAgent::Sudo,
         )
@@ -1105,6 +1131,7 @@ mod test {
                 include_external: false,
                 drive: None,
                 aggregation: None,
+                expression_filters: Vec::new(),
             },
             &ForAgent::Sudo,
         )
@@ -1134,6 +1161,7 @@ mod test {
                 include_external: false,
                 drive: None,
                 aggregation: None,
+                expression_filters: Vec::new(),
             },
             &ForAgent::Sudo,
         )
@@ -1174,6 +1202,7 @@ mod test {
                     include_external: false,
                     drive: None,
                     aggregation: None,
+                    expression_filters: Vec::new(),
                 },
                 &ForAgent::Sudo,
             )
@@ -1219,6 +1248,7 @@ mod test {
                     include_external: false,
                     drive: None,
                     aggregation: None,
+                    expression_filters: Vec::new(),
                 },
                 &ForAgent::Sudo,
             )
@@ -1250,6 +1280,7 @@ mod test {
                 include_external: false,
                 drive: None,
                 aggregation: None,
+                expression_filters: Vec::new(),
             },
             &ForAgent::Sudo,
         )
@@ -1282,6 +1313,7 @@ mod test {
             include_external: false,
             drive: None,
             aggregation: None,
+            expression_filters: Vec::new(),
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await

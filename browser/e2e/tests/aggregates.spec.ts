@@ -80,27 +80,37 @@ test.describe('table totals', () => {
       page.getByRole('button', { name: 'Hours', exact: true }),
     ).toBeVisible();
 
-    // Columns: name, Start, End, Project, Hours — Hours is the 6th, counting the
-    // row-number gutter. Data rows start at aria-rowindex 2 (1 is the header).
-    await setCell(page, 2, 6, '2');
-    await setCell(page, 3, 6, '3');
+    // Address the column by its heading rather than by a hardcoded position: the
+    // template's own columns (and its computed Duration) sit to the left of it,
+    // and a template gaining a column must not break this test.
+    const hoursColumn = await page
+      .locator('[role="columnheader"]')
+      .filter({ hasText: 'Hours' })
+      .first()
+      .getAttribute('aria-colindex');
+    const hours = Number(hoursColumn);
+    expect(hours).toBeGreaterThan(1);
+
+    // Data rows start at aria-rowindex 2 (1 is the header).
+    await setCell(page, 2, hours, '2');
+    await setCell(page, 3, hours, '3');
 
     // Total the Hours column from its own footer cell — the totals live under
     // the columns they describe.
     const footer = page.getByTestId('table-totals');
-    await footer.locator('[aria-colindex="6"]').click();
+    await footer.locator(`[aria-colindex="${hours}"]`).click();
     await page.getByTestId('menu-item-sum').click();
 
     // The store computed it over every matching row.
     await expect(footer).toContainText('5', { timeout: 15_000 });
 
     // It follows an edit, without a reload: 2 + 4 = 6.
-    await setCell(page, 3, 6, '4', { replace: true });
+    await setCell(page, 3, hours, '4', { replace: true });
     await expect(footer).toContainText('6', { timeout: 15_000 });
 
     // The menu must come back on the same cell, again and again: a cell whose
     // menu opens once and then goes dead is the failure this covers.
-    await footer.locator('[aria-colindex="6"]').click();
+    await footer.locator(`[aria-colindex="${hours}"]`).click();
     await expect(page.getByTestId('menu-item-avg')).toBeVisible();
     await page.getByTestId('menu-item-avg').click();
     await expect(footer).toContainText('Average', { timeout: 15_000 });
@@ -109,7 +119,7 @@ test.describe('table totals', () => {
     await footer.locator('[aria-colindex="2"]').click();
     await expect(page.getByTestId('menu-item-count')).toBeVisible();
     await page.keyboard.press('Escape');
-    await footer.locator('[aria-colindex="6"]').click();
+    await footer.locator(`[aria-colindex="${hours}"]`).click();
     await expect(page.getByTestId('menu-item-sum')).toBeVisible();
     await page.getByTestId('menu-item-sum').click();
     await expect(footer).toContainText('Sum', { timeout: 15_000 });
@@ -119,7 +129,7 @@ test.describe('table totals', () => {
     await page.getByTestId('menu-item-add-row').click();
     const secondRow = page.getByTestId('table-totals-1');
     await expect(secondRow).toBeVisible();
-    await secondRow.locator('[aria-colindex="6"]').click();
+    await secondRow.locator(`[aria-colindex="${hours}"]`).click();
     await page.getByTestId('menu-item-avg').click();
 
     // 2 and 4 → sum 6, average 3, each in its own row under Hours.

@@ -180,6 +180,7 @@ impl<'a> CSVExporter<'a> {
             for_agent: self.agent.clone(),
             drive: None,
             aggregation: None,
+            expression_filters: Vec::new(),
         };
 
         let results = self.store.query(&query).await?;

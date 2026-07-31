@@ -229,6 +229,7 @@ impl ClientDb {
         drive: Option<String>,
         filters: JsValue,
         aggregation: JsValue,
+        expression_filters: JsValue,
     ) -> Result<JsValue, JsError> {
         // Extra `(property, value)` AND constraints from JS. `null`/`undefined`
         // → none, keeping single-filter callers unchanged.
@@ -298,10 +299,21 @@ impl ClientDb {
                 Some(serde_wasm_bindgen::from_value(aggregation).map_err(to_js_err)?)
             };
 
+        // Constraints on values computed per row (a duration, a days-since).
+        // These can't be indexed, so the store evaluates them over the matching
+        // set — see `atomic_lib::expression`.
+        let expression_filters: Vec<atomic_lib::expression::ExpressionFilter> =
+            if expression_filters.is_null() || expression_filters.is_undefined() {
+                Vec::new()
+            } else {
+                serde_wasm_bindgen::from_value(expression_filters).map_err(to_js_err)?
+            };
+
         let q = Query {
             property,
             value,
             filters: extra,
+            expression_filters,
             aggregation,
             sort_by,
             sort_desc: sort_desc.unwrap_or(false),
