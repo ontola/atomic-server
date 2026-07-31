@@ -5,8 +5,8 @@
 In progress (2026-07-31). Prompted by the Timer view: building it as a bespoke
 renderer meant re-implementing the table badly, which raised the question of
 what should happen as templates multiply. Steps 3 (derived columns), 4
-(aggregation with breakdowns) and 5 (assistant tools) have shipped. What's left
-is the list of gaps at the end of step 5 — chiefly making derived columns
+(aggregation with breakdowns), 5 (assistant tools) and 6 (the catalogue) have
+shipped. What's left is the list of gaps below — chiefly making derived columns
 first-class in filters and aggregates.
 
 ## The Problem
@@ -203,6 +203,22 @@ configuration, not a renderer.
   differently. Keying widths by column key would fix both.
 - Aggregates and filters can't reference a derived column, so the timer's day
   totals, "qty × price summed" and "overdue" filters all remain out of reach.
+- **A filtered view keeps a row whose value stopped matching.** Found building
+  the Inventory template: with a "Quantity at most 3" view, raising a row's
+  quantity to 10 leaves it listed there — across a reload, so this is not the
+  in-memory collection. It is not the shared query logic either: at the
+  `atomic_lib` level (including a string filter value and a sort on the filtered
+  property, as the wire sends them) the row leaves the query correctly. That
+  points at how a browser edit reaches the index — the Loro commit path — and it
+  wants its own investigation. Rows filtered *before* the view is first opened
+  are correct, which is why nothing caught it until now.
+- Computed columns are blank on the row you are typing into. The trailing row is
+  a local draft whose cells stay mounted as the draft's after it saves, so a
+  duration or a next-due date only appears once the row is rendered as a saved
+  one (a reload, or navigating back). A template full of computed columns makes
+  this obvious in a way the timer never did.
+- No template can seed a default value, so a "date added" column starts empty
+  even though `createdAt` is stamped on every row.
 
 ## Implementation Plan
 
@@ -324,6 +340,38 @@ same expression-aware seam a formula language would want.
 - Acceptance: walk the mini-app table above and build each from a single
   prompt using only these tools. Every failure is a missing capability or a
   missing tool — answered with configuration, not a renderer.
+
+### 6. The catalogue — done (2026-07-31)
+
+The payoff for steps 3–5: the catalogue went from 2 templates to 13, and not one
+of them shipped a line of rendering code. Expenses, deals (CRM), job
+applications, project tasks, reading list, grocery list, workout log, plant care,
+inventory, guest list and bookmarks joined the issue tracker and the time
+tracker — every row of the mini-app table above that these capabilities reach.
+Each is columns + views, and between them they use every capability: kanban and
+calendar layouts, computed columns (`daysSince` for a stale deal, `offset` for a
+plant's next watering, `product` for a line total), totals with a month or
+category breakdown, two totals rows on one column, per-view column order, and a
+filtered second view ("Low stock").
+
+Two things this surfaced:
+
+- **`decimal` columns.** The column vocabulary only had `number`, which is an
+  integer — so every money template would have silently dropped its cents.
+  `decimal` is a FLOAT carrying the FormattedNumber shape the property form
+  writes, so its own form (currency, percentage, more decimals) opens on it
+  afterwards. Reachable from `create_table` too.
+- **`tableTemplates.test.ts`.** A typo in configuration is not a compile error,
+  it is a broken mini-app. The test walks every spec and checks it against the
+  capabilities that exist: a total names a real, stored, numeric column; a kanban
+  groups by a select; a breakdown column is groupable; a computed column's
+  arguments have the datatype the generator accepts; `columnOrder` names things
+  that exist. Cheap, and it caught the class of mistake this step is full of.
+
+`table-templates.spec.ts` walks three of them end to end (Expenses' order,
+decimals and totals; Plant care's next-due date; Inventory's line value and
+filtered view), since "the config arrived wired up" is the only thing a template
+can get wrong.
 
 ## Open Questions
 

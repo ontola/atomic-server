@@ -5,10 +5,7 @@ import {
   DERIVED_COLUMN_GENERATORS,
   type DerivedColumnKind,
 } from './derivedColumns';
-import type {
-  TableColumnType,
-  TableViewSpec,
-} from './createTableFromSpec';
+import type { TableColumnType, TableViewSpec } from './createTableFromSpec';
 
 /**
  * The templates are pure configuration, which means a typo in one of them is a

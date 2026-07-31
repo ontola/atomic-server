@@ -75,6 +75,7 @@ const columnSchema = z.object({
       'text',
       'markdown',
       'number',
+      'decimal',
       'date',
       'datetime',
       'checkbox',
@@ -83,7 +84,7 @@ const columnSchema = z.object({
       'select',
     ])
     .describe(
-      "The column datatype. Use 'select' for an enum/tag column; provide its `options`. Use 'relation' for a link to another resource.",
+      "The column datatype. 'number' is whole numbers; use 'decimal' for money, prices, hours and measurements. Use 'select' for an enum/tag column; provide its `options`. Use 'relation' for a link to another resource.",
     ),
   options: z
     .array(z.string())
@@ -695,9 +696,26 @@ export function useAtomicMCPTools({
                   ? `${column.name} (${column.type}: ${column.options.join(', ')})`
                   : `${column.name} (${column.type})`,
               ),
-              views: (template.spec?.views ?? []).map(
-                view => `${view.name} (${view.kind})`,
-              ),
+              // What each view already does, so a template that answers the
+              // request is recognisable without instantiating it first.
+              views: (template.spec?.views ?? []).map(view => {
+                const extras = [
+                  ...(view.derivedColumns ?? []).map(
+                    derived => `computed ${derived.name}`,
+                  ),
+                  ...(view.aggregates ?? []).map(
+                    aggregate =>
+                      `${aggregate.function} of ${aggregate.column ?? 'rows'}`,
+                  ),
+                  ...(view.breakdownColumn
+                    ? [`broken down by ${view.breakdownColumn}`]
+                    : []),
+                ];
+
+                return extras.length > 0
+                  ? `${view.name} (${view.kind}) — ${extras.join(', ')}`
+                  : `${view.name} (${view.kind})`;
+              }),
             }),
           );
         },

@@ -332,6 +332,9 @@ const TemplateGrid = styled.div`
   max-height: min(40vh, 18rem);
   overflow-y: auto;
   padding-right: 0.25rem;
+  /* Rows line up, so the scroll edge cuts between cards rather than through
+     the middle of one. */
+  grid-auto-rows: 1fr;
 `;
 
 const TemplateHeading = styled.span`
@@ -367,6 +370,12 @@ const TemplateCard = styled.button<{ $selected: boolean }>`
 const TemplateDescription = styled.span`
   font-size: 0.8em;
   color: ${p => p.theme.colors.textLight};
+  /* Two lines, so every card is the same height. The card's title attribute
+     carries the whole description. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `;
 
 const RelativeDialogTitle = styled(DialogTitle)`

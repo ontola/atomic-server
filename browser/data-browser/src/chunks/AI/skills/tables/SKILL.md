@@ -23,9 +23,14 @@ already attached as context.
 ## Creating Tables
 
 **Start from a template when one fits.** `list_table_templates` shows the
-catalogue; `create_table_from_template` builds one (`{ template: 'time-tracker',
-name: 'My hours' }`) and you adapt it afterwards rather than re-deriving its
-schema by hand.
+catalogue — expenses, deals, job applications, tasks, groceries, inventory,
+plants, workouts, guest lists and more, each with its columns, views, computed
+columns and totals already configured. `create_table_from_template` builds one
+(`{ template: 'time-tracker', name: 'My hours' }`) and you adapt it afterwards
+with `add_table_columns` / `configure_view`, rather than re-deriving its schema
+by hand. A template is a starting point, not a straitjacket: the user's own
+wording ("track my plants, but per room") is best served by instantiating the
+closest one and then changing it.
 
 **Otherwise prefer the `create_table` tool.** It builds the whole table — the row Class,
 every column, any saved views (`table`, `kanban`, `calendar` or `timer`) with

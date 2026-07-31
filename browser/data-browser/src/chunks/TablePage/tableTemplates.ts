@@ -54,8 +54,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
   {
     id: 'issue-tracker',
     title: 'Issue Tracker',
-    description:
-      'Issues with Status, Assignee and Priority — plus a ready-made kanban board.',
+    description: 'Status, Assignee and Priority, plus a kanban board.',
     rowName: 'Issue',
     icon: FaBug,
     spec: {
@@ -86,8 +85,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
   {
     id: 'project-tasks',
     title: 'Project tasks',
-    description:
-      'Tasks on a board and on a calendar, with the estimated hours added up.',
+    description: 'A board, a calendar, and the estimated hours added up.',
     rowName: 'Task',
     icon: FaListCheck,
     spec: {
@@ -125,8 +123,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
   {
     id: 'time-tracker',
     title: 'Time tracker',
-    description:
-      'Log what you work on with a start/stop timer, grouped by project.',
+    description: 'A start/stop timer, grouped by project.',
     rowName: 'Time entry',
     icon: FaStopwatch,
     spec: {
@@ -166,8 +163,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
   {
     id: 'expenses',
     title: 'Expenses',
-    description:
-      'What you spent, with the receipt attached, summed and broken down per month.',
+    description: 'Receipts attached, summed and broken down per month.',
     rowName: 'Expense',
     icon: FaReceipt,
     spec: {
@@ -217,8 +213,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
   {
     id: 'crm',
     title: 'Deals (CRM)',
-    description:
-      'A pipeline board, the value of what is in it, and how long since you last talked.',
+    description: 'A pipeline board, its value, and days since contact.',
     rowName: 'Deal',
     icon: FaHandshake,
     spec: {
@@ -273,8 +268,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
   {
     id: 'job-applications',
     title: 'Job applications',
-    description:
-      'Where every application stands, and how long it has been waiting.',
+    description: 'Where each one stands, and how long it has waited.',
     rowName: 'Application',
     icon: FaBriefcase,
     spec: {
@@ -371,7 +365,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
   {
     id: 'grocery-list',
     title: 'Grocery list',
-    description: 'What to buy, grouped by aisle, with the basket priced up.',
+    description: 'Grouped by aisle, with the basket priced up.',
     rowName: 'Item',
     icon: FaCartShopping,
     spec: {
@@ -490,8 +484,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
   {
     id: 'plant-care',
     title: 'Plant care',
-    description:
-      'Last watered plus an interval, and it works out what is due next.',
+    description: 'Last watered plus an interval works out what is due.',
     rowName: 'Plant',
     icon: FaSeedling,
     spec: {
