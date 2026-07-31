@@ -1,14 +1,43 @@
 name: Deployment Production
 
+# Production follows `master`, but only ever deploys a commit whose pipeline
+# went green. This used to trigger on `push` directly, which ran the deploy and
+# the pipeline CONCURRENTLY -- a red build did not stop the deploy, it just
+# finished a few minutes later and told you about it.
+#
+# `workflow_run` fires after the pipeline concludes, and the `conclusion` check
+# below is what makes it a gate rather than a delay. The trade is that this
+# event checks out the default branch rather than the tested commit, so the
+# head_sha is threaded through explicitly.
+#
+# Still `workflow_dispatch`-able on purpose: when production needs a specific
+# commit -- a rollback, or a fix that cannot wait for a full pipeline -- that is
+# a human decision made with the reasons in view. To gate that too, add required
+# reviewers to the `production` environment in repo settings; no YAML change is
+# needed, the environment is already declared in deployment.yml.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - "master"
+    inputs:
+      ref:
+        description: "Commit or branch to deploy"
+        required: false
+        default: master
+        type: string
+  workflow_run:
+    workflows: ["Main pipeline: build, lint, test"]
+    branches: ["master"]
+    types: [completed]
+
 jobs:
   deploy-production:
+    # `workflow_run` fires on failure too — without this it would deploy every
+    # red master build.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     uses: "./.github/workflows/deployment.yml"
     with:
       environment: production
       remote_host: atomicdata.dev
+      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
     secrets: inherit

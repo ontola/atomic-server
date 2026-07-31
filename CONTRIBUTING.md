@@ -259,6 +259,51 @@ Note:
 - Github Action for `tag`: create release + publish binaries
 - Docker tags should include immutable release tags such as `0.41.0-beta.0`. `latest` is useful as a convenience tag, but downstream consumers such as Home Assistant add-ons need a changing version tag to reliably detect updates.
 
+### Deployments
+
+Branches own environments, and nothing deploys until its pipeline is green.
+
+| Branch | Deploys to | Docs |
+| --- | --- | --- |
+| `develop` | staging.atomicdata.dev | Netlify preview URL |
+| `master` | atomicdata.dev | the live docs + typedoc sites |
+
+Both deploy workflows trigger on `workflow_run` — they wait for
+_Main pipeline: build, lint, test_ to **conclude successfully** on that branch,
+then deploy the exact commit that was tested. They used to trigger on `push`,
+which ran the deploy and the pipeline at the same time, so a red build did not
+stop the deploy. If you ever move them back to `push`, you are removing the
+gate, not just changing the trigger.
+
+Two consequences worth knowing:
+
+- `workflow_run` checks out the **default branch**, not the commit that passed.
+  Every caller therefore passes `github.event.workflow_run.head_sha` into
+  `deployment.yml`'s required `ref` input. Leaving it out deploys something
+  other than what CI tested, silently.
+- Docs publishing is opt-in per branch. `dagger call ci` takes `--publish-docs`,
+  and `main.yml` passes it only from `master`. Without it Netlify gets a preview
+  deploy. This used to be unconditional `--prod`, which meant pushing any
+  feature branch republished the public documentation.
+
+Every deploy then has to prove itself: the job polls `/server` on the target
+until it answers `200` (with enough patience for a store migration). A deploy
+that "succeeds" while the process crash-loops is otherwise invisible — that
+happened, and staging stayed dead for over an hour behind a green checkmark.
+
+If the health check fails, the job restores the previous binary automatically.
+Each deploy leaves a timestamped copy, so the last one that actually served
+traffic is still on disk. The rollback deliberately **does not touch the
+store**: if the new binary migrated it on boot, an older binary may not read it
+back, and a rollback that quietly mangles data is worse than an outage. Use the
+export taken during the deploy, and expect to think.
+
+To deploy a specific commit — a rollback, or a fix that cannot wait for a full
+pipeline — use the `workflow_dispatch` on either deploy workflow and give it a
+ref. To require human approval for production, add reviewers to the `production`
+environment in the repository settings; the environment is already declared, so
+no workflow change is needed.
+
 ### Publishing manually - doing the CI's work
 
 If the CI scripts for some reason do not do their job (buildin releases, docker file, publishing to cargo), you can follow these instructions:

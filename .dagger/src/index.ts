@@ -82,7 +82,16 @@ export class AtomicServer {
   }
 
   @func()
-  async ci(@argument() netlifyAuthToken: Secret): Promise<string> {
+  async ci(
+    @argument() netlifyAuthToken: Secret,
+    /**
+     * Publish docs to the live sites instead of preview URLs. Pass `--publish-docs`
+     * only from a branch that should own the public docs (master). Left off,
+     * every branch build gets a Netlify preview and the published docs are
+     * whatever master last put there.
+     */
+    @argument() publishDocs = false,
+  ): Promise<string> {
     // Rust tasks (test/clippy/fmt) all extend `rustBuild()` and share the
     // `rust-target` cache mount. Running them via `Promise.all` makes the
     // parallel cargo processes fight for cargo's per-target file lock —
@@ -90,8 +99,8 @@ export class AtomicServer {
     // the rust pipeline (cheap: build is cached after the first run),
     // and parallelize only the genuinely-independent JS + publish work.
     await Promise.all([
-      this.docsPublish(netlifyAuthToken),
-      this.typedocPublish(netlifyAuthToken),
+      this.docsPublish(netlifyAuthToken, publishDocs),
+      this.typedocPublish(netlifyAuthToken, publishDocs),
       this.endToEnd(netlifyAuthToken),
       this.jsLint(),
       this.jsTest(),
@@ -448,10 +457,19 @@ export class AtomicServer {
   }
 
   @func()
-  docsPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
+  docsPublish(
+    @argument() netlifyAuthToken: Secret,
+    /** Publish to the live docs site rather than a preview URL. */
+    @argument() prod = false,
+  ): Promise<string> {
     const builtDocsHtml = this.docsFolder();
 
-    return this.netlifyDeploy(builtDocsHtml, 'atomic-docs', netlifyAuthToken);
+    return this.netlifyDeploy(
+      builtDocsHtml,
+      'atomic-docs',
+      netlifyAuthToken,
+      prod,
+    );
   }
 
   private netlifyDeploy(
@@ -459,7 +477,16 @@ export class AtomicServer {
     directory: Directory,
     siteName: string,
     netlifyAuthToken: Secret,
+    /**
+     * Publish to the live site rather than a preview URL. Off by default: this
+     * runs inside `ci()`, which runs on every push to every branch, so a
+     * `--prod` default meant any feature branch republished the public docs.
+     * Only the workflow knows the branch, so only the workflow may ask for it.
+     */
+    prod = false,
   ): Promise<string> {
+    const target = prod ? '--prod' : '';
+
     return dag
       .container()
       .from(NODE_IMAGE)
@@ -473,7 +500,7 @@ export class AtomicServer {
         // Skip silently when no auth token is configured (PR builds from
         // forks, branches without secret access). Netlify CLI 23+ rejects
         // empty `--auth ""` instead of treating it as missing.
-        `if [ -z "$NETLIFY_AUTH_TOKEN" ]; then echo 'NETLIFY_AUTH_TOKEN not set — skipping ${siteName} deploy'; exit 0; fi; for i in $(seq 1 5); do netlify link --name ${siteName} --auth "$NETLIFY_AUTH_TOKEN" && break || sleep 2; done && netlify deploy --dir . --prod --auth "$NETLIFY_AUTH_TOKEN"`,
+        `if [ -z "$NETLIFY_AUTH_TOKEN" ]; then echo 'NETLIFY_AUTH_TOKEN not set — skipping ${siteName} deploy'; exit 0; fi; for i in $(seq 1 5); do netlify link --name ${siteName} --auth "$NETLIFY_AUTH_TOKEN" && break || sleep 2; done && netlify deploy --dir . ${target} --auth "$NETLIFY_AUTH_TOKEN"`,
       ])
       .stdout();
   }
@@ -503,12 +530,19 @@ export class AtomicServer {
   }
 
   @func()
-  typedocPublish(@argument() netlifyAuthToken: Secret): Promise<string> {
+  typedocPublish(
+    @argument() netlifyAuthToken: Secret,
+    /** Publish to the live typedoc site rather than a preview URL. */
+    @argument() prod = false,
+  ): Promise<string> {
     const browserDir = this.jsBuild();
 
     return browserDir
       .withWorkdir('/app')
       .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
+      // The `--prod` flag lives in the pnpm script, so it is steered by env
+      // rather than argv — see `typedoc-publish` in browser/package.json.
+      .withEnvVariable('NETLIFY_PROD', prod ? '1' : '')
       .withExec(['pnpm', 'run', 'typedoc-publish'])
       .stdout();
   }

@@ -52,7 +52,11 @@ jobs:
           version: "latest"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
-          args: ci --netlify-auth-token env://NETLIFY_TOKEN
+          # `--publish-docs` only from master. This pipeline runs on every push
+          # to every branch, and netlifyDeploy used to pass `--prod`
+          # unconditionally — so any feature branch republished the public docs
+          # and typedoc. Every other branch now gets a preview URL instead.
+          args: ci --netlify-auth-token env://NETLIFY_TOKEN ${{ github.ref == 'refs/heads/master' && '--publish-docs' || '' }}
       - name: Dagger docker images (build images & publish)
         if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
         uses: dagger/dagger-for-github@8.0.0
