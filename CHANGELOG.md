@@ -7,6 +7,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+### Fixed
+
+- A row edited until it no longer satisfies a filter now leaves that filter's results. Filtered queries are answered from a cached member list per watched query, and the whole-resource write path (`add_resource`, used by the browser's local database for every write it makes, and by imports) evicted the previous values' entries **against the new resource** — so it asked whether the new value still matched the filter, and a row edited out of the view answered no, skipping the one deletion that mattered. The row then stayed listed until the index was rebuilt, a reload included. It now evicts against the resource being replaced, the way commit application and recursive deletes already did. Commits were never affected, which is why this only ever showed up in the browser.
+
 ## [v0.41.0-beta.2] - 2026-07-31
 
 ### Security

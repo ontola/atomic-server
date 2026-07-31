@@ -194,28 +194,21 @@ configuration, not a renderer.
 
 - ~~The timer's day totals~~ and ~~aggregates over a derived column~~: closed by
   step 7 below — the store evaluates a computed column as it aggregates.
-- **No filter persists on a table created from a template.** Investigated
-  2026-07-31 after a computed-column filter failed to survive a reload; it turned
-  out not to be about computed columns at all. What the instrumentation showed, on
-  the Time tracker template's timer view:
-  - a filter on a *stored* column is lost the same way, so this is pre-existing —
-    the new computed-column e2e only surfaced it;
-  - the persist effect's gate passes (`hydratedFor === activeView`,
-    `canWrite === true`, non-empty filters), so it does reach its debounced write;
-  - after the debounce, **no resource in the store has `view-filters` set at all** —
-    not the timer view, not the table view, not a stray one;
-  - the write throws nothing (its `catch` used to swallow everything; it now logs,
-    and stayed quiet).
-  That leaves the write itself silently not happening. Prime suspect:
-  `ensureView()` returns `store.getResourceLoading(activeView)`, so the config is
-  set on a resource that may still be loading, and the `set` + `save` go nowhere.
-  `table-views-filters.spec.ts` passes because it builds its table by hand rather
-  than from a template, which is worth understanding before fixing — the
-  difference is the whole bug.
-  The computed-column e2e asserts only what works (narrowing, the unit, removal)
-  rather than asserting the bug.
+- ~~**No filter persists on a table created from a template.**~~ Not a bug. The
+  computed-column e2e that reported it was measuring the wrong readiness signal:
+  it waited for `pendingDirtyCount === 0`, which is *already* 0 in the window
+  between changing a filter and the 600ms debounce queueing the commit, so it
+  reloaded before the write existed and read the absence back as a lost filter.
+  Re-instrumented 2026-07-31 on the Time tracker template's timer view: the
+  persist effect fires, the View resource holds the constraint, and both a stored
+  and a computed filter survive a reload. The e2e now waits for the View to
+  actually hold the filter before waiting on the sync queue, and asserts the
+  reload — the same order `table-views-filters.spec.ts` already documented.
+  The lesson generalizes: **`pendingDirtyCount` says nothing about a write that
+  has not been queued yet.** Any test of debounced view config has to wait on the
+  resource, not the queue.
 - ~~**Filters on a computed column: the store can, the UI can't yet.**~~ Shipped
-  2026-07-31, apart from the persistence bug above. `Query` takes
+  2026-07-31. `Query` takes
   `expression_filters`, evaluated over the set the index narrows to, with paging
   and `count` computed after them (see step 8). What is missing is the UI and the
   view config: the table's filter machinery is keyed by property subject from end
@@ -236,15 +229,24 @@ configuration, not a renderer.
 - Column widths are a positional array on the table, shared by every view, so
   reordering columns swaps their widths and two views can't size the same column
   differently. Keying widths by column key would fix both.
-- **A filtered view keeps a row whose value stopped matching.** Found building
-  the Inventory template: with a "Quantity at most 3" view, raising a row's
-  quantity to 10 leaves it listed there — across a reload, so this is not the
-  in-memory collection. It is not the shared query logic either: at the
-  `atomic_lib` level (including a string filter value and a sort on the filtered
-  property, as the wire sends them) the row leaves the query correctly. That
-  points at how a browser edit reaches the index — the Loro commit path — and it
-  wants its own investigation. Rows filtered *before* the view is first opened
-  are correct, which is why nothing caught it until now.
+- ~~**A filtered view keeps a row whose value stopped matching.**~~ Fixed
+  2026-07-31. Found building the Inventory template: with a "Quantity at most 3"
+  view, restocking a row left it listed there across a reload. The suspicion that
+  it was the Loro commit path was wrong — that path is right by construction,
+  because it is handed both the old and the new resource. The culprit was
+  `Db::add_resource_opts`, which is the *other* write path: given only the new
+  resource, it evicted the old values' index entries **against the new resource**.
+  `should_update_property` therefore asked whether the new value still matches the
+  filter, a restocked row answered no, and the one entry that needed deleting was
+  the one deletion was skipped for. It now rebuilds the old resource from the
+  stored propvals (as `recursive_remove` already did) and evicts against that.
+  Why only the browser saw it: the server applies commits, while the browser's
+  local database writes whole resources (`putResource` → `add_resource_opts`),
+  and a filtered view is answered from that database's cached member list.
+  So a scratch test at the `atomic_lib` level passed — it was exercising the
+  commit path. Guarded by `lib/tests/query_index_eviction.rs` (leaving a filter,
+  entering one, and an unrelated edit that must not evict) plus the Inventory
+  e2e, which fails against a wasm build without the fix.
 - Computed columns are blank on the row you are typing into. The trailing row is
   a local draft whose cells stay mounted as the draft's after it saves, so a
   duration or a next-due date only appears once the row is rendered as a saved

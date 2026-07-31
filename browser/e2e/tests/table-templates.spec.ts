@@ -226,5 +226,21 @@ test.describe('table templates', () => {
     ).toBeVisible();
     await expect(row(page, 'Bolts')).toBeVisible({ timeout: 15_000 });
     await expect(row(page, 'Crates')).toHaveCount(0);
+
+    // Restocking a low-stock item has to take it out of this view. The local
+    // database answers a filtered view from its cached member list, so an edit
+    // that ends a row's membership must delete that row's entry — otherwise the
+    // row stays listed here for as long as the cache does, a reload included.
+    await page.getByRole('tab', { name: 'Stock', exact: true }).click();
+    await expect(page.getByRole('grid')).toBeVisible();
+    await setCell(page, 2, 4, '40', { replace: true });
+    await reloadGrid(page);
+
+    await page.getByRole('tab', { name: 'Low stock' }).click();
+    await expect(
+      page.getByRole('button', { name: /Quantity at most 3/ }),
+    ).toBeVisible();
+    await expect(row(page, 'Bolts')).toHaveCount(0, { timeout: 15_000 });
+    await expect(row(page, 'Crates')).toHaveCount(0);
   });
 });

@@ -2668,9 +2668,18 @@ impl Storelike for Db {
 
             if let Some(pv) = existing {
                 let subject = resource.get_subject();
+                // Evict against the state that is going away, not the one
+                // replacing it. Whether an entry belongs in a watched query's
+                // member list — and under which sort key it was filed — are
+                // facts about the old values. Handing over the new resource
+                // asks instead whether the *new* values still match, and a row
+                // edited out of a filtered view answers no, so the entry that
+                // needs deleting is the one deletion is skipped for. The row
+                // then stays listed in that view until the index is rebuilt.
+                let old = Resource::from_propvals(pv.clone(), subject.clone());
                 for (prop, val) in pv.iter() {
                     let remove_atom = crate::Atom::new(subject.clone(), prop.into(), val.clone());
-                    self.remove_atom_from_index(&remove_atom, resource, &mut transaction)
+                    self.remove_atom_from_index(&remove_atom, &old, &mut transaction)
                         .map_err(|e| {
                             format!("Failed to remove atom from index {}. {}", remove_atom, e)
                         })?;

@@ -369,11 +369,13 @@ least urgent and the only new drawing code.
 - Malformed stored config is dropped, never thrown on: a person or an LLM can
   write it, and one bad block must not take a page down.
 
-**Two bugs to know about before you lean on filtered queries**, both in
-[[table-templates-and-mini-apps]]'s gaps: no filter persists on a table created
-from a template, and a row whose value stops matching a filter can stay in a
-view's results. A dashboard leans on filtered queries much harder than a table
-does, so fix them first — that is the sequencing decision made on 2026-07-31.
+**Filtered queries are safe to lean on.** The two bugs that were meant to block
+this work (recorded 2026-07-31 in [[table-templates-and-mini-apps]]'s gaps) are
+both closed. One was real — a whole-resource write evicted stale query-index
+entries against the new resource, so a row edited out of a filter stayed in it;
+one was a test measuring `pendingDirtyCount` instead of the resource it was
+waiting on. Both entries there explain themselves; nothing about them constrains
+the design below.
 
 ## Open questions
 
