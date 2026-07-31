@@ -29,6 +29,8 @@ export const dataBrowser = {
     selectProperty: 'https://atomicdata.dev/classes/SelectProperty',
     table: 'https://atomicdata.dev/classes/Table',
     view: 'https://atomicdata.dev/classes/View',
+    dashboard: 'https://atomicdata.dev/classes/Dashboard',
+    block: 'https://atomicdata.dev/classes/Block',
     tag: 'https://atomicdata.dev/classes/Tag',
     template: 'https://atomicdata.dev/ontology/data-browser/class/template',
     documentV2: 'https://atomicdata.dev/classes/DocumentV2',
@@ -93,6 +95,14 @@ export const dataBrowser = {
     viewGroupByColumn: 'https://atomicdata.dev/properties/view-group-by-column',
     viewGroupGranularity:
       'https://atomicdata.dev/properties/view-group-granularity',
+    dashboardBlocks: 'https://atomicdata.dev/properties/dashboard-blocks',
+    dashboardLayout: 'https://atomicdata.dev/properties/dashboard-layout',
+    blockKind: 'https://atomicdata.dev/properties/block-kind',
+    blockSource: 'https://atomicdata.dev/properties/block-source',
+    blockView: 'https://atomicdata.dev/properties/block-view',
+    blockQuery: 'https://atomicdata.dev/properties/block-query',
+    blockAggregate: 'https://atomicdata.dev/properties/block-aggregate',
+    blockChartSpec: 'https://atomicdata.dev/properties/block-chart-spec',
     tags: 'https://atomicdata.dev/properties/tags',
     tagList: 'https://atomicdata.dev/ontology/data-browser/property/tag-list',
     url: 'https://atomicdata.dev/property/url',
@@ -190,6 +200,21 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/view-aggregates',
       'https://atomicdata.dev/properties/view-group-by-column',
       'https://atomicdata.dev/properties/view-group-granularity',
+    ],
+    ['https://atomicdata.dev/classes/Dashboard']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/dashboard-blocks',
+      'https://atomicdata.dev/properties/dashboard-layout',
+    ],
+    ['https://atomicdata.dev/classes/Block']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/block-kind',
+      'https://atomicdata.dev/properties/block-source',
+      'https://atomicdata.dev/properties/block-view',
+      'https://atomicdata.dev/properties/block-query',
+      'https://atomicdata.dev/properties/block-aggregate',
+      'https://atomicdata.dev/properties/block-chart-spec',
+      'https://atomicdata.dev/properties/description',
     ],
     ['https://atomicdata.dev/classes/Tag']: [
       'https://atomicdata.dev/properties/shortname',
@@ -383,6 +408,25 @@ declare module '../index.js' {
         | typeof dataBrowser.properties.viewGroupByColumn
         | typeof dataBrowser.properties.viewGroupGranularity;
     };
+    [dataBrowser.classes.dashboard]: {
+      requires: BaseProps | 'https://atomicdata.dev/properties/name';
+      recommends:
+        | typeof dataBrowser.properties.dashboardBlocks
+        | typeof dataBrowser.properties.dashboardLayout;
+    };
+    [dataBrowser.classes.block]: {
+      requires:
+        | BaseProps
+        | 'https://atomicdata.dev/properties/name'
+        | typeof dataBrowser.properties.blockKind;
+      recommends:
+        | typeof dataBrowser.properties.blockSource
+        | typeof dataBrowser.properties.blockView
+        | typeof dataBrowser.properties.blockQuery
+        | typeof dataBrowser.properties.blockAggregate
+        | typeof dataBrowser.properties.blockChartSpec
+        | 'https://atomicdata.dev/properties/description';
+    };
     [dataBrowser.classes.tag]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/shortname';
       recommends:
@@ -479,6 +523,36 @@ declare module '../index.js' {
     }>;
     [dataBrowser.properties.viewGroupByColumn]: string;
     [dataBrowser.properties.viewGroupGranularity]: string;
+    [dataBrowser.properties.dashboardBlocks]: string[];
+    [dataBrowser.properties.dashboardLayout]: Array<{
+      subject?: string;
+      x?: number;
+      y?: number;
+      w?: number;
+      h?: number;
+    }>;
+    [dataBrowser.properties.blockKind]: string;
+    [dataBrowser.properties.blockSource]: string;
+    [dataBrowser.properties.blockView]: string;
+    [dataBrowser.properties.blockQuery]: Array<{
+      property?: string;
+      derived?: string;
+      operator?: string;
+      value?: string;
+    }>;
+    [dataBrowser.properties.blockAggregate]: {
+      function?: string;
+      property?: string;
+      derived?: string;
+    };
+    [dataBrowser.properties.blockChartSpec]: {
+      mark?: string;
+      field?: string;
+      granularity?: string;
+      encoding?: {
+        x?: { field?: string; granularity?: string; timeUnit?: string };
+      };
+    };
     [dataBrowser.properties.tags]: string[];
     [dataBrowser.properties.tagList]: string[];
     [dataBrowser.properties.url]: string;
@@ -536,6 +610,14 @@ declare module '../index.js' {
     [dataBrowser.properties.viewAggregates]: 'viewAggregates';
     [dataBrowser.properties.viewGroupByColumn]: 'viewGroupByColumn';
     [dataBrowser.properties.viewGroupGranularity]: 'viewGroupGranularity';
+    [dataBrowser.properties.dashboardBlocks]: 'dashboardBlocks';
+    [dataBrowser.properties.dashboardLayout]: 'dashboardLayout';
+    [dataBrowser.properties.blockKind]: 'blockKind';
+    [dataBrowser.properties.blockSource]: 'blockSource';
+    [dataBrowser.properties.blockView]: 'blockView';
+    [dataBrowser.properties.blockQuery]: 'blockQuery';
+    [dataBrowser.properties.blockAggregate]: 'blockAggregate';
+    [dataBrowser.properties.blockChartSpec]: 'blockChartSpec';
     [dataBrowser.properties.tags]: 'tags';
     [dataBrowser.properties.tagList]: 'tagList';
     [dataBrowser.properties.url]: 'url';

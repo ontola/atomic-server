@@ -29,8 +29,12 @@ type UseTableDataResult = {
 } & UseCollectionResult &
   UseTableViewResult;
 
-export function useTableData(resource: Resource): UseTableDataResult {
-  const tableView = useTableView(resource);
+export function useTableData(
+  resource: Resource,
+  /** Which view to show, when the caller decides rather than the URL. */
+  viewOverride?: string,
+): UseTableDataResult {
+  const tableView = useTableView(resource, viewOverride);
   const { filters, sorting } = tableView;
   const store = useStore();
 

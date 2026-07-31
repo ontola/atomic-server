@@ -1,0 +1,154 @@
+import { describe, expect, it } from 'vitest';
+import {
+  GRID_COLUMNS,
+  defaultSizeFor,
+  isBlockKind,
+  parseBlockAggregate,
+  parseBlockChartSpec,
+  parseLayout,
+  placementsFor,
+} from './dashboardBlocks';
+
+/**
+ * Every one of these functions reads configuration a person or an LLM wrote, so
+ * the contract under test is the same throughout: understand what fits, drop what
+ * doesn't, and never throw. One bad block must not take a page down.
+ */
+describe('block kinds', () => {
+  it('accepts the four kinds and nothing else', () => {
+    expect(isBlockKind('stat')).toBe(true);
+    expect(isBlockKind('chart')).toBe(true);
+    expect(isBlockKind('view')).toBe(true);
+    expect(isBlockKind('text')).toBe(true);
+    expect(isBlockKind('gauge')).toBe(false);
+    expect(isBlockKind(undefined)).toBe(false);
+    expect(isBlockKind(42)).toBe(false);
+  });
+
+  it('sizes a number smaller than a table', () => {
+    expect(defaultSizeFor('stat').w).toBeLessThan(defaultSizeFor('view').w);
+    expect(defaultSizeFor('view').w).toBe(GRID_COLUMNS);
+  });
+});
+
+describe('parseBlockAggregate', () => {
+  it('reads a function and a property', () => {
+    expect(
+      parseBlockAggregate({ function: 'sum', property: 'https://x/amount' }),
+    ).toEqual({ function: 'sum', property: 'https://x/amount' });
+  });
+
+  it('lets count stand alone, because counting rows needs no column', () => {
+    expect(parseBlockAggregate({ function: 'count' })).toEqual({
+      function: 'count',
+    });
+  });
+
+  it('drops a sum with nothing to sum', () => {
+    // Asking anyway would answer null, which reads as a broken statistic
+    // rather than as unfinished configuration.
+    expect(parseBlockAggregate({ function: 'sum' })).toBeUndefined();
+  });
+
+  it('reads a computed column as the target', () => {
+    expect(
+      parseBlockAggregate({ function: 'sum', derived: 'duration' }),
+    ).toEqual({ function: 'sum', derived: 'duration' });
+  });
+
+  it('drops an unknown function and any non-object', () => {
+    expect(
+      parseBlockAggregate({ function: 'median', property: 'x' }),
+    ).toBeUndefined();
+    expect(parseBlockAggregate('sum')).toBeUndefined();
+    expect(parseBlockAggregate([])).toBeUndefined();
+    expect(parseBlockAggregate(undefined)).toBeUndefined();
+  });
+});
+
+describe('parseBlockChartSpec', () => {
+  it('reads the flat shape a config dialog writes', () => {
+    expect(
+      parseBlockChartSpec({ field: 'https://x/category', granularity: 'day' }),
+    ).toEqual({
+      mark: 'bar',
+      field: 'https://x/category',
+      granularity: 'day',
+    });
+  });
+
+  it('reads the Vega-Lite shape an LLM writes', () => {
+    expect(
+      parseBlockChartSpec({
+        mark: 'bar',
+        encoding: { x: { field: 'https://x/date', granularity: 'month' } },
+      }),
+    ).toEqual({ mark: 'bar', field: 'https://x/date', granularity: 'month' });
+  });
+
+  it('accepts timeUnit as a spelling of the bucket, since Vega-Lite calls it that', () => {
+    expect(
+      parseBlockChartSpec({ encoding: { x: { field: 'f', timeUnit: 'day' } } }),
+    ).toEqual({ mark: 'bar', field: 'f', granularity: 'day' });
+  });
+
+  it('refuses a mark it cannot draw rather than drawing bars anyway', () => {
+    // Silently substituting bars for a requested line would misrepresent the
+    // stored spec.
+    expect(parseBlockChartSpec({ mark: 'line', field: 'f' })).toBeUndefined();
+  });
+
+  it('drops a bucket it does not know', () => {
+    expect(
+      parseBlockChartSpec({ field: 'f', granularity: 'fortnight' }),
+    ).toEqual({ mark: 'bar', field: 'f' });
+  });
+});
+
+describe('parseLayout', () => {
+  it('reads placements and rounds them onto the grid', () => {
+    expect(parseLayout([{ subject: 'a', x: 0.4, y: 1, w: 3.6, h: 2 }])).toEqual(
+      [{ subject: 'a', x: 0, y: 1, w: 4, h: 2 }],
+    );
+  });
+
+  it('clamps a placement that runs off the grid instead of dropping it', () => {
+    // Half a decision is still a decision; the grid can honour the part that
+    // fits.
+    expect(parseLayout([{ subject: 'a', x: 99, y: -5, w: 40, h: 0 }])).toEqual([
+      { subject: 'a', x: GRID_COLUMNS - 1, y: 0, w: GRID_COLUMNS, h: 1 },
+    ]);
+  });
+
+  it('drops entries that are not placements, and non-arrays entirely', () => {
+    expect(parseLayout([{ subject: 'a' }, 'nope'])).toEqual([]);
+    expect(parseLayout({ subject: 'a' })).toEqual([]);
+    expect(parseLayout(undefined)).toEqual([]);
+  });
+});
+
+describe('placementsFor', () => {
+  const blocks = [
+    { subject: 'a', kind: 'stat' as const },
+    { subject: 'b', kind: 'view' as const },
+  ];
+
+  it('uses a stored placement when there is one', () => {
+    const stored = [{ subject: 'a', x: 2, y: 3, w: 6, h: 1 }];
+
+    expect(placementsFor(blocks, stored)[0]).toEqual(stored[0]);
+  });
+
+  it('gives an unplaced block its kind default and lets it flow', () => {
+    // A block added without touching the layout must never be invisible, which
+    // is why the block order is the fallback rather than a requirement.
+    const [, view] = placementsFor(blocks, []);
+
+    expect(view.w).toBe(defaultSizeFor('view').w);
+    expect(view.x).toBeLessThan(0);
+  });
+
+  it('returns one placement per block, in block order', () => {
+    expect(placementsFor(blocks, []).map(p => p.subject)).toEqual(['a', 'b']);
+  });
+});

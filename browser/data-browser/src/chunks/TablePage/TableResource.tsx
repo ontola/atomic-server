@@ -64,11 +64,28 @@ import { TablePresenceContext, useTablePresence } from './TablePresence';
 
 interface TableResourceProps {
   resource: Resource<DataBrowser.Table>;
+  /**
+   * Which view to render. Defaults to the `?view=` search param, then the
+   * table's own default — which is what its own page wants, and what an
+   * embedded copy cannot use, since one param can't address several tables.
+   */
+  viewSubject?: string;
+  /**
+   * Rendered inside something else, e.g. a dashboard block. The view tab bar and
+   * the filter bar are the table page's own chrome: the tabs would rewrite the
+   * host page's `?view=`, and an embedded block's filters are its configuration
+   * rather than something to fiddle with in place.
+   */
+  embedded?: boolean;
 }
 
 const columnToKey = (column: TableColumn) => column.key;
 
-export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
+export const TableResource: React.FC<TableResourceProps> = ({
+  resource,
+  viewSubject,
+  embedded,
+}) => {
   const store = useStore();
   const titleId = useId();
   const canWrite = useCanWrite(resource);
@@ -118,7 +135,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     setViewGroupGranularity,
     queryFilters,
     queryExpressionFilters,
-  } = useTableData(resource);
+  } = useTableData(resource, viewSubject);
 
   const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
     tableClass,
@@ -943,33 +960,37 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   return (
     <TablePageContext value={tablePageContext}>
       <TablePresenceContext value={presenceValue}>
-        <TableViewTabs
-          views={views}
-          activeView={activeView}
-          setActiveView={setActiveView}
-          createView={createView}
-          setViewKind={setViewKind}
-          duplicateView={duplicateView}
-          deleteView={deleteView}
-          viewName={viewName}
-          renameView={renameView}
-          allColumns={allColumns}
-          columns={uniqueColumnProperties}
-          derivedColumns={derivedSpecs}
-          showColumn={showColumn}
-          hideColumn={hideColumn}
-          lockedColumns={lockedColumns}
-          lockedReason={lockedReason}
-          canWrite={canWrite}
-        />
+        {!embedded && (
+          <TableViewTabs
+            views={views}
+            activeView={activeView}
+            setActiveView={setActiveView}
+            createView={createView}
+            setViewKind={setViewKind}
+            duplicateView={duplicateView}
+            deleteView={deleteView}
+            viewName={viewName}
+            renameView={renameView}
+            allColumns={allColumns}
+            columns={uniqueColumnProperties}
+            derivedColumns={derivedSpecs}
+            showColumn={showColumn}
+            hideColumn={hideColumn}
+            lockedColumns={lockedColumns}
+            lockedReason={lockedReason}
+            canWrite={canWrite}
+          />
+        )}
         {/* Above the view switch, not inside the table branch: the filter
          * dropdown in the tab bar is offered for every view kind, so a kanban /
          * calendar / timer view could add a filter that then had nowhere to
          * render its chip — the filter silently did nothing. */}
-        <TableFilterBar
-          columns={uniqueColumnProperties}
-          derivedColumns={derivedSpecs}
-        />
+        {!embedded && (
+          <TableFilterBar
+            columns={uniqueColumnProperties}
+            derivedColumns={derivedSpecs}
+          />
+        )}
         {viewKind === 'kanban' ? (
           <KanbanView
             tableSubject={resource.subject}

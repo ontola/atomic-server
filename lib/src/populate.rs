@@ -296,6 +296,13 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
         .map_err(|e| format!("Failed to import table.json: {e}"))?;
     store
         .import(
+            include_str!("../defaults/dashboard.json"),
+            &ParseOpts::default(),
+        )
+        .await
+        .map_err(|e| format!("Failed to import dashboard.json: {e}"))?;
+    store
+        .import(
             include_str!("../defaults/ontologies.json"),
             &ParseOpts::default(),
         )

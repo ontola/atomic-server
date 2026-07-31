@@ -173,7 +173,15 @@ export interface UseTableViewResult {
  * is lazily created on the first change (writers only) — until then a table
  * behaves exactly as before.
  */
-export function useTableView(table: Resource): UseTableViewResult {
+export function useTableView(
+  table: Resource,
+  /**
+   * Which view to show, when the caller decides rather than the URL. A dashboard
+   * embeds a table per block, so `?view=` — one param for the whole page —
+   * cannot say which view each of them shows.
+   */
+  viewOverride?: string,
+): UseTableViewResult {
   const store = useStore();
   const canWrite = useCanWrite(table);
 
@@ -190,7 +198,11 @@ export function useTableView(table: Resource): UseTableViewResult {
   const activeViewParam = ShowRoute.useSearch({ select: s => s.view });
   const navigate = ShowRoute.useNavigate();
   const activeView =
-    activeViewParam ?? defaultViewSubject ?? views[0] ?? undefined;
+    viewOverride ??
+    activeViewParam ??
+    defaultViewSubject ??
+    views[0] ??
+    undefined;
   const view = useResource(activeView ?? unknownSubject);
 
   // Reactive reads of the View's persisted config.

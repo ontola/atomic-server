@@ -215,14 +215,21 @@ configuration, not a renderer.
   to end — the chips, the value input, `view-filters` — so a filter that names a
   computed column needs that key generalized to a target, plus a value input that
   asks for hours rather than milliseconds.
-- Configuring the Time tracker's "All entries" view in the template (a sort, the
-  Duration column, a preconfigured total) made `aggregates.spec.ts` thrash — it
-  went from 13s to a timeout, with an open dropdown detaching from the DOM
-  repeatedly, which smells like a render/refetch loop on view load. Reverting that
-  one view's config fixed it. The same fields on other templates' views are fine,
-  so something about *that* view (two views declaring the same computed column? the
-  timer's implicit-Duration merge?) is involved. Not diagnosed; the template
-  stays minimal and the day totals are proven by `timer.spec.ts` instead.
+- **`aggregates.spec.ts` is load-sensitive and currently fails on a well-used dev
+  store.** Two sightings, probably the same cause. First: configuring the Time
+  tracker's "All entries" view in the template (a sort, the Duration column, a
+  preconfigured total) made it thrash — 13s to a timeout, with an open dropdown
+  detaching from the DOM repeatedly. Reverting that view's config fixed it, and the
+  same fields on other templates' views are fine. Second, 2026-07-31: it fails
+  deterministically at the "add a second totals row" click ("element is not stable
+  … detached from the DOM") on a dev store that has accumulated tens of e2e runs,
+  while every other table/timer/template/dashboard spec passes. Verified not to be
+  a code regression by stashing an entire feature branch's worth of changes and
+  re-running: the failure set is identical with and without them. The shape fits
+  the totals footer re-rendering (it refreshes on every store event, debounced
+  500ms) landing on top of the click. Fixing it properly means the footer's menu
+  surviving a refresh, not a longer timeout. The day totals are proven by
+  `timer.spec.ts` meanwhile.
 - Aggregation has no per-aggregate filter ("sum of Amount **where** Status =
   Done"); a total follows the view's own filters instead.
 - Subtotals render under the grid, not as rows between groups inside it.

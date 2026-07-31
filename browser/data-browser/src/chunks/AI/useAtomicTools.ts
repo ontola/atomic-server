@@ -43,6 +43,15 @@ import {
   toCompact,
 } from './jsonAdCompact';
 import type { AIModelIdentifier } from './types';
+import {
+  buildDashboardFromSpec,
+  type DashboardBlockSpec,
+} from '../DashboardPage/createDashboardFromSpec';
+import {
+  configureBlock,
+  describeDashboard,
+  resolveBlock,
+} from '../DashboardPage/dashboardOps';
 
 export const TOOL_NAMES = {
   SEMANTIC_SEARCH: 'semantic_search',
@@ -65,6 +74,9 @@ export const TOOL_NAMES = {
   READ_SKILL: 'read_skill',
   READ_SKILL_REFERENCE: 'read_skill_reference',
   CREATE_SKILL: 'create_skill',
+  CREATE_DASHBOARD: 'create_dashboard',
+  DESCRIBE_DASHBOARD: 'describe_dashboard',
+  CONFIGURE_BLOCK: 'configure_block',
 } as const;
 
 /** One column of a table, in the compact vocabulary `create_table` uses. */
@@ -153,6 +165,64 @@ const filterSchema = z.object({
     .string()
     .describe(
       "The value to compare against. For a 'select' column use the option name.",
+    ),
+});
+
+/** What a dashboard block measures. */
+const measureSchema = z.object({
+  function: z
+    .enum(['count', 'sum', 'avg', 'min', 'max'])
+    .describe('The statistic to compute.'),
+  column: z
+    .string()
+    .optional()
+    .describe(
+      "The column to measure, by name. Omit with 'count' to count rows. A computed column of the block's view (e.g. 'Duration') works too.",
+    ),
+});
+
+/** How a chart block buckets its bars. */
+const chartBySchema = z.object({
+  column: z
+    .string()
+    .describe('The column whose values become the bars, by name.'),
+  bucket: z
+    .enum(['exact', 'day', 'month'])
+    .optional()
+    .describe(
+      "How a date/timestamp column is bucketed. Defaults to 'exact' (one bar per distinct value).",
+    ),
+});
+
+const blockSpecSchema = z.object({
+  kind: z
+    .enum(['stat', 'chart', 'view', 'text'])
+    .describe(
+      "'stat' is one number, 'chart' a number per bucket, 'view' an embedded editable table, 'text' a heading or note.",
+    ),
+  title: z.string().describe("The block's heading."),
+  table: z
+    .string()
+    .optional()
+    .describe(
+      "Subject of the table this block describes. Required for every kind except 'text'.",
+    ),
+  view: z
+    .string()
+    .optional()
+    .describe(
+      "A view of that table, by name. Its filters scope the block, so a number over a subset is a view plus a stat block rather than a filter restated here. A 'view' block renders it. Omit for every row.",
+    ),
+  measure: measureSchema
+    .optional()
+    .describe("What a 'stat' or 'chart' block measures."),
+  chartBy: chartBySchema.optional().describe("Required for a 'chart' block."),
+  text: z.string().optional().describe("A 'text' block's markdown body."),
+  width: z
+    .number()
+    .optional()
+    .describe(
+      'Width in twelfths of the grid (1-12). Defaults to 3 for a number, 6 for a chart, 12 for a table or text.',
     ),
 });
 
@@ -686,6 +756,27 @@ export function useAtomicMCPTools({
         },
         strict: true,
       }),
+      [TOOL_NAMES.DESCRIBE_DASHBOARD]: tool({
+        description:
+          "Read a dashboard's blocks and their configuration: each block's kind, title, source table, which view scopes it, what it measures and how it is bucketed. Use this before configure_block instead of guessing.",
+        inputSchema: z.object({
+          dashboard: z.string().describe('Subject (or #ref) of the dashboard.'),
+        }),
+        execute: async ({ dashboard: reference }) => {
+          try {
+            const dashboard = await store.getResource(expandSubject(reference));
+
+            if (dashboard.error) {
+              throw new Error(String(dashboard.error));
+            }
+
+            return shortenRefsDeep(await describeDashboard(store, dashboard));
+          } catch (err) {
+            return `Error describing dashboard: ${err}`;
+          }
+        },
+        strict: true,
+      }),
       [TOOL_NAMES.LIST_TABLE_TEMPLATES]: tool({
         description:
           'List the ready-made table templates. Start from one of these when it fits what the user asked for — then adapt it with add_table_columns and configure_view — rather than deriving the same schema from scratch.',
@@ -1100,6 +1191,96 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
             });
           } catch (err) {
             return `Error creating table from template: ${err}`;
+          }
+        },
+        strict: true,
+      }),
+      [TOOL_NAMES.CREATE_DASHBOARD]: tool({
+        description:
+          'Create a dashboard over existing tables in ONE call: its blocks and their layout. A dashboard is the overview a table cannot give — a few numbers, a chart, and the list itself. Blocks come in four kinds: "stat" (one number), "chart" (a number per bucket, drawn as bars), "view" (an embedded, editable table/board/calendar) and "text" (a heading or note). A stat or chart block borrows a view\'s filters, so "open issues" is a stat block pointing at the view that filters to open — call describe_table first to see which views exist. Blocks are laid out left to right in twelfths automatically.',
+        inputSchema: z.object({
+          name: z.string().describe('The display name of the dashboard.'),
+          parent: z
+            .string()
+            .optional()
+            .describe(
+              'Subject of the folder or drive to create it in. Defaults to the current drive.',
+            ),
+          blocks: z.array(blockSpecSchema).describe('The blocks, in order.'),
+        }),
+        execute: async ({ name, parent, blocks }) => {
+          try {
+            const result = await buildDashboardFromSpec(
+              store,
+              { name, blocks: blocks as DashboardBlockSpec[] },
+              { parent: parent ? expandSubject(parent) : drive },
+            );
+
+            return shortenRefsDeep({
+              dashboard: result.dashboardSubject,
+              blocks: result.blocks,
+              ...(result.warnings.length > 0
+                ? { warnings: result.warnings }
+                : {}),
+            });
+          } catch (err) {
+            return `Error creating dashboard: ${err}`;
+          }
+        },
+        strict: true,
+      }),
+      [TOOL_NAMES.CONFIGURE_BLOCK]: tool({
+        description:
+          'Change one block of a dashboard in place. Only the fields you pass are touched, so setting a width cannot drop what the block measures. Read the current state with describe_dashboard first.',
+        inputSchema: z.object({
+          dashboard: z.string().describe('Subject (or #ref) of the dashboard.'),
+          block: z
+            .string()
+            .describe('The block to change, by title or subject.'),
+          title: z.string().optional().describe('Rename the block.'),
+          table: z
+            .string()
+            .optional()
+            .describe('Point it at a different table (subject).'),
+          view: z
+            .string()
+            .optional()
+            .describe(
+              'A view of that table, by name — its filters scope the block.',
+            ),
+          measure: measureSchema.optional(),
+          chartBy: chartBySchema.optional(),
+          text: z
+            .string()
+            .optional()
+            .describe('For text blocks: the markdown body.'),
+          width: z
+            .number()
+            .optional()
+            .describe('Width in twelfths of the grid (1-12).'),
+        }),
+        execute: async ({
+          dashboard: reference,
+          block: blockRef,
+          ...patch
+        }) => {
+          try {
+            const dashboard = await store.getResource(expandSubject(reference));
+
+            if (dashboard.error) {
+              throw new Error(String(dashboard.error));
+            }
+
+            const block = await resolveBlock(store, dashboard, blockRef);
+            await configureBlock(store, dashboard, block, patch);
+
+            return shortenRefsDeep(
+              (await describeDashboard(store, dashboard)).blocks.find(
+                described => described.subject === block.subject,
+              ),
+            );
+          } catch (err) {
+            return `Error configuring block: ${err}`;
           }
         },
         strict: true,

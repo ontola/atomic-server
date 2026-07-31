@@ -1,8 +1,12 @@
 # Dashboards: user- and LLM-composable views over data
 
-> Status: **Proposal (2026-07-15)**, with its analytics half already built
-> (2026-07-30). Builds on the Table View pattern ([[table-view-filters]]) and the
-> `create_table` LLM-authoring precedent.
+> Status: **First slice shipped (2026-07-31)** — the `Dashboard`/`Block` ontology,
+> a grid renderer, all four v1 block kinds (stat, chart, view, text), the block
+> config UI, and `create_dashboard` / `describe_dashboard` / `configure_block`.
+> Its analytics half was already built (2026-07-30). Builds on the Table View
+> pattern ([[table-view-filters]]) and the `create_table` LLM-authoring precedent.
+> What is *not* built is interactivity — see that section, which is now the next
+> slice and is mostly table work.
 >
 > The aggregation engine this plan specified shipped for table totals instead —
 > see step 4 of [[table-templates-and-mini-apps]]. It landed as designed here (an
@@ -134,9 +138,10 @@ A stat block is therefore a `CollectionBuilder` call with `setAggregation` — s
 `useTableAggregates.ts`, which does exactly that (one row plus the numbers,
 re-read on save/delete). A chart block is the same call with a `group_by`.
 
-One caveat inherited from that work: aggregates read **stored** properties, so a
-computed column can't be summed. A dashboard over derived values (a total
-duration, qty × price) hits the same wall.
+That caveat is gone: step 7 of [[table-templates-and-mini-apps]] added
+`Aggregate.expression`, so a computed column *can* be summed. A stat block over a
+total duration or qty × price is `{function, derived}` naming a computed column of
+the block's view, which `toBlockAggregation` translates with `toExpression`.
 
 Consequences:
 
@@ -328,7 +333,65 @@ mostly not dashboard work: **one-tap create and a row action, built in the table
 A Time tracker dashboard — one Start/Stop button, today's total, today's entries —
 is the smallest thing that proves the whole idea, and it is one action away.
 
-### Handover: what to read, what exists, what to build
+### What the first slice actually shipped (2026-07-31)
+
+Built to the design above, with the deviations noted.
+
+- **Ontology** (`lib/defaults/dashboard.json`, seeded by `populate.rs` and by the
+  browser's `bootstrap.ts`): `Dashboard` (`dashboard-blocks`, `dashboard-layout`)
+  and `Block` (`block-kind`, `block-source`, `block-view`, `block-query`,
+  `block-aggregate`, `block-chart-spec`; a text block's body is `description`).
+  **Open question 1 is answered: one `Block` class with a `block-kind` string**,
+  the same shape `View` uses — a new kind is then a renderer and a label rather
+  than an ontology change, and an unknown kind renders as a labelled placeholder
+  instead of breaking the page.
+- **`block-view` is new and load-bearing.** A stat or chart block *borrows* a
+  View's filters and computed columns rather than restating them, so "open issues"
+  is the open-issues view plus a count. That is why `block-query` (extra
+  constraints ANDed on top) is honoured by `useBlockQuery` but written by neither
+  the UI nor the tool yet: a capability lands with both or neither, and pointing at
+  a view covered every case the template survey wanted.
+- **Renderer**: `chunks/DashboardPage/`, lazily chunked and dispatched from
+  `ResourcePage.tsx`. A 12-column CSS grid, collapsing to one column under 50rem.
+  A block with no stored placement gets a per-kind default size and flows, so a
+  block an assistant added without writing a layout is never invisible.
+- **Blocks**: `stat` (the table's own `useTableAggregates` — one implementation of
+  "a number over a filtered set", not two), `chart`, `view` (the real
+  `TableResource`, editable), `text` (markdown).
+- **Chart**: horizontal bars, drawn with a CSS grid rather than a chart library.
+  Horizontal because bucket labels are category names, dates and tag names, which
+  read at any width. The *spec* is Vega-Lite-shaped and parsed from either the flat
+  form a dialog writes or the `encoding.x` form an LLM writes, so a real Vega
+  renderer stays a drop-in. A mark other than `bar` is rejected rather than drawn
+  as bars.
+- **Embedding a table needed one change to it**: `TableResource` grew
+  `viewSubject` (which view to render) and `embedded` (drop the view tabs and
+  filter bar). Both were unavoidable — the active view lives in `?view=`, one
+  param for the whole page, and a dashboard has a view per block.
+- **Authoring, both halves**: `create_dashboard` (blocks + auto-layout in one
+  call, resolving column and view *names*), `describe_dashboard`, `configure_block`
+  (touches only the fields it is given, like `configure_view`), and the
+  `BlockConfigDialog` behind each block's ⋯ menu, which can change everything the
+  tool can write. A block created from the Add menu opens its dialog immediately.
+- **A dashboard is creatable from the New-resource palette** and has an icon.
+
+Two traps found by building it, both worth knowing:
+
+- **A plain object written with `set(prop, value, false)` is stored as a JSON
+  *string*.** `loroSetProperty` gives arrays native `LoroList`s but
+  `JSON.stringify`s objects, and the read path only parses them back when the
+  Loro `datatypes` tag says `json` — a tag that is only written when the Property
+  is loaded in the store, which is exactly what `false` skips. `block-aggregate`
+  silently round-tripped as a string until this was found. Every JSON-datatype
+  write here therefore validates (no `false`), **and** the parsers accept a string
+  as well as an object. This generalises beyond dashboards: the existing
+  `view-*` JSON config gets away with `false` only because it is all arrays.
+- **A config dialog must not drop config it cannot offer.** The breakdown rule
+  deliberately keeps free-text columns out of "group by"; a chart already grouped
+  by one showed an empty picker, and saving would have destroyed it. Stored values
+  are now appended to the offered list.
+
+### Handover: what to read, what to build next
 
 Written 2026-07-31 so this can be picked up cold.
 
@@ -350,10 +413,24 @@ a UI to a tool, since a dashboard block repeats that path exactly.
 | A new page for a class | dispatch in `views/ResourcePage.tsx`, like `TablePage` |
 | The tool surface | `chunks/AI/useAtomicTools.ts` + the skill in `chunks/AI/skills/tables/` |
 
-**Order of work.** Ontology (`Dashboard`, `Block`) → `DashboardPage` rendering a
-CSS grid from `layout` → the view block (free: embed the table) → the stat block →
-`create_dashboard` → the block-config UI → the bar chart last, since it is the
-least urgent and the only new drawing code.
+**Order of work.** ~~Ontology → `DashboardPage` → view block → stat block →
+`create_dashboard` → block-config UI → bar chart~~ — all shipped; see the section
+above. What is left, in order:
+
+1. **Row actions and one-tap create, in the table** (see Interactivity). This is
+   the slice that makes a dashboard an app rather than a report, and it belongs in
+   the table first, where it also deletes the timer's last bespoke code. Then
+   offer them as block kinds.
+2. **The three filter gaps** the template survey kept hitting, none of them
+   dashboard features: relative date windows (`today`, `this month`,
+   `last 7 days`), week/quarter buckets, and "this field is empty".
+3. **Parameters** — one control narrowing several blocks. Needs shared dashboard
+   state; open question 6 is still open.
+4. **Drag-and-drop layout.** The grid already reads `{x, y, w, h}`; only width and
+   reordering are exposed, via the block menu (keyboard-reachable, which
+   drag-and-drop alone would not be).
+5. **A dashboard per template** — and whether it is generated or shipped
+   (open question 7).
 
 **Constraints that are not negotiable** (each one was learned the hard way):
 
@@ -368,21 +445,28 @@ least urgent and the only new drawing code.
   enters a query, or the query re-runs on every render.
 - Malformed stored config is dropped, never thrown on: a person or an LLM can
   write it, and one bad block must not take a page down.
+- A JSON-datatype write must let `set` validate, and its parser must accept a
+  string as well as an object — see the two traps above.
+- A config UI must keep whatever is already stored in its option lists, even when
+  it would not offer that choice itself.
 
 **Filtered queries are safe to lean on.** The two bugs that were meant to block
 this work (recorded 2026-07-31 in [[table-templates-and-mini-apps]]'s gaps) are
 both closed. One was real — a whole-resource write evicted stale query-index
 entries against the new resource, so a row edited out of a filter stayed in it;
 one was a test measuring `pendingDirtyCount` instead of the resource it was
-waiting on. Both entries there explain themselves; nothing about them constrains
-the design below.
+waiting on. Both entries there explain themselves; neither constrains this design.
 
 ## Open questions
 
-1. One `Block` class with `block-kind`, or a class per kind? (`View` uses a
-   kind string; per-kind classes give better schema validation for the LLM.)
-2. Exact Vega-Lite subset: which marks/encodings in v1, and how to validate
-   (zod schema in the tool + renderer-side clamp).
+1. ~~One `Block` class with `block-kind`, or a class per kind?~~ Answered by
+   building it: one class with a kind string, like `View`. A new kind is then a
+   renderer plus a label, and an unknown kind degrades to a labelled placeholder.
+2. Exact Vega-Lite subset: v1 accepts `mark: 'bar'` plus an x field and a
+   day/month/exact bucket, in either the flat or the `encoding.x` spelling, and
+   rejects any other mark. Still open: which marks come next (line for a time
+   series is the obvious one), and whether the tool should carry a zod schema for
+   the spec rather than the flattened `chartBy` it takes today.
 3. ~~Aggregate clause shape: one `group_by` level or nested? How do date
    bucketing and select-property buckets encode in the `aggregate` JSON?~~
    Answered by the built engine: one `group_by` level, a `granularity` of

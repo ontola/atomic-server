@@ -7,6 +7,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+### Added
+
+- `Dashboard` and `Block` classes in the default store, with `dashboard-blocks` / `dashboard-layout` and `block-kind` / `block-source` / `block-view` / `block-query` / `block-aggregate` / `block-chart-spec`. One `Block` class carrying a kind string, the way `View` does, so a new block kind needs no ontology change. This is the schema behind the browser's new dashboards; the numbers themselves come from the aggregation engine already in `Query`.
+
 ### Fixed
 
 - A row edited until it no longer satisfies a filter now leaves that filter's results. Filtered queries are answered from a cached member list per watched query, and the whole-resource write path (`add_resource`, used by the browser's local database for every write it makes, and by imports) evicted the previous values' entries **against the new resource** — so it asked whether the new value still matched the filter, and a row edited out of the view answered no, skipping the one deletion that mattered. The row then stayed listed until the index was rebuilt, a reload included. The same mistake also listed a row **twice** when an edit kept it in the view but changed its sort value: the entry was filed under the old key and deleted under the new one, so the stale entry survived alongside the fresh one. It now evicts against the resource being replaced, the way commit application and recursive deletes already did. Commits were never affected, which is why this only ever showed up in the browser.

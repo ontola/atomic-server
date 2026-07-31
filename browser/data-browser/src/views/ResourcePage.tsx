@@ -46,6 +46,10 @@ const TablePage = lazy(() =>
   import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
 );
 
+const DashboardPage = lazy(() =>
+  import('../chunks/DashboardPage').then(m => ({ default: m.DashboardPage })),
+);
+
 /** These properties are passed to every View at Page level */
 export type ResourcePageProps<Subject extends OptionalClass = never> = {
   resource: Resource<Subject>;
@@ -212,6 +216,8 @@ function selectComponent(klass: string | undefined) {
       return ArticlePage;
     case dataBrowser.classes.table:
       return TablePage;
+    case dataBrowser.classes.dashboard:
+      return DashboardPage;
     case core.classes.ontology:
       return OntologyPage;
     case dataBrowser.classes.tag:
