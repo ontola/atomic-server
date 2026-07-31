@@ -19,6 +19,7 @@ export const collections = {
     value: 'https://atomicdata.dev/properties/collection/value',
     sortBy: 'https://atomicdata.dev/properties/collection/sortBy',
     sortDesc: 'https://atomicdata.dev/properties/collection/sortDesc',
+    aggregates: 'https://atomicdata.dev/properties/collection/aggregates',
     includeExternal:
       'https://atomicdata.dev/properties/collection/includeExternal',
   },
@@ -34,6 +35,7 @@ export const collections = {
       'https://atomicdata.dev/properties/collection/sortDesc',
       'https://atomicdata.dev/properties/collection/totalMembers',
       'https://atomicdata.dev/properties/collection/totalPages',
+      'https://atomicdata.dev/properties/collection/aggregates',
       'https://atomicdata.dev/properties/collection/value',
       'https://atomicdata.dev/properties/collection/includeExternal',
       'https://atomicdata.dev/properties/incomplete',
@@ -61,6 +63,7 @@ declare module '../index.js' {
         | typeof collections.properties.sortDesc
         | typeof collections.properties.totalMembers
         | typeof collections.properties.totalPages
+        | typeof collections.properties.aggregates
         | typeof collections.properties.value
         | typeof collections.properties.includeExternal
         | 'https://atomicdata.dev/properties/incomplete';
@@ -74,6 +77,17 @@ declare module '../index.js' {
     [collections.properties.property]: string;
     [collections.properties.totalMembers]: number;
     [collections.properties.totalPages]: number;
+    // `value` is declared without null: JSONValue has no null, and a statistic
+    // with nothing to compute is read through `AggregateOutcome` (collection.ts),
+    // which does model that case.
+    [collections.properties.aggregates]: Array<{
+      property?: string;
+      function?: string;
+      value?: number;
+      count?: number;
+      groups?: Array<{ key?: string; value?: number; count?: number }>;
+      groups_truncated?: boolean;
+    }>;
     [collections.properties.value]: string;
     [collections.properties.sortBy]: string;
     [collections.properties.sortDesc]: boolean;
@@ -87,6 +101,7 @@ declare module '../index.js' {
     [collections.properties.property]: 'property';
     [collections.properties.totalMembers]: 'totalMembers';
     [collections.properties.totalPages]: 'totalPages';
+    [collections.properties.aggregates]: 'aggregates';
     [collections.properties.value]: 'value';
     [collections.properties.sortBy]: 'sortBy';
     [collections.properties.sortDesc]: 'sortDesc';

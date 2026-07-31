@@ -81,8 +81,18 @@ export const dataBrowser = {
     viewSortDesc: 'https://atomicdata.dev/properties/view-sort-desc',
     viewColumns: 'https://atomicdata.dev/properties/view-columns',
     viewGroupBy: 'https://atomicdata.dev/properties/view-group-by',
+    viewEndProp: 'https://atomicdata.dev/properties/view-end-prop',
+    viewTimerExclusive:
+      'https://atomicdata.dev/properties/view-timer-exclusive',
     viewSplitLanguages:
       'https://atomicdata.dev/properties/view-split-languages',
+    viewDerivedColumns:
+      'https://atomicdata.dev/properties/view-derived-columns',
+    viewColumnOrder: 'https://atomicdata.dev/properties/view-column-order',
+    viewAggregates: 'https://atomicdata.dev/properties/view-aggregates',
+    viewGroupByColumn: 'https://atomicdata.dev/properties/view-group-by-column',
+    viewGroupGranularity:
+      'https://atomicdata.dev/properties/view-group-granularity',
     tags: 'https://atomicdata.dev/properties/tags',
     tagList: 'https://atomicdata.dev/ontology/data-browser/property/tag-list',
     url: 'https://atomicdata.dev/property/url',
@@ -172,7 +182,14 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/view-sort-desc',
       'https://atomicdata.dev/properties/view-columns',
       'https://atomicdata.dev/properties/view-group-by',
+      'https://atomicdata.dev/properties/view-end-prop',
+      'https://atomicdata.dev/properties/view-timer-exclusive',
       'https://atomicdata.dev/properties/view-split-languages',
+      'https://atomicdata.dev/properties/view-derived-columns',
+      'https://atomicdata.dev/properties/view-column-order',
+      'https://atomicdata.dev/properties/view-aggregates',
+      'https://atomicdata.dev/properties/view-group-by-column',
+      'https://atomicdata.dev/properties/view-group-granularity',
     ],
     ['https://atomicdata.dev/classes/Tag']: [
       'https://atomicdata.dev/properties/shortname',
@@ -357,7 +374,14 @@ declare module '../index.js' {
         | typeof dataBrowser.properties.viewSortDesc
         | typeof dataBrowser.properties.viewColumns
         | typeof dataBrowser.properties.viewGroupBy
-        | typeof dataBrowser.properties.viewSplitLanguages;
+        | typeof dataBrowser.properties.viewEndProp
+        | typeof dataBrowser.properties.viewTimerExclusive
+        | typeof dataBrowser.properties.viewSplitLanguages
+        | typeof dataBrowser.properties.viewDerivedColumns
+        | typeof dataBrowser.properties.viewColumnOrder
+        | typeof dataBrowser.properties.viewAggregates
+        | typeof dataBrowser.properties.viewGroupByColumn
+        | typeof dataBrowser.properties.viewGroupGranularity;
     };
     [dataBrowser.classes.tag]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/shortname';
@@ -437,7 +461,24 @@ declare module '../index.js' {
     [dataBrowser.properties.viewSortDesc]: boolean;
     [dataBrowser.properties.viewColumns]: string[];
     [dataBrowser.properties.viewGroupBy]: string;
+    [dataBrowser.properties.viewEndProp]: string;
+    [dataBrowser.properties.viewTimerExclusive]: boolean;
     [dataBrowser.properties.viewSplitLanguages]: string[];
+    [dataBrowser.properties.viewDerivedColumns]: Array<{
+      id?: string;
+      label?: string;
+      kind?: string;
+      args?: Record<string, string | number>;
+      width?: number;
+    }>;
+    [dataBrowser.properties.viewColumnOrder]: string[];
+    [dataBrowser.properties.viewAggregates]: Array<{
+      id?: string;
+      property?: string;
+      function?: string;
+    }>;
+    [dataBrowser.properties.viewGroupByColumn]: string;
+    [dataBrowser.properties.viewGroupGranularity]: string;
     [dataBrowser.properties.tags]: string[];
     [dataBrowser.properties.tagList]: string[];
     [dataBrowser.properties.url]: string;
@@ -487,7 +528,14 @@ declare module '../index.js' {
     [dataBrowser.properties.viewSortDesc]: 'viewSortDesc';
     [dataBrowser.properties.viewColumns]: 'viewColumns';
     [dataBrowser.properties.viewGroupBy]: 'viewGroupBy';
+    [dataBrowser.properties.viewEndProp]: 'viewEndProp';
+    [dataBrowser.properties.viewTimerExclusive]: 'viewTimerExclusive';
     [dataBrowser.properties.viewSplitLanguages]: 'viewSplitLanguages';
+    [dataBrowser.properties.viewDerivedColumns]: 'viewDerivedColumns';
+    [dataBrowser.properties.viewColumnOrder]: 'viewColumnOrder';
+    [dataBrowser.properties.viewAggregates]: 'viewAggregates';
+    [dataBrowser.properties.viewGroupByColumn]: 'viewGroupByColumn';
+    [dataBrowser.properties.viewGroupGranularity]: 'viewGroupGranularity';
     [dataBrowser.properties.tags]: 'tags';
     [dataBrowser.properties.tagList]: 'tagList';
     [dataBrowser.properties.url]: 'url';

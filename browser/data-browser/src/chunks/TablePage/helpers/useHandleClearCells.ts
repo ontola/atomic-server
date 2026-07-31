@@ -34,16 +34,23 @@ export function useHandleClearCells(
         // LocalizedText property is a read-modify-write on one map — parallel
         // writes would race and resurrect cleared languages.
         for (const col of cols) {
+          // Virtual columns (a duration, a row action) hold no stored value.
+          if (!col.property) {
+            continue;
+          }
+
+          const property = col.property;
+
           historyItemBatch.push(
-            createValueChangedHistoryItem(res, col.property.subject),
+            createValueChangedHistoryItem(res, property.subject),
           );
 
           if (
             col.languageTag !== undefined &&
-            col.property.datatype === Datatype.LOCALIZEDTEXT
+            property.datatype === Datatype.LOCALIZEDTEXT
           ) {
             // Clear only this column's language; other languages stay.
-            const existing = res.get(col.property.subject);
+            const existing = res.get(property.subject);
             const map =
               existing &&
               typeof existing === 'object' &&
@@ -52,12 +59,12 @@ export function useHandleClearCells(
                 : {};
             delete map[col.languageTag];
             await res.set(
-              col.property.subject,
+              property.subject,
               Object.keys(map).length > 0 ? map : undefined,
               false,
             );
           } else {
-            await res.set(col.property.subject, undefined, false);
+            await res.set(property.subject, undefined, false);
           }
         }
 

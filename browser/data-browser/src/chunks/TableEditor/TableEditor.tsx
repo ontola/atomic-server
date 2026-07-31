@@ -71,6 +71,15 @@ interface FancyTableProps<T> {
   itemKey?: (index: number) => string;
   HeadingComponent: TableHeadingComponent<T>;
   NewColumnButtonComponent: React.ComponentType;
+  /**
+   * Rendered as a row under the last row, aligned to the columns. The list
+   * scrolls inside its own box, so this stays in view while the rows move —
+   * and scrolls sideways with them, keeping each cell under its column.
+   *
+   * It is handed the same columns the grid renders, so the two can't disagree
+   * about how many cells a row has.
+   */
+  FooterComponent?: React.ComponentType<{ columns: T[] }>;
   ref?: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -116,6 +125,7 @@ function FancyTableInner<T>({
   onSelectedCellChange,
   HeadingComponent,
   NewColumnButtonComponent,
+  FooterComponent,
 }: FancyTableProps<T>): JSX.Element {
   const ariaUsageId = useId();
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -330,6 +340,11 @@ function FancyTableInner<T>({
             <AutoSizeTamer role='rowgroup'>
               <AutoSizer renderProp={renderList} />
             </AutoSizeTamer>
+            {FooterComponent && (
+              <FooterWrapper role='rowgroup'>
+                <FooterComponent columns={columns} />
+              </FooterWrapper>
+            )}
             <ActiveCellIndicator
               sizeStr={templateColumns}
               scrollerRef={scrollerRef}
@@ -393,6 +408,14 @@ const PercentageInsanityFix = styled.div`
 const StyledList = styled(List)`
   overflow-x: hidden !important;
   overflow-y: auto !important;
+`;
+
+/** Under the rows, above the horizontal scrollbar, always in view. */
+const FooterWrapper = styled.div`
+  position: relative;
+  z-index: 9;
+  background-color: ${p => p.theme.colors.bgBody};
+  border-top: 1px solid ${p => p.theme.colors.bg2};
 `;
 
 const AutoSizeTamer = styled.div`

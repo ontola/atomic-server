@@ -90,6 +90,7 @@ export const ResourceSelector = memo(function ResourceSelector({
   allowsOnly,
   id,
   onBlur,
+  autoFocus,
 }: ResourceSelectorProps): JSX.Element {
   const store = useStore();
   const { inResourceForm } = useContext(ResourceFormContext);
@@ -179,6 +180,9 @@ export const ResourceSelector = memo(function ResourceSelector({
     <Wrapper first={first} last={last}>
       <StyledSearchBox
         prefix={prefix}
+        // Focusing the trigger also opens its dropdown, so an autofocused
+        // selector lands the caret straight in the search field.
+        autoFocus={autoFocus}
         value={value}
         isA={isA}
         required={required}

@@ -1,4 +1,9 @@
-import { Collection, CollectionParams, PropVal } from './collection.js';
+import {
+  Aggregation,
+  Collection,
+  CollectionParams,
+  PropVal,
+} from './collection.js';
 import { Store } from './store.js';
 
 export class CollectionBuilder {
@@ -79,6 +84,17 @@ export class CollectionBuilder {
 
   public setDrive(drive: string): CollectionBuilder {
     this.params.drive = drive;
+
+    return this;
+  }
+
+  /**
+   * Asks the store for statistics over every matching resource — a sum, a
+   * count, an average — optionally broken down per distinct value of a
+   * property. Read them back from `collection.aggregates`.
+   */
+  public setAggregation(aggregation: Aggregation): CollectionBuilder {
+    this.params.aggregation = aggregation;
 
     return this;
   }

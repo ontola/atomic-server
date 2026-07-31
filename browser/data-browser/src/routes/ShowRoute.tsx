@@ -9,6 +9,11 @@ import { pathNames } from './paths';
 
 export type ShowRouteSearch = {
   subject: string;
+  /**
+   * The active View of a Table, so switching tabs is linkable and lands in
+   * browser history. Absent = the table's default view.
+   */
+  view?: string;
 };
 
 export const ShowRoute = createRoute({
@@ -17,6 +22,7 @@ export const ShowRoute = createRoute({
   getParentRoute: () => appRoute,
   validateSearch: (search): ShowRouteSearch => ({
     subject: (search.subject as string) ?? '',
+    view: (search.view as string) || undefined,
   }),
 });
 

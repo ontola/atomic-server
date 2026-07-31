@@ -1,0 +1,100 @@
+import {
+  CollectionBuilder,
+  StoreEvents,
+  useStore,
+  type AggregateOutcome,
+  type Aggregation,
+  type PropVal,
+} from '@tomic/react';
+import { useEffect, useState } from 'react';
+
+/** How long to wait after the last edit before re-reading the totals. */
+const REFRESH_DEBOUNCE_MS = 500;
+
+/**
+ * The totals for a table's rows, kept up to date as the data changes.
+ *
+ * A separate query from the one that renders the rows, on purpose. Totals are
+ * computed over every matching row, so they have to be re-read whenever a value
+ * changes — and doing that by refreshing the row collection would clear its
+ * pages and churn the grid under the user's cursor. This asks for a single row
+ * and the numbers, which is the cheapest thing that can answer the question.
+ */
+export function useTableAggregates(opts: {
+  /** Which rows to aggregate: the same constraints the grid queries with. */
+  property: string;
+  value: string;
+  filters: PropVal[];
+  drive?: string;
+  server?: string;
+  /** Undefined when the view asks for no totals — then nothing is fetched. */
+  aggregation: Aggregation | undefined;
+}): AggregateOutcome[] {
+  const store = useStore();
+  const [outcomes, setOutcomes] = useState<AggregateOutcome[]>([]);
+
+  // Serialized deps: these are rebuilt every render, and the fetch must only
+  // re-run when the question actually changed.
+  const aggregationKey = JSON.stringify(opts.aggregation ?? null);
+  const filtersKey = JSON.stringify(opts.filters ?? []);
+  const { property, value, drive, server } = opts;
+
+  useEffect(() => {
+    const aggregation = JSON.parse(aggregationKey) as Aggregation | null;
+
+    if (!aggregation?.aggregates.length || !property || !value) {
+      setOutcomes([]);
+
+      return;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const read = async () => {
+      const builder = new CollectionBuilder(store, server);
+      builder.setProperty(property);
+      builder.setValue(value);
+      builder.setFilters(JSON.parse(filtersKey) as PropVal[]);
+      // One member is enough — the rows come from the grid's own query. The
+      // totals cover every matching row regardless of this page size.
+      builder.setPageSize(1);
+      builder.setAggregation(aggregation);
+
+      if (drive) {
+        builder.setDrive(drive);
+      }
+
+      const collection = await builder.buildAndFetch();
+
+      if (!cancelled) {
+        setOutcomes(collection.aggregates);
+      }
+    };
+
+    const refresh = () => {
+      clearTimeout(timer);
+      // Debounced: typing in a cell saves on every keystroke, and each save
+      // would otherwise be a round trip.
+      timer = setTimeout(() => {
+        void read().catch(() => undefined);
+      }, REFRESH_DEBOUNCE_MS);
+    };
+
+    void read().catch(() => undefined);
+
+    // Any save or delete can change a total — including one made in another
+    // tab, which arrives through the same events.
+    const offSaved = store.on(StoreEvents.ResourceSaved, refresh);
+    const offRemoved = store.on(StoreEvents.ResourceRemoved, refresh);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      offSaved();
+      offRemoved();
+    };
+  }, [store, property, value, filtersKey, aggregationKey, drive, server]);
+
+  return outcomes;
+}

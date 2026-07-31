@@ -53,6 +53,10 @@ export type UseCollectionOptions = {
   includeNested?: boolean;
 };
 
+/** Stable key for the aggregation config, used as a rebuild dep. */
+const aggregationKey = (aggregation: QueryFilter['aggregation']): string =>
+  aggregation?.aggregates.length ? JSON.stringify(aggregation) : '';
+
 /** Stable key for an array of extra AND filters, used as a memo/rebuild dep. */
 const filtersKey = (filters: QueryFilter['filters']): string =>
   filters && filters.length > 0 ? JSON.stringify(filters) : '';
@@ -60,7 +64,15 @@ const filtersKey = (filters: QueryFilter['filters']): string =>
 const buildCollection = (
   store: Store,
   server: string | undefined,
-  { property, value, filters, sort_by, sort_desc, drive }: QueryFilter,
+  {
+    property,
+    value,
+    filters,
+    sort_by,
+    sort_desc,
+    drive,
+    aggregation,
+  }: QueryFilter,
   pageSize?: number,
   includeNested?: boolean,
 ) => {
@@ -77,6 +89,7 @@ const buildCollection = (
   // caller provides one so the same query works offline, not only against the
   // server.
   if (drive) builder.setDrive(drive);
+  if (aggregation?.aggregates.length) builder.setAggregation(aggregation);
 
   return builder.build();
 };
@@ -142,7 +155,11 @@ export function useCollection(
       col.value !== queryFilterMemo.value ||
       filtersKey(col.filters) !== filtersKey(queryFilterMemo.filters) ||
       col.sortBy !== queryFilterMemo.sort_by ||
-      col.sortDesc !== !!queryFilterMemo.sort_desc
+      col.sortDesc !== !!queryFilterMemo.sort_desc ||
+      // Baked into the page subject the store answers, like sort — a changed
+      // aggregation needs a new collection, not a refresh.
+      aggregationKey(col.aggregation) !==
+        aggregationKey(queryFilterMemo.aggregation)
     ) {
       const built = buildCollection(
         store,
@@ -259,6 +276,7 @@ export function useCollection(
 
 function useQueryFilterMemo(queryFilter: QueryFilter) {
   const filtersDep = filtersKey(queryFilter.filters);
+  const aggregationDep = aggregationKey(queryFilter.aggregation);
 
   return useMemo(
     () => queryFilter,
@@ -270,6 +288,7 @@ function useQueryFilterMemo(queryFilter: QueryFilter) {
       queryFilter.sort_by,
       queryFilter.sort_desc,
       queryFilter.drive,
+      aggregationDep,
     ],
   );
 }

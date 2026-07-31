@@ -1,6 +1,15 @@
-import { Core, Datatype, Resource, useResource, useTitle } from '@tomic/react';
+import {
+  Core,
+  Datatype,
+  Resource,
+  unknownSubject,
+  useCanWrite,
+  useResource,
+  useTitle,
+} from '@tomic/react';
 import type { TableColumn } from './useTableColumns';
 import { ColumnLanguageChip } from './ColumnLanguageChip';
+import { DerivedColumnHeading } from './DerivedColumnHeading';
 
 import {
   FaAngleDown,
@@ -42,25 +51,66 @@ export const TableHeading: TableHeadingComponent<TableColumn> = ({
   const [hoverOrFocus, setHoverOrFocus] = useState(false);
   const menuRef = useRef<TableHeadingMenuHandle>(null);
 
-  const propResource = useResource(column.property.subject);
+  // Virtual columns have no property behind them, so `unknownSubject` keeps
+  // the hooks unconditional; the render bails out below.
+  const propResource = useResource(column.property?.subject ?? unknownSubject);
   const [title] = useTitle(propResource);
   const { setSortBy, sorting, tableClassSubject } =
     useContext(TablePageContext);
   const tableClass = useResource<Core.Class>(tableClassSubject);
+  const canWriteClass = useCanWrite(tableClass);
 
-  const isRequired = (tableClass.props.requires ?? []).includes(
-    column.property.subject,
-  );
+  const property = column.property;
+
+  const isRequired =
+    !!property && (tableClass.props.requires ?? []).includes(property.subject);
 
   const Icon = getIcon(
     propResource,
     sorting,
     hoverOrFocus,
-    column.property.datatype,
+    property?.datatype ?? Datatype.STRING,
   );
   const isSorted = sorting.prop === propResource.subject;
 
-  const text = `${title || column.property.shortname}${isRequired ? '*' : ''}`;
+  // A configured computed column — its label plus a menu to edit or remove the
+  // configuration behind it.
+  if (!property && column.derived) {
+    return (
+      <DerivedColumnHeading
+        spec={column.derived}
+        readOnly={!canWriteClass}
+        dragListeners={dragListeners}
+        dragAttributes={dragAttributes}
+      />
+    );
+  }
+
+  // A column the view owns (a timer's Start/Stop button) — a plain label. There
+  // is no property to sort by or drag, and nothing to configure: it exists
+  // because the view kind renders it, so it carries no menu. The tooltip says
+  // so, since every other heading here has one.
+  if (!property) {
+    return (
+      <VirtualWrapper>
+        {/* Draggable even though it isn't configurable: where it sits in the row
+         *  is the view's column order, which everything can take part in. */}
+        <DragIconButton
+          {...dragListeners}
+          {...dragAttributes}
+          title='Drag column'
+          aria-label='Drag column'
+        >
+          <FaGripVertical />
+        </DragIconButton>
+        <VirtualLabel title={`${column.virtual?.label} — part of this view`}>
+          {column.virtual?.label}
+        </VirtualLabel>
+      </VirtualWrapper>
+    );
+  }
+
+  const text = `${title || property.shortname}${isRequired ? '*' : ''}`;
 
   return (
     <>
@@ -82,9 +132,9 @@ export const TableHeading: TableHeadingComponent<TableColumn> = ({
         >
           {text}
         </NameButton>
-        {column.property.datatype === Datatype.LOCALIZEDTEXT && (
+        {property.datatype === Datatype.LOCALIZEDTEXT && (
           <ColumnLanguageChip
-            propertySubject={column.property.subject}
+            propertySubject={property.subject}
             languageTag={column.languageTag}
           />
         )}
@@ -93,6 +143,25 @@ export const TableHeading: TableHeadingComponent<TableColumn> = ({
     </>
   );
 };
+
+const VirtualWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  align-self: stretch;
+  color: ${p => p.theme.colors.textLight};
+  /* The header cell is bold; a property's heading renders its name in a button
+   * that isn't, so match that rather than standing out as the odd column. */
+  font-weight: normal;
+  min-width: 0;
+`;
+
+const VirtualLabel = styled.span`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
 
 const Wrapper = styled.div`
   display: flex;

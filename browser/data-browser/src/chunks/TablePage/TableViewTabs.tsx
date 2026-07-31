@@ -6,7 +6,6 @@ import {
   useTitle,
 } from '@tomic/react';
 import { useContext, useMemo, useState, type JSX } from 'react';
-import * as RadixPopover from '@radix-ui/react-popover';
 import { styled } from 'styled-components';
 import {
   FaCheck,
@@ -17,7 +16,6 @@ import {
   FaTableColumns,
   FaTrash,
 } from 'react-icons/fa6';
-import { Popover } from '@components/Popover';
 import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import { AutoOpenTrigger } from '@components/Dropdown/AutoOpenTrigger';
@@ -25,10 +23,9 @@ import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
 } from '@components/ConfirmationDialog';
-import { Column, Row } from '@components/Row';
-import { Checkbox } from '@components/forms/Checkbox';
 import { InputStyled } from '@components/forms/InputStyles';
 import { TablePageContext } from './tablePageContext';
+import { usePropertyTitles } from './helpers/usePropertyTitles';
 import {
   normalizeViewKind,
   VIEW_KINDS,
@@ -51,6 +48,14 @@ interface TableViewTabsProps {
   columns: Property[];
   showColumn: (subject: string) => void;
   hideColumn: (subject: string) => void;
+  /**
+   * Properties the active view kind uses structurally (a timer's start/end, a
+   * kanban's group-by). Toggling them would be a lie — the view renders them
+   * either way — so they're shown as locked instead.
+   */
+  lockedColumns: ReadonlySet<string>;
+  /** Why those are locked, e.g. "Always used by the timer view". */
+  lockedReason: string;
   canWrite: boolean;
 }
 
@@ -73,6 +78,8 @@ export function TableViewTabs({
   columns,
   showColumn,
   hideColumn,
+  lockedColumns,
+  lockedReason,
   canWrite,
 }: TableViewTabsProps): JSX.Element {
   // A table with no saved views yet still shows one implicit "Default View" tab.
@@ -104,6 +111,8 @@ export function TableViewTabs({
           columns={columns}
           showColumn={showColumn}
           hideColumn={hideColumn}
+          lockedColumns={lockedColumns}
+          lockedReason={lockedReason}
           canWrite={canWrite}
         />
       </Actions>
@@ -142,18 +151,31 @@ const FilterTrigger = buildDefaultTrigger(<FaFilter />, 'Filter');
 /** Dropdown that adds a filter for one of the table's columns. */
 function FilterMenu({ columns }: { columns: Property[] }): JSX.Element {
   const { filters, addFilter } = useContext(TablePageContext);
+  const titles = usePropertyTitles(columns);
 
-  const items = useMemo(
-    (): DropdownItem[] =>
-      columns
-        .filter(c => !filters.some(f => f.property === c.subject))
-        .map(c => ({
-          id: c.subject,
-          label: c.shortname,
-          onClick: () => addFilter(c.subject),
-        })),
-    [columns, filters, addFilter],
-  );
+  const items = useMemo((): DropdownItem[] => {
+    const available = columns.filter(
+      c => !filters.some(f => f.property === c.subject),
+    );
+
+    if (available.length === 0) {
+      return [];
+    }
+
+    return [
+      {
+        id: 'filter-header',
+        label: 'Filter rows by a property',
+        header: true,
+        onClick: () => undefined,
+      },
+      ...available.map(c => ({
+        id: c.subject,
+        label: titles.get(c.subject) ?? c.shortname,
+        onClick: () => addFilter(c.subject),
+      })),
+    ];
+  }, [columns, filters, addFilter, titles]);
 
   // `DropdownMenu` with an empty item list recurses forever in its
   // index-finder, so render a disabled button when there's nothing to filter
@@ -331,68 +353,101 @@ function ViewTab({
   );
 }
 
+const ColumnsTrigger = buildDefaultTrigger(
+  <FaTableColumns />,
+  'Toggle properties',
+);
+
+/**
+ * Dropdown that shows/hides the table's properties. A `DropdownMenu` rather
+ * than its own popover so it matches every other menu here: whole-row targets,
+ * a header saying what it does, and keyboard navigation for free. Rows keep the
+ * menu open, since toggling several columns is the normal case.
+ */
 function ColumnsMenu({
   allColumns,
   columns,
   showColumn,
   hideColumn,
+  lockedColumns,
+  lockedReason,
   canWrite,
 }: {
   allColumns: Property[];
   columns: Property[];
   showColumn: (subject: string) => void;
   hideColumn: (subject: string) => void;
+  lockedColumns: ReadonlySet<string>;
+  lockedReason: string;
   canWrite: boolean;
 }): JSX.Element {
-  const [open, setOpen] = useState(false);
+  const titles = usePropertyTitles(allColumns);
   const visible = useMemo(
     () => new Set(columns.map(c => c.subject)),
     [columns],
   );
 
-  return (
-    <Popover
-      open={open}
-      onOpenChange={setOpen}
-      Trigger={
-        <ColumnsTrigger disabled={!canWrite} title='Show / hide columns'>
-          <FaTableColumns />
-        </ColumnsTrigger>
-      }
-    >
-      <PopoverInner>
-        {allColumns.map(column => (
-          <ColumnToggle
-            key={column.subject}
-            column={column}
-            checked={visible.has(column.subject)}
-            onToggle={checked =>
-              checked ? showColumn(column.subject) : hideColumn(column.subject)
-            }
-          />
-        ))}
-      </PopoverInner>
-    </Popover>
-  );
-}
+  const items = useMemo((): DropdownItem[] => {
+    if (allColumns.length === 0) {
+      return [];
+    }
 
-function ColumnToggle({
-  column,
-  checked,
-  onToggle,
-}: {
-  column: Property;
-  checked: boolean;
-  onToggle: (checked: boolean) => void;
-}): JSX.Element {
-  const resource = useResource(column.subject);
-  const [title] = useTitle(resource);
+    return [
+      {
+        id: 'columns-header',
+        label: 'Toggle properties',
+        header: true,
+        onClick: () => undefined,
+      },
+      ...allColumns.map(column => {
+        const locked = lockedColumns.has(column.subject);
+        // A locked property is rendered by the view whatever the config says,
+        // so it reads as shown regardless.
+        const shown = locked || visible.has(column.subject);
+
+        return {
+          id: column.subject,
+          label: titles.get(column.subject) ?? column.shortname,
+          // A check on the shown ones, matching how the view-type section of
+          // the tab menu marks its current choice.
+          icon: shown ? <FaCheck /> : <CheckPlaceholder />,
+          helper: locked
+            ? lockedReason
+            : shown
+              ? 'Hide this property'
+              : 'Show this property',
+          disabled: locked,
+          keepOpen: true,
+          onClick: () =>
+            shown ? hideColumn(column.subject) : showColumn(column.subject),
+        };
+      }),
+    ];
+  }, [
+    allColumns,
+    visible,
+    showColumn,
+    hideColumn,
+    titles,
+    lockedColumns,
+    lockedReason,
+  ]);
+
+  if (!canWrite || items.length === 0) {
+    return (
+      <IconBtn disabled title='Toggle properties' type='button'>
+        <FaTableColumns />
+      </IconBtn>
+    );
+  }
 
   return (
-    <ToggleRow>
-      <Checkbox checked={checked} onChange={onToggle} />
-      <span>{title || column.shortname}</span>
-    </ToggleRow>
+    <DropdownMenu
+      Trigger={ColumnsTrigger}
+      items={items}
+      // Only worth a filter box once scanning the list stops being instant.
+      searchable={allColumns.length > 8}
+    />
   );
 }
 
@@ -464,34 +519,8 @@ const TabInput = styled(InputStyled)`
   font-weight: bold;
 `;
 
-const ColumnsTrigger = styled(RadixPopover.Trigger)`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.85rem;
-  width: 1.85rem;
-  border: none;
-  border-radius: ${p => p.theme.radius};
-  background-color: transparent;
-  color: ${p => p.theme.colors.textLight};
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background-color: ${p => p.theme.colors.bg1};
-    color: ${p => p.theme.colors.text};
-  }
-`;
-
-const PopoverInner = styled(Column)`
-  padding: ${p => p.theme.size()};
-  gap: 0.25rem;
-  min-width: 14rem;
-  max-height: 24rem;
-  overflow-y: auto;
-`;
-
-const ToggleRow = styled(Row)`
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.15rem 0.25rem;
+/** Keeps unchecked rows aligned with the checked ones. */
+const CheckPlaceholder = styled.span`
+  display: inline-block;
+  width: 1em;
 `;

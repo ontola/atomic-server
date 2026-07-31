@@ -29,6 +29,8 @@ interface NewPropertyDialogProps {
   tableClassResource: Resource<Core.Class>;
   bindShow: React.Dispatch<boolean>;
   selectedCategory?: string;
+  /** Called with the new property's subject once it's saved onto the class. */
+  onCreated?: (subject: string) => void;
 }
 
 /** Returns the isA classes and propVals for a given category, for inclusion in the genesis commit. */
@@ -107,6 +109,7 @@ export function NewPropertyDialog({
   selectedCategory,
   tableClassResource,
   bindShow,
+  onCreated,
 }: NewPropertyDialogProps): JSX.Element {
   const store = useStore();
   const [propertyResource, setPropertyResource] = useState<Resource | null>(
@@ -141,8 +144,9 @@ export function NewPropertyDialog({
       await prop.save();
       await saveChildren(store, prop);
       pushProp([prop.subject]);
+      onCreated?.(prop.subject);
     },
-    [store, tableClassResource, pushProp],
+    [store, tableClassResource, pushProp, onCreated],
   );
 
   const onSuccess = useCallback(async () => {

@@ -10,11 +10,17 @@ import {
   useSubject,
 } from '@tomic/react';
 import { useTableView, UseTableViewResult } from './useTableView';
+import { toAggregation } from './tableAggregates';
 
 const PAGE_SIZE = 30;
 
 type UseTableDataResult = {
   tableClass: Resource;
+  /**
+   * The constraints the grid queries with (class + the view's filters). Shared
+   * so the totals can be computed over exactly the rows the grid shows.
+   */
+  queryFilters: PropVal[];
 } & UseCollectionResult &
   UseTableViewResult;
 
@@ -41,12 +47,22 @@ export function useTableData(resource: Resource): UseTableDataResult {
       ? [{ property: core.properties.isA, value: classSubject }]
       : [];
 
+  // The view's statistics ride along with the query, so the store computes them
+  // over every matching row (filters included, paging excluded) instead of the
+  // client adding up the page it happens to have.
+  const aggregation = toAggregation(
+    tableView.viewAggregates,
+    tableView.viewGroupByColumn,
+    tableView.viewGroupGranularity,
+  );
+
   const queryFilter = {
     property: core.properties.parent,
     value: resource.subject,
     filters: [...classFilter, ...userFilters],
     sort_by: sorting.prop,
     sort_desc: sorting.sortDesc,
+    aggregation,
   };
 
   const { collection, ready, invalidateCollection, mapAll } = useCollection(
@@ -62,6 +78,7 @@ export function useTableData(resource: Resource): UseTableDataResult {
   return {
     ...tableView,
     tableClass,
+    queryFilters: queryFilter.filters,
     collection,
     ready,
     invalidateCollection,

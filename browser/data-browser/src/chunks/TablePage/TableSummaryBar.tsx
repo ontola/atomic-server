@@ -1,0 +1,166 @@
+import { type JSX } from 'react';
+import { styled } from 'styled-components';
+import { Datatype, type AggregateOutcome, type Property } from '@tomic/react';
+import { ResourceInline } from '@views/ResourceInline';
+import { usePropertyTitles } from './helpers/usePropertyTitles';
+import {
+  aggregateKey,
+  formatAggregateValue,
+  formatGroupKey,
+  type GroupGranularity,
+  type TableAggregate,
+} from './tableAggregates';
+
+interface TableSummaryBarProps {
+  /** The view's configured statistics, in display order. */
+  aggregates: TableAggregate[];
+  /** What the store computed for them, over every matching row. */
+  outcomes: AggregateOutcome[];
+  /** Every property of the row class, for labels and value formatting. */
+  classProperties: Property[];
+  /** The property the statistics are broken down by, if any. */
+  groupByColumn: string | undefined;
+  granularity: GroupGranularity;
+}
+
+/**
+ * The per-group breakdown, under the grid: one row per bucket, a column per
+ * total. The totals themselves live in the table's footer, each under its own
+ * column — this is only the part that can't: a value per group.
+ *
+ * Computed by the store over every row the view matches, so a breakdown adds up
+ * to the footer's totals.
+ */
+export function TableSummaryBar({
+  aggregates,
+  outcomes,
+  classProperties,
+  groupByColumn,
+  granularity,
+}: TableSummaryBarProps): JSX.Element | null {
+  const titles = usePropertyTitles(classProperties);
+
+  if (aggregates.length === 0) {
+    return null;
+  }
+
+  const byProperty = new Map(classProperties.map(p => [p.subject, p]));
+  const byKey = new Map(outcomes.map(o => [aggregateKey(o), o]));
+
+  const cell = (aggregate: TableAggregate, groupKey?: string) => {
+    const outcome = byKey.get(aggregateKey(aggregate));
+    const property = aggregate.property
+      ? byProperty.get(aggregate.property)
+      : undefined;
+
+    const value =
+      groupKey === undefined
+        ? outcome?.value
+        : outcome?.groups?.find(g => g.key === groupKey)?.value;
+
+    return formatAggregateValue(value, aggregate.function, property);
+  };
+
+  // Buckets come from the first outcome: every aggregate is grouped by the same
+  // property, so they all carry the same keys.
+  const groups = groupByColumn ? (outcomes[0]?.groups ?? []) : [];
+  const truncated = outcomes.some(o => o.groups_truncated);
+  const groupProperty = groupByColumn
+    ? byProperty.get(groupByColumn)
+    : undefined;
+  const groupsAreSubjects =
+    groupProperty?.datatype === Datatype.RESOURCEARRAY ||
+    groupProperty?.datatype === Datatype.ATOMIC_URL;
+
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return (
+    <Wrapper data-testid='table-summary'>
+      <Breakdown data-testid='table-breakdown'>
+        <caption>
+          Per {titles.get(groupByColumn!) ?? groupProperty?.shortname ?? ''}
+        </caption>
+        <tbody>
+          {groups.map(group => (
+            <tr key={group.key} data-testid={`group-${group.key}`}>
+              <GroupCell>
+                {groupsAreSubjects && group.key !== '' ? (
+                  <ResourceInline subject={group.key} />
+                ) : (
+                  formatGroupKey(group.key, granularity)
+                )}
+              </GroupCell>
+              {aggregates.map(aggregate => (
+                <ValueCell key={aggregate.id}>
+                  {cell(aggregate, group.key)}
+                </ValueCell>
+              ))}
+              <CountCell>{group.count.toLocaleString()} rows</CountCell>
+            </tr>
+          ))}
+        </tbody>
+        {truncated && (
+          <tfoot>
+            <tr>
+              {/* Never let a cut-off breakdown read as a complete one. */}
+              <TruncatedCell colSpan={aggregates.length + 2}>
+                Only the largest groups are shown.
+              </TruncatedCell>
+            </tr>
+          </tfoot>
+        )}
+      </Breakdown>
+    </Wrapper>
+  );
+}
+
+const Wrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-block: 0.5rem;
+  border-top: 1px solid ${p => p.theme.colors.bg2};
+`;
+
+const Breakdown = styled.table`
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  max-width: 100%;
+
+  caption {
+    text-align: left;
+    color: ${p => p.theme.colors.textLight};
+    font-size: 0.8rem;
+    padding-bottom: 0.2rem;
+  }
+
+  td {
+    padding: 0.15rem 0.75rem 0.15rem 0;
+    border-top: 1px solid ${p => p.theme.colors.bg2};
+  }
+`;
+
+const GroupCell = styled.td`
+  max-width: 20rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const ValueCell = styled.td`
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+`;
+
+const CountCell = styled.td`
+  color: ${p => p.theme.colors.textLight};
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+`;
+
+const TruncatedCell = styled.td`
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.8rem;
+`;

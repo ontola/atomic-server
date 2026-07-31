@@ -65,6 +65,11 @@ export function useHandlePaste(
 
         const { property, languageTag } = cell.index[1];
 
+        // Nothing to paste into a virtual column (a duration, a row action).
+        if (!property) {
+          continue;
+        }
+
         historyItemBatch.push(
           createValueChangedHistoryItem(row, property.subject),
         );

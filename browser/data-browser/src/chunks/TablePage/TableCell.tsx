@@ -7,7 +7,14 @@ import {
   useResource,
   useValue,
 } from '@tomic/react';
-import { useCallback, useContext, useMemo, type JSX } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type JSX,
+} from 'react';
 import { Cell } from '@chunks/TableEditor';
 import { CellAlign } from '@chunks/TableEditor/Cell';
 import {
@@ -154,6 +161,17 @@ export function TableCell({
     [isEditing, openResourceMenu, subject],
   );
 
+  // The character that opened edit mode, held until the resource catches up.
+  //
+  // Typing in Visual mode emits the character AND flips to Edit mode in the
+  // same handler, but writing the character is async (`setValue` awaits
+  // `resource.set`). The editor therefore mounted on the next render with the
+  // value as it was BEFORE the keystroke — empty — and the rest of what you
+  // typed replaced it, silently eating the first character. Seeding the editor
+  // from this synchronous state closes that window; under load (where the write
+  // is slower) it was losing the character most of the time.
+  const [pendingValue, setPendingValue] = useState<JSONValue | undefined>();
+
   const handleEnterEditModeWithCharacter = useCallback(
     (key: string) => {
       // A LocalizedText cell replaces only its own language — spreading the
@@ -165,15 +183,39 @@ export function TableCell({
           value && typeof value === 'object' && !Array.isArray(value)
             ? (value as Record<string, string>)
             : {};
-        onChange({ ...map, [languageTag ?? contentLanguage]: key });
+        const next = { ...map, [languageTag ?? contentLanguage]: key };
+        setPendingValue(next);
+        onChange(next);
 
         return;
       }
 
-      onChange(appendStringToType(undefined, key, dataType));
+      const next = appendStringToType(undefined, key, dataType);
+      setPendingValue(next);
+      onChange(next);
     },
     [onChange, dataType, value, languageTag, contentLanguage],
   );
+
+  // The editor's own edits hand control straight back to the resource —
+  // waiting for `value` to equal the seed would never fire, since the next
+  // keystroke makes it "ro" while the seed is still "r", freezing the editor
+  // on the first character.
+  const handleEditorChange = useCallback(
+    (v: JSONValue) => {
+      setPendingValue(undefined);
+
+      return onChange(v);
+    },
+    [onChange],
+  );
+
+  // Leaving edit mode drops the seed regardless.
+  useEffect(() => {
+    if (!isEditing && pendingValue !== undefined) {
+      setPendingValue(undefined);
+    }
+  }, [isEditing, pendingValue]);
 
   const handleEditNextRow = useCallback(() => {
     // Advance to the next row. The trailing empty row to move into already
@@ -203,8 +245,8 @@ export function TableCell({
     >
       {isEditing ? (
         <Editor.Edit
-          value={value}
-          onChange={onChange}
+          value={pendingValue ?? value}
+          onChange={handleEditorChange}
           property={property.subject}
           resource={resource}
           languageTag={languageTag}

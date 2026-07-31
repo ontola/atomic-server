@@ -112,6 +112,60 @@ export interface QueryFilter {
   sort_by?: string;
   sort_desc?: boolean;
   drive?: string;
+  /**
+   * Statistics to compute over **every** matching resource, not just the
+   * current page. Computed by the store (server or local DB), so a total costs
+   * one number rather than a fetch of every member.
+   */
+  aggregation?: Aggregation;
+}
+
+/** One statistic to compute. `count` needs no property. */
+export interface Aggregate {
+  property?: string;
+  function: AggregateFunction;
+}
+
+export type AggregateFunction = 'sum' | 'count' | 'avg' | 'min' | 'max';
+
+/** Break the statistics down per distinct value of a property. */
+export interface AggregateGrouping {
+  property: string;
+  /** Date and timestamp properties are bucketed; `exact` gives one group per
+   *  distinct value, which for a timestamp means one per row. */
+  granularity?: 'exact' | 'day' | 'month';
+  /** Minutes to add before bucketing, so days are the caller's days.
+   *  `-new Date().getTimezoneOffset()`. */
+  tz_offset_minutes?: number;
+  /** Most buckets to return (the store defaults to 100). */
+  limit?: number;
+}
+
+export interface Aggregation {
+  aggregates: Aggregate[];
+  group_by?: AggregateGrouping;
+}
+
+/** One bucket of a breakdown. */
+export interface AggregateGroup {
+  /** A value's string form, an ISO day (`2026-07-30`) or month (`2026-07`).
+   *  Empty for the resources that have no value for the grouping property. */
+  key: string;
+  value: number | null;
+  count: number;
+}
+
+/** The answer to one requested statistic, over every matching resource. */
+export interface AggregateOutcome {
+  property?: string;
+  function: AggregateFunction;
+  /** `null` when no resource had a usable value — not the same as `0`. */
+  value: number | null;
+  /** How many resources contributed a value. */
+  count: number;
+  groups?: AggregateGroup[];
+  /** True when there were more buckets than the limit allowed. */
+  groups_truncated?: boolean;
 }
 
 export interface CollectionParams extends QueryFilter {
@@ -155,6 +209,10 @@ export class Collection {
   private params: CollectionParams;
 
   private _totalMembers = 0;
+
+  /** Statistics from the last loaded page. The store computes them over every
+   *  matching resource, so any page carries the same numbers. */
+  private _aggregates: AggregateOutcome[] = [];
 
   private _waitForReady: Promise<void>;
 
@@ -216,6 +274,20 @@ export class Collection {
 
   public get totalPages(): number {
     return Math.ceil(this.totalMembers / this.pageSize);
+  }
+
+  /** The aggregation this collection was built with, if any. */
+  public get aggregation(): Aggregation | undefined {
+    return this.params.aggregation;
+  }
+
+  /**
+   * The statistics this collection asked for, over every matching resource.
+   * Empty until a page has loaded (or when none were requested). They do not
+   * change as you page: the store computed them over the whole filtered set.
+   */
+  public get aggregates(): AggregateOutcome[] {
+    return this._aggregates;
   }
 
   public waitForReady(): Promise<void> {
@@ -594,9 +666,10 @@ export class Collection {
     const url = new URL(`${this.server}/query`);
 
     for (const [key, value] of Object.entries(this.params)) {
-      // `filters` is an array of constraints — serialise it as JSON below,
-      // not via the scalar `set()` (which would stringify to "[object Object]").
-      if (key === 'filters') {
+      // `filters` and `aggregation` are structured — serialised as JSON
+      // below, not via the scalar `set()` (which would stringify to
+      // "[object Object]").
+      if (key === 'filters' || key === 'aggregation') {
         continue;
       }
 
@@ -609,6 +682,14 @@ export class Collection {
     // server parses in `construct_collection_from_params`.
     if (this.params.filters && this.params.filters.length > 0) {
       url.searchParams.set('filters', JSON.stringify(this.params.filters));
+    }
+
+    // Statistics over the whole matching set, computed by the store.
+    if (this.params.aggregation?.aggregates.length) {
+      url.searchParams.set(
+        'aggregation',
+        JSON.stringify(this.params.aggregation),
+      );
     }
 
     url.searchParams.set('current_page', `${page}`);
@@ -769,6 +850,11 @@ export class Collection {
       // DID-sort issue.
       drive: hasExtraFilters ? drive : undefined,
       includeResources: true,
+      // Aggregated in WASM over the whole matching set, exactly as the server
+      // would — the local DB is not a lesser source here.
+      aggregation: this.params.aggregation?.aggregates.length
+        ? this.params.aggregation
+        : undefined,
     });
 
     // Worker returned no result (query error / DB not available). Don't
@@ -888,6 +974,9 @@ export class Collection {
     // skip the just-added resource. `fetchPageFromServer` already does this.
     const mergedTotal = resource.props.totalMembers;
     this._totalMembers = isNumber(mergedTotal) ? mergedTotal : result.count;
+    // Computed by the same Rust code the server runs, so an offline table shows
+    // the same totals rather than none.
+    this._aggregates = result.aggregates ?? [];
 
     return 'ok';
   }
@@ -941,7 +1030,15 @@ export class Collection {
     }
 
     this._totalMembers = totalMembers;
+    this._aggregates = readAggregates(resource);
   }
+}
+
+/** Reads the aggregates the server computed off a collection page. */
+function readAggregates(resource: Resource): AggregateOutcome[] {
+  const value = resource.get(collections.properties.aggregates);
+
+  return Array.isArray(value) ? (value as unknown as AggregateOutcome[]) : [];
 }
 
 export function proxyCollection(collection: Collection): Collection {

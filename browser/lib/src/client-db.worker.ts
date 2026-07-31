@@ -53,6 +53,9 @@ export type WorkerRequest =
       offset?: number;
       includeResources?: boolean;
       drive?: string;
+      /** Statistics over every matching resource — computed in WASM by the same
+       *  Rust code the server runs. */
+      aggregation?: unknown;
     }
   | { id: number; type: 'allSubjects' }
   | { id: number; type: 'populate' }
@@ -199,6 +202,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.includeResources ?? null,
         msg.drive ?? null,
         msg.filters ?? null,
+        msg.aggregation ?? null,
       );
     }
 

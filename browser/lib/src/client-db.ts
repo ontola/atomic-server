@@ -25,6 +25,7 @@
  * ```
  */
 
+import type { Aggregation, AggregateOutcome } from './collection.js';
 import type {
   WorkerRequest,
   WorkerResponse,
@@ -83,6 +84,8 @@ export interface ClientDbQueryResult {
   subjects: string[];
   resources: string[];
   count: number;
+  /** Statistics over every matching resource, when the query asked for them. */
+  aggregates?: AggregateOutcome[];
 }
 
 export interface ClientDbQueryOpts {
@@ -98,6 +101,8 @@ export interface ClientDbQueryOpts {
   includeResources?: boolean;
   /** Drive scope — required for sorted queries. */
   drive?: string;
+  /** Statistics to compute over every matching resource, not just this page. */
+  aggregation?: Aggregation;
 }
 
 /** Options for opening a specific (per-agent) local database. */

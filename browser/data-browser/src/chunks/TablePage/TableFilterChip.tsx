@@ -41,7 +41,7 @@ export function TableFilterChip({
       open={open}
       onOpenChange={setOpen}
       Trigger={
-        <ChipTrigger $active={filter.value !== ''}>
+        <ChipTrigger $active={filter.value !== ''} data-testid='filter-chip'>
           <ChipLabel>{label}</ChipLabel>
           <ChipOperator>{chipOperator}</ChipOperator>
           <ChipValue>

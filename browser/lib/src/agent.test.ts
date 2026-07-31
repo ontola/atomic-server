@@ -1,9 +1,6 @@
 import { describe, it } from 'vitest';
 import { Agent } from './agent.js';
-import {
-  JSCryptoProvider,
-  legacySubjectFromSecret,
-} from './CryptoProvider.js';
+import { JSCryptoProvider, legacySubjectFromSecret } from './CryptoProvider.js';
 
 describe('Agent', () => {
   const validPrivateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
@@ -56,7 +53,10 @@ describe('legacySubjectFromSecret', () => {
     const pk = 'QmfpRIBn2JYEatT0MjSkMNoBJzstz19orwnT5oT2rcQ=';
     expect(
       legacySubjectFromSecret(
-        b64({ privateKey: 'x', subject: `https://atomicdata.dev/agents/${pk}` }),
+        b64({
+          privateKey: 'x',
+          subject: `https://atomicdata.dev/agents/${pk}`,
+        }),
       ),
     ).toBe(`https://atomicdata.dev/agents/${pk}`);
     // http and a port, as a self-hosted pre-DID server would have issued.
@@ -78,7 +78,13 @@ describe('legacySubjectFromSecret', () => {
 
   it('never throws on a malformed secret', ({ expect }) => {
     // Runs on the sign-in path — it must not be able to break signing in.
-    for (const bad of ['', 'not-base64!!', btoa('{'), btoa('{}'), btoa('null')]) {
+    for (const bad of [
+      '',
+      'not-base64!!',
+      btoa('{'),
+      btoa('{}'),
+      btoa('null'),
+    ]) {
       expect(() => legacySubjectFromSecret(bad)).not.toThrow();
       expect(legacySubjectFromSecret(bad)).toBeUndefined();
     }

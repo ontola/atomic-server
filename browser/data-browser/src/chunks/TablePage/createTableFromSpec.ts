@@ -1,4 +1,5 @@
 import {
+  Client,
   Datatype,
   JSONValue,
   Resource,
@@ -8,8 +9,15 @@ import {
   core,
   dataBrowser,
   server,
+  urls,
 } from '@tomic/react';
 import { ViewKind } from './tableViewKinds';
+import type { FilterOperator } from './tableFiltering';
+import {
+  DERIVED_COLUMN_GENERATORS,
+  type DerivedColumnKind,
+  type DerivedColumnSpec,
+} from './derivedColumns';
 import { stringToSlug } from '@helpers/stringToSlug';
 import {
   createPropertyOnClass,
@@ -25,6 +33,7 @@ export type TableColumnType =
   | 'text'
   | 'markdown'
   | 'number'
+  | 'decimal'
   | 'date'
   | 'datetime'
   | 'checkbox'
@@ -37,15 +46,88 @@ export interface TableColumnSpec {
   type: TableColumnType;
   /** For `select` columns: the tag options, e.g. ['Todo', 'Doing', 'Done']. */
   options?: string[];
+  /**
+   * For `relation` columns: the class the link must point at, so the cell's
+   * picker searches that class instead of everything. A class subject.
+   */
+  targetClass?: string;
   description?: string;
+}
+
+/**
+ * A computed column, described in the same column-name vocabulary as the rest
+ * of a spec: its arguments name columns of this table (or are literal numbers),
+ * and are resolved to property subjects on creation.
+ */
+export interface TableDerivedColumnSpec {
+  /** The column heading, e.g. 'Duration'. */
+  name: string;
+  kind: DerivedColumnKind;
+  /**
+   * The generator's arguments — `difference` takes `from`/`to`, `elapsed`
+   * `from`/`until`, `daysSince` `from`, `product` `a`/`b`, `offset`
+   * `from`/`days`.
+   */
+  args: Record<string, string | number>;
+}
+
+/**
+ * A statistic shown under a view's rows. Computed by the store over every row
+ * the view matches, so it costs a number rather than a fetch of every row.
+ */
+export interface TableAggregateSpec {
+  /** One of sum / count / avg / min / max. */
+  function: 'sum' | 'count' | 'avg' | 'min' | 'max';
+  /** The column to aggregate, by name. Omit for `count` to count rows. */
+  column?: string;
+  /** Which totals row it shows in, from 0. One statistic per column per row. */
+  row?: number;
 }
 
 export interface TableViewSpec {
   name: string;
   kind: ViewKind;
-  /** For `kanban` views: the name of the `select` column to group cards by. */
+  /**
+   * The column this view arranges rows by: for `kanban` the `select` column
+   * whose tags become the board columns, for `calendar` the date column that
+   * places rows on days, for `timer` the datetime column holding each entry's
+   * start.
+   */
   groupByColumn?: string;
+  /** For `timer` views: the datetime column holding each entry's end. */
+  endColumn?: string;
+  /** Columns computed from each row rather than stored on it. */
+  derivedColumns?: TableDerivedColumnSpec[];
+  /** Statistics shown under the rows (sum, count, average, min, max). */
+  aggregates?: TableAggregateSpec[];
+  /** A column to break those statistics down by — one subtotal per value. */
+  breakdownColumn?: string;
+  /** For a date or timestamp breakdown column: the bucket size. */
+  breakdownGranularity?: 'day' | 'month' | 'exact';
+  /** The column this view sorts by. */
+  sortByColumn?: string;
+  /** Sort descending (newest / largest first). */
+  sortDesc?: boolean;
+  /** Constraints on which rows the view shows, combined with AND. */
+  filters?: TableFilterSpec[];
+  /** The columns this view shows, in order. Omitted columns are hidden. */
+  columns?: string[];
+  /**
+   * The full display order, which can also place columns that aren't
+   * properties: a computed column by its name, or `timer` for the timer's
+   * Start/Stop button.
+   */
+  columnOrder?: string[];
   default?: boolean;
+}
+
+/** One row constraint, in the caller's column-name vocabulary. */
+export interface TableFilterSpec {
+  column: string;
+  /** Defaults to `eq`. */
+  operator?: FilterOperator;
+  /** For a `select` column, the option name works. */
+  value: string;
 }
 
 export interface TableSpec {
@@ -78,6 +160,7 @@ const DATATYPE_BY_TYPE: Record<Exclude<TableColumnType, 'select'>, Datatype> = {
   text: Datatype.STRING,
   markdown: Datatype.MARKDOWN,
   number: Datatype.INTEGER,
+  decimal: Datatype.FLOAT,
   date: Datatype.DATE,
   datetime: Datatype.TIMESTAMP,
   checkbox: Datatype.BOOLEAN,
@@ -125,7 +208,7 @@ export async function createRowClass(
   });
 }
 
-async function createColumn(
+export async function createColumnOnClass(
   store: Store,
   tableClass: Resource,
   column: TableColumnSpec,
@@ -140,7 +223,27 @@ async function createColumn(
   const subject = await createPropertyOnClass(store, tableClass, {
     name: column.name,
     datatype: DATATYPE_BY_TYPE[column.type],
-    classtype: column.type === 'file' ? server.classes.file : undefined,
+    // A money or measurement column renders with two decimals rather than as a
+    // bare float. The same shape the number property form writes, so its own
+    // form (currency, percentage, more decimals) opens on it afterwards.
+    classes:
+      column.type === 'decimal' ? [dataBrowser.classes.formattedNumber] : [],
+    propVals:
+      column.type === 'decimal'
+        ? {
+            [dataBrowser.properties.numberFormatting]:
+              urls.instances.numberFormats.number,
+            [dataBrowser.properties.decimalPlaces]: 2,
+          }
+        : {},
+    classtype:
+      column.type === 'file'
+        ? server.classes.file
+        : // A relation that names its target class gets a picker scoped to that
+          // class instead of a search across everything.
+          column.type === 'relation'
+          ? column.targetClass
+          : undefined,
     description: column.description,
   });
 
@@ -197,29 +300,249 @@ function rowToPropVals(
   return propVals;
 }
 
-async function createView(
-  store: Store,
-  table: Resource,
+/**
+ * Turns the caller's column-name arguments into property subjects. A value that
+ * is already a subject passes through, so config copied off an existing view
+ * still works; anything else must name a column, or the caller silently gets a
+ * column that computes nothing.
+ */
+function resolveDerivedColumns(
+  specs: TableDerivedColumnSpec[],
+  resolve: (reference: string, role: string) => string,
+): DerivedColumnSpec[] {
+  return specs.map(spec => {
+    const generator = DERIVED_COLUMN_GENERATORS[spec.kind];
+
+    if (!generator) {
+      throw new Error(
+        `Unknown derived column kind "${spec.kind}". Available kinds: ${Object.keys(
+          DERIVED_COLUMN_GENERATORS,
+        ).join(', ')}`,
+      );
+    }
+
+    const args: Record<string, string | number> = {};
+
+    for (const [argument, value] of Object.entries(spec.args)) {
+      if (typeof value === 'number') {
+        args[argument] = value;
+        continue;
+      }
+
+      args[argument] = resolve(
+        value,
+        `the "${argument}" argument of derived column "${spec.name}"`,
+      );
+    }
+
+    return {
+      id: stringToSlug(spec.name),
+      label: spec.name,
+      kind: spec.kind,
+      args,
+    };
+  });
+}
+
+/** Resolves an aggregate's column name to a property subject. */
+function resolveAggregates(
+  specs: TableAggregateSpec[],
+  resolve: (reference: string, role: string) => string,
+): Array<{
+  id: string;
+  property?: string;
+  function: string;
+  row?: number;
+}> {
+  const taken = new Set<string>();
+
+  return specs.map(spec => {
+    let property: string | undefined;
+
+    if (spec.column) {
+      property = resolve(spec.column, `the ${spec.function} total`);
+    }
+
+    const base = stringToSlug(
+      `${spec.function}-${spec.column ?? 'rows'}-${spec.row ?? 0}`,
+    );
+    let id = base;
+
+    for (let n = 2; taken.has(id); n++) {
+      id = `${base}-${n}`;
+    }
+
+    taken.add(id);
+
+    return {
+      id,
+      property,
+      function: spec.function,
+      ...(spec.row ? { row: spec.row } : {}),
+    };
+  });
+}
+
+/**
+ * Translates a view spec into the propVals a View resource stores. Shared by
+ * table creation and `configure_view`, so a view built by the assistant and one
+ * it edits afterwards can never drift apart.
+ *
+ * With `partial`, only the fields the caller named are returned — editing a
+ * view's sort must not silently drop its filters.
+ */
+export function buildViewPropVals(
   view: TableViewSpec,
   columnSubjectByName: Record<string, string>,
-): Promise<void> {
-  const propVals: Record<string, JSONValue> = {
-    [core.properties.name]: view.name,
-    [dataBrowser.properties.viewKind]: view.kind,
+  tagsByColumn: Record<string, Record<string, string>> = {},
+  opts: { partial?: boolean } = {},
+): Record<string, JSONValue> {
+  const propVals: Record<string, JSONValue> = {};
+  const partial = !!opts.partial;
+
+  /** Resolves a column name (or subject) the caller used. */
+  const column = (reference: string | undefined): string | undefined => {
+    if (!reference) {
+      return undefined;
+    }
+
+    if (reference.toLowerCase() === 'name') {
+      return core.properties.name;
+    }
+
+    return (
+      columnSubjectByName[reference] ??
+      columnSubjectByName[reference.toLowerCase()] ??
+      (Client.isValidSubject(reference) ? reference : undefined)
+    );
   };
 
-  const groupBy = view.groupByColumn
-    ? columnSubjectByName[view.groupByColumn]
-    : undefined;
+  const require = (reference: string, role: string): string => {
+    const subject = column(reference);
+
+    if (!subject) {
+      throw new Error(
+        `Unknown column "${reference}" for ${role}. Available columns: name, ${Object.keys(
+          columnSubjectByName,
+        ).join(', ')}`,
+      );
+    }
+
+    return subject;
+  };
+
+  if (!partial || view.name !== undefined) {
+    propVals[core.properties.name] = view.name;
+  }
+
+  if (!partial || view.kind !== undefined) {
+    propVals[dataBrowser.properties.viewKind] = view.kind;
+  }
+
+  const groupBy = column(view.groupByColumn);
 
   if (groupBy) {
     propVals[dataBrowser.properties.viewGroupBy] = groupBy;
   }
 
+  const end = column(view.endColumn);
+
+  if (end) {
+    propVals[dataBrowser.properties.viewEndProp] = end;
+  }
+
+  if (view.sortByColumn !== undefined) {
+    propVals[
+      dataBrowser.properties.viewSortBy
+    ] = require(view.sortByColumn, 'the sort');
+    propVals[dataBrowser.properties.viewSortDesc] = !!view.sortDesc;
+  } else if (view.sortDesc !== undefined) {
+    propVals[dataBrowser.properties.viewSortDesc] = view.sortDesc;
+  }
+
+  if (view.filters !== undefined) {
+    propVals[dataBrowser.properties.viewFilters] = view.filters.map(filter => {
+      const subject = require(filter.column, 'a filter');
+      // A select column filters by tag subject, but the caller says "Done".
+      const tags =
+        tagsByColumn[filter.column] ??
+        tagsByColumn[filter.column.toLowerCase()] ??
+        {};
+
+      return {
+        property: subject,
+        operator: filter.operator ?? 'eq',
+        value:
+          tags[filter.value] ??
+          tags[filter.value.toLowerCase()] ??
+          filter.value,
+      };
+    }) as unknown as JSONValue;
+  }
+
+  if (view.columns !== undefined) {
+    propVals[dataBrowser.properties.viewColumns] = view.columns.map(name =>
+      require(name, 'the column list'),
+    );
+  }
+
+  if (view.columnOrder !== undefined) {
+    propVals[dataBrowser.properties.viewColumnOrder] = view.columnOrder.map(
+      reference => {
+        // The order can also place columns that are not properties.
+        if (reference.toLowerCase() === 'timer') {
+          return 'timer-action';
+        }
+
+        const asColumn = column(reference);
+
+        if (asColumn) {
+          return asColumn;
+        }
+
+        // A computed column, by the name it was created with.
+        return `derived:${stringToSlug(reference)}`;
+      },
+    ) as unknown as JSONValue;
+  }
+
+  if (view.derivedColumns !== undefined) {
+    // A spec is plain JSON, just a narrower shape than `JSONValue` describes.
+    propVals[dataBrowser.properties.viewDerivedColumns] = resolveDerivedColumns(
+      view.derivedColumns,
+      require,
+    ) as unknown as JSONValue;
+  }
+
+  if (view.aggregates !== undefined) {
+    propVals[dataBrowser.properties.viewAggregates] = resolveAggregates(
+      view.aggregates,
+      require,
+    ) as unknown as JSONValue;
+  }
+
+  const breakdown = column(view.breakdownColumn);
+
+  if (breakdown) {
+    propVals[dataBrowser.properties.viewGroupByColumn] = breakdown;
+    propVals[dataBrowser.properties.viewGroupGranularity] =
+      view.breakdownGranularity ?? 'day';
+  }
+
+  return propVals;
+}
+
+async function createView(
+  store: Store,
+  table: Resource,
+  view: TableViewSpec,
+  columnSubjectByName: Record<string, string>,
+  tagsByColumn: Record<string, Record<string, string>>,
+): Promise<void> {
   const viewResource = await store.newResource({
     parent: table.subject,
     isA: dataBrowser.classes.view,
-    propVals,
+    propVals: buildViewPropVals(view, columnSubjectByName, tagsByColumn),
   });
   await viewResource.save();
 
@@ -270,7 +593,7 @@ export async function buildTableFromSpec(
   const tags: Record<string, Record<string, string>> = {};
 
   for (const column of spec.columns) {
-    const created = await createColumn(store, rowClass, column);
+    const created = await createColumnOnClass(store, rowClass, column);
     columns[column.name] = created.subject;
 
     if (created.tags) {
@@ -289,7 +612,7 @@ export async function buildTableFromSpec(
   await table.save();
 
   for (const view of spec.views ?? []) {
-    await createView(store, table, view, columns);
+    await createView(store, table, view, columns, tags);
   }
 
   const rowSubjects: string[] = [];

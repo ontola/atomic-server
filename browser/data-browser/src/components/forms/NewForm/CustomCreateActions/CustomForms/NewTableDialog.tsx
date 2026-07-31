@@ -223,7 +223,10 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
                       }}
                       title={template.description}
                     >
-                      <strong key='title'>{template.title}</strong>
+                      <TemplateHeading key='title'>
+                        <template.icon key='icon' aria-hidden />
+                        <strong key='name'>{template.title}</strong>
+                      </TemplateHeading>
                       <TemplateDescription key='description'>
                         {template.description}
                       </TemplateDescription>
@@ -324,6 +327,22 @@ const TemplateGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   gap: 0.5rem;
+  /* The catalogue keeps growing; scroll it instead of pushing the name field
+     and the Create button off the dialog. */
+  max-height: min(40vh, 18rem);
+  overflow-y: auto;
+  padding-right: 0.25rem;
+`;
+
+const TemplateHeading = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 0.5ch;
+
+  svg {
+    color: ${p => p.theme.colors.textLight};
+    flex-shrink: 0;
+  }
 `;
 
 const TemplateCard = styled.button<{ $selected: boolean }>`

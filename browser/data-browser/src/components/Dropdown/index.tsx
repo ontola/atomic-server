@@ -38,6 +38,12 @@ export type MenuItemMinimial = {
   icon?: ReactNode;
   disabled?: boolean;
   header?: boolean;
+  /**
+   * Leaves the menu open after activating this item, for menus whose items
+   * toggle state (show/hide columns, say) rather than navigate away — otherwise
+   * every toggle costs a reopen.
+   */
+  keepOpen?: boolean;
   /** Keyboard shortcut helper */
   shortcut?: string;
   /** Extra search terms for searchable menus. */
@@ -362,6 +368,10 @@ export function DropdownMenu({
 
         if (isItem(item) && !item.disabled) {
           item.onClick();
+
+          if (item.keepOpen) {
+            return;
+          }
         }
 
         handleClose();
@@ -506,12 +516,16 @@ export function DropdownMenu({
                 shortcut,
                 icon,
                 header,
+                keepOpen,
               } = props;
 
               return (
                 <MenuItem
                   onClick={() => {
-                    handleClose();
+                    if (!keepOpen) {
+                      handleClose();
+                    }
+
                     onClick();
                   }}
                   id={id}

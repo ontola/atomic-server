@@ -75,6 +75,13 @@ export async function createPropertyOnClass(
     datatype: Datatype;
     classtype?: string;
     description?: string;
+    /**
+     * Extra classes the property is an instance of — how a number becomes a
+     * FormattedNumber, the same way the property form does it.
+     */
+    classes?: string[];
+    /** Extra propVals, e.g. the constraints those classes recommend. */
+    propVals?: Record<string, JSONValue>;
   },
 ): Promise<string> {
   const parent = await resolvePropertyParent(store, tableClass);
@@ -84,6 +91,7 @@ export async function createPropertyOnClass(
     [core.properties.name]: opts.name,
     [core.properties.description]: opts.description ?? '',
     [core.properties.datatype]: opts.datatype,
+    ...opts.propVals,
   };
 
   if (opts.classtype) {
@@ -92,7 +100,7 @@ export async function createPropertyOnClass(
 
   const property = await store.newResource({
     parent: parent.subject,
-    isA: core.classes.property,
+    isA: [core.classes.property, ...(opts.classes ?? [])],
     propVals,
   });
   await property.save();
