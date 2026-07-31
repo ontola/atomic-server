@@ -84,7 +84,7 @@ export function DashboardPage({ resource }: ResourcePageProps): JSX.Element {
         {blocks.length === 0 ? (
           <Empty>
             {canWrite
-              ? 'Nothing here yet. Add a number, a chart or a table.'
+              ? 'Nothing here yet. Add a number, a chart, a button or a table.'
               : 'This dashboard has no blocks yet.'}
           </Empty>
         ) : (

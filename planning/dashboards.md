@@ -377,7 +377,12 @@ Built to the design above, with the deviations noted.
   (touches only the fields it is given, like `configure_view`), and the
   `BlockConfigDialog` behind each block's ⋯ menu, which can change everything the
   tool can write. A block created from the Add menu opens its dialog immediately.
-- **A dashboard is creatable from the New-resource palette** and has an icon.
+- **A dashboard is creatable from the New-resource palette** and has an icon,
+  through a name-only create dialog. Adding a class to that palette without
+  registering one drops the user into the generic resource form — which renders
+  every JSON-datatype property as a raw JSON field, so a dashboard's create screen
+  asked for a `layout` before any blocks existed to lay out. Any future class with
+  JSON config needs its own dialog for the same reason.
 
 Two traps found by building it, both worth knowing:
 

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, editableTitle, FRONTEND_URL } from './test-utils';
+import { before, editableTitle, FRONTEND_URL, newResource } from './test-utils';
 
 /**
  * A dashboard is stored configuration and nothing else, so what is worth proving
@@ -275,6 +275,30 @@ async function pickTable(page: Page, name: string) {
 test.describe('dashboards', () => {
   test.beforeEach(before);
   test.slow();
+
+  test('a dashboard is created by name, not by writing JSON', async ({
+    page,
+  }) => {
+    // Without a create dialog this class fell through to the generic resource
+    // form, which renders `dashboard-blocks` and `dashboard-layout` as raw JSON
+    // fields — asking for a layout before any blocks exist to lay out.
+    await newResource('dashboard', page);
+    await page.getByTestId('new-dashboard-name').fill('Overview');
+    await page.getByTestId('new-dashboard-create').click();
+
+    // The title is an input, so it holds a value rather than text.
+    await expect(editableTitle(page)).toHaveValue('Overview', {
+      timeout: 15_000,
+    });
+
+    // It lands on the dashboard's own editor, which is where blocks are added.
+    await expect(page.getByTitle('Add block')).toBeVisible();
+    await expect(page.getByText(/Nothing here yet/)).toBeVisible();
+
+    await page.getByTitle('Add block').click();
+    await expect(page.getByRole('menuitem', { name: 'Number' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Button' })).toBeVisible();
+  });
 
   test('the four block kinds each show what they were configured to', async ({
     page,

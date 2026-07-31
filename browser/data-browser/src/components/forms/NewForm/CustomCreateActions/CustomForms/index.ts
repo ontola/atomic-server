@@ -3,6 +3,7 @@ import { registerNewResourceDialog } from '../../useNewResourceUI';
 import { NewBookmarkDialog } from './NewBookmarkDialog';
 import { NewOntologyDialog } from './NewOntologyDialog';
 import { NewTableDialog } from './NewTableDialog';
+import { NewDashboardDialog } from './NewDashboardDialog';
 import { NewCollectionDialog } from './NewCollectionDialog';
 import { NewDriveDialog } from './NewDriveDialog';
 import { NewArticleDialog } from './NewArticleDialog';
@@ -11,6 +12,7 @@ export const registerCustomForms = () => {
   registerNewResourceDialog(dataBrowser.classes.bookmark, NewBookmarkDialog);
   registerNewResourceDialog(core.classes.ontology, NewOntologyDialog);
   registerNewResourceDialog(dataBrowser.classes.table, NewTableDialog);
+  registerNewResourceDialog(dataBrowser.classes.dashboard, NewDashboardDialog);
   registerNewResourceDialog(
     collections.classes.collection,
     NewCollectionDialog,
