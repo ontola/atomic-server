@@ -2,10 +2,16 @@ import {
   Datatype,
   type AggregateFunction,
   type AggregateGrouping,
+  type Aggregate,
   type Aggregation,
   type JSONValue,
   type Property,
 } from '@tomic/react';
+import {
+  DERIVED_COLUMN_GENERATORS,
+  toExpression,
+  type DerivedColumnSpec,
+} from './derivedColumns';
 
 /**
  * A statistic a view shows under its rows. Configuration on the View
@@ -18,6 +24,13 @@ export interface TableAggregate {
   id: string;
   /** The property whose values are aggregated. Absent for a plain row count. */
   property?: string;
+  /**
+   * The id of a computed column of this view, when the statistic is over a value
+   * computed per row rather than stored on it — a duration, an amount. The store
+   * evaluates the column's expression as it aggregates, so a sum of durations
+   * covers every matching row like any other total.
+   */
+  derived?: string;
   function: AggregateFunction;
   /**
    * Which totals row this sits in, counting from 0. A column can carry one
@@ -81,6 +94,18 @@ export function propertiesForFunction(
 }
 
 /**
+ * Which statistics a computed column can carry. A date (a next-due) has no
+ * meaningful sum or average; a duration or an amount has all of them.
+ */
+export function functionsForDerived(
+  spec: DerivedColumnSpec,
+): AggregateFunction[] {
+  return DERIVED_COLUMN_GENERATORS[spec.kind].valueKind === 'date'
+    ? ['min', 'max', 'count']
+    : ['sum', 'avg', 'min', 'max', 'count'];
+}
+
+/**
  * Properties that make sense to break down by. A free-text column would give
  * one bucket per row, so only bounded or bucketable kinds are offered.
  */
@@ -121,6 +146,7 @@ function isAggregate(value: unknown): value is TableAggregate {
     typeof spec.function === 'string' &&
     (AGGREGATE_FUNCTIONS as string[]).includes(spec.function) &&
     (spec.property === undefined || typeof spec.property === 'string') &&
+    (spec.derived === undefined || typeof spec.derived === 'string') &&
     (spec.row === undefined ||
       (typeof spec.row === 'number' && Number.isInteger(spec.row)))
   );
@@ -152,18 +178,46 @@ export function toAggregation(
   aggregates: TableAggregate[],
   groupByColumn: string | undefined,
   granularity: GroupGranularity,
+  /** The view's computed columns, for the statistics that name one. */
+  derivedColumns: DerivedColumnSpec[] = [],
 ): Aggregation | undefined {
   if (aggregates.length === 0) {
     return undefined;
   }
 
+  const specById = new Map(derivedColumns.map(spec => [spec.id, spec]));
+
+  const requests: Aggregate[] = aggregates.flatMap(
+    ({ id, property, derived, function: fn }): Aggregate[] => {
+      if (derived === undefined) {
+        return [{ id, property, function: fn }];
+      }
+
+      const spec = specById.get(derived);
+      const expression = spec && toExpression(spec);
+
+      // The column it named is gone (or still incomplete). Asking anyway would
+      // return an empty number and read as a broken total, so don't ask.
+      return expression ? [{ id, expression, function: fn }] : [];
+    },
+  );
+
+  if (requests.length === 0) {
+    return undefined;
+  }
+
+  const live = aggregates.some(aggregate => {
+    const spec = aggregate.derived
+      ? specById.get(aggregate.derived)
+      : undefined;
+
+    return spec ? measuresAgainstNow(spec) : false;
+  });
+
   return {
-    // Rows are a display concern; the store is asked for each distinct
-    // (property, function) once, and two rows asking the same thing share it.
-    aggregates: aggregates.map(({ property, function: fn }) => ({
-      property,
-      function: fn,
-    })),
+    // Rows are a display concern; each statistic is asked for once and carries
+    // its own id, which is how the outcomes are matched back to it.
+    aggregates: requests,
     group_by: groupByColumn
       ? {
           property: groupByColumn,
@@ -171,7 +225,24 @@ export function toAggregation(
           tz_offset_minutes: -new Date().getTimezoneOffset(),
         }
       : undefined,
+    // Only when something actually measures against the present, and quantized:
+    // this value is part of the query's identity, so a raw `Date.now()` would
+    // re-run the query on every render. A minute is close enough for a total
+    // while the cells themselves tick every second.
+    ...(live ? { now_ms: quantizedNow() } : {}),
   };
+}
+
+/** How coarsely `now` is passed to the store — see `toAggregation`. */
+const NOW_QUANTUM_MS = 60_000;
+
+function quantizedNow(): number {
+  return Math.floor(Date.now() / NOW_QUANTUM_MS) * NOW_QUANTUM_MS;
+}
+
+/** Whether a computed column's value keeps moving on its own. */
+function measuresAgainstNow(spec: DerivedColumnSpec): boolean {
+  return spec.kind === 'daysSince' || spec.kind === 'elapsed';
 }
 
 /** How many totals rows the configuration needs (always at least one). */
@@ -182,12 +253,19 @@ export function aggregateRowCount(aggregates: TableAggregate[]): number {
   );
 }
 
-/** `sum:<property>` — matches a stored spec to the outcome the store returned. */
+/**
+ * Matches a configured statistic to the outcome the store returned.
+ *
+ * By `id` when both sides carry one — two statistics over computed columns name
+ * no property, so nothing else tells them apart. The `function:property` form is
+ * the fallback for a store that predates the echoed id.
+ */
 export function aggregateKey(spec: {
+  id?: string;
   property?: string;
   function: AggregateFunction;
 }): string {
-  return `${spec.function}:${spec.property ?? ''}`;
+  return spec.id ? `id:${spec.id}` : `${spec.function}:${spec.property ?? ''}`;
 }
 
 /**
@@ -199,6 +277,8 @@ export function formatAggregateValue(
   value: number | null | undefined,
   fn: AggregateFunction,
   property: Property | undefined,
+  /** The computed column the number came from, when it wasn't a property. */
+  derived?: DerivedColumnSpec,
 ): string {
   if (value === null || value === undefined) {
     // Nothing to compute is not zero, and must not read as zero.
@@ -207,6 +287,12 @@ export function formatAggregateValue(
 
   if (fn === 'count') {
     return value.toLocaleString();
+  }
+
+  // A sum of durations is a duration: format it the way the column itself does,
+  // or "5:30:00" of logged time reads as 19800000.
+  if (derived) {
+    return DERIVED_COLUMN_GENERATORS[derived.kind].format(value);
   }
 
   if (

@@ -58,6 +58,7 @@ import { stringToSlug } from '@helpers/stringToSlug';
 import { orderColumns, reorderColumnKeys } from './columnOrder';
 import { TableSummaryBar } from './TableSummaryBar';
 import type { GroupGranularity } from './tableAggregates';
+import type { AggregateTarget } from './tablePageContext';
 import type { DerivedColumnSpec } from './derivedColumns';
 import { TablePresenceContext, useTablePresence } from './TablePresence';
 
@@ -239,11 +240,14 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
    * does.
    */
   const setColumnAggregate = useCallback(
-    (property: string, fn: AggregateFunction | undefined, row = 0) => {
-      // One statistic per column per totals row.
+    (target: AggregateTarget, fn: AggregateFunction | undefined, row = 0) => {
+      // One statistic per column per totals row — a column being either a stored
+      // property or one this view computes.
       const rest = viewAggregates.filter(
         aggregate =>
-          aggregate.property !== property || (aggregate.row ?? 0) !== row,
+          aggregate.property !== target.property ||
+          aggregate.derived !== target.derived ||
+          (aggregate.row ?? 0) !== row,
       );
 
       if (!fn) {
@@ -258,13 +262,14 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
         return;
       }
 
+      const name =
+        target.derived ?? target.property?.split('/').pop() ?? 'column';
+
       setViewAggregates([
         ...rest,
         {
-          id: `${fn}-${stringToSlug(
-            property.split('/').pop() ?? 'column',
-          )}-${row}`,
-          property,
+          id: `${fn}-${stringToSlug(name)}-${row}`,
+          ...target,
           function: fn,
           row,
         },
@@ -381,6 +386,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       viewAggregates,
       viewGroupByColumn,
       viewGroupGranularity,
+      derivedSpecs,
     ),
     server: resource.subject.startsWith('http')
       ? new URL(resource.subject).origin
@@ -1032,6 +1038,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
                 aggregates={viewAggregates}
                 outcomes={aggregateOutcomes}
                 classProperties={allColumns}
+                derivedColumns={derivedSpecs}
                 groupByColumn={viewGroupByColumn}
                 granularity={viewGroupGranularity}
               />

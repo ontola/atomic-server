@@ -1,5 +1,6 @@
 import {
   Datatype,
+  type Expression,
   type JSONValue,
   type Property,
   type Resource,
@@ -55,9 +56,18 @@ export interface DerivedColumnArgSpec {
   optional?: boolean;
 }
 
+/**
+ * What kind of number a generator produces. Decides how a total over the column
+ * is formatted, which statistics are offered for it, and (for a filter) what the
+ * value input asks for.
+ */
+export type DerivedValueKind = 'duration' | 'days' | 'number' | 'date';
+
 interface DerivedColumnGenerator {
   /** Name of this generator in the "add computed column" picker. */
   title: string;
+  /** What its value is, beyond "a number". */
+  valueKind: DerivedValueKind;
   /** One line saying what it computes, shown under the picker. */
   description: string;
   /** Prefills the column name. */
@@ -166,6 +176,7 @@ export const DERIVED_COLUMN_GENERATORS: Record<
       from: { label: 'From', accepts: 'instant' },
       to: { label: 'To', accepts: 'instant' },
     },
+    valueKind: 'duration',
     width: 130,
     compute: (row, args) => {
       const from = readInstant(row, args.from);
@@ -188,6 +199,7 @@ export const DERIVED_COLUMN_GENERATORS: Record<
       from: { label: 'Start', accepts: 'instant' },
       until: { label: 'End', accepts: 'instant', optional: true },
     },
+    valueKind: 'duration',
     width: 130,
     compute: (row, args, now) => {
       const from = readInstant(row, args.from);
@@ -209,6 +221,7 @@ export const DERIVED_COLUMN_GENERATORS: Record<
     description: 'Whole days between a date column and today.',
     defaultLabel: 'Days since',
     args: { from: { label: 'Date', accepts: 'instant' } },
+    valueKind: 'days',
     width: 110,
     compute: (row, args, now) => {
       const from = readInstant(row, args.from);
@@ -227,6 +240,7 @@ export const DERIVED_COLUMN_GENERATORS: Record<
       a: { label: 'First value', accepts: 'number', allowsLiteral: true },
       b: { label: 'Second value', accepts: 'number', allowsLiteral: true },
     },
+    valueKind: 'number',
     width: 110,
     compute: (row, args) => {
       const a = readNumber(row, args.a);
@@ -246,6 +260,7 @@ export const DERIVED_COLUMN_GENERATORS: Record<
       from: { label: 'Date', accepts: 'instant' },
       days: { label: 'Days', accepts: 'number', allowsLiteral: true },
     },
+    valueKind: 'date',
     width: 130,
     compute: (row, args) => {
       const from = readInstant(row, args.from);
@@ -284,6 +299,22 @@ export function propertyFitsArg(
     property.datatype === Datatype.INTEGER ||
     property.datatype === Datatype.FLOAT
   );
+}
+
+/**
+ * The store's form of a computed column, so a total or a filter can be computed
+ * over one where the rows live. The wire shape is the generator's own kind and
+ * argument names, flattened — `{ kind: 'elapsed', from, until }`.
+ *
+ * Returns undefined for a spec that can't compute anything (an argument still
+ * empty), because asking the store for it would only produce a blank.
+ */
+export function toExpression(spec: DerivedColumnSpec): Expression | undefined {
+  if (!isDerivedColumnComplete(spec)) {
+    return undefined;
+  }
+
+  return { kind: spec.kind, ...spec.args } as Expression;
 }
 
 /** True once every argument the generator requires is filled in. */

@@ -2152,6 +2152,10 @@ impl Db {
         let mut per_group: Vec<HashMap<String, Accumulator>> =
             vec![HashMap::new(); aggregation.aggregates.len()];
 
+        // One instant for the whole pass: a `daysSince` evaluated per row against
+        // a moving clock could put two rows of the same day in different buckets.
+        let now_ms = aggregation.now_ms.unwrap_or_else(crate::utils::now);
+
         for subject in subjects {
             let Ok(resource) = self.get_resource_shallow(&subject) else {
                 continue;
@@ -2162,10 +2166,22 @@ impl Db {
             });
 
             for (index, aggregate) in aggregation.aggregates.iter().enumerate() {
-                let stored = aggregate
-                    .property
+                // A computed value stands in for a stored one: `Some(None)` means
+                // "this row has nothing to contribute", which is exactly how a
+                // missing property already reads below.
+                let computed = aggregate
+                    .expression
                     .as_ref()
-                    .map(|property| resource.get(property).ok());
+                    .map(|expression| expression.evaluate(&resource, now_ms));
+
+                let stored = if computed.is_some() {
+                    None
+                } else {
+                    aggregate
+                        .property
+                        .as_ref()
+                        .map(|property| resource.get(property).ok())
+                };
 
                 // `count` counts rows: every matching row when it names no
                 // property, only the rows that HAVE the property when it does
@@ -2175,16 +2191,19 @@ impl Db {
                 // sum would report a denominator it never added up.
                 let accumulate = |acc: &mut Accumulator| {
                     if aggregate.function == crate::aggregate::AggregateFunction::Count {
-                        if !matches!(stored, Some(None)) {
+                        if !matches!(stored, Some(None)) && !matches!(computed, Some(None)) {
                             acc.count_row();
                         }
 
                         return;
                     }
 
-                    if let Some(number) =
-                        stored.flatten().and_then(crate::aggregate::value_as_number)
-                    {
+                    let number = match &computed {
+                        Some(value) => *value,
+                        None => stored.flatten().and_then(crate::aggregate::value_as_number),
+                    };
+
+                    if let Some(number) = number {
                         acc.add(number);
                     }
                 };
@@ -2233,6 +2252,7 @@ impl Db {
             groups.truncate(limit);
 
             outcomes.push(AggregateOutcome {
+                id: aggregate.id.clone(),
                 property: aggregate.property.clone(),
                 function: aggregate.function,
                 value: totals[index].finish(aggregate.function),

@@ -43,6 +43,8 @@ fn query_for(table: &str, aggregation: Aggregation, limit: Option<usize>) -> Que
 
 fn sum_of(property: &str) -> Aggregate {
     Aggregate {
+        id: None,
+        expression: None,
         property: Some(property.into()),
         function: AggregateFunction::Sum,
     }
@@ -78,23 +80,32 @@ async fn totals_cover_every_matching_row_not_just_the_page() {
                 aggregates: vec![
                     sum_of(AMOUNT),
                     Aggregate {
+                        id: None,
+                        expression: None,
                         property: Some(AMOUNT.into()),
                         function: AggregateFunction::Avg,
                     },
                     Aggregate {
+                        id: None,
+                        expression: None,
                         property: Some(AMOUNT.into()),
                         function: AggregateFunction::Min,
                     },
                     Aggregate {
+                        id: None,
+                        expression: None,
                         property: Some(AMOUNT.into()),
                         function: AggregateFunction::Max,
                     },
                     Aggregate {
+                        id: None,
+                        expression: None,
                         property: None,
                         function: AggregateFunction::Count,
                     },
                 ],
                 group_by: None,
+                now_ms: None,
             },
             Some(1),
         ))
@@ -148,6 +159,7 @@ async fn a_filtered_query_only_totals_what_it_matches() {
             Aggregation {
                 aggregates: vec![sum_of(AMOUNT)],
                 group_by: None,
+                now_ms: None,
             },
             None,
         ))
@@ -166,6 +178,7 @@ async fn a_filtered_query_only_totals_what_it_matches() {
         Aggregation {
             aggregates: vec![sum_of(AMOUNT)],
             group_by: None,
+            now_ms: None,
         },
         None,
     );
@@ -232,6 +245,7 @@ async fn a_breakdown_splits_the_total_per_group() {
                 tz_offset_minutes: 0,
                 limit: None,
             }),
+            now_ms: None,
         },
         None,
     );
@@ -296,6 +310,7 @@ async fn a_breakdown_by_day_buckets_timestamps() {
                     tz_offset_minutes: 0,
                     limit: None,
                 }),
+                now_ms: None,
             },
             None,
         ))
@@ -352,11 +367,14 @@ async fn rows_without_a_value_are_counted_but_do_not_change_the_sum() {
                 aggregates: vec![
                     sum_of(AMOUNT),
                     Aggregate {
+                        id: None,
+                        expression: None,
                         property: None,
                         function: AggregateFunction::Count,
                     },
                 ],
                 group_by: None,
+                now_ms: None,
             },
             None,
         ))
@@ -396,11 +414,14 @@ async fn an_empty_set_has_no_sum_but_counts_zero() {
                 aggregates: vec![
                     sum_of(AMOUNT),
                     Aggregate {
+                        id: None,
+                        expression: None,
                         property: None,
                         function: AggregateFunction::Count,
                     },
                 ],
                 group_by: None,
+                now_ms: None,
             },
             None,
         ))
@@ -431,6 +452,7 @@ async fn a_query_without_aggregation_returns_none() {
         Aggregation {
             aggregates: vec![],
             group_by: None,
+            now_ms: None,
         },
         None,
     );
@@ -442,4 +464,178 @@ async fn a_query_without_aggregation_returns_none() {
         "asking for nothing computes nothing"
     );
     assert_eq!(result.subjects.len(), 1, "the query itself still works");
+}
+
+/// The gap this closes: a duration is computed, not stored, so until now nothing
+/// could total one. A timer's day totals are the motivating case — sum the
+/// elapsed time of every entry, bucketed by the day it started.
+#[tokio::test]
+async fn a_computed_value_can_be_summed_and_broken_down() {
+    use atomic_lib::expression::{Expression, Operand};
+
+    let store = Db::init_temp("aggregates_expression").await.unwrap();
+    let (_agent, drive) = store.setup("Alice").await.unwrap();
+
+    let table = store
+        .create_resource(urls::FOLDER, &drive, "Time entries", None)
+        .await
+        .unwrap();
+
+    const DAY: i64 = 86_400_000;
+    // Two entries on day 1 (1h and 30m), one on day 2 (2h), and one still
+    // running — started 15 minutes before the clock this query is evaluated at.
+    let now = 10 * DAY;
+    let entries: [(i64, Option<i64>); 4] = [
+        (DAY, Some(DAY + 3_600_000)),
+        (DAY + 7_200_000, Some(DAY + 9_000_000)),
+        (2 * DAY, Some(2 * DAY + 7_200_000)),
+        (now - 900_000, None),
+    ];
+
+    for (index, (start, end)) in entries.iter().enumerate() {
+        let mut propvals = vec![(SPENT_AT, Value::Timestamp(*start))];
+
+        if let Some(end) = end {
+            propvals.push((AMOUNT, Value::Timestamp(*end)));
+        }
+
+        store
+            .create_resource(
+                urls::FOLDER,
+                &table,
+                &format!("Entry {index}"),
+                Some(propvals),
+            )
+            .await
+            .unwrap();
+    }
+
+    // `AMOUNT` stands in for the end column here: any second timestamp will do.
+    let duration = Expression::Elapsed {
+        from: Operand::Property(SPENT_AT.into()),
+        until: Some(Operand::Property(AMOUNT.into())),
+    };
+
+    let mut query = query_for(
+        &table,
+        Aggregation {
+            aggregates: vec![Aggregate {
+                id: Some("total-duration".into()),
+                expression: Some(duration),
+                property: None,
+                function: AggregateFunction::Sum,
+            }],
+            group_by: Some(AggregateGrouping {
+                property: SPENT_AT.into(),
+                granularity: GroupGranularity::Day,
+                tz_offset_minutes: 0,
+                limit: None,
+            }),
+            // The caller's clock, so the running entry's 15 minutes are exact
+            // rather than however long this test took to get here.
+            now_ms: Some(now),
+        },
+        None,
+    );
+    query.sort_by = Some(SPENT_AT.into());
+
+    let result = store.query(&query).await.unwrap();
+    let outcome = &result.aggregates[0];
+
+    assert_eq!(
+        outcome.id.as_deref(),
+        Some("total-duration"),
+        "the outcome names the statistic that was asked for"
+    );
+    assert_eq!(
+        outcome.value,
+        Some((3_600_000 + 1_800_000 + 7_200_000 + 900_000) as f64),
+        "every entry's elapsed time, the running one included"
+    );
+    assert_eq!(outcome.count, 4, "all four entries contributed");
+
+    let per_day: Vec<(String, Option<f64>)> = outcome
+        .groups
+        .iter()
+        .map(|group| (group.key.clone(), group.value))
+        .collect();
+    assert_eq!(
+        per_day,
+        vec![
+            ("1970-01-02".to_string(), Some(5_400_000.0)),
+            ("1970-01-03".to_string(), Some(7_200_000.0)),
+            // Bucketed by the day it STARTED — a quarter to midnight on the 10th,
+            // even though the clock this was evaluated at is the 11th.
+            ("1970-01-10".to_string(), Some(900_000.0)),
+        ],
+        "1h30m on the first day, 2h on the second, the running quarter hour"
+    );
+}
+
+/// A row that can't be computed contributes nothing — not a zero, which would
+/// drag an average down and claim a denominator the sum never added up.
+#[tokio::test]
+async fn a_row_missing_an_argument_is_left_out_of_a_computed_total() {
+    use atomic_lib::expression::{Expression, Operand};
+
+    let store = Db::init_temp("aggregates_expression_gaps").await.unwrap();
+    let (_agent, drive) = store.setup("Alice").await.unwrap();
+
+    let table = store
+        .create_resource(urls::FOLDER, &drive, "Line items", None)
+        .await
+        .unwrap();
+
+    // Two rows with a quantity, one without.
+    for quantity in [Some(2), Some(4), None] {
+        let propvals = quantity.map(|value| vec![(AMOUNT, Value::Integer(value))]);
+        store
+            .create_resource(urls::FOLDER, &table, "Item", propvals)
+            .await
+            .unwrap();
+    }
+
+    let result = store
+        .query(&query_for(
+            &table,
+            Aggregation {
+                aggregates: vec![
+                    Aggregate {
+                        id: Some("total".into()),
+                        // Quantity × a fixed price, the "amount" of a line item.
+                        expression: Some(Expression::Product {
+                            a: Operand::Property(AMOUNT.into()),
+                            b: Operand::Literal(2.5),
+                        }),
+                        property: None,
+                        function: AggregateFunction::Sum,
+                    },
+                    Aggregate {
+                        id: Some("average".into()),
+                        expression: Some(Expression::Product {
+                            a: Operand::Property(AMOUNT.into()),
+                            b: Operand::Literal(2.5),
+                        }),
+                        property: None,
+                        function: AggregateFunction::Avg,
+                    },
+                ],
+                group_by: None,
+                now_ms: None,
+            },
+            None,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(result.aggregates[0].value, Some(15.0), "2 and 4, at 2.50");
+    assert_eq!(
+        result.aggregates[0].count, 2,
+        "the third row has no quantity"
+    );
+    assert_eq!(
+        result.aggregates[1].value,
+        Some(7.5),
+        "averaged over the two rows that have a value, not over three"
+    );
 }

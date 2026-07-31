@@ -6225,7 +6225,7 @@ msgstr "{0} rows"
 #~ msgid "Σ"
 #~ msgstr "Σ"
 
-#. 0: AGGREGATE_FUNCTION_LABELS[configured.function]; 1: property.shortname
+#. 0: AGGREGATE_FUNCTION_LABELS[configured.function]; 1: label
 #: src/chunks/TablePage/TableTotalsFooter.tsx
 msgid "{0} of {1} — click to change"
 msgstr "{0} of {1} — click to change"
@@ -6289,9 +6289,8 @@ msgstr "{0} rows — the totals menu"
 msgid "Total this column"
 msgstr "Total this column"
 
-#: src/chunks/TablePage/TableTotalsFooter.tsx
-msgid "Computed columns cannot be totalled yet — the total is computed from stored values."
-msgstr "Computed columns cannot be totalled yet — the total is computed from stored values."
+#~ msgid "Computed columns cannot be totalled yet — the total is computed from stored values."
+#~ msgstr "Computed columns cannot be totalled yet — the total is computed from stored values."
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Unknown error"
@@ -6306,3 +6305,7 @@ msgstr "No answer from {0}: {1}"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Ollama{0}"
 msgstr "Ollama{0}"
+
+#: src/chunks/TablePage/TableTotalsFooter.tsx
+msgid "This column holds an action, not a value, so there is nothing to total."
+msgstr "This column holds an action, not a value, so there is nothing to total."

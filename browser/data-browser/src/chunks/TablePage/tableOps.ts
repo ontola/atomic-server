@@ -7,6 +7,7 @@ import {
   type Store,
 } from '@tomic/react';
 import { normalizeViewKind, type ViewKind } from './tableViewKinds';
+import { parseDerivedColumnSpecs } from './derivedColumns';
 import {
   buildViewPropVals,
   createColumnOnClass,
@@ -204,9 +205,17 @@ export async function configureView(
     },
     map.byName,
     map.tags,
-    // Only write what was asked for: an absent field must not clear config the
-    // view already has.
-    { partial: true },
+    {
+      // Only write what was asked for: an absent field must not clear config the
+      // view already has.
+      partial: true,
+      // So a total can name a computed column this call isn't re-declaring.
+      existingDerivedColumns: parseDerivedColumnSpecs(
+        view.get(dataBrowser.properties.viewDerivedColumns) as
+          | JSONValue
+          | undefined,
+      ).map(spec => spec.label),
+    },
   );
 
   for (const [property, value] of Object.entries(propVals)) {

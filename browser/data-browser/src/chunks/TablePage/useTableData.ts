@@ -54,6 +54,7 @@ export function useTableData(resource: Resource): UseTableDataResult {
     tableView.viewAggregates,
     tableView.viewGroupByColumn,
     tableView.viewGroupGranularity,
+    tableView.viewDerivedColumns,
   );
 
   const queryFilter = {

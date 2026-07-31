@@ -132,19 +132,28 @@ describe('table templates', () => {
             }
           });
 
-          it('totals stored columns of a type the function accepts', () => {
+          it('totals columns of a type the function accepts', () => {
             for (const aggregate of view.aggregates ?? []) {
+              // A total over a computed column names it separately, and the
+              // column has to be one THIS view declares — the store is sent its
+              // expression, not a reference.
+              if (aggregate.computedColumn) {
+                expect(
+                  derivedNames,
+                  `${aggregate.computedColumn} is not a computed column of this view`,
+                ).toContain(aggregate.computedColumn);
+                expect(
+                  aggregate.column,
+                  'a total names a stored column or a computed one, not both',
+                ).toBeUndefined();
+                continue;
+              }
+
               if (aggregate.function === 'count' && !aggregate.column) {
                 continue;
               }
 
               const type = typeOf(aggregate.column ?? '');
-              // Aggregates read stored properties: a computed column has no
-              // value in the index, so totalling one would silently be empty.
-              expect(
-                derivedNames,
-                `${aggregate.column} is a computed column`,
-              ).not.toContain(aggregate.column);
               expect(type, `${aggregate.column} is not a column`).toBeDefined();
 
               if (
@@ -164,7 +173,8 @@ describe('table templates', () => {
 
             // One statistic per column per totals row, or they overwrite.
             const slots = (view.aggregates ?? []).map(
-              aggregate => `${aggregate.row ?? 0}:${aggregate.column ?? ''}`,
+              aggregate =>
+                `${aggregate.row ?? 0}:${aggregate.column ?? ''}:${aggregate.computedColumn ?? ''}`,
             );
             expect(new Set(slots).size).toBe(slots.length);
 

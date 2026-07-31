@@ -122,11 +122,41 @@ export interface QueryFilter {
 
 /** One statistic to compute. `count` needs no property. */
 export interface Aggregate {
+  /** Your own name for this statistic, echoed on the outcome. Needed to tell two
+   *  statistics apart when neither names a property (two computed values). */
+  id?: string;
   property?: string;
+  /** A value computed per resource instead of read off it. Takes precedence over
+   *  `property`. */
+  expression?: Expression;
   function: AggregateFunction;
 }
 
 export type AggregateFunction = 'sum' | 'count' | 'avg' | 'min' | 'max';
+
+/** A property to read off the resource, or a fixed number. */
+export type Operand = string | number;
+
+/**
+ * A value computed from a resource rather than stored on it: a duration, an
+ * amount, a days-since, a next-due date. Evaluated by the store, so a total or a
+ * filter can name one wherever it can name a property.
+ *
+ * A fixed set of five, not a formula language — the same five the data-browser's
+ * computed columns offer, in the same argument names.
+ */
+export type Expression =
+  /** `to − from`, in milliseconds. */
+  | { kind: 'difference'; from: Operand; to: Operand }
+  /** `(until ?? now) − from`, in milliseconds: still running while `until` is
+   *  empty. */
+  | { kind: 'elapsed'; from: Operand; until?: Operand | null }
+  /** Whole days between `from` and now. */
+  | { kind: 'daysSince'; from: Operand }
+  /** `a × b` — quantity × price, hours × rate. */
+  | { kind: 'product'; a: Operand; b: Operand }
+  /** `from + days`, as an instant. */
+  | { kind: 'offset'; from: Operand; days: Operand };
 
 /** Break the statistics down per distinct value of a property. */
 export interface AggregateGrouping {
@@ -144,6 +174,10 @@ export interface AggregateGrouping {
 export interface Aggregation {
   aggregates: Aggregate[];
   group_by?: AggregateGrouping;
+  /** The instant a computed value that measures against "now" (a running
+   *  duration, a days-since) is evaluated at. Send `Date.now()` so the number
+   *  agrees with the cells the client computed itself. */
+  now_ms?: number;
 }
 
 /** One bucket of a breakdown. */
@@ -157,6 +191,8 @@ export interface AggregateGroup {
 
 /** The answer to one requested statistic, over every matching resource. */
 export interface AggregateOutcome {
+  /** Echoes the request's `id`. */
+  id?: string;
   property?: string;
   function: AggregateFunction;
   /** `null` when no resource had a usable value — not the same as `0`. */

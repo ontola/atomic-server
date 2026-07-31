@@ -15,14 +15,16 @@ import type {
 } from '@components/Dropdown/DropdownTrigger';
 import { TableRow } from '@chunks/TableEditor/TableRow';
 import { TableHeadingWrapper } from '@chunks/TableEditor/TableHeading';
-import { TablePageContext } from './tablePageContext';
+import { TablePageContext, type AggregateTarget } from './tablePageContext';
 import type { TableColumn } from './useTableColumns';
 import { BreakdownDialog } from './BreakdownDialog';
+import type { DerivedColumnSpec } from './derivedColumns';
 import {
   AGGREGATE_FUNCTION_LABELS,
   aggregateKey,
   aggregateRowCount,
   formatAggregateValue,
+  functionsForDerived,
   isInstantProperty,
   isNumericProperty,
   type GroupGranularity,
@@ -70,12 +72,23 @@ const CellTrigger: DropdownTriggerComponent = ({
 };
 
 /** Which statistics make sense for a column, in menu order. */
-function functionsFor(property: Property): AggregateFunction[] {
-  if (isNumericProperty(property)) {
+function functionsFor(column: {
+  property?: Property;
+  derived?: DerivedColumnSpec;
+}): AggregateFunction[] {
+  if (column.derived) {
+    return functionsForDerived(column.derived);
+  }
+
+  if (!column.property) {
+    return [];
+  }
+
+  if (isNumericProperty(column.property)) {
     return ['sum', 'avg', 'min', 'max', 'count'];
   }
 
-  if (isInstantProperty(property)) {
+  if (isInstantProperty(column.property)) {
     return ['min', 'max', 'count'];
   }
 
@@ -131,15 +144,22 @@ export function TableTotalsFooter({
 
   /** The statistic configured for a column in a given totals row. */
   const configuredAt = (
-    property: string | undefined,
+    column: TableColumn,
     row: number,
-  ): TableAggregate | undefined =>
-    property === undefined
-      ? undefined
-      : aggregates.find(
-          aggregate =>
-            aggregate.property === property && (aggregate.row ?? 0) === row,
-        );
+  ): TableAggregate | undefined => {
+    const target = targetOf(column);
+
+    if (!target) {
+      return undefined;
+    }
+
+    return aggregates.find(
+      aggregate =>
+        aggregate.property === target.property &&
+        aggregate.derived === target.derived &&
+        (aggregate.row ?? 0) === row,
+    );
+  };
 
   return (
     <>
@@ -163,20 +183,21 @@ export function TableTotalsFooter({
               row < storedRows ? removeAggregateRow(row) : setExtraRows(0)
             }
           />
-          {columns.map((column, index) => (
-            <TotalCell
-              key={column.key}
-              aria-colindex={index + 2}
-              column={column}
-              configured={configuredAt(column.property?.subject, row)}
-              outcomeByKey={outcomeByKey}
-              onPick={fn =>
-                column.property &&
-                setColumnAggregate(column.property.subject, fn, row)
-              }
-              readOnly={!canWriteTable}
-            />
-          ))}
+          {columns.map((column, index) => {
+            const target = targetOf(column);
+
+            return (
+              <TotalCell
+                key={column.key}
+                aria-colindex={index + 2}
+                column={column}
+                configured={configuredAt(column, row)}
+                outcomeByKey={outcomeByKey}
+                onPick={fn => target && setColumnAggregate(target, fn, row)}
+                readOnly={!canWriteTable}
+              />
+            );
+          })}
           <FillerCell aria-colindex={columns.length + 2} />
         </FooterRow>
       ))}
@@ -283,41 +304,43 @@ function TotalCell({
   readOnly,
   ...rest
 }: {
-  column: { key: string; property?: Property };
+  column: TableColumn;
   configured?: TableAggregate;
   outcomeByKey: Map<string, { value: number | null; count: number }>;
   onPick: (fn: AggregateFunction | undefined) => void;
   readOnly: boolean;
 }): JSX.Element {
-  const property = column.property;
+  const functions = functionsFor(column);
 
-  // A computed column isn't stored, so the store has nothing to aggregate. Say
-  // so rather than swallowing the click: a dead cell in a row of live ones reads
-  // as a bug.
-  if (!property) {
+  // A column that is neither stored nor computed — the timer's Start/Stop button
+  // — has nothing to add up. Say so rather than swallowing the click: a dead cell
+  // in a row of live ones reads as a bug.
+  if (functions.length === 0) {
     return (
       <Cell {...rest}>
-        <Unavailable title='Computed columns cannot be totalled yet — the total is computed from stored values.'>
+        <Unavailable title='This column holds an action, not a value, so there is nothing to total.'>
           –
         </Unavailable>
       </Cell>
     );
   }
 
+  const label = column.derived?.label ?? column.property?.shortname ?? '';
+
   const outcome = configured
-    ? outcomeByKey.get(
-        aggregateKey({
-          property: property.subject,
-          function: configured.function,
-        }),
-      )
+    ? outcomeByKey.get(aggregateKey(configured))
     : undefined;
 
   const value = configured ? (
     <Value>
       <Label>{AGGREGATE_FUNCTION_LABELS[configured.function]}</Label>
       <Amount>
-        {formatAggregateValue(outcome?.value, configured.function, property)}
+        {formatAggregateValue(
+          outcome?.value,
+          configured.function,
+          column.property,
+          column.derived,
+        )}
       </Amount>
     </Value>
   ) : undefined;
@@ -328,7 +351,7 @@ function TotalCell({
 
   const items: DropdownItem[] = [
     { id: 'none', label: 'None', onClick: () => onPick(undefined) },
-    ...functionsFor(property).map(fn => ({
+    ...functions.map(fn => ({
       id: fn,
       label: AGGREGATE_FUNCTION_LABELS[fn],
       onClick: () => onPick(fn),
@@ -341,7 +364,7 @@ function TotalCell({
         value={{
           content: value ?? <Hint data-hint='true'>Σ</Hint>,
           title: configured
-            ? `${AGGREGATE_FUNCTION_LABELS[configured.function]} of ${property.shortname} — click to change`
+            ? `${AGGREGATE_FUNCTION_LABELS[configured.function]} of ${label} — click to change`
             : 'Total this column',
         }}
       >
@@ -349,6 +372,18 @@ function TotalCell({
       </CellTriggerContext>
     </Cell>
   );
+}
+
+/**
+ * What a column's statistic would describe: its property, or the computed column
+ * itself. Undefined for a column that is neither (a row action).
+ */
+function targetOf(column: TableColumn): AggregateTarget | undefined {
+  if (column.property) {
+    return { property: column.property.subject };
+  }
+
+  return column.derived ? { derived: column.derived.id } : undefined;
 }
 
 /**

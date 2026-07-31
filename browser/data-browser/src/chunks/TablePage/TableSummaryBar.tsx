@@ -3,6 +3,7 @@ import { styled } from 'styled-components';
 import { Datatype, type AggregateOutcome, type Property } from '@tomic/react';
 import { ResourceInline } from '@views/ResourceInline';
 import { usePropertyTitles } from './helpers/usePropertyTitles';
+import type { DerivedColumnSpec } from './derivedColumns';
 import {
   aggregateKey,
   formatAggregateValue,
@@ -18,6 +19,8 @@ interface TableSummaryBarProps {
   outcomes: AggregateOutcome[];
   /** Every property of the row class, for labels and value formatting. */
   classProperties: Property[];
+  /** The view's computed columns, for the statistics that describe one. */
+  derivedColumns: DerivedColumnSpec[];
   /** The property the statistics are broken down by, if any. */
   groupByColumn: string | undefined;
   granularity: GroupGranularity;
@@ -35,6 +38,7 @@ export function TableSummaryBar({
   aggregates,
   outcomes,
   classProperties,
+  derivedColumns,
   groupByColumn,
   granularity,
 }: TableSummaryBarProps): JSX.Element | null {
@@ -45,6 +49,7 @@ export function TableSummaryBar({
   }
 
   const byProperty = new Map(classProperties.map(p => [p.subject, p]));
+  const byDerived = new Map(derivedColumns.map(spec => [spec.id, spec]));
   const byKey = new Map(outcomes.map(o => [aggregateKey(o), o]));
 
   const cell = (aggregate: TableAggregate, groupKey?: string) => {
@@ -58,7 +63,14 @@ export function TableSummaryBar({
         ? outcome?.value
         : outcome?.groups?.find(g => g.key === groupKey)?.value;
 
-    return formatAggregateValue(value, aggregate.function, property);
+    // A bucket of a computed column formats the way the column does — an hour of
+    // logged time reads as 1:00:00, not 3600000.
+    return formatAggregateValue(
+      value,
+      aggregate.function,
+      property,
+      aggregate.derived ? byDerived.get(aggregate.derived) : undefined,
+    );
   };
 
   // Buckets come from the first outcome: every aggregate is grouped by the same

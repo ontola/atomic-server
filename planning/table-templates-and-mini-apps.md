@@ -192,17 +192,18 @@ configuration, not a renderer.
 
 ## Known Gaps
 
-- The timer's day totals: aggregation reads stored properties and a duration is
-  a derived column. Needs a stored duration, or an aggregate that can evaluate a
-  derived column.
+- ~~The timer's day totals~~ and ~~aggregates over a derived column~~: closed by
+  step 7 below — the store evaluates a computed column as it aggregates.
+- **Filters still can't reference a computed column**, so "overdue" and "logged
+  more than an hour" remain out of reach. Unlike a total this can't ride the
+  existing pass: the query index is keyed by stored values, and a running
+  duration has no stable value to key by. Needs a post-index evaluation pass.
 - Aggregation has no per-aggregate filter ("sum of Amount **where** Status =
   Done"); a total follows the view's own filters instead.
 - Subtotals render under the grid, not as rows between groups inside it.
 - Column widths are a positional array on the table, shared by every view, so
   reordering columns swaps their widths and two views can't size the same column
   differently. Keying widths by column key would fix both.
-- Aggregates and filters can't reference a derived column, so the timer's day
-  totals, "qty × price summed" and "overdue" filters all remain out of reach.
 - **A filtered view keeps a row whose value stopped matching.** Found building
   the Inventory template: with a "Quantity at most 3" view, raising a row's
   quantity to 10 leaves it listed there — across a reload, so this is not the
@@ -372,6 +373,44 @@ Two things this surfaced:
 decimals and totals; Plant care's next-due date; Inventory's line value and
 filtered view), since "the config arrived wired up" is the only thing a template
 can get wrong.
+
+### 7. Computed columns in the store: totals — done (2026-07-31)
+
+A computed column used to live only in the cell: the store knew nothing about it,
+so a total couldn't sum one. That is what blocked the timer's day totals, "qty ×
+price summed" and inventory's total value — three of the mini-app list's own
+requirements.
+
+- `lib/src/expression.rs`: the same five generators, in Rust. An `Expression` is
+  the column's own `kind` and argument names, flattened
+  (`{kind: 'elapsed', from, until}`), with each argument either a property
+  subject or a literal number — so one spec describes the cell and the store.
+  A row missing an argument yields no value, which is the same "doesn't
+  contribute" a row without a stored value already got: never a zero, which would
+  drag an average down.
+- `Aggregate` gained `expression` (alternative to `property`) and `id` — two
+  totals over computed columns name no property at all, so nothing else told
+  their outcomes apart. The outcome echoes the id.
+- `Aggregation.now_ms`: the caller's clock, so a running duration totals to the
+  same instant the cells are showing, and so a day breakdown can't split one day
+  across two buckets mid-pass. The browser quantizes it to the minute, because
+  `now` is part of the query's identity — a raw `Date.now()` would re-run the
+  query on every render.
+- UI, per the rule: a computed column's footer cell now offers the same menu a
+  stored column does, and formats the answer the way the column does (a sum of
+  durations reads `5:30:00`, not `19800000`) — in the breakdown panel too. A date
+  column (a next-due) offers only earliest/latest, since summing dates is
+  meaningless. The one cell that still says "nothing to total here" is the timer's
+  Start/Stop, which holds an action rather than a value.
+- Tool: `aggregates` take `computedColumn` alongside `column`, and
+  `configure_view` resolves one the view already has — the assistant adds the
+  column in one call and totals it in the next.
+- The Time tracker template now ships the day totals it always described: its
+  All entries view sums Duration and breaks it down per day.
+
+Filters over computed columns are deliberately not in this step: a total rides
+the aggregation pass that already scans the matching set, while a filter decides
+*membership*, which today comes from an index keyed by stored values.
 
 ## Open Questions
 

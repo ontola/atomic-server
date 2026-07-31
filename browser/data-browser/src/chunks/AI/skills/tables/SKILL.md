@@ -124,8 +124,12 @@ on a view:
 - Totals render in footer rows, under the column each describes. One total per
   column per row: to show a sum and an average of the same column, put the
   second on `"row": 1`.
-- These only work on **stored** columns. A computed column (`derivedColumns`) is
-  not stored, so it cannot be summed yet.
+- A **computed** column can be totalled too — name it with `computedColumn`
+  instead of `column`, and the store evaluates it per row:
+  `{ "function": "sum", "computedColumn": "Duration" }`. That is how a timesheet
+  gets its hours per day (a `sum` of Duration with `breakdownColumn: "Start"`),
+  or an inventory its total value (a `sum` of a `product` column). The column has
+  to exist on the same view; `configure_view` can name one the view already has.
 
 Only fall back to building a table by hand (multiple `create_resource` calls)
 when you need something `create_table` can't express. For that lower-level

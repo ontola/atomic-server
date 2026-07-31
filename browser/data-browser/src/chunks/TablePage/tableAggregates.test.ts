@@ -76,8 +76,85 @@ describe('toAggregation', () => {
 
   it('passes the aggregates through, without a breakdown', () => {
     expect(toAggregation([sumAmount], undefined, 'day')).toEqual({
-      aggregates: [{ property: AMOUNT.subject, function: 'sum' }],
+      aggregates: [{ id: 'sum', property: AMOUNT.subject, function: 'sum' }],
       group_by: undefined,
+    });
+  });
+
+  describe('over a computed column', () => {
+    const duration = {
+      id: 'duration',
+      label: 'Duration',
+      kind: 'elapsed' as const,
+      args: { from: START.subject, until: 'https://example.com/end' },
+    };
+    const sumDuration = {
+      id: 'sum-duration-0',
+      derived: 'duration',
+      function: 'sum' as const,
+    };
+
+    it('sends the column expression for the store to evaluate', () => {
+      const aggregation = toAggregation([sumDuration], undefined, 'day', [
+        duration,
+      ]);
+
+      expect(aggregation?.aggregates).toEqual([
+        {
+          id: 'sum-duration-0',
+          function: 'sum',
+          expression: {
+            kind: 'elapsed',
+            from: START.subject,
+            until: 'https://example.com/end',
+          },
+        },
+      ]);
+    });
+
+    it('measures a live value against a whole minute, not this instant', () => {
+      const aggregation = toAggregation([sumDuration], undefined, 'day', [
+        duration,
+      ]);
+
+      // `now_ms` is part of the query's identity, so it must not change on every
+      // render — that would re-run the query continuously.
+      expect(aggregation?.now_ms).toBe(
+        Math.floor(Date.now() / 60_000) * 60_000,
+      );
+    });
+
+    it('leaves the clock out when nothing measures against it', () => {
+      const total = {
+        id: 'total',
+        label: 'Total',
+        kind: 'product' as const,
+        args: { a: AMOUNT.subject, b: 2 },
+      };
+      const aggregation = toAggregation(
+        [{ id: 'sum-total-0', derived: 'total', function: 'sum' }],
+        undefined,
+        'day',
+        [total],
+      );
+
+      expect(aggregation?.now_ms).toBeUndefined();
+    });
+
+    it('asks for nothing when the column it names is gone', () => {
+      // A total left behind by a removed column would otherwise render as an
+      // empty number forever.
+      expect(
+        toAggregation([sumDuration], undefined, 'day', []),
+      ).toBeUndefined();
+    });
+
+    it('asks for nothing when the column is still incomplete', () => {
+      const halfBuilt = { ...duration, args: { from: '' } };
+
+      expect(
+        toAggregation([sumDuration], undefined, 'day', [halfBuilt]),
+      ).toBeUndefined();
     });
   });
 

@@ -80,6 +80,12 @@ export interface TableAggregateSpec {
   function: 'sum' | 'count' | 'avg' | 'min' | 'max';
   /** The column to aggregate, by name. Omit for `count` to count rows. */
   column?: string;
+  /**
+   * A computed column of this view to aggregate instead of a stored one, by its
+   * name — a duration, an amount. The store evaluates it per row, so the total
+   * still covers every matching row.
+   */
+  computedColumn?: string;
   /** Which totals row it shows in, from 0. One statistic per column per row. */
   row?: number;
 }
@@ -344,27 +350,45 @@ function resolveDerivedColumns(
   });
 }
 
-/** Resolves an aggregate's column name to a property subject. */
+/** Resolves an aggregate's column name to a property subject, or a computed
+ *  column's name to its id. */
 function resolveAggregates(
   specs: TableAggregateSpec[],
   resolve: (reference: string, role: string) => string,
+  /** The names of the computed columns this view declares. */
+  derivedNames: string[],
 ): Array<{
   id: string;
   property?: string;
+  derived?: string;
   function: string;
   row?: number;
 }> {
   const taken = new Set<string>();
+  const derivedIds = new Map(
+    derivedNames.map(name => [name.toLowerCase(), stringToSlug(name)]),
+  );
 
   return specs.map(spec => {
     let property: string | undefined;
+    let derived: string | undefined;
 
-    if (spec.column) {
+    if (spec.computedColumn) {
+      derived = derivedIds.get(spec.computedColumn.toLowerCase());
+
+      if (!derived) {
+        throw new Error(
+          `Unknown computed column "${spec.computedColumn}" for the ${spec.function} total. This view's computed columns: ${
+            derivedNames.join(', ') || '(none)'
+          }`,
+        );
+      }
+    } else if (spec.column) {
       property = resolve(spec.column, `the ${spec.function} total`);
     }
 
     const base = stringToSlug(
-      `${spec.function}-${spec.column ?? 'rows'}-${spec.row ?? 0}`,
+      `${spec.function}-${spec.computedColumn ?? spec.column ?? 'rows'}-${spec.row ?? 0}`,
     );
     let id = base;
 
@@ -377,6 +401,7 @@ function resolveAggregates(
     return {
       id,
       property,
+      ...(derived ? { derived } : {}),
       function: spec.function,
       ...(spec.row ? { row: spec.row } : {}),
     };
@@ -395,7 +420,15 @@ export function buildViewPropVals(
   view: TableViewSpec,
   columnSubjectByName: Record<string, string>,
   tagsByColumn: Record<string, Record<string, string>> = {},
-  opts: { partial?: boolean } = {},
+  opts: {
+    partial?: boolean;
+    /**
+     * Names of computed columns the view already has. A total can name one
+     * without the same call re-declaring the column — which is how the assistant
+     * works: add the column, then total it.
+     */
+    existingDerivedColumns?: string[];
+  } = {},
 ): Record<string, JSONValue> {
   const propVals: Record<string, JSONValue> = {};
   const partial = !!opts.partial;
@@ -518,6 +551,10 @@ export function buildViewPropVals(
     propVals[dataBrowser.properties.viewAggregates] = resolveAggregates(
       view.aggregates,
       require,
+      [
+        ...(view.derivedColumns ?? []).map(derived => derived.name),
+        ...(opts.existingDerivedColumns ?? []),
+      ],
     ) as unknown as JSONValue;
   }
 

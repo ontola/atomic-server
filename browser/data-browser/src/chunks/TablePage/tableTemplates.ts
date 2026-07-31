@@ -156,7 +156,26 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
           ],
           default: true,
         },
-        { name: 'All entries', kind: 'table' },
+        {
+          name: 'All entries',
+          kind: 'table',
+          sortByColumn: 'Start',
+          sortDesc: true,
+          // The hours themselves: a total over a *computed* column, broken down
+          // per day. Duration is computed per row, and the store evaluates it as
+          // it aggregates.
+          derivedColumns: [
+            {
+              name: 'Duration',
+              kind: 'elapsed',
+              args: { from: 'Start', until: 'End' },
+            },
+          ],
+          aggregates: [{ function: 'sum', computedColumn: 'Duration' }],
+          breakdownColumn: 'Start',
+          breakdownGranularity: 'day',
+          columnOrder: ['Name', 'Start', 'End', 'Duration', 'Project'],
+        },
       ],
     },
   },

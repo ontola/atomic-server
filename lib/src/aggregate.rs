@@ -46,10 +46,19 @@ impl AggregateFunction {
 /// One requested statistic.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Aggregate {
+    /// The caller's own name for this statistic, echoed on the outcome. Two
+    /// statistics can otherwise be indistinguishable — a sum of one computed
+    /// column and a sum of another name no property at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     /// The property whose values are aggregated. `count` needs none: it counts
     /// rows, and with a property set it counts the rows that have one.
     #[serde(default)]
     pub property: Option<String>,
+    /// A value computed from each row instead of read off it — a duration, an
+    /// amount. Takes precedence over `property` when both are given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expression: Option<crate::expression::Expression>,
     pub function: AggregateFunction,
 }
 
@@ -90,6 +99,12 @@ pub struct Aggregation {
     pub aggregates: Vec<Aggregate>,
     #[serde(default)]
     pub group_by: Option<AggregateGrouping>,
+    /// The instant a computed value that measures against "now" (a running
+    /// duration, a days-since) is evaluated at. The caller's clock, since the
+    /// caller is the one who will read the number next to a cell it computed
+    /// itself; defaults to this machine's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub now_ms: Option<i64>,
 }
 
 impl Aggregation {
@@ -113,6 +128,10 @@ pub struct AggregateGroup {
 /// The answer to one requested statistic.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateOutcome {
+    /// Echoes the request's `id`, so a caller can tell two otherwise identical
+    /// statistics apart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub property: Option<String>,
     pub function: AggregateFunction,

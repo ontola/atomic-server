@@ -129,6 +129,12 @@ const aggregateSchema = z.object({
     .describe(
       "The column to aggregate. Omit with 'count' to count rows; 'sum'/'avg' need a number column, 'min'/'max' a number or date column.",
     ),
+  computedColumn: z
+    .string()
+    .optional()
+    .describe(
+      "A computed column of this view to aggregate instead of a stored column, by its name (e.g. 'Duration'). The server evaluates it per row, so a sum of durations or of quantity × price covers every matching row.",
+    ),
   row: z
     .number()
     .optional()

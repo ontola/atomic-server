@@ -11,6 +11,15 @@ import { TableFilter, FilterOperator } from './tableFiltering';
 import type { DerivedColumnSpec } from './derivedColumns';
 import type { GroupGranularity, TableAggregate } from './tableAggregates';
 
+/**
+ * Which column a statistic describes: a stored property, or a column this view
+ * computes (by its id). Exactly one of the two.
+ */
+export interface AggregateTarget {
+  property?: string;
+  derived?: string;
+}
+
 export interface TablePageContextType {
   tableSubject: string;
   tableClassSubject: string;
@@ -45,7 +54,7 @@ export interface TablePageContextType {
    * the given totals row (the first one by default).
    */
   setColumnAggregate: (
-    property: string,
+    target: AggregateTarget,
     fn: AggregateFunction | undefined,
     row?: number,
   ) => void;

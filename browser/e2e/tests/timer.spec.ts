@@ -269,4 +269,66 @@ test.describe('timer view', () => {
     await expect(page.getByRole('menuitem', { name: 'End' })).toBeDisabled();
     await expect(page.getByRole('menuitem', { name: 'Status' })).toBeEnabled();
   });
+  test('a duration can be totalled, and broken down per day', async ({
+    page,
+  }) => {
+    test.slow();
+    // Wide enough that the footer cell under Duration can be clicked.
+    await page.setViewportSize({ width: 1800, height: 900 });
+
+    await newResource('table', page);
+    await page.getByRole('button', { name: /Time tracker/ }).click();
+    await page.getByPlaceholder('New Table').fill('Totalled hours');
+    await page.getByRole('button', { name: 'Create' }).click();
+
+    await expect(page.getByTestId('timer-new-input')).toBeVisible();
+    await expect(page.getByRole('grid')).toBeVisible();
+    await page.waitForTimeout(500);
+
+    // Two logged entries, both stopped, so their durations are settled.
+    for (const name of ['Invoicing', 'Standup']) {
+      await page.getByTestId('timer-new-input').fill(name);
+      await page.getByTestId('timer-start-new').click();
+      await expect(row(page, name)).toBeVisible();
+      await row(page, name).getByTestId('timer-stop').click();
+      await expect(row(page, name).getByTestId('timer-resume')).toBeVisible();
+    }
+
+    // Duration leads a timer view, so its footer cell is the first after the
+    // row-count one. A duration is COMPUTED, not stored — totalling one is what
+    // this covers.
+    const footer = page.getByTestId('table-totals');
+    await footer.locator('[aria-colindex="2"]').click();
+    await page.getByTestId('menu-item-sum').click();
+
+    // Formatted as a clock, like the column itself: milliseconds would be
+    // unreadable. Both entries were sub-minute, so the total is 0:00:0x.
+    await expect(footer).toContainText('Sum', { timeout: 15_000 });
+    await expect(footer).toHaveText(/0:00:\d{2}/, { timeout: 15_000 });
+
+    // The day totals the plan called out as blocked: break the same sum down by
+    // the day each entry started.
+    await expect(page.locator('[role="menu"]')).toHaveCount(0);
+    await footer.locator('[aria-colindex="1"]').click();
+    await page.getByTestId('menu-item-breakdown').click();
+    await inDialog(page, async () => {
+      await page
+        .getByTestId('breakdown-column')
+        .selectOption({ label: 'Start' });
+      await page.getByTestId('breakdown-save').click();
+    });
+
+    const breakdown = page.getByTestId('table-breakdown');
+    await expect(breakdown).toBeVisible({ timeout: 15_000 });
+    // Both entries started today: one bucket, holding both.
+    await expect(breakdown).toContainText('2 rows');
+    await expect(breakdown).toHaveText(/0:00:\d{2}/);
+
+    // It is configuration on the View, so it survives a reload.
+    await page.reload();
+    await expect(page.getByRole('grid')).toBeVisible();
+    await expect(page.getByTestId('table-totals')).toContainText('Sum', {
+      timeout: 15_000,
+    });
+  });
 });
