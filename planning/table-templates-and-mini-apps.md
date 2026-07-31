@@ -240,6 +240,10 @@ configuration, not a renderer.
   filter, a restocked row answered no, and the one entry that needed deleting was
   the one deletion was skipped for. It now rebuilds the old resource from the
   stored propvals (as `recursive_remove` already did) and evicts against that.
+  The same mistake had a second symptom nobody had noticed: an edit that keeps a
+  row in the view but changes its sort value deleted the key the *new* value
+  implies rather than the one the entry is filed under, so the row was listed
+  **twice** (and `count` disagreed with the rows).
   Why only the browser saw it: the server applies commits, while the browser's
   local database writes whole resources (`putResource` → `add_resource_opts`),
   and a filtered view is answered from that database's cached member list.

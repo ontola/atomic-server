@@ -6,7 +6,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ### Atomic Browser
 
-- Fix: a filtered view kept a row whose value had stopped matching it. Raise a "Quantity at most 3" row to 40 and it stayed in the Low stock view — across a reload, because the local database's index still listed it as a member. Editing a row out of a filtered view now removes it, and editing one into a filter still adds it in the right sorted position.
+- Fix: a filtered view kept a row whose value had stopped matching it. Raise a "Quantity at most 3" row to 40 and it stayed in the Low stock view — across a reload, because the local database's index still listed it as a member. Editing a row out of a filtered view now removes it, editing one into a filter still adds it in the right sorted position, and an edit that keeps a row in the view but changes what it sorts by no longer lists it twice.
 
 ## [v0.41.0-beta.2] - 2026-07-31
 

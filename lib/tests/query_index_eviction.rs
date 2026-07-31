@@ -189,6 +189,40 @@ async fn a_row_edited_into_a_filter_appears_and_is_sorted_by_its_new_value() {
 }
 
 #[tokio::test]
+async fn a_row_that_stays_a_member_but_moves_is_listed_once() {
+    let store = Db::init_temp("index_eviction_resorts").await.unwrap();
+    let (_agent, drive) = store.setup("Alice").await.unwrap();
+    let table = stock_table(&store, &drive).await;
+
+    let query = low_stock_query(&table, 3);
+    assert_eq!(
+        names_in_order(&store, &query).await,
+        vec!["Screws".to_string(), "Nails".to_string()],
+        "2 before 3"
+    );
+
+    // Still low stock, but sorted differently now. Membership is unchanged, so
+    // nothing about this edit looks like an eviction — and yet the entry has to
+    // move, because the sort value is part of its key. Deleting the key the new
+    // value implies (rather than the one the entry is actually filed under)
+    // leaves the old entry behind and adds a second, listing one row twice.
+    let screws = subject_named(&store, &query, "Screws").await;
+    restock(&store, &screws, 3).await;
+
+    let names = names_in_order(&store, &query).await;
+    assert_eq!(
+        names.len(),
+        2,
+        "two rows match, so two rows are listed: {names:?}"
+    );
+    assert_eq!(
+        store.query(&query).await.unwrap().count,
+        2,
+        "and the count agrees with the rows"
+    );
+}
+
+#[tokio::test]
 async fn rewriting_a_row_without_touching_the_filtered_value_keeps_it() {
     let store = Db::init_temp("index_eviction_untouched").await.unwrap();
     let (_agent, drive) = store.setup("Alice").await.unwrap();
