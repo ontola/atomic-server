@@ -178,6 +178,37 @@ const rowActionSchema = z.object({
     ),
 });
 
+/** The view's create button. */
+const quickAddSchema = z.object({
+  label: z.string().describe("What the button says, e.g. 'Log a feed'."),
+  field: z
+    .string()
+    .optional()
+    .describe(
+      "A column to type into before creating, by name — usually 'name'. Omit for a button that just creates a row, which is what a one-tap logger wants.",
+    ),
+  placeholder: z.string().optional().describe('Placeholder for that field.'),
+  presets: z
+    .array(
+      z.object({
+        kind: z
+          .enum(['setNow', 'setValue', 'toggle', 'increment'])
+          .describe(
+            'Same verbs as a row action, applied to the new row: setNow stamps the moment the button was pressed, setValue presets a status, toggle starts it ticked, increment starts it at the step.',
+          ),
+        column: z.string().describe('The column to set, by name.'),
+        value: z
+          .union([z.string(), z.number()])
+          .optional()
+          .describe(
+            "For 'setValue' the option name (or literal); for 'increment' the amount.",
+          ),
+      }),
+    )
+    .optional()
+    .describe('Values every new row starts with.'),
+});
+
 const filterSchema = z.object({
   column: z.string().describe('The column to constrain, by name.'),
   operator: z
@@ -301,6 +332,11 @@ const viewConfigShape = {
     .optional()
     .describe(
       'Computed columns, shown next to the stored ones but read off each row rather than out of it. Use these instead of asking for a renderer: a duration, a days-since, an amount and a next-due date are all configuration.',
+    ),
+  quickAdd: quickAddSchema
+    .optional()
+    .describe(
+      'A button above the rows that creates one — the widget a personal app is mostly used through. Replaces the whole spec when given.',
     ),
   rowActions: z
     .array(rowActionSchema)

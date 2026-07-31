@@ -93,6 +93,7 @@ export const dataBrowser = {
     viewColumnOrder: 'https://atomicdata.dev/properties/view-column-order',
     viewAggregates: 'https://atomicdata.dev/properties/view-aggregates',
     viewRowActions: 'https://atomicdata.dev/properties/view-row-actions',
+    viewQuickAdd: 'https://atomicdata.dev/properties/view-quick-add',
     viewGroupByColumn: 'https://atomicdata.dev/properties/view-group-by-column',
     viewGroupGranularity:
       'https://atomicdata.dev/properties/view-group-granularity',
@@ -200,6 +201,7 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/view-column-order',
       'https://atomicdata.dev/properties/view-aggregates',
       'https://atomicdata.dev/properties/view-row-actions',
+      'https://atomicdata.dev/properties/view-quick-add',
       'https://atomicdata.dev/properties/view-group-by-column',
       'https://atomicdata.dev/properties/view-group-granularity',
     ],
@@ -408,6 +410,7 @@ declare module '../index.js' {
         | typeof dataBrowser.properties.viewColumnOrder
         | typeof dataBrowser.properties.viewAggregates
         | typeof dataBrowser.properties.viewRowActions
+        | typeof dataBrowser.properties.viewQuickAdd
         | typeof dataBrowser.properties.viewGroupByColumn
         | typeof dataBrowser.properties.viewGroupGranularity;
     };
@@ -531,6 +534,12 @@ declare module '../index.js' {
       property?: string;
       value?: string | number;
     }>;
+    [dataBrowser.properties.viewQuickAdd]: {
+      label?: string;
+      field?: string;
+      placeholder?: string;
+      presets?: { kind?: string; property?: string; value?: string | number }[];
+    };
     [dataBrowser.properties.viewGroupByColumn]: string;
     [dataBrowser.properties.viewGroupGranularity]: string;
     [dataBrowser.properties.dashboardBlocks]: string[];
@@ -619,6 +628,7 @@ declare module '../index.js' {
     [dataBrowser.properties.viewColumnOrder]: 'viewColumnOrder';
     [dataBrowser.properties.viewAggregates]: 'viewAggregates';
     [dataBrowser.properties.viewRowActions]: 'viewRowActions';
+    [dataBrowser.properties.viewQuickAdd]: 'viewQuickAdd';
     [dataBrowser.properties.viewGroupByColumn]: 'viewGroupByColumn';
     [dataBrowser.properties.viewGroupGranularity]: 'viewGroupGranularity';
     [dataBrowser.properties.dashboardBlocks]: 'dashboardBlocks';

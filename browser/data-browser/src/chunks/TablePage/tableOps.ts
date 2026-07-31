@@ -303,6 +303,7 @@ export interface ViewDescription {
   derivedColumns?: JSONValue;
   aggregates?: JSONValue;
   rowActions?: JSONValue;
+  quickAdd?: JSONValue;
   breakdownColumn?: string;
   breakdownGranularity?: string;
 }
@@ -410,6 +411,12 @@ export async function describeTable(
 
       if (Array.isArray(rowActions) && rowActions.length > 0) {
         described.rowActions = rowActions as JSONValue;
+      }
+
+      const quickAdd = read(dataBrowser.properties.viewQuickAdd);
+
+      if (quickAdd !== undefined) {
+        described.quickAdd = quickAdd as JSONValue;
       }
 
       const aggregates = read(dataBrowser.properties.viewAggregates);

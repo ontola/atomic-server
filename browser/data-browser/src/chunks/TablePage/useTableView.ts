@@ -39,6 +39,7 @@ import {
   type TableAggregate,
 } from './tableAggregates';
 import { parseRowActions, type RowActionSpec } from './rowActions';
+import { parseQuickAdd, type QuickAddSpec } from './quickAdd';
 import { TableSorting, DEFAULT_SORT_PROP } from './tableSorting';
 import {
   ViewKind,
@@ -164,6 +165,13 @@ export interface UseTableViewResult {
   viewRowActions: RowActionSpec[];
   /** Persist the row actions to the active View (lazy-creates it). */
   setViewRowActions: (actions: RowActionSpec[]) => void;
+  /**
+   * The button this view offers for creating a row — "Log a feed", "Add item".
+   * Undefined when the view offers none.
+   */
+  viewQuickAdd: QuickAddSpec | undefined;
+  /** Persist the quick-add (undefined removes it). */
+  setViewQuickAdd: (spec: QuickAddSpec | undefined) => void;
   /** The property the statistics are broken down by, if any. */
   viewGroupByColumn: string | undefined;
   /** Persist the breakdown property (empty string clears it). */
@@ -253,6 +261,7 @@ export function useTableView(
     view,
     dataBrowser.properties.viewRowActions,
   );
+  const [storedQuickAdd] = useValue(view, dataBrowser.properties.viewQuickAdd);
   const [storedGroupByColumn] = useString(
     view,
     dataBrowser.properties.viewGroupByColumn,
@@ -293,6 +302,14 @@ export function useTableView(
   const viewRowActions = useMemo(
     () => parseRowActions(JSON.parse(rowActionsKey)),
     [rowActionsKey],
+  );
+
+  // Serialized dep, like the rest of the JSON config: this reaches the rendered
+  // bar, and a fresh object every render would remount it.
+  const quickAddKey = JSON.stringify(storedQuickAdd ?? null);
+  const viewQuickAdd = useMemo(
+    () => parseQuickAdd(JSON.parse(quickAddKey)),
+    [quickAddKey],
   );
 
   const [filters, setFilters] = useState<TableFilter[]>([]);
@@ -743,6 +760,29 @@ export function useTableView(
     [ensureView],
   );
 
+  const setViewQuickAdd = useCallback(
+    (spec: QuickAddSpec | undefined) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        if (spec === undefined) {
+          v.remove(dataBrowser.properties.viewQuickAdd);
+        } else {
+          // Validated (no `false`): the property fetch is what records the JSON
+          // datatype tag, without which a plain object is stored as a string.
+          await v.set(dataBrowser.properties.viewQuickAdd, spec as never);
+        }
+
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
   const setViewGroupByColumn = useCallback(
     (property: string) => {
       void (async () => {
@@ -818,6 +858,7 @@ export function useTableView(
           dataBrowser.properties.viewColumnOrder,
           dataBrowser.properties.viewAggregates,
           dataBrowser.properties.viewRowActions,
+          dataBrowser.properties.viewQuickAdd,
           dataBrowser.properties.viewGroupByColumn,
           dataBrowser.properties.viewGroupGranularity,
         ]) {
@@ -918,6 +959,8 @@ export function useTableView(
     setViewAggregates,
     viewRowActions,
     setViewRowActions,
+    viewQuickAdd,
+    setViewQuickAdd,
     viewGroupByColumn: storedGroupByColumn || undefined,
     setViewGroupByColumn,
     viewGroupGranularity: (storedGroupGranularity as GroupGranularity) || 'day',

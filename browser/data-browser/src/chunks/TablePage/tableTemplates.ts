@@ -417,6 +417,12 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
             'Bought',
           ],
           rowActions: [{ label: 'Got it', kind: 'toggle', column: 'Bought' }],
+          // The bar you actually use a shopping list through.
+          quickAdd: {
+            label: 'Add item',
+            field: 'Name',
+            placeholder: 'What do you need?',
+          },
         },
       ],
     },
@@ -465,6 +471,11 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
             { function: 'max', column: 'Weight' },
             { function: 'sum', column: 'Sets', row: 1 },
           ],
+          // A press stamps today, so a logged set needs no date typed.
+          quickAdd: {
+            label: 'Log set',
+            presets: [{ kind: 'setNow', column: 'Date' }],
+          },
           breakdownColumn: 'Exercise',
           breakdownGranularity: 'exact',
           columnOrder: [
@@ -543,6 +554,11 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
           rowActions: [
             { label: 'Watered', kind: 'setNow', column: 'Last watered' },
           ],
+          quickAdd: {
+            label: 'Add plant',
+            field: 'Name',
+            placeholder: 'Which plant?',
+          },
           default: true,
         },
         { name: 'By room', kind: 'kanban', groupByColumn: 'Location' },

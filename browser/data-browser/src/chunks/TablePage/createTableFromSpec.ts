@@ -111,6 +111,8 @@ export interface TableViewSpec {
   aggregates?: TableAggregateSpec[];
   /** Buttons this view puts on each row. */
   rowActions?: TableRowActionSpec[];
+  /** A button above the rows that creates one. */
+  quickAdd?: TableQuickAddSpec;
   /** A column to break those statistics down by — one subtotal per value. */
   breakdownColumn?: string;
   /** For a date or timestamp breakdown column: the bucket size. */
@@ -155,6 +157,27 @@ export interface TableRowActionSpec {
    * `setNow` or `toggle`.
    */
   value?: string | number;
+}
+
+/**
+ * The view's create button, in the caller's column-name vocabulary. Its presets
+ * reuse the row-action verbs, applied to the row being created.
+ */
+export interface TableQuickAddSpec {
+  /** What the button says, e.g. 'Log a feed'. */
+  label: string;
+  /**
+   * A column to type into before creating, by name — usually 'name'. Omit for a
+   * button that just creates.
+   */
+  field?: string;
+  placeholder?: string;
+  /** Values the new row starts with. */
+  presets?: {
+    kind: RowActionKind;
+    column: string;
+    value?: string | number;
+  }[];
 }
 
 /** One row constraint, in the caller's column-name vocabulary. */
@@ -645,6 +668,31 @@ export function buildViewPropVals(
       require,
       tagsByColumn,
     ) as unknown as JSONValue;
+  }
+
+  if (view.quickAdd !== undefined) {
+    const { label, field, placeholder, presets } = view.quickAdd;
+
+    propVals[dataBrowser.properties.viewQuickAdd] = {
+      label,
+      ...(field ? { field: require(field, 'quick-add field') } : {}),
+      ...(placeholder ? { placeholder } : {}),
+      presets: (presets ?? []).map(preset => {
+        const property = require(preset.column, `quick-add preset for "${label}"`);
+        const options = tagsByColumn[preset.column.toLowerCase()] ?? {};
+        const value =
+          typeof preset.value === 'string'
+            ? (options[preset.value.toLowerCase()] ?? preset.value)
+            : preset.value;
+
+        return {
+          kind: preset.kind,
+          property,
+          ...(value === undefined ? {} : { value }),
+        };
+      }),
+      // A spec is plain JSON, just a narrower shape than `JSONValue` describes.
+    } as unknown as JSONValue;
   }
 
   const breakdown = column(view.breakdownColumn);

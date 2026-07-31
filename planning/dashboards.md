@@ -421,11 +421,15 @@ above. What is left, in order:
 1. ~~**Row actions**, in the table~~ — shipped 2026-07-31 as `view-row-actions`
    (four verbs: `setNow`, `setValue`, `toggle`, `increment`), with a config dialog
    and tool support, and shipped on the Plant care, Inventory and Grocery
-   templates. **Still to do:** offer them as a dashboard block kind (a big button
-   over a whole view rather than one per row), and **one-tap create** — the
-   quick-add bar generalised, which is the other half of what makes a dashboard an
-   app. Of the six verbs the template survey found, four are done; "create with
-   defaults" and the set-level "clear every matching row" are not.
+   templates. **One-tap create** shipped the same day as
+   `view-quick-add` — a label, an optional field, and presets reusing the same four
+   verbs applied to the new row. Five of the six verbs the template survey found
+   are now built; only the set-level "clear every matching row" is missing.
+   **Still to do:** offer both as dashboard **block kinds** — a create button and
+   an action button over a whole view rather than one per row. That is now a
+   renderer over existing configuration rather than new vocabulary, and it is what
+   turns the Time tracker dashboard (one button, today's total, today's entries)
+   into the proof this document asks for.
 2. **The three filter gaps** the template survey kept hitting, none of them
    dashboard features: relative date windows (`today`, `this month`,
    `last 7 days`), week/quarter buckets, and "this field is empty".

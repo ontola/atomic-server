@@ -35,6 +35,8 @@ import {
   VIEW_KIND_ICONS,
   ViewKind,
 } from './tableViewKinds';
+import { QuickAddDialog } from './QuickAddDialog';
+import type { QuickAddSpec } from './quickAdd';
 
 interface TableViewTabsProps {
   views: string[];
@@ -61,6 +63,10 @@ interface TableViewTabsProps {
   /** Why those are locked, e.g. "Always used by the timer view". */
   lockedReason: string;
   canWrite: boolean;
+  /** The active view's create button, if it has one. */
+  quickAdd: QuickAddSpec | undefined;
+  /** Persist the active view's create button (undefined removes it). */
+  setQuickAdd: (spec: QuickAddSpec | undefined) => void;
 }
 
 /**
@@ -86,6 +92,8 @@ export function TableViewTabs({
   lockedColumns,
   lockedReason,
   canWrite,
+  quickAdd,
+  setQuickAdd,
 }: TableViewTabsProps): JSX.Element {
   // A table with no saved views yet still shows one implicit "Default View" tab.
   const tabs = views.length > 0 ? views : [undefined];
@@ -105,6 +113,9 @@ export function TableViewTabs({
             setViewKind={setViewKind}
             duplicateView={duplicateView}
             deleteView={deleteView}
+            classProperties={allColumns}
+            quickAdd={quickAdd}
+            setQuickAdd={setQuickAdd}
           />
         ))}
         {canWrite && <AddViewMenu createView={createView} />}
@@ -221,6 +232,9 @@ function ViewTab({
   setViewKind,
   duplicateView,
   deleteView,
+  classProperties,
+  quickAdd,
+  setQuickAdd,
 }: {
   subject: string | undefined;
   active: boolean;
@@ -231,6 +245,9 @@ function ViewTab({
   setViewKind: (subject: string, kind: ViewKind) => void;
   duplicateView: (subject: string) => void;
   deleteView: (subject: string) => void;
+  classProperties: Property[];
+  quickAdd: QuickAddSpec | undefined;
+  setQuickAdd: (spec: QuickAddSpec | undefined) => void;
 }): JSX.Element {
   const resource = useResource(subject ?? 'unknown-subject');
   const [title] = useTitle(resource);
@@ -245,6 +262,7 @@ function ViewTab({
   // already-active tab). `undefined` = closed.
   const [menuPoint, setMenuPoint] = useState<{ x: number; y: number }>();
   const [showDelete, setShowDelete] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
 
   const startRename = () => {
     setDraft(name);
@@ -283,6 +301,21 @@ function ViewTab({
           icon: <FaTrash />,
           onClick: () => setShowDelete(true),
         },
+        // Only on the active tab: `setQuickAdd` writes to the active view, so
+        // offering it elsewhere would edit a view the user is not looking at.
+        ...(active
+          ? [
+              DIVIDER,
+              {
+                id: 'quick-add',
+                label: quickAdd ? 'Edit the add button' : 'Add a create button',
+                helper:
+                  'A button above the rows that creates one — "Log a feed", "Add item".',
+                icon: <FaPlus />,
+                onClick: () => setShowQuickAdd(true),
+              },
+            ]
+          : []),
         DIVIDER,
         {
           id: 'view-type',
@@ -352,6 +385,15 @@ function ViewTab({
           Trigger={AutoOpenTrigger}
           anchorPoint={menuPoint}
           bindActive={a => !a && setMenuPoint(undefined)}
+        />
+      )}
+      {showQuickAdd && (
+        <QuickAddDialog
+          open
+          bindShow={setShowQuickAdd}
+          classProperties={classProperties}
+          editing={quickAdd}
+          onSave={setQuickAdd}
         />
       )}
       {subject && (

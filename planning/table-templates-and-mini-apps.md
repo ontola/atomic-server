@@ -76,7 +76,11 @@ appearing. None of them is specific to one app:
   which needs a two-property patch and an exclusivity sweep, and the set-level
   "clear completed".)*
 - **A quick-add bar.** one field that creates a row with sensible defaults.
-  Wanted by timer, grocery, tasks.
+  Wanted by timer, grocery, tasks. *(Shipped 2026-07-31 as `view-quick-add`: a
+  label, an optional field to type into, and presets that reuse the row-action
+  verbs applied to the new row. A button with no field is the one-tap logger —
+  "Log set" stamps today and creates. On the Grocery list, Plant care and Workout
+  log templates.)*
 - **Relations and rollups.** invoice → line items, recipe → ingredients,
   contact → company.
 
@@ -123,10 +127,12 @@ land as configuration, the timer view kind collapses into a template and the
 
 Two thirds of that has happened: the Duration is a derived column (step 3), and
 row actions are configuration (2026-07-31) — so an ordinary "stamp the end
-column" button is now config rather than code. What still keeps the timer a view
-kind is the part its start/stop does *beyond* one patch: starting an entry writes
-two properties and clears a third, and "one at a time" sweeps every other running
-row. A fifth verb could cover the first; the sweep is a set-level action.
+column" button is now config rather than code. Its toolbar is now expressible too: `view-quick-add` with a
+`setNow` preset on the start column is exactly "name a thing and start timing it".
+What still keeps the timer a view kind is the part its start/stop does *beyond*
+one patch: starting an entry writes two properties and clears a third, and "one at
+a time" sweeps every other running row. A verb that clears a property would cover
+the first; the sweep is the set-level action, the last of the six still unbuilt.
 
 Day totals are still open, but for a narrower reason than "grouping isn't built":
 aggregation (step 4) reads stored properties, and a duration is derived. See the

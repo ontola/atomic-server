@@ -53,6 +53,7 @@ import { useTimerColumns } from './Timer/useTimerColumns';
 import { useDerivedColumns } from './useDerivedColumns';
 import { useRowActions } from './useRowActions';
 import { rowActionKey, type RowActionSpec } from './rowActions';
+import { QuickAddBar } from './QuickAddBar';
 import { useTableAggregates } from './useTableAggregates';
 import { TableTotalsFooter } from './TableTotalsFooter';
 import { toAggregation } from './tableAggregates';
@@ -137,6 +138,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setViewGroupGranularity,
     viewRowActions,
     setViewRowActions,
+    viewQuickAdd,
+    setViewQuickAdd,
     queryFilters,
     queryExpressionFilters,
   } = useTableData(resource, viewSubject);
@@ -1035,6 +1038,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
             lockedColumns={lockedColumns}
             lockedReason={lockedReason}
             canWrite={canWrite}
+            quickAdd={viewQuickAdd}
+            setQuickAdd={setViewQuickAdd}
           />
         )}
         {/* Above the view switch, not inside the table branch: the filter
@@ -1045,6 +1050,18 @@ export const TableResource: React.FC<TableResourceProps> = ({
           <TableFilterBar
             columns={uniqueColumnProperties}
             derivedColumns={derivedSpecs}
+          />
+        )}
+        {/* Above the view switch on purpose: a grocery board wants its "Add
+         *  item" as much as the list does. Writers only — a create button that
+         *  will be rejected is worse than none. */}
+        {viewQuickAdd && canWrite && (
+          <QuickAddBar
+            spec={viewQuickAdd}
+            tableSubject={resource.subject}
+            tableClass={tableClass}
+            classProperties={allColumns}
+            onRowCreated={notifyEntryCreated}
           />
         )}
         {viewKind === 'kanban' ? (

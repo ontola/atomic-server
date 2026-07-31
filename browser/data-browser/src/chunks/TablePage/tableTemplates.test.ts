@@ -299,6 +299,52 @@ describe('table templates', () => {
             expect(new Set(labels).size).toBe(labels.length);
           });
 
+          it('points its create button at columns that exist', () => {
+            const quickAdd = view.quickAdd;
+
+            if (!quickAdd) {
+              return;
+            }
+
+            expect(quickAdd.label).not.toBe('');
+
+            if (quickAdd.field !== undefined) {
+              // What is typed has to land somewhere that holds text.
+              expect(
+                typeOf(quickAdd.field),
+                `${quickAdd.label} types into "${quickAdd.field}", which is not a column`,
+              ).toBeDefined();
+            }
+
+            for (const preset of quickAdd.presets ?? []) {
+              const type = typeOf(preset.column);
+
+              expect(
+                type,
+                `${quickAdd.label} presets "${preset.column}", which is not a column`,
+              ).toBeDefined();
+
+              // Presets are row-action verbs applied to a new row, so the same
+              // datatype rules hold.
+              if (preset.kind === 'setNow') {
+                expect(['date', 'datetime']).toContain(type);
+              }
+
+              if (preset.kind === 'toggle') {
+                expect(type).toBe('checkbox');
+              }
+
+              if (preset.kind === 'increment') {
+                expect(['number', 'decimal']).toContain(type);
+                expect(typeof preset.value).toBe('number');
+              }
+
+              if (preset.kind === 'setValue') {
+                expect(preset.value).toBeDefined();
+              }
+            }
+          });
+
           it('orders columns that exist', () => {
             for (const reference of view.columnOrder ?? []) {
               const known =

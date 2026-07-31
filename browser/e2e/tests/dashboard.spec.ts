@@ -198,11 +198,7 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
       [D.source]: f.table,
     });
 
-    await dashboard.set(
-      D.blocks,
-      [total, count, chart, note, list],
-      false,
-    );
+    await dashboard.set(D.blocks, [total, count, chart, note, list], false);
     await dashboard.set(
       D.layout,
       [
@@ -304,16 +300,12 @@ test.describe('dashboards', () => {
 
     // Everything the create tool can write, the dialog can change — otherwise
     // the assistant builds dashboards their owner cannot edit.
-    await block(page, 'Total spent')
-      .getByTitle('Block options')
-      .click();
+    await block(page, 'Total spent').getByTitle('Block options').click();
     await page.getByRole('menuitem', { name: 'Configure' }).click();
 
     await page.getByTestId('block-name').fill('Average spend');
     await page.getByTestId('block-function').selectOption('avg');
-    await page
-      .getByTestId('block-target')
-      .selectOption({ label: 'amount' });
+    await page.getByTestId('block-target').selectOption({ label: 'amount' });
     await page.getByTestId('block-save').click();
 
     // 946.5 over four rows.
@@ -350,9 +342,7 @@ test.describe('dashboards', () => {
     await page.getByTestId('block-name').fill('Biggest expense');
     await pickTable(page, 'Spending');
     await page.getByTestId('block-function').selectOption('max');
-    await page
-      .getByTestId('block-target')
-      .selectOption({ label: 'amount' });
+    await page.getByTestId('block-target').selectOption({ label: 'amount' });
     await page.getByTestId('block-save').click();
 
     await expect(block(page, 'Biggest expense')).toContainText('900', {
