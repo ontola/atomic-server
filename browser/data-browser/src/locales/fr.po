@@ -34,6 +34,7 @@ msgstr "Fermer la barre latérale de l'IA"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter"
 msgstr "OpenRouter"
@@ -5006,6 +5007,7 @@ msgstr ""
 msgid "Pairing device"
 msgstr ""
 
+#: src/chunks/AI/RealAIChat.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Try again"
 msgstr ""
@@ -6255,4 +6257,18 @@ msgstr ""
 
 #: src/chunks/TablePage/TableTotalsFooter.tsx
 msgid "Computed columns cannot be totalled yet — the total is computed from stored values."
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Unknown error"
+msgstr ""
+
+#. 0: providerLabel; 1: requestError
+#: src/chunks/AI/RealAIChat.tsx
+msgid "No answer from {0}: {1}"
+msgstr ""
+
+#. 0: ollamaUrl ? ` at ${ollamaUrl}` \\: ''
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Ollama{0}"
 msgstr ""
