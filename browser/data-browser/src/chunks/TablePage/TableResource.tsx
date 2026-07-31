@@ -6,7 +6,9 @@ import {
   useCanWrite,
   useStore,
   type DataBrowser,
+  type ExpressionFilter,
   type Property,
+  type PropVal,
   type Resource,
 } from '@tomic/react';
 import type { CellIndex } from '@chunks/TableEditor';
@@ -83,6 +85,24 @@ interface TableResourceProps {
 }
 
 const columnToKey = (column: TableColumn) => column.key;
+
+/**
+ * Which rows a query asks for, as one comparable string — so the collection in
+ * hand can be told apart from the one that was asked for. Built from the same
+ * fields on both sides (`Collection` stores them verbatim), so the two are
+ * directly comparable. Paging is left out: pages of one query answer it all.
+ */
+const queryIdentity = (
+  filters: PropVal[],
+  expressionFilters: ExpressionFilter[],
+  sortBy: string | undefined,
+  sortDesc: boolean,
+): string =>
+  JSON.stringify({
+    f: filters,
+    e: expressionFilters,
+    s: [sortBy ?? null, !!sortDesc],
+  });
 
 export const TableResource: React.FC<TableResourceProps> = ({
   resource,
@@ -593,12 +613,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // session row can sort into the member range and briefly render twice until a
   // reload re-seeds the session. For a fresh table `memberCount` is 0, so this
   // never happens — covering new-table entry, the common case.
-  // Identity of the current query: value-bearing filters (incl. operator),
-  // sort, and active view. `useCollection` returns a NEW collection instance
-  // both when this changes (a filter/sort/view edit) and on same-query
-  // refreshes (e.g. after a new row materializes). The baseline must re-capture
-  // in the former case but stay frozen in the latter (so session/new rows keep
-  // a stable identity and don't duplicate — "fast entry").
+  // What the user asked to see: value-bearing filters (incl. operator), sort,
+  // and active view. Only the session rows key off this (they rebase when it
+  // changes); the member baseline below compares against the collection itself,
+  // because what was asked for and what has arrived are not the same thing.
   const queryKey = useMemo(
     () =>
       JSON.stringify({
@@ -613,19 +631,42 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
   const baselineMemberCountRef = useRef<number | null>(null);
   const baselineQueryKeyRef = useRef<string | null>(null);
-  const prevCollectionRef = useRef(collection);
 
-  if (prevCollectionRef.current !== collection) {
-    prevCollectionRef.current = collection;
+  // What the grid is asking for, and what the collection in hand answers.
+  // `useCollection` keeps serving the previous collection while it builds the
+  // new one, so these differ for a moment after every filter or sort edit.
+  const requestedQuery = queryIdentity(
+    queryFilters,
+    queryExpressionFilters,
+    sorting.prop,
+    sorting.sortDesc,
+  );
+  const answeredQuery = queryIdentity(
+    collection.filters,
+    collection.expressionFilters,
+    collection.sortBy,
+    collection.sortDesc,
+  );
 
-    if (baselineQueryKeyRef.current !== queryKey) {
-      baselineMemberCountRef.current = null;
-    }
+  // A count captured under a different query says nothing about this one.
+  if (baselineQueryKeyRef.current !== requestedQuery) {
+    baselineMemberCountRef.current = null;
   }
 
-  if (ready && baselineMemberCountRef.current === null) {
+  // Freeze the count only once the collection actually answers what was asked.
+  // Edits land faster than collections arrive — change a filter's operator and
+  // then type its value, and the collection built for the operator-only query
+  // arrives when the query has already moved on. Recording ITS count against
+  // the current query would freeze it for good: the collection that finally
+  // answers carries the same query, so it would never be allowed to re-capture,
+  // and the grid would keep rendering the previous filter's rows.
+  if (
+    ready &&
+    answeredQuery === requestedQuery &&
+    baselineMemberCountRef.current === null
+  ) {
     baselineMemberCountRef.current = collection.totalMembers;
-    baselineQueryKeyRef.current = queryKey;
+    baselineQueryKeyRef.current = requestedQuery;
   }
 
   // Before the collection is ready, track its live count so existing members
@@ -661,8 +702,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // When the query changes (filter/sort/view edit — keyed on `queryKey`), the
   // collection rebuilds, so rebase the session: force-save any in-progress new
   // row, then reset to a single trailing placeholder. The baseline itself is
-  // re-captured by the `queryKey`-aware block above (NOT here — doing it here
-  // raced the still-`ready` old collection and captured its count).
+  // re-captured by the block above (NOT here — doing it here raced the
+  // still-`ready` old collection and captured its count).
   useEffect(() => {
     if (!rebaseInitialisedRef.current) {
       rebaseInitialisedRef.current = true;
