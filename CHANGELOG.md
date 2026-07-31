@@ -7,7 +7,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
-## [v0.41.0-beta.2] - 2026-07-25
+## [v0.41.0-beta.2] - 2026-07-31
 
 ### Security
 
@@ -17,6 +17,7 @@ All four fixes documented under [v0.40.3](#v0403---2026-07-06) are present here 
 
 ### Added
 
+- Aggregate queries: a `Query` can carry an `aggregation`, and the store answers it by walking its own index instead of returning rows for the caller to add up. Sum, count, average, min and max over every row a query matches — filters included, paging excluded — plus an optional breakdown giving one subtotal per distinct value of a column, with day and month buckets resolved in the caller's timezone. Results arrive on the Collection's new `collection/aggregates` property. Because the browser's local database runs this same code through wasm, a table shows identical totals with no server in reach. Note that `count` counts the rows the asking agent may actually read, which can be lower than `totalMembers` — that one counts raw index hits, before rights are applied.
 - Argon2id key derivation in `atomic-lib` as `vault::keys` (`argon2id_derive_key`), exposed to the browser as `argon2idDeriveKey`. This backs the passkey-wrapped ("envelope v2") backup of the agent secret: AES-GCM runs natively in WebCrypto, and Argon2id is the one primitive the Web platform's crypto API is missing. Defaults to ~64 MiB / 3 iterations / 1 lane.
 - `EncryptedBackend` wraps any redb `StorageBackend` and encrypts data at rest with XChaCha20-Poly1305 (4 KiB blocks, a fresh random nonce per write, block-index AAD, key-check header), so resources, Loro snapshots, blobs and derived indexes are all ciphertext. Backs the browser's per-agent OPFS databases.
 - A `coverImage` property in the default store — an image File shown as a decorative banner at the top of a resource's page — and a `coverImageFocus` float (0-1) holding that banner's vertical focal point, since a wide crop of a photo rarely has its subject in the middle.

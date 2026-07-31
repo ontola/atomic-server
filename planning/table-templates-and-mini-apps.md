@@ -1,0 +1,335 @@
+# Table Templates and Mini-Apps
+
+## Status
+
+In progress (2026-07-31). Prompted by the Timer view: building it as a bespoke
+renderer meant re-implementing the table badly, which raised the question of
+what should happen as templates multiply. Steps 3 (derived columns), 4
+(aggregation with breakdowns) and 5 (assistant tools) have shipped. What's left
+is the list of gaps at the end of step 5 — chiefly making derived columns
+first-class in filters and aggregates.
+
+## The Problem
+
+We have three ways to ship "an app that is mostly a table":
+
+1. **A table template** — a data shape offered in the New Table dialog
+   (`tableTemplates.ts`). Today: Blank, Issue Tracker. Pure config: a row
+   class, its columns, and some views. No code.
+2. **A built-in view kind** — a new renderer in `TablePage`
+   (`table` / `kanban` / `calendar` / `timer`). Real code, shipped in the
+   data-browser, one `case` per app.
+3. **An external app** — a plugin or custom-view iframe, built only on public
+   surfaces. This is the route [`habits-app.md`](./habits-app.md) argues for,
+   explicitly avoiding new `case`s in `ResourcePage.tsx`.
+
+The Timer took route 2, and that was the wrong call. Almost everything it
+needed — editable cells, column headings with property menus, add-column,
+alignment, responsive layout — already existed in the table and had to be
+re-implemented. It still lacks keyboard navigation, column resize, column
+sort, drag-reorder, copy/paste, undo, and (worse) virtualisation: it loads
+every row via `getAllMembers`, in the one table type guaranteed to grow
+without bound.
+
+Route 2 does not scale to N apps. If every mini-app is a view kind, the
+data-browser accretes a renderer per app and each one re-litigates the same
+table features.
+
+## The Candidate Mini-Apps
+
+A list of plausible templates, and what each needs **beyond a plain table**.
+
+| Mini-app | Beyond a plain table |
+| --- | --- |
+| Hour tracker / timesheet | start/stop action, live duration, day+week subtotals, rate × hours, invoice export |
+| Expenses / receipts | currency amount, month grouping + sum, file attachment, category select |
+| Invoices & clients | child line-items, per-invoice total, status, due-date overdue flag |
+| CRM / deal pipeline | kanban by stage (have), "days since last contact", relation to Company, activity log |
+| Job applications | kanban by stage (have), days-since-applied, follow-up reminder |
+| Grocery / shopping list | quick-add bar, done checkbox, group by aisle, "clear completed" bulk action |
+| Project tasks | due date (calendar, have), subtask relations, timeline/Gantt |
+| Reading list / media log | status select (kanban, have), rating, finished date |
+| Workout log | sets/reps, date, personal-record derived from history |
+| Plant care / maintenance | last-done date, interval, next-due derived, overdue filter |
+| Inventory / collection | quantity, low-stock filter, location, total value |
+| Event guest list | RSVP select, +1 counts, headcount total |
+| Habit tracker | date heatmap, streaks — genuinely custom; see `habits-app.md` |
+| Bookmarks library | url + preview, tags |
+
+## What Recurs
+
+Reading down the right-hand column, the same handful of capabilities keep
+appearing. None of them is specific to one app:
+
+- **Derived columns.** duration (`end − start`), days-since (`now − date`),
+  amount (`qty × price`), next-due (`date + interval`), streaks. Wanted by
+  timer, CRM, expenses, invoices, plants, workouts.
+- **Aggregation.** sum / count / avg, overall and per group. Wanted by timer,
+  expenses, invoices, inventory, guest lists. *(Shipped in step 4, as a query
+  capability — see below.)*
+- **Grouping with subtotals.** by day, category, month, stage. *(Shipped as a
+  breakdown under the grid; not as rows inside it.)*
+- **Row actions.** start/stop, mark done, log-today, clear-completed.
+- **A quick-add bar.** one field that creates a row with sensible defaults.
+  Wanted by timer, grocery, tasks.
+- **Relations and rollups.** invoice → line items, recipe → ingredients,
+  contact → company.
+
+The Timer's "special" features are all instances of these. **Duration is a
+derived column. Day totals are grouping + aggregation. Start/stop is a row
+action. The "what are you working on?" field is a quick-add bar.** None of
+them is a timer concept.
+
+## Direction
+
+Keep view kinds a **small closed set of layouts** — how rows are arranged in
+space: `table`, `kanban`, `calendar`, and plausibly `timeline`. A new layout
+earns a view kind. A new *app* does not.
+
+Push per-app behaviour into **configurable table capabilities**, stored on the
+View like `view-columns` and `view-filters` already are. Then a template is
+what it should be: pure data + config, no code. Adding the grocery list would
+ship zero renderers.
+
+Anything that genuinely needs a bespoke UI — the habit heatmap — goes to route
+3, as an external app.
+
+That gives a ladder with the cheap rungs first:
+
+1. Data shape only → **template**.
+2. Data shape + generic table capabilities → **template + view config**.
+3. Genuinely novel layout → **view kind** (rare).
+4. Genuinely novel UI → **external plugin app**.
+
+## Consequences for the Timer
+
+Rebuild it on `FancyTable`, which is already generic over its column type
+(`FancyTable<T>`, `columnToKey`, a pluggable `HeadingComponent<T>`, and the row
+renderer passed as children). It does **not** require columns to be Properties —
+`TableColumn` is merely what `TableResource` happens to pass. So the timer can
+supply the real property columns plus two synthetic ones (live Duration, a
+Start/Stop action) and keep every table feature, virtualisation included.
+
+Build those two synthetic columns through a **general** seam — "a column that
+isn't a Property, with its own render" — rather than timer-specific branches.
+That seam is the precursor to derived columns and row actions above; when they
+land as configuration, the timer view kind collapses into a template and the
+`case` disappears.
+
+Half of that has happened: the Duration is a derived column (step 3), leaving
+the timer with its start/stop row action, its toolbar and its "one at a time"
+sweep. Row actions as configuration would finish it.
+
+Day totals are still open, but for a narrower reason than "grouping isn't built":
+aggregation (step 4) reads stored properties, and a duration is derived. See the
+end of step 4.
+
+## Letting the Assistant Build These
+
+The strongest argument for config-over-code is the assistant. **An LLM can
+write configuration; it cannot ship a renderer.** If a mini-app is a view kind,
+the assistant can only ever produce the apps we hard-coded. If a mini-app is a
+class plus View config, the assistant can invent the plant-care tracker nobody
+on the team thought of.
+
+So the tool surface *is* the app-authoring API. Anything not expressible there
+is an app the assistant cannot build.
+
+### Where `create_table` stands today
+
+It is already the right shape — one call builds the row class, its columns, its
+views and its initial rows, and the response returns every subject (including
+per-tag subjects) so no `get_schema` round-trip is needed afterwards. That
+"return everything the caller will need next" property is worth preserving in
+anything we add.
+
+The gaps:
+
+- **`views.kind` is `['table', 'kanban']` only.** Calendar has been shippable
+  for a while and the assistant still cannot create one; `timer` is missing
+  too. Any new view kind must land in this enum in the same change — otherwise
+  the feature is invisible to the assistant.
+- **View config stops at `groupByColumn` / `endColumn` / `derivedColumns` /
+  `aggregates` / `default`.** No sort, no filters, no column visibility. "A table of my hours sorted by newest first" is not
+  expressible, though the View resource has stored `view-sort-by` and
+  `view-filters` all along.
+- **`relation` columns cannot name their target class.** CRM's contact →
+  company and invoice → line-items are unbuildable as a result.
+- **Creation only, no iteration.** There is no way to add a column to an
+  existing table, add or reconfigure a view. Real app-building is iterative
+  ("now add a Priority column"), and today that falls back to raw
+  `create_resource` plus manual property wiring.
+- **Templates are invisible.** With a catalogue of the size above, the
+  assistant should be able to start from one and adapt it, rather than
+  re-deriving the Issue Tracker's schema from scratch every time.
+
+### Proposed tool changes
+
+1. **Extend `create_table`** — `kind` gains `calendar` and `timer`; each view
+   accepts `sortBy` / `sortDesc` / `filters` / `columns`; `relation` columns
+   accept a target class.
+2. **Add `configure_view`** — update an existing View's config in place
+   (kind, sort, filters, columns, group-by, and later derived columns,
+   aggregates and row actions). This is the single seam that keeps every future
+   capability assistant-reachable.
+3. **Add `add_table_columns`** — add properties to an existing row class and
+   make them visible in the chosen views, so iteration doesn't require
+   schema-level knowledge. (Note the related product bug: a column added to a
+   view with an explicit `view-columns` list is invisible unless it's appended
+   there — the tool must do the same thing the UI now does.)
+4. **Add `list_table_templates` + `create_table_from_template`** — start from a
+   catalogue entry, then adapt with the tools above.
+5. **Add `describe_table`** — read back a table's full config (class,
+   columns, every view's settings), so the assistant can inspect before
+   modifying instead of guessing. `get_schema` covers the class but not views.
+
+### The test to hold ourselves to
+
+For each mini-app in the table above: *could the assistant build it, from a
+single prompt, using only these tools?* Any "no" is either a missing generic
+capability or a missing tool — and it should be answered by adding
+configuration, not a renderer.
+
+## Known Gaps
+
+- The timer's day totals: aggregation reads stored properties and a duration is
+  a derived column. Needs a stored duration, or an aggregate that can evaluate a
+  derived column.
+- Aggregation has no per-aggregate filter ("sum of Amount **where** Status =
+  Done"); a total follows the view's own filters instead.
+- Subtotals render under the grid, not as rows between groups inside it.
+- Column widths are a positional array on the table, shared by every view, so
+  reordering columns swaps their widths and two views can't size the same column
+  differently. Keying widths by column key would fix both.
+- Aggregates and filters can't reference a derived column, so the timer's day
+  totals, "qty × price summed" and "overdue" filters all remain out of reach.
+
+## Implementation Plan
+
+Ordered so each step is independently shippable and green. Steps 3, 4 and 5 are
+done.
+
+### 3. Derived columns as configuration — done (2026-07-30)
+
+`Duration` used to be hand-built in `useTimerColumns`. Now:
+
+- `chunks/TablePage/derivedColumns.ts` — a `DerivedColumnSpec`
+  (`{ id, label, kind, args, width? }`) plus a **fixed** registry of five
+  generators, not a formula language: `difference` (`to − from`), `elapsed`
+  (`(until ?? now) − from`, the ticking variant), `daysSince`, `product`
+  (either factor may be a literal, so a rate needs no column) and `offset`
+  (date + days). Each declares its argument names, computes a number and
+  formats it. Malformed stored config is dropped, not thrown: hand- or
+  assistant-written config must not be able to take a table down.
+- `useDerivedColumns.tsx` — turns specs into `TableColumn[]` with `virtual`
+  cells, and holds the shared 1s ticker moved out of `useTimerColumns` (only
+  `elapsed` reports itself live, so a table of settled durations ticks zero
+  times). Keyed on the specs' serialized shape, since the parsed JSON's
+  identity churns every render.
+- Ontology: `view-derived-columns` (JSON) on the View class, alongside
+  `view-filters` — in `lib/defaults/table.json` and
+  `browser/lib/src/ontologies/dataBrowser.ts`, and copied by `duplicateView`.
+- UI, on the same footing as the tool: **Add column → Computed** opens a dialog
+  generated from the registry — the generator's arguments become its fields,
+  `accepts` filters the column picker to date or number properties, and
+  `allowsLiteral` offers "a fixed number" where one makes sense. A computed
+  column's heading carries its own menu (Edit / Remove) since there's no
+  property behind it to configure. Anything the assistant can build here, a
+  person can build and change too; that constraint is worth keeping for
+  aggregation and row actions.
+- `create_table` gained per-view `derivedColumns` in the same change, in the
+  column-name vocabulary the rest of a spec uses (arguments resolve to property
+  subjects on creation), so the capability is assistant-reachable immediately.
+- The timer: `Duration` is an `elapsed` spec over `view-group-by` /
+  `view-end-prop`, seeded by the Time tracker template. The bespoke duration
+  cell is gone; only the start/stop row action stays behind. A timer view that
+  configures none of its own (added from the view menu rather than the
+  template) falls back to timing its own start/end pair, so nothing regressed
+  for views created before this.
+- The e2e proof that this is config and not a timer feature: switching the
+  template's timer view to `table` keeps the Duration column and drops only the
+  Start/Stop one. A second spec drives the human path end to end: add two
+  computed columns (one with a typed-in number), rename one, reload, remove it.
+
+Column placement came later, when the timer's own columns needed to lead: order
+is now per-view configuration (`view-column-order`, a list of column keys) that
+any heading can drag, computed and view-owned columns included.
+
+A rule this established, worth holding to for steps 4 and 5: **a capability
+lands with both its tool and its UI.** Config-only would mean the assistant can
+build a table its owner cannot then change.
+
+Left for step 4: nothing here aggregates. A derived column is per-row.
+
+### 4. Aggregation and grouping — done (2026-07-30)
+
+Answered as a **query capability**, not a client-side add-up. The store computes
+where the data is; only the numbers travel.
+
+- Rust (`lib/src/aggregate.rs`): `Aggregation` on `Query` (sum / count / avg /
+  min / max, with an optional `group_by`), outcomes on `QueryResult`. `db.rs`
+  runs it as a second, unpaged pass over the same filter and index path as the
+  page query — so a total can never summarize a different set than the rows on
+  screen. Day and month buckets take a timezone offset from the caller; the
+  calendar maths is hand-rolled (`civil_from_days`) because this crate compiles
+  to wasm and carries no date dependency.
+- Wire: the `aggregation` query param, results on the Collection's new
+  `collection/aggregates` (JSON). The browser's local WASM DB runs the same
+  code, so an offline table gets the same totals from the same implementation.
+- Ontology: `view-aggregates` (JSON `[{ id, property, function }]`),
+  `view-group-by-column` and `view-group-granularity` — the group-by column is
+  deliberately separate from `view-group-by`, which is what a kanban, calendar
+  or timer arranges its rows by. A view can be grouped one way and subtotalled
+  another.
+- UI: **footer rows inside the grid**, one total per column per row, picked from
+  that column's own footer cell (Sum / Average / Min / Max / Count, filtered by
+  datatype). More than one row is allowed — a column can show a sum on one line
+  and an average on the next — carried as a `row` index on each aggregate. Always in view, scrolls sideways with the columns, and its left
+  cell holds the row count plus the breakdown menu. The per-group breakdown
+  renders as a panel under the grid, since that is the one part which has no
+  column to sit in. `create_table` gained `aggregates` / `breakdownColumn` /
+  `breakdownGranularity` in the same change.
+- Totals ride their own small query (`useTableAggregates`: one row plus the
+  numbers), re-read on save/delete with a debounce. Piggybacking on the row
+  collection left them stale after an edit — that collection patches its pages
+  surgically instead of re-querying — and refreshing *it* would clear the pages
+  under the user's cursor.
+- Two honest edges, both surfaced rather than hidden: a `count` counts the rows
+  the reader can actually resolve, so it can be lower than `totalMembers`
+  (which counts raw index hits, issue #286); and a breakdown past its bucket
+  limit says so instead of looking complete.
+
+Subtotal rows *inside* the grid were not built — `FancyTable` assumes a flat row
+list, and a summary panel under it turned out to answer the same question
+without touching the virtualised editor.
+
+Still open: **the timer's day totals.** Aggregates read stored properties, and a
+duration is a derived column — nothing stores it. Closing that needs either a
+stored duration or an aggregate that can evaluate a derived column, which is the
+same expression-aware seam a formula language would want.
+
+### 5. Assistant tools
+
+- Extend `create_table`: per-view `sortBy` / `sortDesc` / `filters` /
+  `columns`, `derivedColumns`, `aggregates`; `relation` columns gain a target
+  class.
+- `configure_view` — update an existing View in place. This is the single seam
+  that keeps every future capability assistant-reachable.
+- `add_table_columns` — add properties to an existing row class **and append
+  them to the active view's `view-columns`**, or they are invisible (the exact
+  bug fixed in the UI on 2026-07-30).
+- `describe_table` — read back class + every view's config, so the assistant
+  inspects before modifying rather than guessing.
+- `list_table_templates` / `create_table_from_template`.
+- Acceptance: walk the mini-app table above and build each from a single
+  prompt using only these tools. Every failure is a missing capability or a
+  missing tool — answered with configuration, not a renderer.
+
+## Open Questions
+
+- Do derived columns need a formula language, or is a fixed set of generators
+  (difference-of-dates, product-of-columns, days-since) enough to cover the
+  table above? The fixed set is far cheaper and covers every row listed.
+- Should aggregation live on the View (`view-aggregates`) or be a per-column
+  toggle in the column menu?
+- Is `timeline` a fourth layout, or a calendar variant?
