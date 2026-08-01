@@ -7,6 +7,7 @@ import {
   useStore,
   type DataBrowser,
   type ExpressionFilter,
+  type JSONValue,
   type Property,
   type PropVal,
   type Resource,
@@ -21,6 +22,8 @@ import { useHandlePaste } from '@chunks/TablePage/helpers/useHandlePaste';
 import {
   useTableHistory,
   createResourceDeletedHistoryItem,
+  createValueChangedHistoryItem,
+  type HistoryItemBatch,
 } from '@chunks/TablePage/helpers/useTableHistory';
 import {
   TablePageContext,
@@ -62,6 +65,10 @@ import { toAggregation } from './tableAggregates';
 import { stringToSlug } from '@helpers/stringToSlug';
 import { orderColumns, reorderColumnKeys } from './columnOrder';
 import { TableSummaryBar } from './TableSummaryBar';
+import { useRowSelection } from './useRowSelection';
+import { RowSelectCheckbox } from './RowSelectCheckbox';
+import { TableBulkActionsBar } from './TableBulkActionsBar';
+import { Checkbox } from '@components/forms/Checkbox';
 import type { GroupGranularity } from './tableAggregates';
 import type { AggregateTarget } from './tablePageContext';
 import type { DerivedColumnSpec } from './derivedColumns';
@@ -931,6 +938,96 @@ export const TableResource: React.FC<TableResourceProps> = ({
     ],
   );
 
+  // Bulk row selection (by subject, so it survives sort/filter/paging).
+  const selection = useRowSelection(collection);
+  const { clear: clearSelection, deselect: deselectRow } = selection;
+
+  // A filter/sort/view change rebuilds the row set; a selection made against
+  // the old one no longer means anything, so drop it.
+  useEffect(() => {
+    clearSelection();
+  }, [queryKey, clearSelection]);
+
+  const handleBulkDelete = useCallback(async () => {
+    const subjects = selection.selectedList.filter(s => !s.startsWith('_new:'));
+
+    if (subjects.length === 0) {
+      return;
+    }
+
+    const batch: HistoryItemBatch = [];
+    let failures = 0;
+
+    for (const subject of subjects) {
+      try {
+        const rowResource = store.getResourceLoading(subject);
+        batch.push(createResourceDeletedHistoryItem(rowResource));
+        await rowResource.destroy();
+        decrementMemberCount();
+      } catch (e) {
+        failures++;
+        console.error('Failed to delete row', subject, e);
+      }
+    }
+
+    addItemsToHistoryStack(batch);
+    clearSelection();
+
+    if (failures > 0) {
+      toast.error(`Failed to delete ${failures} of ${subjects.length} rows`);
+    } else {
+      toast.success(
+        `Deleted ${subjects.length} ${subjects.length === 1 ? 'row' : 'rows'}`,
+      );
+    }
+  }, [
+    selection.selectedList,
+    store,
+    addItemsToHistoryStack,
+    decrementMemberCount,
+    clearSelection,
+  ]);
+
+  const handleBulkSetProperty = useCallback(
+    async (propertySubject: string, value: JSONValue | undefined) => {
+      const subjects = selection.selectedList.filter(
+        s => !s.startsWith('_new:'),
+      );
+
+      if (subjects.length === 0) {
+        return;
+      }
+
+      const batch: HistoryItemBatch = [];
+      let failures = 0;
+
+      // Sequential: keeps a burst of commits off the shared server, and mirrors
+      // how the clear-cells helper writes.
+      for (const subject of subjects) {
+        try {
+          const res = await store.getResource(subject);
+          batch.push(createValueChangedHistoryItem(res, propertySubject));
+          await res.set(propertySubject, value, true);
+          await res.save();
+        } catch (e) {
+          failures++;
+          console.error('Failed to set property on row', subject, e);
+        }
+      }
+
+      addItemsToHistoryStack(batch);
+
+      if (failures > 0) {
+        toast.error(`Failed to update ${failures} of ${subjects.length} rows`);
+      } else {
+        toast.success(
+          `Updated ${subjects.length} ${subjects.length === 1 ? 'row' : 'rows'}`,
+        );
+      }
+    },
+    [selection.selectedList, store, addItemsToHistoryStack],
+  );
+
   const handleDeleteRow = useCallback(
     async (index: number) => {
       // Resolve the row by the SAME index→row mapping the grid renders with:
@@ -946,6 +1043,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
       if (!subject) {
         return;
       }
+
+      // Keep a deleted row from lingering in the selection set.
+      deselectRow(subject);
 
       // Drop a session row from the render list immediately (optimistic).
       if (!isMember) {
@@ -1057,6 +1157,42 @@ export const TableResource: React.FC<TableResourceProps> = ({
     ],
   );
 
+  // Selection controls are writer-only: selecting rows to bulk-edit or delete
+  // is pointless without the rights to do either.
+  const { isSelected, toggle: toggleSelected } = selection;
+  const renderRowSelector = useCallback(
+    (rowIndex: number) => {
+      // Session/new rows have no persisted resource to act on.
+      if (rowIndex >= memberCount) {
+        return null;
+      }
+
+      return (
+        <RowSelectCheckbox
+          collection={collection}
+          index={rowIndex}
+          isSelected={isSelected}
+          onToggle={toggleSelected}
+        />
+      );
+    },
+    [collection, memberCount, isSelected, toggleSelected],
+  );
+
+  const headerSelector = (
+    <Checkbox
+      title={selection.allSelected ? 'Deselect all' : 'Select all'}
+      aria-label={selection.allSelected ? 'Deselect all' : 'Select all'}
+      checked={selection.allSelected}
+      selected={selection.someSelected}
+      onChange={() =>
+        selection.allSelected ? clearSelection() : void selection.selectAll()
+      }
+      onMouseDown={e => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
+    />
+  );
+
   return (
     <TablePageContext value={tablePageContext}>
       <TablePresenceContext value={presenceValue}>
@@ -1142,10 +1278,21 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 onEntryCreated={notifyEntryCreated}
               />
             )}
+            {canWrite && (
+              <TableBulkActionsBar
+                count={selection.count}
+                properties={uniqueColumnProperties}
+                onSetProperty={handleBulkSetProperty}
+                onDelete={handleBulkDelete}
+                onClear={clearSelection}
+              />
+            )}
             <FancyTable
               readOnly={!canWrite}
               columns={gridColumns}
               columnSizes={gridColumnSizes}
+              renderRowSelector={canWrite ? renderRowSelector : undefined}
+              headerSelector={canWrite ? headerSelector : undefined}
               itemCount={
                 ready
                   ? memberCount + newRowSubjects.length
