@@ -14,7 +14,8 @@ name: Deployment Production
 #
 # Deploys are still gated on a green pipeline — see the `verify` job. That check
 # used to come free from `workflow_run`, which cannot filter tags, so it is done
-# explicitly against the tagged commit instead.
+# explicitly against the tagged commit instead. It waits for a pipeline that is
+# still running, because pushing the tag starts one.
 on:
   workflow_dispatch:
     inputs:
@@ -55,24 +56,71 @@ jobs:
         id: resolve
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      # Wait for the pipeline rather than demanding one that already finished.
+      #
+      # `main.yml` is `on: [push]`, and a bare `push` includes TAG pushes — so
+      # pushing `v1.2.3` starts the main pipeline and this job simultaneously.
+      # Asking only for `status=completed` runs then reads a pipeline that is
+      # seconds old as "none" and blocks a release that was about to go green.
+      # Tagging a commit whose branch pipeline is still running fails the same
+      # way. Neither is a real failure, and both are easy to hit.
+      #
+      # Any *completed successful* run for the commit passes immediately — the
+      # usual merge-then-tag flow never waits, because the branch push already
+      # produced one, and `head_sha` matches whichever ref triggered it. Only
+      # when nothing has finished yet do we wait on what is in flight.
+      #
+      # Still fails closed: no run at all, or every run finished without
+      # succeeding, blocks the deploy. `skip_ci_check` remains the override.
       - name: Check the pipeline passed on it
         if: ${{ !inputs.skip_ci_check }}
         env:
           GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.resolve.outputs.sha }}
+          REPO: ${{ github.repository }}
+          PIPELINE: "Main pipeline: build, lint, test"
+          # Long enough for a cold pipeline, short enough to fail the deploy
+          # rather than occupy a runner for an hour if something is wedged.
+          TIMEOUT_MINUTES: "45"
         run: |
-          sha="${{ steps.resolve.outputs.sha }}"
-          conclusion=$(gh api \
-            "repos/${{ github.repository }}/actions/runs?head_sha=$sha&status=completed" \
-            --jq '[.workflow_runs[]
-                   | select(.name == "Main pipeline: build, lint, test")]
-                  | first | .conclusion // "none"')
+          set -euo pipefail
 
-          echo "Pipeline conclusion for $sha: $conclusion"
+          deadline=$(( $(date +%s) + TIMEOUT_MINUTES * 60 ))
 
-          if [ "$conclusion" != "success" ]; then
-            echo "::error::No successful pipeline for $sha (found: $conclusion). Tag a commit that has passed CI, or re-run with skip_ci_check."
-            exit 1
-          fi
+          while :; do
+            runs=$(gh api \
+              "repos/${REPO}/actions/runs?head_sha=${SHA}&per_page=100" \
+              --jq "[.workflow_runs[] | select(.name == \"${PIPELINE}\")]")
+
+            succeeded=$(jq 'map(select(.status == "completed" and .conclusion == "success")) | length' <<<"$runs")
+            pending=$(jq 'map(select(.status != "completed")) | length' <<<"$runs")
+            total=$(jq 'length' <<<"$runs")
+
+            if [ "$succeeded" -gt 0 ]; then
+              echo "Pipeline passed for ${SHA}."
+              exit 0
+            fi
+
+            if [ "$total" -eq 0 ]; then
+              echo "::error::No pipeline has ever run for ${SHA}. Push the commit to a branch so CI runs, or re-run with skip_ci_check."
+              exit 1
+            fi
+
+            if [ "$pending" -eq 0 ]; then
+              echo "::error::Every pipeline for ${SHA} finished without succeeding:"
+              jq -r '.[] | "  \(.conclusion // "?")  \(.html_url)"' <<<"$runs"
+              exit 1
+            fi
+
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::Timed out after ${TIMEOUT_MINUTES}m waiting for the pipeline on ${SHA}."
+              jq -r '.[] | "  \(.status)  \(.html_url)"' <<<"$runs"
+              exit 1
+            fi
+
+            echo "${pending} pipeline run(s) still going for ${SHA}; waiting 30s..."
+            sleep 30
+          done
 
   deploy-production:
     needs: verify
