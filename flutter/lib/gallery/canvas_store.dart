@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
-import '../atomic/atomic_client.dart';
+import 'package:atomic_flutter/atomic_flutter.dart';
 import '../models/canvas_entry.dart';
 import '../models/stroke_data.dart';
 import '../canvas/thumbnail.dart';

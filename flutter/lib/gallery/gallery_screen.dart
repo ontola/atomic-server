@@ -1,12 +1,9 @@
 import 'dart:async';
+import 'package:atomic_flutter/atomic_flutter.dart';
 import 'package:flutter/material.dart';
 import '../models/canvas_entry.dart';
 import '../theme.dart';
-import '../atomic/atomic_client.dart';
-import '../atomic/session.dart';
-import '../widgets/error_snack.dart';
 import 'canvas_store.dart';
-import '../atomic/widgets/agent_settings_dialog.dart';
 
 class GalleryScreen extends StatefulWidget {
   final CanvasStore store;

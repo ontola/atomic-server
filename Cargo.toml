@@ -14,7 +14,11 @@ members = [
   "plugin-runtime",
   "tools/cargo-bin",
 ]
-exclude = ["flutter/rust", "integrations/localthought/syncables"]
+exclude = [
+  "flutter/rust",
+  "integrations/localthought/syncables",
+  "dart/atomic_flutter/rust",
+]
 
 # Debuginfo dominates target/ size: with ~1460 deps (tauri, actix, iroh) the
 # default `debug = true` produces a multi-GB tree per build flavor, and this
