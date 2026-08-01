@@ -273,6 +273,7 @@ msgid "Automatically compact the conversation when input tokens exceed this perc
 msgstr "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled."
 
 #: src/chunks/AI/MessageContextItem.tsx
+#: src/chunks/DashboardPage/DashboardBlock.tsx
 #: src/chunks/EmojiInput/EmojiInput.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
@@ -2138,6 +2139,7 @@ msgid "Toggle whether this resource appears in your Favorites."
 msgstr "Toggle whether this resource appears in your Favorites."
 
 #: src/actions/resourceActions.tsx
+#: src/chunks/DashboardPage/blocks/ViewBlock.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "Open"
