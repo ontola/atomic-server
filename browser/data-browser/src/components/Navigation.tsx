@@ -11,6 +11,7 @@ import { RightPanelProvider } from './RightPanel/RightPanelContext';
 import { CommentsPanelContainer } from './CommentsPanel/CommentsPanelContainer';
 import { FollowSessionPanelContainer } from './Presence/FollowSessionPanelContainer';
 import { MeetingMessageToaster } from './Presence/MeetingMessageToaster';
+import { NotificationOsPresenter } from './NotificationOsPresenter';
 import { ResourceContextMenuHost } from './ResourceContextMenu';
 import { HideInPrint } from './HideInPrint';
 import { MAIN_CONTAINER } from '@helpers/containers';
@@ -73,6 +74,8 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
         <ResourceContextMenuHost />
         {/* Toasts new meeting messages when the meeting panel isn't open. */}
         {!hideGlobalChrome && <MeetingMessageToaster />}
+        {/* In-app toast / OS banner for NotificationItems. */}
+        {!hideGlobalChrome && <NotificationOsPresenter />}
         {!hideGlobalChrome && (
           <TopBar subject={contextualSubject} top={navbarTop} />
         )}

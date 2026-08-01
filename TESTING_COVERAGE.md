@@ -143,11 +143,13 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Seeded NotificationItem appears with unread badge | flow | `notifications.spec.ts` |
 | Mark all read clears unread styling | flow | `notifications.spec.ts` |
 | Table Watch toggle → Watching | flow | `notifications.spec.ts` |
+| OS notification id hash + surface heuristics | unit | `osNotifications.test.ts` |
+| Local OS banner (browser / Tauri) | flow | manual / desktop smoke — Phase 4 wired |
 | Mention → NotificationItem materialization (engine) | glue | **gap** — unit with mock store |
 | A mentions B → B sees unread (two browser contexts) | flow | **gap** — e2e |
 | Watch table → row add → notification | flow | **gap** — e2e |
 | Mark read on A clears badge on B | flow | **gap** — e2e / sync |
-| OS / APNs / FCM delivery | flow | **gap** — Phase 4–5 |
+| OS / APNs / FCM delivery | flow | **gap** — Phase 5 (push); Phase 4 local OS shipped |
 
 ---
 

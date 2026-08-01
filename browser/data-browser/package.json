@@ -30,6 +30,7 @@
     "@tanstack/react-router": "^1.170.7",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-barcode-scanner": "^2.4.5",
+    "@tauri-apps/plugin-notification": "^2.3.3",
     "@tiptap/core": "^3.23.6",
     "@tiptap/extension-drag-handle": "^3.23.6",
     "@tiptap/extension-drag-handle-react": "^3.23.6",

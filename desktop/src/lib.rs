@@ -456,7 +456,8 @@ pub fn run() {
   let builder = tauri::Builder::default()
     .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_process::init())
-    .plugin(tauri_plugin_opener::init());
+    .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_notification::init());
 
   // Lets an agent drive this window over a WebSocket — open a document, type,
   // read back the DOM — so collaborative editing can be tested end to end

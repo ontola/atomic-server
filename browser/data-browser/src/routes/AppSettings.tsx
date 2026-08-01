@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { HexColorPicker } from 'react-colorful';
 import { ContainerNarrow } from '../components/Containers';
@@ -25,7 +25,13 @@ import {
 } from '@components/Settings';
 import { presetColors } from '../styling';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
+import { FaBell, FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
+import {
+  ensureOsNotificationPermission,
+  getOsNotificationPermission,
+  type OsNotificationPermission,
+} from '../helpers/osNotifications';
+import { isRunningInTauri } from '../helpers/tauri';
 
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
@@ -189,7 +195,7 @@ const AppSettings: React.FunctionComponent = () => {
             </SettingsSection>
             <SettingsSection
               label='Notifications'
-              childSearchKeywords='mentions watch table collection alerts bell'
+              childSearchKeywords='mentions watch table collection alerts bell os desktop push permission'
             >
               <Column gap='0.5rem'>
                 <p>
@@ -199,9 +205,12 @@ const AppSettings: React.FunctionComponent = () => {
                 </p>
                 <p>
                   Use <strong>Watch</strong> on a table to get alerted when rows
-                  change. Delivery channels (OS / push) arrive in a later
-                  release; the in-app inbox works now.
+                  change. When this tab or window is in the background, alerts
+                  can also show as {isRunningInTauri() ? 'system' : 'browser'}{' '}
+                  notifications. Push wake when the app is closed is not wired
+                  yet (Android/iOS need FCM/APNs later).
                 </p>
+                <OsNotificationPermissionRow />
               </Column>
             </SettingsSection>
             <SettingsSection
@@ -334,3 +343,44 @@ const SubLabel = styled.span`
   font-size: 0.85rem;
   color: ${p => p.theme.colors.textLight};
 `;
+
+function OsNotificationPermissionRow(): React.JSX.Element {
+  const [permission, setPermission] =
+    useState<OsNotificationPermission>('default');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void getOsNotificationPermission().then(setPermission);
+  }, []);
+
+  const label =
+    permission === 'granted'
+      ? 'OS notifications allowed'
+      : permission === 'denied'
+        ? 'OS notifications blocked — enable them in system settings'
+        : permission === 'unsupported'
+          ? 'OS notifications are not available in this browser'
+          : 'OS notifications not enabled yet';
+
+  return (
+    <Row gap='0.75rem' center>
+      <SubLabel>{label}</SubLabel>
+      {(permission === 'default' || permission === 'denied') && (
+          <Button
+            subtle
+            disabled={busy || permission === 'denied'}
+            onClick={() => {
+              setBusy(true);
+              void ensureOsNotificationPermission()
+                .then(() => getOsNotificationPermission())
+                .then(setPermission)
+                .finally(() => setBusy(false));
+            }}
+          >
+            <FaBell />
+            Enable OS notifications
+          </Button>
+        )}
+    </Row>
+  );
+}
