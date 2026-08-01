@@ -279,11 +279,16 @@ Pre-release tags (`v0.41.0-beta.2` and friends) do **not** deploy. They exist to
 be published and tested. Put one on production deliberately via the
 `workflow_dispatch` if you want it there.
 
-There is no `main` branch, and nothing refers to one. `release_plz.yml` used to
-trigger on pushes to `main`, so it had never run despite holding a
-`CARGO_REGISTRY_TOKEN`; it is `workflow_dispatch`-only now, because repointing
-it at `master` would have turned on automated publishing as a side effect of a
-rename.
+There is no `main` branch, and nothing refers to one.
+
+`release-plz` used to live here, triggered on pushes to `main` — a branch this
+repo does not have — so it never ran once, while holding a
+`CARGO_REGISTRY_TOKEN`. It is gone rather than repointed. It versions Cargo
+crates, and a release here is one version across four Rust crates, twelve
+`@tomic/*` packages and `desktop/tauri.conf.json`; it would have bumped one half
+and left the other failing `bump-version.mjs --check`. It also generates
+changelogs from commit subjects, and these changelogs are written by hand on
+purpose.
 
 Both deploy workflows refuse to run against a commit whose pipeline has not
 passed. They used to trigger on `push`, which ran the deploy and the pipeline at
