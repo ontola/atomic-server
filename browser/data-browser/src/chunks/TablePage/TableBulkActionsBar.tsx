@@ -41,14 +41,15 @@ export function TableBulkActionsBar({
   }
 
   return (
-    <Bar role='toolbar' aria-label='Bulk actions'>
-      <Count>
+    <Bar role='toolbar' aria-label='Bulk actions' data-testid='table-bulk-actions'>
+      <Count data-testid='bulk-selected-count'>
         {count} {count === 1 ? 'row' : 'rows'} selected
       </Count>
       <Button
         subtle
         onClick={() => setShowSetProperty(true)}
         disabled={properties.length === 0}
+        data-testid='bulk-set-property-button'
         title={
           properties.length === 0
             ? 'No columns available to set'
@@ -60,12 +61,18 @@ export function TableBulkActionsBar({
       <Button
         alert
         onClick={() => setShowDeleteConfirm(true)}
+        data-testid='bulk-delete-button'
         title='Delete all selected rows'
       >
         <FaTrash /> Delete
       </Button>
       <Spacer />
-      <Button subtle onClick={onClear} title='Clear selection'>
+      <Button
+        subtle
+        onClick={onClear}
+        data-testid='bulk-clear-button'
+        title='Clear selection'
+      >
         <FaXmark /> Clear
       </Button>
 

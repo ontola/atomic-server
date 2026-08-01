@@ -36,6 +36,7 @@ export function RowSelectCheckbox({
     <Checkbox
       title='Select row'
       aria-label='Select row'
+      data-testid='row-select-checkbox'
       checked={isSelected(subject)}
       onChange={() => onToggle(subject)}
       // Keep the click from reaching the cell, which would otherwise start a

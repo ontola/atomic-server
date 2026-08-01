@@ -1183,6 +1183,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     <Checkbox
       title={selection.allSelected ? 'Deselect all' : 'Select all'}
       aria-label={selection.allSelected ? 'Deselect all' : 'Select all'}
+      data-testid='select-all-checkbox'
       checked={selection.allSelected}
       selected={selection.someSelected}
       onChange={() =>

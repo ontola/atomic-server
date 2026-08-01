@@ -80,6 +80,7 @@ export function TableSetPropertyDialog({
           <label htmlFor={propertySelectId}>Property</label>
           <BasicSelect
             id={propertySelectId}
+            data-testid='bulk-set-property-select'
             value={selectedSubject}
             onChange={e => setSelectedSubject(e.target.value)}
           >
