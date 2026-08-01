@@ -1870,6 +1870,15 @@ export class Store {
     // placeholders.
     if (
       this.clientDb &&
+      // A Collection is a derived query result, not a record: a page is either
+      // assembled from `queryLocalDb` over the index or fetched from the
+      // server, and neither ever reads it back out of the local database.
+      // Writing it there costs a full index rebuild and an fsync for something
+      // nothing reads — and because collections are deliberately exempt from
+      // the `lastCommit` skip above, they are re-added (and so re-written) on
+      // every refresh. Building one table from a template wrote a single
+      // collection page seven times.
+      !resource.hasClasses(collections.classes.collection) &&
       // Skip persisting when the worker has a known init failure (e.g.
       // OPFS leader-election couldn't steal the lock — Firefox doesn't
       // support `navigator.locks.request({ steal: true })`). Without this
@@ -1889,14 +1898,35 @@ export class Store {
         if (jsonAd) {
           const doc = resource.getLoroDoc?.();
           const snapshot = doc?.export({ mode: 'snapshot' });
-          this.clientDb
-            .putResourceWithSnapshot(resource.subject, jsonAd, snapshot)
-            .catch(e =>
-              console.error(
-                `[ClientDb] put failed for ${resource.subject.slice(0, 60)}:`,
-                e,
-              ),
-            );
+
+          // One local-DB write costs ~9ms, three quarters of it rebuilding
+          // this resource's index entries. `addResource` runs on every merge
+          // and every notify, so the same unchanged state was being written
+          // repeatedly — a table built from a template did 64 writes for 15
+          // resources. Hash what we are about to write and skip the write when
+          // it matches the last one for this subject.
+          //
+          // Deliberately a content hash rather than `lastCommit`: local edits
+          // and merges change state without advancing it. The hash covers the
+          // Loro snapshot too, so a CRDT-only change still writes. A collision
+          // would skip one cache write, which the server copy repairs — this
+          // is a cache, not the record.
+          const stamp = hashPersistedState(jsonAd, snapshot);
+
+          if (this.lastPersistedStamp.get(resource.subject) !== stamp) {
+            this.lastPersistedStamp.set(resource.subject, stamp);
+            this.clientDb
+              .putResourceWithSnapshot(resource.subject, jsonAd, snapshot)
+              .catch(e => {
+                // Failed write: drop the stamp so the next attempt is not
+                // skipped as a duplicate of a write that never landed.
+                this.lastPersistedStamp.delete(resource.subject);
+                console.error(
+                  `[ClientDb] put failed for ${resource.subject.slice(0, 60)}:`,
+                  e,
+                );
+              });
+          }
         }
       } catch (e) {
         console.error(
@@ -3403,6 +3433,10 @@ export class Store {
       void this.clientDb.removeResource(resolved).catch(() => undefined);
     }
 
+    // The stored state is gone, so the next write for this subject must not be
+    // mistaken for a duplicate of it.
+    this.lastPersistedStamp.delete(resolved);
+
     if (this.resources.delete(resolved)) {
       this.localSearch.removeResource(resolved);
 
@@ -4899,6 +4933,11 @@ export class Store {
    * `useSyncExternalStore` checks. */
   private snapshots = new Map<string, { resource: Resource }>();
 
+  /** Subject → content stamp of the last state written to the local DB, so
+   *  `addResource` can skip re-writing state that is already there. Entries are
+   *  dropped by `removeResource` and by a failed write. */
+  private lastPersistedStamp = new Map<string, number>();
+
   public getResourceSnapshot(
     subject: string,
     opts: FetchOpts = {},
@@ -5026,4 +5065,46 @@ function resourceToJsonAd(resource: Resource): string | null {
   const obj = resource.toObject({ includeBinary: false });
 
   return obj ? JSON.stringify(obj) : null;
+}
+
+/**
+ * Cheap 53-bit content stamp over exactly what a local-DB write persists: the
+ * JSON-AD and the Loro snapshot. Used only to skip re-writing state identical
+ * to the last write for that subject (see `addResource`), so the cost has to
+ * stay far below the ~9ms write it saves — this is two xor-multiply passes over
+ * a few KB, i.e. microseconds.
+ *
+ * Not a security hash. The failure mode of a collision is one skipped cache
+ * write, repaired by the next real change or by re-fetching from the server.
+ */
+function hashPersistedState(jsonAd: string, snapshot?: Uint8Array): number {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+
+  for (let i = 0; i < jsonAd.length; i++) {
+    const ch = jsonAd.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+
+  if (snapshot) {
+    // Length first, so two snapshots differing only in trailing bytes can't
+    // land on the same stamp through the byte loop alone.
+    h1 = Math.imul(h1 ^ snapshot.byteLength, 2654435761);
+
+    for (let i = 0; i < snapshot.length; i++) {
+      const b = snapshot[i];
+      h1 = Math.imul(h1 ^ b, 2654435761);
+      h2 = Math.imul(h2 ^ b, 1597334677);
+    }
+  }
+
+  h1 =
+    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 =
+    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 }

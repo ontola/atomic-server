@@ -13,6 +13,7 @@ import { Client } from './client.js';
 import type { Collection } from './collection.js';
 import { CollectionBuilder } from './collectionBuilder.js';
 import { CommitBuilder, Commit } from './commit.js';
+import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
 import { isUnauthorized } from './error.js';
 import { commits } from './ontologies/commits.js';
@@ -2892,10 +2893,12 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this._saveDepth++;
+    const closeSave = perfSpan('resource.save');
 
     try {
       return await this._saveInner(hasChanges);
     } finally {
+      closeSave();
       this._saveDepth--;
     }
   }
@@ -3016,6 +3019,22 @@ export class Resource<C extends OptionalClass = any> {
       //  - Any genesis (e.g. table rows materialized from a virtual `_new:`
       //    placeholder): the resource is on the server but was never put in
       //    OPFS, so its parent-indexed membership is invisible after reload.
+      //
+      // This write is on the critical path of every create, and against a
+      // RELEASE server it is the dominant one: ~33 ms here versus ~5 ms for the
+      // commit round-trip it follows. Measure against a debug server and you
+      // conclude the opposite — that build verifies signatures ~7× slower,
+      // which buries this. Worker-side split of the ~33 ms, on sub-2KB
+      // payloads: ~13 ms `putResource` (parse + a redb write transaction per
+      // resource), ~2.5 ms snapshot, ~3.5 ms fsync, the rest postMessage and
+      // queue wait. The Loro export before it is 0 ms.
+      //
+      // It stays awaited AND durable regardless. Callers read the local
+      // database back straight away (a table's rows come from a `parent=`
+      // query); dropping either loses freshly-typed rows in `tables.spec.ts`,
+      // measured on a healthy store. Making a burst of creates faster means
+      // making fewer, larger writes — one transaction over N resources — not
+      // making each one lazier.
       if (wasGenesis || this.subject.startsWith('did:ad:agent:')) {
         await this.persistToClientDb();
       }
@@ -3172,13 +3191,17 @@ export class Resource<C extends OptionalClass = any> {
     // Await the OPFS write — when `save()` resolves the edit MUST survive a
     // reload. A non-awaited write left a reload reading OPFS before the
     // write landed and silently losing the edit.
+    const closePersist = perfSpan('resource.persistToClientDb');
+
     try {
       await clientDb.putResourceWithSnapshot(
         this.subject,
         JSON.stringify(obj),
         snapshot,
       );
+      closePersist();
     } catch (e) {
+      closePersist({ err: e instanceof Error ? e.message : String(e) });
       console.error('[persistToClientDb] failed:', e);
     }
   }
