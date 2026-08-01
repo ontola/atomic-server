@@ -22,7 +22,9 @@ interface WatchToggleProps {
  * Toggle a {@link notifications.classes.watchSubscription} for a Table /
  * Collection. Creates the preference on the personal drive.
  */
-export function WatchToggle({ resource }: WatchToggleProps): React.JSX.Element | null {
+export function WatchToggle({
+  resource,
+}: WatchToggleProps): React.JSX.Element | null {
   const store = useStore();
   const { agent } = useSettings();
   const engine = useNotificationEngine();
@@ -102,6 +104,8 @@ export function WatchToggle({ resource }: WatchToggleProps): React.JSX.Element |
       const personalDrive = await fetchPersonalDriveSubject(store, agent);
 
       if (!personalDrive) {
+        setBusy(false);
+
         return;
       }
 
@@ -110,6 +114,7 @@ export function WatchToggle({ resource }: WatchToggleProps): React.JSX.Element |
         await existing.destroy();
         setWatchSubject(undefined);
         await engine?.reloadWatches();
+        setBusy(false);
 
         return;
       }
@@ -123,18 +128,17 @@ export function WatchToggle({ resource }: WatchToggleProps): React.JSX.Element |
           [notifications.properties.watchTarget]: resource.subject,
           [notifications.properties.watchKind]: 'membership',
           [notifications.properties.notificationEnabled]: true,
-          [notifications.properties.notificationChannels]: [
-            'inApp',
-            'os',
-          ],
+          [notifications.properties.notificationChannels]: ['inApp', 'os'],
         },
       });
       await watch.save();
       setWatchSubject(watch.subject);
       await engine?.reloadWatches();
-    } finally {
-      setBusy(false);
+    } catch {
+      // Keep previous UI state on failure.
     }
+
+    setBusy(false);
   };
 
   return (
