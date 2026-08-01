@@ -291,6 +291,10 @@ const DEFAULT_FILES: &[(&str, &str)] = &[
     ("tasks.json", include_str!("../defaults/tasks.json")),
     ("forks.json", include_str!("../defaults/forks.json")),
     ("i18n.json", include_str!("../defaults/i18n.json")),
+    (
+        "notifications.json",
+        include_str!("../defaults/notifications.json"),
+    ),
 ];
 
 /// Fingerprint of everything `bootstrap` seeds: the base models and the

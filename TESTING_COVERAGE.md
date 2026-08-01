@@ -553,6 +553,19 @@ Not covered: table `contains`; Playwright search overlay on the KV path and asse
 
 ---
 
+## Notifications
+
+| Flow | Layer | Where |
+|---|---|---|
+| Extract agent mentions from TipTap JSON / chat text | glue | `browser/lib/src/mentions.test.ts` |
+| Mention → NotificationItem materialization (engine) | glue | **gap** — unit with mock store |
+| A mentions B → B sees unread (two browser contexts) | flow | **gap** — e2e |
+| Watch table → row add → notification | flow | **gap** — e2e |
+| Mark read on A clears badge on B | flow | **gap** — e2e / sync |
+| OS / APNs / FCM delivery | flow | **gap** — Phase 4–5 |
+
+---
+
 ## Blind spots
 
 ### Plugin execution lifecycle (2026-09-05)
