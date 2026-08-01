@@ -128,7 +128,6 @@ msgstr "<0/> Crear Nuevo Agente"
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/UpdatePluginButton.tsx
-#: src/chunks/TablePage/AggregatesDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -1529,7 +1528,6 @@ msgstr "Descripción Textual <0/>"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/RTE/ImagePicker.tsx
-#: src/chunks/TablePage/AggregatesDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
@@ -1784,6 +1782,10 @@ msgstr ""
 
 #: src/chunks/TablePage/Kanban/KanbanColumn.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
 msgid "Add"
 msgstr "Añadir"
 
@@ -4113,6 +4115,8 @@ msgid "Next month"
 msgstr ""
 
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
 msgid "Add item"
 msgstr ""
 
@@ -6045,11 +6049,9 @@ msgstr ""
 #: src/chunks/TablePage/Timer/useTimerColumns.tsx
 #: src/chunks/TablePage/derivedColumns.test.ts
 #: src/chunks/TablePage/derivedColumns.test.ts
+#: src/chunks/TablePage/tableAggregates.test.ts
 msgid "Duration"
 msgstr ""
-
-#~ msgid "Filter rows by a property"
-#~ msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
@@ -6128,19 +6130,6 @@ msgstr ""
 msgid "No kind"
 msgstr ""
 
-#~ msgid "Totals ({0})"
-#~ msgstr ""
-
-#: src/chunks/TablePage/AggregatesDialog.tsx
-msgid "Totals"
-msgstr ""
-
-#~ msgid "{0} of {1}"
-#~ msgstr ""
-
-#~ msgid "Over {0} rows"
-#~ msgstr ""
-
 #: src/chunks/TablePage/TableSummaryBar.tsx
 msgid "Only the largest groups are shown."
 msgstr ""
@@ -6150,52 +6139,20 @@ msgstr ""
 msgid "Per {0}"
 msgstr ""
 
-#: src/chunks/TablePage/AggregatesDialog.tsx
-msgid "Remove this total"
-msgstr ""
-
-#: src/chunks/TablePage/AggregatesDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 msgid "Break down by"
 msgstr ""
 
-#: src/chunks/TablePage/AggregatesDialog.tsx
-msgid "One subtotal per distinct value of a column — per project, per month, per status."
-msgstr ""
-
-#: src/chunks/TablePage/AggregatesDialog.tsx
-msgid "No totals yet."
-msgstr ""
-
-#: src/chunks/TablePage/AggregatesDialog.tsx
-msgid "Computed over every row this view matches — filters included, so a total always describes what you are looking at rather than the rows that happen to be loaded."
-msgstr ""
-
-#: src/chunks/TablePage/AggregatesDialog.tsx
-msgid "of all rows"
-msgstr ""
-
-#: src/chunks/TablePage/AggregatesDialog.tsx
-msgid "<0/> Add a total"
-msgstr ""
-
-#: src/chunks/TablePage/AggregatesDialog.tsx
-msgid "Nothing — one total"
-msgstr ""
-
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
-#: src/chunks/TablePage/AggregatesDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 msgid "Per day"
 msgstr ""
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
-#: src/chunks/TablePage/AggregatesDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 msgid "Per month"
 msgstr ""
 
-#: src/chunks/TablePage/AggregatesDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 msgid "Per exact value"
 msgstr ""
@@ -6210,16 +6167,10 @@ msgstr ""
 msgid "{0} rows"
 msgstr ""
 
-#~ msgid "Σ"
-#~ msgstr ""
-
 #. 0: AGGREGATE_FUNCTION_LABELS[configured.function]; 1: label
 #: src/chunks/TablePage/TableTotalsFooter.tsx
 msgid "{0} of {1} — click to change"
 msgstr ""
-
-#~ msgid "Click to total this column"
-#~ msgstr ""
 
 #: src/chunks/TablePage/TableTotalsFooter.tsx
 msgid "Change breakdown…"
@@ -6233,12 +6184,6 @@ msgstr ""
 msgid "Clear breakdown"
 msgstr ""
 
-#~ msgid "Rows in this view — click to break the totals down"
-#~ msgstr ""
-
-#~ msgid "Rows in this view"
-#~ msgstr ""
-
 #: src/chunks/TablePage/BreakdownDialog.tsx
 msgid "Break down the totals"
 msgstr ""
@@ -6251,9 +6196,6 @@ msgstr ""
 msgid "Splits each total per distinct value of a column — per project, per month, per status — under the table. Computed by the server over every matching row, like the totals themselves."
 msgstr ""
 
-#~ msgid "{0} rows — click to break the totals down"
-#~ msgstr ""
-
 #: src/chunks/TablePage/TableTotalsFooter.tsx
 msgid "Add a totals row"
 msgstr ""
@@ -6261,12 +6203,6 @@ msgstr ""
 #: src/chunks/TablePage/TableTotalsFooter.tsx
 msgid "Remove this totals row"
 msgstr ""
-
-#~ msgid "{0} rows — click for the totals menu"
-#~ msgstr ""
-
-#~ msgid "TotalsCellTrigger"
-#~ msgstr ""
 
 #. 0: rowCount
 #: src/chunks/TablePage/TableTotalsFooter.tsx
@@ -6276,9 +6212,6 @@ msgstr ""
 #: src/chunks/TablePage/TableTotalsFooter.tsx
 msgid "Total this column"
 msgstr ""
-
-#~ msgid "Computed columns cannot be totalled yet — the total is computed from stored values."
-#~ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Unknown error"
@@ -6313,9 +6246,6 @@ msgstr ""
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Filter rows by a column"
 msgstr ""
-
-#~ msgid "Nothing here yet. Add a number, a chart or a table."
-#~ msgstr ""
 
 #: src/chunks/DashboardPage/DashboardPage.tsx
 msgid "This dashboard has no blocks yet."
@@ -6488,6 +6418,9 @@ msgid "Could not add the {0}"
 msgstr ""
 
 #: src/chunks/TablePage/QuickAddFields.tsx
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
 msgid "Log a feed"
 msgstr ""
 
@@ -6553,4 +6486,112 @@ msgstr ""
 
 #: src/chunks/DashboardPage/DashboardPage.tsx
 msgid "Nothing here yet. Add a number, a chart, a button or a table."
+msgstr ""
+
+#. 0: fn
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Pick a column for the {0} to measure"
+msgstr ""
+
+#: src/helpers/stringToSlug.test.ts
+msgid "Last watered"
+msgstr ""
+
+#: src/helpers/stringToSlug.test.ts
+msgid "Meat & fish"
+msgstr ""
+
+#: src/helpers/stringToSlug.test.ts
+msgid "Quantity / unit"
+msgstr ""
+
+#: src/helpers/stringToSlug.test.ts
+msgid "Plan B2 - final"
+msgstr ""
+
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
+msgid "What do you need?"
+msgstr ""
+
+#: src/chunks/TablePage/tableAggregates.test.ts
+msgid "Total"
+msgstr ""
+
+#: src/chunks/TablePage/rowActions.test.ts
+msgid "Do it"
+msgstr ""
+
+#. 0: kind; 1: count
+#: src/chunks/TablePage/derivedColumns.test.ts
+msgid "{0} takes {1} arguments; raise MAX_DERIVED_ARGS and add a subscription in DerivedCell"
+msgstr ""
+
+#. 0: aggregate.computedColumn
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} is not a computed column of this view"
+msgstr ""
+
+#. 0: aggregate.column
+#. 0: value
+#. 0: reference
+#: src/chunks/TablePage/tableTemplates.test.ts
+#: src/chunks/TablePage/tableTemplates.test.ts
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} is not a column"
+msgstr ""
+
+#. 0: derived.name; 1: name
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} is missing {1}"
+msgstr ""
+
+#. 0: derived.name; 1: name; 2: value
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0}.{1} reads {2}"
+msgstr ""
+
+#. 0: action.label; 1: action.column
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} writes \"{1}\", which is not a column"
+msgstr ""
+
+#. 0: action.label; 1: type
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} stamps now into a {1} column"
+msgstr ""
+
+#. 0: action.label; 1: type
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} toggles a {1} column"
+msgstr ""
+
+#. 0: action.label; 1: type
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} increments a {1} column"
+msgstr ""
+
+#. 0: action.label
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} needs a step"
+msgstr ""
+
+#. 0: action.label
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} needs a value to write"
+msgstr ""
+
+#. 0: action.label; 1: action.value; 2: action.column
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} sets \"{1}\", not an option of {2}"
+msgstr ""
+
+#. 0: quickAdd.label; 1: quickAdd.field
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} types into \"{1}\", which is not a column"
+msgstr ""
+
+#. 0: quickAdd.label; 1: preset.column
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} presets \"{1}\", which is not a column"
 msgstr ""
