@@ -110,7 +110,7 @@ showAgentSettings(context);
 ### Follow-ups
 
 - [ ] Peel canvas CRUD off the bridge
-- [ ] End-to-end “build an app” tutorial
+- [x] End-to-end “build an app” tutorial — `docs/src/flutter-guide/` + `docs/src/flutter.md`
 - [ ] Web / WASM story (today: pure-Dart HTTP stopgap)
 
 ## Twin files (keep in step with browser)

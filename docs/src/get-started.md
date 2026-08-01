@@ -6,6 +6,7 @@ There's a couple of levels at which you can start working with Atomic Data (from
 - **Play with the demo**: Create an Agent, edit a document.
 - **Host your own Atomic-Server**.
 - **Create a react app with the template**
+- **Build a local-first Flutter app** with [`atomic_lib`](flutter-guide/1-index.md) — no server required to start.
 - **Set up the full dev environment**.
 - **Create a library for Atomic Data**.
 

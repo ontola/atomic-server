@@ -46,9 +46,15 @@
   - [Rust](rust.md)
     - [CLI](rust-cli.md)
     - [Lib](rust-lib.md)
+  - [Flutter / Dart (`atomic_lib`)](flutter.md)
 
 # Guides
 
+- [Build a local-first Flutter app](flutter-guide/1-index.md)
+  - [Setup](flutter-guide/2-setup.md)
+  - [Identity & workspaces](flutter-guide/3-identity.md)
+  - [Working with data](flutter-guide/4-data.md)
+  - [Sync, pairing & servers](flutter-guide/5-sync.md)
 - [Build a portfolio using Astro and Atomic Server](astro-guide/1-index.md)
   - [Setup](astro-guide/2-setup.md)
   - [Frontend setup](astro-guide/3-frontend-setup.md)
