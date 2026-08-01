@@ -99,6 +99,14 @@ Items are **derived, re-creatable** from sources. Destroying them is fine; the
 source (the mention in the doc) remains. Dedup key: `(type, about, actor,
 mentionedAgent|watchTarget, sourceCommitId?)` so re-materialization is idempotent.
 
+**Decision (2026-08-01): sync read status.** `NotificationItem`s live on the
+recipient's personal drive, and `read` / `dismissed` are ordinary properties on
+those resources — they sync across laptop / phone / browser like any other
+commit. Mark-read on one device clears the bell on the others after sync.
+Device-local overlays are rejected: the whole point of multi-device is one
+inbox state. Tradeoff: read-flips create small commits (acceptable; batch
+mark-all-read into one commit).
+
 ### `mentions` property (on content)
 
 `https://atomicdata.dev/properties/mentions` — `resourceArray` of Agent subjects
@@ -137,20 +145,34 @@ For ad-hoc queries: either persist a Collection resource, or embed the filter
 params on the `WatchSubscription` itself (`filters` JSON) — prefer pointing at
 an existing Collection/Table so there is one source of truth for the query shape.
 
-### `NotificationPreferences` (agent / device)
+### `NotificationPreferences` (agent-scoped, syncs)
 
-One resource (or localStorage for device-only knobs) covering global defaults:
+One resource on the personal drive covering global defaults shared by all
+devices:
 
 - Master enable / Do Not Disturb schedule
-- Default channels for `mention` vs `watch-*`
+- Default channels for `mention` vs `watch-*` (`inApp`, `os`, `push`)
 - "Mentions in resources I can already read" on/off
-- Desktop: show OS notifications when window unfocused / always / never
-- Browser: request Notification permission
-- Later: device-token registry pointer (push)
 
-Device-local keys (sound, OS permission granted) stay in `AppSettings` /
-`localStorage`; syncable prefs live as Atomic resources on the personal drive so
-phone and desktop share mute rules.
+### Device-local only (do not sync)
+
+- OS / push permission granted (platform state)
+- Sound / vibration preference if OS-specific
+- Last registered push token (also mirrored to hub — see below)
+
+### `DevicePushToken` (Phase 5)
+
+Hub-visible (or personal-drive + replicated) registry entry per install:
+
+| Property | Purpose |
+| --- | --- |
+| `agent` | Owner agent DID |
+| `platform` | `ios` \| `android` \| `web` \| `desktop` |
+| `token` | APNs device token (hex) or FCM registration token |
+| `appId` | Bundle / package id (APNs topic / FCM sender scoping) |
+| `updatedAt` | Token refresh time |
+
+Tokens rotate; re-register on every launch. Hub uses this list for wake fan-out.
 
 ## Mentions — end-to-end
 
@@ -251,20 +273,138 @@ Per-resource toggle also on Table / Collection toolbars (writes the same
 | --- | --- | --- |
 | In-app center | Always when app running | React store of `NotificationItem`s + bell in chrome |
 | In-app toast | App focused, subject not visible | Extend toast patterns; respect prefs |
-| OS notification | Window unfocused / background | Web `Notification` API in browser; `tauri-plugin-notification` in desktop |
-| Push (FCM/APNs/web-push) | App killed / mobile suspended | Out of v1 — see social-apps P2.3; wake → sync → materialize |
+| Local OS notification | App process alive, window/tab unfocused | Web `Notification` API (browser); `tauri-plugin-notification` (Tauri desktop **and** mobile foreground/background-capable local schedule) |
+| Remote push (APNs / FCM / web-push) | Process suspended or killed | Required on iOS/Android for anything after the OS freezes the app; wake → sync → materialize |
 
-**Tauri specifics**
+Local OS ≠ remote push. Confusing them is the main mobile footgun — see next
+section.
 
-- Add `tauri-plugin-notification` (desktop + mobile targets).
-- Tray can show unread badge / "N notifications" menu item (optional stretch).
-- Deep link already exists (`atomic://…`) — OS notification click should open
-  the app to `?subject=` of `about`.
-- Embedded server keeps WS alive while the app runs, so OS notifications for
-  watches/mentions work without push as long as the process is up.
+**Permission UX:** first mention or first watch enable prompts for notification
+permission; never on cold start. On Android 13+ this is `POST_NOTIFICATIONS`;
+on iOS it is the usual alert/badge/sound prompt (separate from Push capability
+entitlement, which is a build-time Xcode setting).
 
-**Permission UX:** first mention or first watch enable prompts for OS
-permission; never on cold start.
+## Native notifications on iOS and Android
+
+Tauri already ships Android/iOS targets (`desktop/`, barcode scanner plugin,
+`#[cfg_attr(mobile, tauri::mobile_entry_point)]`). Notifications need two
+plugins and two OS concepts:
+
+```text
+                    app foreground          app background         app killed
+Browser             in-app / toast          Notification API       web-push (later)
+Tauri desktop       in-app / toast          tauri-plugin-notification  (process usually alive; tray)
+Tauri iOS/Android   in-app / toast          local notif *if* OS    **remote push only**
+                                            still schedules us     (APNs / FCM)
+```
+
+### Why push is mandatory on mobile
+
+[`virtual-drive.md`](./virtual-drive.md) already records it: WebSockets do not
+survive suspension. The embedded node in the Tauri webview is frozen or dead
+when the user switches away. Local notifications (`tauri-plugin-notification`)
+can show a banner **only while our process can run code** (or for alarms we
+pre-scheduled — useless for unpredictable mentions). For "someone mentioned
+you while the phone was in your pocket," the hub must send **APNs (iOS)** or
+**FCM (Android)**.
+
+Desktop Tauri can defer push longer: the process + tray often stay resident, so
+local notifications + live WS cover the common case. Mobile cannot.
+
+### Two Tauri plugins (do not conflate)
+
+| Plugin | Role | Platforms |
+| --- | --- | --- |
+| [`tauri-plugin-notification`](https://v2.tauri.app/plugin/notification/) | **Local** notifications: permission, show banner/badge from JS when app code is running | Desktop + iOS + Android |
+| Push plugin (community; evaluate at implement time — e.g. `tauri-plugin-push-notifications` / `tauri-plugin-mobile-push`) | **Remote** token registration + receive APNs/FCM; tap / cold-start events | iOS + Android only (desktop stubs/rejects) |
+
+Wire both into `desktop/src/lib.rs` behind `#[cfg(mobile)]` for push; keep
+local notification on all targets.
+
+### Platform setup (implementor's checklist)
+
+**iOS**
+
+- Xcode capability: **Push Notifications** (`aps-environment` entitlement).
+- Capability: **Background Modes → Remote notifications** (silent/wake delivery).
+- Apple Developer: APNs key (`.p8`) or certificate on the hub that sends pushes.
+- Permission: `requestPermission` for alert/badge/sound (user-facing); entitlement
+  alone does not prompt.
+- Minimum deployment target per chosen push plugin (often iOS 15+).
+- Tap payload → existing `atomic://` / `?subject=` deep link path (same as
+  pairing deep links in `desktop/src/lib.rs`).
+
+**Android**
+
+- Firebase project + `google-services.json` + Google Services Gradle plugin.
+- `POST_NOTIFICATIONS` runtime permission on API 33+ (plugin may merge the
+  manifest permission; JS still must request).
+- FCM service in the merged manifest (push plugin responsibility).
+- Tap → same deep-link routing as iOS.
+- Do **not** rely on a permanent foreground-service notification for sync
+  ([`virtual-drive.md`](./virtual-drive.md) / [`android-data-reuse.md`](./android-data-reuse.md)
+  already flag that as user-hostile); use FCM wake + short sync work, then stop.
+
+### Push payload contract (hint-to-sync)
+
+Matches [`social-apps.md`](./social-apps.md) P2.3 — push carries **no trusted
+body**:
+
+```json
+{
+  "type": "atomic.notify",
+  "notificationItem": "did:ad:…",
+  "about": "did:ad:…",
+  "notificationType": "mention"
+}
+```
+
+Client on receive (background or cold start):
+
+1. Bring up store / reconnect sync (WS or Iroh).
+2. Fetch/materialize `NotificationItem` (or discover via reverse query if the
+   item was created on another device first — see below).
+3. **If `read` or `dismissed` is already true → do not show a banner; clear
+   badge.** This is why synced read status matters for native UX.
+4. Else show local notification (or let the OS show the remote one if we used
+   an alert push) and open `about` on tap.
+
+Prefer **data / silent-ish wake** where the platform allows, then render locally
+after sync — so a read-on-laptop wins the race before the phone paints a
+stale banner. Where iOS requires a visible alert to guarantee delivery, keep
+title/body generic ("New mention in Atomic") and collapse/cancel once sync
+confirms read state.
+
+### Cross-device + badge
+
+- Unread count = query `NotificationItem` where `read != true` on personal drive
+  (same on every client after sync).
+- Mark read → commit → other devices update bell; mobile cancels delivered
+  notifications with matching id and sets badge to the new unread count.
+- Each local/remote notification id should equal or derive from the
+  `NotificationItem` subject so cancellation is deterministic.
+
+### Who creates the `NotificationItem` under push?
+
+Two acceptable orders (pick one in Phase 5; both need idempotent upsert):
+
+1. **Hub creates nothing.** Push is pure wake with `about` + type; each device
+   runs `NotificationEngine.reconcile` and upserts the same dedup key. First
+   device to sync "wins" writing the item; others merge via Loro / see existing.
+2. **Recipient's always-on replica (hub hosting their personal drive) materializes
+   the item server-side** when it applies the mention commit, then pushes the
+   item subject. Heavier hub logic; nicer single writer.
+
+Recommendation: **(1)** for v1 of push — keeps the server dumb, reuses the
+client engine, matches local-first. Hub only needs: match commit against
+registered watches/mentions → look up `DevicePushToken`s → send wake.
+
+### Flutter canvas
+
+Out of Tauri. When Flutter needs the same product notifications, use
+`firebase_messaging` + `flutter_local_notifications` against the **same**
+ontology and push payload contract — do not invent a second registry format.
+v1 remains data-browser + Tauri.
 
 ## Notification engine (client module)
 
@@ -286,9 +426,9 @@ Rules of thumb (shared with `MeetingMessageToaster`):
 - Honor `mutedUntil` / DND / channel flags.
 - Idempotent upsert of `NotificationItem`.
 
-Server stays dumb in v1: no notification fan-out service. Push later hooks the
-same commit_monitor path *only* as a wake signal to devices that registered
-tokens for agents mentioned or watches matching — still no payload body.
+Server stays dumb through Phase 4: no notification fan-out. Phase 5 hooks
+`commit_monitor` only as a wake signal to `DevicePushToken`s for matching
+mentions/watches — still no trusted body in the push (see payload contract).
 
 ## What we are *not* doing (v1)
 
@@ -306,8 +446,10 @@ tokens for agents mentioned or watches matching — still no payload body.
 ### Phase 0 — Design lock (this doc)
 
 - [x] Constraints mapped from auth-sync / social-apps / subscriptions
-- [ ] Product sign-off on: actor-side `mentions` property, personal
-      `NotificationItem`s, client-side watch matching
+- [x] Sync `read` / `dismissed` on personal-drive `NotificationItem`s
+- [x] iOS/Android: local plugin vs APNs/FCM push split recorded
+- [ ] Product sign-off on: actor-side `mentions` property, client-side watch
+      matching, push payload = wake-only
 
 ### Phase 1 — Ontology + mention authoring
 
@@ -319,7 +461,8 @@ tokens for agents mentioned or watches matching — still no payload body.
 ### Phase 2 — In-app engine + center (browser)
 
 - [ ] `NotificationEngine` materializes mention items from `ResourceUpdated`
-- [ ] Bell + notification center + mark read/dismiss
+- [ ] Bell + notification center; `markRead` / `dismiss` commit to personal drive
+- [ ] Multi-device: mark read on A → unread clears on B after sync (e2e or unit+)
 - [ ] Settings section: mention toggles
 - [ ] E2E: A mentions B in a shared doc → B sees unread item (two contexts /
       `getDevDriveSecret` pattern)
@@ -331,19 +474,23 @@ tokens for agents mentioned or watches matching — still no payload body.
 - [ ] Settings list + mute/channels
 - [ ] E2E: watch table → other agent adds row → notification
 
-### Phase 4 — OS notifications (browser + Tauri)
+### Phase 4 — Local OS notifications (browser + Tauri desktop/mobile)
 
-- [ ] Notification API when tab hidden
-- [ ] `tauri-plugin-notification` + click → deep link to subject
+- [ ] Notification API when tab hidden (browser)
+- [ ] `tauri-plugin-notification` on desktop + mobile targets
+- [ ] Click → deep link to `about`; notification id = item subject
 - [ ] Permission request UX tied to first enable
+- [ ] On `read` sync: cancel local notifications + refresh badge
 
-### Phase 5 — Push wake (platform)
+### Phase 5 — Remote push wake (iOS APNs + Android FCM + optional web-push)
 
-- [ ] Device-token registry per agent (hub)
-- [ ] commit_monitor → mention/watch match → FCM/APNs/web-push *wake*
-- [ ] Client: on wake, sync, then materialize (social-apps framing)
-- Track under social-apps; this doc only requires the client engine be
-  push-ready (idempotent materialize, prefs already have a `push` channel).
+- [ ] Choose/integrate Tauri push plugin; iOS entitlements + Android Firebase
+- [ ] `DevicePushToken` register/refresh on launch
+- [ ] Hub: commit_monitor match → wake fan-out (no trusted body)
+- [ ] Client: on push → sync → materialize → suppress if already read
+- [ ] Cold-start tap queued until JS listeners arm (plugin requirement)
+- Track operational secrets (APNs `.p8`, FCM service account) with hub deploy;
+  product behavior stays aligned with social-apps P2.3.
 
 ## Test plan (where tests belong)
 
@@ -356,14 +503,14 @@ Per [`TESTING_COVERAGE.md`](../TESTING_COVERAGE.md) preference for cheaper layer
 | Engine idempotency + coalesce | unit with mock store events |
 | Watch membership vs table filter | unit reusing Collection match helpers |
 | A mentions B / watch fires | e2e (two pages, shared drive) |
-| Tauri OS notification | manual / desktop smoke; plugin config in CI later |
+| Mark read on A clears B | e2e or sync integration (two agents/devices, personal drive) |
+| Local OS notification | manual / desktop smoke |
+| Push wake + suppress-if-read | mobile manual + hub unit for token fan-out |
 
 ## Open questions
 
-1. **Where do `NotificationItem`s live?** Personal drive folder (syncs across
-   devices, uses quota) vs IndexedDB/OPFS-only (lighter, per-device read state).
-   Recommendation: personal drive for the item graph; `read`/`dismissed` may be
-   device-local overlays if syncing read-state feels noisy — decide in Phase 2.
+1. ~~**Where do `NotificationItem`s live / sync read?**~~ **Decided:** personal
+   drive; `read` / `dismissed` sync.
 2. **Should `mentions` include non-Agent resource links?** No for v1 — only
    Agent subjects. Resource embeds stay separate.
 3. **Chat `@` vs document `@`.** Unify on `mentions` property for both; AI chat
@@ -374,8 +521,14 @@ Per [`TESTING_COVERAGE.md`](../TESTING_COVERAGE.md) preference for cheaper layer
    connected to" as v1 limitation and document it in the toggle tooltip.
 5. **Group mentions / `@everyone`.** Defer; needs groups (zones.md / social-apps
    P3.7).
-6. **Flutter canvas.** Same ontology + engine in Rust/`atomic_lib` later; v1 is
-   data-browser + Tauri webview (shared JS).
+6. **Flutter canvas.** Same ontology + push payload; native stack is
+   firebase_messaging, not Tauri plugins. v1 is data-browser + Tauri.
+7. **Which Tauri push plugin?** Community options exist (`tauri-plugin-push-notifications`,
+   `tauri-plugin-mobile-push`, …); pick at Phase 5 by cold-start tap reliability
+   and maintenance. Not blocking Phases 1–4.
+8. **Alert push vs silent wake on iOS.** Silent pushes are best-effort and
+   throttled; may need visible APNs with generic copy + client cancel-on-read.
+   Validate on device before locking.
 
 ## Relationship to other plans
 
