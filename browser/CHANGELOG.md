@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+## [v0.41.0-beta.2] - 2026-08-01
+
 ### Atomic Browser
 
 - Fix: creating a dashboard from the New menu dropped you into the generic resource form, which renders its blocks and layout as raw JSON fields — a create screen asking you to hand-write a layout before any blocks exist to lay out. It now asks for a name and takes you to the dashboard, which is where blocks are added.
@@ -13,17 +15,9 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Fix: a computed column now updates as soon as the column it derives from changes. It used to show whatever it computed when it was first drawn — edit the quantity and its "Quantity × Unit price" stayed put until you reloaded the page; press a row action that stamps a date and the "days since" beside it did not move. The React Compiler was caching the computation against a resource identity that never changes, because the store mutates resources in place. Computed columns are now functions of the values they read, and each cell subscribes to exactly those. The timer's Start/Stop button had the same latent problem and is fixed with it. (A computed cell is still blank on the trailing row you are typing into, until that row is saved and redrawn.)
 - Fix: the Grocery list template could not be created at all. Its "Meat & fish" aisle option became the shortname `meat--fish`, which the slug rule rejects — `stringToSlug` stripped the `&` only *after* collapsing repeated dashes, leaving the two dashes it had been sitting between. Any name with punctuation between words hit this.
 
-### Atomic Browser
-
 - **Dashboards.** A new kind of page that composes blocks over your data: a number, a chart, an embedded table, a note — arranged on a grid. Four block kinds in v1. A **number** is a sum, count, average, min or max computed by the store over *every* row a view matches, so it is exact regardless of paging, and it can measure a computed column (a total duration, quantity × price) as well as a stored one. A **chart** is the same number per bucket, drawn as horizontal bars, bucketed exactly or per day or month. A **table** block embeds the real table — cells stay editable, columns sortable — rather than a snapshot. A **note** is markdown. Blocks are resources of their own, so the same dashboard can be built by hand and by the assistant: `create_dashboard` builds one in a call (resolving column and view names, laying blocks out automatically), `describe_dashboard` reads it back, and `configure_block` changes one field without disturbing the rest — everything the tools can write, the per-block Configure dialog can change. A stat or chart block points at one of the table's *views* and borrows its filters, so "open issues" is the open-issues view plus a count instead of a filter restated in two places. Create one from the New menu.
 
-### Atomic Browser
-
 - Fix: a filtered view kept a row whose value had stopped matching it. Raise a "Quantity at most 3" row to 40 and it stayed in the Low stock view — across a reload, because the local database's index still listed it as a member. Editing a row out of a filtered view now removes it, editing one into a filter still adds it in the right sorted position, and an edit that keeps a row in the view but changes what it sorts by no longer lists it twice.
-
-## [v0.41.0-beta.2] - 2026-07-31
-
-### Atomic Browser
 
 - [#1236](https://github.com/ontola/atomic-server/issues/1236) [#1238](https://github.com/ontola/atomic-server/issues/1238) **A computed column can be totalled.** Sum a table's Durations, average a days-since, add up quantity × price — and break any of it down per day, month or category. The store evaluates the column as it aggregates, so the number covers every row the view matches rather than the page on screen, and a running timer entry counts its time so far. Totals of a computed column read the way the column does: a sum of durations is `5:30:00`, not `19800000`. This closes the gap that made the Time tracker's day totals impossible, and that template now ships them. `create_table` and `configure_view` take `computedColumn` next to `column`, so the assistant can total one too.
 - Fix: when an AI request failed, the chat did nothing at all — no message, no error, just silence, with the only evidence a line in the browser console. An unreachable Ollama, a rejected API key or a model that doesn't exist now says so under the input, naming the provider and quoting its reason, with a Try again button. A turn that dies mid-answer shows its error too: the failure was already recorded on the message, but nothing ever rendered it.

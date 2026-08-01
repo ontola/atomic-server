@@ -7,18 +7,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
-### Added
-
-- A `block-quick-add` property and a `'create'` block kind, so a Dashboard can carry a create button. It holds the same JSON shape as `view-quick-add`, which is what lets the table and the dashboard describe one button identically.
-- A `view-quick-add` property in the default store: the button a view offers for creating a row, as a JSON object `{ label, field?, placeholder?, presets? }`. Each preset is `{ kind, property, value? }` using the same closed patch vocabulary as `view-row-actions`, applied to the row being created — so a button can stamp the current time and create in one press.
-- A `view-row-actions` property in the default store: the buttons a view puts on each row, as a JSON array of `{ id, label, kind, property, value }`. `kind` is a closed vocabulary of patches (`setNow` / `setValue` / `toggle` / `increment`) rather than code, so a person can edit one in a dialog and an assistant can write one, and each press stays an ordinary commit.
-- `Dashboard` and `Block` classes in the default store, with `dashboard-blocks` / `dashboard-layout` and `block-kind` / `block-source` / `block-view` / `block-query` / `block-aggregate` / `block-chart-spec`. One `Block` class carrying a kind string, the way `View` does, so a new block kind needs no ontology change. This is the schema behind the browser's new dashboards; the numbers themselves come from the aggregation engine already in `Query`.
-
-### Fixed
-
-- A row edited until it no longer satisfies a filter now leaves that filter's results. Filtered queries are answered from a cached member list per watched query, and the whole-resource write path (`add_resource`, used by the browser's local database for every write it makes, and by imports) evicted the previous values' entries **against the new resource** — so it asked whether the new value still matched the filter, and a row edited out of the view answered no, skipping the one deletion that mattered. The row then stayed listed until the index was rebuilt, a reload included. The same mistake also listed a row **twice** when an edit kept it in the view but changed its sort value: the entry was filed under the old key and deleted under the new one, so the stale entry survived alongside the fresh one. It now evicts against the resource being replaced, the way commit application and recursive deletes already did. Commits were never affected, which is why this only ever showed up in the browser.
-
-## [v0.41.0-beta.2] - 2026-07-31
+## [v0.41.0-beta.2] - 2026-08-01
 
 ### Security
 
@@ -28,6 +17,10 @@ All four fixes documented under [v0.40.3](#v0403---2026-07-06) are present here 
 
 ### Added
 
+- `Dashboard` and `Block` classes in the default store, with `dashboard-blocks` / `dashboard-layout` and `block-kind` / `block-source` / `block-view` / `block-query` / `block-aggregate` / `block-chart-spec`. One `Block` class carrying a kind string, the way `View` does, so a new block kind needs no ontology change. This is the schema behind the browser's new dashboards; the numbers themselves come from the aggregation engine already in `Query`.
+- A `view-row-actions` property in the default store: the buttons a view puts on each row, as a JSON array of `{ id, label, kind, property, value }`. `kind` is a closed vocabulary of patches (`setNow` / `setValue` / `toggle` / `increment`) rather than code, so a person can edit one in a dialog and an assistant can write one, and each press stays an ordinary commit.
+- A `view-quick-add` property in the default store: the button a view offers for creating a row, as a JSON object `{ label, field?, placeholder?, presets? }`. Each preset is `{ kind, property, value? }` using the same closed patch vocabulary as `view-row-actions`, applied to the row being created — so a button can stamp the current time and create in one press.
+- A `block-quick-add` property and a `'create'` block kind, so a Dashboard can carry a create button. It holds the same JSON shape as `view-quick-add`, which is what lets the table and the dashboard describe one button identically.
 - Aggregate queries: a `Query` can carry an `aggregation`, and the store answers it by walking its own index instead of returning rows for the caller to add up. Sum, count, average, min and max over every row a query matches — filters included, paging excluded — plus an optional breakdown giving one subtotal per distinct value of a column, with day and month buckets resolved in the caller's timezone. Results arrive on the Collection's new `collection/aggregates` property. Because the browser's local database runs this same code through wasm, a table shows identical totals with no server in reach. Note that `count` counts the rows the asking agent may actually read, which can be lower than `totalMembers` — that one counts raw index hits, before rights are applied.
 - Argon2id key derivation in `atomic-lib` as `vault::keys` (`argon2id_derive_key`), exposed to the browser as `argon2idDeriveKey`. This backs the passkey-wrapped ("envelope v2") backup of the agent secret: AES-GCM runs natively in WebCrypto, and Argon2id is the one primitive the Web platform's crypto API is missing. Defaults to ~64 MiB / 3 iterations / 1 lane.
 - `EncryptedBackend` wraps any redb `StorageBackend` and encrypts data at rest with XChaCha20-Poly1305 (4 KiB blocks, a fresh random nonce per write, block-index AAD, key-check header), so resources, Loro snapshots, blobs and derived indexes are all ciphertext. Backs the browser's per-agent OPFS databases.
@@ -43,6 +36,7 @@ All four fixes documented under [v0.40.3](#v0403---2026-07-06) are present here 
 
 ### Fixed
 
+- A row edited until it no longer satisfies a filter now leaves that filter's results. Filtered queries are answered from a cached member list per watched query, and the whole-resource write path (`add_resource`, used by the browser's local database for every write it makes, and by imports) evicted the previous values' entries **against the new resource** — so it asked whether the new value still matched the filter, and a row edited out of the view answered no, skipping the one deletion that mattered. The row then stayed listed until the index was rebuilt, a reload included. The same mistake also listed a row **twice** when an edit kept it in the view but changed its sort value: the entry was filed under the old key and deleted under the new one, so the stale entry survived alongside the fresh one. It now evicts against the resource being replaced, the way commit application and recursive deletes already did. Commits were never affected, which is why this only ever showed up in the browser.
 - [#287](https://github.com/atomicdata-dev/atomic-server/issues/287) Sorting collections by numeric properties (integers, floats, timestamps) now orders numerically instead of lexicographically ("2" no longer sorts after "10").
 - `/search?filters=` actually filters again. Tantivy only scopes a JSON-field query to a path when the clause carries the field's own name, so the documented bare `<property-uri>:<value>` syntax silently matched nothing (no parse error) — `filters=isA:File`, used by the file picker, never found anything. Each AND/OR clause is now rewritten with the `propvals.` prefix before parsing, so the documented syntax works without any client change.
 - Fixed a deadlock in `Db::apply_commit`: the per-subject lock was held across the after-commit handler loop, so a plugin's `after_commit` issuing its own follow-up commit to the same subject re-entered `apply_commit` and waited forever on a lock only it could release. The lock is now released before handlers run.
