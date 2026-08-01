@@ -3,6 +3,7 @@ import {
   GRID_COLUMNS,
   defaultSizeFor,
   isBlockKind,
+  measureKeepingTarget,
   parseBlockAggregate,
   parseBlockChartSpec,
   parseLayout,
@@ -62,6 +63,49 @@ describe('parseBlockAggregate', () => {
     expect(parseBlockAggregate('sum')).toBeUndefined();
     expect(parseBlockAggregate([])).toBeUndefined();
     expect(parseBlockAggregate(undefined)).toBeUndefined();
+  });
+});
+
+describe('measureKeepingTarget', () => {
+  it('changes the function and keeps the column', () => {
+    // `configure_block` touches only the fields it is given, and that applies
+    // inside `measure` too: "average instead of sum" names no column.
+    expect(
+      measureKeepingTarget(
+        { function: 'sum', property: 'https://x/amount' },
+        'avg',
+      ),
+    ).toEqual({ function: 'avg', property: 'https://x/amount' });
+  });
+
+  it('keeps a computed column just the same', () => {
+    expect(
+      measureKeepingTarget({ function: 'sum', derived: 'duration' }, 'max'),
+    ).toEqual({ function: 'max', derived: 'duration' });
+  });
+
+  it('lets count stand alone, whatever was there before', () => {
+    expect(
+      measureKeepingTarget(
+        { function: 'sum', property: 'https://x/a' },
+        'count',
+      ),
+    ).toEqual({ function: 'count' });
+    expect(measureKeepingTarget(undefined, 'count')).toEqual({
+      function: 'count',
+    });
+  });
+
+  it('refuses when there is nothing to keep', () => {
+    // Writing `{ function: 'sum' }` alone produces a spec every reader rejects,
+    // which empties the block silently instead of reporting the instruction was
+    // incomplete.
+    expect(() => measureKeepingTarget(undefined, 'sum')).toThrow(
+      /needs a column/,
+    );
+    expect(() => measureKeepingTarget({ function: 'count' }, 'avg')).toThrow(
+      /needs a column/,
+    );
   });
 });
 

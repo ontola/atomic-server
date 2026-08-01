@@ -444,6 +444,33 @@ test.describe('dashboards', () => {
     });
   });
 
+  test('a measure cannot be saved with nothing to measure', async ({
+    page,
+  }) => {
+    const fixture = await createSpendingTable(page);
+    await createDashboard(page, fixture);
+    await expect(block(page, 'Total spent')).toContainText('946.5', {
+      timeout: 15_000,
+    });
+
+    await block(page, 'Total spent').getByTitle('Block options').click();
+    await page.getByRole('menuitem', { name: 'Configure' }).click();
+
+    // Clearing the column leaves "sum of nothing", which used to save happily
+    // and render as an em-dash forever.
+    await page.getByTestId('block-target').selectOption('');
+    await expect(page.getByTestId('block-save')).toBeDisabled();
+
+    // Count needs no column, so it is saveable immediately.
+    await page.getByTestId('block-function').selectOption('count');
+    await expect(page.getByTestId('block-save')).toBeEnabled();
+    await page.getByTestId('block-save').click();
+
+    await expect(block(page, 'Total spent')).toContainText('4', {
+      timeout: 15_000,
+    });
+  });
+
   test('a block added from the menu can be configured into a working number', async ({
     page,
   }) => {

@@ -482,6 +482,9 @@ above. What is left, in order:
   member count at first load and treats anything past it as a session draft, and
   nothing lets one block bump another's count. Worth fixing if a dashboard is ever
   the primary place rows are added; the create block's own e2e documents it.
+- A patch that names a field but not its target should keep the target, not blank
+  it — and refuse loudly when there is none. `configure_block`'s "only the fields
+  you pass are touched" applies *inside* a field too.
 - Stored config that no renderer reads is worse than no config: it looks
   authoritative, the tool writes it, and the page quietly disagrees. If a shape
   carries a field, something must read it — or the field should go.

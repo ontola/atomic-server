@@ -168,6 +168,13 @@ export function BlockConfigDialog({
   );
   const chartProperty = classProperties.find(p => p.subject === chartField);
 
+  // Saving a measure with nothing to measure writes a spec that renders as an
+  // em-dash forever. Every function but `count` needs a target.
+  const measureIncomplete =
+    (blockKind === 'stat' || blockKind === 'chart') &&
+    fn !== 'count' &&
+    target === '';
+
   const save = async () => {
     await block.set(core.properties.name, name, false);
 
@@ -398,6 +405,12 @@ export function BlockConfigDialog({
         </Button>
         <Button
           data-testid='block-save'
+          disabled={measureIncomplete}
+          title={
+            measureIncomplete
+              ? `Pick a column for the ${fn} to measure`
+              : undefined
+          }
           onClick={() => {
             void save().catch(error => {
               store.notifyError(error as Error);

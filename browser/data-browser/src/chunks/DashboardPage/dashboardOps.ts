@@ -1,6 +1,7 @@
 import {
   core,
   dataBrowser,
+  type AggregateFunction,
   type JSONValue,
   type Resource,
   type Store,
@@ -8,6 +9,7 @@ import {
 import { readTableColumns, resolveView } from '../TablePage/tableOps';
 import { parseDerivedColumnSpecs } from '../TablePage/derivedColumns';
 import {
+  measureKeepingTarget,
   parseBlockAggregate,
   parseBlockChartSpec,
   parseLayout,
@@ -242,10 +244,18 @@ export async function configureBlock(
       const { function: fn, column } = patch.measure;
 
       if (fn === 'count' || !column) {
+        // No column named: keep whatever this block already measures, so
+        // "average instead of sum" needs only the function. Throws when there is
+        // nothing to keep, rather than writing a spec every reader rejects.
         await block.set(
           dataBrowser.properties.blockAggregate,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          { function: fn } as any,
+          measureKeepingTarget(
+            parseBlockAggregate(
+              block.get(dataBrowser.properties.blockAggregate),
+            ),
+            fn as AggregateFunction,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ) as any,
         );
       } else {
         const property = resolve(column);

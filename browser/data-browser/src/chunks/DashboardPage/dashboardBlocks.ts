@@ -108,6 +108,37 @@ export function parseBlockAggregate(
   };
 }
 
+/**
+ * The aggregate to write when a patch changes the *function* but names no column
+ * — "average instead of sum". `configure_block` touches only the fields it is
+ * given, and that reading applies inside `measure` too, so the target the block
+ * already measures is kept.
+ *
+ * Throws when there is nothing to keep: writing `{ function: 'sum' }` on its own
+ * produces a spec every reader rejects, which silently empties the block instead
+ * of saying the instruction was incomplete.
+ */
+export function measureKeepingTarget(
+  existing: BlockAggregateSpec | undefined,
+  fn: AggregateFunction,
+): BlockAggregateSpec {
+  if (fn === 'count') {
+    return { function: 'count' };
+  }
+
+  if (existing?.property) {
+    return { function: fn, property: existing.property };
+  }
+
+  if (existing?.derived) {
+    return { function: fn, derived: existing.derived };
+  }
+
+  throw new Error(
+    `"${fn}" needs a column to measure, and this block does not have one yet.`,
+  );
+}
+
 /** How a chart block draws its buckets — a Vega-Lite-shaped subset. */
 export interface BlockChartSpec {
   mark: 'bar';
