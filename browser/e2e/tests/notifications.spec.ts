@@ -16,10 +16,11 @@ import { test, expect } from '@playwright/test';
 import {
   acceptInvite,
   before,
+  contextMenuClick,
+  currentDriveTitle,
   FRONTEND_URL,
   getDevDriveSecret,
   newResource,
-  topBarShareButton,
 } from './test-utils';
 
 const NOTIFICATION_ITEM = 'https://atomicdata.dev/classes/NotificationItem';
@@ -542,7 +543,11 @@ test.describe('notifications', () => {
     const driveSubject = await page.evaluate(() => window.store.getDrive());
     expect(driveSubject).toBeTruthy();
 
-    await topBarShareButton(page).click();
+    // Share the drive via context menu (same path as e2e authorization invite).
+    // Top-bar Share on a freshly UI-created document can leave useCanWrite
+    // stuck false so "Create Invite" never appears.
+    await currentDriveTitle(page).click();
+    await contextMenuClick('share', page);
     await expect(
       page.getByRole('button', { name: 'Create Invite' }),
     ).toBeVisible({ timeout: 10_000 });
@@ -594,6 +599,7 @@ test.describe('notifications', () => {
       ).__notificationEngine?.stop();
     });
 
+    // Mention B on a drive child — B has drive write via the invite above.
     const docSubject = await page.evaluate(
       async ({ drive, agentB: mentioned, mentionsProp, nameProp, docClass }) => {
         const store = window.store;
