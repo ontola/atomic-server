@@ -944,11 +944,15 @@ export class Collection {
 
     if (result.count === 0) {
       // Empty local result is normally authoritative — but it's ambiguous
-      // on a fresh page load before the drive sync has touched the store
-      // yet (the index may be mid-populate). Once any drive sync has
-      // completed we trust the empty: a freshly-created table or folder
-      // just has no children. Pre-sync, fall back to `/query`.
-      if (this.store.hasCompletedDriveSync()) {
+      // until THIS drive has been synced (the index may be mid-populate, or
+      // never populated at all). Once its sync has completed we trust the
+      // empty: a freshly-created table or folder just has no children.
+      // Otherwise fall back to `/query`.
+      //
+      // Per-drive on purpose. Asking whether *any* sync had finished meant a
+      // synced personal drive vouched for every other drive too, so browsing
+      // a drive that was never synced locally showed nothing at all.
+      if (this.store.hasCompletedDriveSyncFor(drive)) {
         // `fetchPage` races us against `/query`. If the server already
         // populated the page with non-empty data, leave it — server is
         // authoritative for the instant of the query.

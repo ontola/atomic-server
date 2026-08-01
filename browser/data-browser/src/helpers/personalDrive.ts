@@ -1,8 +1,20 @@
-import { Agent, Store, core, server } from '@tomic/react';
+import { Agent, Store, core } from '@tomic/react';
 
 /**
- * Resolves the agent's personal home drive: `personalDrive` on the Agent resource
- * when present, else first entry in `drives`, else `initialDrive` from the secret.
+ * Resolves the agent's personal home drive: `personalDrive` on the Agent
+ * resource when present, else `initialDrive` from the secret.
+ *
+ * Deliberately does NOT fall back to the first entry of `drives`. That list is
+ * every drive the user owns, in no meaningful order, and on a pre-DID account
+ * the server synthesises the DID Agent from the legacy one — so `drives` is
+ * populated while `personalDrive` is not. Taking `drives[0]` then promotes an
+ * arbitrary drive to "Private drive" and redirects sign-in into it, which is
+ * both wrong and destructive-looking: the user is dropped somewhere unexpected
+ * and their real list appears to have collapsed to one entry.
+ *
+ * Returning undefined is the honest answer, and it is handled: the caller
+ * falls through to whatever lives at `/`, and `adoptLegacyDriveList`
+ * provisions a real private drive on sign-in.
  *
  * Always fetches the agent resource fresh from the server. Signing in on a
  * device that has none of the account's data resolves the agent to a
@@ -45,12 +57,6 @@ export async function fetchPersonalDriveSubject(
 
     if (typeof personal === 'string' && personal.length > 0) {
       return personal;
-    }
-
-    const drives = r.getSubjects(server.properties.drives);
-
-    if (drives.length > 0) {
-      return drives[0];
     }
   } catch {
     // ignore fetch errors; fall back below

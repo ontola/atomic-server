@@ -512,6 +512,11 @@ export class Store {
     count: number;
     timestamp: number;
   };
+  /** Every drive whose sync finished this session. `_lastDriveSync` only
+   *  remembers the most recent one, which is not enough to answer "is the
+   *  local index populated for THIS drive" once more than one is in play —
+   *  see `hasCompletedDriveSyncFor`. */
+  private _syncedDrives = new Set<string>();
   private _commitLog: CommitLogEntry[] = [];
   /**
    * Per-subject ACCUMULATED Loro snapshot bytes (genesis + every commit seen
@@ -3275,15 +3280,36 @@ export class Store {
   ): void {
     this._driveSyncInProgress = false;
     this._lastDriveSync = { drive, count, timestamp };
+
+    if (drive) {
+      this._syncedDrives.add(drive);
+    }
+
     this.emitSyncStatus();
   }
 
-  /** True once any drive sync has finished in this session. Used by
-   * collection queries to decide whether an empty local-DB result is
-   * authoritative ("the table has no children") or ambiguous ("the index
-   * may not be populated yet"). */
-  public hasCompletedDriveSync(): boolean {
-    return this._lastDriveSync !== undefined;
+  /** True once a drive sync has finished FOR THIS DRIVE in this session.
+   *
+   * Used by collection queries to decide whether an empty local-DB result is
+   * authoritative ("the table has no children") or ambiguous ("the index may
+   * not be populated yet").
+   *
+   * Deliberately per-drive. This used to answer "has ANY sync finished", which
+   * is a different question and wrong for every drive except the synced one: a
+   * session that syncs the user's own (small, new) personal drive would then
+   * treat an empty local result for a DIFFERENT drive — one never synced, so
+   * its index is legitimately empty — as proof that the drive has no children.
+   * The visible effect was a sidebar full of items while signed out (server
+   * answers) that emptied on sign-in (local DB answers 0, and the 0 is
+   * believed).
+   *
+   * An unknown drive returns false, so the caller falls back to the server.
+   * That is the safe direction: a needless `/query` costs a round-trip, while
+   * a wrongly-trusted empty silently hides the user's data. */
+  public hasCompletedDriveSyncFor(drive: string | undefined): boolean {
+    if (!drive) return false;
+
+    return this._syncedDrives.has(drive);
   }
 
   public getSyncStatus(): StoreSyncStatus {
@@ -3647,10 +3673,16 @@ export class Store {
    * drive" and the other 52 vanish. These are ordinary drives the user owns,
    * not their private one.
    *
-   * So the list goes on the private drive, and `personalDrive` is left for the
-   * user to choose. Union, never replace: drives already in the list stay, and
-   * one that was deliberately unstarred is not resurrected on the next sign-in
-   * — only genuinely-missing ones are added.
+   * So the list goes on the private drive. Union, never replace: drives
+   * already in the list stay, and one that was deliberately unstarred is not
+   * resurrected on the next sign-in — only genuinely-missing ones are added.
+   *
+   * A migrated user usually has NO private drive: the old server never had the
+   * concept, so nothing set `personalDrive`, and a legacy secret carries no
+   * `initialDrive` either. Returning in that case — as this used to — skips
+   * the adoption in precisely the situation the function exists for, which is
+   * why "My drives" stayed empty while one drive was mislabelled "Private
+   * drive". So provision one instead, the same way onboarding does.
    */
   private async adoptLegacyDriveList(
     agent: Agent,
@@ -3667,15 +3699,24 @@ export class Store {
 
     if (inherited.length === 0) return;
 
-    const personalDriveSubject =
+    const existingSubject =
       (didAgent.get(core.properties.personalDrive) as string | undefined) ??
       agent.initialDrive;
 
-    if (!personalDriveSubject) return;
-
-    const personalDrive = await this.getResource(personalDriveSubject);
+    // `createDrive(personal: true)` seeds the switcher list with itself and
+    // links `personalDrive` on the Agent, so afterwards this is an ordinary
+    // union into an existing list. It is only reached when the account has no
+    // private drive at all, so it cannot displace one the user already has.
+    const personalDrive = existingSubject
+      ? await this.getResource(existingSubject)
+      : await this.createDrive('My drive', {
+          personal: true,
+          agentName: legacy.get(core.properties.name) as string | undefined,
+        });
 
     if (personalDrive.error) return;
+
+    const personalDriveSubject = personalDrive.subject;
 
     const already = new Set(
       personalDrive.getSubjects(server.properties.drives),
