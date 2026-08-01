@@ -555,6 +555,10 @@ Two things to decide when doing it, neither obvious:
   member count at first load and treats anything past it as a session draft, and
   nothing lets one block bump another's count. Worth fixing if a dashboard is ever
   the primary place rows are added; the create block's own e2e documents it.
+- Repointing a block at a different table invalidates everything that named a
+  column or view of the old one. The dialog cleared these from the start and the
+  tool did not — check both surfaces whenever a change cascades, not just the one
+  being written.
 - A patch that names a field but not its target should keep the target, not blank
   it — and refuse loudly when there is none. `configure_block`'s "only the fields
   you pass are touched" applies *inside* a field too.

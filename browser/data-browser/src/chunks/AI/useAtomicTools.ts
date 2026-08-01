@@ -1312,7 +1312,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
       }),
       [TOOL_NAMES.CONFIGURE_BLOCK]: tool({
         description:
-          'Change one block of a dashboard in place. Only the fields you pass are touched, so setting a width cannot drop what the block measures. Read the current state with describe_dashboard first.',
+          'Change one block of a dashboard in place. Only the fields you pass are touched, so setting a width cannot drop what the block measures — with one exception: pointing a block at a different `table` also clears its view, measure and chart column, because those named columns of the old table. Pass replacements in the same call. Read the current state with describe_dashboard first.',
         inputSchema: z.object({
           dashboard: z.string().describe('Subject (or #ref) of the dashboard.'),
           block: z

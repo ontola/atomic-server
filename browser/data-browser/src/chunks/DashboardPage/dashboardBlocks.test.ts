@@ -7,6 +7,7 @@ import {
   parseBlockAggregate,
   parseBlockChartSpec,
   parseLayout,
+  staleOnTableChange,
 } from './dashboardBlocks';
 
 /**
@@ -145,6 +146,21 @@ describe('parseBlockChartSpec', () => {
     expect(
       parseBlockChartSpec({ field: 'f', granularity: 'fortnight' }),
     ).toEqual({ mark: 'bar', field: 'f' });
+  });
+});
+
+describe('staleOnTableChange', () => {
+  it('drops everything that named the old table', () => {
+    // A view belongs to one table, a measure names one of its columns, a chart
+    // buckets by one. None survives being repointed.
+    expect(staleOnTableChange({})).toEqual(['view', 'measure', 'chart']);
+  });
+
+  it('leaves alone whatever the same change replaces', () => {
+    expect(staleOnTableChange({ view: true })).toEqual(['measure', 'chart']);
+    expect(
+      staleOnTableChange({ view: true, measure: true, chart: true }),
+    ).toEqual([]);
   });
 });
 

@@ -10,6 +10,7 @@ import { readTableColumns, resolveView } from '../TablePage/tableOps';
 import { parseDerivedColumnSpecs } from '../TablePage/derivedColumns';
 import {
   measureKeepingTarget,
+  staleOnTableChange,
   parseBlockAggregate,
   parseBlockChartSpec,
   parseLayout,
@@ -193,8 +194,12 @@ export interface BlockConfigPatch {
 
 /**
  * Changes one block in place, touching only the fields it was given — the same
- * contract `configure_view` has, and for the same reason: setting a width must
- * not silently drop what the block measures.
+ * contract `configure_view` has, and for the same reason: setting a width must not
+ * silently drop what the block measures.
+ *
+ * One deliberate exception: pointing the block at a *different* table also clears
+ * the view, measure and chart column that named the old one. See
+ * {@link staleOnTableChange}.
  */
 export async function configureBlock(
   store: Store,
@@ -210,6 +215,10 @@ export async function configureBlock(
     await block.set(core.properties.description, patch.text, false);
   }
 
+  const previousSource = block.get(dataBrowser.properties.blockSource) as
+    | string
+    | undefined;
+
   if (patch.table !== undefined) {
     await block.set(dataBrowser.properties.blockSource, patch.table, false);
   }
@@ -218,6 +227,28 @@ export async function configureBlock(
     | string
     | undefined;
   const table = source ? await store.getResource(source) : undefined;
+
+  // Repointing at a different table invalidates everything that named a view or a
+  // column of the old one. Dropped rather than carried: a measure over a property
+  // the new class lacks answers nothing instead of erroring, so the block would go
+  // quietly wrong. Anything this same patch replaces is left for the code below.
+  if (patch.table !== undefined && patch.table !== previousSource) {
+    const stale = staleOnTableChange({
+      view: patch.view !== undefined,
+      measure: patch.measure !== undefined,
+      chart: patch.chartBy !== undefined,
+    });
+
+    for (const setting of stale) {
+      if (setting === 'view') {
+        block.remove(dataBrowser.properties.blockView);
+      } else if (setting === 'measure') {
+        block.remove(dataBrowser.properties.blockAggregate);
+      } else {
+        block.remove(dataBrowser.properties.blockChartSpec);
+      }
+    }
+  }
 
   if (patch.view !== undefined && table) {
     const view = await resolveView(store, table, patch.view);

@@ -184,6 +184,31 @@ export function parseBlockChartSpec(
   };
 }
 
+/** A block setting that names something belonging to its source table. */
+export type TableBoundSetting = 'view' | 'measure' | 'chart';
+
+/**
+ * The settings that stop meaning anything when a block is pointed at a *different*
+ * table, minus whichever the same change replaces.
+ *
+ * A view belongs to one table; a measure names one of its columns; a chart buckets
+ * by one of them. Carry any of them across and the block asks the store to
+ * aggregate a property the new class does not have — which does not error, it just
+ * answers nothing, so the block goes quietly wrong rather than visibly broken.
+ *
+ * The config dialog has always cleared these; this is the same rule for the tool,
+ * and it is the one place `configure_block` touches a field it was not given.
+ */
+export function staleOnTableChange(replaced: {
+  view?: boolean;
+  measure?: boolean;
+  chart?: boolean;
+}): TableBoundSetting[] {
+  return (['view', 'measure', 'chart'] as const).filter(
+    setting => !replaced[setting],
+  );
+}
+
 /** The grid a dashboard lays its blocks out on. */
 export const GRID_COLUMNS = 12;
 
