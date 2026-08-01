@@ -8,6 +8,7 @@
  *   2. A NotificationItem on the personal drive appears in the inbox + badge.
  *   3. Opening an item marks it read (synced `notificationRead`).
  *   4. Table Watch toggle flips to Watching.
+ *   5. Watch → simulated other-agent row → inbox item (engine path).
  */
 
 import { test, expect } from '@playwright/test';
@@ -29,6 +30,9 @@ const NAME = 'https://atomicdata.dev/properties/name';
 const LOCAL_ID = 'https://atomicdata.dev/properties/localId';
 const FOLDER = 'https://atomicdata.dev/classes/Folder';
 const PERSONAL_DRIVE = 'https://atomicdata.dev/properties/personalDrive';
+const CREATED_BY = 'https://atomicdata.dev/properties/createdBy';
+const PARENT = 'https://atomicdata.dev/properties/parent';
+const DOCUMENT = 'https://atomicdata.dev/classes/DocumentV2';
 
 async function resolvePersonalDrive(page: import('@playwright/test').Page) {
   return page.evaluate(async personalDriveProp => {
@@ -63,21 +67,6 @@ async function getOrCreateNotificationsFolder(
     async ({ personalDrive: drive, folderClass, localIdProp, nameProp }) => {
       const store = window.store;
 
-      // Look for existing folder with localId=notifications among children.
-      // Simple approach: create with a stable localId; if one already exists
-      // with that localId under the drive, CollectionBuilder would find it —
-      // here we just create when missing by trying to find via children.
-      const children =
-        (
-          await store.getResource(drive).catch(() => null)
-        )?.get?.('https://atomicdata.dev/properties/children') ?? [];
-
-      void children;
-
-      // Create (or reuse via localId query through store.search / newResource).
-      // Prefer newResource with localId — duplicate localIds on same parent
-      // are unusual; engine's helper does a collection query. Mirror that
-      // by creating once per test drive.
       const existing = await store
         .search('Notifications', { limit: 5, parents: [drive] })
         .catch(() => [] as string[]);
@@ -297,5 +286,77 @@ test.describe('notifications', () => {
     await expect(watch).toContainText('Watch');
     await watch.click();
     await expect(watch).toContainText('Watching', { timeout: 15_000 });
+  });
+
+  test('watch table + other-agent child materializes inbox item', async ({
+    page,
+  }) => {
+    test.slow();
+
+    await newResource('table', page);
+    await page.getByPlaceholder('New Table').fill('Watch Fire Table');
+    await page.locator('dialog[open] button:has-text("Create")').click();
+    await expect(page.getByTestId('editable-title').first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.keyboard.press('Escape');
+
+    const watch = page.getByTestId('watch-toggle');
+    await expect(watch).toBeVisible({ timeout: 20_000 });
+    await watch.click();
+    await expect(watch).toContainText('Watching', { timeout: 15_000 });
+
+    const tableSubject = await page.evaluate(() => {
+      const url = new URL(window.location.href);
+
+      return url.searchParams.get('subject') ?? window.store.getDrive();
+    });
+    expect(tableSubject).toBeTruthy();
+
+    // Simulate another agent's child under the watched table (engine skips
+    // the current agent's own commits).
+    await page.evaluate(
+      async ({ table, createdByProp, parentProp, nameProp, docClass }) => {
+        const store = window.store;
+        const engine = (
+          window as Window & {
+            __notificationEngine?: {
+              reloadWatches: () => Promise<void>;
+              flushPendingWatches: () => Promise<void>;
+            };
+          }
+        ).__notificationEngine;
+
+        if (!engine) {
+          throw new Error('__notificationEngine not ready');
+        }
+
+        await engine.reloadWatches();
+
+        const child = await store.newResource({
+          parent: table,
+          isA: docClass,
+          propVals: {
+            [nameProp]: 'Foreign Row',
+            [parentProp]: table,
+          },
+        });
+        await child.set(createdByProp, 'did:ad:agent:otherE2EActor', false);
+        store.notifyResourceUpdated(child);
+        await engine.flushPendingWatches();
+      },
+      {
+        table: tableSubject,
+        createdByProp: CREATED_BY,
+        parentProp: PARENT,
+        nameProp: NAME,
+        docClass: DOCUMENT,
+      },
+    );
+
+    await page.goto(`${FRONTEND_URL}/app/notifications`);
+    const item = page.getByTestId('notification-item').first();
+    await expect(item).toBeVisible({ timeout: 20_000 });
+    await expect(item).toContainText(/Update in Watch Fire Table|updates in/i);
   });
 });

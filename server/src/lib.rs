@@ -21,6 +21,8 @@ mod jsonerrors;
 mod metrics;
 pub mod node_key;
 pub mod plugins;
+/// Phase 5 push wake helpers (payload contract + mention match). Transport TBD.
+pub mod push_wake;
 pub mod rate_limit;
 pub mod routes;
 pub mod serve;

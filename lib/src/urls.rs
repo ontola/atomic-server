@@ -34,6 +34,7 @@ pub const NOTIFICATION_ITEM: &str = "https://atomicdata.dev/classes/Notification
 pub const WATCH_SUBSCRIPTION: &str = "https://atomicdata.dev/classes/WatchSubscription";
 pub const NOTIFICATION_PREFERENCES: &str =
     "https://atomicdata.dev/classes/NotificationPreferences";
+pub const DEVICE_PUSH_TOKEN: &str = "https://atomicdata.dev/classes/DevicePushToken";
 
 // Properties
 pub const ORIGINAL_SUBJECT: &str = "https://atomicdata.dev/properties/originalSubject";
@@ -56,6 +57,12 @@ pub const NOTIFICATION_SUMMARY: &str =
     "https://atomicdata.dev/properties/notificationSummary";
 pub const NOTIFICATION_ACTOR: &str = "https://atomicdata.dev/properties/notificationActor";
 pub const DEDUPE_KEY: &str = "https://atomicdata.dev/properties/dedupeKey";
+pub const DEVICE_PUSH_AGENT: &str = "https://atomicdata.dev/properties/devicePushAgent";
+pub const PUSH_PLATFORM: &str = "https://atomicdata.dev/properties/pushPlatform";
+pub const PUSH_TOKEN: &str = "https://atomicdata.dev/properties/pushToken";
+pub const PUSH_APP_ID: &str = "https://atomicdata.dev/properties/pushAppId";
+pub const PUSH_TOKEN_UPDATED_AT: &str =
+    "https://atomicdata.dev/properties/pushTokenUpdatedAt";
 // Content i18n (lib/defaults/i18n.json)
 pub const LANGUAGE: &str = "https://atomicdata.dev/properties/language";
 pub const TRANSLATION_OF: &str = "https://atomicdata.dev/properties/translationOf";

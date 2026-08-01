@@ -15,6 +15,7 @@ export const notifications = {
     watchSubscription: 'https://atomicdata.dev/classes/WatchSubscription',
     notificationPreferences:
       'https://atomicdata.dev/classes/NotificationPreferences',
+    devicePushToken: 'https://atomicdata.dev/classes/DevicePushToken',
   },
   properties: {
     mentions: 'https://atomicdata.dev/properties/mentions',
@@ -33,6 +34,12 @@ export const notifications = {
       'https://atomicdata.dev/properties/notificationSummary',
     notificationActor: 'https://atomicdata.dev/properties/notificationActor',
     dedupeKey: 'https://atomicdata.dev/properties/dedupeKey',
+    devicePushAgent: 'https://atomicdata.dev/properties/devicePushAgent',
+    pushPlatform: 'https://atomicdata.dev/properties/pushPlatform',
+    pushToken: 'https://atomicdata.dev/properties/pushToken',
+    pushAppId: 'https://atomicdata.dev/properties/pushAppId',
+    pushTokenUpdatedAt:
+      'https://atomicdata.dev/properties/pushTokenUpdatedAt',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/NotificationItem']: [
@@ -44,6 +51,11 @@ export const notifications = {
       'https://atomicdata.dev/properties/watchTarget',
     ],
     ['https://atomicdata.dev/classes/NotificationPreferences']: [],
+    ['https://atomicdata.dev/classes/DevicePushToken']: [
+      'https://atomicdata.dev/properties/devicePushAgent',
+      'https://atomicdata.dev/properties/pushPlatform',
+      'https://atomicdata.dev/properties/pushToken',
+    ],
   },
 } as const satisfies OntologyBaseObject;
 
@@ -54,6 +66,7 @@ export namespace Notifications {
     typeof notifications.classes.watchSubscription;
   export type NotificationPreferences =
     typeof notifications.classes.notificationPreferences;
+  export type DevicePushToken = typeof notifications.classes.devicePushToken;
 }
 
 declare module '../index.js' {
@@ -89,6 +102,17 @@ declare module '../index.js' {
         | typeof notifications.properties.notificationChannels
         | 'https://atomicdata.dev/properties/name';
     };
+    [notifications.classes.devicePushToken]: {
+      requires:
+        | BaseProps
+        | typeof notifications.properties.devicePushAgent
+        | typeof notifications.properties.pushPlatform
+        | typeof notifications.properties.pushToken;
+      recommends:
+        | typeof notifications.properties.pushAppId
+        | typeof notifications.properties.pushTokenUpdatedAt
+        | 'https://atomicdata.dev/properties/name';
+    };
   }
 
   interface PropTypeMapping {
@@ -105,6 +129,11 @@ declare module '../index.js' {
     [notifications.properties.notificationSummary]: string;
     [notifications.properties.notificationActor]: string;
     [notifications.properties.dedupeKey]: string;
+    [notifications.properties.devicePushAgent]: string;
+    [notifications.properties.pushPlatform]: string;
+    [notifications.properties.pushToken]: string;
+    [notifications.properties.pushAppId]: string;
+    [notifications.properties.pushTokenUpdatedAt]: number;
   }
 
   interface PropSubjectToNameMapping {
@@ -121,5 +150,10 @@ declare module '../index.js' {
     [notifications.properties.notificationSummary]: 'notificationSummary';
     [notifications.properties.notificationActor]: 'notificationActor';
     [notifications.properties.dedupeKey]: 'dedupeKey';
+    [notifications.properties.devicePushAgent]: 'devicePushAgent';
+    [notifications.properties.pushPlatform]: 'pushPlatform';
+    [notifications.properties.pushToken]: 'pushToken';
+    [notifications.properties.pushAppId]: 'pushAppId';
+    [notifications.properties.pushTokenUpdatedAt]: 'pushTokenUpdatedAt';
   }
 }

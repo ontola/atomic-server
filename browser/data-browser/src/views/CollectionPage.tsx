@@ -35,6 +35,7 @@ import { useEffectOnce } from '../hooks/useEffectOnce';
 import { Row } from '../components/Row';
 import { EditableTitle } from '../components/EditableTitle';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { WatchToggle } from '../components/WatchToggle';
 
 import type { JSX } from 'react';
 
@@ -160,7 +161,10 @@ function Collection({ resource }: ResourcePageProps): JSX.Element {
 
   return (
     <ContainerFull>
-      <EditableTitle resource={resource} />
+      <Row justify='space-between' center>
+        <EditableTitle resource={resource} />
+        <WatchToggle resource={resource} />
+      </Row>
       {description && <Markdown text={description} />}
       <ButtonsBar>
         {totalPages! > 1 && <Pagination />}
