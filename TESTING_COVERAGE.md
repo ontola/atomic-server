@@ -151,8 +151,9 @@ Both matter because `iroh_transport` holds the router and node identity in
 | DevicePushToken wake payload contract | unit | `devicePushToken.test.ts` + `push_wake` Rust tests |
 | Cold-start push tap queue | unit | `pushWakeTap.test.ts` |
 | Mention → NotificationItem materialization (engine) | flow | `notifications.spec.ts` (fake other-agent actor) |
-| A mentions B → B sees unread (two browser contexts) | flow | **gap** — invite / two-agent e2e |
+| A mentions B → B sees unread (two agents / invite) | flow | `notifications.spec.ts` (invite + reconcile backlog) |
 | Mark read on A clears badge on B | flow | `notifications.spec.ts` (same agent, two contexts) |
+| Reverse query mentions ∋ agent | flow | same invite e2e (`reconcileMentionBacklog`) |
 | OS / APNs / FCM delivery | flow | **gap** — Phase 5 transport (ontology + wake helpers + tap queue wired) |
 
 ---

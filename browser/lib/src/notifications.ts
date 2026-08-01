@@ -70,6 +70,7 @@ export class NotificationEngine {
 
   private unsubUpdated?: () => void;
   private unsubRemoved?: () => void;
+  private unsubDrive?: () => void;
   private folderSubject?: string;
   private started = false;
   private readonly listeners = new Set<Listener>();
@@ -157,13 +158,20 @@ export class NotificationEngine {
     this.unsubRemoved = this.store.on(StoreEvents.ResourceRemoved, () => {
       // Membership leave deferred — enter is the valuable v1 signal.
     });
+    // Switching drives (e.g. after accepting an invite) should pick up
+    // mention backlog on the newly current drive via reverse query.
+    this.unsubDrive = this.store.on(StoreEvents.DriveChanged, () => {
+      void this.reconcileMentionBacklog();
+    });
   }
 
   stop(): void {
     this.unsubUpdated?.();
     this.unsubRemoved?.();
+    this.unsubDrive?.();
     this.unsubUpdated = undefined;
     this.unsubRemoved = undefined;
+    this.unsubDrive = undefined;
 
     for (const pending of this.watchCoalesce.values()) {
       clearTimeout(pending.timer);

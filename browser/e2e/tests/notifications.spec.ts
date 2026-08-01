@@ -1,8 +1,7 @@
 /**
  * Notifications UI + personal-drive inbox.
  *
- * Cross-agent "@mention → other agent sees unread" via invite is still a
- * gap (two distinct agents). These specs pin shipped behaviour:
+ * Specs:
  *   1. Sidebar entry below User Settings + empty state.
  *   2. A NotificationItem on the personal drive appears in the inbox + badge.
  *   3. Opening an item marks it read (synced `notificationRead`).
@@ -10,14 +9,17 @@
  *   5. Watch → simulated other-agent row → inbox item (engine path).
  *   6. Mention ResourceUpdated (other actor) → inbox item (engine path).
  *   7. Mark read on device A clears badge on device B (same agent, two contexts).
+ *   8. Invite: A mentions B → B reconciles backlog → unread (two agents).
  */
 
 import { test, expect } from '@playwright/test';
 import {
+  acceptInvite,
   before,
   FRONTEND_URL,
   getDevDriveSecret,
   newResource,
+  topBarShareButton,
 } from './test-utils';
 
 const NOTIFICATION_ITEM = 'https://atomicdata.dev/classes/NotificationItem';
@@ -524,5 +526,135 @@ test.describe('notifications', () => {
     );
 
     await ctx2.close();
+  });
+
+  test('A mentions B via invite; B reconciles unread', async ({
+    page,
+    browser,
+    context,
+  }) => {
+    test.slow();
+
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
+      origin: new URL(FRONTEND_URL).origin,
+    });
+
+    const driveSubject = await page.evaluate(() => window.store.getDrive());
+    expect(driveSubject).toBeTruthy();
+
+    await topBarShareButton(page).click();
+    await expect(
+      page.getByRole('button', { name: 'Create Invite' }),
+    ).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'Create Invite' }).click();
+    await page.getByLabel('Allow edits').check();
+    await page.getByRole('button', { name: 'Create' }).click();
+    await expect(page.locator('text=Invite created and copied ')).toBeVisible();
+
+    const inviteUrl = await page.evaluate(() =>
+      document
+        .querySelector('[data-code-content]')
+        ?.getAttribute('data-code-content'),
+    );
+    expect(inviteUrl).toBeTruthy();
+
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 15_000 },
+    );
+
+    const context2 = await browser.newContext();
+    await context2.grantPermissions(['clipboard-read', 'clipboard-write'], {
+      origin: new URL(FRONTEND_URL).origin,
+    });
+    const page2 = await context2.newPage();
+    await page2.goto(inviteUrl as string);
+    await acceptInvite(page2);
+    await page2.waitForURL(/\/app\//, { timeout: 15_000 });
+
+    const agentB = await page2.evaluate(() => window.store.getAgent()?.subject);
+    expect(agentB).toMatch(/^did:ad:agent:/);
+
+    await page2.waitForFunction(
+      () =>
+        !!(window as Window & { __notificationEngine?: unknown })
+          .__notificationEngine,
+      null,
+      { timeout: 20_000 },
+    );
+
+    // Pause B's engine so A's mention is discovered via reverse query on
+    // restart (reconcileMentionBacklog), not live ResourceUpdated.
+    await page2.evaluate(() => {
+      (
+        window as Window & {
+          __notificationEngine?: { stop: () => void };
+        }
+      ).__notificationEngine?.stop();
+    });
+
+    const docSubject = await page.evaluate(
+      async ({ drive, agentB: mentioned, mentionsProp, nameProp, docClass }) => {
+        const store = window.store;
+        const doc = await store.newResource({
+          parent: drive,
+          isA: docClass,
+          propVals: {
+            [nameProp]: 'Cross Agent Ping',
+          },
+        });
+        await doc.set(mentionsProp, [mentioned], false);
+        await doc.save();
+
+        return doc.subject;
+      },
+      {
+        drive: driveSubject,
+        agentB,
+        mentionsProp: MENTIONS,
+        nameProp: NAME,
+        docClass: DOCUMENT,
+      },
+    );
+
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 15_000 },
+    );
+
+    // B loads the mentioned doc and restarts the engine → backlog reconcile.
+    await page2.evaluate(async doc => {
+      const store = window.store;
+      const engine = (
+        window as Window & {
+          __notificationEngine?: {
+            start: () => Promise<void>;
+            reconcileMentionBacklog: () => Promise<void>;
+          };
+        }
+      ).__notificationEngine;
+
+      if (!engine) {
+        throw new Error('__notificationEngine missing after stop');
+      }
+
+      await store.fetchResourceFromServer(doc);
+      await engine.start();
+      // start() already reconciles; call again after fetch to be sure.
+      await engine.reconcileMentionBacklog();
+    }, docSubject);
+
+    await page2.getByRole('link', { name: 'Notifications' }).click();
+    await expect(page2).toHaveURL(/\/app\/notifications/);
+    const item = page2.getByTestId('notification-item').first();
+    await expect(item).toBeVisible({ timeout: 30_000 });
+    await expect(item).toContainText(/Mentioned you in Cross Agent Ping/i);
+    await expect(page2.getByTestId('sidebar-notification-badge')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await context2.close();
   });
 });
