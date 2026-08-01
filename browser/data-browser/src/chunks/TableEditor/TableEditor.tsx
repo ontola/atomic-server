@@ -88,6 +88,12 @@ interface FancyTableProps<T> {
    * about how many cells a row has.
    */
   FooterComponent?: React.ComponentType<{ columns: T[] }>;
+  /** Renders the per-row selection control (a checkbox) inside the index
+   * column. When provided, the index column widens to fit it and the grid is
+   * treated as selectable. */
+  renderRowSelector?: (rowIndex: number) => React.ReactNode;
+  /** Select-all control shown in the index column header. */
+  headerSelector?: React.ReactNode;
   ref?: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -135,6 +141,8 @@ function FancyTableInner<T>({
   HeadingComponent,
   NewColumnButtonComponent,
   FooterComponent,
+  renderRowSelector,
+  headerSelector,
 }: FancyTableProps<T>): JSX.Element {
   const ariaUsageId = useId();
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -157,6 +165,7 @@ function FancyTableInner<T>({
     columnSizes,
     columns,
     onCellResize,
+    !!renderRowSelector,
   );
 
   const handleClickOutside = useCallback(() => {
@@ -260,7 +269,12 @@ function FancyTableInner<T>({
           role='row'
           aria-rowindex={index + 2}
         >
-          <IndexCell rowIndex={index} columnIndex={0} onExpand={onRowExpand}>
+          <IndexCell
+            rowIndex={index}
+            columnIndex={0}
+            onExpand={onRowExpand}
+            selector={renderRowSelector?.(index)}
+          >
             {index + 1}
           </IndexCell>
           {children({ index })}
@@ -268,7 +282,7 @@ function FancyTableInner<T>({
         </TableRow>
       );
     },
-    [children, onRowExpand],
+    [children, onRowExpand, renderRowSelector],
   );
 
   const rowProps = useMemo(() => ({}), []);
@@ -346,6 +360,7 @@ function FancyTableInner<T>({
               onColumnReorder={onColumnReorder}
               HeadingComponent={HeadingComponent}
               NewColumnButtonComponent={NewColumnButtonComponent}
+              headerSelector={headerSelector}
             />
             <AutoSizeTamer role='rowgroup'>
               <AutoSizer renderProp={renderList} />

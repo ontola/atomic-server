@@ -36,6 +36,9 @@ export interface TableHeaderProps<T> {
   HeadingComponent: TableHeadingComponent<T>;
   NewColumnButtonComponent: React.ComponentType;
   headerRef: React.Ref<HTMLDivElement>;
+  /** Optional control (a select-all checkbox) shown in the index column
+   * header instead of the `#` label. */
+  headerSelector?: React.ReactNode;
 }
 
 /** The entire first row of an Editable Table. */
@@ -47,6 +50,7 @@ export function TableHeader<T>({
   HeadingComponent,
   NewColumnButtonComponent,
   headerRef,
+  headerSelector,
 }: TableHeaderProps<T>): JSX.Element {
   const [activeIndex, setActiveIndex] = useState<number | undefined>();
 
@@ -96,7 +100,7 @@ export function TableHeader<T>({
     <div role='rowgroup'>
       <StyledTableRow ref={headerRef} aria-rowindex={1}>
         <TableHeadingWrapper align='end' aria-colindex={1} role='columnheader'>
-          #
+          {headerSelector ?? '#'}
         </TableHeadingWrapper>
         {columns.map((column, index) => (
           <TableHeading
