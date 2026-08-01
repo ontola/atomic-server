@@ -570,10 +570,10 @@ Not covered: table `contains`; Playwright search overlay on the KV path and asse
 | Local OS banner (browser / Tauri) | flow | manual / desktop smoke — Phase 4 wired |
 | DevicePushToken wake payload contract | unit | `devicePushToken.test.ts` + `push_wake` Rust tests |
 | Cold-start push tap queue | unit | `pushWakeTap.test.ts` |
-| Mention → NotificationItem materialization (engine) | glue | **gap** — unit with mock store |
-| A mentions B → B sees unread (two browser contexts) | flow | **gap** — e2e |
-| Mark read on A clears badge on B | flow | **gap** — e2e / sync |
-| OS / APNs / FCM delivery | flow | **gap** — Phase 5 transport (ontology + wake helpers shipped) |
+| Mention → NotificationItem materialization (engine) | flow | `notifications.spec.ts` (fake other-agent actor) |
+| A mentions B → B sees unread (two browser contexts) | flow | **gap** — invite / two-agent e2e |
+| Mark read on A clears badge on B | flow | `notifications.spec.ts` (same agent, two contexts) |
+| OS / APNs / FCM delivery | flow | **gap** — Phase 5 transport (ontology + wake helpers + tap queue wired) |
 
 ---
 

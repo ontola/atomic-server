@@ -21,6 +21,8 @@ import {
   showOsNotification,
 } from '../helpers/osNotifications';
 import { isRunningInTauri } from '../helpers/tauri';
+import { onPushWakeTap } from '../helpers/pushWakeTap';
+import { useDevicePushRegistration } from '../hooks/useDevicePushRegistration';
 
 type CreatedItem = {
   subject: string;
@@ -45,6 +47,9 @@ export function NotificationOsPresenter(): null {
   /** Until true, mark subjects seen without presenting (backlog / boot). */
   const liveRef = useRef(false);
 
+  // Phase 5: upsert DevicePushToken when a token exists (stub in Tauri DEV).
+  useDevicePushRegistration();
+
   useEffect(() => {
     if (!engine) {
       return;
@@ -57,6 +62,11 @@ export function NotificationOsPresenter(): null {
         navigate(pathNames.notifications);
       }
     };
+
+    // Cold-start / background push tap → navigate once React listeners arm.
+    const unsubTap = onPushWakeTap(about => {
+      openAbout(about);
+    });
 
     const handleCreated = (item: CreatedItem) => {
       if (seenRef.current.has(item.subject)) {
@@ -130,6 +140,7 @@ export function NotificationOsPresenter(): null {
     return () => {
       clearTimeout(timer);
       liveRef.current = false;
+      unsubTap();
       unsubStore();
       engine.setOnItemCreated(undefined);
     };

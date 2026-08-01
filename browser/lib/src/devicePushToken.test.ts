@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPushWakePayload,
+  shouldOpenAfterPushWake,
+  shouldSurfaceAfterPushSync,
   type PushPlatform,
 } from './devicePushToken.js';
 import { watchDedupeKey } from './mentions.js';
@@ -17,6 +19,24 @@ describe('buildPushWakePayload', () => {
   });
 });
 
+describe('shouldSurfaceAfterPushSync', () => {
+  it('suppresses read or dismissed items', () => {
+    expect(shouldSurfaceAfterPushSync(true, false)).toBe(false);
+    expect(shouldSurfaceAfterPushSync(false, true)).toBe(false);
+    expect(shouldSurfaceAfterPushSync(false, false)).toBe(true);
+  });
+});
+
+describe('shouldOpenAfterPushWake', () => {
+  it('opens when no item flags are set', () => {
+    expect(shouldOpenAfterPushWake({})).toBe(true);
+  });
+
+  it('skips when already read', () => {
+    expect(shouldOpenAfterPushWake({ itemRead: true })).toBe(false);
+  });
+});
+
 describe('watchDedupeKey', () => {
   it('includes type, about, watch target, and actor', () => {
     expect(
@@ -26,9 +46,7 @@ describe('watchDedupeKey', () => {
         'did:ad:table1',
         'did:ad:agent:bob',
       ),
-    ).toBe(
-      'watch-membership|did:ad:row1|did:ad:table1|did:ad:agent:bob',
-    );
+    ).toBe('watch-membership|did:ad:row1|did:ad:table1|did:ad:agent:bob');
   });
 });
 

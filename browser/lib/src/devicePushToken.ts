@@ -124,3 +124,28 @@ export function buildPushWakePayload(input: {
 }): { about: string; type: string } {
   return { about: input.about, type: input.type };
 }
+
+/**
+ * After a push wake + sync, only surface if the personal NotificationItem is
+ * still unread and not dismissed (mirrors `push_wake::should_surface_after_sync`).
+ */
+export function shouldSurfaceAfterPushSync(
+  read: boolean,
+  dismissed: boolean,
+): boolean {
+  return !read && !dismissed;
+}
+
+/**
+ * Client path for a remote push wake: suppress UI presentation if already
+ * read/dismissed. Returns whether the UI should still open `about`.
+ */
+export function shouldOpenAfterPushWake(opts: {
+  itemRead?: boolean;
+  itemDismissed?: boolean;
+}): boolean {
+  return shouldSurfaceAfterPushSync(
+    opts.itemRead === true,
+    opts.itemDismissed === true,
+  );
+}
