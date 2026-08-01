@@ -8,14 +8,14 @@
 > social preferred).
 >
 > **Shipped so far:** ontology (`lib/defaults/notifications.json`), TipTap /
-> chat `mentions` write path, `NotificationEngine`, sidebar entry +
-> `/app/notifications` center, table **and collection** Watch toggle,
-> Settings watches list, App Settings blurb + OS permission,
-> Playwright e2e for inbox / mark-read / Watch / watch→item,
-> **Phase 4 local OS notifications** (Web Notification API +
-> `tauri-plugin-notification`), **Phase 5 scaffold** (`DevicePushToken`
-> ontology, `registerDevicePushToken`, hub `push_wake` helpers, cold-start
-> tap queue). Live APNs/FCM transport still open.
+> chat `mentions` write path, `NotificationEngine` (incl. DriveChanged
+> reverse-query reconcile), sidebar entry + `/app/notifications` center,
+> table **and collection** Watch toggle, Settings watches list, App Settings
+> blurb + OS permission, Playwright e2e (inbox / mark-read / Watch /
+> watch→item / mention / multi-device / invite A→B backlog), **Phase 4 local
+> OS notifications**, **Phase 5 scaffold** (`DevicePushToken`,
+> `registerDevicePushToken`, hub `push_wake`, cold-start tap queue). Live
+> APNs/FCM transport still open.
 
 ## Problem
 
@@ -476,7 +476,8 @@ mentions/watches — still no trusted body in the push (see payload contract).
       `NotificationPreferences` to defaults
 - [x] TipTap: agent-prioritized `@`; write `mentions` on save (docs + chat)
 - [x] Unit tests: extract mentions from fixture docs
-- [ ] Reverse-query integration test (mentions ∋ agent)
+- [x] Reverse-query integration test (mentions ∋ agent) — invite e2e +
+      `reconcileMentionBacklog`; DriveChanged also re-reconciles
 
 ### Phase 2 — In-app engine + center (browser)
 
@@ -485,9 +486,8 @@ mentions/watches — still no trusted body in the push (see payload contract).
 - [x] `/app/notifications` center; `markRead` / `dismiss` commit to personal drive
 - [x] Multi-device: mark read on A → unread clears on B after sync (e2e or unit+)
 - [x] App Settings → Notifications section (pointer to inbox / watch)
-- [ ] E2E: A mentions B in a shared doc → B sees unread item (two contexts /
-      `getDevDriveSecret` pattern) — invite / two-agent still open; engine path
-      covered by “mention ResourceUpdated materializes inbox item”
+- [x] E2E: A mentions B in a shared doc → B sees unread item (invite + reverse
+      query / `reconcileMentionBacklog`)
 
 ### Phase 3 — Watch subscriptions
 
