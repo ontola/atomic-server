@@ -84,11 +84,34 @@ export class NotificationEngine {
     }
   >();
 
+  /**
+   * Optional presenter hook (OS banner / toast). Fired only when a new
+   * NotificationItem is created — not on dedupe hits or mark-read.
+   */
+  private onItemCreated?: (item: {
+    subject: string;
+    summary: string;
+    about: string;
+    type: NotificationType;
+  }) => void;
+
   constructor(opts: NotificationEngineOptions) {
     this.store = opts.store;
     this.agentSubject = opts.agentSubject;
     this.personalDrive = opts.personalDrive;
     this.getNotificationsFolder = opts.getNotificationsFolder;
+  }
+
+  /** Wire OS / toast presentation without coupling the engine to UI. */
+  setOnItemCreated(
+    cb?: (item: {
+      subject: string;
+      summary: string;
+      about: string;
+      type: NotificationType;
+    }) => void,
+  ): void {
+    this.onItemCreated = cb;
   }
 
   subscribe(listener: Listener): () => void {
@@ -526,6 +549,12 @@ export class NotificationEngine {
     });
 
     await item.save();
+    this.onItemCreated?.({
+      subject: item.subject,
+      summary: input.summary,
+      about: input.about,
+      type: input.type,
+    });
     this.emit();
   }
 

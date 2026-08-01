@@ -13,6 +13,7 @@ import { useSettings } from '../helpers/AppSettings';
 import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
 import { getOrCreateNotificationsFolder } from '../helpers/notificationsFolder';
 import { useNotificationEngine } from '../hooks/useNotificationEngine';
+import { ensureOsNotificationPermission } from '../helpers/osNotifications';
 
 interface WatchToggleProps {
   resource: Resource;
@@ -120,6 +121,9 @@ export function WatchToggle({
       }
 
       const folder = await getOrCreateNotificationsFolder(store, personalDrive);
+      // First watch enable is a natural moment to ask for OS banners
+      // (never on cold start — see planning/notifications.md Phase 4).
+      void ensureOsNotificationPermission();
       const watch = await store.newResource({
         parent: folder,
         isA: [notifications.classes.watchSubscription],

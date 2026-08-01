@@ -9,8 +9,11 @@
 >
 > **Shipped so far:** ontology (`lib/defaults/notifications.json`), TipTap /
 > chat `mentions` write path, `NotificationEngine`, sidebar entry +
-> `/app/notifications` center, table Watch toggle, App Settings blurb. OS
-> notifications and push wake are still Phase 4–5.
+> `/app/notifications` center, table Watch toggle, App Settings blurb,
+> Playwright e2e for inbox / mark-read / Watch, **Phase 4 local OS
+> notifications** (Web Notification API + `tauri-plugin-notification`,
+> permission on Watch/Settings, toast when focused). Remote push wake
+> (APNs/FCM / web-push) is still Phase 5.
 
 ## Problem
 
@@ -493,11 +496,12 @@ mentions/watches — still no trusted body in the push (see payload contract).
 
 ### Phase 4 — Local OS notifications (browser + Tauri desktop/mobile)
 
-- [ ] Notification API when tab hidden (browser)
-- [ ] `tauri-plugin-notification` on desktop + mobile targets
-- [ ] Click → deep link to `about`; notification id = item subject
-- [ ] Permission request UX tied to first enable
-- [ ] On `read` sync: cancel local notifications + refresh badge
+- [x] Notification API when tab hidden (browser)
+- [x] `tauri-plugin-notification` on desktop + mobile targets
+- [x] Click → deep link to `about`; notification id = item subject
+- [x] Permission request UX tied to first enable (Watch / Settings; not cold start)
+- [x] On `read` / dismiss: cancel local notifications
+- [x] Focused window → in-app toast instead of OS banner
 
 ### Phase 5 — Remote push wake (iOS APNs + Android FCM + optional web-push)
 
