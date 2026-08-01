@@ -261,26 +261,49 @@ Note:
 
 ### Deployments
 
-Branches own environments, and nothing deploys until its pipeline is green.
+Nothing deploys until its pipeline is green.
 
-| Branch | Deploys to | Docs |
+| Trigger | Deploys to | Docs |
 | --- | --- | --- |
-| `develop` | staging.atomicdata.dev | Netlify preview URL |
-| `master` | atomicdata.dev | the live docs + typedoc sites |
+| push to `develop` | staging.atomicdata.dev | Netlify preview URL |
+| push to `master` | — | the live docs + typedoc sites |
+| a `v*` **tag** | atomicdata.dev | — |
 
-Both deploy workflows trigger on `workflow_run` — they wait for
-_Main pipeline: build, lint, test_ to **conclude successfully** on that branch,
-then deploy the exact commit that was tested. They used to trigger on `push`,
-which ran the deploy and the pipeline at the same time, so a red build did not
-stop the deploy. If you ever move them back to `push`, you are removing the
-gate, not just changing the trigger.
+Staging follows a branch; **production runs a tagged release**. A branch pointer
+answers "what was merged most recently", which is not the question you are
+asking when production is misbehaving — "which release is this" is, and a tag
+answers it. It also means the deployed thing has a name that appears in the
+changelog, and that redeploying it later gets you the same bytes.
+
+Pre-release tags (`v0.41.0-beta.2` and friends) do **not** deploy. They exist to
+be published and tested. Put one on production deliberately via the
+`workflow_dispatch` if you want it there.
+
+There is no `main` branch, and nothing refers to one. `release_plz.yml` used to
+trigger on pushes to `main`, so it had never run despite holding a
+`CARGO_REGISTRY_TOKEN`; it is `workflow_dispatch`-only now, because repointing
+it at `master` would have turned on automated publishing as a side effect of a
+rename.
+
+Both deploy workflows refuse to run against a commit whose pipeline has not
+passed. They used to trigger on `push`, which ran the deploy and the pipeline at
+the same time, so a red build did not stop the deploy — it just told you
+afterwards. Removing that gate is easy to do by accident, so:
+
+- **Staging** waits on `workflow_run`: _Main pipeline: build, lint, test_ must
+  **conclude successfully** on `develop`, and only then does the tested commit
+  deploy. Moving it back to `push` removes the gate, not just the delay.
+- **Production** cannot use `workflow_run` — that event has no tag filter — so
+  its `verify` job asks the API whether a successful pipeline exists for the
+  tagged commit, and the deploy `needs:` it. `skip_ci_check` exists for
+  emergencies and should feel like a decision.
 
 Two consequences worth knowing:
 
 - `workflow_run` checks out the **default branch**, not the commit that passed.
-  Every caller therefore passes `github.event.workflow_run.head_sha` into
-  `deployment.yml`'s required `ref` input. Leaving it out deploys something
-  other than what CI tested, silently.
+  Staging therefore passes `github.event.workflow_run.head_sha` into
+  `deployment.yml`'s required `ref` input; production passes the resolved tag
+  SHA. Leaving it out deploys something other than what CI tested, silently.
 - Docs publishing is opt-in per branch. `dagger call ci` takes `--publish-docs`,
   and `main.yml` passes it only from `master`. Without it Netlify gets a preview
   deploy. This used to be unconditional `--prod`, which meant pushing any

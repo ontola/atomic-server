@@ -58,7 +58,10 @@ jobs:
           # and typedoc. Every other branch now gets a preview URL instead.
           args: ci --netlify-auth-token env://NETLIFY_TOKEN ${{ github.ref == 'refs/heads/master' && '--publish-docs' || '' }}
       - name: Dagger docker images (build images & publish)
-        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+        # develop and master only. There is no `main` branch here — that clause
+        # could never fire, and left in place it invites someone to conclude
+        # one exists.
+        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'
         uses: dagger/dagger-for-github@8.0.0
         with:
           version: "latest"

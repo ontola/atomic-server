@@ -1,43 +1,84 @@
 name: Deployment Production
 
-# Production follows `master`, but only ever deploys a commit whose pipeline
-# went green. This used to trigger on `push` directly, which ran the deploy and
-# the pipeline CONCURRENTLY -- a red build did not stop the deploy, it just
-# finished a few minutes later and told you about it.
+# Production runs a tagged release, not whatever a branch currently points at.
 #
-# `workflow_run` fires after the pipeline concludes, and the `conclusion` check
-# below is what makes it a gate rather than a delay. The trade is that this
-# event checks out the default branch rather than the tested commit, so the
-# head_sha is threaded through explicitly.
+# A branch pointer answers "what was merged most recently"; a tag answers "which
+# release is this", which is the question you are actually asking when something
+# is wrong in production. It also means the deployed thing has a name that
+# appears in the changelog and on crates.io, and that redeploying it later gets
+# you the same bytes.
 #
-# Still `workflow_dispatch`-able on purpose: when production needs a specific
-# commit -- a rollback, or a fix that cannot wait for a full pipeline -- that is
-# a human decision made with the reasons in view. To gate that too, add required
-# reviewers to the `production` environment in repo settings; no YAML change is
-# needed, the environment is already declared in deployment.yml.
+# Pre-release tags (v0.41.0-beta.2 and friends) deliberately do NOT deploy: they
+# exist to be published and tested, not to land on the live site. Deploy one on
+# purpose with the `workflow_dispatch` below if you want it there.
+#
+# Deploys are still gated on a green pipeline — see the `verify` job. That check
+# used to come free from `workflow_run`, which cannot filter tags, so it is done
+# explicitly against the tagged commit instead.
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Commit or branch to deploy"
+        description: "Tag, branch or commit to deploy"
         required: false
         default: master
         type: string
-  workflow_run:
-    workflows: ["Main pipeline: build, lint, test"]
-    branches: ["master"]
-    types: [completed]
+      skip_ci_check:
+        description: "Deploy even if no green pipeline is found (emergencies)"
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "v*"
 
 jobs:
-  deploy-production:
-    # `workflow_run` fires on failure too — without this it would deploy every
-    # red master build.
+  # Nothing reaches a live host without a pipeline having passed on this exact
+  # commit. deployment.yml is a reusable workflow, so this cannot be a step
+  # inside it -- hence a gate job the deploy depends on.
+  verify:
+    name: Require a green pipeline for this commit
+    runs-on: ubuntu-latest
+    # Skip the whole deploy for pre-release tags.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      !contains(github.ref_name, '-')
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+
+      - name: Resolve the commit being deployed
+        id: resolve
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Check the pipeline passed on it
+        if: ${{ !inputs.skip_ci_check }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha="${{ steps.resolve.outputs.sha }}"
+          conclusion=$(gh api \
+            "repos/${{ github.repository }}/actions/runs?head_sha=$sha&status=completed" \
+            --jq '[.workflow_runs[]
+                   | select(.name == "Main pipeline: build, lint, test")]
+                  | first | .conclusion // "none"')
+
+          echo "Pipeline conclusion for $sha: $conclusion"
+
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::No successful pipeline for $sha (found: $conclusion). Tag a commit that has passed CI, or re-run with skip_ci_check."
+            exit 1
+          fi
+
+  deploy-production:
+    needs: verify
     uses: "./.github/workflows/deployment.yml"
     with:
       environment: production
       remote_host: atomicdata.dev
-      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+      ref: ${{ needs.verify.outputs.sha }}
     secrets: inherit
