@@ -110,7 +110,7 @@ test.describe('notifications', () => {
     await expect(
       page.getByRole('heading', { name: 'Notifications' }),
     ).toBeVisible();
-    await expect(page.getByText('No notifications yet')).toBeVisible();
+    await expect(page.getByTestId('notifications-empty')).toBeVisible();
   });
 
   test('inbox lists a NotificationItem with unread badge', async ({
@@ -260,7 +260,7 @@ test.describe('notifications', () => {
     await expect(item).toBeVisible({ timeout: 20_000 });
     await expect(item).toHaveAttribute('data-unread', '');
 
-    await page.getByRole('button', { name: 'Mark all read' }).click();
+    await page.getByTestId('mark-all-read').click();
     await expect(item).not.toHaveAttribute('data-unread', '', {
       timeout: 15_000,
     });
@@ -283,9 +283,13 @@ test.describe('notifications', () => {
 
     const watch = page.getByTestId('watch-toggle');
     await expect(watch).toBeVisible({ timeout: 20_000 });
-    await expect(watch).toContainText('Watch');
+    await expect(watch).toHaveAttribute('data-watching', 'false', {
+      timeout: 10_000,
+    });
     await watch.click();
-    await expect(watch).toContainText('Watching', { timeout: 15_000 });
+    await expect(watch).toHaveAttribute('data-watching', 'true', {
+      timeout: 15_000,
+    });
   });
 
   test('watch table + other-agent child materializes inbox item', async ({
@@ -304,7 +308,9 @@ test.describe('notifications', () => {
     const watch = page.getByTestId('watch-toggle');
     await expect(watch).toBeVisible({ timeout: 20_000 });
     await watch.click();
-    await expect(watch).toContainText('Watching', { timeout: 15_000 });
+    await expect(watch).toHaveAttribute('data-watching', 'true', {
+      timeout: 15_000,
+    });
 
     const tableSubject = await page.evaluate(() => {
       const url = new URL(window.location.href);
@@ -343,6 +349,8 @@ test.describe('notifications', () => {
         });
         await child.set(createdByProp, 'did:ad:agent:otherE2EActor', false);
         store.notifyResourceUpdated(child);
+        // ResourceUpdated handler is async; wait for watch coalesce to queue.
+        await new Promise(r => setTimeout(r, 250));
         await engine.flushPendingWatches();
       },
       {
