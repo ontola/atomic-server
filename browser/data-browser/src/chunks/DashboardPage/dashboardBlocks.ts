@@ -156,11 +156,18 @@ export function parseBlockChartSpec(
 /** The grid a dashboard lays its blocks out on. */
 export const GRID_COLUMNS = 12;
 
-/** Where one block sits. `w`/`h` are in grid cells. */
+/**
+ * How big one block is, in grid cells.
+ *
+ * Size only — *where* a block sits comes from its position in `dashboard-blocks`
+ * and the grid's own flow. Coordinates were stored here at first and read by
+ * nothing, which meant a layout written by `create_dashboard` was silently
+ * ignored. Free positioning is a real feature (drag and drop, see the plan); it
+ * needs a renderer that honours coordinates *and* a way for a person to set them,
+ * and it can add `x`/`y` back to this shape when it lands.
+ */
 export interface BlockPlacement {
   subject: string;
-  x: number;
-  y: number;
   w: number;
   h: number;
 }
@@ -192,8 +199,6 @@ function isPlacement(value: unknown): value is BlockPlacement {
 
   return (
     typeof p.subject === 'string' &&
-    typeof p.x === 'number' &&
-    typeof p.y === 'number' &&
     typeof p.w === 'number' &&
     typeof p.h === 'number'
   );
@@ -206,41 +211,13 @@ export function parseLayout(stored: JSONValue | undefined): BlockPlacement[] {
     return [];
   }
 
+  // Any `x`/`y` an older dashboard carries is read past, not rejected: the sizes
+  // beside them are still what their author chose.
   return (value as unknown[]).filter(isPlacement).map(p => ({
     subject: p.subject,
-    // Clamped rather than rejected: a placement half off the grid is still a
+    // Clamped rather than rejected: a width wider than the grid is still a
     // decision someone made, and the grid can honour the part that fits.
-    x: Math.max(0, Math.min(GRID_COLUMNS - 1, Math.round(p.x))),
-    y: Math.max(0, Math.round(p.y)),
     w: Math.max(1, Math.min(GRID_COLUMNS, Math.round(p.w))),
     h: Math.max(1, Math.round(p.h)),
   }));
-}
-
-/**
- * The placement to render each block at: the stored one when there is one, and
- * the block's default size flowing after the laid-out ones when there isn't.
- *
- * A block that was added without touching the layout must never be invisible,
- * which is why `dashboard-blocks` order is the fallback rather than a
- * requirement.
- */
-export function placementsFor(
-  blocks: { subject: string; kind: BlockKind }[],
-  stored: BlockPlacement[],
-): BlockPlacement[] {
-  const bySubject = new Map(stored.map(p => [p.subject, p]));
-
-  return blocks.map(({ subject, kind }) => {
-    const placement = bySubject.get(subject);
-
-    if (placement) {
-      return placement;
-    }
-
-    // `x`/`y` of -1 means "flow here": the renderer leaves it to the grid's
-    // auto-placement rather than inventing coordinates that would then be
-    // saved as if someone had chosen them.
-    return { subject, x: -1, y: -1, ...defaultSizeFor(kind) };
-  });
 }

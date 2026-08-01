@@ -136,9 +136,6 @@ export async function buildDashboardFromSpec(
     return map;
   };
 
-  let x = 0;
-  let y = 0;
-
   for (const blockSpec of spec.blocks) {
     const kind: BlockKind = isBlockKind(blockSpec.kind)
       ? blockSpec.kind
@@ -256,26 +253,14 @@ export async function buildDashboardFromSpec(
     blocks[blockSpec.title] = created.subject;
     subjects.push(created.subject);
 
-    // Laid out left to right, wrapping at twelve columns. A dashboard an
-    // assistant wrote therefore arrives arranged rather than in one tall stack.
-    const w = Math.max(
-      1,
-      Math.min(12, blockSpec.width ?? defaultSizeFor(kind).w),
-    );
-    const h = defaultSizeFor(kind).h;
-
-    if (x + w > 12) {
-      x = 0;
-      y += 1;
-    }
-
-    layout.push({ subject: created.subject, x, y, w, h });
-    x += w;
-
-    if (x >= 12) {
-      x = 0;
-      y += 1;
-    }
+    // Size only: the grid lays blocks out in `dashboard-blocks` order, wrapping
+    // at twelve columns on its own. Computing coordinates here would be writing
+    // down what the flow already does — and nothing reads them.
+    layout.push({
+      subject: created.subject,
+      w: Math.max(1, Math.min(12, blockSpec.width ?? defaultSizeFor(kind).w)),
+      h: defaultSizeFor(kind).h,
+    });
   }
 
   await dashboard.set(dataBrowser.properties.dashboardBlocks, subjects, false);

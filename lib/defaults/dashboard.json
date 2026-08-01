@@ -50,7 +50,7 @@
   {
     "@id": "https://atomicdata.dev/properties/dashboard-layout",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
-    "https://atomicdata.dev/properties/description": "Where each Block sits on the grid, as a JSON array of { subject, x, y, w, h } placements in a 12-column grid. A block without a placement falls back to its position in dashboard-blocks, so layout is an enhancement rather than a requirement.",
+    "https://atomicdata.dev/properties/description": "How big each Block is, as a JSON array of { subject, w, h } in a 12-column grid. Size only: *where* a block sits comes from its order in dashboard-blocks and the grid's own wrapping. A block with no entry uses its kind's default size, so layout is an enhancement rather than a requirement. (Free positioning — drag and drop — would add coordinates here, together with a renderer that honours them.)",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],

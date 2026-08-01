@@ -17,7 +17,8 @@ import {
 export interface UseDashboardResult {
   /** The blocks this dashboard shows, in order. */
   blocks: string[];
-  /** Where each laid-out block sits. Blocks without a placement flow. */
+  /** The size of each block that has one. Blocks without one use their kind's
+   *  default; order comes from `blocks`. */
   layout: BlockPlacement[];
   canWrite: boolean;
   /** Creates a block of the given kind, links it, and returns its subject. */
@@ -26,10 +27,10 @@ export interface UseDashboardResult {
   removeBlock: (subject: string) => Promise<void>;
   /** Moves a block one place earlier or later in the order. */
   moveBlock: (subject: string, direction: -1 | 1) => Promise<void>;
-  /** Persists a placement (or clears one by passing undefined). */
+  /** Persists a block's size (or clears it by passing undefined). */
   setPlacement: (
     subject: string,
-    placement: Omit<BlockPlacement, 'subject'> | undefined,
+    size: Omit<BlockPlacement, 'subject'> | undefined,
   ) => Promise<void>;
 }
 
@@ -120,12 +121,12 @@ export function useDashboard(dashboard: Resource): UseDashboardResult {
   const setPlacement = useCallback(
     async (
       subject: string,
-      placement: Omit<BlockPlacement, 'subject'> | undefined,
+      size: Omit<BlockPlacement, 'subject'> | undefined,
     ): Promise<void> => {
       const next = layout.filter(p => p.subject !== subject);
 
-      if (placement) {
-        next.push({ subject, ...placement });
+      if (size) {
+        next.push({ subject, ...size });
       }
 
       await dashboard.set(

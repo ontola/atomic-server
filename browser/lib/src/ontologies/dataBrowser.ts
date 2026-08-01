@@ -548,8 +548,6 @@ declare module '../index.js' {
     [dataBrowser.properties.dashboardBlocks]: string[];
     [dataBrowser.properties.dashboardLayout]: Array<{
       subject?: string;
-      x?: number;
-      y?: number;
       w?: number;
       h?: number;
     }>;

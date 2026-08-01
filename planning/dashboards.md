@@ -446,9 +446,16 @@ above. What is left, in order:
    `last 7 days`), week/quarter buckets, and "this field is empty".
 3. **Parameters** — one control narrowing several blocks. Needs shared dashboard
    state; open question 6 is still open.
-4. **Drag-and-drop layout.** The grid already reads `{x, y, w, h}`; only width and
-   reordering are exposed, via the block menu (keyboard-reachable, which
-   drag-and-drop alone would not be).
+4. **Drag-and-drop layout.** `dashboard-layout` holds `{subject, w, h}` — sizes
+   only. Position comes from the order in `dashboard-blocks` plus the grid's own
+   wrapping. An earlier version stored `x`/`y` too and **no renderer ever read
+   them**, so a layout `create_dashboard` computed was silently ignored; they were
+   removed (2026-08-01) rather than implemented, because the UI offers no way to
+   set coordinates and a tool that can position blocks where a person cannot is
+   the asymmetry this plan exists to avoid. Free positioning therefore needs three
+   things together: coordinates back in the shape, a renderer that honours them,
+   and a way to drag — plus a keyboard path, since the current width-and-reorder
+   menu is reachable without a pointer and drag-and-drop alone would not be.
 5. **A dashboard per template** — and whether it is generated or shipped
    (open question 7).
 
@@ -475,6 +482,9 @@ above. What is left, in order:
   member count at first load and treats anything past it as a session draft, and
   nothing lets one block bump another's count. Worth fixing if a dashboard is ever
   the primary place rows are added; the create block's own e2e documents it.
+- Stored config that no renderer reads is worse than no config: it looks
+  authoritative, the tool writes it, and the page quietly disagrees. If a shape
+  carries a field, something must read it — or the field should go.
 - The row class is not the table. `QuickAddBar` takes the class a row is an
   instance of, and passing the Table resource instead creates rows that match no
   view's `isA` filter — so they save fine and are simply never listed.

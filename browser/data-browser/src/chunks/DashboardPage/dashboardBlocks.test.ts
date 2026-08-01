@@ -6,7 +6,6 @@ import {
   parseBlockAggregate,
   parseBlockChartSpec,
   parseLayout,
-  placementsFor,
 } from './dashboardBlocks';
 
 /**
@@ -106,49 +105,30 @@ describe('parseBlockChartSpec', () => {
 });
 
 describe('parseLayout', () => {
-  it('reads placements and rounds them onto the grid', () => {
-    expect(parseLayout([{ subject: 'a', x: 0.4, y: 1, w: 3.6, h: 2 }])).toEqual(
-      [{ subject: 'a', x: 0, y: 1, w: 4, h: 2 }],
-    );
-  });
-
-  it('clamps a placement that runs off the grid instead of dropping it', () => {
-    // Half a decision is still a decision; the grid can honour the part that
-    // fits.
-    expect(parseLayout([{ subject: 'a', x: 99, y: -5, w: 40, h: 0 }])).toEqual([
-      { subject: 'a', x: GRID_COLUMNS - 1, y: 0, w: GRID_COLUMNS, h: 1 },
+  it('reads sizes and rounds them onto the grid', () => {
+    expect(parseLayout([{ subject: 'a', w: 3.6, h: 2 }])).toEqual([
+      { subject: 'a', w: 4, h: 2 },
     ]);
   });
 
-  it('drops entries that are not placements, and non-arrays entirely', () => {
+  it('clamps a size larger than the grid instead of dropping it', () => {
+    // Half a decision is still a decision; the grid can honour what fits.
+    expect(parseLayout([{ subject: 'a', w: 40, h: 0 }])).toEqual([
+      { subject: 'a', w: GRID_COLUMNS, h: 1 },
+    ]);
+  });
+
+  it('reads past coordinates an older dashboard carries', () => {
+    // `x`/`y` were stored before anything read them. The sizes beside them are
+    // still what their author chose, so the entry is kept and they are dropped.
+    expect(parseLayout([{ subject: 'a', x: 3, y: 1, w: 6, h: 2 }])).toEqual([
+      { subject: 'a', w: 6, h: 2 },
+    ]);
+  });
+
+  it('drops entries that are not sizes, and non-arrays entirely', () => {
     expect(parseLayout([{ subject: 'a' }, 'nope'])).toEqual([]);
     expect(parseLayout({ subject: 'a' })).toEqual([]);
     expect(parseLayout(undefined)).toEqual([]);
-  });
-});
-
-describe('placementsFor', () => {
-  const blocks = [
-    { subject: 'a', kind: 'stat' as const },
-    { subject: 'b', kind: 'view' as const },
-  ];
-
-  it('uses a stored placement when there is one', () => {
-    const stored = [{ subject: 'a', x: 2, y: 3, w: 6, h: 1 }];
-
-    expect(placementsFor(blocks, stored)[0]).toEqual(stored[0]);
-  });
-
-  it('gives an unplaced block its kind default and lets it flow', () => {
-    // A block added without touching the layout must never be invisible, which
-    // is why the block order is the fallback rather than a requirement.
-    const [, view] = placementsFor(blocks, []);
-
-    expect(view.w).toBe(defaultSizeFor('view').w);
-    expect(view.x).toBeLessThan(0);
-  });
-
-  it('returns one placement per block, in block order', () => {
-    expect(placementsFor(blocks, []).map(p => p.subject)).toEqual(['a', 'b']);
   });
 });

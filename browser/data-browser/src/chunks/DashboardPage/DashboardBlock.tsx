@@ -36,7 +36,7 @@ interface Props {
   onConfigureClose: () => void;
   onRemove: () => void;
   onMove: (direction: -1 | 1) => void;
-  onResize: (size: { x: number; y: number; w: number; h: number }) => void;
+  onResize: (size: { w: number; h: number }) => void;
 }
 
 const BlockOptionsTrigger = buildDefaultTrigger(
@@ -88,13 +88,7 @@ export function DashboardBlock({
     id: `width-${w}`,
     label: w === width ? `${label} ✓` : label,
     keepOpen: true,
-    onClick: () =>
-      onResize({
-        x: placement?.x ?? 0,
-        y: placement?.y ?? 0,
-        w,
-        h: height,
-      }),
+    onClick: () => onResize({ w, h: height }),
   }));
 
   const menuItems: DropdownItem[] = [

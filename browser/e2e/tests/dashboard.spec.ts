@@ -214,6 +214,8 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
       [total, count, chart, note, list, add],
       false,
     );
+    // Written with the legacy `x`/`y` keys on purpose: dashboards created before
+    // the layout became size-only still carry them, and their sizes must survive.
     await dashboard.set(
       D.layout,
       [
@@ -368,6 +370,42 @@ test.describe('dashboards', () => {
     await expect(
       block(page, 'All expenses').getByRole('gridcell', { name: 'Notebook' }),
     ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('a stored width reaches the grid, and survives a reload', async ({
+    page,
+  }) => {
+    const fixture = await createSpendingTable(page);
+    await createDashboard(page, fixture);
+
+    const total = block(page, 'Total spent');
+    await expect(total).toContainText('946.5', { timeout: 15_000 });
+
+    // `grid-column: span N` resolves into `gridColumnStart`, not End.
+    const spanOf = () =>
+      total.evaluate(el => getComputedStyle(el).gridColumnStart);
+
+    // The fixture stores w: 3 for this block.
+    expect(await spanOf()).toBe('span 3');
+
+    await total.getByTitle('Block options').click();
+    await page.getByRole('menuitem', { name: /Full width/ }).click();
+    await page.keyboard.press('Escape');
+
+    // Stored layout has to actually reach the grid — it was written and read by
+    // nothing at first, so the menu appeared to do nothing.
+    await expect.poll(spanOf, { timeout: 15_000 }).toBe('span 12');
+
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 15_000 },
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(block(page, 'Total spent')).toContainText('946.5', {
+      timeout: 15_000,
+    });
+    await expect.poll(spanOf, { timeout: 15_000 }).toBe('span 12');
   });
 
   test('a person can reconfigure a block, and it survives a reload', async ({

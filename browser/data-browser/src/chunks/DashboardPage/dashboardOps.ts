@@ -307,8 +307,6 @@ export async function configureBlock(
 
     next.push({
       subject: block.subject,
-      x: existing?.x ?? 0,
-      y: existing?.y ?? 0,
       w: Math.max(1, Math.min(12, patch.width)),
       h: existing?.h ?? 1,
     });
