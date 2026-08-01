@@ -383,3 +383,31 @@ pub async fn bootstrap(store: &impl Storelike) -> AtomicResult<()> {
     store.commit_batch()?;
     Ok(())
 }
+
+#[cfg(test)]
+mod notifications_populate_tests {
+    use crate::Storelike;
+
+    #[tokio::test]
+    async fn notifications_ontology_is_populated() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/classes/NotificationItem".into()),
+            "NotificationItem class missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/properties/notificationRead".into()),
+            "notificationRead property missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/classes/WatchSubscription".into()),
+            "WatchSubscription class missing after populate"
+        );
+        let class = store
+            .get_class("https://atomicdata.dev/classes/NotificationItem")
+            .await
+            .expect("get_class NotificationItem");
+        assert_eq!(class.shortname, "notification-item");
+    }
+}

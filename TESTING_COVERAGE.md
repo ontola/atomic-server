@@ -138,6 +138,11 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Flow | Layer | Where |
 |---|---|---|
 | Extract agent mentions from TipTap JSON / chat text | glue | `browser/lib/src/mentions.test.ts` |
+| Populate includes NotificationItem / watches ontology | unit | `populate::notifications_ontology_is_populated` |
+| Sidebar Notifications + empty inbox | flow | `browser/e2e/tests/notifications.spec.ts` |
+| Seeded NotificationItem appears with unread badge | flow | `notifications.spec.ts` |
+| Mark all read clears unread styling | flow | `notifications.spec.ts` |
+| Table Watch toggle → Watching | flow | `notifications.spec.ts` |
 | Mention → NotificationItem materialization (engine) | glue | **gap** — unit with mock store |
 | A mentions B → B sees unread (two browser contexts) | flow | **gap** — e2e |
 | Watch table → row add → notification | flow | **gap** — e2e |
