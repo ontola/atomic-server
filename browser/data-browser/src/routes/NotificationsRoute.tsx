@@ -11,6 +11,7 @@ import {
   useStore,
   useString,
   useTitle,
+  useValue,
 } from '@tomic/react';
 import { FaBell, FaCheck, FaTrash } from 'react-icons/fa6';
 import { ContainerNarrow } from '../components/Containers';
@@ -110,11 +111,26 @@ function NotificationsPage(): React.JSX.Element {
   }, [engine]);
 
   const markAllRead = async () => {
-    if (!engine) {
+    if (engine) {
+      await engine.markAllRead(subjects);
+      setTick(t => t + 1);
+
       return;
     }
 
-    await engine.markAllRead(subjects);
+    // Engine still starting — mark via the store so the button is never a no-op.
+    for (const subject of subjects) {
+      const res = await store.getResource(subject);
+
+      if (res.get(notifications.properties.notificationRead) === true) {
+        continue;
+      }
+
+      await res.set(notifications.properties.notificationRead, true);
+      await res.save();
+      store.notifyResourceUpdated(res);
+    }
+
     setTick(t => t + 1);
   };
 
@@ -182,7 +198,13 @@ function NotificationRow({
   const [type] = useString(resource, notifications.properties.notificationType);
   const [about] = useString(resource, dataBrowser.properties.about);
   const [title] = useTitle(resource);
-  const read = resource.get(notifications.properties.notificationRead) === true;
+  // useValue (not resource.get during render) so LocalChange from markRead
+  // re-renders — useResource alone only wakes on store.notify.
+  const [readRaw] = useValue(
+    resource,
+    notifications.properties.notificationRead,
+  );
+  const read = readRaw === true;
 
   const open = async () => {
     if (engine && !read) {

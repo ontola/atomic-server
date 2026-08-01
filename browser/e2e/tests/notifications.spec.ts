@@ -275,6 +275,10 @@ test.describe('notifications', () => {
     await expect(item).not.toHaveAttribute('data-unread', '', {
       timeout: 15_000,
     });
+    await expect(page.getByTestId('sidebar-notification-badge')).toHaveCount(
+      0,
+      { timeout: 10_000 },
+    );
   });
 
   test('watch toggle on a table shows Watching', async ({ page }) => {

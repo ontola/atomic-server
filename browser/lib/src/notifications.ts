@@ -533,6 +533,9 @@ export class NotificationEngine {
     const res = await this.store.getResource(subject);
     await res.set(notifications.properties.notificationRead, true);
     await res.save();
+    // Bump useSyncExternalStore snapshots (useResource) in addition to
+    // LocalChange (useValue) so badge / list styling refresh reliably.
+    this.store.notifyResourceUpdated(res);
     this.emit();
   }
 
@@ -547,6 +550,7 @@ export class NotificationEngine {
 
       await res.set(notifications.properties.notificationRead, true);
       await res.save();
+      this.store.notifyResourceUpdated(res);
     }
 
     this.emit();
@@ -557,6 +561,7 @@ export class NotificationEngine {
     await res.set(notifications.properties.dismissed, true);
     await res.set(notifications.properties.notificationRead, true);
     await res.save();
+    this.store.notifyResourceUpdated(res);
     this.emit();
   }
 }

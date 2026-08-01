@@ -4,7 +4,7 @@
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/class/ontology"
     ],
-    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/",
     "https://atomicdata.dev/properties/shortname": "notifications",
     "https://atomicdata.dev/properties/description": "Product notifications: agent mentions on content, and watch subscriptions for collections / tables / queries. Mention edges are actor-side (`mentions` on the host resource); `NotificationItem`s are personal, recipient-owned inbox rows with synced read state. See planning/notifications.md.",
     "https://atomicdata.dev/properties/classes": [
