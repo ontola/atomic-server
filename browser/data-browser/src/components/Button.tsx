@@ -73,8 +73,25 @@ export const Button = forwardRef<
   const Comp = getButtonComp(props);
 
   return (
-    <Comp type='button' {...buttonProps} $gutter={gutter} ref={ref}>
-      {loading ? <Spinner /> : children}
+    <Comp
+      type='button'
+      {...buttonProps}
+      $gutter={gutter}
+      aria-busy={loading ? true : undefined}
+      ref={ref}
+    >
+      {loading ? (
+        <>
+          {/* Sized to the label so the button keeps its height, and coloured
+              from the button's own text so it reads on every variant. The
+              label stays rendered: it says what is being waited on, and it
+              keeps the button's accessible name. */}
+          <Spinner size='1em' inheritColor />
+          {loading}
+        </>
+      ) : (
+        children
+      )}
     </Comp>
   );
 });

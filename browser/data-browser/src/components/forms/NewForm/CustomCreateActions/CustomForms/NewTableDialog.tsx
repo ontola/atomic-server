@@ -20,7 +20,11 @@ import {
   DialogTitle,
 } from '../../../../Dialog';
 import Field from '../../../Field';
-import { InputWrapper, InputStyled } from '../../../InputStyles';
+import {
+  InputWrapper,
+  InputStyled,
+  InlineErrMessage,
+} from '../../../InputStyles';
 import type { CustomResourceDialogProps } from '../../useNewResourceUI';
 import { singularize } from '../../../../../helpers/singularize';
 import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate';
@@ -78,7 +82,16 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
   // Follows the table name (singularized) until the user edits it themselves.
   const [rowName, setRowName] = useState('Row');
   const [rowNameEdited, setRowNameEdited] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string>();
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const hasName = name.trim() !== '';
+  const hasRowName = rowName.trim() !== '';
+  const saveDisabled =
+    templateId === 'blank' && useExistingClass
+      ? !hasName || !existingClass
+      : !hasName || !hasRowName;
 
   const addToOntology = useAddToOntology();
   const createResourceAndNavigate = useCreateAndNavigate();
@@ -88,7 +101,7 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     onClose();
   }, [onClose]);
 
-  const onSuccess = useCallback(async () => {
+  const create = useCallback(async () => {
     // A template produces a fully-configured table (class + columns + views) in
     // one shot via the shared spec builder, then we open it.
     const template = TABLE_TEMPLATES.find(t => t.id === templateId);
@@ -103,8 +116,6 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
       if (!skipNavigation) {
         navigate(constructOpenURL(tableSubject));
       }
-
-      onClose();
 
       return;
     }
@@ -141,13 +152,10 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
         onCreated,
       },
     );
-
-    onClose();
   }, [
     name,
     rowName,
     templateId,
-    onClose,
     parent,
     useExistingClass,
     existingClass,
@@ -160,7 +168,36 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     driveSubject,
   ]);
 
-  const [dialogProps, show, hide, isOpen] = useDialog({ onCancel, onSuccess });
+  const [dialogProps, show, hide, isOpen] = useDialog({
+    onCancel,
+    onSuccess: onClose,
+  });
+
+  /**
+   * Builds the table with the dialog still up. A template is a few dozen
+   * commits, so closing first would leave the user on the previous page with
+   * nothing to look at; the Create button carries the wait instead, and the
+   * dialog only closes once there is a table to navigate to.
+   */
+  const onSubmit = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault();
+
+      if (saveDisabled || creating) return;
+
+      setCreating(true);
+      setError(undefined);
+
+      try {
+        await create();
+        hide(true);
+      } catch (err) {
+        setCreating(false);
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [create, hide, saveDisabled, creating],
+  );
 
   useEffect(() => {
     show();
@@ -173,13 +210,6 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     }
   }, [isOpen]);
 
-  const hasName = name.trim() !== '';
-  const hasRowName = rowName.trim() !== '';
-  const saveDisabled =
-    templateId === 'blank' && useExistingClass
-      ? !hasName || !existingClass
-      : !hasName || !hasRowName;
-
   return (
     <Dialog {...dialogProps}>
       {isOpen && (
@@ -189,14 +219,7 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
             <BetaBadge key='badge' />
           </RelativeDialogTitle>
           <WiderDialogContent key='content'>
-            <form
-              id={formId}
-              onSubmit={(e: FormEvent) => {
-                e.preventDefault();
-                if (saveDisabled) return;
-                hide(true);
-              }}
-            >
+            <form id={formId} onSubmit={onSubmit}>
               <Field key='template' label='Start from'>
                 <TemplateGrid>
                   {TABLE_TEMPLATES.map(template => (
@@ -301,14 +324,21 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
             </form>
           </WiderDialogContent>
           <DialogActions key='actions'>
-            <Button key='cancel' onClick={() => hide(false)} subtle>
+            {error && <InlineErrMessage key='error'>{error}</InlineErrMessage>}
+            <Button
+              key='cancel'
+              onClick={() => hide(false)}
+              subtle
+              disabled={creating}
+            >
               Cancel
             </Button>
             <Button
               key='create'
               type='submit'
               form={formId}
-              disabled={saveDisabled}
+              disabled={saveDisabled || creating}
+              loading={creating ? 'Creating table…' : undefined}
             >
               Create
             </Button>

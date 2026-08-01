@@ -36,6 +36,7 @@ export function ApplyTemplateDialog({
   const [dialogProps, show, close, isOpen] = useDialog({ bindShow: bindOpen });
   const { drive } = useSettings();
   const [error, setError] = useState<string>();
+  const [applying, setApplying] = useState(false);
   const [existingRootSubject, setExistingRootSubject] = useState<string>();
 
   const formattedJSONAD = template
@@ -62,6 +63,8 @@ export function ApplyTemplateDialog({
   const applyTemplate = async () => {
     if (!template) return;
 
+    setApplying(true);
+
     try {
       // The imported resources set `parent`; children are resolved via the
       // `parent=` query, so no explicit child list needs maintaining.
@@ -78,6 +81,7 @@ export function ApplyTemplateDialog({
       toast.success('Template applied!');
       navigate(constructOpenURL(rootSubject));
     } catch (err) {
+      setApplying(false);
       setError(err.message);
     }
   };
@@ -114,7 +118,8 @@ export function ApplyTemplateDialog({
             )}
             <Button
               onClick={applyTemplate}
-              disabled={!!error || alreadyApplied}
+              disabled={!!error || alreadyApplied || applying}
+              loading={applying ? 'Applying template…' : undefined}
             >
               <FaCheck />
               Apply template

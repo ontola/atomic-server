@@ -5,6 +5,7 @@ import {
   Store,
   core,
   dataBrowser,
+  perfSpan,
 } from '@tomic/react';
 import { sortSubjectList } from '@views/OntologyPage/sortSubjectList';
 import { stringToSlug } from '@helpers/stringToSlug';
@@ -38,29 +39,52 @@ async function resolvePropertyParent(
 }
 
 /**
- * Registers an already-saved property into the class's ontology (if any) and
- * adds it as a column of the table's row class. Shared by every property
+ * Registers already-saved properties into the class's ontology (if any) and
+ * adds them as columns of the table's row class. Shared by every property
  * created for a table so they behave like hand-made columns.
+ *
+ * Takes a list rather than one subject because the ontology and the row class
+ * are the same two resources for every column of a table: attaching per column
+ * costs two round-trip commits each, attaching a whole table's columns at once
+ * costs two in total. `createTableFromSpec` builds its columns with
+ * `deferAttach` and calls this once at the end.
  */
-async function attachPropertyToClass(
+export async function attachPropertiesToClass(
   store: Store,
   tableClass: Resource,
-  propertySubject: string,
+  propertySubjects: string[],
 ): Promise<void> {
+  if (propertySubjects.length === 0) {
+    return;
+  }
+
+  const closeAttach = perfSpan('table.attachPropertyToClass', {
+    n: propertySubjects.length,
+  });
   const classParentSubject = tableClass.get(core.properties.parent) as string;
   const classParent = await store.getResource(classParentSubject);
 
   if (classParent.hasClasses(core.classes.ontology)) {
     const ontologyProps = classParent.get(core.properties.properties) ?? [];
-    await classParent.set(
-      core.properties.properties,
-      await sortSubjectList(store, [...ontologyProps, propertySubject]),
-    );
+    const closeSort = perfSpan('table.sortSubjectList', {
+      n: (ontologyProps as string[]).length + propertySubjects.length,
+    });
+    const sorted = await sortSubjectList(store, [
+      ...ontologyProps,
+      ...propertySubjects,
+    ]);
+    closeSort();
+    await classParent.set(core.properties.properties, sorted);
+    const closeOntologySave = perfSpan('table.ontologySave');
     await classParent.save();
+    closeOntologySave();
   }
 
-  await tableClass.push(core.properties.recommends, [propertySubject], true);
+  await tableClass.push(core.properties.recommends, propertySubjects, true);
+  const closeClassSave = perfSpan('table.rowClassSave');
   await tableClass.save();
+  closeClassSave();
+  closeAttach();
 }
 
 /**
@@ -82,6 +106,12 @@ export async function createPropertyOnClass(
     classes?: string[];
     /** Extra propVals, e.g. the constraints those classes recommend. */
     propVals?: Record<string, JSONValue>;
+    /**
+     * Skip registering the property on the ontology and the row class — the
+     * caller is creating several columns at once and will call
+     * {@link attachPropertiesToClass} for all of them together.
+     */
+    deferAttach?: boolean;
   },
 ): Promise<string> {
   const parent = await resolvePropertyParent(store, tableClass);
@@ -104,7 +134,10 @@ export async function createPropertyOnClass(
     propVals,
   });
   await property.save();
-  await attachPropertyToClass(store, tableClass, property.subject);
+
+  if (!opts.deferAttach) {
+    await attachPropertiesToClass(store, tableClass, [property.subject]);
+  }
 
   return property.subject;
 }
@@ -123,7 +156,12 @@ export async function createPropertyOnClass(
 export async function createSelectPropertyOnClass(
   store: Store,
   tableClass: Resource,
-  opts: { name: string; tags: TagSeed[] },
+  opts: {
+    name: string;
+    tags: TagSeed[];
+    /** See {@link createPropertyOnClass}'s `deferAttach`. */
+    deferAttach?: boolean;
+  },
 ): Promise<CreatedSelectProperty> {
   const parent = await resolvePropertyParent(store, tableClass);
 
@@ -145,12 +183,15 @@ export async function createSelectPropertyOnClass(
   const tagsByName: Record<string, string> = {};
 
   for (const seed of opts.tags) {
+    const closeTag = perfSpan('table.tag');
+    const closeSubject = perfSpan('table.tagUniqueSubject');
     const subject = property.subject.startsWith('did:')
       ? undefined
       : await store.buildUniqueSubjectFromParts(
           ['tag', seed.name],
           property.subject,
         );
+    closeSubject();
 
     const tag = await store.newResource({
       subject,
@@ -162,6 +203,7 @@ export async function createSelectPropertyOnClass(
       },
     });
     await tag.save();
+    closeTag();
     tagSubjects.push(tag.subject);
     tagsByName[seed.name] = tag.subject;
   }
@@ -169,7 +211,9 @@ export async function createSelectPropertyOnClass(
   await property.set(core.properties.allowsOnly, tagSubjects);
   await property.save();
 
-  await attachPropertyToClass(store, tableClass, property.subject);
+  if (!opts.deferAttach) {
+    await attachPropertiesToClass(store, tableClass, [property.subject]);
+  }
 
   return { subject: property.subject, tags: tagsByName };
 }
