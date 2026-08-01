@@ -18,8 +18,8 @@ This repo also includes:
 - [`@tomic/svelte`](/browser/svelte/README.md) Svelte NPM library.
 - [`atomic_lib`](lib/README.md) Rust library.
 - [`atomic-cli`](cli/README.md) terminal client.
-- [`dart/atomic_flutter`](/dart/atomic_flutter) — reusable Dart / Flutter Atomic SDK (auth, sync, pairing UI, workspaces)
-- [`flutter`](/flutter) — AtomicCanvas, a collaborative infinite drawing canvas built on `atomic_flutter`
+- [`dart/atomic_lib`](/dart/atomic_lib) — reusable Dart / Flutter Atomic SDK (auth, sync, pairing UI, workspaces)
+- [`flutter`](/flutter) — AtomicCanvas, a collaborative infinite drawing canvas built on `atomic_lib`
 - [`docs`](docs/README.md) documentation / specification for Atomic Data ([docs.atomicdata.dev](https://docs.atomicdata.dev)).
 
 _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
@@ -48,8 +48,8 @@ _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 - 🔐  **Authorization** (read / write permissions) and Hierarchical structures powered by [Atomic Hierarchy](https://docs.atomicdata.dev/hierarchy.html)
 - 📲  **Invite and sharing system** with [Atomic Invites](https://docs.atomicdata.dev/invitations.html)
 - 🌐  **Embedded server** with support for HTTP / HTTPS / HTTP2.0 (TLS) and Built-in LetsEncrypt handshake.
-- 📱  **Runs on mobile**: `atomic_lib` compiles into Flutter apps through [flutter_rust_bridge](https://github.com/fzyzcjy/flutter_rust_bridge), so phones get the same local-first store, signing and peer sync as the browser — not a thin REST wrapper. See [`atomic_flutter`](/dart/atomic_flutter) and the [Canvas app](/flutter).
-- 📚  **Libraries**: [Javascript / Typescript](https://www.npmjs.com/package/@tomic/lib), [React](https://www.npmjs.com/package/@tomic/react), [Svelte](https://www.npmjs.com/package/@tomic/svelte), [Rust](https://crates.io/crates/atomic-lib), and [Dart / Flutter (`atomic_flutter`)](/dart/atomic_flutter)
+- 📱  **Runs on mobile**: `atomic_lib` compiles into Flutter apps through [flutter_rust_bridge](https://github.com/fzyzcjy/flutter_rust_bridge), so phones get the same local-first store, signing and peer sync as the browser — not a thin REST wrapper. See [`atomic_lib`](/dart/atomic_lib) and the [Canvas app](/flutter).
+- 📚  **Libraries**: [Javascript / Typescript](https://www.npmjs.com/package/@tomic/lib), [React](https://www.npmjs.com/package/@tomic/react), [Svelte](https://www.npmjs.com/package/@tomic/svelte), [Rust](https://crates.io/crates/atomic-lib), and [Dart / Flutter (`atomic_lib`)](/dart/atomic_lib)
 
 https://user-images.githubusercontent.com/2183313/139728539-d69b899f-6f9b-44cb-a1b7-bbab68beac0c.mp4
 

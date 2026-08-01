@@ -2,7 +2,7 @@
 
 ## Sync & onboarding — read first
 
-Canvas uses [`package:atomic_flutter`](../dart/atomic_flutter/) for auth, sync,
+Canvas uses [`package:atomic_flutter`](../dart/atomic_lib/) for auth, sync,
 pairing, and workspaces. Before changing those screens, read
 [`../planning/sync-onboarding-ux.md`](../planning/sync-onboarding-ux.md) and
 [`../planning/atomic-flutter-sdk.md`](../planning/atomic-flutter-sdk.md).
@@ -13,7 +13,7 @@ Change a sync screen in the package → change its browser twin, and update that
 
 A cross-platform infinite drawing canvas app. Flutter targets Android, iOS, and
 Web. Atomic plumbing (agent, drive, sync, QR pairing UI) lives in
-`dart/atomic_flutter`; this folder is the canvas product UI on top.
+`dart/atomic_lib`; this folder is the canvas product UI on top.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ flutter/lib/                 # Canvas-only
 ├── models/                  # StrokeData, CanvasEntry
 └── widgets/                 # Toolbars, fans, history scrubber
 
-dart/atomic_flutter/         # Reusable SDK
+dart/atomic_lib/         # Reusable SDK
 ├── lib/src/                 # AtomicClient, session, Atomic facade
 ├── lib/src/ui/              # Login, Pair, sync settings, drive switcher
 └── rust/                    # flutter_rust_bridge over atomic_lib
@@ -34,7 +34,7 @@ dart/atomic_flutter/         # Reusable SDK
 
 ### Storage: atomic-server / local node
 
-Uses **atomic_lib** (Rust) via `flutter_rust_bridge` inside `atomic_flutter`.
+Uses **atomic_lib** (Rust) via `flutter_rust_bridge` inside `atomic_lib`.
 Authentication uses Ed25519 keypairs (agents). Optional AtomicServer / Iroh for sync.
 
 ### Canvas Coordinate System
@@ -55,7 +55,7 @@ Authentication uses Ed25519 keypairs (agents). Optional AtomicServer / Iroh for 
 
 ## Gotchas
 
-- Do not edit `dart/atomic_flutter/lib/src/rust/` — FRB generated
-- After changing the Rust bridge API, regenerate from `dart/atomic_flutter/`
+- Do not edit `dart/atomic_lib/lib/src/rust/` — FRB generated
+- After changing the Rust bridge API, regenerate from `dart/atomic_lib/`
 - Canvas CRUD helpers (`createCanvas`, `pushStroke`, …) still sit on
   `AtomicClient` until generic query/mutate/blobs land — prefer not to grow them

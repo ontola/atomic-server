@@ -1,1 +1,1 @@
-export 'package:atomic_flutter/atomic_flutter.dart' show showErrorSnack;
+export 'package:atomic_lib/atomic_lib.dart' show showErrorSnack;

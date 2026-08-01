@@ -1,6 +1,6 @@
 ## Sync & onboarding — read first
 
-The Flutter canvas app (`dart/atomic_flutter/`) is a client of the same system,
+The Flutter canvas app (`dart/atomic_lib/`) is a client of the same system,
 used by the same person. Before changing anything about signing in, servers,
 pairing or sync, read
 [`../../planning/sync-onboarding-ux.md`](../../planning/sync-onboarding-ux.md):

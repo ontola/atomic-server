@@ -36,3 +36,4 @@ scratchpad
 
 .bin/
 .fastembed_cache
+dart/.secrets/

@@ -9,7 +9,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ### Added
 
-- [`atomic_flutter`](/dart/atomic_flutter) — reusable Dart/Flutter Atomic SDK extracted from the canvas app: auth, local store, workspaces, WS/Iroh sync, and shared UI for login, QR pairing, sync settings, and drive switching. Canvas depends on the package; app builders can use it without managing a server. See `planning/atomic-flutter-sdk.md`.
+- [`atomic_lib`](/dart/atomic_lib) — reusable Dart/Flutter Atomic SDK (pub.dev name; matches Rust `atomic_lib` / JS `@tomic/lib`): auth, local store, workspaces, WS/Iroh sync, and shared UI for login, QR pairing, sync settings, and drive switching. Precompiled native binaries via Cargokit + GitHub Releases (workflow `atomic_lib`). See `planning/atomic-flutter-sdk.md`.
 
 ## [v0.41.0-beta.2] - 2026-07-25
 
