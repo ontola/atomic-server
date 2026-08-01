@@ -232,3 +232,62 @@ cd browser/lib && pnpm test                      # 29 JS tests
 cd browser && pnpm run -r build                  # Full workspace build
 cd browser && pnpm run test-e2e                  # Full e2e test
 ```
+
+## Cursor Cloud specific instructions
+
+The startup update script only runs `pnpm install` (in `browser/`). Everything below is
+already handled in the VM snapshot; these notes capture the non-obvious gotchas for
+building/running the stack again after pulling changes.
+
+### Run the server on port 9885 (not the default 9883)
+
+The frontend's `browser/data-browser/.env.development` and the Vite proxy both point at
+`http://localhost:9885`, but `atomic-server` defaults to `9883`. For a standalone dev
+setup the two MUST be aligned, so start the server on 9885:
+
+```
+/workspace/target/debug/atomic-server --port 9885            # subsequent runs
+/workspace/target/debug/atomic-server --port 9885 --initialize   # first run / to reset the /setup invite
+```
+
+If they disagree, the app silently repoints drives to a server that isn't listening and
+auth/drive resolution fails. Then open `http://localhost:6747/app/dev-drive` for a clean
+authenticated agent + drive.
+
+### pnpm scripts need bash (`build:wasm` breaks under dash)
+
+`data-browser`'s `build:wasm` uses `CARGO_ENCODED_RUSTFLAGS=$'--cfg\x1f...'` (bash ANSI-C
+quoting). The VM's `/bin/sh` is `dash`, which doesn't understand `$'...'`, so pnpm scripts
+must run under bash. This is configured once (persisted in `~/.config/pnpm/rc`):
+
+```
+pnpm config set script-shell /usr/bin/bash
+```
+
+If `pnpm build:wasm` ever fails with `error: multiple input filenames provided (... $--cfg\x1f...)`,
+re-run that config command.
+
+### WASM build is required before the frontend works
+
+`browser/data-browser/public/wasm/{atomic_wasm.js,atomic_wasm_bg.wasm}` are git-ignored and
+must be generated (needs the `wasm32-unknown-unknown` target, already installed):
+
+```
+pnpm --filter @tomic/data-browser build:wasm
+```
+
+Only re-run this when the `wasm/` or `lib/` Rust changes; it is not part of `pnpm start`.
+
+### Running the frontend
+
+`cd browser && pnpm start` runs `@tomic/lib` + `@tomic/react` (tsup watch) and the Vite dev
+server (`:6747`) together. During `vite dev` you'll see `Compilation failed: <file>` lines
+from `babel-plugin-react-compiler` — these are non-fatal (the compiler skips auto-memoizing
+files with try/catch); the app still serves and HMRs normally.
+
+### Services summary
+
+| Service | Dir | Dev command | Port |
+| --- | --- | --- | --- |
+| AtomicServer (Rust: HTTP/WS, redb, tantivy, Loro sync) | `server/` | `cargo run -- --port 9885` | 9885 |
+| Frontend (Vite) + `@tomic/lib`/`@tomic/react` watch | `browser/` | `pnpm start` | 6747 |
