@@ -18,7 +18,6 @@ import {
   FRONTEND_URL,
   getDevDriveSecret,
   newResource,
-  openNewSubjectWindow,
 } from './test-utils';
 
 const NOTIFICATION_ITEM = 'https://atomicdata.dev/classes/NotificationItem';
@@ -351,11 +350,19 @@ test.describe('notifications', () => {
   test('mention ResourceUpdated materializes inbox item', async ({ page }) => {
     test.slow();
 
+    await page.waitForFunction(
+      () =>
+        !!(window as Window & { __notificationEngine?: unknown })
+          .__notificationEngine,
+      null,
+      { timeout: 20_000 },
+    );
+
     const personalDrive = await resolvePersonalDrive(page);
     const myAgent = await page.evaluate(() => window.store.getAgent()?.subject);
     expect(myAgent).toBeTruthy();
 
-    await page.evaluate(
+    const created = await page.evaluate(
       async ({
         drive,
         me,
@@ -363,6 +370,8 @@ test.describe('notifications', () => {
         mentionsProp,
         nameProp,
         docClass,
+        notificationItem,
+        isAProp,
       }) => {
         const store = window.store;
         const engine = (
@@ -378,12 +387,35 @@ test.describe('notifications', () => {
           isA: docClass,
           propVals: {
             [nameProp]: 'Mention Host Doc',
-            [mentionsProp]: [me],
           },
         });
+        // validate:false — ontology fetch can lag on fresh drives.
+        await doc.set(mentionsProp, [me], false);
         await doc.set(createdByProp, 'did:ad:agent:mentionActorE2E', false);
+
+        const debug = {
+          mentions: doc.get(mentionsProp),
+          createdBy: doc.get(createdByProp),
+          me,
+        };
+
         store.notifyResourceUpdated(doc);
-        await new Promise(r => setTimeout(r, 400));
+
+        // Poll local store for a NotificationItem (engine upsert is async).
+        for (let i = 0; i < 40; i++) {
+          await new Promise(r => setTimeout(r, 250));
+
+          for (const res of store.resources.values()) {
+            if (
+              res.getClasses?.().includes(notificationItem) &&
+              res.get?.(nameProp)?.toString().includes('Mention Host Doc')
+            ) {
+              return { ok: true, debug, count: 1 };
+            }
+          }
+        }
+
+        return { ok: false, debug, count: 0 };
       },
       {
         drive: personalDrive,
@@ -392,12 +424,23 @@ test.describe('notifications', () => {
         mentionsProp: MENTIONS,
         nameProp: NAME,
         docClass: DOCUMENT,
+        notificationItem: NOTIFICATION_ITEM,
       },
     );
 
-    await page.goto(`${FRONTEND_URL}/app/notifications`);
+    expect(
+      created,
+      `mention materialization failed: ${JSON.stringify(created)}`,
+    ).toMatchObject({ ok: true });
+
+    // In-app nav keeps the same Store (full reload can race OPFS index).
+    await page.getByRole('link', { name: 'Notifications' }).click();
+    await expect(page).toHaveURL(/\/app\/notifications/);
     const item = page.getByTestId('notification-item').first();
-    await expect(item).toBeVisible({ timeout: 20_000 });
+    await expect(
+      item,
+      `created=${JSON.stringify(created)}`,
+    ).toBeVisible({ timeout: 20_000 });
     await expect(item).toContainText(/Mentioned you in Mention Host Doc/i);
     await expect(page.getByTestId('sidebar-notification-badge')).toBeVisible({
       timeout: 10_000,
@@ -443,12 +486,25 @@ test.describe('notifications', () => {
       timeout: 10_000,
     });
 
-    const page2 = await openNewSubjectWindow(
-      browser,
-      `${FRONTEND_URL}/app/notifications`,
-      secret,
+    const ctx2 = await browser.newContext();
+    const page2 = await ctx2.newPage();
+    await page2.goto(FRONTEND_URL);
+    await page2.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page2.getByLabel('Agent secret').fill(secret);
+    const continueBtn = page2.getByRole('button', { name: 'Continue' });
+
+    if (await continueBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await continueBtn.click();
+    }
+
+    // Fresh OPFS may land on connect-device; wait for agent then open inbox.
+    await page2.waitForFunction(
+      () => !!window.store?.getAgent()?.subject,
+      null,
+      { timeout: 25_000 },
     );
 
+    await page2.goto(`${FRONTEND_URL}/app/notifications`);
     await expect(page2.getByTestId('notification-item').first()).toBeVisible({
       timeout: 25_000,
     });
@@ -467,6 +523,6 @@ test.describe('notifications', () => {
       { timeout: 30_000 },
     );
 
-    await page2.context().close();
+    await ctx2.close();
   });
 });
