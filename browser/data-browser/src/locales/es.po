@@ -125,21 +125,24 @@ msgstr "<0/> Crear Nuevo Agente"
 #: src/chunks/AI/AgentConfig.tsx
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/chunks/TablePage/AggregatesDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -167,6 +170,7 @@ msgstr "Nombre del agente"
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/routes/NewDriveRoute.tsx
@@ -273,6 +277,9 @@ msgstr "Compacta automáticamente la conversación cuando los tokens de entrada 
 #: src/chunks/RTE/EditLinkForm.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
@@ -531,6 +538,7 @@ msgstr "Encabezados HTTP opcionales para enviar al conectarse a este servidor MC
 #: src/actions/resourceActions.tsx
 #: src/chunks/AI/AgentConfigItem.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/routes/EditRoute.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
@@ -1518,11 +1526,14 @@ msgstr "Texto alternativo"
 msgid "Textual Description <0/>"
 msgstr "Descripción Textual <0/>"
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 #: src/chunks/TablePage/AggregatesDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
@@ -1998,6 +2009,7 @@ msgstr "Crear nuevo recurso"
 msgid "New Resource"
 msgstr "Nuevo recurso"
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/views/FolderPage/ListView.tsx
 msgid "Title"
@@ -2357,9 +2369,9 @@ msgstr "Shortname"
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/InviteForm.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/ResourceSelector/DropdownInput.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 msgid "Create"
@@ -2375,6 +2387,7 @@ msgstr "Nuevo marcador"
 msgid "Ok"
 msgstr "Aceptar"
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
@@ -3234,7 +3247,9 @@ msgstr "Nombre corto de la propiedad"
 msgid "Property description"
 msgstr "Descripción de la propiedad"
 
+#. 0: BLOCK_KIND_LABELS[blockKind].toLowerCase()
 #. 0: resource.title
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Configure {0}"
 msgstr "Configurar {0}"
@@ -3613,6 +3628,7 @@ msgstr "Activar/desactivar código en línea"
 msgid "No alt text"
 msgstr "Sin texto alternativo"
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/Demo/SimulatedTypist.ts
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Text"
@@ -3659,12 +3675,15 @@ msgstr "Filtros de tabla"
 
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
 #: src/chunks/TablePage/TableHeading.tsx
 #: src/chunks/TablePage/TableHeading.tsx
 #: src/chunks/TablePage/TableHeading.tsx
 msgid "Drag column"
 msgstr "Arrastrar columna"
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/useTableView.ts
@@ -6162,11 +6181,13 @@ msgstr ""
 msgid "Nothing — one total"
 msgstr ""
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/TablePage/AggregatesDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 msgid "Per day"
 msgstr ""
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/TablePage/AggregatesDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 msgid "Per month"
@@ -6289,4 +6310,245 @@ msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Filter rows by a column"
+msgstr ""
+
+#~ msgid "Nothing here yet. Add a number, a chart or a table."
+#~ msgstr ""
+
+#: src/chunks/DashboardPage/DashboardPage.tsx
+msgid "This dashboard has no blocks yet."
+msgstr ""
+
+#: src/chunks/DashboardPage/DashboardBlock.tsx
+msgid "Configure"
+msgstr ""
+
+#: src/chunks/DashboardPage/DashboardBlock.tsx
+msgid "Width"
+msgstr ""
+
+#: src/chunks/DashboardPage/DashboardBlock.tsx
+msgid "Move earlier"
+msgstr ""
+
+#: src/chunks/DashboardPage/DashboardBlock.tsx
+msgid "Move later"
+msgstr ""
+
+#. 0: kind
+#: src/chunks/DashboardPage/BlockRenderer.tsx
+msgid "This block is a “{0}”, which this version can’t show."
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "What this shows"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Every row"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Rows"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Measure"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/TablePage/QuickAddFields.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Pick a column…"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Of"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "One bar per"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Each value"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Bucket"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/ViewBlock.tsx
+msgid "Pick a table to show"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/TextBlock.tsx
+msgid "Nothing written here yet"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/StatBlock.tsx
+msgid "Pick something to measure"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+msgid "Pick a number and something to group it by"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+msgid "No data yet"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+msgid "Showing the largest"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+msgid "groups"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+#: src/chunks/TablePage/rowActions.ts
+msgid "Value"
+msgstr ""
+
+#. 0: spec.label
+#: src/chunks/TablePage/RowActionHeading.tsx
+msgid "Remove the {0} button from this view. Nothing already recorded by pressing it is affected — add it back any time."
+msgstr ""
+
+#: src/chunks/TablePage/RowActionHeading.tsx
+msgid "Remove action"
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Edit action"
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Add an action"
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Does what"
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "This table has no column of the right kind for that yet."
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "To column"
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Pick an option…"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Button says"
+msgstr ""
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "Action"
+msgstr ""
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "A button on every row: \"Watered\", \"Mark done\", \"+1\"."
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+msgid "Creating table…"
+msgstr ""
+
+#: src/components/Template/ApplyTemplateDialog.tsx
+msgid "Applying template…"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Edit the add button"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add a create button"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "A button above the rows that creates one — \"Log a feed\", \"Add item\"."
+msgstr ""
+
+#. 0: tableClass.title.toLowerCase()
+#: src/chunks/TablePage/QuickAddBar.tsx
+msgid "Could not add the {0}"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Log a feed"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddDialog.tsx
+msgid "It sits above the rows and creates one. Everything else about the row is edited in the table."
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Ask for a value first"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "On for a list you name things in; off for a button you just press."
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Type into"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "What are you adding?"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Placeholder"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Nothing"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Also set"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/CreateBlock.tsx
+msgid "Pick a table to add to"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/CreateBlock.tsx
+msgid "Say what the button does"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/CreateBlock.tsx
+msgid "That table has no row class yet"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
+msgid "Dashboard"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
+msgid "Overview"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
+msgid "You add its blocks — numbers, charts, buttons, tables — on the dashboard itself."
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
+msgid "New Dashboard"
+msgstr ""
+
+#: src/chunks/DashboardPage/DashboardPage.tsx
+msgid "Nothing here yet. Add a number, a chart, a button or a table."
 msgstr ""
