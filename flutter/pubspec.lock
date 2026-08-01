@@ -25,10 +25,10 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.11.0"
-  atomic_flutter:
+  atomic_lib:
     dependency: "direct main"
     description:
-      path: "../dart/atomic_flutter"
+      path: "../dart/atomic_lib"
       relative: true
     source: path
     version: "0.1.0"
@@ -391,13 +391,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.0"
-  rust_lib_atomic_flutter:
-    dependency: transitive
-    description:
-      path: "../dart/atomic_flutter/rust_builder"
-      relative: true
-    source: path
-    version: "0.0.1"
   shared_preferences:
     dependency: "direct main"
     description:

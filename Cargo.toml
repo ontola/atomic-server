@@ -17,7 +17,7 @@ members = [
 exclude = [
   "flutter/rust",
   "integrations/localthought/syncables",
-  "dart/atomic_flutter/rust",
+  "dart/atomic_lib/rust",
 ]
 
 # Debuginfo dominates target/ size: with ~1460 deps (tauri, actix, iroh) the

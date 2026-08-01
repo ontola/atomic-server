@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import '../models/stroke_data.dart';
 import '../models/canvas_entry.dart';
 import '../gallery/canvas_store.dart';
-import 'package:atomic_flutter/atomic_flutter.dart';
+import 'package:atomic_lib/atomic_lib.dart';
 import 'canvas_painter.dart';
 import 'fan_helpers.dart';
 import 'thumbnail.dart';

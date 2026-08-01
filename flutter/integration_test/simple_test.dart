@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:atomiccanvas_flutter/main.dart';
-import 'package:atomic_flutter/atomic_flutter.dart';
+import 'package:atomic_lib/atomic_lib.dart';
 import 'package:integration_test/integration_test.dart';
 
 void main() {

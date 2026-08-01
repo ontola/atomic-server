@@ -13,8 +13,8 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   path_provider: ^2.1.5
-  atomic_flutter:
-    path: ../dart/atomic_flutter
+  atomic_lib:
+    path: ../dart/atomic_lib
   shared_preferences: ^2.3.3
 
 dev_dependencies:

@@ -23,12 +23,12 @@
 ## Architecture
 
 Canvas UI lives here. Auth, local store, sync, pairing, and drive switching come
-from [`package:atomic_flutter`](../dart/atomic_flutter/) — the reusable Atomic
+from [`package:atomic_flutter`](../dart/atomic_lib/) — the reusable Atomic
 Dart/Flutter SDK. See that package's README for the app-builder API.
 
 ```
 flutter/          → canvas app (gallery, drawing, theme)
-dart/atomic_flutter/ → Atomic SDK (Rust bridge + Dart API + reusable UI)
+dart/atomic_lib/ → Atomic SDK (Rust bridge + Dart API + reusable UI)
 ```
 
 ## Development
