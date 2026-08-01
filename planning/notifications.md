@@ -515,6 +515,8 @@ mentions/watches — still no trusted body in the push (see payload contract).
 - [x] `useDevicePushRegistration` on launch (no-ops without token; Tauri DEV stub)
 - [ ] Client: on push → sync → materialize (needs plugin token + wake delivery)
 - [ ] Cold-start tap wired from plugin launch details (queue consumer is ready)
+- Track operational secrets (APNs `.p8`, FCM service account) with hub deploy;
+  product behavior stays aligned with social-apps P2.3.
 
 ## Test plan (where tests belong)
 
