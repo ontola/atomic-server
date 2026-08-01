@@ -188,6 +188,23 @@ const AppSettings: React.FunctionComponent = () => {
               </Column>
             </SettingsSection>
             <SettingsSection
+              label='Notifications'
+              childSearchKeywords='mentions watch table collection alerts bell'
+            >
+              <Column gap='0.5rem'>
+                <p>
+                  Mentions and watched tables appear under{' '}
+                  <strong>Notifications</strong> in the sidebar (below User
+                  Settings). Read status syncs across your devices.
+                </p>
+                <p>
+                  Use <strong>Watch</strong> on a table to get alerted when rows
+                  change. Delivery channels (OS / push) arrive in a later
+                  release; the in-app inbox works now.
+                </p>
+              </Column>
+            </SettingsSection>
+            <SettingsSection
               label='Accessibility'
               childSearchKeywords='disable page transition animations view transitions motion'
             >

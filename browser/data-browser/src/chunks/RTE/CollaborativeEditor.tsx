@@ -20,7 +20,7 @@ import {
   ResourceNodeInline,
 } from './ResourceExtension/ResourceNode';
 import DragHandle from '@tiptap/extension-drag-handle-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { TiptapContextProvider } from './TiptapContext';
 import { SlashCommands, buildSuggestion } from './SlashMenu/CommandsExtension';
 import {
@@ -30,6 +30,7 @@ import {
 import type { LoroDoc } from 'loro-crdt';
 import {
   dataBrowser,
+  syncDocumentMentions,
   useCanWrite,
   useDebouncedSave,
   useResource,
@@ -84,7 +85,7 @@ export default function CollaborativeEditor({
 }: CollaborativeEditorProps): React.JSX.Element {
   const store = useStore();
   const showNewResourceUI = useNewResourceUI();
-  const [save] = useDebouncedSave(resource, 500);
+  const [debouncedSave] = useDebouncedSave(resource, 500);
   const { agent, drive } = useSettings();
   // Same deterministic per-agent color as the presence avatars, so a
   // user's cursor and their avatar match everywhere.
@@ -407,6 +408,22 @@ export default function CollaborativeEditor({
     }
   }, [editor, editorReady, isComparing, comparisonBaseline]);
 
+  // Keep the actor-side `mentions` property in sync with Agent subjects
+  // embedded via `@` before the debounced Loro body save.
+  const save = useCallback(() => {
+    void (async () => {
+      if (editor) {
+        try {
+          await syncDocumentMentions(resource, editor.getJSON());
+        } catch {
+          // Mentions are best-effort; body save still proceeds.
+        }
+      }
+
+      debouncedSave();
+    })();
+  }, [editor, resource, debouncedSave]);
+
   return (
     <IsInRTEContex value={true}>
       <TiptapContextProvider editor={editor}>
@@ -416,7 +433,8 @@ export default function CollaborativeEditor({
           </DragHandle>
           <EditorContent key='rich-editor' editor={editor}>
             <FloatingHint editor={editor}>
-              Type &apos;/&apos; for options or &apos;@&apos; for resources
+              Type &apos;/&apos; for options or &apos;@&apos; for people and
+              resources
             </FloatingHint>
             <FullBubbleMenu />
             <EditorEvents

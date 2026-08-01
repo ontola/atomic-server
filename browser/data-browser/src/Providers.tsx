@@ -31,6 +31,7 @@ import { LazyMCPProvider } from '@components/AI/MCP/LazyMCPProvider';
 import { CustomViewProvider } from '@components/CustomViewProvider';
 import { LazyAIChangesProvider } from '@components/AI/AIChanges/LazyAIChangesProvider';
 import { FollowProvider } from '@components/Presence/FollowContext';
+import { NotificationEngineProvider } from './hooks/useNotificationEngine';
 
 // Setup bugsnag for error handling, but only if there's an API key
 const ErrBoundary = window.bugsnagApiKey
@@ -91,9 +92,11 @@ export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
                                               <SkipNav />
                                               <SearchOverlayContextProvider>
                                                 <FollowProvider>
-                                                  <NavWrapper>
-                                                    {children}
-                                                  </NavWrapper>
+                                                  <NotificationEngineProvider>
+                                                    <NavWrapper>
+                                                      {children}
+                                                    </NavWrapper>
+                                                  </NotificationEngineProvider>
                                                 </FollowProvider>
                                               </SearchOverlayContextProvider>
                                             </NewResourceUIProvider>

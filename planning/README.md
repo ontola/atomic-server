@@ -58,7 +58,7 @@ Remaining work, not "this file exists."
 | [`llm-wasm-gui-plugins.md`](./llm-wasm-gui-plugins.md) | **Proposal.** Browser-built JS/TS apps with scoped Loro docs. |
 | [`personal-information-suite.md`](./personal-information-suite.md) | Exploration: contacts, calendar, email. |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
-| [`notifications.md`](./notifications.md) | **Proposal (2026-08-01).** Product notifications: mentions, watches, inbox with synced read/dismissed; in-app → OS → APNs/FCM. |
+| [`notifications.md`](./notifications.md) | **In progress (2026-08-01):** product notifications — ontology + TipTap/chat `mentions`, `NotificationEngine`, sidebar inbox + table Watch toggle shipped; OS/push still open. Actor-side mentions; synced `notificationRead`/`dismissed`. |
 | [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Supersedes `on-device-atomic-daemon.md`. |
 | [`nextgraph-interop.md`](./nextgraph-interop.md) | **Proposal.** `did:ng:` via a scheme-routed Store backend. |
 | [`s3-blob-storage.md`](./s3-blob-storage.md) | Pluggable blob backend (redb/S3/hybrid). |

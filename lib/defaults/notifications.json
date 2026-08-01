@@ -1,0 +1,220 @@
+[
+  {
+    "@id": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
+    "https://atomicdata.dev/properties/shortname": "notifications",
+    "https://atomicdata.dev/properties/description": "Product notifications: agent mentions on content, and watch subscriptions for collections / tables / queries. Mention edges are actor-side (`mentions` on the host resource); `NotificationItem`s are personal, recipient-owned inbox rows with synced read state. See planning/notifications.md.",
+    "https://atomicdata.dev/properties/classes": [
+      "https://atomicdata.dev/classes/NotificationItem",
+      "https://atomicdata.dev/classes/WatchSubscription",
+      "https://atomicdata.dev/classes/NotificationPreferences"
+    ],
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/properties/mentions",
+      "https://atomicdata.dev/properties/notificationType",
+      "https://atomicdata.dev/properties/mentionedAgent",
+      "https://atomicdata.dev/properties/watchTarget",
+      "https://atomicdata.dev/properties/watchKind",
+      "https://atomicdata.dev/properties/notificationChannels",
+      "https://atomicdata.dev/properties/mutedUntil",
+      "https://atomicdata.dev/properties/notificationEnabled",
+      "https://atomicdata.dev/properties/notificationRead",
+      "https://atomicdata.dev/properties/dismissed",
+      "https://atomicdata.dev/properties/notificationSummary",
+      "https://atomicdata.dev/properties/notificationActor",
+      "https://atomicdata.dev/properties/dedupeKey"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/NotificationItem",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "notification-item",
+    "https://atomicdata.dev/properties/description": "A personal inbox row for one notification event (mention, watch membership change, …). Lives on the recipient's personal drive. `read` and `dismissed` sync across devices. Derived and re-creatable from sources via `dedupeKey`.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/notificationType",
+      "https://atomicdata.dev/properties/about",
+      "https://atomicdata.dev/properties/dedupeKey"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/notificationActor",
+      "https://atomicdata.dev/properties/mentionedAgent",
+      "https://atomicdata.dev/properties/watchTarget",
+      "https://atomicdata.dev/properties/notificationRead",
+      "https://atomicdata.dev/properties/dismissed",
+      "https://atomicdata.dev/properties/notificationSummary",
+      "https://atomicdata.dev/properties/name"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/WatchSubscription",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "watch-subscription",
+    "https://atomicdata.dev/properties/description": "Recipient preference: alert me when this Collection, Table, or query-shaped resource changes. Owned by the recipient on their personal drive.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/watchTarget"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/watchKind",
+      "https://atomicdata.dev/properties/notificationChannels",
+      "https://atomicdata.dev/properties/mutedUntil",
+      "https://atomicdata.dev/properties/notificationEnabled",
+      "https://atomicdata.dev/properties/name"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/NotificationPreferences",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "notification-preferences",
+    "https://atomicdata.dev/properties/description": "Agent-scoped defaults for notifications (master enable, default channels, mention toggle). One per personal drive; syncs across devices.",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/notificationEnabled",
+      "https://atomicdata.dev/properties/notificationChannels",
+      "https://atomicdata.dev/properties/name"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mentions",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "mentions",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/description": "Agents mentioned in this resource's content (document embeds, chat body, …). Actor-side edge written at save time; recipients discover via reverse query or live ResourceUpdated."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/notificationType",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "notification-type",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Kind of notification: `mention`, `watch-membership`, `watch-content`, or later types (`invite`, `fork`, …)."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mentionedAgent",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "mentioned-agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/description": "For mention notifications: the agent DID that was tagged."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/watchTarget",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "watch-target",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The Collection, Table, or saved query being watched (on WatchSubscription), or the watch that fired (on NotificationItem)."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/watchKind",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "watch-kind",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "What to watch for: `membership` (row enter/leave), `content` (member props changed), or `both`."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/notificationChannels",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "notification-channels",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Delivery surfaces as a JSON string array, e.g. `[\"inApp\",\"os\",\"push\"]`."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mutedUntil",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "muted-until",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "Do not surface notifications for this watch (or globally) until this timestamp."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/notificationEnabled",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "notification-enabled",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "Whether this watch or global notification prefs are enabled."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/notificationRead",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "notification-read",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "Whether the recipient has marked this NotificationItem as read. Syncs across devices. Named separately from the ACL `read` property."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/dismissed",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "dismissed",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "Soft-hide this NotificationItem without destroying it. Syncs across devices."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/notificationSummary",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "notification-summary",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Short renderable line for the notification center / OS banner. Optional cache; UI may regenerate."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/notificationActor",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "notification-actor",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/description": "Who caused this notification (usually `createdBy` / signer of the source resource)."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/dedupeKey",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "dedupe-key",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Idempotency key for materializing NotificationItems: typically `type|about|actor|mentionedAgent|watchTarget`. Reverse-queryable so re-materialization upserts instead of duplicating."
+  }
+]

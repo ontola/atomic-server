@@ -1,11 +1,16 @@
 # Notifications (mentions + watch subscriptions)
 
-> Status: **Proposal (2026-08-01).** Design for in-app / desktop / (later) push
-> notifications in the data-browser and Tauri app. Scope of this doc: **mentions**
+> Status: **In progress (2026-08-01).** Design + initial implementation for
+> in-app notifications in the data-browser (and later Tauri). Scope: **mentions**
 > of agents, and **watch settings** for updated queries / collections / tables.
 > Complements [`social-apps.md`](./social-apps.md) P2.3 (push as hint-to-sync) and
 > [`authorization-sync.md`](./authorization-sync.md) (inbox reserved; actor-side
 > social preferred).
+>
+> **Shipped so far:** ontology (`lib/defaults/notifications.json`), TipTap /
+> chat `mentions` write path, `NotificationEngine`, sidebar entry +
+> `/app/notifications` center, table Watch toggle, App Settings blurb. OS
+> notifications and push wake are still Phase 4–5.
 
 ## Problem
 
@@ -90,7 +95,7 @@ A personal, recipient-owned resource under e.g. `{personalDrive}/notifications/`
 | `actor` | atomicUrl | Who caused it (`createdBy` / signer of source) |
 | `mentions` / `mentionedAgent` | atomicUrl | For mentions: the agent DID that was tagged |
 | `watchTarget` | atomicUrl | For watches: Collection / Table / WatchSubscription subject |
-| `read` | boolean | Inbox UI state |
+| `notificationRead` | boolean | Inbox UI state (not ACL `read`) |
 | `dismissed` | boolean | Soft-hide without destroy |
 | `createdAt` | timestamp | Ordering |
 | `summary` | string | Short renderable line (optional cache; UI can regenerate) |
@@ -456,32 +461,35 @@ mentions/watches — still no trusted body in the push (see payload contract).
 - [x] Constraints mapped from auth-sync / social-apps / subscriptions
 - [x] Sync `read` / `dismissed` on personal-drive `NotificationItem`s
 - [x] iOS/Android: local plugin vs APNs/FCM push split recorded
+- [x] UI entry: sidebar App menu below User Settings → `/app/notifications`
 - [ ] Product sign-off on: actor-side `mentions` property, client-side watch
       matching, push payload = wake-only
 
 ### Phase 1 — Ontology + mention authoring
 
-- [ ] Add `mentions`, `NotificationItem`, `WatchSubscription`,
+- [x] Add `mentions`, `NotificationItem`, `WatchSubscription`,
       `NotificationPreferences` to defaults
-- [ ] TipTap: agent-prioritized `@`; write `mentions` on save (docs + chat)
-- [ ] Unit tests: extract mentions from fixture docs; reverse query finds them
+- [x] TipTap: agent-prioritized `@`; write `mentions` on save (docs + chat)
+- [x] Unit tests: extract mentions from fixture docs
+- [ ] Reverse-query integration test (mentions ∋ agent)
 
 ### Phase 2 — In-app engine + center (browser)
 
-- [ ] `NotificationEngine` materializes mention items from `ResourceUpdated`
-- [ ] Sidebar `AppMenu` item below User Settings + unread badge
-- [ ] `/app/notifications` center; `markRead` / `dismiss` commit to personal drive
+- [x] `NotificationEngine` materializes mention items from `ResourceUpdated`
+- [x] Sidebar `AppMenu` item below User Settings + unread badge
+- [x] `/app/notifications` center; `markRead` / `dismiss` commit to personal drive
 - [ ] Multi-device: mark read on A → unread clears on B after sync (e2e or unit+)
-- [ ] App Settings → Notifications prefs (mention toggles)
+- [x] App Settings → Notifications section (pointer to inbox / watch)
 - [ ] E2E: A mentions B in a shared doc → B sees unread item (two contexts /
       `getDevDriveSecret` pattern)
 
 ### Phase 3 — Watch subscriptions
 
-- [ ] Toggle on Table / Collection → `WatchSubscription`
-- [ ] Engine: membership + coalesced content events
-- [ ] Settings list + mute/channels
+- [x] Toggle on Table → `WatchSubscription`
+- [x] Engine: membership + coalesced content events
+- [ ] Settings list + mute/channels UI
 - [ ] E2E: watch table → other agent adds row → notification
+- [ ] Watch toggle on Collection views
 
 ### Phase 4 — Local OS notifications (browser + Tauri desktop/mobile)
 

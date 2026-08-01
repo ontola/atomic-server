@@ -31,6 +31,8 @@ export interface SideBarMenuItemProps extends AtomicLinkProps {
   helper?: string;
   icon?: React.ReactNode;
   disabled?: boolean;
+  /** Optional count badge (e.g. unread notifications). */
+  badge?: number;
   /** Is called when clicking on the item. Used for closing the menu. */
   onClick?: () => void;
 }
@@ -39,6 +41,7 @@ export function SideBarMenuItem({
   helper,
   label,
   icon,
+  badge,
   path,
   href,
   subject,
@@ -58,10 +61,28 @@ export function SideBarMenuItem({
       >
         {icon && <SideBarMenuRowIcon>{icon}</SideBarMenuRowIcon>}
         <SideBarMenuRowLabel>{label}</SideBarMenuRowLabel>
+        {typeof badge === 'number' && badge > 0 && (
+          <SideBarMenuBadge data-testid='sidebar-notification-badge'>
+            {badge > 99 ? '99+' : badge}
+          </SideBarMenuBadge>
+        )}
       </SideBarMenuRow>
     </SideBarMenuItemLink>
   );
 }
+
+const SideBarMenuBadge = styled.span`
+  flex-shrink: 0;
+  margin-left: 0.4rem;
+  min-width: 1.25rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 1em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: center;
+  background: ${p => p.theme.colors.main};
+  color: ${p => p.theme.colors.bg};
+`;
 
 /** Icon column for APP menu rows and Shared with me (matches tree LeadingSlot). */
 export const SideBarMenuRowIcon = styled.span`

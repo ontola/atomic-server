@@ -10,6 +10,7 @@ import { TableExportDialog } from './TableExportDialog';
 import { TableResource } from './TableResource';
 import { useCustomContextItems } from '@components/ResourceContextMenu/CustomContextItemsContext';
 import { DIVIDER } from '@components/Dropdown';
+import { WatchToggle } from '@components/WatchToggle';
 
 export function TablePage({ resource }: ResourcePageProps): JSX.Element {
   const titleId = useId();
@@ -52,13 +53,14 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
       <ResourceCoverImage resource={resource} />
       <BoundedHeightContainer>
         <Column>
-          <FlexRow justify='space-between'>
+          <FlexRow justify='space-between' center>
             <EditableTitle
               resource={resource}
               id={titleId}
               onCommit={focusTable}
               withDecorations
             />
+            <WatchToggle resource={resource} />
           </FlexRow>
           <TableResource resource={resource} />
         </Column>
