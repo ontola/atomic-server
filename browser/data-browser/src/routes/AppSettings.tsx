@@ -32,6 +32,7 @@ import {
   type OsNotificationPermission,
 } from '../helpers/osNotifications';
 import { isRunningInTauri } from '../helpers/tauri';
+import { WatchesList } from '../components/WatchesList';
 
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
@@ -195,7 +196,7 @@ const AppSettings: React.FunctionComponent = () => {
             </SettingsSection>
             <SettingsSection
               label='Notifications'
-              childSearchKeywords='mentions watch table collection alerts bell os desktop push permission'
+              childSearchKeywords='mentions watch table collection alerts bell os desktop push permission mute'
             >
               <Column gap='0.5rem'>
                 <p>
@@ -204,13 +205,18 @@ const AppSettings: React.FunctionComponent = () => {
                   Settings). Read status syncs across your devices.
                 </p>
                 <p>
-                  Use <strong>Watch</strong> on a table to get alerted when rows
-                  change. When this tab or window is in the background, alerts
-                  can also show as {isRunningInTauri() ? 'system' : 'browser'}{' '}
-                  notifications. Push wake when the app is closed is not wired
-                  yet (Android/iOS need FCM/APNs later).
+                  Use <strong>Watch</strong> on a table or collection to get
+                  alerted when rows change. When this tab or window is in the
+                  background, alerts can also show as{' '}
+                  {isRunningInTauri() ? 'system' : 'browser'} notifications.
+                  Push wake when the app is closed is not wired yet
+                  (Android/iOS need FCM/APNs later).
                 </p>
                 <OsNotificationPermissionRow />
+                <div>
+                  <strong>Your watches</strong>
+                  <WatchesList />
+                </div>
               </Column>
             </SettingsSection>
             <SettingsSection

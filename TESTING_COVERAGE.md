@@ -143,13 +143,17 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Seeded NotificationItem appears with unread badge | flow | `notifications.spec.ts` |
 | Mark all read clears unread styling | flow | `notifications.spec.ts` |
 | Table Watch toggle → Watching | flow | `notifications.spec.ts` |
+| Collection Watch toggle | flow | same `WatchToggle` on `CollectionPage` |
+| Watch → simulated other-agent row → inbox | flow | `notifications.spec.ts` (engine via `__notificationEngine`) |
+| Settings watches list (mute / remove) | flow | `WatchesList` in App Settings |
 | OS notification id hash + surface heuristics | unit | `osNotifications.test.ts` |
 | Local OS banner (browser / Tauri) | flow | manual / desktop smoke — Phase 4 wired |
+| DevicePushToken wake payload contract | unit | `devicePushToken.test.ts` + `push_wake` Rust tests |
+| Cold-start push tap queue | unit | `pushWakeTap.test.ts` |
 | Mention → NotificationItem materialization (engine) | glue | **gap** — unit with mock store |
 | A mentions B → B sees unread (two browser contexts) | flow | **gap** — e2e |
-| Watch table → row add → notification | flow | **gap** — e2e |
 | Mark read on A clears badge on B | flow | **gap** — e2e / sync |
-| OS / APNs / FCM delivery | flow | **gap** — Phase 5 (push); Phase 4 local OS shipped |
+| OS / APNs / FCM delivery | flow | **gap** — Phase 5 transport (ontology + wake helpers shipped) |
 
 ---
 

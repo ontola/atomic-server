@@ -9,11 +9,13 @@
 >
 > **Shipped so far:** ontology (`lib/defaults/notifications.json`), TipTap /
 > chat `mentions` write path, `NotificationEngine`, sidebar entry +
-> `/app/notifications` center, table Watch toggle, App Settings blurb,
-> Playwright e2e for inbox / mark-read / Watch, **Phase 4 local OS
-> notifications** (Web Notification API + `tauri-plugin-notification`,
-> permission on Watch/Settings, toast when focused). Remote push wake
-> (APNs/FCM / web-push) is still Phase 5.
+> `/app/notifications` center, table **and collection** Watch toggle,
+> Settings watches list, App Settings blurb + OS permission,
+> Playwright e2e for inbox / mark-read / Watch / watch→item,
+> **Phase 4 local OS notifications** (Web Notification API +
+> `tauri-plugin-notification`), **Phase 5 scaffold** (`DevicePushToken`
+> ontology, `registerDevicePushToken`, hub `push_wake` helpers, cold-start
+> tap queue). Live APNs/FCM transport still open.
 
 ## Problem
 
@@ -490,9 +492,9 @@ mentions/watches — still no trusted body in the push (see payload contract).
 
 - [x] Toggle on Table → `WatchSubscription`
 - [x] Engine: membership + coalesced content events
-- [ ] Settings list + mute/channels UI
-- [ ] E2E: watch table → other agent adds row → notification
-- [ ] Watch toggle on Collection views
+- [x] Settings list + mute/remove UI (per-channel picker still deferred)
+- [x] E2E: watch table → other agent adds row → notification
+- [x] Watch toggle on Collection views
 
 ### Phase 4 — Local OS notifications (browser + Tauri desktop/mobile)
 
@@ -506,10 +508,11 @@ mentions/watches — still no trusted body in the push (see payload contract).
 ### Phase 5 — Remote push wake (iOS APNs + Android FCM + optional web-push)
 
 - [ ] Choose/integrate Tauri push plugin; iOS entitlements + Android Firebase
-- [ ] `DevicePushToken` register/refresh on launch
-- [ ] Hub: commit_monitor match → wake fan-out (no trusted body)
-- [ ] Client: on push → sync → materialize → suppress if already read
-- [ ] Cold-start tap queued until JS listeners arm (plugin requirement)
+- [x] `DevicePushToken` ontology + register/refresh helper (client; call on launch when token exists)
+- [x] Hub: wake payload + mention-match helpers (`server/src/push_wake.rs`); commit_monitor hook point documented — provider fan-out still TODO
+- [x] Client: suppress-if-read helper + cold-start tap queue (`pushWakeTap.ts`)
+- [ ] Client: on push → sync → materialize → suppress if already read (needs plugin)
+- [ ] Cold-start tap wired from plugin launch details
 - Track operational secrets (APNs `.p8`, FCM service account) with hub deploy;
   product behavior stays aligned with social-apps P2.3.
 

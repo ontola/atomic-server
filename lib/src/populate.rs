@@ -404,6 +404,14 @@ mod notifications_populate_tests {
             store.has_stored_resource(&"https://atomicdata.dev/classes/WatchSubscription".into()),
             "WatchSubscription class missing after populate"
         );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/classes/DevicePushToken".into()),
+            "DevicePushToken class missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/properties/pushToken".into()),
+            "pushToken property missing after populate"
+        );
         let class = store
             .get_class("https://atomicdata.dev/classes/NotificationItem")
             .await

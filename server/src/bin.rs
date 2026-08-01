@@ -19,6 +19,7 @@ mod jsonerrors;
 mod loro_sync_broadcaster;
 mod metrics;
 pub mod plugins;
+mod push_wake;
 mod routes;
 pub mod serve;
 pub mod vector_search;

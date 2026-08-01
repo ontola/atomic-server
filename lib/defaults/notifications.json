@@ -10,7 +10,8 @@
     "https://atomicdata.dev/properties/classes": [
       "https://atomicdata.dev/classes/NotificationItem",
       "https://atomicdata.dev/classes/WatchSubscription",
-      "https://atomicdata.dev/classes/NotificationPreferences"
+      "https://atomicdata.dev/classes/NotificationPreferences",
+      "https://atomicdata.dev/classes/DevicePushToken"
     ],
     "https://atomicdata.dev/properties/properties": [
       "https://atomicdata.dev/properties/mentions",
@@ -25,7 +26,12 @@
       "https://atomicdata.dev/properties/dismissed",
       "https://atomicdata.dev/properties/notificationSummary",
       "https://atomicdata.dev/properties/notificationActor",
-      "https://atomicdata.dev/properties/dedupeKey"
+      "https://atomicdata.dev/properties/dedupeKey",
+      "https://atomicdata.dev/properties/pushPlatform",
+      "https://atomicdata.dev/properties/pushToken",
+      "https://atomicdata.dev/properties/pushAppId",
+      "https://atomicdata.dev/properties/pushTokenUpdatedAt",
+      "https://atomicdata.dev/properties/devicePushAgent"
     ]
   },
   {
@@ -81,6 +87,25 @@
     "https://atomicdata.dev/properties/recommends": [
       "https://atomicdata.dev/properties/notificationEnabled",
       "https://atomicdata.dev/properties/notificationChannels",
+      "https://atomicdata.dev/properties/name"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/DevicePushToken",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "device-push-token",
+    "https://atomicdata.dev/properties/description": "Per-install push registration for remote wake (APNs / FCM / web-push). Lives on the agent's personal drive (or hub-replicated registry). Tokens rotate; upsert on every launch. Hub fan-out sends wake-only payloads — see planning/notifications.md Phase 5.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/devicePushAgent",
+      "https://atomicdata.dev/properties/pushPlatform",
+      "https://atomicdata.dev/properties/pushToken"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/pushAppId",
+      "https://atomicdata.dev/properties/pushTokenUpdatedAt",
       "https://atomicdata.dev/properties/name"
     ]
   },
@@ -216,5 +241,56 @@
     "https://atomicdata.dev/properties/shortname": "dedupe-key",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
     "https://atomicdata.dev/properties/description": "Idempotency key for materializing NotificationItems: typically `type|about|actor|mentionedAgent|watchTarget`. Reverse-queryable so re-materialization upserts instead of duplicating."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/devicePushAgent",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "device-push-agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/description": "Owner agent of this DevicePushToken (who should receive wakes for this install)."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/pushPlatform",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "push-platform",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Install platform for push delivery: `ios`, `android`, `web`, or `desktop`."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/pushToken",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "push-token",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "APNs device token (hex) or FCM / web-push registration token. Rotates; re-register on launch."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/pushAppId",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "push-app-id",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Bundle id / package name / web origin used to scope APNs topic or FCM sender."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/pushTokenUpdatedAt",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "push-token-updated-at",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "When this push token was last registered or refreshed."
   }
 ]

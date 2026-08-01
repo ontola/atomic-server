@@ -37,6 +37,11 @@ export interface NotificationEngineOptions {
     store: Store,
     personalDrive: string,
   ) => Promise<string>;
+  /**
+   * Watch-event coalesce window (ms). Default 2000. Tests may pass `0` (or a
+   * small value) and call {@link NotificationEngine.flushPendingWatches}.
+   */
+  watchCoalesceMs?: number;
 }
 
 type Listener = () => void;
@@ -61,6 +66,7 @@ export class NotificationEngine {
   private readonly agentSubject: string;
   private readonly personalDrive: string;
   private readonly getNotificationsFolder: NotificationEngineOptions['getNotificationsFolder'];
+  private readonly watchCoalesceMs: number;
 
   private unsubUpdated?: () => void;
   private unsubRemoved?: () => void;
@@ -100,6 +106,7 @@ export class NotificationEngine {
     this.agentSubject = opts.agentSubject;
     this.personalDrive = opts.personalDrive;
     this.getNotificationsFolder = opts.getNotificationsFolder;
+    this.watchCoalesceMs = opts.watchCoalesceMs ?? 2000;
   }
 
   /** Wire OS / toast presentation without coupling the engine to UI. */
@@ -164,6 +171,24 @@ export class NotificationEngine {
 
     this.watchCoalesce.clear();
     this.started = false;
+  }
+
+  /**
+   * Flush coalesced watch events immediately (clears timers). Used by tests
+   * and e2e so they need not wait the full coalesce window.
+   */
+  async flushPendingWatches(): Promise<void> {
+    const keys = [...this.watchCoalesce.keys()];
+
+    for (const key of keys) {
+      const pending = this.watchCoalesce.get(key);
+
+      if (pending) {
+        clearTimeout(pending.timer);
+      }
+
+      await this.flushWatchCoalesce(key);
+    }
   }
 
   /** Refresh WatchSubscription cache from the personal drive. */
@@ -422,14 +447,14 @@ export class NotificationEngine {
       clearTimeout(existing.timer);
       existing.timer = setTimeout(() => {
         void this.flushWatchCoalesce(coalesceKey);
-      }, 2000);
+      }, this.watchCoalesceMs);
 
       return;
     }
 
     const timer = setTimeout(() => {
       void this.flushWatchCoalesce(coalesceKey);
-    }, 2000);
+    }, this.watchCoalesceMs);
 
     this.watchCoalesce.set(coalesceKey, {
       count: 1,
@@ -470,7 +495,8 @@ export class NotificationEngine {
       actor,
     );
     // Time-bucket so coalesced groups don't collapse forever into one item.
-    const bucketKey = `${baseKey}|${Math.floor(Date.now() / 2000)}`;
+    const bucketMs = Math.max(this.watchCoalesceMs, 1);
+    const bucketKey = `${baseKey}|${Math.floor(Date.now() / bucketMs)}`;
 
     await this.upsertItem({
       dedupeKey: bucketKey,

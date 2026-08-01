@@ -20,6 +20,8 @@ mod jsonerrors;
 mod loro_sync_broadcaster;
 mod metrics;
 pub mod plugins;
+/// Phase 5 push wake helpers (payload contract + mention match). Transport TBD.
+pub mod push_wake;
 pub mod routes;
 pub mod serve;
 pub mod vector_search;

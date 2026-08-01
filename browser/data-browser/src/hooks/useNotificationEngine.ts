@@ -69,6 +69,11 @@ export function NotificationEngineProvider({
         return;
       }
 
+      // E2E / console: flushPendingWatches(), inspect watches.
+      (
+        window as Window & { __notificationEngine?: NotificationEngine }
+      ).__notificationEngine = active;
+
       setEngine(active);
     }
 
@@ -77,6 +82,13 @@ export function NotificationEngineProvider({
     return () => {
       cancelled = true;
       active?.stop();
+
+      const w = window as Window & { __notificationEngine?: NotificationEngine };
+
+      if (w.__notificationEngine === active) {
+        delete w.__notificationEngine;
+      }
+
       setEngine(null);
     };
   }, [store, agent]);

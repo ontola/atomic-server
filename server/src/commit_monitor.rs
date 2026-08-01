@@ -771,6 +771,10 @@ impl Handler<CommitMessage> for CommitMonitor {
         // per-connection.
         let frame = encode_commit_frame(&self.store, &msg);
 
+        // Phase 5 hook point: after frame fan-out, match mentions / watches →
+        // DevicePushToken lookup → wake-only push (see `crate::push_wake`).
+        // Not wired to a provider yet — helpers + unit tests land first.
+
         if let Some(frame) = frame.as_ref() {
             // Per-resource subscribers
             if let Some(subscribers) = self.subscriptions.get(&target_subject) {
