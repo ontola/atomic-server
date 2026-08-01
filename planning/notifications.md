@@ -213,12 +213,20 @@ No server special-case. Works offline once OPFS has the commit (local-first).
 
 ### Surfaces
 
-- **In-app:** bell → notification center (unread count); toast when unfocused
-  panel (reuse `MeetingMessageToaster` pattern: skip own actions, skip if
-  already viewing the subject).
+- **In-app entry (decided):** sidebar **App** menu, directly **below User
+  Settings** (`AppMenu` in `browser/data-browser/src/components/SideBar/AppMenu.tsx`).
+  Order becomes: User Settings → **Notifications** → Settings → Sync → About.
+  Row shows an unread count badge (query of personal-drive `NotificationItem`
+  where `read != true`). Click opens the notification center route (not a
+  popover-only UI — full page/panel so mark-read / filters have room).
+- **Prefs** stay under App Settings → Notifications section (channels, DND,
+  watches list) — the sidebar row is the inbox, not the preference form.
+- **Toast** when the subject isn't already visible (reuse
+  `MeetingMessageToaster` pattern: skip own actions).
 - **Desktop / browser OS:** when document hidden or Tauri window unfocused,
   fire OS notification via Notification API / `tauri-plugin-notification`.
-- Click → navigate to `about` (doc deep-link / chat message scroll).
+- Click on an item / OS banner → navigate to `about` (doc deep-link / chat
+  message scroll).
 
 ## Watch subscriptions — queries / collections / tables
 
@@ -255,14 +263,14 @@ Aligns with unify-subscription work; do not hard-depend on the refactor.
 
 ### Settings UI
 
-New **Notifications** section in `AppSettings` (searchable `SettingsGroup`
-pattern already used there):
+Two places (don't conflate):
 
-- Mentions: on/off, channels
-- Watches: list of `WatchSubscription`s with enable / mute / kind / channels
-- Quiet hours / DND
-- Desktop & browser permission status + request button
-- (Later) Push device list
+1. **Sidebar → Notifications** (below User Settings) — the **center / inbox**:
+   list of `NotificationItem`s, mark read / dismiss, jump to `about`. Route
+   e.g. `/app/notifications` (`paths.notifications`).
+2. **App Settings → Notifications** section (searchable `SettingsGroup`) —
+   **preferences**: mentions on/off + channels, watches list (mute/kind/
+   channels), quiet hours / DND, OS/push permission status, (later) devices.
 
 Per-resource toggle also on Table / Collection toolbars (writes the same
 `WatchSubscription`).
@@ -461,9 +469,10 @@ mentions/watches — still no trusted body in the push (see payload contract).
 ### Phase 2 — In-app engine + center (browser)
 
 - [ ] `NotificationEngine` materializes mention items from `ResourceUpdated`
-- [ ] Bell + notification center; `markRead` / `dismiss` commit to personal drive
+- [ ] Sidebar `AppMenu` item below User Settings + unread badge
+- [ ] `/app/notifications` center; `markRead` / `dismiss` commit to personal drive
 - [ ] Multi-device: mark read on A → unread clears on B after sync (e2e or unit+)
-- [ ] Settings section: mention toggles
+- [ ] App Settings → Notifications prefs (mention toggles)
 - [ ] E2E: A mentions B in a shared doc → B sees unread item (two contexts /
       `getDevDriveSecret` pattern)
 
@@ -550,6 +559,9 @@ Per [`TESTING_COVERAGE.md`](../TESTING_COVERAGE.md) preference for cheaper layer
 - Drive WS: `browser/lib/src/websockets.ts`
 - Server query sub (optional assist): `server/src/commit_monitor.rs`,
   `SUBSCRIBE_QUERY` in `web_sockets.rs`
-- Settings chrome: `routes/AppSettings.tsx`, `components/Settings/`
+- **Sidebar entry:** `components/SideBar/AppMenu.tsx` (insert below User
+  Settings); path in `routes/paths.tsx`; new center route beside
+  `SettingsAgent.tsx` / `AppSettings.tsx`
+- Prefs chrome: `routes/AppSettings.tsx`, `components/Settings/`
 - Toast precedent: `MeetingMessageToaster.tsx`
 - Desktop: `desktop/Cargo.toml`, `desktop/src/lib.rs` (plugin init)
