@@ -20,9 +20,20 @@
   - Reset view /zoom scrubber (tap to fit all content, or tap again to go back to previous view)
   - Place image
 
+## Architecture
+
+Canvas UI lives here. Auth, local store, sync, pairing, and drive switching come
+from [`package:atomic_flutter`](../dart/atomic_flutter/) — the reusable Atomic
+Dart/Flutter SDK. See that package's README for the app-builder API.
+
+```
+flutter/          → canvas app (gallery, drawing, theme)
+dart/atomic_flutter/ → Atomic SDK (Rust bridge + Dart API + reusable UI)
+```
+
 ## Development
 
-This project uses [mise](https://mise.jdx.dev/) to manage the Flutter SDK (Flutter 3.44+, Dart 3.12 — see `.mise.toml`).
+This project uses [mise](https://mise.jdx.dev/) to manage the Flutter SDK (Flutter 3.44+ — see `mise.toml`).
 
 A `Makefile` wraps `dev.sh` which sets up a FIFO pipe so you can trigger hot reload **from any terminal tab** — no need to switch focus or type into the running process.
 
@@ -88,7 +99,3 @@ NodeIDs are persistent (stored in the local DB), so a QR code stays valid across
 ### Stylus / pen input
 
 When a stylus or pen is detected, **finger touches pan the canvas** instead of drawing. This matches the behaviour of the Kotlin version: use the pen to draw, fingers to navigate.
-
-## Architecture
-
-The Dart client code in `lib/atomic/` (`AtomicClient`, `session.dart`, FRB bridge) is not canvas-specific — it's a general-purpose Atomic Data SDK wrapping `atomic_lib` via `flutter_rust_bridge`. Once the API stabilizes, it should be extracted to `atomic-server/dart/` (or `sdk/dart/`) as a reusable Dart package, keeping this app as a thin UI layer on top.

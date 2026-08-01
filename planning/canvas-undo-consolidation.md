@@ -67,11 +67,11 @@ Going with bulk replace keeps parity with the JS API and is simpler. Add the FFI
 
 - Delete `saveFullStrokeState`. Callers updated above.
 
-**`flutter/lib/atomic/atomic_client.dart`**
+**`dart/atomic_flutter/lib/src/atomic_client.dart`**
 
 - Delete the public `AtomicClient.setStrokes`. Wire `checkoutCanvasVersion` to a new dedicated FFI (`revert_canvas_to_version` or similar) so it no longer rides on `set_strokes`.
 
-**`flutter/rust/src/api/simple.rs`**
+**`dart/atomic_flutter/rust/src/api/simple.rs`**
 
 - Delete the array-arg branch of `set_strokes`. The function becomes a thin wrapper around the `checkout_version_id` payload — at which point it should be renamed `revert_canvas_to_version` and take `Vec<u8>` directly (regenerate FRB bindings).
 - Add `replace_canvas_strokes(subject, items: Vec<serde_json::Value>)` that calls a new `resource.replace_list_items(CANVAS_STROKE_DATA, items)` on the lib side.

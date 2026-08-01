@@ -32,4 +32,5 @@ In the "old" HTTP based Atomic(Server) UX, an app developer had to:
 
 - [ ] Make tutorial describing the future situation (I think this is where we should start, so we design from the perspective of a developer)
 - [ ] Schema creation in-code. See [`json-schema-code-first.md`](./json-schema-code-first.md).
-- [ ] Update APIs
+- [x] Extract `dart/atomic_flutter` package (canvas is first consumer). See [`atomic-flutter-sdk.md`](./atomic-flutter-sdk.md).
+- [ ] Update APIs / generic query·mutate·blobs on the bridge

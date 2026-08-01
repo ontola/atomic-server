@@ -2,7 +2,7 @@
  * Server URLs as people type and read them.
  *
  * Shared by every surface that takes a server from someone or shows one back.
- * Kept in step with `flutter/lib/atomic/server_url.dart`: the same URL typed
+ * Kept in step with `dart/atomic_flutter/lib/src/server_url.dart`: the same URL typed
  * into either client should mean the same thing.
  */
 

@@ -61,7 +61,8 @@ Atomic Server is a graph database with real-time sync, built on **Loro CRDT** fo
 - **`@tomic/lib`** (`browser/lib/`) — TypeScript client library, powering the other JS projects
 - **`@tomic/react`** (`browser/react/`) — React hooks.
 - **`data-browser`** (`browser/data-browser/`) — The web app (React + TipTap + Loro), feels similar to notion. See the related AGENTS.md
-- **`flutter/`** — Cross-platform canvas app (Android/iOS/Web). Uses `flutter_rust_bridge` to call `atomic_lib`. See `flutter/README.md` and `flutter/AGENTS.md`.
+- **`dart/atomic_flutter/`** — Reusable Flutter/Dart Atomic SDK (auth, sync, pairing UI, workspaces) over `atomic_lib` via `flutter_rust_bridge`. See `dart/atomic_flutter/README.md` and `planning/atomic-flutter-sdk.md`.
+- **`flutter/`** — Atomic Canvas app (Android/iOS/Web). Depends on `atomic_flutter` for Atomic plumbing; keeps drawing/gallery UI. See `flutter/README.md` and `flutter/AGENTS.md`.
 
 ### Data model
 
@@ -227,7 +228,7 @@ cargo test -p atomic_lib --features "iroh,db-redb" --lib -- sync::iroh_e2e -- --
 cargo test -p atomic_lib --features db-redb,iroh --test identity_durability  # identity/peers survive an unclean kill
 cargo test -p atomic_lib --features db-redb,iroh --test cross_process_sync   # two OS processes reconcile over Iroh
 cargo test -p atomic-server --test it iroh_pairing  # two servers pair via POST /iroh-sync
-cargo test --manifest-path flutter/rust/Cargo.toml  # Flutter bridge (workspace-excluded, needs --manifest-path)
+cargo test --manifest-path dart/atomic_flutter/rust/Cargo.toml  # Flutter bridge (workspace-excluded, needs --manifest-path)
 cd browser/lib && pnpm test                      # 29 JS tests
 cd browser && pnpm run -r build                  # Full workspace build
 cd browser && pnpm run test-e2e                  # Full e2e test

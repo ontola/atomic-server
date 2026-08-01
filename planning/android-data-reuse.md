@@ -28,11 +28,11 @@ The canvas app is representative:
   `AtomicClient.openDb(dir.path)`: the store is a redb file in the app's
   private sandbox. No other app can ever reach it (Android sandboxing), and
   redb is single-writer anyway (exclusive lock).
-- `flutter/rust/src/api/simple.rs` — the FRB surface (~60 functions in 7
+- `dart/atomic_flutter/rust/src/api/simple.rs` — the FRB surface (~60 functions in 7
   groups: db, agent, drive, resource, canvas, history, peer/sync). Canvas
   domain logic (stroke CRUD, the Loro editing-session cache `CANVAS_CACHE`,
   undo/redo) lives in the same file as the generic store API.
-- `flutter/lib/atomic/atomic_client.dart` — a static-method Dart facade that
+- `dart/atomic_flutter/lib/src/atomic_client.dart` — a static-method Dart facade that
   calls the FRB bindings directly. There is no seam where a second (remote)
   backend could plug in.
 - Sync is per-app: each app starts its own Iroh endpoint (`start_peer`), has
@@ -154,7 +154,7 @@ state is therefore a *higher* privilege than read. Tiers:
 
 ### 1. Rust: split the generic API out of the canvas crate
 
-`flutter/rust/src/api/simple.rs` mixes the generic store SDK with canvas
+`dart/atomic_flutter/rust/src/api/simple.rs` mixes the generic store SDK with canvas
 domain logic. Extract the generic part (db/agent/drive/resource/history/sync
 groups) into a crate the host can bind from Kotlin — either a new `atomic-ffi`
 crate or a feature of `atomic_lib` (this is the `atomic-lib-runtime.md`
@@ -336,4 +336,4 @@ transport abstraction across them.
   rights-based enforcement ([`authorization-sync.md`](./authorization-sync.md)),
   and host-side signing ([`sign-at-drain.md`](./sign-at-drain.md)).
 - The drive replication used for handover is the one canvas already ships in
-  `sync_drive_to_server` (`flutter/rust/src/api/simple.rs`).
+  `sync_drive_to_server` (`dart/atomic_flutter/rust/src/api/simple.rs`).

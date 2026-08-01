@@ -88,13 +88,13 @@ Keep these in step. A change to one is usually a change to its twin.
 
 | Concern | Browser | Flutter |
 | --- | --- | --- |
-| sync screen | `data-browser/src/routes/SyncRoute.tsx` | `flutter/lib/atomic/widgets/server_settings_section.dart` |
-| settings shell | (same route) | `flutter/lib/atomic/widgets/agent_settings_dialog.dart` |
-| onboarding, data elsewhere | `data-browser/src/views/getting-started/ConnectDeviceStep.tsx` | `flutter/lib/screens/login_screen.dart` |
-| pairing code, show / scan | `components/PairingCode.tsx`, `ConnectToDeviceForm.tsx` | `flutter/lib/screens/pair_screen.dart` |
+| sync screen | `data-browser/src/routes/SyncRoute.tsx` | `dart/atomic_flutter/lib/src/ui/server_settings_section.dart` |
+| settings shell | (same route) | `dart/atomic_flutter/lib/src/ui/agent_settings_dialog.dart` |
+| onboarding, data elsewhere | `data-browser/src/views/getting-started/ConnectDeviceStep.tsx` | `dart/atomic_flutter/lib/src/ui/login_screen.dart` |
+| pairing code, show / scan | `components/PairingCode.tsx`, `ConnectToDeviceForm.tsx` | `dart/atomic_flutter/lib/src/ui/pair_screen.dart` |
 | pairing code, format | `browser/lib/src/pairing.ts` | `pair_screen.dart` (`_parsePairingUri`) |
-| URL rules (scheme, local address) | `data-browser/src/helpers/serverUrl.ts` | `flutter/lib/atomic/server_url.dart` |
-| what a machine says about itself | `data-browser/src/helpers/managedServer.ts` | `flutter/lib/atomic/server_info.dart` |
+| URL rules (scheme, local address) | `data-browser/src/helpers/serverUrl.ts` | `dart/atomic_flutter/lib/src/server_url.dart` |
+| what a machine says about itself | `data-browser/src/helpers/managedServer.ts` | `dart/atomic_flutter/lib/src/server_info.dart` |
 | push a workspace up | `browser/lib/src/store.ts` (`promoteLocalDrive`) | `AtomicClient.syncDriveToServer` |
 
 **Which servers the browser's Devices list shows.** `SyncRoute` renders every
