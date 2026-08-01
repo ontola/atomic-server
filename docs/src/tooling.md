@@ -9,6 +9,7 @@ Libraries and clients (all MIT licenced) that work great with [atomic-server](at
 - Svelte library: [@tomic/svelte](svelte.md)
 - Client CLI (rust): [atomic-cli](rust-cli.md) for fetching & editing data
 - Rust library: [atomic-lib](rust-lib.md) powers `atomic-server` and `atomic-cli`, and can be used in other Rust projects ([docs.rs](https://docs.rs/atomic_lib/latest/atomic_lib/))
+- Flutter SDK: [`atomic_lib`](flutter.md) — local-first auth, workspaces, sync, and reusable UI ([pub.dev](https://pub.dev/packages/atomic_lib)). Start with the [Flutter guide](flutter-guide/1-index.md).
 - [Raycast Extension](https://www.raycast.com/atomicdata-dev/atomic-data-browser): full-text search
 
 ## Want to add to this list? Some ideas for tooling
@@ -35,6 +36,6 @@ A mobile app for granting permissions to your data and signing things. See [gith
 - Would be useful for documentation, and as a default view for Atomic Data.
 - Use `@tomic/react` and `@tomic/lib` to get started
 
-### Atomic-Dart + Flutter
+### ~~Atomic-Dart + Flutter~~ (shipped)
 
-Library + front-end app for browsing / manipulating Atomic Data on mobile devices.
+Shipped as [`atomic_lib`](flutter.md) on [pub.dev](https://pub.dev/packages/atomic_lib). See the [local-first Flutter guide](flutter-guide/1-index.md).
