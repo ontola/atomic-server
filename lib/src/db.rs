@@ -1508,6 +1508,62 @@ impl Db {
         Ok(())
     }
 
+    /// Index the propvals the server derives for a resource rather than
+    /// reading them off the commit.
+    ///
+    /// `createdAt` / `createdBy` / `parent` / `drive` can all reach a resource
+    /// without ever being atoms of its commit: `validate_and_build_response`
+    /// stamps `drive` from the parent via `set_unsafe`, and
+    /// `materialize_genesis_metadata` fills the rest in from the inline
+    /// certificate. Both mutate `resource_new` — which is what gets stored —
+    /// but neither touches `add_atoms`, and `apply_commit` indexes `add_atoms`.
+    /// So these landed in the resource projection and never in the index.
+    ///
+    /// `drive` is the one that bites, because nothing else ever sets it: its
+    /// index held only the rare resource whose commit named it explicitly. A
+    /// drive-scoped filtered query then estimates that constraint as the
+    /// cheapest candidate source (one entry), verifies just that one resource,
+    /// and files an empty member list — which `query_complex` then caches for
+    /// good, since it rebuilds only for filters that are not yet watched.
+    ///
+    /// Runs on every commit, not just the creating one: the values are
+    /// immutable, so re-indexing is idempotent, and it lets a resource written
+    /// before this existed heal on its next edit instead of waiting for a full
+    /// index rebuild.
+    fn index_genesis_derived_atoms(
+        &self,
+        commit_atoms: &[Atom],
+        resource: &Resource,
+        transaction: &mut Transaction,
+    ) -> AtomicResult<()> {
+        const DERIVED_PROPS: [&str; 4] = [
+            urls::CREATED_AT,
+            urls::CREATED_BY,
+            urls::PARENT,
+            urls::DRIVE_PROP,
+        ];
+
+        for property in DERIVED_PROPS {
+            // The commit set it itself — already indexed above.
+            if commit_atoms.iter().any(|atom| atom.property == property) {
+                continue;
+            }
+
+            let Ok(value) = resource.get(property) else {
+                continue;
+            };
+
+            let atom = Atom::new(
+                resource.get_subject().clone(),
+                property.into(),
+                value.clone(),
+            );
+            self.add_atom_to_index(&atom, resource, transaction)?;
+        }
+
+        Ok(())
+    }
+
     fn add_resource_tx(
         &self,
         resource: &Resource,
@@ -2861,6 +2917,12 @@ impl Storelike for Db {
                         .add_atom_to_index(atom, new, &mut transaction)
                         .map_err(|e| format!("Error adding atom to index: {e}  Atom: {e}"))?
                 }
+
+                store.index_genesis_derived_atoms(
+                    &commit_response.add_atoms,
+                    new,
+                    &mut transaction,
+                )?;
             }
         }
 

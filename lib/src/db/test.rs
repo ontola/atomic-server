@@ -1806,3 +1806,108 @@ async fn db_events_say_whether_a_commit_produced_the_change() {
         "a write with no commit must be recognisable, or nothing announces it"
     );
 }
+
+/// A resource created under a drive must be findable by that drive.
+///
+/// `drive` is stamped onto the resource by the server (`commit.rs`, from the
+/// parent) rather than carried as an atom of the commit, so indexing only the
+/// commit's atoms left it out of the prop/val index. That is invisible until
+/// something filters on it: the query planner sizes each constraint by its
+/// index, picks the near-empty `drive` one as the cheapest candidate source,
+/// finds nothing, and caches the empty result for that filter.
+///
+/// This is the shape `@tomic/create-template` uses to locate a template in a
+/// specific drive — template localIds repeat across drives, so the drive
+/// constraint is the only thing disambiguating them.
+#[tokio::test]
+#[timeout(30000)]
+async fn find_resource_scoped_to_its_drive() {
+    let store = Db::init_temp("drive_scoped_query").await.unwrap();
+    store.populate().await.unwrap();
+
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+
+    // Created the way an import does it: a parent, no explicit `drive`, and
+    // applied with rights validation on — which is what makes the server
+    // stamp the drive (`commit.rs`), so `save_as_genesis` (rights off) would
+    // not reproduce this at all.
+    let agent = store.get_default_agent().unwrap();
+    let mut imported = crate::Resource::new("did:ad:placeholder".into());
+    imported
+        .set(urls::PARENT.into(), Value::AtomicUrl(drive.clone()), &store)
+        .await
+        .unwrap();
+    imported
+        .set(
+            urls::LOCAL_ID.into(),
+            Value::String("website".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+
+    let mut commit_builder = imported.get_commit_builder().clone();
+    commit_builder.is_genesis = true;
+    let commit = commit_builder
+        .sign(&agent, &store, &imported)
+        .await
+        .unwrap();
+    let signature = commit.signature.clone().unwrap();
+    let mut genesis_commit = commit;
+    genesis_commit.subject = Subject::from_raw(&format!("did:ad:{signature}"), None);
+
+    let opts = crate::commit::CommitOpts {
+        validate_schema: true,
+        validate_signature: true,
+        validate_timestamp: false,
+        validate_rights: true,
+        validate_previous_commit: false,
+        validate_loro_causality: false,
+        validate_for_agent: Some(agent.subject.to_string()),
+        update_index: true,
+        source_id: None,
+    };
+    let subject = store
+        .apply_commit(genesis_commit, &opts)
+        .await
+        .unwrap()
+        .resource_new
+        .unwrap()
+        .get_subject()
+        .clone();
+
+    let stored = store.get_resource(&subject).await.unwrap();
+    assert_eq!(
+        stored.get(urls::DRIVE_PROP).unwrap().to_string(),
+        drive.to_string(),
+        "sanity: the server stamps the drive onto a resource created under it"
+    );
+
+    let by_drive = store
+        .query(&crate::storelike::Query::new_prop_val(
+            urls::DRIVE_PROP,
+            drive.as_str(),
+        ))
+        .await
+        .unwrap();
+    assert!(
+        by_drive.subjects.contains(&subject),
+        "the stamped drive must be indexed, not just stored. Found: {:?}",
+        by_drive.subjects
+    );
+
+    // The shape that actually broke: localId AND drive.
+    let mut scoped = crate::storelike::Query::new_prop_val(urls::LOCAL_ID, "website");
+    scoped.drive = Some(drive.clone());
+    scoped.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::DRIVE_PROP.into()),
+        value: Some(Value::AtomicUrl(drive.clone())),
+        operator: crate::storelike::FilterOperator::Equal,
+    }];
+    let result = store.query(&scoped).await.unwrap();
+    assert_eq!(
+        result.subjects,
+        vec![subject],
+        "a localId lookup constrained to one drive must resolve the resource"
+    );
+}
