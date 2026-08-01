@@ -156,6 +156,7 @@ export function WatchToggle({
           : 'Notify me when rows change'
       }
       data-testid='watch-toggle'
+      data-watching={watching ? 'true' : 'false'}
     >
       {watching ? <FaBell /> : <FaBellSlash />}
       {watching ? 'Watching' : 'Watch'}

@@ -151,13 +151,17 @@ function NotificationsPage(): React.JSX.Element {
         <Row justify='space-between' center>
           <h1>Notifications</h1>
           {unread > 0 && (
-            <Button subtle onClick={() => void markAllRead()}>
+            <Button
+              subtle
+              data-testid='mark-all-read'
+              onClick={() => void markAllRead()}
+            >
               <FaCheck /> Mark all read
             </Button>
           )}
         </Row>
         {subjects.length === 0 ? (
-          <Empty>
+          <Empty data-testid='notifications-empty'>
             <FaBell />
             <p>No notifications yet.</p>
             <Hint>
