@@ -483,10 +483,11 @@ mentions/watches — still no trusted body in the push (see payload contract).
 - [x] `NotificationEngine` materializes mention items from `ResourceUpdated`
 - [x] Sidebar `AppMenu` item below User Settings + unread badge
 - [x] `/app/notifications` center; `markRead` / `dismiss` commit to personal drive
-- [ ] Multi-device: mark read on A → unread clears on B after sync (e2e or unit+)
+- [x] Multi-device: mark read on A → unread clears on B after sync (e2e or unit+)
 - [x] App Settings → Notifications section (pointer to inbox / watch)
 - [ ] E2E: A mentions B in a shared doc → B sees unread item (two contexts /
-      `getDevDriveSecret` pattern)
+      `getDevDriveSecret` pattern) — invite / two-agent still open; engine path
+      covered by “mention ResourceUpdated materializes inbox item”
 
 ### Phase 3 — Watch subscriptions
 
@@ -510,11 +511,10 @@ mentions/watches — still no trusted body in the push (see payload contract).
 - [ ] Choose/integrate Tauri push plugin; iOS entitlements + Android Firebase
 - [x] `DevicePushToken` ontology + register/refresh helper (client; call on launch when token exists)
 - [x] Hub: wake payload + mention-match helpers (`server/src/push_wake.rs`); commit_monitor hook point documented — provider fan-out still TODO
-- [x] Client: suppress-if-read helper + cold-start tap queue (`pushWakeTap.ts`)
-- [ ] Client: on push → sync → materialize → suppress if already read (needs plugin)
-- [ ] Cold-start tap wired from plugin launch details
-- Track operational secrets (APNs `.p8`, FCM service account) with hub deploy;
-  product behavior stays aligned with social-apps P2.3.
+- [x] Client: suppress-if-read helpers + cold-start tap queue wired to navigate (`pushWakeTap` → `NotificationOsPresenter`)
+- [x] `useDevicePushRegistration` on launch (no-ops without token; Tauri DEV stub)
+- [ ] Client: on push → sync → materialize (needs plugin token + wake delivery)
+- [ ] Cold-start tap wired from plugin launch details (queue consumer is ready)
 
 ## Test plan (where tests belong)
 
