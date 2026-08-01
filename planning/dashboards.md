@@ -1,19 +1,22 @@
 # Dashboards: user- and LLM-composable views over data
 
-> Status: **First slice shipped (2026-07-31)** — the `Dashboard`/`Block` ontology,
-> a grid renderer, all four v1 block kinds (stat, chart, view, text), the block
-> config UI, and `create_dashboard` / `describe_dashboard` / `configure_block`.
+> Status: **First slice shipped (2026-07-31 – 08-01)** — the `Dashboard`/`Block`
+> ontology, a grid renderer, five block kinds (stat, chart, create, view, text),
+> the block config UI, and `create_dashboard` / `describe_dashboard` /
+> `configure_block`.
 > Its analytics half was already built (2026-07-30). Builds on the Table View
 > pattern ([[table-view-filters]]) and the `create_table` LLM-authoring precedent.
-> What is *not* built is interactivity — see that section, which is now the next
-> slice and is mostly table work.
+> Interactivity is half built: five of the six action verbs ship (four as row
+> actions, one as the create button, on both the table and the dashboard). What is
+> *not* built is the sixth verb, parameters, and — the biggest gap — any way to
+> reach a dashboard from the table it describes. See **Remaining work**.
 >
 > The aggregation engine this plan specified shipped for table totals instead —
 > see step 4 of [[table-templates-and-mini-apps]]. It landed as designed here (an
 > aggregate clause on the shared `Query`, one implementation serving both the
 > server and the browser's WASM DB), so a stat block's number is now a call, not
-> a project. What remains is what this document said was genuinely new: the
-> `Dashboard`/`Block` ontology, a layout model, and chart rendering.
+> a project. The three things this document called genuinely new — the
+> `Dashboard`/`Block` ontology, a layout model and chart rendering — are all built.
 >
 > Extended 2026-07-31 with **interactivity** — a dashboard as an app shell rather
 > than a report — after walking every table template to see what each one's app
@@ -423,41 +426,111 @@ a UI to a tool, since a dashboard block repeats that path exactly.
 | The tool surface | `chunks/AI/useAtomicTools.ts` + the skill in `chunks/AI/skills/tables/` |
 
 **Order of work.** ~~Ontology → `DashboardPage` → view block → stat block →
-`create_dashboard` → block-config UI → bar chart~~ — all shipped; see the section
-above. What is left, in order:
+`create_dashboard` → block-config UI → bar chart~~, and ~~row actions~~,
+~~one-tap create~~, ~~a create block~~ — all shipped; see the section above. What
+is left is below, roughly in the order it is worth doing.
 
-1. ~~**Row actions**, in the table~~ — shipped 2026-07-31 as `view-row-actions`
-   (four verbs: `setNow`, `setValue`, `toggle`, `increment`), with a config dialog
-   and tool support, and shipped on the Plant care, Inventory and Grocery
-   templates. **One-tap create** shipped the same day as
-   `view-quick-add` — a label, an optional field, and presets reusing the same four
-   verbs applied to the new row. Five of the six verbs the template survey found
-   are now built; only the set-level "clear every matching row" is missing.
-   The **create block** shipped the same day, which is the shell's primary
-   button: press it and the numbers beside it move, on the page you are already
-   looking at. A per-row action block turned out to be unnecessary — an embedded
-   `view` block renders the real table, so its row-action buttons and its quick-add
-   bar are already there. **Still to do:** the set-level verb ("clear every
-   matching row"), which is the last of the six and the one that needs a
-   confirmation model (open question 8), plus a **parameters** model for one control
-   narrowing several blocks.
-2. **The three filter gaps** the template survey kept hitting, none of them
-   dashboard features: relative date windows (`today`, `this month`,
-   `last 7 days`), week/quarter buckets, and "this field is empty".
-3. **Parameters** — one control narrowing several blocks. Needs shared dashboard
-   state; open question 6 is still open.
-4. **Drag-and-drop layout.** `dashboard-layout` holds `{subject, w, h}` — sizes
-   only. Position comes from the order in `dashboard-blocks` plus the grid's own
-   wrapping. An earlier version stored `x`/`y` too and **no renderer ever read
-   them**, so a layout `create_dashboard` computed was silently ignored; they were
-   removed (2026-08-01) rather than implemented, because the UI offers no way to
-   set coordinates and a tool that can position blocks where a person cannot is
-   the asymmetry this plan exists to avoid. Free positioning therefore needs three
-   things together: coordinates back in the shape, a renderer that honours them,
-   and a way to drag — plus a keyboard path, since the current width-and-reorder
-   menu is reachable without a pointer and drag-and-drop alone would not be.
-5. **A dashboard per template** — and whether it is generated or shipped
-   (open question 7).
+### Remaining work (2026-08-01)
+
+Written after building the first slice, so this is what is actually missing rather
+than what was guessed at the start.
+
+#### 1. Where a dashboard *lives* — the biggest open thing
+
+Today a Dashboard is a resource you create from the New menu and then have to find
+again. Nothing links a table to the dashboard about it. That is the single
+largest gap between "this works" and "people use it", and it splits into two
+questions that are easy to conflate.
+
+**Should a dashboard be a View?** Tempting — it would appear as a tab beside
+Board and Calendar, and you would navigate to it the way you already navigate
+between views. **Recommendation: no, not as the model.** A `View` belongs to
+exactly one table, and the motivating example at the top of this document is
+cross-table (a perfume Drive with Batches, Batch Ingredients, Batch Log and
+Shopping List; "my week" across projects). Folding Dashboard into View would also
+contradict the decision the whole design rests on — blocks are standalone
+resources *so they can render in more than one context*.
+
+What is right is the **ergonomics** the suggestion is reaching for. Two ways, not
+exclusive:
+
+- **A view of kind `dashboard` that points at one** (`view-kind: 'dashboard'` plus
+  a `view-dashboard` reference). The tab bar then shows it, navigation is free, and
+  the Dashboard stays a first-class resource that a Drive homepage or a document
+  can also embed. This is the cheap half and probably the right first move.
+- **A table names its dashboard** (`table-dashboard`), which is the same idea
+  without the tab machinery.
+
+Either way the Dashboard resource is unchanged; what is added is a way to *reach*
+it. Do this before anything else on this list — a feature nobody can find has no
+users to tell you what is wrong with it.
+
+#### 2. Templates that ship a dashboard
+
+"A dashboard per template" above already says what each of the thirteen would
+contain. What is missing is the mechanism, and building the blocks changed what
+the choice looks like.
+
+**Recommendation: shipped, not generated** — a `dashboard` field on a template
+spec beside `columns` and `views`, resolved by `buildTableFromSpec` the way view
+config already resolves column and view *names*. Reasons:
+
+- It is inspectable and editable exactly like the views a template already ships,
+  and `tableTemplates.test.ts` can validate it the way it validates aggregates and
+  row actions — a generated one can only be checked by running it.
+- The builder already returns every subject the blocks need (table, class, columns,
+  tags), so resolution is a post-pass over data it has in hand.
+- Generation is still worth having later as the "X-ray this table" action this
+  document calls the killer demo. That is a *different* feature — a button, not a
+  template field — and shipping the declarative one first gives the generator
+  something to emit.
+
+Two things to decide when doing it, neither obvious:
+
+- **Where the dashboard resource goes.** A template currently creates one
+  top-level resource; this makes it two. A child of the table keeps them together
+  and makes the table the thing you navigate to; a sibling in the drive makes the
+  dashboard the front door. Bound up with (1) — if a table can name its dashboard,
+  child is the natural answer.
+- **Whether every template gets one.** Probably not. Bookmarks and Reading list are
+  lists; the dashboard adds little. Start with the four whose apps are mostly one
+  button: Time tracker, Plant care, Grocery list, Workout log.
+
+#### 3. The last verb, and parameters
+
+- **The set-level action** ("clear every matching row" — Grocery's "clear bought")
+  is the sixth and last verb of the closed vocabulary, and the only one unbuilt.
+  It needs the confirmation model of open question 8: it touches every row a filter
+  matches, and a dashboard has no undo affordance, though every action is a commit
+  and the history has one.
+- **Parameters** (open question 6) — one control narrowing several blocks. Still
+  the thing that separates a report from an interface, and still the piece with no
+  model. Needs shared dashboard state that blocks reference from their filters.
+
+#### 4. Smaller, concrete, and each independently worth doing
+
+- **`block-query` is read but written by neither surface.** `useBlockQuery` honours
+  it; the dialog and the tool both ignore it. This is the mirror of the `x`/`y` bug
+  fixed on 2026-08-01 — config nothing *writes* rather than config nothing *reads* —
+  and it deserves the same resolution: expose it on both surfaces, or delete it.
+  Deciding needs an answer to "when is a block's own filter better than pointing it
+  at a view that already filters?"
+- **A new row does not appear in a `view` block** until reload. The grid freezes its
+  member count at first load and nothing lets one block invalidate another's. Only
+  matters once a dashboard is where rows are added — which (1) and (2) would make
+  true.
+- **Charts do bars only.** A time series wants a line, and `day`/`month` buckets
+  want `week` and `quarter` beside them (the tail of open question 3). The spec is
+  Vega-Lite-shaped, so both are additive.
+- **Per-block cost is unmeasured.** Every stat and chart is its own collection fetch,
+  each re-reading on `ResourceSaved` behind a 500ms debounce. A ten-block dashboard
+  is therefore ten round trips per save. Fine at personal-drive scale and never
+  measured; measure before adding a block kind that multiplies it.
+- **Rights on a shared dashboard** are only half handled. Buttons are hidden from
+  someone who cannot write, but a stat over a table they cannot *read* has not been
+  looked at — it should say so, not render a confident `0`.
+- **A block whose source was deleted** has no defined behaviour. It should read as
+  broken configuration, the way an unknown `block-kind` already does.
 
 **Constraints that are not negotiable** (each one was learned the hard way):
 
@@ -516,7 +589,9 @@ waiting on. Both entries there explain themselves; neither constrains this desig
    properties bucketed by tag subject. Week and quarter buckets are not built,
    and a time chart will want them.
 4. Should the Drive homepage become a default Dashboard resource
-   (replacing the fixed `DrivePage` layout), and if so, when is it created?
+   (replacing the fixed `DrivePage` layout), and if so, when is it created? Note
+   this is the same reachability problem as Remaining work §1, one level up: a
+   Drive would name its dashboard the way a table might.
 5. Document embeds: what does a Block need so TipTap (DocumentV2) can host
    it as a node later?
 6. Do parameters live on the Dashboard (declared, blocks reference them by name)
@@ -524,8 +599,18 @@ waiting on. Both entries there explain themselves; neither constrains this desig
    matches Grafana and survives block reordering; naming targets keeps a block
    self-contained.
 7. Is a template's dashboard *generated* on demand (X-ray from the class + views)
-   or *shipped* as part of the template spec? Generated stays correct as a table
-   changes; shipped is inspectable and editable like the views already are.
+   or *shipped* as part of the template spec? **Leaning shipped** — see Remaining
+   work §2 for the reasoning and the two sub-decisions it forces (where the
+   dashboard resource lives, and which templates get one). Generation stays worth
+   having as a separate "X-ray this table" action.
 8. Does an action need a confirmation model? "Clear bought" touches every matching
    row, and there is no undo affordance on a dashboard yet — though every action
-   is a commit, so the history has one.
+   is a commit, so the history has one. Now blocking: this is the last unbuilt
+   verb of the six.
+9. Should a Dashboard be reachable as a View of a table (`view-kind: 'dashboard'`
+   pointing at one), or should a table simply name its dashboard? Remaining work
+   §1 argues for reachability without folding Dashboard into View — but which of
+   the two mechanisms is untested.
+10. Is a block's own `block-query` worth keeping at all, given a block can point at
+   a view that already filters? It is honoured but written by nothing; answering
+   this decides whether to expose it on both surfaces or delete it.
