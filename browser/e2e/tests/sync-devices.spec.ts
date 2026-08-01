@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, FRONTEND_URL } from './test-utils';
+import { before, FRONTEND_URL, SERVER_URL } from './test-utils';
 
 /**
  * The Sync page's device-facing surface: the pairing code a user scans, and
@@ -118,8 +118,13 @@ test.describe('sync page devices', () => {
       page.getByRole('heading', { name: 'Devices', exact: true }),
     ).toBeVisible();
 
-    // The dev drive is created against localhost:9883, so that connection is
-    // the one thing guaranteed to be listed.
-    await expect(page.getByText('localhost:9883').first()).toBeVisible();
+    // The dev drive is created against whatever server the suite was pointed
+    // at, so that connection is the one thing guaranteed to be listed. Derived
+    // from SERVER_URL rather than hardcoded: the port is configurable (the
+    // suite runs against 9885 when the app is, see the README), and a literal
+    // 9883 here passes on the default and fails everywhere else for a reason
+    // that names neither port.
+    const host = new URL(SERVER_URL).host;
+    await expect(page.getByText(host).first()).toBeVisible();
   });
 });

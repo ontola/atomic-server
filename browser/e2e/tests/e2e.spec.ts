@@ -455,8 +455,11 @@ test.describe('data-browser', async () => {
     const { driveTitle: secondDriveTitle } = await newDrive(page);
     await expect(currentDriveTitle(page)).toHaveText(secondDriveTitle);
 
-    // Switch back through the open-by-URL input on the drives page.
+    // Switch back through the open-by-URL input on the drives page. The field
+    // is behind an "Open by URL" disclosure — the section leads with the drive
+    // list and "New drive" — so it is not in the DOM until this is clicked.
     await openConfigureDrive(page);
+    await page.locator('[data-test="open-drive-by-url"]').click();
     await page
       .getByLabel('Open a drive by URL or DID')
       .fill(initialDriveSubject);
@@ -476,9 +479,14 @@ test.describe('data-browser', async () => {
     await newResource('https://atomicdata.dev/classes/Class', page);
     const shortnameInput = '[data-test="input-shortname"]';
     await page.click(shortnameInput);
+    // The field sanitizes as you type rather than rejecting: a space becomes a
+    // dash, and the trailing dash is settled away on blur. Typing must survive
+    // this — a per-keystroke strip of trailing dashes ate the separator before
+    // the next character arrived, so "not valid-" came out as "notvalid" and
+    // hyphenated shortnames were untypeable.
     await page.keyboard.type('not valid-');
     await page.locator(shortnameInput).blur();
-    await expect(page.getByText('Invalid Slug')).toBeVisible();
+    await expect(page.locator(shortnameInput)).toHaveValue('not-valid');
     await page.locator(shortnameInput).fill('');
     await page.keyboard.type('is-valid');
     await expect(page.locator('text=Not a valid slug')).not.toBeVisible();

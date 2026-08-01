@@ -34,9 +34,12 @@ test.describe('onboarding', () => {
       timeout: 5000,
     });
 
-    // Secret step — the secret includes the drive URL
+    // Secret step — the secret includes the drive URL. Headed "This is your
+    // account" since the passkey-first rework: on a self-hosted server there
+    // is no passkey-wrapped backup to fall back on, so the secret is still
+    // shown here and this remains the step that hands it over.
     await expect(
-      page.getByRole('heading', { name: 'Safely store your secret' }),
+      page.getByRole('heading', { name: 'This is your account' }),
     ).toBeVisible({ timeout: 10000 });
 
     // Get the secret from the code block BEFORE signing out
