@@ -3684,6 +3684,43 @@ export class Store {
    * why "My drives" stayed empty while one drive was mislabelled "Private
    * drive". So provision one instead, the same way onboarding does.
    */
+  /**
+   * Whether a drive subject inherited from a pre-DID account is worth putting
+   * in front of the user on THIS server.
+   *
+   * A years-old `drives` list is a history of everywhere its owner ever had a
+   * drive, not a list of drives that exist here. A real one contained 53
+   * entries, of which only 26 were well-formed and local: 11 pointed at
+   * long-dead dev servers (`http://localhost:9883/…`,
+   * `http://dawdawda.localhost:9883/…`) and 15 carried a subdomain spliced
+   * into the path by the migration (`internal:/staging:/drive/…`).
+   *
+   * Adopting those verbatim is not merely untidy. A drive list is fetched, so
+   * a `localhost` entry makes an app served from a public origin fire requests
+   * at the machine of whoever signed in — which, if they happen to run a local
+   * server on that port, quietly returns THEIR data. The rest 404 in a loop and
+   * bury the console.
+   *
+   * So: keep DIDs (portable by construction) and subjects on this server's own
+   * origin; drop everything else. A drive that genuinely lives elsewhere is not
+   * lost — it is still on the legacy Agent, and "Open by URL" reaches it.
+   */
+  private isAdoptableDriveSubject(subject: string): boolean {
+    if (subject.startsWith('did:')) return true;
+
+    // The migration's mangled spelling. It survives serialization as a path
+    // segment containing a colon, which is not a subject this server can
+    // resolve — it is the `staging` subdomain welded onto the path.
+    if (/\/[^/]+:\//.test(subject.replace(/^https?:\/\//, ''))) return false;
+
+    try {
+      return new URL(subject).origin === new URL(this.serverUrl).origin;
+    } catch {
+      // Unparseable, and not a DID: nothing can be done with it.
+      return false;
+    }
+  }
+
   private async adoptLegacyDriveList(
     agent: Agent,
     legacy: Resource,
@@ -3695,7 +3732,7 @@ export class Store {
     const inherited = [
       ...legacy.getSubjects(server.properties.drives),
       ...didAgent.getSubjects(server.properties.drives),
-    ];
+    ].filter(subject => this.isAdoptableDriveSubject(subject));
 
     if (inherited.length === 0) return;
 
