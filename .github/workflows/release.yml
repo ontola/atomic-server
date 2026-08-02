@@ -126,6 +126,28 @@ jobs:
           # starts writing into the working tree before this step widens that,
           # and should be looked at rather than waved through.
           args: --allow-dirty
+          # publish-crates' repo check cannot work on an annotated tag, and
+          # this workflow only ever runs on one.
+          #
+          # For any crate already published at the current version it asks the
+          # GraphQL API for the last commit touching that crate's directory,
+          # via `repository.ref(qualifiedName: $ref).target`, matching
+          # `... on Commit`. On a tag push $ref is refs/tags/vX -- and an
+          # annotated tag's target is a Tag object, not a Commit. The fragment
+          # does not match, `history` comes back undefined, and the action dies
+          # destructuring it. (A lightweight tag would resolve straight to a
+          # commit and slip through, which is a poor reason to stop annotating
+          # release tags.)
+          #
+          # Nothing is lost. The check exists to catch "you changed the code but
+          # forgot to bump the version", which the `--check` step above already
+          # does properly: it compares every declared version against the tag
+          # being released, rather than inferring intent from commit dates.
+          #
+          # This only bites once something IS published at this version, so it
+          # stays invisible until a release partially completes and gets re-run
+          # -- which is exactly when you least want a new failure mode.
+          check-repo: false
 
   # I'd like to skip this one, as the publish-tauri action already creates a release
   create-release:
