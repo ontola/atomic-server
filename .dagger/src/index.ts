@@ -107,6 +107,7 @@ export class AtomicServer {
           'sh',
           '-c',
           'echo "=== mdbook install ===" && ' +
+            'if [ -x /opt/cargo-bin/bin/mdbook ] && [ -x /opt/cargo-bin/bin/mdbook-linkcheck ]; then echo "cache_hit=1"; fi && ' +
             'START=$(date +%s) && ' +
             'cargo install mdbook mdbook-linkcheck --quiet && ' +
             'END=$(date +%s) && ' +
@@ -114,13 +115,22 @@ export class AtomicServer {
             'mdbook --version && mdbook-linkcheck --version',
         ])
         .stdout(),
-      this.netlifyCliContainer()
+      dag
+        .container()
+        .from(NODE_IMAGE)
+        .withMountedCache('/opt/npm-global', dag.cacheVolume('npm-global'))
+        .withMountedCache('/root/.npm', dag.cacheVolume('npm-cache'))
+        .withEnvVariable('NPM_CONFIG_PREFIX', '/opt/npm-global')
+        .withEnvVariable(
+          'PATH',
+          '/opt/npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        )
         .withExec([
           'sh',
           '-c',
           'echo "=== netlify-cli install ===" && ' +
             'START=$(date +%s) && ' +
-            'npm install -g netlify-cli --quiet && ' +
+            'if [ ! -x /opt/npm-global/bin/netlify ]; then npm install -g netlify-cli --quiet; else echo "cache_hit=1"; fi && ' +
             'END=$(date +%s) && ' +
             'echo "elapsed_s=$((END-START))" && ' +
             'netlify --version',
@@ -624,11 +634,14 @@ export class AtomicServer {
           '/opt/npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
         )
         // Install + version check in one exec so a cleared volume can't
-        // leave `netlify` missing on a dagger layer-cache hit.
+        // leave `netlify` missing on a dagger layer-cache hit. Unlike
+        // `cargo install`, `npm install -g` is NOT a no-op when the
+        // package is already present — it still walks the tree (~15-60s) —
+        // so skip when the binary exists.
         .withExec([
           'sh',
           '-c',
-          'npm install -g netlify-cli --quiet && netlify --version',
+          'if [ ! -x /opt/npm-global/bin/netlify ]; then npm install -g netlify-cli --quiet; fi && netlify --version',
         ])
     );
   }
@@ -1302,7 +1315,7 @@ export class AtomicServer {
         'curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=10.15.1 ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && ' +
           'export PATH=/root/.local/share/pnpm:/opt/npm-global/bin:$PATH && ' +
           '/bin/apt update && /bin/apt install -y zip && ' +
-          'npm install -g netlify-cli --quiet && netlify --version',
+          'if [ ! -x /opt/npm-global/bin/netlify ]; then npm install -g netlify-cli --quiet; fi && netlify --version',
       ]);
 
     // Setup e2e test environment
