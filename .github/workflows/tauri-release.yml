@@ -239,6 +239,7 @@ jobs:
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           set -euo pipefail
           KEYCHAIN=build.keychain
@@ -258,16 +259,39 @@ jobs:
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
           rm certificate.p12
 
+          echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+      # Signing credentials go through $GITHUB_ENV, not the build step's `env:`.
+      #
+      # A workflow expression that evaluates to '' still SETS the variable, to
+      # the empty string — and tauri checks presence, not emptiness. So the
+      # obvious `${{ cond && secrets.X || '' }}` made an unsigned macOS build
+      # announce `Signing with identity ""` and die on `: no identity found`.
+      # Writing the keys only when they have a value is the only way to leave
+      # them genuinely unset.
+      #
+      # `-` is codesign's ad-hoc identity, and is what a plain local
+      # `cargo tauri build` produces. Not a no-op: macOS refuses to run an
+      # unsigned arm64 binary at all, so the fallback has to be ad-hoc rather
+      # than nothing. It is still not a substitute for a real certificate — see
+      # the keychain note above.
+      - name: Use ad-hoc signing when no certificate is configured
+        if: matrix.os == 'macos-latest' && needs.preflight.outputs.sign_apple != 'true'
+        run: echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+
+      - name: Enable notarization
+        if: matrix.os == 'macos-latest' && needs.preflight.outputs.notarize == 'true'
+        run: |
+          {
+            echo "APPLE_ID=${{ secrets.APPLE_ID }}"
+            echo "APPLE_PASSWORD=${{ secrets.APPLE_PASSWORD }}"
+            echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}"
+          } >> "$GITHUB_ENV"
+
       - name: Build and bundle
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Only set when we actually imported a certificate; tauri reads the
-          # presence of these, so an empty string is not the same as unset.
-          APPLE_SIGNING_IDENTITY: ${{ needs.preflight.outputs.sign_apple == 'true' && secrets.APPLE_SIGNING_IDENTITY || '' }}
-          APPLE_ID: ${{ needs.preflight.outputs.notarize == 'true' && secrets.APPLE_ID || '' }}
-          APPLE_PASSWORD: ${{ needs.preflight.outputs.notarize == 'true' && secrets.APPLE_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ needs.preflight.outputs.notarize == 'true' && secrets.APPLE_TEAM_ID || '' }}
         with:
           projectPath: desktop
           args: ${{ matrix.args }}
