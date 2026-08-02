@@ -134,7 +134,10 @@ jobs:
           - name: macOS (universal)
             os: macos-latest
             args: "--target universal-apple-darwin"
-            rust-targets: "aarch64-apple-darwin x86_64-apple-darwin"
+            # wasm32 is on every row: `build:tauri` runs `build:wasm` first, and
+            # atomic-server's own build.rs runs the plain `pnpm run build`,
+            # which does the same. Both need the wasm target present.
+            rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin,wasm32-unknown-unknown"
           - name: Linux (x86_64)
             # Deliberately NOT ubuntu-latest. AppImage and .deb link against the
             # glibc of the machine that built them, so building on the newest
@@ -142,11 +145,11 @@ jobs:
             # oldest image GitHub still provides with webkit2gtk 4.1.
             os: ubuntu-22.04
             args: ""
-            rust-targets: ""
+            rust-targets: "wasm32-unknown-unknown"
           - name: Windows (x86_64)
             os: windows-latest
             args: ""
-            rust-targets: ""
+            rust-targets: "wasm32-unknown-unknown"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -174,7 +177,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            libwebkit2gtk-4.1-dev librsvg2-dev \
             patchelf libssl-dev build-essential curl wget file \
             libgtk-3-dev libayatana-appindicator3-dev
 
@@ -182,6 +185,38 @@ jobs:
         with:
           workspaces: ". -> target"
           key: tauri-${{ matrix.os }}
+
+      # Two things the Tauri build assumes are already done, and are not.
+      #
+      # 1. Dependencies. tauri-action installs them itself only when it finds a
+      #    package.json at `projectPath`; desktop/ has none, because the JS
+      #    workspace lives in browser/. Without this, `beforeBuildCommand` dies
+      #    with `vite: command not found` — after the whole Rust build.
+      #
+      # 2. server/assets_tmp. desktop/.cargo/config.toml sets
+      #    ATOMICSERVER_SKIP_JS_BUILD=true so the embedded server does not
+      #    redundantly rebuild the frontend the Tauri webview never loads. But
+      #    handlers/single_page_app.rs does
+      #    `include_str!("../../assets_tmp/index.html")`, so those assets must
+      #    exist to COMPILE regardless of whether they are ever served. On a dev
+      #    machine one is left over from an earlier plain `cargo build`; a clean
+      #    runner has neither it nor `dist` to fall back to, and build.rs fails
+      #    with a bare `Os { code: 2, kind: NotFound }`.
+      #
+      # Building `dist` here rather than clearing the skip flag is deliberate.
+      # build.rs shells out via `Command::new("pnpm")`, and on Windows that
+      # resolves through CreateProcess, which does not find the `pnpm.cmd` shim —
+      # so letting build.rs do the work would break the Windows job specifically,
+      # in a way that looks identical to this failure.
+      - name: Install dependencies and prepare embedded assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm -C browser install --frozen-lockfile
+          pnpm -C browser/data-browser build
+          rm -rf server/assets_tmp
+          cp -r browser/data-browser/dist server/assets_tmp
+          test -f server/assets_tmp/index.html
 
       # Imports the Developer ID certificate into a throwaway keychain.
       # tauri-action reads APPLE_SIGNING_IDENTITY and signs during bundling.
@@ -305,12 +340,44 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android,wasm32-unknown-unknown
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
           key: tauri-android
+
+      # Two things the Tauri build assumes are already done, and are not.
+      #
+      # 1. Dependencies. tauri-action installs them itself only when it finds a
+      #    package.json at `projectPath`; desktop/ has none, because the JS
+      #    workspace lives in browser/. Without this, `beforeBuildCommand` dies
+      #    with `vite: command not found` — after the whole Rust build.
+      #
+      # 2. server/assets_tmp. desktop/.cargo/config.toml sets
+      #    ATOMICSERVER_SKIP_JS_BUILD=true so the embedded server does not
+      #    redundantly rebuild the frontend the Tauri webview never loads. But
+      #    handlers/single_page_app.rs does
+      #    `include_str!("../../assets_tmp/index.html")`, so those assets must
+      #    exist to COMPILE regardless of whether they are ever served. On a dev
+      #    machine one is left over from an earlier plain `cargo build`; a clean
+      #    runner has neither it nor `dist` to fall back to, and build.rs fails
+      #    with a bare `Os { code: 2, kind: NotFound }`.
+      #
+      # Building `dist` here rather than clearing the skip flag is deliberate.
+      # build.rs shells out via `Command::new("pnpm")`, and on Windows that
+      # resolves through CreateProcess, which does not find the `pnpm.cmd` shim —
+      # so letting build.rs do the work would break the Windows job specifically,
+      # in a way that looks identical to this failure.
+      - name: Install dependencies and prepare embedded assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm -C browser install --frozen-lockfile
+          pnpm -C browser/data-browser build
+          rm -rf server/assets_tmp
+          cp -r browser/data-browser/dist server/assets_tmp
+          test -f server/assets_tmp/index.html
 
       - name: Install tauri-cli
         run: cargo install tauri-cli --version "^2" --locked
@@ -401,12 +468,44 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,wasm32-unknown-unknown
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
           key: tauri-ios
+
+      # Two things the Tauri build assumes are already done, and are not.
+      #
+      # 1. Dependencies. tauri-action installs them itself only when it finds a
+      #    package.json at `projectPath`; desktop/ has none, because the JS
+      #    workspace lives in browser/. Without this, `beforeBuildCommand` dies
+      #    with `vite: command not found` — after the whole Rust build.
+      #
+      # 2. server/assets_tmp. desktop/.cargo/config.toml sets
+      #    ATOMICSERVER_SKIP_JS_BUILD=true so the embedded server does not
+      #    redundantly rebuild the frontend the Tauri webview never loads. But
+      #    handlers/single_page_app.rs does
+      #    `include_str!("../../assets_tmp/index.html")`, so those assets must
+      #    exist to COMPILE regardless of whether they are ever served. On a dev
+      #    machine one is left over from an earlier plain `cargo build`; a clean
+      #    runner has neither it nor `dist` to fall back to, and build.rs fails
+      #    with a bare `Os { code: 2, kind: NotFound }`.
+      #
+      # Building `dist` here rather than clearing the skip flag is deliberate.
+      # build.rs shells out via `Command::new("pnpm")`, and on Windows that
+      # resolves through CreateProcess, which does not find the `pnpm.cmd` shim —
+      # so letting build.rs do the work would break the Windows job specifically,
+      # in a way that looks identical to this failure.
+      - name: Install dependencies and prepare embedded assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm -C browser install --frozen-lockfile
+          pnpm -C browser/data-browser build
+          rm -rf server/assets_tmp
+          cp -r browser/data-browser/dist server/assets_tmp
+          test -f server/assets_tmp/index.html
 
       - name: Install tauri-cli
         run: cargo install tauri-cli --version "^2" --locked
