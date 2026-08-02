@@ -21,6 +21,22 @@ pub fn init() {
     console_error_panic_hook::set_once();
 }
 
+/// Marker spliced into the `new ClientDb` error message when the existing OPFS
+/// file is a well-formed encrypted database that this key cannot decrypt.
+///
+/// The local database is a pure cache, so JS self-heals that one case by
+/// deleting the file and recreating it (`browser/lib/src/client-db-open.ts`).
+/// It matches on this token rather than on the prose message, and every other
+/// open failure — corrupt file, unsupported version, OPFS unavailable — stays
+/// unmarked so it can never trigger a delete.
+const WRONG_KEY_MARKER: &str = "ATOMIC_DB_WRONG_KEY";
+
+/// Marks the other explainable open failure: the browser refuses this origin
+/// storage at all (private browsing, tracking prevention, site data blocked).
+/// Nothing is wrong with the data and retrying cannot help, so JS reports it
+/// as a plain degraded-mode sentence rather than a wasm stack trace.
+const STORAGE_BLOCKED_MARKER: &str = "ATOMIC_DB_STORAGE_BLOCKED";
+
 /// A client-side Atomic Data database backed by redb (in-memory, future OPFS).
 /// Provides indexed queries, resource storage, and commit application.
 #[wasm_bindgen]
@@ -42,7 +58,8 @@ impl ClientDb {
     /// SharedWorker. The SharedWorker fans tab ports into this single inner
     /// worker so exactly one OPFS sync access handle exists. If this fails,
     /// OPFS is genuinely broken (corrupt, quota, unsupported browser) — the
-    /// error surfaces verbatim.
+    /// error surfaces verbatim, except that an undecryptable file is tagged
+    /// with `WRONG_KEY_MARKER` so the caller can drop and recreate the cache.
     #[wasm_bindgen(constructor)]
     pub async fn new(
         base_url: Option<String>,
@@ -53,7 +70,21 @@ impl ClientDb {
         let key = validate_db_key(db_key)?;
         let db = Db::init_redb_opfs(base_url, &name, key.as_ref())
             .await
-            .map_err(|e| to_js_err(format!("OPFS unavailable: {e}")))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                // Tag the one recoverable failure so JS can tell it apart from
+                // a corrupt file or a genuinely unavailable OPFS without
+                // pattern-matching on prose. See `WRONG_KEY_MARKER`.
+                if atomic_lib::db::encrypted_backend::is_wrong_key_error(&msg) {
+                    to_js_err(format!("OPFS unavailable [{WRONG_KEY_MARKER}]: {msg}"))
+                } else if atomic_lib::db::opfs_backend::is_storage_blocked_error(&msg) {
+                    to_js_err(format!(
+                        "OPFS unavailable [{STORAGE_BLOCKED_MARKER}]: {msg}"
+                    ))
+                } else {
+                    to_js_err(format!("OPFS unavailable: {msg}"))
+                }
+            })?;
         web_sys::console::log_1(
             &format!(
                 "[ClientDb] Using OPFS persistent storage ({name}, {})",
@@ -93,10 +124,14 @@ impl ClientDb {
     /// Get a resource by its subject URL. Returns JSON-AD string or null.
     #[wasm_bindgen(js_name = "getResource")]
     pub async fn get_resource(&self, subject: &str) -> Result<JsValue, JsError> {
-        let subject = Subject::from(subject);
+        // Localized in, localized out: the caller addresses resources by the
+        // URL it was served, while the store is keyed by `internal:`.
+        // `Subject::from` drops the base domain and would look up an
+        // `External` subject that does not exist here.
+        let subject = Subject::from_raw(subject, self.db.get_base_domain().as_deref());
         match self.db.get_resource(&subject).await {
             Ok(resource) => {
-                let json = resource_to_json_ad(&resource)?;
+                let json = resource_to_json_ad(&resource, &self.origin())?;
                 Ok(JsValue::from_str(&json))
             }
             Err(_) => Ok(JsValue::NULL),
@@ -193,6 +228,8 @@ impl ClientDb {
         include_resources: Option<bool>,
         drive: Option<String>,
         filters: JsValue,
+        aggregation: JsValue,
+        expression_filters: JsValue,
     ) -> Result<JsValue, JsError> {
         // Extra `(property, value)` AND constraints from JS. `null`/`undefined`
         // → none, keeping single-filter callers unchanged.
@@ -203,7 +240,9 @@ impl ClientDb {
             operator: Option<String>,
         }
 
-        let extra: Vec<atomic_lib::storelike::PropVal> =
+        let base_domain = self.db.get_base_domain();
+
+        let mut extra: Vec<atomic_lib::storelike::PropVal> =
             if filters.is_null() || filters.is_undefined() {
                 Vec::new()
             } else {
@@ -221,10 +260,61 @@ impl ClientDb {
                     .collect()
             };
 
+        // The caller only ever saw localized subjects, but this database is
+        // keyed by the raw `internal:` form — exactly the asymmetry the server
+        // handles in `collections::collect_members`. Without it a `parent=`
+        // filter matches nothing locally.
+        for filter in extra.iter_mut() {
+            let (Some(property), Some(Value::String(raw))) =
+                (filter.property.as_deref(), filter.value.as_ref())
+            else {
+                continue;
+            };
+            let raw = raw.clone();
+            filter.value = Some(
+                atomic_lib::collections::delocalize_filter_value(&self.db, Some(property), &raw)
+                    .await,
+            );
+        }
+
+        let value = match value {
+            Some(raw) => Some(
+                atomic_lib::collections::delocalize_filter_value(
+                    &self.db,
+                    property.as_deref(),
+                    &raw,
+                )
+                .await,
+            ),
+            None => None,
+        };
+
+        // Statistics over every matching row. The same computation the server
+        // does — this is the same crate — so an offline table shows the same
+        // totals rather than none.
+        let aggregation: Option<atomic_lib::aggregate::Aggregation> =
+            if aggregation.is_null() || aggregation.is_undefined() {
+                None
+            } else {
+                Some(serde_wasm_bindgen::from_value(aggregation).map_err(to_js_err)?)
+            };
+
+        // Constraints on values computed per row (a duration, a days-since).
+        // These can't be indexed, so the store evaluates them over the matching
+        // set — see `atomic_lib::expression`.
+        let expression_filters: Vec<atomic_lib::expression::ExpressionFilter> =
+            if expression_filters.is_null() || expression_filters.is_undefined() {
+                Vec::new()
+            } else {
+                serde_wasm_bindgen::from_value(expression_filters).map_err(to_js_err)?
+            };
+
         let q = Query {
             property,
-            value: value.map(Value::String),
+            value,
             filters: extra,
+            expression_filters,
+            aggregation,
             sort_by,
             sort_desc: sort_desc.unwrap_or(false),
             limit,
@@ -234,12 +324,24 @@ impl ClientDb {
             include_external: false,
             include_nested: include_resources.unwrap_or(false),
             for_agent: atomic_lib::agents::ForAgent::Sudo,
-            drive: drive.map(Subject::from),
+            // `Subject::from` drops the base domain, leaving a localized drive
+            // as an `External` subject that matches no stored drive prefix.
+            drive: drive.map(|d| Subject::from_raw(&d, base_domain.as_deref())),
         };
 
         let result = self.db.query(&q).await.map_err(to_js_err)?;
-        let response = QueryResponse::from_result(&result)?;
+        let response = QueryResponse::from_result(&result, &self.origin())?;
         serde_wasm_bindgen::to_value(&response).map_err(|e| JsError::new(&e.to_string()))
+    }
+
+    /// The absolute origin this database's subjects are addressed by in the
+    /// browser. `internal:` is a storage detail: everything handed back across
+    /// the wasm boundary must be a URL (or a DID) the client can actually
+    /// fetch, matching what the server sends over HTTP.
+    fn origin(&self) -> String {
+        self.db
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".to_string())
     }
 
     /// Store a Loro CRDT snapshot (raw bytes) for a resource subject.
@@ -468,28 +570,39 @@ struct QueryResponse {
     subjects: Vec<String>,
     resources: Vec<String>,
     count: usize,
+    /// One per requested aggregate; empty when none were asked for.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    aggregates: Vec<atomic_lib::aggregate::AggregateOutcome>,
 }
 
 impl QueryResponse {
-    fn from_result(result: &QueryResult) -> Result<Self, JsError> {
-        let subjects: Vec<String> = result.subjects.iter().map(|s| s.to_string()).collect();
+    /// `origin` localizes every subject on the way out, the same way
+    /// [atomic_lib::serialize] does for the server's HTTP responses.
+    ///
+    /// Without it `Subject::Internal` stringifies to its raw storage form and
+    /// the client receives `internal:/01k4sg…` as a member subject. The
+    /// browser cannot fetch that — there is no host to send a request to — so
+    /// the resource never resolves and the row renders with no name.
+    fn from_result(result: &QueryResult, origin: &str) -> Result<Self, JsError> {
+        let subjects: Vec<String> = result.subjects.iter().map(|s| s.resolve(origin)).collect();
 
         let resources: Vec<String> = result
             .resources
             .iter()
-            .map(resource_to_json_ad)
+            .map(|r| resource_to_json_ad(r, origin))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(QueryResponse {
             subjects,
             resources,
             count: result.count,
+            aggregates: result.aggregates.clone(),
         })
     }
 }
 
-fn resource_to_json_ad(resource: &Resource) -> Result<String, JsError> {
-    resource.to_json_ad(None).map_err(to_js_err)
+fn resource_to_json_ad(resource: &Resource, origin: &str) -> Result<String, JsError> {
+    resource.to_json_ad(Some(origin)).map_err(to_js_err)
 }
 
 fn to_js_err(e: impl std::fmt::Display) -> JsError {
@@ -545,6 +658,29 @@ pub fn argon2id_derive_key_js(
     };
     let key = argon2id_derive_key(secret.as_bytes(), salt, params).map_err(to_js_err)?;
     Ok(key.to_vec())
+}
+
+/// Delete one OPFS database file. Returns whether a file was actually removed.
+///
+/// Only ever called for the *current* identity's file, and only after that
+/// file failed to open with `WRONG_KEY_MARKER` — i.e. its contents are already
+/// unreadable, and everything it held is re-fetchable from the server. Other
+/// agents' files are untouched: the caller passes the name it was about to
+/// open, and `validate_db_name` keeps that a plain filename in the OPFS root.
+#[wasm_bindgen(js_name = "deleteClientDb")]
+pub async fn delete_client_db(db_name: String) -> Result<bool, JsError> {
+    let name = validate_db_name(Some(db_name))?;
+    let exists = atomic_lib::db::opfs_backend::file_exists(&name)
+        .await
+        .map_err(|e| to_js_err(format!("checking {name}: {e:?}")))?;
+    if !exists {
+        return Ok(false);
+    }
+    atomic_lib::db::opfs_backend::remove_file(&name)
+        .await
+        .map_err(|e| to_js_err(format!("deleting {name}: {e:?}")))?;
+    web_sys::console::warn_1(&format!("[ClientDb] deleted undecryptable database {name}").into());
+    Ok(true)
 }
 
 /// One-time migration of the pre-split `atomic_data.redb` into the per-agent

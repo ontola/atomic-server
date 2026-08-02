@@ -283,7 +283,16 @@
       "https://atomicdata.dev/properties/view-sort-desc",
       "https://atomicdata.dev/properties/view-columns",
       "https://atomicdata.dev/properties/view-group-by",
-      "https://atomicdata.dev/properties/view-split-languages"
+      "https://atomicdata.dev/properties/view-end-prop",
+      "https://atomicdata.dev/properties/view-timer-exclusive",
+      "https://atomicdata.dev/properties/view-split-languages",
+      "https://atomicdata.dev/properties/view-derived-columns",
+      "https://atomicdata.dev/properties/view-aggregates",
+      "https://atomicdata.dev/properties/view-group-by-column",
+      "https://atomicdata.dev/properties/view-group-granularity",
+      "https://atomicdata.dev/properties/view-column-order",
+      "https://atomicdata.dev/properties/view-row-actions",
+      "https://atomicdata.dev/properties/view-quick-add"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/name",
@@ -347,12 +356,33 @@
     "@id": "https://atomicdata.dev/properties/view-group-by",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-    "https://atomicdata.dev/properties/description": "For grouped views (e.g. kanban), the SelectProperty whose tags define the groups/columns. Cards are grouped by their value for this property.",
+    "https://atomicdata.dev/properties/description": "The property a view arranges its rows by. For grouped views (e.g. kanban) the SelectProperty whose tags define the groups/columns; for calendar views the date property that places rows on days; for timer views the timestamp property holding each entry's start.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "view-group-by"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-end-prop",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "For interval views (e.g. timer), the timestamp property holding each entry's end. Its start is stored in view-group-by; an entry with a start but no end is still running.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-end-prop"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-timer-exclusive",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "For timer views: whether starting an entry stops whatever else is running, so only one timer runs at a time. Defaults to true when unset.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-timer-exclusive"
   },
   {
     "@id": "https://atomicdata.dev/properties/view-split-languages",
@@ -364,6 +394,77 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "view-split-languages"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-derived-columns",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The computed columns of a view, stored as a JSON array of { id, label, kind, args, width } specs. Each is shown next to the stored columns but read off the row rather than out of it: 'kind' names one of a fixed set of generators (difference, elapsed, daysSince, product, offset) and 'args' maps that generator's arguments to property subjects or literal numbers.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-derived-columns"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-column-order",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The display order of a view's columns, as a JSON array of column keys: a property subject for a stored column, 'derived:<id>' for a computed one, or a key the view kind owns (e.g. 'timer-action' for the start/stop button). Columns missing from the list follow the ones in it, so a newly added column appears rather than disappearing. Separate from view-columns, which decides which properties are visible at all — this one can also place columns that are not properties.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-column-order"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-aggregates",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The statistics a view shows under its rows, as a JSON array of { id, property, function } specs (function is one of sum / count / avg / min / max). The store computes them over every row the view matches — not just the loaded page — so a total is exact without fetching the rows.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-aggregates"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-row-actions",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The buttons a view puts on each row, as a JSON array of { id, label, kind, property, value } specs. `kind` is one of setNow / setValue / toggle / increment — a closed vocabulary of patches, not code, so a person can edit one in a dialog and an assistant can write one. Pressing a button is an ordinary commit on that row, so it is rights-checked, synced and in history.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-row-actions"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-quick-add",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "A button above the rows that creates one, as a JSON object { label, field?, placeholder?, presets? }. `field` names a property to type into first (usually the row's name); each preset is { kind, property, value? } using the same closed patch vocabulary as view-row-actions, applied to the new row — so `setNow` stamps the moment the button was pressed. Absent means the view offers no quick-add.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-quick-add"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-group-by-column",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The property a view breaks its statistics down by: one subtotal per distinct value. Deliberately separate from view-group-by, which is the property a kanban, calendar or timer view arranges its rows by — a view can be grouped one way and subtotalled another.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-group-by-column"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-group-granularity",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "How a date or timestamp view-group-by-column is bucketed for subtotals: 'day', 'month', or 'exact' (one bucket per distinct value). Defaults to 'day' for timestamps, whose exact values are unique per row.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-group-granularity"
   },
   {
     "@id": "https://atomicdata.dev/properties/table-views",

@@ -9,6 +9,7 @@ import { decodeB64, encodeB64 } from './base64.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import type { Agent } from './agent.js';
+import { perfSpan } from './perf-trace.js';
 
 /** A {@link Commit} without its signature, signer and timestamp */
 export interface CommitBuilderI {
@@ -239,8 +240,10 @@ export class CommitBuilder {
       commitPreSigned.isGenesis = true;
     }
 
+    const closeSign = perfSpan('commit.signAt');
     const serializedCommit = serializeDeterministically({ ...commitPreSigned });
     const signature = await agent.sign(serializedCommit);
+    closeSign();
 
     let subject = commitPreSigned.subject;
 

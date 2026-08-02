@@ -269,6 +269,8 @@ async fn destroy_clears_parent_index_count() {
         include_nested: false,
         for_agent: ForAgent::Sudo,
         drive: None,
+        aggregation: None,
+        expression_filters: Vec::new(),
     };
 
     let before = store.query(&q).await.unwrap();
@@ -354,6 +356,8 @@ async fn unauthorized_query_count_matches_subjects() {
         // each one and `subjects` will end up empty.
         for_agent: urls::PUBLIC_AGENT.into(),
         drive: None,
+        aggregation: None,
+        expression_filters: Vec::new(),
     };
 
     let res = store.query(&q).await.unwrap();
@@ -483,6 +487,8 @@ async fn queries() {
         include_nested: false,
         for_agent: ForAgent::Sudo,
         drive: None,
+        aggregation: None,
+        expression_filters: Vec::new(),
     };
     let res = store.query(&q).await.unwrap();
     assert_eq!(
@@ -620,6 +626,8 @@ async fn query_include_external() {
         include_nested: false,
         for_agent: ForAgent::Sudo,
         drive: None,
+        aggregation: None,
+        expression_filters: Vec::new(),
     };
     let res_include = store.query(&q).await.unwrap();
     q.include_external = false;
@@ -769,6 +777,8 @@ async fn test_collection_update_value(
         include_nested: true,
         for_agent: ForAgent::Sudo,
         drive: Some(Subject::from("internal:/")),
+        aggregation: None,
+        expression_filters: Vec::new(),
     };
     let mut res = store.query(&q).await.unwrap();
     assert_eq!(
@@ -836,7 +846,11 @@ async fn test_collection_update_value(
 async fn test_migration_v2_to_v3() {
     let tmp_dir_path = ".temp/db/migration_v2_v3";
     let _try_remove_existing = std::fs::remove_dir_all(tmp_dir_path);
-    let server_url = "https://localhost";
+    // Deliberately NOT `localhost`. `resources_v2_to_v3` used to hardcode
+    // "localhost" as the base domain, so a test on `https://localhost` passed
+    // while every real deployment migrated its own resources to `External` and
+    // kept them as HTTP URLs. A realistic domain here is what catches that.
+    let server_url = "https://staging.example.com";
     let store = Db::init(
         std::path::Path::new(tmp_dir_path),
         Some(server_url.to_string()),
@@ -874,7 +888,7 @@ async fn test_migration_v2_to_v3() {
     }
 
     // Run migration
-    super::migrations::migrate_maybe(&sled_store).unwrap();
+    super::migrations::migrate_maybe(&sled_store, Some(server_url)).unwrap();
     drop(sled_store);
 
     // Re-open the Db to pick up the migrated data
@@ -919,6 +933,150 @@ async fn test_migration_v2_to_v3() {
         .tree_names()
         .into_iter()
         .any(|n| n == "resources_v2".as_bytes()));
+}
+
+/// On `atomicdata.dev` itself, the canonical vocabulary must still RESOLVE
+/// LOCALLY — not trigger a network fetch.
+///
+/// The vocabulary is deliberately kept `Subject::External` there (see
+/// `Subject::CANONICAL_VOCABULARY_PREFIXES`) so the absolute `urls::` constants
+/// keep working. But `get_resource` only network-fetches non-local subjects, so
+/// if these fell through to that branch the server would issue a request to
+/// ITSELF for its own ontology — an infinite loop in production, and a 500 for
+/// every `/properties/*` and `/classes/*` URL.
+#[cfg(feature = "db-sled")]
+#[tokio::test]
+async fn canonical_vocabulary_resolves_locally_on_its_own_host() {
+    let tmp_dir_path = ".temp/db/canonical_vocab_serving";
+    let _try_remove_existing = std::fs::remove_dir_all(tmp_dir_path);
+
+    // Exactly production's origin.
+    let store = Db::init(
+        std::path::Path::new(tmp_dir_path),
+        Some("https://atomicdata.dev".to_string()),
+    )
+    .await
+    .unwrap();
+
+    for canonical in [
+        crate::urls::DESCRIPTION,
+        crate::urls::SHORTNAME,
+        crate::urls::IS_A,
+    ] {
+        let subject = crate::Subject::from_raw(canonical, Some("https://atomicdata.dev"));
+        assert!(
+            matches!(subject, crate::Subject::External(_)),
+            "{canonical} should be External (kept canonical), got {subject:?}"
+        );
+
+        let resource = store.get_resource(&subject).await;
+        assert!(
+            resource.is_ok(),
+            "{canonical} must resolve from the local store on its own host, \
+             but failed with: {:?}. If this says 'Error when fetching', the \
+             server is trying to request its own ontology over the network.",
+            resource.err()
+        );
+    }
+}
+
+/// A `resources_v1` store must migrate all the way to `resources_v3` in ONE
+/// `migrate_maybe` call.
+///
+/// `migrate_maybe` used to iterate a single `tree_names()` snapshot, so on a v1
+/// store it ran v1→v2, created `resources_v2`, and then never consumed it —
+/// because that tree didn't exist when the work list was built. `Tree::Resources`
+/// (`resources_v3`) stayed empty, `migrate_from_sled` copied from that empty
+/// tree, and the process exited 0. A real production store migrated 271 of
+/// 184,843 resources this way, silently.
+#[cfg(feature = "db-sled")]
+#[tokio::test]
+async fn test_migration_v1_chains_all_the_way_to_v3() {
+    let tmp_dir_path = ".temp/db/migration_v1_chain";
+    let _try_remove_existing = std::fs::remove_dir_all(tmp_dir_path);
+    // Not `localhost` — see test_migration_v2_to_v3.
+    let server_url = "https://staging.example.com";
+    let store = Db::init(
+        std::path::Path::new(tmp_dir_path),
+        Some(server_url.to_string()),
+    )
+    .await
+    .unwrap();
+    drop(store);
+
+    let subject_url = format!("{}/v1-resource", server_url);
+
+    // Seed a v1-encoded resource (bincode) directly into `resources_v1`.
+    let sled_store =
+        super::sled_store::SledStore::open(std::path::Path::new(tmp_dir_path)).unwrap();
+    {
+        let mut propvals = crate::db::v1_types::PropValsV1::new();
+        propvals.insert(
+            crate::urls::DESCRIPTION.to_string(),
+            crate::db::v1_types::ValueV1::String("from v1".to_string()),
+        );
+        propvals.insert(
+            crate::urls::PARENT.to_string(),
+            crate::db::v1_types::ValueV1::AtomicUrl(subject_url.clone()),
+        );
+
+        let v1_tree = sled_store.raw_db().open_tree("resources_v1").unwrap();
+        v1_tree
+            .insert(
+                subject_url.as_bytes(),
+                bincode1::serialize(&propvals).unwrap(),
+            )
+            .unwrap();
+        v1_tree.flush().unwrap();
+    }
+
+    // A single call must chain v1 → v2 → v3.
+    super::migrations::migrate_maybe(&sled_store, Some(server_url)).unwrap();
+
+    // Both intermediate trees must be gone, and the data must have landed in v3.
+    let names: Vec<String> = sled_store
+        .raw_db()
+        .tree_names()
+        .iter()
+        .map(|n| String::from_utf8_lossy(n).to_string())
+        .collect();
+    assert!(
+        !names.iter().any(|n| n == "resources_v1"),
+        "resources_v1 should have been dropped, trees: {names:?}"
+    );
+    assert!(
+        !names.iter().any(|n| n == "resources_v2"),
+        "resources_v2 should have been consumed by the v2→v3 step in the SAME call \
+         (this is the regression: it used to be left behind, stranding all data), \
+         trees: {names:?}"
+    );
+
+    // Scope the tree handle: a sled `Tree` keeps the `Db` alive, so holding it
+    // across the reopen below would fail to acquire the file lock.
+    {
+        let v3 = sled_store.raw_db().open_tree("resources_v3").unwrap();
+        assert_eq!(v3.len(), 1, "the v1 resource should be in resources_v3");
+    }
+    drop(sled_store);
+
+    // And it must be readable, with its subject localized against the real
+    // base domain rather than the old "localhost" placeholder.
+    let store = crate::Db::init(
+        std::path::Path::new(tmp_dir_path),
+        Some(server_url.to_string()),
+    )
+    .await
+    .unwrap();
+    let resource = store.get_resource(&subject_url.into()).await.unwrap();
+    assert!(
+        matches!(resource.get_subject(), crate::Subject::Internal { .. }),
+        "Subject should be Internal, but is {:?}",
+        resource.get_subject()
+    );
+    assert_eq!(
+        resource.get(crate::urls::DESCRIPTION).unwrap().to_string(),
+        "from v1"
+    );
 }
 
 /// Test that resources added via add_resource_opts with update_index=true
@@ -1646,5 +1804,110 @@ async fn db_events_say_whether_a_commit_produced_the_change() {
     assert!(
         !from_commit,
         "a write with no commit must be recognisable, or nothing announces it"
+    );
+}
+
+/// A resource created under a drive must be findable by that drive.
+///
+/// `drive` is stamped onto the resource by the server (`commit.rs`, from the
+/// parent) rather than carried as an atom of the commit, so indexing only the
+/// commit's atoms left it out of the prop/val index. That is invisible until
+/// something filters on it: the query planner sizes each constraint by its
+/// index, picks the near-empty `drive` one as the cheapest candidate source,
+/// finds nothing, and caches the empty result for that filter.
+///
+/// This is the shape `@tomic/create-template` uses to locate a template in a
+/// specific drive — template localIds repeat across drives, so the drive
+/// constraint is the only thing disambiguating them.
+#[tokio::test]
+#[timeout(30000)]
+async fn find_resource_scoped_to_its_drive() {
+    let store = Db::init_temp("drive_scoped_query").await.unwrap();
+    store.populate().await.unwrap();
+
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+
+    // Created the way an import does it: a parent, no explicit `drive`, and
+    // applied with rights validation on — which is what makes the server
+    // stamp the drive (`commit.rs`), so `save_as_genesis` (rights off) would
+    // not reproduce this at all.
+    let agent = store.get_default_agent().unwrap();
+    let mut imported = crate::Resource::new("did:ad:placeholder".into());
+    imported
+        .set(urls::PARENT.into(), Value::AtomicUrl(drive.clone()), &store)
+        .await
+        .unwrap();
+    imported
+        .set(
+            urls::LOCAL_ID.into(),
+            Value::String("website".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+
+    let mut commit_builder = imported.get_commit_builder().clone();
+    commit_builder.is_genesis = true;
+    let commit = commit_builder
+        .sign(&agent, &store, &imported)
+        .await
+        .unwrap();
+    let signature = commit.signature.clone().unwrap();
+    let mut genesis_commit = commit;
+    genesis_commit.subject = Subject::from_raw(&format!("did:ad:{signature}"), None);
+
+    let opts = crate::commit::CommitOpts {
+        validate_schema: true,
+        validate_signature: true,
+        validate_timestamp: false,
+        validate_rights: true,
+        validate_previous_commit: false,
+        validate_loro_causality: false,
+        validate_for_agent: Some(agent.subject.to_string()),
+        update_index: true,
+        source_id: None,
+    };
+    let subject = store
+        .apply_commit(genesis_commit, &opts)
+        .await
+        .unwrap()
+        .resource_new
+        .unwrap()
+        .get_subject()
+        .clone();
+
+    let stored = store.get_resource(&subject).await.unwrap();
+    assert_eq!(
+        stored.get(urls::DRIVE_PROP).unwrap().to_string(),
+        drive.to_string(),
+        "sanity: the server stamps the drive onto a resource created under it"
+    );
+
+    let by_drive = store
+        .query(&crate::storelike::Query::new_prop_val(
+            urls::DRIVE_PROP,
+            drive.as_str(),
+        ))
+        .await
+        .unwrap();
+    assert!(
+        by_drive.subjects.contains(&subject),
+        "the stamped drive must be indexed, not just stored. Found: {:?}",
+        by_drive.subjects
+    );
+
+    // The shape that actually broke: localId AND drive.
+    let mut scoped = crate::storelike::Query::new_prop_val(urls::LOCAL_ID, "website");
+    scoped.drive = Some(drive.clone());
+    scoped.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::DRIVE_PROP.into()),
+        value: Some(Value::AtomicUrl(drive.clone())),
+        operator: crate::storelike::FilterOperator::Equal,
+    }];
+    let result = store.query(&scoped).await.unwrap();
+    assert_eq!(
+        result.subjects,
+        vec![subject],
+        "a localId lookup constrained to one drive must resolve the resource"
     );
 }

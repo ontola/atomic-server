@@ -16,12 +16,15 @@ interface ExternalPropertyDialogProps {
   open: boolean;
   bindShow: React.Dispatch<boolean>;
   tableClassResource: Resource;
+  /** Called with the property's subject once it's added to the class. */
+  onCreated?: (subject: string) => void;
 }
 
 export function ExternalPropertyDialog({
   open,
   bindShow,
   tableClassResource,
+  onCreated,
 }: ExternalPropertyDialogProps): JSX.Element {
   const [subject, setSubject] = useState<string | undefined>();
   const [isValid, setIsValid] = useState(false);
@@ -36,6 +39,7 @@ export function ExternalPropertyDialog({
   const onAddClick = () => {
     if (subject) {
       setRecommends([...recommends, subject]);
+      onCreated?.(subject);
       hide();
     }
   };

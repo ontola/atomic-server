@@ -13,6 +13,7 @@ import { Client } from './client.js';
 import type { Collection } from './collection.js';
 import { CollectionBuilder } from './collectionBuilder.js';
 import { CommitBuilder, Commit } from './commit.js';
+import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
 import { isUnauthorized } from './error.js';
 import { commits } from './ontologies/commits.js';
@@ -711,9 +712,20 @@ export class Resource<C extends OptionalClass = any> {
       | Record<string, string>
       | undefined;
 
+    // Loro snapshots arrive with their subject-valued props still in the
+    // server's `internal:` storage form — see `localizeInternalSubject`. This
+    // is the single point where doc values become propvals, so it is the one
+    // place that has to resolve them.
+    // The `store` getter throws when unset (a bare `new Resource()` in tests,
+    // or a resource built before it's attached), so read the field directly.
+    const origin = this._store?.getServerUrl();
+
     if (json && typeof json === 'object') {
       for (const [key, value] of Object.entries(json)) {
-        nextCache[key] = normalizeLoroValue(datatypesJson?.[key], value);
+        const normalized = normalizeLoroValue(datatypesJson?.[key], value);
+        nextCache[key] = origin
+          ? localizeInternalSubjects(normalized, origin)
+          : normalized;
       }
     }
 
@@ -2881,10 +2893,12 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this._saveDepth++;
+    const closeSave = perfSpan('resource.save');
 
     try {
       return await this._saveInner(hasChanges);
     } finally {
+      closeSave();
       this._saveDepth--;
     }
   }
@@ -3005,6 +3019,22 @@ export class Resource<C extends OptionalClass = any> {
       //  - Any genesis (e.g. table rows materialized from a virtual `_new:`
       //    placeholder): the resource is on the server but was never put in
       //    OPFS, so its parent-indexed membership is invisible after reload.
+      //
+      // This write is on the critical path of every create, and against a
+      // RELEASE server it is the dominant one: ~33 ms here versus ~5 ms for the
+      // commit round-trip it follows. Measure against a debug server and you
+      // conclude the opposite — that build verifies signatures ~7× slower,
+      // which buries this. Worker-side split of the ~33 ms, on sub-2KB
+      // payloads: ~13 ms `putResource` (parse + a redb write transaction per
+      // resource), ~2.5 ms snapshot, ~3.5 ms fsync, the rest postMessage and
+      // queue wait. The Loro export before it is 0 ms.
+      //
+      // It stays awaited AND durable regardless. Callers read the local
+      // database back straight away (a table's rows come from a `parent=`
+      // query); dropping either loses freshly-typed rows in `tables.spec.ts`,
+      // measured on a healthy store. Making a burst of creates faster means
+      // making fewer, larger writes — one transaction over N resources — not
+      // making each one lazier.
       if (wasGenesis || this.subject.startsWith('did:ad:agent:')) {
         await this.persistToClientDb();
       }
@@ -3161,13 +3191,17 @@ export class Resource<C extends OptionalClass = any> {
     // Await the OPFS write — when `save()` resolves the edit MUST survive a
     // reload. A non-awaited write left a reload reading OPFS before the
     // write landed and silently losing the edit.
+    const closePersist = perfSpan('resource.persistToClientDb');
+
     try {
       await clientDb.putResourceWithSnapshot(
         this.subject,
         JSON.stringify(obj),
         snapshot,
       );
+      closePersist();
     } catch (e) {
+      closePersist({ err: e instanceof Error ? e.message : String(e) });
       console.error('[persistToClientDb] failed:', e);
     }
   }
@@ -3447,6 +3481,88 @@ export class Resource<C extends OptionalClass = any> {
 
     return parent.new;
   }
+}
+
+/**
+ * A subject that is `internal:` and nothing else — no whitespace, and either
+ * `internal:/path` (server root) or `internal:tenant:/path` (subdomain drive).
+ *
+ * Deliberately strict so a prose propval that merely begins with the word
+ * "internal:" is never rewritten. Any real subject matches; a sentence does
+ * not, because it contains a space.
+ */
+const INTERNAL_SUBJECT = /^internal:(?:\/|[A-Za-z0-9-]+:\/)\S*$/;
+
+/**
+ * Resolves an `internal:` subject against this server's origin — the client
+ * side of what {@link https://docs.atomicdata.dev | serialize.rs} does for
+ * HTTP responses.
+ *
+ * `internal:` is the server's *storage* scheme. It reaches the browser only
+ * through Loro snapshots: a WebSocket frame carries the CRDT bytes verbatim,
+ * and while the frame's subject header is resolved server-side, the AtomicUrl
+ * values *inside* the document are not. (They can't be — the snapshot is
+ * covered by the commit signature, so the server must not rewrite it.)
+ *
+ * Left raw, such a value is unusable: the browser has no host to send a
+ * request to, so `useResource` on it issues no request at all and hangs in
+ * `loading` forever, with nothing in the console. That is why a migrated
+ * drive's tables render no rows — the table dereferences its `classtype`,
+ * which arrives as `internal:/…` — and why the same resource ends up in the
+ * store under two keys at once.
+ *
+ * Resolving unconditionally is safe here in a way it would not be on the
+ * server: the client never mints an `internal:` subject of its own. Its
+ * temporary subjects are `_new:`/`_local:` and its local-only drives are
+ * DIDs, so an `internal:` string in the browser is always a leaked storage
+ * subject.
+ */
+export function localizeInternalSubject(value: string, origin: string): string {
+  if (!INTERNAL_SUBJECT.test(value)) return value;
+
+  const rest = value.slice('internal:'.length);
+  const base = origin.replace(/\/+$/, '');
+
+  // `internal:/path` → `<origin>/path`. Root (`internal:/`) keeps its slash,
+  // matching the subject the server serves for a root drive.
+  if (rest.startsWith('/')) return `${base}${rest}`;
+
+  // `internal:tenant:/path` → `<proto>tenant.<host>/path`
+  const separator = rest.indexOf(':/');
+
+  if (separator === -1) return value;
+
+  const subdomain = rest.slice(0, separator);
+  const path = rest.slice(separator + 1);
+  const withProtocol = /^(\w+:\/\/)(.*)$/.exec(base);
+
+  return withProtocol
+    ? `${withProtocol[1]}${subdomain}.${withProtocol[2]}${path}`
+    : `${subdomain}.${base}${path}`;
+}
+
+/** Applies {@link localizeInternalSubject} to a propval, including arrays. */
+function localizeInternalSubjects(value: JSONValue, origin: string): JSONValue {
+  if (typeof value === 'string') {
+    return localizeInternalSubject(value, origin);
+  }
+
+  if (Array.isArray(value)) {
+    let changed = false;
+    const next = value.map(item => {
+      if (typeof item !== 'string') return item;
+
+      const localized = localizeInternalSubject(item, origin);
+
+      if (localized !== item) changed = true;
+
+      return localized;
+    });
+
+    return changed ? (next as JSONValue) : value;
+  }
+
+  return value;
 }
 
 function normalizeLoroValue(

@@ -26,16 +26,70 @@
  */
 
 import type {
+  Aggregation,
+  AggregateOutcome,
+  ExpressionFilter,
+} from './collection.js';
+import type {
   WorkerRequest,
   WorkerResponse,
   ClientDbInitTimings,
 } from './client-db.worker.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 
+/**
+ * Duplicated from `client-db-open.ts` on purpose — do NOT import it here.
+ *
+ * That module is imported by `client-db.worker.ts`. Importing it from this
+ * file too makes it a module shared across the worker boundary, and Vite then
+ * hoists it into a common chunk that its worker build references but never
+ * emits. The worker's `import` then resolves to the SPA's HTML fallback,
+ * fails to parse, and dies with an empty `onerror` — taking the whole local
+ * database with it.
+ *
+ * `client-db-open.test.ts` asserts this literal still matches the exported
+ * constant, so the two cannot drift apart silently.
+ */
+const STORAGE_BLOCKED_MARKER = 'ATOMIC_DB_STORAGE_BLOCKED';
+
+function isStorageBlockedDbError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return message.includes(STORAGE_BLOCKED_MARKER);
+}
+
+/**
+ * Normalizes a leader-init failure into the error we keep on `_initError`.
+ *
+ * A browser withholding storage from this origin (private browsing, tracking
+ * prevention, blocked site data) is a known, permanent-for-this-session state,
+ * not a fault to debug — so it gets the same treatment as the other explained
+ * degraded modes here: one actionable sentence. Left raw, it surfaced a wasm
+ * stack trace on every single page load. Every other failure passes through
+ * untouched, because those we DO want to see in full.
+ */
+function asInitError(e: unknown): Error {
+  if (isStorageBlockedDbError(e)) {
+    return new Error(
+      'Local caching and offline support are disabled: this browser is not ' +
+        'giving this site access to local storage right now. That is usually ' +
+        'private browsing, or a setting that blocks site data or cross-site ' +
+        'tracking — but it can also be another tab of this site still ' +
+        'holding the local database, in which case a reload clears it. The ' +
+        'app still works, reading directly from the server; nothing is kept ' +
+        'locally between reloads.',
+    );
+  }
+
+  return e instanceof Error ? e : new Error(String(e));
+}
+
 export interface ClientDbQueryResult {
   subjects: string[];
   resources: string[];
   count: number;
+  /** Statistics over every matching resource, when the query asked for them. */
+  aggregates?: AggregateOutcome[];
 }
 
 export interface ClientDbQueryOpts {
@@ -51,6 +105,11 @@ export interface ClientDbQueryOpts {
   includeResources?: boolean;
   /** Drive scope — required for sorted queries. */
   drive?: string;
+  /** Statistics to compute over every matching resource, not just this page. */
+  aggregation?: Aggregation;
+  /** Constraints on values computed per resource, evaluated by the store over the
+   *  set the index narrows to. */
+  expressionFilters?: ExpressionFilter[];
 }
 
 /** Options for opening a specific (per-agent) local database. */
@@ -375,7 +434,7 @@ export class ClientDbWorker {
         try {
           await this.becomeLeader(baseUrl);
         } catch (e) {
-          this._initError = e instanceof Error ? e : new Error(String(e));
+          this._initError = asInitError(e);
           // Release the lock so another tab can try.
           throw e;
         }
@@ -399,7 +458,7 @@ export class ClientDbWorker {
         // surface as a hard error if init never completed on a live
         // instance — a destroyed one has been superseded.
         if (!this.worker && !this.destroyed) {
-          this._initError = e instanceof Error ? e : new Error(String(e));
+          this._initError = asInitError(e);
         }
       });
   }

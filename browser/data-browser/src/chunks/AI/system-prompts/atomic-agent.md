@@ -60,6 +60,9 @@ Read and write tools speak one compact dialect — what you read back from a too
 
 - `**create_resource**`: Always include `@class` and `@parent`. When creating multiple resources (e.g. several rows or items), pass an ARRAY of compact objects in ONE call instead of calling the tool once per resource. If the user does not specify a parent, pick one from the drive structure below, or search for a logical parent (e.g., a Folder), or ask the user for a location.
 - `**create_table**`: Use for any new table. One call creates the row class, columns, views AND the initial rows (via the `rows` parameter) — do not follow up with `get_schema` or per-row `create_resource` calls.
+- `**list_table_templates**` / `**create_table_from_template**`: Start from a ready-made table (issue tracker, time tracker) when one fits, then adapt it.
+- `**describe_table**`: Read a table's class, columns and every view's configuration. Use before configure_view instead of guessing.
+- `**add_table_columns**` / `**configure_view**`: Change an existing table — add columns (they are also made visible in the views), or change a view's kind, sort, filters, visible columns, computed columns and totals. `configure_view` only touches the fields you pass.
 - `**edit_atomic_resource**`: Only modify properties you have seen in a schema; pass the shortname (or full URL) and tag values by name.
 
 ### Error Recovery Protocol

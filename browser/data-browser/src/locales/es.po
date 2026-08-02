@@ -34,6 +34,7 @@ msgstr "Cerrar la barra lateral de IA"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter"
 msgstr "OpenRouter"
@@ -124,18 +125,23 @@ msgstr "<0/> Crear Nuevo Agente"
 #: src/chunks/AI/AgentConfig.tsx
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/UpdatePluginButton.tsx
+#: src/chunks/TablePage/BreakdownDialog.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -162,6 +168,8 @@ msgstr "Nombre del agente"
 #: src/chunks/AI/AgentConfig.tsx
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/routes/NewDriveRoute.tsx
@@ -264,8 +272,14 @@ msgid "Automatically compact the conversation when input tokens exceed this perc
 msgstr "Compacta automáticamente la conversación cuando los tokens de entrada superan este porcentaje de la ventana de contexto del modelo seleccionado. La compactación manual /compact sigue funcionando cuando está desactivada."
 
 #: src/chunks/AI/MessageContextItem.tsx
+#: src/chunks/DashboardPage/DashboardBlock.tsx
 #: src/chunks/EmojiInput/EmojiInput.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
@@ -523,6 +537,8 @@ msgstr "Encabezados HTTP opcionales para enviar al conectarse a este servidor MC
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/AI/AgentConfigItem.tsx
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/routes/EditRoute.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
@@ -1510,8 +1526,13 @@ msgstr "Texto alternativo"
 msgid "Textual Description <0/>"
 msgstr "Descripción Textual <0/>"
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/RTE/ImagePicker.tsx
+#: src/chunks/TablePage/BreakdownDialog.tsx
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
@@ -1687,18 +1708,6 @@ msgstr "Advertencia:"
 msgid "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
 msgstr "Estás utilizando un Agente local, que no puede autenticarse en otros dominios, porque su URL no se resuelve."
 
-#~ msgid "<0/> You{0}re signed in as"
-#~ msgstr "<0/> Has iniciado sesión como"
-
-#~ msgid "Edit profile"
-#~ msgstr "Editar perfil"
-
-#~ msgid "Sign Out"
-#~ msgstr "Cerrar sesión"
-
-#~ msgid "Sign out with current Agent and reset this form"
-#~ msgstr "Cerrar sesión con el Agente actual y restablecer este formulario"
-
 #: src/routes/ShortcutsRoute.tsx
 msgid "Global"
 msgstr "Global"
@@ -1773,6 +1782,10 @@ msgstr ""
 
 #: src/chunks/TablePage/Kanban/KanbanColumn.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
 msgid "Add"
 msgstr "Añadir"
 
@@ -1999,6 +2012,7 @@ msgstr "Crear nuevo recurso"
 msgid "New Resource"
 msgstr "Nuevo recurso"
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/views/FolderPage/ListView.tsx
 msgid "Title"
@@ -2127,6 +2141,7 @@ msgid "Toggle whether this resource appears in your Favorites."
 msgstr ""
 
 #: src/actions/resourceActions.tsx
+#: src/chunks/DashboardPage/blocks/ViewBlock.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "Open"
@@ -2358,9 +2373,9 @@ msgstr "Shortname"
 #: src/chunks/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: src/components/InviteForm.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/ResourceSelector/DropdownInput.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 msgid "Create"
@@ -2376,6 +2391,7 @@ msgstr "Nuevo marcador"
 msgid "Ok"
 msgstr "Aceptar"
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
@@ -2748,11 +2764,6 @@ msgstr "Arrastra los archivos aquí..."
 msgid "Upload file(s)..."
 msgstr "Subir archivo(s)..."
 
-#: src/views/Article/ArticleCover.tsx
-#: src/views/Article/ArticleCover.tsx
-msgid "Click or drop image to use as a cover"
-msgstr "Haz clic o arrastra una imagen para usarla como portada"
-
 #: src/views/OntologyPage/Class/ClassCardRead.tsx
 #: src/views/OntologyPage/Class/ClassCardWrite.tsx
 msgid "Requires"
@@ -2992,9 +3003,6 @@ msgstr "Creado: {0}"
 #: src/components/NewIdentitySection.tsx
 msgid "Backup file downloaded — move it out of Downloads if you share this computer"
 msgstr "Archivo de copia de seguridad descargado — muévelo de la carpeta Descargas si compartes este ordenador"
-
-#~ msgid "Safely store your secret"
-#~ msgstr "Guarda tu secreto de forma segura"
 
 #: src/components/NewIdentitySection.tsx
 msgid "<0/> Save backup file…"
@@ -3243,7 +3251,9 @@ msgstr "Nombre corto de la propiedad"
 msgid "Property description"
 msgstr "Descripción de la propiedad"
 
+#. 0: BLOCK_KIND_LABELS[blockKind].toLowerCase()
 #. 0: resource.title
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Configure {0}"
 msgstr "Configurar {0}"
@@ -3370,6 +3380,7 @@ msgstr "Crear nuevo {0}"
 msgid "No Results"
 msgstr "Sin resultados"
 
+#: src/chunks/TablePage/TableTotalsFooter.tsx
 #: src/views/CodeUsage/PropSelector.tsx
 msgid "None"
 msgstr "Ninguno"
@@ -3621,6 +3632,7 @@ msgstr "Activar/desactivar código en línea"
 msgid "No alt text"
 msgstr "Sin texto alternativo"
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/Demo/SimulatedTypist.ts
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Text"
@@ -3665,10 +3677,17 @@ msgstr "<0/>{0} Referenciar recursos por sujeto en lugar de nombre."
 msgid "Table filters"
 msgstr "Filtros de tabla"
 
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/TableHeading.tsx
+#: src/chunks/TablePage/TableHeading.tsx
 #: src/chunks/TablePage/TableHeading.tsx
 msgid "Drag column"
 msgstr "Arrastrar columna"
 
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/useTableView.ts
@@ -3708,10 +3727,6 @@ msgstr "Exportar a CSV"
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Untitled view"
 msgstr "Vista sin título"
-
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Show / hide columns"
-msgstr "Mostrar / ocultar columnas"
 
 #: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Any"
@@ -3989,19 +4004,10 @@ msgstr ""
 msgid "Back up your secret?"
 msgstr ""
 
-#~ msgid "Choose a recovery password"
-#~ msgstr ""
-
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery password"
 msgstr ""
-
-#~ msgid "Backing up…"
-#~ msgstr ""
-
-#~ msgid "Back up & continue"
-#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 #: src/components/NewIdentitySection.tsx
@@ -4011,9 +4017,6 @@ msgstr ""
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Could not restore your account."
 msgstr ""
-
-#~ msgid "Forgot your secret?"
-#~ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restore account"
@@ -4112,6 +4115,8 @@ msgid "Next month"
 msgstr ""
 
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
 msgid "Add item"
 msgstr ""
 
@@ -4250,12 +4255,6 @@ msgstr ""
 msgid "Create a new Agent on this server. We will set your username and create a private drive as your home."
 msgstr "Crea un nuevo Agente en este servidor. Estableceremos tu nombre de usuario y crearemos una unidad privada como tu espacio personal."
 
-#~ msgid "<0>IMPORTANT:</0> You need this secret to sign in again. We do not store a copy you can reset like a normal password."
-#~ msgstr "<0>IMPORTANTE:</0> Necesitas este secreto para volver a iniciar sesión. Nosotros no guardamos una copia que puedas restablecer como una contraseña normal."
-
-#~ msgid "<0>Ways to keep it:</0> a password manager (best),{0} <1>Save as file</1> below and move it to a private folder, or copy into a <2>locked note</2> (Apple Notes, Google Keep, etc.)—not email or chat."
-#~ msgstr "<0>Formas de guardarlo:</0> un gestor de contraseñas (lo mejor),{0} <1>Guardar como archivo</1> a continuación y moverlo a una carpeta privada, o copiarlo en una <2>nota bloqueada</2> (Apple Notes, Google Keep, etc.)—no en correo electrónico o chat."
-
 #: src/components/NewIdentitySection.tsx
 msgid "Are you sure you've stored this secret somewhere safe? You cannot recover it if you lose it."
 msgstr "¿Estás seguro de que has guardado este secreto en un lugar seguro? No podrás recuperarlo si lo pierdes."
@@ -4263,9 +4262,6 @@ msgstr "¿Estás seguro de que has guardado este secreto en un lugar seguro? No 
 #: src/components/NewIdentitySection.tsx
 msgid "You have been signed out to verify that you saved your secret. Enter it below to sign in."
 msgstr "Se ha cerrado tu sesión para verificar que guardaste tu secreto. Introdúcelo a continuación para iniciar sesión."
-
-#~ msgid "This lets you recover your account if you lose your secret. We won't get access to your data — your secret is encrypted with the recovery password below before it leaves your device."
-#~ msgstr ""
 
 #. 0: classTitle
 #: src/hooks/useCreateAndNavigate.ts
@@ -4567,7 +4563,7 @@ msgstr "El modelo seleccionado no es compatible con el uso de herramientas."
 msgid "{0}/M input tokens"
 msgstr "{0}/M tokens de entrada"
 
-#. 0: INDEX_CELL_WIDTH; 1: sizes.join( ' ', )
+#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
 #: src/chunks/TableEditor/hooks/useCellSizes.ts
 msgid "{0} {1} minmax(50px, 1fr)"
 msgstr ""
@@ -4769,6 +4765,7 @@ msgstr ""
 msgid "Chat and the log of resources visited during the meeting."
 msgstr ""
 
+#: src/chunks/TablePage/Timer/useTimerProps.ts
 #: src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "End"
 msgstr ""
@@ -4882,9 +4879,6 @@ msgstr ""
 #: src/routes/SettingsAgent.tsx
 msgid "Recently visited"
 msgstr ""
-
-#~ msgid "Open a drive by URL or DID"
-#~ msgstr ""
 
 #: src/routes/DemoRoute.tsx
 msgid "Setting up your demo…"
@@ -5038,6 +5032,7 @@ msgstr ""
 msgid "Pairing device"
 msgstr ""
 
+#: src/chunks/AI/RealAIChat.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Try again"
 msgstr ""
@@ -5139,18 +5134,9 @@ msgstr ""
 msgid "Could not enable {0} backup."
 msgstr ""
 
-#~ msgid "Back up my secret"
-#~ msgstr ""
-
 #: src/components/NewIdentitySection.tsx
 msgid "Skip anyway"
 msgstr ""
-
-#~ msgid "Skip the recovery backup?"
-#~ msgstr ""
-
-#~ msgid "<0>This can’t be undone.</0> Without a recovery backup, no one can restore your account if you lose your secret — not even the sync service. Your data would be permanently inaccessible. Only skip if you’re certain you’ll keep your secret somewhere safe."
-#~ msgstr ""
 
 #: src/actions/resourceActions.tsx
 msgid "Open original"
@@ -5400,9 +5386,6 @@ msgstr ""
 msgid "An always-on device has an address — add it and your workspace appears."
 msgstr ""
 
-#~ msgid "Paste from clipboard"
-#~ msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Error: could not disconnect that device"
 msgstr ""
@@ -5643,15 +5626,6 @@ msgstr ""
 msgid "Add cover"
 msgstr ""
 
-#~ msgid "Remove emoji"
-#~ msgstr ""
-
-#~ msgid "<0/> Add cover"
-#~ msgstr ""
-
-#~ msgid "Pick an emoji shown next to this resource wherever it appears."
-#~ msgstr ""
-
 #: src/actions/resourceActions.tsx
 msgid "Pick an image shown as a banner at the top of this resource."
 msgstr ""
@@ -5677,7 +5651,6 @@ msgid "Pick an emoji or image shown next to this resource wherever it appears."
 msgstr ""
 
 #: src/components/ResourceDecorations.tsx
-#: src/components/forms/UploadImageButton.tsx
 msgid "<0/> Upload image"
 msgstr ""
 
@@ -5727,9 +5700,6 @@ msgstr ""
 msgid "Save your new recovery code"
 msgstr ""
 
-#~ msgid "Your old recovery password has been upgraded to a stronger, generated code. Anyone with this code can restore your account — {0} does not store it and cannot show it to you again."
-#~ msgstr ""
-
 #. 0: new Date().toISOString().slice(0, 10)
 #: src/helpers/managed/recovery.ts
 msgid "Recovery code saved {0}"
@@ -5739,15 +5709,9 @@ msgstr ""
 msgid "Save your recovery code"
 msgstr ""
 
-#~ msgid "<0>IMPORTANT:</0> Anyone with this code can restore your account. {0} does not store it and cannot show it to you again."
-#~ msgstr ""
-
 #: src/components/NewIdentitySection.tsx
 msgid "Are you sure you've stored this code somewhere safe? You cannot recover your account without it."
 msgstr ""
-
-#~ msgid "This lets you recover your account if you lose your secret. We generate a recovery code on this device — it's never sent to {0}, and we can't recover your account without it."
-#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 #: src/components/NewIdentitySection.tsx
@@ -5784,24 +5748,12 @@ msgstr ""
 msgid "Checking what this device supports…"
 msgstr ""
 
-#~ msgid "This device can’t protect a backup with a passkey, so we’ll generate a recovery code instead. It’s created here and never sent to {0} — we can’t recover your account without it."
-#~ msgstr ""
-
-#~ msgid "We generate a recovery code on this device — it’s never sent to {0}, and we can’t recover your account without it."
-#~ msgstr ""
-
-#~ msgid "Protect your account with a passkey — your fingerprint, face, or screen lock. It unlocks your backup on any device your passkeys sync to, and there's nothing to write down. {0} never sees your secret."
-#~ msgstr ""
-
 #: src/components/NewIdentitySection.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Waiting for your passkey…"
 msgstr ""
-
-#~ msgid "Protect with a passkey"
-#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -5822,9 +5774,6 @@ msgstr ""
 msgid "Unlock with your passkey"
 msgstr ""
 
-#~ msgid "Unlock the backup for {0} with your passkey — your fingerprint, face, or screen lock."
-#~ msgstr ""
-
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use your passkey instead"
 msgstr ""
@@ -5837,9 +5786,6 @@ msgstr ""
 #: src/components/NewIdentitySection.tsx
 msgid "This passkey only works on this device"
 msgstr ""
-
-#~ msgid "It isn't synced to your other devices, so if you lose this one you'd lose access. A recovery code is a backup you can keep somewhere safe."
-#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Give me a recovery code"
@@ -5861,15 +5807,6 @@ msgstr ""
 msgid "Could not show your secret."
 msgstr ""
 
-#~ msgid "This account has no encrypted backup, so your secret can't be shown or recovered here. If you saved it during setup, keep it safe — it's the only copy."
-#~ msgstr ""
-
-#~ msgid "Unlocked by:{0} {1} ."
-#~ msgstr ""
-
-#~ msgid "<0>Keep this private.</0> Anyone with it can sign in as you. {0} never sees it."
-#~ msgstr ""
-
 #: src/components/AccountRecoveryCard.tsx
 msgid "Unlocking…"
 msgstr ""
@@ -5877,9 +5814,6 @@ msgstr ""
 #: src/components/AccountRecoveryCard.tsx
 msgid "Show my agent secret"
 msgstr ""
-
-#~ msgid "<0>Save this recovery code.</0> It opens your account if you ever lose your passkey. It can't be shown again."
-#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "This is your account"
@@ -6053,21 +5987,6 @@ msgstr ""
 msgid "Whether this browser stays signed in as you when anyone opens it."
 msgstr ""
 
-#~ msgid "This device stays locked until you unlock it with your passkey. Closing the browser locks it again."
-#~ msgstr ""
-
-#~ msgid "This device stays locked until you enter your agent secret. Closing the browser locks it again."
-#~ msgstr ""
-
-#~ msgid "Anyone who opens this browser is signed in as you. Lock the device to require your "
-#~ msgstr ""
-
-#~ msgid "Stop locking this device"
-#~ msgstr ""
-
-#~ msgid "Lock this device"
-#~ msgstr ""
-
 #: src/components/DeviceLockCard.tsx
 msgid "Lock now"
 msgstr ""
@@ -6083,4 +6002,596 @@ msgstr ""
 
 #: src/components/DeviceLockCard.tsx
 msgid "When to lock this device"
+msgstr ""
+
+#: src/chunks/TablePage/Timer/TimerToolbar.tsx
+#: src/chunks/TablePage/Timer/useTimerColumns.tsx
+msgid "Untitled entry"
+msgstr ""
+
+#: src/chunks/TablePage/Timer/TimerToolbar.tsx
+msgid "What are you working on?"
+msgstr ""
+
+#: src/chunks/TablePage/Timer/TimerToolbar.tsx
+msgid "<0/> Start"
+msgstr ""
+
+#: src/chunks/TablePage/Timer/useTimerColumns.tsx
+msgid "Stop"
+msgstr ""
+
+#: src/chunks/TablePage/Timer/useTimerColumns.tsx
+#: src/chunks/TablePage/Timer/useTimerProps.ts
+msgid "Start"
+msgstr ""
+
+#: src/chunks/TablePage/Timer/useTimerColumns.tsx
+msgid "Start again"
+msgstr ""
+
+#: src/chunks/TablePage/Timer/useTimerProps.ts
+msgid "When tracking of this entry started."
+msgstr ""
+
+#: src/chunks/TablePage/Timer/useTimerProps.ts
+msgid "When tracking of this entry stopped."
+msgstr ""
+
+#: src/chunks/TablePage/Timer/TimerToolbar.tsx
+msgid "One at a time"
+msgstr ""
+
+#: src/chunks/TablePage/Timer/TimerToolbar.tsx
+msgid "Stop the running entry when another starts"
+msgstr ""
+
+#: src/chunks/TablePage/Timer/useTimerColumns.tsx
+#: src/chunks/TablePage/derivedColumns.test.ts
+#: src/chunks/TablePage/derivedColumns.test.ts
+#: src/chunks/TablePage/tableAggregates.test.ts
+msgid "Duration"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Toggle properties"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Hide this property"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Show this property"
+msgstr ""
+
+#. 0: VIEW_KIND_LABELS[ viewKind ].toLowerCase()
+#: src/chunks/TablePage/TableResource.tsx
+msgid "Always used by the {0} view"
+msgstr ""
+
+#: src/chunks/TablePage/Timer/useTimerColumns.tsx
+msgid "Timer"
+msgstr ""
+
+#: src/chunks/TablePage/Timer/TimerToolbar.tsx
+msgid "Could not start the entry"
+msgstr ""
+
+#. 0: days
+#: src/chunks/TablePage/derivedColumns.ts
+msgid "{0}d ago"
+msgstr ""
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "Computed"
+msgstr ""
+
+#. 0: spec.label
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
+msgid "Remove the {0} column from this view. It is computed, so no data is deleted — add it back any time."
+msgstr ""
+
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
+msgid "Remove computed column"
+msgstr ""
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+msgid "Edit computed column"
+msgstr ""
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+msgid "New computed column"
+msgstr ""
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+msgid "Computes"
+msgstr ""
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+msgid "Choose a column…"
+msgstr ""
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+msgid "A fixed number…"
+msgstr ""
+
+#. 0: arg.accepts === 'instant' ? 'date' \\: 'number'
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+msgid "This table has no {0} column to use here yet."
+msgstr ""
+
+#: src/chunks/TablePage/DerivedColumnDialog.tsx
+msgid "Add column"
+msgstr ""
+
+#: src/chunks/TablePage/derivedColumns.test.ts
+msgid "No kind"
+msgstr ""
+
+#: src/chunks/TablePage/TableSummaryBar.tsx
+msgid "Only the largest groups are shown."
+msgstr ""
+
+#. 0: titles.get(groupByColumn!) ?? groupProperty?.shortname ?? ''
+#: src/chunks/TablePage/TableSummaryBar.tsx
+msgid "Per {0}"
+msgstr ""
+
+#: src/chunks/TablePage/BreakdownDialog.tsx
+msgid "Break down by"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/TablePage/BreakdownDialog.tsx
+msgid "Per day"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/TablePage/BreakdownDialog.tsx
+msgid "Per month"
+msgstr ""
+
+#: src/chunks/TablePage/BreakdownDialog.tsx
+msgid "Per exact value"
+msgstr ""
+
+#. 0: column.virtual?.label
+#: src/chunks/TablePage/TableHeading.tsx
+msgid "{0} — part of this view"
+msgstr ""
+
+#. 0: rowCount
+#: src/chunks/TablePage/TableTotalsFooter.tsx
+msgid "{0} rows"
+msgstr ""
+
+#. 0: AGGREGATE_FUNCTION_LABELS[configured.function]; 1: label
+#: src/chunks/TablePage/TableTotalsFooter.tsx
+msgid "{0} of {1} — click to change"
+msgstr ""
+
+#: src/chunks/TablePage/TableTotalsFooter.tsx
+msgid "Change breakdown…"
+msgstr ""
+
+#: src/chunks/TablePage/TableTotalsFooter.tsx
+msgid "Break down by…"
+msgstr ""
+
+#: src/chunks/TablePage/TableTotalsFooter.tsx
+msgid "Clear breakdown"
+msgstr ""
+
+#: src/chunks/TablePage/BreakdownDialog.tsx
+msgid "Break down the totals"
+msgstr ""
+
+#: src/chunks/TablePage/BreakdownDialog.tsx
+msgid "Nothing — one total per column"
+msgstr ""
+
+#: src/chunks/TablePage/BreakdownDialog.tsx
+msgid "Splits each total per distinct value of a column — per project, per month, per status — under the table. Computed by the server over every matching row, like the totals themselves."
+msgstr ""
+
+#: src/chunks/TablePage/TableTotalsFooter.tsx
+msgid "Add a totals row"
+msgstr ""
+
+#: src/chunks/TablePage/TableTotalsFooter.tsx
+msgid "Remove this totals row"
+msgstr ""
+
+#. 0: rowCount
+#: src/chunks/TablePage/TableTotalsFooter.tsx
+msgid "{0} rows — the totals menu"
+msgstr ""
+
+#: src/chunks/TablePage/TableTotalsFooter.tsx
+msgid "Total this column"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Unknown error"
+msgstr ""
+
+#. 0: providerLabel; 1: requestError
+#: src/chunks/AI/RealAIChat.tsx
+msgid "No answer from {0}: {1}"
+msgstr ""
+
+#. 0: ollamaUrl ? ` at ${ollamaUrl}` \\: ''
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Ollama{0}"
+msgstr ""
+
+#: src/chunks/TablePage/TableTotalsFooter.tsx
+msgid "This column holds an action, not a value, so there is nothing to total."
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "now"
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "a date"
+msgstr ""
+
+#: src/chunks/TablePage/TableFilterChip.tsx
+msgid "Compare against"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Filter rows by a column"
+msgstr ""
+
+#: src/chunks/DashboardPage/DashboardPage.tsx
+msgid "This dashboard has no blocks yet."
+msgstr ""
+
+#: src/chunks/DashboardPage/DashboardBlock.tsx
+msgid "Configure"
+msgstr ""
+
+#: src/chunks/DashboardPage/DashboardBlock.tsx
+msgid "Width"
+msgstr ""
+
+#: src/chunks/DashboardPage/DashboardBlock.tsx
+msgid "Move earlier"
+msgstr ""
+
+#: src/chunks/DashboardPage/DashboardBlock.tsx
+msgid "Move later"
+msgstr ""
+
+#. 0: kind
+#: src/chunks/DashboardPage/BlockRenderer.tsx
+msgid "This block is a “{0}”, which this version can’t show."
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "What this shows"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Every row"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Rows"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Measure"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/TablePage/QuickAddFields.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Pick a column…"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Of"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "One bar per"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Each value"
+msgstr ""
+
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Bucket"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/ViewBlock.tsx
+msgid "Pick a table to show"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/TextBlock.tsx
+msgid "Nothing written here yet"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/StatBlock.tsx
+msgid "Pick something to measure"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+msgid "Pick a number and something to group it by"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+msgid "No data yet"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+msgid "Showing the largest"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
+msgid "groups"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+#: src/chunks/TablePage/rowActions.ts
+msgid "Value"
+msgstr ""
+
+#. 0: spec.label
+#: src/chunks/TablePage/RowActionHeading.tsx
+msgid "Remove the {0} button from this view. Nothing already recorded by pressing it is affected — add it back any time."
+msgstr ""
+
+#: src/chunks/TablePage/RowActionHeading.tsx
+msgid "Remove action"
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Edit action"
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Add an action"
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Does what"
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "This table has no column of the right kind for that yet."
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "To column"
+msgstr ""
+
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Pick an option…"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
+msgid "Button says"
+msgstr ""
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "Action"
+msgstr ""
+
+#: src/chunks/TablePage/NewColumnButton.tsx
+msgid "A button on every row: \"Watered\", \"Mark done\", \"+1\"."
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
+msgid "Creating table…"
+msgstr ""
+
+#: src/components/Template/ApplyTemplateDialog.tsx
+msgid "Applying template…"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Edit the add button"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add a create button"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "A button above the rows that creates one — \"Log a feed\", \"Add item\"."
+msgstr ""
+
+#. 0: tableClass.title.toLowerCase()
+#: src/chunks/TablePage/QuickAddBar.tsx
+msgid "Could not add the {0}"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
+msgid "Log a feed"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddDialog.tsx
+msgid "It sits above the rows and creates one. Everything else about the row is edited in the table."
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Ask for a value first"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "On for a list you name things in; off for a button you just press."
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Type into"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "What are you adding?"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Placeholder"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Nothing"
+msgstr ""
+
+#: src/chunks/TablePage/QuickAddFields.tsx
+msgid "Also set"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/CreateBlock.tsx
+msgid "Pick a table to add to"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/CreateBlock.tsx
+msgid "Say what the button does"
+msgstr ""
+
+#: src/chunks/DashboardPage/blocks/CreateBlock.tsx
+msgid "That table has no row class yet"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
+msgid "Dashboard"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
+msgid "Overview"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
+msgid "You add its blocks — numbers, charts, buttons, tables — on the dashboard itself."
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
+msgid "New Dashboard"
+msgstr ""
+
+#: src/chunks/DashboardPage/DashboardPage.tsx
+msgid "Nothing here yet. Add a number, a chart, a button or a table."
+msgstr ""
+
+#. 0: fn
+#: src/chunks/DashboardPage/BlockConfigDialog.tsx
+msgid "Pick a column for the {0} to measure"
+msgstr ""
+
+#: src/helpers/stringToSlug.test.ts
+msgid "Last watered"
+msgstr ""
+
+#: src/helpers/stringToSlug.test.ts
+msgid "Meat & fish"
+msgstr ""
+
+#: src/helpers/stringToSlug.test.ts
+msgid "Quantity / unit"
+msgstr ""
+
+#: src/helpers/stringToSlug.test.ts
+msgid "Plan B2 - final"
+msgstr ""
+
+#: src/chunks/TablePage/quickAdd.test.ts
+#: src/chunks/TablePage/quickAdd.test.ts
+msgid "What do you need?"
+msgstr ""
+
+#: src/chunks/TablePage/tableAggregates.test.ts
+msgid "Total"
+msgstr ""
+
+#: src/chunks/TablePage/rowActions.test.ts
+msgid "Do it"
+msgstr ""
+
+#. 0: kind; 1: count
+#: src/chunks/TablePage/derivedColumns.test.ts
+msgid "{0} takes {1} arguments; raise MAX_DERIVED_ARGS and add a subscription in DerivedCell"
+msgstr ""
+
+#. 0: aggregate.computedColumn
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} is not a computed column of this view"
+msgstr ""
+
+#. 0: aggregate.column
+#. 0: value
+#. 0: reference
+#: src/chunks/TablePage/tableTemplates.test.ts
+#: src/chunks/TablePage/tableTemplates.test.ts
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} is not a column"
+msgstr ""
+
+#. 0: derived.name; 1: name
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} is missing {1}"
+msgstr ""
+
+#. 0: derived.name; 1: name; 2: value
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0}.{1} reads {2}"
+msgstr ""
+
+#. 0: action.label; 1: action.column
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} writes \"{1}\", which is not a column"
+msgstr ""
+
+#. 0: action.label; 1: type
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} stamps now into a {1} column"
+msgstr ""
+
+#. 0: action.label; 1: type
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} toggles a {1} column"
+msgstr ""
+
+#. 0: action.label; 1: type
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} increments a {1} column"
+msgstr ""
+
+#. 0: action.label
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} needs a step"
+msgstr ""
+
+#. 0: action.label
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} needs a value to write"
+msgstr ""
+
+#. 0: action.label; 1: action.value; 2: action.column
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} sets \"{1}\", not an option of {2}"
+msgstr ""
+
+#. 0: quickAdd.label; 1: quickAdd.field
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} types into \"{1}\", which is not a column"
+msgstr ""
+
+#. 0: quickAdd.label; 1: preset.column
+#: src/chunks/TablePage/tableTemplates.test.ts
+msgid "{0} presets \"{1}\", which is not a column"
 msgstr ""

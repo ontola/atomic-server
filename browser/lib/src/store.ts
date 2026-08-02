@@ -240,6 +240,26 @@ export interface AddResourcesOpts {
  *  generated ontology). Serves the drive on its own subdomain. */
 const SUBDOMAIN_PROP = 'https://atomicdata.dev/properties/subdomain';
 
+/**
+ * Opt-in tracing for search, mirroring `ws-debug`:
+ * `localStorage.setItem('search-debug', '1')`.
+ *
+ * These lines used to be bare `console.debug`, on the assumption that browsers
+ * hide that behind a "Verbose" log level. Chrome does; Safari's Web Inspector
+ * shows Debug messages by default, so every visitor there saw the query, the
+ * full search URL and the result count for each search — several per page
+ * load. Diagnostics have to be asked for, not opted out of.
+ */
+const SEARCH_DEBUG =
+  typeof localStorage !== 'undefined' &&
+  localStorage.getItem('search-debug') === '1';
+
+function searchDebug(...args: unknown[]): void {
+  if (SEARCH_DEBUG) {
+    console.debug(...args);
+  }
+}
+
 export interface CreateDriveOpts {
   /** Shown on the drive page. Personal drives default to 'Your personal drive.'. */
   description?: string;
@@ -492,6 +512,11 @@ export class Store {
     count: number;
     timestamp: number;
   };
+  /** Every drive whose sync finished this session. `_lastDriveSync` only
+   *  remembers the most recent one, which is not enough to answer "is the
+   *  local index populated for THIS drive" once more than one is in play —
+   *  see `hasCompletedDriveSyncFor`. */
+  private _syncedDrives = new Set<string>();
   private _commitLog: CommitLogEntry[] = [];
   /**
    * Per-subject ACCUMULATED Loro snapshot bytes (genesis + every commit seen
@@ -905,7 +930,7 @@ export class Store {
       }
 
       endIndex({ indexed });
-      console.debug(
+      searchDebug(
         `[search] drive index built — drive=${drive} indexed=${indexed}`,
       );
     } catch (e) {
@@ -1850,6 +1875,15 @@ export class Store {
     // placeholders.
     if (
       this.clientDb &&
+      // A Collection is a derived query result, not a record: a page is either
+      // assembled from `queryLocalDb` over the index or fetched from the
+      // server, and neither ever reads it back out of the local database.
+      // Writing it there costs a full index rebuild and an fsync for something
+      // nothing reads — and because collections are deliberately exempt from
+      // the `lastCommit` skip above, they are re-added (and so re-written) on
+      // every refresh. Building one table from a template wrote a single
+      // collection page seven times.
+      !resource.hasClasses(collections.classes.collection) &&
       // Skip persisting when the worker has a known init failure (e.g.
       // OPFS leader-election couldn't steal the lock — Firefox doesn't
       // support `navigator.locks.request({ steal: true })`). Without this
@@ -1869,14 +1903,35 @@ export class Store {
         if (jsonAd) {
           const doc = resource.getLoroDoc?.();
           const snapshot = doc?.export({ mode: 'snapshot' });
-          this.clientDb
-            .putResourceWithSnapshot(resource.subject, jsonAd, snapshot)
-            .catch(e =>
-              console.error(
-                `[ClientDb] put failed for ${resource.subject.slice(0, 60)}:`,
-                e,
-              ),
-            );
+
+          // One local-DB write costs ~9ms, three quarters of it rebuilding
+          // this resource's index entries. `addResource` runs on every merge
+          // and every notify, so the same unchanged state was being written
+          // repeatedly — a table built from a template did 64 writes for 15
+          // resources. Hash what we are about to write and skip the write when
+          // it matches the last one for this subject.
+          //
+          // Deliberately a content hash rather than `lastCommit`: local edits
+          // and merges change state without advancing it. The hash covers the
+          // Loro snapshot too, so a CRDT-only change still writes. A collision
+          // would skip one cache write, which the server copy repairs — this
+          // is a cache, not the record.
+          const stamp = hashPersistedState(jsonAd, snapshot);
+
+          if (this.lastPersistedStamp.get(resource.subject) !== stamp) {
+            this.lastPersistedStamp.set(resource.subject, stamp);
+            this.clientDb
+              .putResourceWithSnapshot(resource.subject, jsonAd, snapshot)
+              .catch(e => {
+                // Failed write: drop the stamp so the next attempt is not
+                // skipped as a duplicate of a write that never landed.
+                this.lastPersistedStamp.delete(resource.subject);
+                console.error(
+                  `[ClientDb] put failed for ${resource.subject.slice(0, 60)}:`,
+                  e,
+                );
+              });
+          }
         }
       } catch (e) {
         console.error(
@@ -2176,7 +2231,7 @@ export class Store {
       : opts.parents;
     const searchDrive = this.driveOf(parentScope ?? this.getDrive() ?? '');
     const hasFilters = Object.keys(opts.filters ?? {}).length > 0;
-    console.debug('[search] search()', {
+    searchDebug('[search] search()', {
       query,
       hasFilters,
       parents: opts.parents,
@@ -2201,7 +2256,7 @@ export class Store {
         : [];
 
     if (localResults.length > 0) {
-      console.debug('[search] local →', localResults.length);
+      searchDebug('[search] local →', localResults.length);
     }
 
     // When offline, the server's filtered Tantivy search is unreachable.
@@ -2221,7 +2276,7 @@ export class Store {
         opts.limit ?? 30,
         parentScope,
       );
-      console.debug(
+      searchDebug(
         '[search] OFFLINE local fallback →',
         offline.subjects.length,
         offline.subjects,
@@ -2232,7 +2287,7 @@ export class Store {
 
     // Fall back to server search (Tantivy)
     const searchSubject = buildSearchSubject(this.serverUrl, query, opts);
-    console.debug('[search] server search →', searchSubject);
+    searchDebug('[search] server search →', searchSubject);
     // Search URLs are dynamic query resources without commit identities. Keeping
     // one in the normal resource cache makes a later retry merge against the
     // previous response and discard it as "unchanged", even when Tantivy now
@@ -2243,7 +2298,7 @@ export class Store {
       noWebSocket: true,
     });
     const results = searchResource.get(server.properties.results) ?? [];
-    console.debug('[search] server search returned', results.length);
+    searchDebug('[search] server search returned', results.length);
 
     return [...new Set([...localResults, ...results])].slice(
       0,
@@ -3225,15 +3280,36 @@ export class Store {
   ): void {
     this._driveSyncInProgress = false;
     this._lastDriveSync = { drive, count, timestamp };
+
+    if (drive) {
+      this._syncedDrives.add(drive);
+    }
+
     this.emitSyncStatus();
   }
 
-  /** True once any drive sync has finished in this session. Used by
-   * collection queries to decide whether an empty local-DB result is
-   * authoritative ("the table has no children") or ambiguous ("the index
-   * may not be populated yet"). */
-  public hasCompletedDriveSync(): boolean {
-    return this._lastDriveSync !== undefined;
+  /** True once a drive sync has finished FOR THIS DRIVE in this session.
+   *
+   * Used by collection queries to decide whether an empty local-DB result is
+   * authoritative ("the table has no children") or ambiguous ("the index may
+   * not be populated yet").
+   *
+   * Deliberately per-drive. This used to answer "has ANY sync finished", which
+   * is a different question and wrong for every drive except the synced one: a
+   * session that syncs the user's own (small, new) personal drive would then
+   * treat an empty local result for a DIFFERENT drive — one never synced, so
+   * its index is legitimately empty — as proof that the drive has no children.
+   * The visible effect was a sidebar full of items while signed out (server
+   * answers) that emptied on sign-in (local DB answers 0, and the 0 is
+   * believed).
+   *
+   * An unknown drive returns false, so the caller falls back to the server.
+   * That is the safe direction: a needless `/query` costs a round-trip, while
+   * a wrongly-trusted empty silently hides the user's data. */
+  public hasCompletedDriveSyncFor(drive: string | undefined): boolean {
+    if (!drive) return false;
+
+    return this._syncedDrives.has(drive);
   }
 
   public getSyncStatus(): StoreSyncStatus {
@@ -3383,6 +3459,10 @@ export class Store {
       void this.clientDb.removeResource(resolved).catch(() => undefined);
     }
 
+    // The stored state is gone, so the next write for this subject must not be
+    // mistaken for a duplicate of it.
+    this.lastPersistedStamp.delete(resolved);
+
     if (this.resources.delete(resolved)) {
       this.localSearch.removeResource(resolved);
 
@@ -3448,6 +3528,11 @@ export class Store {
           this.notifyError(e);
         });
       });
+
+      // Fire-and-forget: a returning pre-DID user should get their name and
+      // drives back, but signing in must not block on it or fail because of
+      // it.
+      void this.adoptLegacyAgentIdentity(agent);
     } else {
       if (hasBrowserAPI()) {
         removeCookieAuthentication();
@@ -3455,6 +3540,195 @@ export class Store {
     }
 
     this.eventManager.emit(StoreEvents.AgentChanged, agent);
+  }
+
+  /**
+   * Carries a pre-DID identity's own details onto its DID.
+   *
+   * Before DIDs, an Agent lived at `https://server/agents/{pubkey}` — and that
+   * resource is what holds the user's `name` and, crucially, the `drives` they
+   * own. Signing in derives `did:ad:agent:{pubkey}` from the key and mints a
+   * fresh Agent there: correct identity, empty resource. It then shadows the
+   * real one permanently, so the user is not shown an error — they are shown
+   * an account that looks brand new, with no name and no drives, which is what
+   * empties the sidebar.
+   *
+   * The old subject survives only inside the secret ({@link
+   * legacySubjectFromSecret}), so this runs on the client: the server never
+   * sees a secret and cannot do this itself.
+   *
+   * Only ever FILLS IN. A property already set on the DID Agent is left alone,
+   * so this converges after one run and a user who renames themselves later is
+   * never reverted on the next sign-in. That also makes it safe for the
+   * already-signed-in case, where a bare Agent is sitting at the DID and needs
+   * merging into rather than replacing.
+   */
+  /**
+   * Finds a pre-DID Agent's resource, given the subject its secret was issued
+   * under.
+   *
+   * The secret records where the identity was *created*, which is not
+   * necessarily where its data lives now — migrating a store moves every
+   * resource onto the new server's origin. A secret issued by
+   * `https://atomicdata.dev` is used to sign in to a staging or local copy of
+   * that same data, and the old absolute URL then resolves to nothing (or, on
+   * a machine with network access, to the real production server — which is
+   * worse).
+   *
+   * So the path is what carries over, not the origin: `/agents/{pubkey}` on
+   * *this* server is tried first. The original is kept as a fallback for the
+   * case the secret really does describe another, still-live server.
+   */
+  private async fetchLegacyAgentResource(
+    legacySubject: string,
+  ): Promise<Resource | undefined> {
+    const onThisServer = legacySubject.replace(
+      /^https?:\/\/[^/]+/,
+      this.serverUrl,
+    );
+
+    const candidates =
+      onThisServer === legacySubject
+        ? [legacySubject]
+        : [onThisServer, legacySubject];
+
+    for (const candidate of candidates) {
+      try {
+        const resource = await this.getResource(candidate);
+
+        if (!resource.error) return resource;
+      } catch {
+        // Try the next candidate.
+      }
+    }
+
+    return undefined;
+  }
+
+  private async adoptLegacyAgentIdentity(agent: Agent): Promise<void> {
+    const legacySubject = agent.legacySubject;
+
+    if (!legacySubject || !agent.subject) return;
+
+    try {
+      const legacy = await this.fetchLegacyAgentResource(legacySubject);
+
+      if (!legacy) return;
+
+      const current = await this.getResource(agent.subject);
+
+      if (current.error) return;
+
+      // Identity only. `drives` is deliberately NOT carried onto the Agent:
+      // the two models keep that list in different places, and putting it back
+      // where the old one had it is actively harmful — see
+      // `adoptLegacyDriveList`.
+      const carried: [string, unknown][] = [];
+
+      for (const prop of [core.properties.name, core.properties.description]) {
+        const existing = current.get(prop);
+        const isEmpty =
+          existing === undefined ||
+          existing === null ||
+          existing === '' ||
+          (Array.isArray(existing) && existing.length === 0);
+
+        if (!isEmpty) continue;
+
+        const inherited = legacy.get(prop);
+
+        if (inherited === undefined || inherited === null) continue;
+
+        carried.push([prop, inherited]);
+      }
+
+      if (carried.length > 0) {
+        for (const [prop, value] of carried) {
+          await current.set(prop, value as never, false);
+        }
+
+        await current.save();
+      }
+
+      await this.adoptLegacyDriveList(agent, legacy, current);
+    } catch {
+      // Best effort. A failure here leaves the user signed in with an empty
+      // profile — bad, but not as bad as failing the sign-in itself.
+    }
+  }
+
+  /**
+   * Restores the drives a pre-DID user owned, into the list the app actually
+   * reads.
+   *
+   * The two models disagree on where that list lives. The old server kept
+   * `drives` on the Agent; the current one keeps it on the user's private
+   * drive — the per-user home index — which is what `useSavedDrives` reads.
+   * Copying the old list onto the Agent therefore restores nothing: "My
+   * drives" stays empty because nothing looks there.
+   *
+   * Worse, it actively misleads. With no `personalDrive` set,
+   * `fetchPersonalDriveSubject` falls back to `drives[0]` on the Agent — so
+   * one arbitrary drive out of the whole list gets promoted to "Private
+   * drive" and the other 52 vanish. These are ordinary drives the user owns,
+   * not their private one.
+   *
+   * So the list goes on the private drive. Union, never replace: drives
+   * already in the list stay, and one that was deliberately unstarred is not
+   * resurrected on the next sign-in — only genuinely-missing ones are added.
+   *
+   * A migrated user usually has NO private drive: the old server never had the
+   * concept, so nothing set `personalDrive`, and a legacy secret carries no
+   * `initialDrive` either. Returning in that case — as this used to — skips
+   * the adoption in precisely the situation the function exists for, which is
+   * why "My drives" stayed empty while one drive was mislabelled "Private
+   * drive". So provision one instead, the same way onboarding does.
+   */
+  private async adoptLegacyDriveList(
+    agent: Agent,
+    legacy: Resource,
+    didAgent: Resource,
+  ): Promise<void> {
+    // An earlier build parked the list on the Agent. Treat that as a source
+    // too, so an account migrated by that version is repaired rather than
+    // stranded.
+    const inherited = [
+      ...legacy.getSubjects(server.properties.drives),
+      ...didAgent.getSubjects(server.properties.drives),
+    ];
+
+    if (inherited.length === 0) return;
+
+    const existingSubject =
+      (didAgent.get(core.properties.personalDrive) as string | undefined) ??
+      agent.initialDrive;
+
+    // `createDrive(personal: true)` seeds the switcher list with itself and
+    // links `personalDrive` on the Agent, so afterwards this is an ordinary
+    // union into an existing list. It is only reached when the account has no
+    // private drive at all, so it cannot displace one the user already has.
+    const personalDrive = existingSubject
+      ? await this.getResource(existingSubject)
+      : await this.createDrive('My drive', {
+          personal: true,
+          agentName: legacy.get(core.properties.name) as string | undefined,
+        });
+
+    if (personalDrive.error) return;
+
+    const personalDriveSubject = personalDrive.subject;
+
+    const already = new Set(
+      personalDrive.getSubjects(server.properties.drives),
+    );
+    const missing = inherited.filter(
+      subject => subject !== personalDriveSubject && !already.has(subject),
+    );
+
+    if (missing.length === 0) return;
+
+    personalDrive.push(server.properties.drives, missing, true);
+    await personalDrive.save();
   }
 
   /** Sets the Server base URL, without the trailing slash. */
@@ -4700,6 +4974,11 @@ export class Store {
    * `useSyncExternalStore` checks. */
   private snapshots = new Map<string, { resource: Resource }>();
 
+  /** Subject → content stamp of the last state written to the local DB, so
+   *  `addResource` can skip re-writing state that is already there. Entries are
+   *  dropped by `removeResource` and by a failed write. */
+  private lastPersistedStamp = new Map<string, number>();
+
   public getResourceSnapshot(
     subject: string,
     opts: FetchOpts = {},
@@ -4827,4 +5106,46 @@ function resourceToJsonAd(resource: Resource): string | null {
   const obj = resource.toObject({ includeBinary: false });
 
   return obj ? JSON.stringify(obj) : null;
+}
+
+/**
+ * Cheap 53-bit content stamp over exactly what a local-DB write persists: the
+ * JSON-AD and the Loro snapshot. Used only to skip re-writing state identical
+ * to the last write for that subject (see `addResource`), so the cost has to
+ * stay far below the ~9ms write it saves — this is two xor-multiply passes over
+ * a few KB, i.e. microseconds.
+ *
+ * Not a security hash. The failure mode of a collision is one skipped cache
+ * write, repaired by the next real change or by re-fetching from the server.
+ */
+function hashPersistedState(jsonAd: string, snapshot?: Uint8Array): number {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+
+  for (let i = 0; i < jsonAd.length; i++) {
+    const ch = jsonAd.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+
+  if (snapshot) {
+    // Length first, so two snapshots differing only in trailing bytes can't
+    // land on the same stamp through the byte loop alone.
+    h1 = Math.imul(h1 ^ snapshot.byteLength, 2654435761);
+
+    for (let i = 0; i < snapshot.length; i++) {
+      const b = snapshot[i];
+      h1 = Math.imul(h1 ^ b, 2654435761);
+      h2 = Math.imul(h2 ^ b, 1597334677);
+    }
+  }
+
+  h1 =
+    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 =
+    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 }

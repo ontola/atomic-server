@@ -358,7 +358,7 @@ impl Db {
         let sled_store = sled_store::SledStore::open(path)?;
 
         // Run migrations before wrapping in Arc (migrations need direct sled access)
-        migrations::migrate_maybe(&sled_store)
+        migrations::migrate_maybe(&sled_store, base_domain.as_deref())
             .map(|e| format!("Error during migration of database: {:?}", e))?;
 
         let store = Db {
@@ -563,7 +563,7 @@ impl Db {
         // `.bak`. `migrate_maybe` chains v0→v1→v2→v3 in place so the read sees
         // every resource. (Verified against a real v2 backup: 61,804 resources
         // were invisible without this call.)
-        migrations::migrate_maybe(&sled_store)?;
+        migrations::migrate_maybe(&sled_store, base_domain)?;
 
         let redb_store = redb_store::RedbStore::new_file(redb_path)?;
 
@@ -1204,6 +1204,24 @@ impl Db {
             || subject_string.starts_with("/query")
     }
 
+    /// Where a pre-DID server stored the Agent that `did:ad:agent:{pubkey}`
+    /// now identifies. `None` for anything that isn't an Agent DID.
+    ///
+    /// The inverse of [crate::agents::migrate_legacy_agent_subject]. The
+    /// pubkey is standard base64 and contains `/` and `+`, so the whole
+    /// remainder is carried across untouched.
+    fn legacy_agent_subject(subject: &Subject) -> Option<Subject> {
+        let pubkey = subject
+            .as_str()
+            .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)?;
+
+        if pubkey.is_empty() {
+            return None;
+        }
+
+        Some(Subject::new_local(&format!("/agents/{pubkey}"), None))
+    }
+
     pub async fn fetch_resource_with_did_fallback(
         &self,
         subject: &Subject,
@@ -1218,6 +1236,40 @@ impl Db {
         }
 
         let store = self.clone_with_url(origin.to_string());
+
+        // A user from before the DID migration signs in as
+        // `did:ad:agent:{pubkey}`, but their Agent resource is still stored
+        // where the old server put it — `internal:/agents/{pubkey}` (the
+        // localized form of `https://server/agents/{pubkey}`). Nothing links
+        // the two.
+        //
+        // Resolving an Agent DID does not fail when there is no stored
+        // resource: it synthesizes a minimal Agent from the key. So the user
+        // isn't met with an error — they're met with an account that looks
+        // brand new. Their name is gone, and because the Agent carries
+        // `drives`, so is every drive they own, which is what empties the
+        // sidebar.
+        //
+        // Same key, same identity, so serve the stored resource under the DID
+        // that asked for it. Gated on the DID having nothing of its own, which
+        // makes it self-healing: it applies only to identities that predate the
+        // migration, and stops the moment a real Agent exists at the DID.
+        // Read-only — the legacy resource is left exactly as it is.
+        if !self.has_stored_resource(subject) {
+            if let Some(legacy) = Self::legacy_agent_subject(subject) {
+                if self.has_stored_resource(&legacy) {
+                    let mut response = store
+                        .get_resource_extended(&legacy, false, for_agent)
+                        .await?;
+                    // Answer under the subject that was requested, so the
+                    // client caches it against the DID rather than
+                    // re-introducing the legacy spelling.
+                    response.set_subject(subject.clone());
+
+                    return Ok(response);
+                }
+            }
+        }
 
         store.get_resource_extended(subject, false, for_agent).await
     }
@@ -1453,6 +1505,62 @@ impl Db {
             )
             .map_err(|e| format!("Failed to check_if_atom_matches_watched_collections. {}", e))?;
         }
+        Ok(())
+    }
+
+    /// Index the propvals the server derives for a resource rather than
+    /// reading them off the commit.
+    ///
+    /// `createdAt` / `createdBy` / `parent` / `drive` can all reach a resource
+    /// without ever being atoms of its commit: `validate_and_build_response`
+    /// stamps `drive` from the parent via `set_unsafe`, and
+    /// `materialize_genesis_metadata` fills the rest in from the inline
+    /// certificate. Both mutate `resource_new` — which is what gets stored —
+    /// but neither touches `add_atoms`, and `apply_commit` indexes `add_atoms`.
+    /// So these landed in the resource projection and never in the index.
+    ///
+    /// `drive` is the one that bites, because nothing else ever sets it: its
+    /// index held only the rare resource whose commit named it explicitly. A
+    /// drive-scoped filtered query then estimates that constraint as the
+    /// cheapest candidate source (one entry), verifies just that one resource,
+    /// and files an empty member list — which `query_complex` then caches for
+    /// good, since it rebuilds only for filters that are not yet watched.
+    ///
+    /// Runs on every commit, not just the creating one: the values are
+    /// immutable, so re-indexing is idempotent, and it lets a resource written
+    /// before this existed heal on its next edit instead of waiting for a full
+    /// index rebuild.
+    fn index_genesis_derived_atoms(
+        &self,
+        commit_atoms: &[Atom],
+        resource: &Resource,
+        transaction: &mut Transaction,
+    ) -> AtomicResult<()> {
+        const DERIVED_PROPS: [&str; 4] = [
+            urls::CREATED_AT,
+            urls::CREATED_BY,
+            urls::PARENT,
+            urls::DRIVE_PROP,
+        ];
+
+        for property in DERIVED_PROPS {
+            // The commit set it itself — already indexed above.
+            if commit_atoms.iter().any(|atom| atom.property == property) {
+                continue;
+            }
+
+            let Ok(value) = resource.get(property) else {
+                continue;
+            };
+
+            let atom = Atom::new(
+                resource.get_subject().clone(),
+                property.into(),
+                value.clone(),
+            );
+            self.add_atom_to_index(&atom, resource, transaction)?;
+        }
+
         Ok(())
     }
 
@@ -2038,8 +2146,238 @@ impl Db {
         Ok(QueryResult {
             subjects,
             resources,
+            aggregates: Vec::new(),
             count: total_count,
         })
+    }
+
+    /// Computes a query's aggregates over every row it matches.
+    ///
+    /// Re-runs the same filter unpaged and reads each row's value locally: the
+    /// whole point is that the numbers travel instead of the rows. Values come
+    /// from the materialized row (`get_resource_shallow`) — the same source the
+    /// filters are matched against, so a total can never disagree with the set
+    /// it claims to summarize.
+    /// Every row the query matches, unpaged and in order.
+    ///
+    /// Subjects, not a count: these are the rows that actually resolved for this
+    /// agent. `QueryResult::count` deliberately counts raw index hits (including
+    /// unauthorized and stale-index entries, see issue #286), so a `count`
+    /// aggregate can legitimately come out lower than `totalMembers` — it counts
+    /// what the reader can see, which is the only number a sum over the same rows
+    /// can agree with.
+    ///
+    /// Shared by the paging path and the aggregation pass, so a total can never
+    /// summarize a different set than the rows on screen.
+    async fn matching_subjects(&self, q: &Query) -> AtomicResult<Vec<Subject>> {
+        // The same query, unpaged. `sort_by` is kept so this takes the exact
+        // same index path as the paged query — a different path could disagree
+        // about which rows match.
+        let scan = Query {
+            property: q.property.clone(),
+            value: q.value.clone(),
+            filters: q.filters.clone(),
+            limit: None,
+            offset: 0,
+            start_val: q.start_val.clone(),
+            end_val: q.end_val.clone(),
+            sort_by: q.sort_by.clone(),
+            sort_desc: q.sort_desc,
+            include_external: q.include_external,
+            // Bodies are never needed here; values are read straight off the
+            // local row.
+            include_nested: false,
+            for_agent: q.for_agent.clone(),
+            drive: q.drive.clone(),
+            aggregation: None,
+            expression_filters: Vec::new(),
+        };
+
+        let subjects = if requires_query_index(&scan) {
+            self.query_complex(&scan).await?.subjects
+        } else {
+            self.query_basic(&scan).await?.subjects
+        };
+
+        if q.expression_filters.is_empty() {
+            return Ok(subjects);
+        }
+
+        Ok(subjects
+            .into_iter()
+            .filter(|subject| {
+                let Ok(resource) = self.get_resource_shallow(subject) else {
+                    // Nothing to evaluate against: a row we can't read can't be
+                    // shown to satisfy a constraint.
+                    return false;
+                };
+
+                q.expression_filters
+                    .iter()
+                    .all(|filter| filter.matches(&resource))
+            })
+            .collect())
+    }
+
+    /// The paged answer to a query with a constraint on a computed value.
+    ///
+    /// The index can't narrow by such a value, so the whole matching set is
+    /// evaluated and *then* paged — which also makes `count` the number of rows
+    /// that really matched, rather than the index's hit count.
+    async fn query_with_expression_filters(&self, q: &Query) -> AtomicResult<QueryResult> {
+        let matching = self.matching_subjects(q).await?;
+        let count = matching.len();
+
+        let page: Vec<Subject> = matching
+            .into_iter()
+            .skip(q.offset)
+            .take(q.limit.unwrap_or(usize::MAX))
+            .collect();
+
+        let resources = if q.include_nested {
+            page.iter()
+                .filter_map(|subject| self.get_resource_shallow(subject).ok())
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        Ok(QueryResult {
+            subjects: page,
+            resources,
+            aggregates: Vec::new(),
+            count,
+        })
+    }
+
+    async fn compute_aggregation(
+        &self,
+        q: &Query,
+        aggregation: &crate::aggregate::Aggregation,
+    ) -> AtomicResult<Vec<crate::aggregate::AggregateOutcome>> {
+        use crate::aggregate::{
+            Accumulator, AggregateGroup, AggregateOutcome, DEFAULT_GROUP_LIMIT,
+        };
+        use std::collections::HashMap;
+
+        let subjects = self.matching_subjects(q).await?;
+
+        let mut totals: Vec<Accumulator> =
+            vec![Accumulator::default(); aggregation.aggregates.len()];
+        let mut per_group: Vec<HashMap<String, Accumulator>> =
+            vec![HashMap::new(); aggregation.aggregates.len()];
+
+        // One instant for the whole pass: a `daysSince` evaluated per row against
+        // a moving clock could put two rows of the same day in different buckets.
+        let now_ms = aggregation.now_ms.unwrap_or_else(crate::utils::now);
+
+        for subject in subjects {
+            let Ok(resource) = self.get_resource_shallow(&subject) else {
+                continue;
+            };
+
+            let group = aggregation.group_by.as_ref().map(|grouping| {
+                crate::aggregate::group_key(&resource, grouping).unwrap_or_default()
+            });
+
+            for (index, aggregate) in aggregation.aggregates.iter().enumerate() {
+                // A computed value stands in for a stored one: `Some(None)` means
+                // "this row has nothing to contribute", which is exactly how a
+                // missing property already reads below.
+                let computed = aggregate
+                    .expression
+                    .as_ref()
+                    .map(|expression| expression.evaluate(&resource, now_ms));
+
+                let stored = if computed.is_some() {
+                    None
+                } else {
+                    aggregate
+                        .property
+                        .as_ref()
+                        .map(|property| resource.get(property).ok())
+                };
+
+                // `count` counts rows: every matching row when it names no
+                // property, only the rows that HAVE the property when it does
+                // (so "count of Paid date" answers "how many are paid"). The
+                // other functions need a number, and a row without one simply
+                // doesn't contribute — it must not land in `count` either, or a
+                // sum would report a denominator it never added up.
+                let accumulate = |acc: &mut Accumulator| {
+                    if aggregate.function == crate::aggregate::AggregateFunction::Count {
+                        if !matches!(stored, Some(None)) && !matches!(computed, Some(None)) {
+                            acc.count_row();
+                        }
+
+                        return;
+                    }
+
+                    let number = match &computed {
+                        Some(value) => *value,
+                        None => stored.flatten().and_then(crate::aggregate::value_as_number),
+                    };
+
+                    if let Some(number) = number {
+                        acc.add(number);
+                    }
+                };
+
+                accumulate(&mut totals[index]);
+
+                if let Some(group) = &group {
+                    accumulate(per_group[index].entry(group.clone()).or_default());
+                }
+            }
+        }
+
+        let mut outcomes = Vec::with_capacity(aggregation.aggregates.len());
+
+        for (index, aggregate) in aggregation.aggregates.iter().enumerate() {
+            let mut groups: Vec<AggregateGroup> = per_group[index]
+                .iter()
+                .map(|(key, acc)| AggregateGroup {
+                    key: key.clone(),
+                    value: acc.finish(aggregate.function),
+                    count: acc.count,
+                })
+                .collect();
+
+            // Day and month buckets read chronologically; anything else reads
+            // biggest-first, which is what a breakdown is usually scanned for.
+            match aggregation.group_by.as_ref().map(|g| g.granularity) {
+                Some(crate::aggregate::GroupGranularity::Exact) | None => {
+                    groups.sort_by(|a, b| {
+                        b.value
+                            .unwrap_or(f64::MIN)
+                            .partial_cmp(&a.value.unwrap_or(f64::MIN))
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then_with(|| a.key.cmp(&b.key))
+                    });
+                }
+                _ => groups.sort_by(|a, b| a.key.cmp(&b.key)),
+            }
+
+            let limit = aggregation
+                .group_by
+                .as_ref()
+                .and_then(|g| g.limit)
+                .unwrap_or(DEFAULT_GROUP_LIMIT);
+            let groups_truncated = groups.len() > limit;
+            groups.truncate(limit);
+
+            outcomes.push(AggregateOutcome {
+                id: aggregate.id.clone(),
+                property: aggregate.property.clone(),
+                function: aggregate.function,
+                value: totals[index].finish(aggregate.function),
+                count: totals[index].count,
+                groups,
+                groups_truncated,
+            });
+        }
+
+        Ok(outcomes)
     }
 
     async fn query_complex(&self, q: &Query) -> AtomicResult<QueryResult> {
@@ -2086,6 +2424,7 @@ impl Db {
         Ok(QueryResult {
             subjects,
             resources,
+            aggregates: Vec::new(),
             count: total_count,
         })
     }
@@ -2385,9 +2724,18 @@ impl Storelike for Db {
 
             if let Some(pv) = existing {
                 let subject = resource.get_subject();
+                // Evict against the state that is going away, not the one
+                // replacing it. Whether an entry belongs in a watched query's
+                // member list — and under which sort key it was filed — are
+                // facts about the old values. Handing over the new resource
+                // asks instead whether the *new* values still match, and a row
+                // edited out of a filtered view answers no, so the entry that
+                // needs deleting is the one deletion is skipped for. The row
+                // then stays listed in that view until the index is rebuilt.
+                let old = Resource::from_propvals(pv.clone(), subject.clone());
                 for (prop, val) in pv.iter() {
                     let remove_atom = crate::Atom::new(subject.clone(), prop.into(), val.clone());
-                    self.remove_atom_from_index(&remove_atom, resource, &mut transaction)
+                    self.remove_atom_from_index(&remove_atom, &old, &mut transaction)
                         .map_err(|e| {
                             format!("Failed to remove atom from index {}. {}", remove_atom, e)
                         })?;
@@ -2569,6 +2917,12 @@ impl Storelike for Db {
                         .add_atom_to_index(atom, new, &mut transaction)
                         .map_err(|e| format!("Error adding atom to index: {e}  Atom: {e}"))?
                 }
+
+                store.index_genesis_derived_atoms(
+                    &commit_response.add_atoms,
+                    new,
+                    &mut transaction,
+                )?;
             }
         }
 
@@ -2776,9 +3130,34 @@ impl Storelike for Db {
             // Only attempt a network fetch for external subjects.
             // Fetching a local URL would cause the server to request itself,
             // creating an infinite loop.
-            let resolved_subject_obj =
-                Subject::from_raw(&resolved_url, self.get_base_domain().as_deref());
-            if resolved_subject_obj.is_local() {
+            //
+            // `is_local()` alone is not enough: the canonical atomicdata.dev
+            // vocabulary is deliberately kept `External` even on its own host
+            // (see `Subject::CANONICAL_VOCABULARY_PREFIXES`), so on
+            // atomicdata.dev a miss for `/properties/*` would fall through to a
+            // network fetch of this very server. Anything served from our own
+            // authority is ours whether or not it is `Internal`, so compare
+            // authorities too — and ignore the scheme, since a store migrated
+            // as `https://` must not self-fetch when served over `http://`.
+            let base_domain = self.get_base_domain();
+            let resolved_subject_obj = Subject::from_raw(&resolved_url, base_domain.as_deref());
+            let is_own_authority = base_domain
+                .as_deref()
+                .map(|base| {
+                    let strip = |s: &str| {
+                        s.trim_start_matches("https://")
+                            .trim_start_matches("http://")
+                            .trim_end_matches('/')
+                            .to_string()
+                    };
+                    let base_authority = strip(base);
+                    let resolved = strip(&resolved_url);
+                    resolved == base_authority
+                        || resolved.starts_with(&format!("{}/", base_authority))
+                })
+                .unwrap_or(false);
+
+            if resolved_subject_obj.is_local() || is_own_authority {
                 return self
                     .handle_not_found(
                         &resolved_url,
@@ -2929,11 +3308,27 @@ impl Storelike for Db {
     /// Tries `query_cache`, which you should implement yourself.
     #[instrument(skip_all)]
     async fn query(&self, q: &Query) -> AtomicResult<QueryResult> {
-        if requires_query_index(q) {
-            return self.query_complex(q).await;
+        // A constraint on a computed value can't come from the index, so it is
+        // applied to the set the index narrows to — which means paging has to
+        // happen after it, not in it.
+        let mut result = if !q.expression_filters.is_empty() {
+            self.query_with_expression_filters(q).await?
+        } else if requires_query_index(q) {
+            self.query_complex(q).await?
+        } else {
+            self.query_basic(q).await?
+        };
+
+        // Aggregates run over the whole matching set, so they need their own
+        // pass — the one above is limited to the requested page. Only when
+        // asked: a query without aggregates pays nothing for this.
+        if let Some(aggregation) = &q.aggregation {
+            if !aggregation.is_empty() {
+                result.aggregates = self.compute_aggregation(q, aggregation).await?;
+            }
         }
 
-        self.query_basic(q).await
+        Ok(result)
     }
 
     #[instrument(skip_all)]

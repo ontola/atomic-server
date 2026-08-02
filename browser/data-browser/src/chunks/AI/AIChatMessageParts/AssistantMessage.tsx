@@ -1,4 +1,5 @@
 import React from 'react';
+import { styled } from 'styled-components';
 import { isStaticToolUIPart } from 'ai';
 import type { AtomicUIMessage } from '../types';
 import { FileContent } from './FileContent';
@@ -16,6 +17,12 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
 }) => {
   return (
     <>
+      {/* A turn that failed mid-flight. The metadata was already being written
+          on error, but nothing rendered it, so a half-finished answer looked
+          like a complete one. */}
+      {message.metadata?.error && (
+        <ErrorNotice role='alert'>{message.metadata.error}</ErrorNotice>
+      )}
       {message.parts.map((part, index) => {
         if (part.type === 'text') {
           if (part.text.length === 0) {
@@ -48,3 +55,12 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
     </>
   );
 };
+
+const ErrorNotice = styled.div`
+  padding: ${p => p.theme.size(2)} ${p => p.theme.size(3)};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.alert}1a;
+  border: 1px solid ${p => p.theme.colors.alert}55;
+  color: ${p => p.theme.colors.text};
+  font-size: 0.85rem;
+`;

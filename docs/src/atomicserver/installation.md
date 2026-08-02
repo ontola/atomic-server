@@ -76,6 +76,43 @@ sudo apt-get install -y build-essential pkg-config libssl-dev --fix-missing
 - A directory is made: `~/.config/atomic`, which stores your newly created Agent keys, the HTTPS certificates other configuration. Depending on your OS, the actual data is stored in different locations. See use the `show-config` command to find out where, if you need the files.
 - Visit `http://localhost:9883/setup` to **register your first (admin) user**. You can use an existing Agent, or create a new one. Note that if you create a `localhost` agent, it cannot be used on the web (since, well, it's local). More info and steps in [getting started with the GUI](gui.md).
 
+## Serving one Drive as your front page (opt-in)
+
+By default, opening `/` sends visitors who aren't signed in to the welcome /
+sign-in screen. That is the right default for a server hosting several Drives,
+or one whose root isn't meant to be public — it doesn't assume the root is a
+Drive that everybody may read.
+
+If your server hosts a single site, wiki or dataset that the public should just
+*see*, point `ATOMIC_HOME_DRIVE` at that Drive:
+
+```env
+# The Drive at the server root
+ATOMIC_HOME_DRIVE=internal:/
+
+# ...or a specific Drive
+# ATOMIC_HOME_DRIVE=did:ad:drive:hqfpna7s5ke
+```
+
+Visiting `/` then opens that Drive directly, for signed-out visitors too.
+Signed-in users still reach their own Drives from the sidebar.
+
+Three things worth knowing:
+
+- **Make the Drive readable by the public Agent.** Otherwise signed-out
+  visitors get an authorization error instead of your front page. Open the
+  Drive, use `share` in the context menu, and give `public` read access.
+- **It costs nothing at runtime.** The subject is written into the HTML the
+  server already serves, so the browser routes to it on the first render —
+  no extra request, and no wait.
+- **`internal:` subjects are resolved for you.** The server rewrites
+  `internal:/` to its own absolute URL before handing it to the browser,
+  because a browser has no host to fetch a bare `internal:` subject from. You
+  can configure whichever form you have; both end up working.
+
+You can read the current setting back from the `/server` endpoint, under
+`https://atomicdata.dev/properties/server/homeDrive`.
+
 ## Vector search embeddings (opt-in)
 
 Semantic search is opt-in twice over: it has to be **compiled in**, and then **switched on**.

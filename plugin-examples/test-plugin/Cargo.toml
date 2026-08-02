@@ -2,6 +2,8 @@
 name = "test-plugin"
 version = "0.1.0"
 edition = "2024"
+# Fixture for the plugin tests. See the note on `publish` in ../../wasm/Cargo.toml.
+publish = false
 
 [lib]
 # This is important for the Wasm build.

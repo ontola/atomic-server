@@ -10,30 +10,149 @@ on:
 jobs:
   crates:
     name: Publish crates to crates.io
-    # See main.yml for what CI_RUNNER is and how to switch it off.
-    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
+    # Deliberately NOT CI_RUNNER. Publishing and deploying must not depend on a
+    # particular machine being switched on: GitHub does not fall back when a
+    # self-hosted runner is offline, it queues for 24h and then fails. A tag
+    # push once left crates.io publishing queued for a day for exactly that
+    # reason. Self-hosted is for main.yml, where a warm Dagger cache is worth
+    # having and a stall only costs slow CI.
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
-      - uses: pnpm/action-setup@v2.0.1
-        name: Install pnpm
-        id: pnpm-install
+          target: wasm32-unknown-unknown
+
+      # `version: 8` used to be pinned here while browser/package.json declares
+      # `packageManager: pnpm@10.15.1`, and there was no Node at all — so this
+      # job could not have run a JS build even though, as the next step
+      # explains, it has to. There is no root package.json for
+      # pnpm/action-setup to read the version from, hence the explicit 10.
+      - uses: actions/setup-node@v4
         with:
-          version: 8
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        name: Install pnpm
+        with:
+          version: 10
           run_install: false
 
+      # The published crate has to CONTAIN the built frontend.
+      #
+      # `atomic-server` embeds the data-browser, and server/Cargo.toml's
+      # `include` lists `assets_tmp` for exactly that reason. But assets_tmp is
+      # gitignored: it is a build output that `server/build.rs` fills by copying
+      # `browser/data-browser/dist` into it. A fresh CI checkout therefore does
+      # not have it, and `cargo package` assembles the .crate from what is on
+      # disk BEFORE it runs any build script — so publishing straight after
+      # checkout produces a crate with no frontend in it.
+      #
+      # That is not a theoretical concern. Someone running `cargo install
+      # atomic-server` has no `browser/` directory, so build.rs cannot rebuild
+      # the assets there; it depends on assets_tmp having been shipped. The
+      # 0.40.1 crate on crates.io does contain it — because that release was
+      # packaged on a machine that happened to have already built the frontend,
+      # not because anything here guaranteed it.
+      #
+      # Copying dist ourselves rather than letting build.rs do it keeps this to
+      # a JS build instead of also compiling the whole server (~1460 crates)
+      # just to run a build script. The `cargo publish` verification build then
+      # finds assets_tmp already present and skips the JS build entirely — it
+      # runs from target/package/, where `../browser/` does not exist.
+      - name: Build the frontend that gets embedded in the crate
+        run: |
+          set -euo pipefail
+          cd browser
+          pnpm install --frozen-lockfile
+          pnpm run build
+          cd ..
+          rm -rf server/assets_tmp
+          cp -r browser/data-browser/dist server/assets_tmp
+          test -f server/assets_tmp/index.html
+
+          # crates.io rejects any .crate over 10 MiB, and these assets are most
+          # of ours — the atomic_wasm and loro_wasm blobs alone are ~9 MiB
+          # uncompressed. Measured 7.4 MiB at v0.41.0-beta.2, so there is room,
+          # but not a lot. Fail here with a readable number rather than at the
+          # upload, which happens AFTER atomic_lib has already gone out and
+          # taken its version number with it.
+          #
+          # Note `dist` never contains the brotli `.br` siblings: build.rs
+          # writes those into assets_tmp on release builds, downstream of this.
+          # They would add ~4 MiB and put the crate over the limit, so if this
+          # ever starts failing, check that something has not started copying
+          # them in before looking for real asset growth.
+          size=$(du -sm server/assets_tmp | cut -f1)
+          echo "Embedded assets: ${size} MiB uncompressed"
+          if [ "$size" -gt 40 ]; then
+            echo "::error::Embedded assets are ${size} MiB uncompressed — the .crate is likely to exceed the 10 MiB crates.io limit."
+            exit 1
+          fi
+
+      # Runs BEFORE publishing, because crates.io is append-only: a version
+      # pushed with (say) browser/lib/package.json still on the previous
+      # number cannot be withdrawn, only yanked, and the mismatched pair stays
+      # visible forever. The 15 version sites share no single source of truth,
+      # so nothing else in this pipeline compares them to the tag.
+      - name: Version sites must match the tag
+        run: node scripts/bump-version.mjs --check "${GITHUB_REF_NAME#v}"
+
+      # Note the ordering risk this job carries: publish-crates walks the
+      # dependency graph, so atomic_lib and atomic-cli go out before
+      # atomic-server. A failure on the last one leaves the first two published
+      # at a version that can never be reused — crates.io only yanks, it does
+      # not delete. Anything that can fail the whole job belongs above this
+      # step, not inside it.
       - name: publish crates
         uses: katyo/publish-crates@v1
         with:
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          # `--allow-dirty` is required by the assets step above, not sloppiness.
+          #
+          # server/assets_tmp is gitignored, and cargo refuses to package a file
+          # that `include` names but git does not track — it reports the whole
+          # tree as having uncommitted changes and aborts. Since the assets are
+          # a build output that must nevertheless ship inside the crate, the two
+          # rules cannot both hold, and this is the one to relax.
+          #
+          # It does mean the .crate is not byte-reproducible from the tag alone;
+          # it is the tag plus a frontend build. That was already true of the
+          # 0.40.1 crate on crates.io, just implicitly.
+          #
+          # The blast radius is contained: the only untracked thing in the tree
+          # is assets_tmp, because this job builds nothing else. Anything that
+          # starts writing into the working tree before this step widens that,
+          # and should be looked at rather than waved through.
+          args: --allow-dirty
+          # publish-crates' repo check cannot work on an annotated tag, and
+          # this workflow only ever runs on one.
+          #
+          # For any crate already published at the current version it asks the
+          # GraphQL API for the last commit touching that crate's directory,
+          # via `repository.ref(qualifiedName: $ref).target`, matching
+          # `... on Commit`. On a tag push $ref is refs/tags/vX -- and an
+          # annotated tag's target is a Tag object, not a Commit. The fragment
+          # does not match, `history` comes back undefined, and the action dies
+          # destructuring it. (A lightweight tag would resolve straight to a
+          # commit and slip through, which is a poor reason to stop annotating
+          # release tags.)
+          #
+          # Nothing is lost. The check exists to catch "you changed the code but
+          # forgot to bump the version", which the `--check` step above already
+          # does properly: it compares every declared version against the tag
+          # being released, rather than inferring intent from commit dates.
+          #
+          # This only bites once something IS published at this version, so it
+          # stays invisible until a release partially completes and gets re-run
+          # -- which is exactly when you least want a new failure mode.
+          check-repo: false
 
   # I'd like to skip this one, as the publish-tauri action already creates a release
   create-release:
     name: Create Release on GitHub
-    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: pnpm/action-setup@v2.0.1
@@ -65,11 +184,25 @@ jobs:
     # silently stop producing macOS binaries.
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: pnpm/action-setup@v2.0.1
-        name: Install pnpm
-        id: pnpm-install
+      - uses: actions/checkout@v4
+
+      # Unlike the `crates` job, this one builds from the full repo, so
+      # `server/build.rs` finds `../browser/` and runs the JS build itself
+      # rather than reusing a packaged assets_tmp. That needs a working Node
+      # toolchain, and the wasm32 target for data-browser's `build:wasm`.
+      #
+      # It previously had none of that -- pnpm 8 against a repo that declares
+      # pnpm 10, no Node, no wasm target -- which is why every release since
+      # v0.40.2 died here with `panicked at server/build.rs: js build failed`
+      # and shipped no binaries. Checkout now comes first so the setup steps
+      # act on a repo that exists.
+      - uses: actions/setup-node@v4
         with:
-          version: 8
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        name: Install pnpm
+        with:
+          version: 10
           run_install: false
 
       - uses: actions-rs/toolchain@v1
@@ -77,7 +210,7 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - uses: actions/checkout@v2
+          target: wasm32-unknown-unknown
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           # (required)

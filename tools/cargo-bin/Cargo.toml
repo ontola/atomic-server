@@ -2,6 +2,11 @@
 name = "cargo-bin"
 version = "0.1.0"
 edition = "2024"
+# A local shim that pins cargo-run-bin so `cargo bin wasm-pack` works without a
+# global install. `cargo-bin` is ALSO an unrelated crate already on crates.io
+# (0.3.0, not ours), so publishing this would be both wrong and impossible.
+# See the note on `publish` in ../../wasm/Cargo.toml.
+publish = false
 
 [dependencies]
 cargo-run-bin = { version = "1.7.5", features = ["cli"] }

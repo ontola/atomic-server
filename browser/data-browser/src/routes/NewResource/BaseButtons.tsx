@@ -11,6 +11,7 @@ interface BaseButtonsProps {
 
 const buttons = [
   dataBrowser.classes.table,
+  dataBrowser.classes.dashboard,
   dataBrowser.classes.folder,
   dataBrowser.classes.documentV2,
   dataBrowser.classes.meeting,

@@ -1,4 +1,10 @@
-import { Collection, CollectionParams, PropVal } from './collection.js';
+import {
+  Aggregation,
+  Collection,
+  CollectionParams,
+  ExpressionFilter,
+  PropVal,
+} from './collection.js';
 import { Store } from './store.js';
 
 export class CollectionBuilder {
@@ -79,6 +85,27 @@ export class CollectionBuilder {
 
   public setDrive(drive: string): CollectionBuilder {
     this.params.drive = drive;
+
+    return this;
+  }
+
+  /**
+   * Asks the store for statistics over every matching resource — a sum, a
+   * count, an average — optionally broken down per distinct value of a
+   * property. Read them back from `collection.aggregates`.
+   */
+  /**
+   * Constrains members by a value computed per resource — "logged more than an
+   * hour", "overdue". Evaluated by the store; see {@link ExpressionFilter}.
+   */
+  public setExpressionFilters(filters: ExpressionFilter[]): CollectionBuilder {
+    this.params.expression_filters = filters;
+
+    return this;
+  }
+
+  public setAggregation(aggregation: Aggregation): CollectionBuilder {
+    this.params.aggregation = aggregation;
 
     return this;
   }

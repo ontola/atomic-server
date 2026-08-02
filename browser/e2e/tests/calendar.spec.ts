@@ -64,9 +64,9 @@ test.describe('calendar view', () => {
     // Persisted: after a reload (which lands on the default Board view), the
     // calendar tab — named after its kind — still renders as a calendar with
     // the item on today.
+    // The active view is in the URL, so a reload comes back to the calendar
+    // rather than the table's default view.
     await page.reload();
-    await expect(page.getByTestId('kanban-board')).toBeVisible();
-    await page.getByRole('tab', { name: 'Calendar' }).click();
     await expect(page.getByTestId('calendar-view')).toBeVisible();
     await expect(
       page

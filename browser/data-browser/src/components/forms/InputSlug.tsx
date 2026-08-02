@@ -29,24 +29,58 @@ export default function InputSlug({
 
   const [inputValue, setInputValue] = useState(value);
 
+  /**
+   * `stringToSlug` is a *final form* — it strips leading and trailing dashes,
+   * which is right for turning a name like "Meat & fish" into a shortname in
+   * one go. Applied to every keystroke it also eats the dash you are in the
+   * middle of typing: "is-valid" arrives as "isvalid", because the `-` is
+   * trailing for exactly as long as it takes to press the next key. That made
+   * hyphenated shortnames untypeable.
+   *
+   * So while typing, keep a single trailing dash and let blur finish the job.
+   */
+  function slugWhileTyping(raw: string): string {
+    const endsWithSeparator = /[^a-z0-9]$/.test(raw.toLowerCase());
+
+    return stringToSlug(raw) + (endsWithSeparator ? '-' : '');
+  }
+
+  function handleBlur(event: React.FocusEvent<HTMLInputElement>): void {
+    // Settle the value: a dash left dangling by the rule above is not valid on
+    // its own, so it goes once the field is done being typed into.
+    const settled = stringToSlug(event.target.value);
+
+    if (settled !== inputValue) {
+      setInputValue(settled);
+      setValue(settled === '' ? undefined : settled);
+    }
+
+    setTouched();
+  }
+
   function handleUpdate(event: React.ChangeEvent<HTMLInputElement>): void {
-    const newValue = stringToSlug(event.target.value);
+    const newValue = slugWhileTyping(event.target.value);
     setInputValue(newValue);
+
+    // Validate and store the settled form, not the one on screen: a value
+    // ending in the dash you are still typing is not a valid slug, and
+    // validating it would flash "Invalid Slug" between every hyphenated word.
+    const settled = stringToSlug(event.target.value);
 
     setError(undefined);
 
     try {
-      if (newValue === '') {
+      if (settled === '') {
         setValue(undefined);
       } else {
-        validateDatatype(newValue, property.datatype);
-        setValue(newValue);
+        validateDatatype(settled, property.datatype);
+        setValue(settled);
       }
     } catch (e) {
       setError('Invalid Slug');
     }
 
-    if (props.required && newValue === '') {
+    if (props.required && settled === '') {
       setError('Required');
     }
   }
@@ -58,7 +92,7 @@ export default function InputSlug({
           type='text'
           value={inputValue ?? ''}
           onChange={handleUpdate}
-          onBlur={setTouched}
+          onBlur={handleBlur}
           autoComplete='none'
           {...props}
         />

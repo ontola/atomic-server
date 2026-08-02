@@ -31,6 +31,11 @@ export default function InputResourceArray({
   commit,
   required,
   id: _id,
+  // Pulled out of `...props` on purpose so it never reaches the rows below:
+  // focusing a selector also OPENS it, and an already-rendered row popping its
+  // dropdown open on mount covers the trigger beneath it. Only the row the user
+  // just added by clicking "+" autofocuses.
+  autoFocus: _autoFocus,
   ...props
 }: InputResourceArrayProps): JSX.Element {
   const [draggingSubject, setDraggingSubject] = useState<string>();
@@ -161,6 +166,10 @@ export default function InputResourceArray({
                 hideClearButton
                 onBlur={setTouched}
                 {...props}
+                // The row only exists because "+" was just clicked, so go
+                // straight to the open search field instead of making the user
+                // click the placeholder as a second step.
+                autoFocus
               />
             )}
             {createPortal(

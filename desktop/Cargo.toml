@@ -5,6 +5,10 @@ description = "Atomic Server - Tauri desktop"
 edition = "2021"
 license = "MIT"
 name = "atomic-server-tauri"
+# Ships as a Tauri bundle (.dmg/.AppImage/.apk), never as a crate. It also
+# depends on `atomic-server` and `atomic_lib` by path with no version, which
+# crates.io forbids — see the note on `publish` in ../wasm/Cargo.toml.
+publish = false
 repository = "https://github.com/atomicdata-dev/atomic-server"
 version = "0.41.0-beta.2"
 
@@ -26,10 +30,23 @@ tauri-plugin-process = "2"
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-barcode-scanner = "2"
 
-# Desktop-only: the NFS "virtual drive" mount. Neither mobile OS can mount NFS
-# (they use provider APIs instead — see planning/virtual-drive.md), so this is
-# gated off android/ios. `nfsserve` runs a local NFS v3 server the OS mounts.
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+# Unix-desktop-only: the NFS "virtual drive" mount.
+#
+# Two separate exclusions, for two different reasons. Neither mobile OS can
+# mount NFS (they use provider APIs instead — see planning/virtual-drive.md).
+# And `nfsserve` itself is unix-only: it reaches for
+# `std::os::unix::fs::{MetadataExt, PermissionsExt}` in fs_util.rs, so it does
+# not compile for windows at all.
+#
+# That second one is why there was no Windows build. The gate used to be
+# `not(any(android, ios))`, which still includes windows, so the target could
+# never link — release.yml carried a "windows-latest currently not supported"
+# comment describing the symptom rather than the cause.
+#
+# Cargo evaluates these selectors itself, before any build script runs, so the
+# `desktop` alias tauri-build provides is not available here — hence the long
+# form. lib.rs says the same thing as `cfg(all(desktop, unix))`.
+[target.'cfg(all(unix, not(any(target_os = "android", target_os = "ios"))))'.dependencies]
 nfsserve = "0.10"
 hex = "0.4"
 blake3 = "1"

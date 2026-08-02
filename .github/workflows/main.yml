@@ -1,29 +1,48 @@
 on: [push, workflow_dispatch]
 
-# Which machine the Linux jobs run on is a repository variable, not a literal,
-# so switching between the self-hosted runner and GitHub's takes one settings
-# change instead of an edit to every workflow.
+# Which machine this pipeline runs on is a repository variable, not a literal,
+# so switching between the self-hosted runner and GitHub's is one settings
+# change rather than an edit here.
 #
 #   Settings -> Secrets and variables -> Actions -> Variables
 #   CI_RUNNER = ["self-hosted", "Linux", "X64"]
 #
-# Unset or delete it and everything falls back to `ubuntu-latest`. There is no
+# Unset or delete it and this falls back to `ubuntu-latest`. There is NO
 # automatic failover: if the self-hosted runner is offline, jobs QUEUE (GitHub
 # gives up after 24h) rather than moving to a hosted runner. Clearing
 # CI_RUNNER is the manual escape hatch.
 #
-# SECURITY: this repo is public, and self-hosted runners must never run
-# untrusted code. That is safe today only because nothing here triggers on
-# `pull_request`/`pull_request_target` -- every trigger is push,
-# workflow_dispatch or workflow_call, all of which need write access. Adding a
-# pull_request trigger while CI_RUNNER points at a self-hosted machine would
-# let any fork execute arbitrary code on it.
+# Only this workflow uses it, on purpose. Releasing and deploying are pinned to
+# `ubuntu-latest` and must stay that way: a tag push once left the crates.io
+# publish queued for a day because the runner was switched off, and a release
+# that depends on a particular PC being awake is not a release process. Here a
+# stall costs slow CI and nothing else, and the warm Dagger cache is worth the
+# trade.
+#
+# (Automatic fallback is not available. The usual trick -- a picker job that
+# queries the runner API and emits labels for the rest -- needs
+# `administration:read`, which GITHUB_TOKEN cannot be granted, so it would mean
+# storing a long-lived PAT purely to decide where to run.)
+#
+# SECURITY: this repo is public, and a self-hosted runner must never execute
+# untrusted code -- a fork's PR branch is code anyone can write, and running it
+# on your own machine hands over arbitrary code execution, plus any secret and
+# any cached credential that machine can reach.
+#
+# So `pull_request` and `pull_request_target` are forced onto GitHub-hosted
+# runners in the expression itself, whatever CI_RUNNER says. Today nothing here
+# triggers on either, and this stays correct if someone adds one later: the
+# guard is structural, not a convention to remember. Trusted events (push,
+# workflow_dispatch, workflow_call -- all requiring write access) still get
+# CI_RUNNER and its warm Dagger cache.
+#
+# Do not "simplify" this back to a bare `vars.CI_RUNNER` lookup.
 
 name: "Main pipeline: build, lint, test"
 jobs:
   Main:
     name: Main
-    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["ubuntu-latest"]')) }}
     env:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
     steps:
@@ -45,9 +64,16 @@ jobs:
           version: "latest"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
-          args: ci --netlify-auth-token env://NETLIFY_TOKEN
+          # `--publish-docs` only from master. This pipeline runs on every push
+          # to every branch, and netlifyDeploy used to pass `--prod`
+          # unconditionally — so any feature branch republished the public docs
+          # and typedoc. Every other branch now gets a preview URL instead.
+          args: ci --netlify-auth-token env://NETLIFY_TOKEN ${{ github.ref == 'refs/heads/master' && '--publish-docs' || '' }}
       - name: Dagger docker images (build images & publish)
-        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+        # develop and master only. There is no `main` branch here — that clause
+        # could never fire, and left in place it invites someone to conclude
+        # one exists.
+        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'
         uses: dagger/dagger-for-github@8.0.0
         with:
           version: "latest"

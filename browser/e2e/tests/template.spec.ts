@@ -6,7 +6,6 @@ import {
   newDrive,
   signIn,
   sidebarNewResourceButton,
-  SERVER_URL,
 } from './test-utils';
 import fs from 'node:fs';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -17,6 +16,25 @@ import os from 'node:os';
 
 const EXEC_DIR = path.join(os.tmpdir(), 'atomic-data-template-tests');
 const TEMPLATE_IMPORT_TIMEOUT = 60_000;
+
+/**
+ * The atomic-server the *app* talks to.
+ *
+ * `SERVER_URL` only configures the test helpers — the data-browser resolves its
+ * own server independently (`VITE_ATOMIC_SERVER_URL` in `.env.development`, or
+ * a stored/`?server=` override), and the two are not the same port on every
+ * machine: a local managed node runs on 9885 while the standalone dev server
+ * runs on 9883. This test applies the template *through the app*, so the
+ * scaffolder has to query whichever server the app actually wrote it to.
+ * Reading it back from the running Store is the only source that can't drift.
+ */
+async function appServerUrl(page: Page): Promise<string> {
+  const url = await page.evaluate(() => window.store.getServerUrl());
+
+  expect(url, 'The app did not expose a server URL').toBeTruthy();
+
+  return url.replace(/\/$/, '');
+}
 
 async function applyWebsiteTemplate(page: Page) {
   const dialog = page.locator('dialog[open][data-top-level="true"]');
@@ -32,6 +50,24 @@ const pathToPackage = (
 ) => {
   return path.join(__dirname, '..', '..', libName);
 };
+
+/**
+ * The scaffolder is run straight off its bin rather than through
+ * `pnpm link` + `pnpm exec`.
+ *
+ * `pnpm link` writes a `pnpm-workspace.yaml` into the directory it runs in,
+ * which makes EXEC_DIR a workspace *root*. The generated site is not a member
+ * of that workspace, so its own `pnpm install` resolves against the root
+ * instead, reports "Already up to date", and creates no `node_modules` at all
+ * — the site then fails much later with `ad-generate: command not found`,
+ * naming nothing that points back here.
+ */
+const CREATE_TEMPLATE_BIN = path.join(
+  pathToPackage('create-template'),
+  'bin',
+  'src',
+  'index.js',
+);
 
 const execAsync = async (command: Parameters<typeof exec>[0], cwd?: string) => {
   return new Promise((resolve, reject) => {
@@ -56,31 +92,74 @@ const execAsync = async (command: Parameters<typeof exec>[0], cwd?: string) => {
   });
 };
 
+/** The `@tomic/*` packages a generated site depends on, and where they live here. */
+const WORKSPACE_PACKAGES = {
+  '@tomic/lib': 'lib',
+  '@tomic/cli': 'cli',
+  '@tomic/react': 'react',
+  '@tomic/svelte': 'svelte',
+} as const satisfies Record<string, Parameters<typeof pathToPackage>[0]>;
+
+/**
+ * Point every `@tomic/*` dependency of the generated site at this checkout.
+ *
+ * The templates pin the workspace's current version (`^0.41.0-beta.2` today),
+ * which by definition is not on npm until it is released — so `pnpm install`
+ * fails with ERR_PNPM_NO_MATCHING_VERSION and the test never reaches the site
+ * it exists to exercise. `pnpm link` afterwards is too late: install has to
+ * resolve the whole manifest first, and so does each `link`.
+ *
+ * Rewriting the manifest before install means the registry is never asked for
+ * these, and the site is built against the code on this branch — which is the
+ * point of the test, not an incidental convenience.
+ */
+async function useWorkspacePackages(siteType: string) {
+  const manifestPath = path.join(EXEC_DIR, siteType, 'package.json');
+  const manifest = JSON.parse(
+    await fs.promises.readFile(manifestPath, 'utf-8'),
+  ) as Record<string, Record<string, string> | undefined>;
+
+  for (const field of ['dependencies', 'devDependencies']) {
+    const deps = manifest[field];
+
+    if (!deps) {
+      continue;
+    }
+
+    for (const [name, dir] of Object.entries(WORKSPACE_PACKAGES)) {
+      if (deps[name]) {
+        deps[name] = `link:${pathToPackage(dir)}`;
+      }
+    }
+  }
+
+  await fs.promises.writeFile(
+    manifestPath,
+    `${JSON.stringify(manifest, null, 2)}\n`,
+  );
+}
+
 async function setupTemplateSite(
   serverUrl: string,
   drive: string,
   siteType: string,
 ) {
-  if (!fs.existsSync(EXEC_DIR)) {
-    fs.mkdirSync(EXEC_DIR);
-    await execAsync('pnpm init');
-    await execAsync(`pnpm link ${pathToPackage('create-template')}`);
-  }
+  fs.mkdirSync(EXEC_DIR, { recursive: true });
 
   await execAsync(
-    `pnpm exec create-template ${siteType} --template ${siteType} --server-url ${serverUrl} --drive ${drive}`,
+    `node ${CREATE_TEMPLATE_BIN} ${siteType} --template ${siteType} --server-url ${serverUrl} --drive ${drive}`,
   );
 
-  // We don't want a frozen lockfile because it would cause issues in the ci.
-  await execAsync('pnpm install --no-frozen-lockfile', siteType);
-  await execAsync(`pnpm link ${pathToPackage('cli')}`, siteType);
-  await execAsync(`pnpm link ${pathToPackage('lib')}`, siteType);
+  await useWorkspacePackages(siteType);
 
-  if (siteType === 'nextjs-site') {
-    await execAsync(`pnpm link ${pathToPackage('react')}`, siteType);
-  } else if (siteType === 'sveltekit-site') {
-    await execAsync(`pnpm link ${pathToPackage('svelte')}`, siteType);
-  }
+  // No frozen lockfile because it would cause issues in the ci. No dependency
+  // build scripts either: none of them matter to what this test asserts, and
+  // pnpm 11 turns an unapproved one (`sharp`, via next) into a hard
+  // ERR_PNPM_IGNORED_BUILDS failure rather than a warning.
+  await execAsync(
+    'pnpm install --no-frozen-lockfile --ignore-scripts',
+    siteType,
+  );
 
   await execAsync('pnpm update-ontologies', siteType);
 }
@@ -179,6 +258,15 @@ test.describe('Test create-template package', () => {
   test.describe.configure({ mode: 'serial' });
   test.beforeEach(before);
 
+  // A run that is killed (or that fails before `afterAll`) leaves EXEC_DIR
+  // behind, and `create-template` then *prompts* "Folder already exists …
+  // Continue? (y/n)" on stdin — which `exec` never answers, so the next run
+  // hangs until the test times out. Start from a clean slate instead of
+  // trusting the previous run's cleanup.
+  test.beforeAll(async () => {
+    await fs.promises.rm(EXEC_DIR, { recursive: true, force: true });
+  });
+
   test('apply next-js template', async ({ page }) => {
     test.slow();
     await signIn(page);
@@ -193,7 +281,11 @@ test.describe('Test create-template package', () => {
 
     await applyWebsiteTemplate(page);
 
-    await setupTemplateSite(SERVER_URL, drive.driveURL, 'nextjs-site');
+    await setupTemplateSite(
+      await appServerUrl(page),
+      drive.driveURL,
+      'nextjs-site',
+    );
 
     try {
       //start server
@@ -244,7 +336,11 @@ test.describe('Test create-template package', () => {
 
     await applyWebsiteTemplate(page);
 
-    await setupTemplateSite(SERVER_URL, drive.driveURL, 'sveltekit-site');
+    await setupTemplateSite(
+      await appServerUrl(page),
+      drive.driveURL,
+      'sveltekit-site',
+    );
 
     try {
       const child = startServer('sveltekit-site');

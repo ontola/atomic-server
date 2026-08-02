@@ -296,6 +296,23 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     false,
   );
 
+  // Why the last request failed, if it did. A request that dies — an unreachable
+  // provider, a rejected key, a model that doesn't exist — used to leave no
+  // trace at all: `useChat` had no `onError`, so the only evidence was a line in
+  // the browser console. "I asked for something and nothing happened" is the
+  // worst possible failure mode for a chat.
+  const [requestError, setRequestError] = useState<string | undefined>(
+    undefined,
+  );
+
+  /** Names the thing that didn't answer, since "no answer" alone helps nobody. */
+  const providerLabel =
+    activeModel.provider === AIProvider.Ollama
+      ? `Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}`
+      : activeModel.provider === AIProvider.OpenRouter
+        ? 'OpenRouter'
+        : 'the model provider';
+
   const providerNotice = canUseInput
     ? null
     : activeModel.provider === AIProvider.Ollama
@@ -345,12 +362,21 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       transport,
       messages: initialMessages,
       generateId: () => store.newLocalId(),
+      onError: error => {
+        console.error('AI request failed:', error);
+        // The provider's own words: "NetworkError when attempting to fetch
+        // resource", "401 Unauthorized", "model not found". Rendered next to the
+        // input, where the reason belongs.
+        setRequestError(error.message || 'Unknown error');
+      },
       onFinish: ({ message, isError, messages: _messages }) => {
         if (isError) {
           message.metadata = {
             ...(message.metadata || {}),
             error: 'Something went wrong',
           };
+        } else {
+          setRequestError(undefined);
         }
 
         onNewMessage(message);
@@ -489,6 +515,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   const handleSubmit = async (inputOverride?: string) => {
     const text = inputOverride || userInput;
+    setRequestError(undefined);
 
     if (text.trim() === '/compact') {
       setUserInput('');
@@ -705,6 +732,21 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 <span>{providerNotice}</span>
                 <Button onClick={() => setSetupComplete(false)}>
                   Set up a model
+                </Button>
+              </ProviderNotice>
+            )}
+            {requestError && (
+              <ProviderNotice role='alert'>
+                <span>
+                  {`No answer from ${providerLabel}: ${requestError}`}
+                </span>
+                <Button
+                  onClick={() => {
+                    setRequestError(undefined);
+                    regenerate();
+                  }}
+                >
+                  Try again
                 </Button>
               </ProviderNotice>
             )}

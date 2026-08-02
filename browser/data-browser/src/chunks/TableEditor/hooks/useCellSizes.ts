@@ -50,26 +50,49 @@ export function useCellSizes<T>(
     }
   }, [externalSizes]);
 
+  // Fit the size list to the column count. Via the updater form, NOT the `sizes`
+  // from this render: when columns and `externalSizes` change in the same commit
+  // (a view adding its own columns does exactly that), the effect above has
+  // already applied the external widths, and appending to the stale list threw
+  // them away — every view-added column then rendered at the 300px default
+  // instead of the width it asked for.
   useEffect(() => {
     if (columns.length === 0) {
       return;
     }
 
-    const diff = columns.length - sizes.length;
+    setSizes(current => {
+      const diff = columns.length - current.length;
 
-    if (diff > 0) {
-      setSizes([...sizes, ...Array(diff).fill(DEFAULT_SIZE_STR)]);
-    }
+      if (diff === 0) {
+        return current;
+      }
 
-    if (diff < 0) {
-      setSizes(sizes.slice(0, columns.length));
-    }
+      return diff > 0
+        ? [...current, ...Array(diff).fill(DEFAULT_SIZE_STR)]
+        : current.slice(0, columns.length);
+    });
   }, [columns]);
 
-  const templateColumns = `${INDEX_CELL_WIDTH} ${sizes.join(
+  // The state above is corrected by effects, which run a frame after the render
+  // that changed the columns. Rendering a size list that doesn't match the
+  // columns paints the *previous* view's widths for that frame — very visible
+  // when switching between views whose column counts differ, and it churns the
+  // grid while it settles. So a mismatched list is ignored in favour of what the
+  // caller passed (or plain defaults) until the state catches up.
+  const effectiveSizes =
+    sizes.length === columns.length
+      ? sizes
+      : externalSizes?.length === columns.length
+        ? toPixels(externalSizes)
+        : Array(columns.length).fill(DEFAULT_SIZE_STR);
+
+  const templateColumns = `${INDEX_CELL_WIDTH} ${effectiveSizes.join(
     ' ',
   )} minmax(50px, 1fr)`;
-  const contentRowWidth = `calc(${INDEX_CELL_WIDTH} + ${sizes.join(' + ')})`;
+  const contentRowWidth = `calc(${INDEX_CELL_WIDTH} + ${effectiveSizes.join(
+    ' + ',
+  )})`;
 
   return {
     /** CSS --table-template-columns */

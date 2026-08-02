@@ -381,14 +381,39 @@ function waitForCommitForSubject(page: Page, subject: string, since: number) {
  *
  * Handles three entry states:
  *   1. Already signed in (e.g. post-`before()`/`devDrive()`): no-op.
- *   2. Welcome gate visible: click its "Sign in" button → paste secret → Continue.
+ *   2. Welcome gate visible: click its "Sign in" button → paste secret.
  *   3. On a drive page with a "Login / New User" sidebar link: click it, then
  *      follow the welcome-gate flow, then navigate back.
+ *
+ * There is no button to confirm the secret, by design: a secret either parses
+ * or it doesn't, so GettingStartedFlow signs in the moment the value is valid
+ * (on change, and again on blur). This helper used to click a "Continue"
+ * button that the passkey-first onboarding rework removed, which timed out and
+ * took down every spec that signs in — most of the suite.
+ *
+ * Note this is deliberately the FOSS path. The neighbouring "Restore account"
+ * button is the managed/recovery route (passkey or recovery code); sending
+ * self-hosted tests through it would exercise the wrong flow entirely.
  *
  * Idempotence is important because `before()` already signs in with a
  * fresh dev-drive agent; tests that also call `signIn(page)` used to pre-empt
  * that by looking for a "Sign in" button that wasn't there.
  */
+/**
+ * Types the agent secret and lets the flow sign itself in.
+ *
+ * `fill()` alone usually suffices — it dispatches the input event React's
+ * onChange listens for, which calls `trySecret`. The explicit blur() covers the
+ * other half of the component's contract (`onBlur` re-runs `trySecret` with its
+ * final flag), so a value that arrives too fast for the change handler still
+ * gets validated rather than sitting in a field nobody submitted.
+ */
+async function enterSecret(page: Page, secret: string) {
+  const field = page.getByLabel('Agent secret');
+  await field.fill(secret);
+  await field.blur();
+}
+
 export async function signIn(page: Page, secret: string = SECRET) {
   // Wait for one of the three states to actually render. Without this, a
   // freshly-navigated page may not yet have the welcome gate or sidebar
@@ -411,8 +436,7 @@ export async function signIn(page: Page, secret: string = SECRET) {
 
   if (await signInButton.isVisible({ timeout: 1500 }).catch(() => false)) {
     await signInButton.click();
-    await page.getByLabel('Agent secret').fill(secret);
-    await page.getByRole('button', { name: 'Continue' }).click();
+    await enterSecret(page, secret);
     // Wait for the signed-in sidebar to appear. Without this, callers
     // (e.g. `openSubject`) may navigate before the auth cookie + localStorage
     // are written, leaving the next page anonymous (the sidebar then renders
@@ -431,8 +455,13 @@ export async function signIn(page: Page, secret: string = SECRET) {
   if (await loginLink.isVisible({ timeout: 1500 }).catch(() => false)) {
     await loginLink.click();
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await page.getByLabel('Agent secret').fill(secret);
-    await page.getByRole('button', { name: 'Continue' }).click();
+    await enterSecret(page, secret);
+    // Sign-in has to have landed before navigating away: goBack() during the
+    // in-flight sign-in leaves the previous page anonymous.
+    await page
+      .getByRole('link', { name: 'User Settings' })
+      .waitFor({ state: 'visible', timeout: 10_000 })
+      .catch(() => undefined);
     await page.goBack();
 
     return;
@@ -660,11 +689,13 @@ export async function openAgentPage(page: Page) {
 /** Opens the users' profile, sets a username, saves, reloads and verifies the change persisted. */
 export async function editProfileAndCommit(page: Page) {
   await openAgentPage(page);
-  await expect(
-    page.getByRole('button', { name: 'Edit profile' }),
-  ).toBeVisible();
+  // Was "Edit profile". AgentProfileHeader now renders name and avatar inline
+  // on the settings page, so the button that leaves for the full edit form
+  // says what is actually behind it. Same destination (`editURL`).
+  const editButton = page.getByRole('button', { name: 'More profile fields' });
+  await expect(editButton).toBeVisible();
 
-  await page.getByRole('button', { name: 'Edit profile' }).click();
+  await editButton.click();
   await page.waitForURL(/\/app\/edit/);
 
   const nameInput = page.locator('[data-test="input-name"]');
@@ -840,6 +871,18 @@ export async function changeDrive(
     const driveLink = page.getByTestId(sidebarDriveButtonId);
     await expect(driveLink).toBeVisible();
     await openConfigureDrive(page);
+    // The input lives behind an "Open by URL" disclosure now — the drives
+    // section leads with the drive list and "New drive", and only reveals the
+    // URL/DID field when asked. Without this click the field is not in the DOM
+    // at all, which reads as a locator timeout rather than a hidden element.
+    const openByUrlToggle = page.locator('[data-test="open-drive-by-url"]');
+
+    if (await openByUrlToggle.isVisible({ timeout: 2000 }).catch(() => false)) {
+      if ((await openByUrlToggle.getAttribute('aria-expanded')) !== 'true') {
+        await openByUrlToggle.click();
+      }
+    }
+
     // The open-by-URL input starts empty on the User Settings page; the Open
     // button is disabled when the target equals the current drive.
     const currentDriveInput = page.getByTestId('drive-url-input');

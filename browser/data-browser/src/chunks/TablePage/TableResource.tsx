@@ -1,10 +1,14 @@
 import {
+  core,
   dataBrowser,
   unknownSubject,
+  type AggregateFunction,
   useCanWrite,
   useStore,
   type DataBrowser,
+  type ExpressionFilter,
   type Property,
+  type PropVal,
   type Resource,
 } from '@tomic/react';
 import type { CellIndex } from '@chunks/TableEditor';
@@ -37,22 +41,74 @@ import {
   useRef,
 } from 'react';
 import { FancyTable } from '@chunks/TableEditor/TableEditor';
+import { DEFAULT_SIZE_PX } from '@chunks/TableEditor/hooks/useCellSizes';
 import { NewColumnButton } from './NewColumnButton';
 import { TableHeading } from './TableHeading';
 import { TableFilterBar } from './TableFilterBar';
 import { TableViewTabs } from './TableViewTabs';
+import { VIEW_KIND_LABELS } from './tableViewKinds';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
 import { KanbanView } from './Kanban/KanbanView';
 import { CalendarView } from './Calendar/CalendarView';
+import { TimerToolbar } from './Timer/TimerToolbar';
+import { useTimerColumns } from './Timer/useTimerColumns';
+import { useDerivedColumns } from './useDerivedColumns';
+import { useRowActions } from './useRowActions';
+import { rowActionKey, type RowActionSpec } from './rowActions';
+import { QuickAddBar } from './QuickAddBar';
+import { useTableAggregates } from './useTableAggregates';
+import { TableTotalsFooter } from './TableTotalsFooter';
+import { toAggregation } from './tableAggregates';
+import { stringToSlug } from '@helpers/stringToSlug';
+import { orderColumns, reorderColumnKeys } from './columnOrder';
+import { TableSummaryBar } from './TableSummaryBar';
+import type { GroupGranularity } from './tableAggregates';
+import type { AggregateTarget } from './tablePageContext';
+import type { DerivedColumnSpec } from './derivedColumns';
 import { TablePresenceContext, useTablePresence } from './TablePresence';
 
 interface TableResourceProps {
   resource: Resource<DataBrowser.Table>;
+  /**
+   * Which view to render. Defaults to the `?view=` search param, then the
+   * table's own default — which is what its own page wants, and what an
+   * embedded copy cannot use, since one param can't address several tables.
+   */
+  viewSubject?: string;
+  /**
+   * Rendered inside something else, e.g. a dashboard block. The view tab bar and
+   * the filter bar are the table page's own chrome: the tabs would rewrite the
+   * host page's `?view=`, and an embedded block's filters are its configuration
+   * rather than something to fiddle with in place.
+   */
+  embedded?: boolean;
 }
 
 const columnToKey = (column: TableColumn) => column.key;
 
-export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
+/**
+ * Which rows a query asks for, as one comparable string — so the collection in
+ * hand can be told apart from the one that was asked for. Built from the same
+ * fields on both sides (`Collection` stores them verbatim), so the two are
+ * directly comparable. Paging is left out: pages of one query answer it all.
+ */
+const queryIdentity = (
+  filters: PropVal[],
+  expressionFilters: ExpressionFilter[],
+  sortBy: string | undefined,
+  sortDesc: boolean,
+): string =>
+  JSON.stringify({
+    f: filters,
+    e: expressionFilters,
+    s: [sortBy ?? null, !!sortDesc],
+  });
+
+export const TableResource: React.FC<TableResourceProps> = ({
+  resource,
+  viewSubject,
+  embedded,
+}) => {
   const store = useStore();
   const titleId = useId();
   const canWrite = useCanWrite(resource);
@@ -83,22 +139,47 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     viewKind,
     viewGroupBy,
     setViewGroupBy,
+    viewEndProp,
+    setViewEndProp,
+    viewTimerExclusive,
+    setViewTimerExclusive,
     viewSplitLanguages,
     setViewSplitLanguages,
-  } = useTableData(resource);
+    viewDerivedColumns,
+    viewDerivedColumnsSet,
+    setViewDerivedColumns,
+    viewColumnOrder,
+    setViewColumnOrder,
+    viewAggregates,
+    setViewAggregates,
+    viewGroupByColumn,
+    setViewGroupByColumn,
+    viewGroupGranularity,
+    setViewGroupGranularity,
+    viewRowActions,
+    setViewRowActions,
+    viewQuickAdd,
+    setViewQuickAdd,
+    queryFilters,
+    queryExpressionFilters,
+  } = useTableData(resource, viewSubject);
 
-  const { columns, allColumns, reorderColumns, hideColumn, showColumn } =
-    useTableColumns(
-      tableClass,
-      viewColumns,
-      setViewColumns,
-      viewSplitLanguages,
-    );
+  const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
+    tableClass,
+    viewColumns,
+    setViewColumns,
+    viewSplitLanguages,
+  );
 
   // The rendered column's property, per grid index (split columns repeat
-  // theirs) — for consumers that need index alignment (presence).
+  // theirs) — for consumers that need index alignment (presence). Virtual
+  // columns have no property and are appended after the real ones, so dropping
+  // them leaves the leading indexes aligned.
   const columnProperties = useMemo(
-    () => columns.map(c => c.property),
+    () =>
+      columns
+        .map(c => c.property)
+        .filter((p): p is Property => p !== undefined),
     [columns],
   );
 
@@ -117,6 +198,344 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       return true;
     });
   }, [columnProperties]);
+
+  // The timer doesn't replace the grid, it augments it: a start/stop button
+  // appended to the real columns, a Duration derived column, plus a toolbar
+  // above. Everything else — editing, sorting, resizing, keyboard navigation,
+  // virtualisation — stays the table's.
+  const isTimer = viewKind === 'timer';
+  // `incrementMemberCount` is declared further down (it needs the member-count
+  // refs); this stable indirection lets the timer call it from up here.
+  const incrementMemberCountRef = useRef<() => void>(() => undefined);
+  const notifyEntryCreated = useCallback(() => {
+    incrementMemberCountRef.current();
+    // The count lives in a ref, so bumping it alone renders nothing — the row
+    // would only appear on the next unrelated render (in practice: a reload).
+    // Refreshing the collection is what actually puts it on screen.
+    void invalidateCollection();
+  }, [invalidateCollection]);
+  const timer = useTimerColumns(
+    resource.subject,
+    tableClass,
+    allColumns,
+    collection,
+    viewGroupBy,
+    setViewGroupBy,
+    viewEndProp,
+    setViewEndProp,
+    viewTimerExclusive,
+    !canWrite,
+    isTimer,
+    notifyEntryCreated,
+  );
+
+  // Computed columns are configuration on the View, not a feature of one view
+  // kind — a table can show a days-since just as a timer shows a duration. A
+  // timer view that has never had a derived-column list falls back to timing
+  // its start/end pair, so a view added from the view menu still has a
+  // Duration; once the user edits or removes it the stored list takes over
+  // (which is why "has a list" and "the list is empty" must stay distinct).
+  const effectiveDerivedSpecs =
+    isTimer && !viewDerivedColumnsSet
+      ? [...viewDerivedColumns, ...timer.derivedColumns]
+      : viewDerivedColumns;
+
+  // Keyed on their shape, not their identity: the timer's contribution is
+  // rebuilt whenever its props resolve, and these specs feed both the grid and
+  // the page context — an unstable array there re-renders every cell.
+  const derivedSpecsKey = JSON.stringify(effectiveDerivedSpecs);
+  const derivedSpecs = useMemo(
+    () => JSON.parse(derivedSpecsKey) as DerivedColumnSpec[],
+    [derivedSpecsKey],
+  );
+
+  const derivedColumns = useDerivedColumns(derivedSpecs);
+
+  // Every edit writes the *effective* list, so acting on a timer's implicit
+  // Duration materializes it instead of silently dropping it.
+  const addDerivedColumn = useCallback(
+    (spec: DerivedColumnSpec) => {
+      // Ids are the column's identity in the grid; keep them unique.
+      const taken = new Set(derivedSpecs.map(s => s.id));
+      let id = spec.id || 'computed';
+
+      for (let n = 2; taken.has(id); n++) {
+        id = `${spec.id}-${n}`;
+      }
+
+      setViewDerivedColumns([...derivedSpecs, { ...spec, id }]);
+    },
+    [derivedSpecs, setViewDerivedColumns],
+  );
+
+  const updateDerivedColumn = useCallback(
+    (spec: DerivedColumnSpec) => {
+      setViewDerivedColumns(
+        derivedSpecs.map(existing =>
+          existing.id === spec.id ? spec : existing,
+        ),
+      );
+    },
+    [derivedSpecs, setViewDerivedColumns],
+  );
+
+  /**
+   * Sets the statistic shown under one column (or clears it). One column holds
+   * at most one, which is what the footer can express — and what a spreadsheet
+   * does.
+   */
+  const setColumnAggregate = useCallback(
+    (target: AggregateTarget, fn: AggregateFunction | undefined, row = 0) => {
+      // One statistic per column per totals row — a column being either a stored
+      // property or one this view computes.
+      const rest = viewAggregates.filter(
+        aggregate =>
+          aggregate.property !== target.property ||
+          aggregate.derived !== target.derived ||
+          (aggregate.row ?? 0) !== row,
+      );
+
+      if (!fn) {
+        setViewAggregates(rest);
+
+        // A breakdown with nothing to break down shows nothing, so it goes with
+        // the last total.
+        if (rest.length === 0 && viewGroupByColumn) {
+          setViewGroupByColumn('');
+        }
+
+        return;
+      }
+
+      const name =
+        target.derived ?? target.property?.split('/').pop() ?? 'column';
+
+      setViewAggregates([
+        ...rest,
+        {
+          id: `${fn}-${stringToSlug(name)}-${row}`,
+          ...target,
+          function: fn,
+          row,
+        },
+      ]);
+    },
+    [
+      viewAggregates,
+      setViewAggregates,
+      setViewGroupByColumn,
+      viewGroupByColumn,
+    ],
+  );
+
+  /** Drops a whole totals row, moving the ones below it up. */
+  const removeAggregateRow = useCallback(
+    (row: number) => {
+      const remaining = viewAggregates
+        .filter(aggregate => (aggregate.row ?? 0) !== row)
+        .map(aggregate =>
+          (aggregate.row ?? 0) > row
+            ? { ...aggregate, row: (aggregate.row ?? 0) - 1 }
+            : aggregate,
+        );
+
+      setViewAggregates(remaining);
+
+      if (remaining.length === 0 && viewGroupByColumn) {
+        setViewGroupByColumn('');
+      }
+    },
+    [
+      viewAggregates,
+      setViewAggregates,
+      setViewGroupByColumn,
+      viewGroupByColumn,
+    ],
+  );
+
+  const setBreakdown = useCallback(
+    (config: { groupByColumn: string; granularity: GroupGranularity }) => {
+      setViewGroupByColumn(config.groupByColumn);
+      setViewGroupGranularity(config.granularity);
+    },
+    [setViewGroupByColumn, setViewGroupGranularity],
+  );
+
+  const removeDerivedColumn = useCallback(
+    (id: string) => {
+      setViewDerivedColumns(derivedSpecs.filter(spec => spec.id !== id));
+    },
+    [derivedSpecs, setViewDerivedColumns],
+  );
+
+  // Configured row-action buttons. Hidden entirely from a viewer who cannot
+  // write: a button that is going to be rejected is worse than no button.
+  const actionColumns = useRowActions(viewRowActions, allColumns, !canWrite);
+
+  const addRowAction = useCallback(
+    (spec: RowActionSpec) => {
+      // Same id minting as a computed column: derived from the label, and
+      // suffixed until it is unique within the view.
+      const base = stringToSlug(spec.label) || 'action';
+      const taken = new Set(viewRowActions.map(existing => existing.id));
+      let id = base;
+      let n = 2;
+
+      while (taken.has(id)) {
+        id = `${base}-${n++}`;
+      }
+
+      setViewRowActions([...viewRowActions, { ...spec, id }]);
+    },
+    [viewRowActions, setViewRowActions],
+  );
+
+  const updateRowAction = useCallback(
+    (spec: RowActionSpec) => {
+      setViewRowActions(
+        viewRowActions.map(existing =>
+          existing.id === spec.id ? spec : existing,
+        ),
+      );
+    },
+    [viewRowActions, setViewRowActions],
+  );
+
+  const removeRowAction = useCallback(
+    (id: string) => {
+      setViewRowActions(viewRowActions.filter(spec => spec.id !== id));
+      // Its placement in the column order would otherwise linger as dead config
+      // that a later drag writes back forever.
+      setViewColumnOrder(
+        viewColumnOrder.filter(key => key !== rowActionKey(id)),
+      );
+    },
+    [viewRowActions, setViewRowActions, viewColumnOrder, setViewColumnOrder],
+  );
+
+  // Computed columns, then configured buttons, then the timer's Start/Stop — so
+  // the buttons stay at the end of the row where a thumb can find them.
+  const virtualColumns = useMemo(
+    () =>
+      isTimer
+        ? [...derivedColumns, ...actionColumns, ...timer.columns]
+        : [...derivedColumns, ...actionColumns],
+    [isTimer, derivedColumns, actionColumns, timer.columns],
+  );
+
+  // The default order: stored columns, then the ones the view adds — except in a
+  // timer view, where its Duration and Start/Stop lead. Timing something is the
+  // point of that view, so its controls belong where the eye starts, not past
+  // four columns of data.
+  const defaultOrder = useMemo(
+    () =>
+      virtualColumns.length === 0
+        ? columns
+        : isTimer
+          ? [...virtualColumns, ...columns]
+          : [...columns, ...virtualColumns],
+    [isTimer, columns, virtualColumns],
+  );
+
+  // A saved order (from dragging a heading) wins over that default, for every
+  // kind of column alike.
+  const gridColumns = useMemo(
+    () => orderColumns(defaultOrder, viewColumnOrder),
+    [defaultOrder, viewColumnOrder],
+  );
+
+  /**
+   * Dragging a heading writes the whole order — including the columns the view
+   * added, which is the only way to place them. `view-columns` is rewritten in
+   * the same relative order so the visibility list and the display order can't
+   * drift apart (it still decides *which* properties show).
+   */
+  const handleColumnReorder = useCallback(
+    async (sourceIndex: number, destinationIndex: number) => {
+      const order = reorderColumnKeys(
+        gridColumns,
+        sourceIndex,
+        destinationIndex,
+      );
+      setViewColumnOrder(order);
+
+      const propertySubjects = new Set(
+        gridColumns
+          .map(column => column.property?.subject)
+          .filter((subject): subject is string => subject !== undefined),
+      );
+      setViewColumns(order.filter(key => propertySubjects.has(key)));
+    },
+    [gridColumns, setViewColumnOrder, setViewColumns],
+  );
+
+  // Totals ride their own query so they can be re-read on every edit without
+  // clearing the grid's pages. See `useTableAggregates`.
+  const aggregateOutcomes = useTableAggregates({
+    property: core.properties.parent,
+    value: resource.subject,
+    filters: queryFilters,
+    expressionFilters: queryExpressionFilters,
+    aggregation: toAggregation(
+      viewAggregates,
+      viewGroupByColumn,
+      viewGroupGranularity,
+      derivedSpecs,
+    ),
+    server: resource.subject.startsWith('http')
+      ? new URL(resource.subject).origin
+      : undefined,
+  });
+
+  const [columnSizes, handleColumnResize] = useHandleColumnResize(resource);
+
+  // Widths follow the *rendered* order, since that is how `tableColumnWidths`
+  // stores them (a plain positional array). A column with no stored width falls
+  // back to its own default — an icon button doesn't want the 300px a text
+  // column does — but a width the user dragged always wins, which is what makes
+  // the view-added columns resizable at all.
+  //
+  // Positional means reordering columns swaps their widths, the same quirk
+  // stored property widths have always had.
+  const gridColumnSizes = useMemo(() => {
+    if (virtualColumns.length === 0) {
+      return columnSizes;
+    }
+
+    const stored = columnSizes ?? [];
+
+    return gridColumns.map(
+      (column, index) =>
+        stored[index] ?? column.virtual?.width ?? DEFAULT_SIZE_PX,
+    );
+  }, [columnSizes, gridColumns, virtualColumns.length]);
+
+  // Properties the active view renders (or groups by) no matter what the
+  // column config says. Offering to hide them would do nothing, so the menu
+  // shows them locked with a reason instead.
+  const lockedColumns = useMemo(() => {
+    const locked = new Set<string>();
+
+    if (viewKind === 'timer') {
+      // The row's title, plus the two timestamps the whole view is built on.
+      locked.add(core.properties.name);
+
+      if (viewEndProp) {
+        locked.add(viewEndProp);
+      }
+    }
+
+    // Kanban groups by it, calendar places days by it, timer starts from it.
+    if (viewKind !== 'table' && viewGroupBy) {
+      locked.add(viewGroupBy);
+    }
+
+    return locked;
+  }, [viewKind, viewGroupBy, viewEndProp]);
+
+  const lockedReason = `Always used by the ${VIEW_KIND_LABELS[
+    viewKind
+  ].toLowerCase()} view`;
 
   const toggleSplitLanguages = useCallback(
     (subject: string) => {
@@ -194,12 +613,10 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   // session row can sort into the member range and briefly render twice until a
   // reload re-seeds the session. For a fresh table `memberCount` is 0, so this
   // never happens — covering new-table entry, the common case.
-  // Identity of the current query: value-bearing filters (incl. operator),
-  // sort, and active view. `useCollection` returns a NEW collection instance
-  // both when this changes (a filter/sort/view edit) and on same-query
-  // refreshes (e.g. after a new row materializes). The baseline must re-capture
-  // in the former case but stay frozen in the latter (so session/new rows keep
-  // a stable identity and don't duplicate — "fast entry").
+  // What the user asked to see: value-bearing filters (incl. operator), sort,
+  // and active view. Only the session rows key off this (they rebase when it
+  // changes); the member baseline below compares against the collection itself,
+  // because what was asked for and what has arrived are not the same thing.
   const queryKey = useMemo(
     () =>
       JSON.stringify({
@@ -214,19 +631,42 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
 
   const baselineMemberCountRef = useRef<number | null>(null);
   const baselineQueryKeyRef = useRef<string | null>(null);
-  const prevCollectionRef = useRef(collection);
 
-  if (prevCollectionRef.current !== collection) {
-    prevCollectionRef.current = collection;
+  // What the grid is asking for, and what the collection in hand answers.
+  // `useCollection` keeps serving the previous collection while it builds the
+  // new one, so these differ for a moment after every filter or sort edit.
+  const requestedQuery = queryIdentity(
+    queryFilters,
+    queryExpressionFilters,
+    sorting.prop,
+    sorting.sortDesc,
+  );
+  const answeredQuery = queryIdentity(
+    collection.filters,
+    collection.expressionFilters,
+    collection.sortBy,
+    collection.sortDesc,
+  );
 
-    if (baselineQueryKeyRef.current !== queryKey) {
-      baselineMemberCountRef.current = null;
-    }
+  // A count captured under a different query says nothing about this one.
+  if (baselineQueryKeyRef.current !== requestedQuery) {
+    baselineMemberCountRef.current = null;
   }
 
-  if (ready && baselineMemberCountRef.current === null) {
+  // Freeze the count only once the collection actually answers what was asked.
+  // Edits land faster than collections arrive — change a filter's operator and
+  // then type its value, and the collection built for the operator-only query
+  // arrives when the query has already moved on. Recording ITS count against
+  // the current query would freeze it for good: the collection that finally
+  // answers carries the same query, so it would never be allowed to re-capture,
+  // and the grid would keep rendering the previous filter's rows.
+  if (
+    ready &&
+    answeredQuery === requestedQuery &&
+    baselineMemberCountRef.current === null
+  ) {
     baselineMemberCountRef.current = collection.totalMembers;
-    baselineQueryKeyRef.current = queryKey;
+    baselineQueryKeyRef.current = requestedQuery;
   }
 
   // Before the collection is ready, track its live count so existing members
@@ -262,8 +702,8 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   // When the query changes (filter/sort/view edit — keyed on `queryKey`), the
   // collection rebuilds, so rebase the session: force-save any in-progress new
   // row, then reset to a single trailing placeholder. The baseline itself is
-  // re-captured by the `queryKey`-aware block above (NOT here — doing it here
-  // raced the still-`ready` old collection and captured its count).
+  // re-captured by the block above (NOT here — doing it here raced the
+  // still-`ready` old collection and captured its count).
   useEffect(() => {
     if (!rebaseInitialisedRef.current) {
       rebaseInitialisedRef.current = true;
@@ -293,6 +733,8 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       baselineMemberCountRef.current += 1;
     }
   }, []);
+
+  incrementMemberCountRef.current = incrementMemberCount;
 
   /**
    * Shift+Enter: insert a row directly below the given row.
@@ -436,8 +878,26 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       setFilterOperator,
       removeFilter,
       hideColumn,
+      showColumn,
       splitLanguageSubjects: viewSplitLanguages,
       toggleSplitLanguages,
+      classProperties: allColumns,
+      rowActions: viewRowActions,
+      addRowAction,
+      updateRowAction,
+      removeRowAction,
+      aggregates: viewAggregates,
+      aggregateOutcomes,
+      rowCount: collection.totalMembers,
+      setColumnAggregate,
+      removeAggregateRow,
+      canWriteTable: canWrite,
+      breakdownColumn: viewGroupByColumn,
+      breakdownGranularity: viewGroupGranularity,
+      setBreakdown,
+      addDerivedColumn,
+      updateDerivedColumn,
+      removeDerivedColumn,
       addItemsToHistoryStack,
     }),
     [
@@ -451,8 +911,22 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       setFilterOperator,
       removeFilter,
       hideColumn,
+      showColumn,
       viewSplitLanguages,
       toggleSplitLanguages,
+      allColumns,
+      viewAggregates,
+      aggregateOutcomes,
+      collection.totalMembers,
+      setColumnAggregate,
+      removeAggregateRow,
+      canWrite,
+      viewGroupByColumn,
+      viewGroupGranularity,
+      setBreakdown,
+      addDerivedColumn,
+      updateDerivedColumn,
+      removeDerivedColumn,
       addItemsToHistoryStack,
     ],
   );
@@ -533,20 +1007,23 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   const handleCopyCommand = useCallback(
     (cells: CellIndex<TableColumn>[]) =>
       handleCopyCommandByProperty(
-        cells.map(
-          ([row, column]): CellIndex<Property> => [row, column.property],
-        ),
+        // Virtual columns hold nothing to copy.
+        cells
+          .filter(([, column]) => column.property !== undefined)
+          .map(([row, column]): CellIndex<Property> => [row, column.property!]),
       ),
     [handleCopyCommandByProperty],
   );
-
-  const [columnSizes, handleColumnResize] = useHandleColumnResize(resource);
 
   const Row = useCallback(
     ({ index }: { index: number }) => {
       if (index < memberCount) {
         return (
-          <TableRow collection={collection} index={index} columns={columns} />
+          <TableRow
+            collection={collection}
+            index={index}
+            columns={gridColumns}
+          />
         );
       }
 
@@ -558,7 +1035,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
       return (
         <TableNewRow
           parent={resource}
-          columns={columns}
+          columns={gridColumns}
           index={index}
           subject={newRowSubjects[newRowIndex]}
           isLast={isLastNewRow}
@@ -572,7 +1049,7 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       collection,
-      columns,
+      gridColumns,
       memberCount,
       newRowSubjects,
       resource.subject,
@@ -583,22 +1060,51 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
   return (
     <TablePageContext value={tablePageContext}>
       <TablePresenceContext value={presenceValue}>
-        <TableViewTabs
-          views={views}
-          activeView={activeView}
-          setActiveView={setActiveView}
-          createView={createView}
-          setViewKind={setViewKind}
-          duplicateView={duplicateView}
-          deleteView={deleteView}
-          viewName={viewName}
-          renameView={renameView}
-          allColumns={allColumns}
-          columns={uniqueColumnProperties}
-          showColumn={showColumn}
-          hideColumn={hideColumn}
-          canWrite={canWrite}
-        />
+        {!embedded && (
+          <TableViewTabs
+            views={views}
+            activeView={activeView}
+            setActiveView={setActiveView}
+            createView={createView}
+            setViewKind={setViewKind}
+            duplicateView={duplicateView}
+            deleteView={deleteView}
+            viewName={viewName}
+            renameView={renameView}
+            allColumns={allColumns}
+            columns={uniqueColumnProperties}
+            derivedColumns={derivedSpecs}
+            showColumn={showColumn}
+            hideColumn={hideColumn}
+            lockedColumns={lockedColumns}
+            lockedReason={lockedReason}
+            canWrite={canWrite}
+            quickAdd={viewQuickAdd}
+            setQuickAdd={setViewQuickAdd}
+          />
+        )}
+        {/* Above the view switch, not inside the table branch: the filter
+         * dropdown in the tab bar is offered for every view kind, so a kanban /
+         * calendar / timer view could add a filter that then had nowhere to
+         * render its chip — the filter silently did nothing. */}
+        {!embedded && (
+          <TableFilterBar
+            columns={uniqueColumnProperties}
+            derivedColumns={derivedSpecs}
+          />
+        )}
+        {/* Above the view switch on purpose: a grocery board wants its "Add
+         *  item" as much as the list does. Writers only — a create button that
+         *  will be rejected is worse than none. */}
+        {viewQuickAdd && canWrite && (
+          <QuickAddBar
+            spec={viewQuickAdd}
+            tableSubject={resource.subject}
+            tableClass={tableClass}
+            classProperties={allColumns}
+            onRowCreated={notifyEntryCreated}
+          />
+        )}
         {viewKind === 'kanban' ? (
           <KanbanView
             tableSubject={resource.subject}
@@ -624,11 +1130,22 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
           />
         ) : (
           <>
-            <TableFilterBar columns={uniqueColumnProperties} />
+            {isTimer && timer.startProp && timer.endProp && (
+              <TimerToolbar
+                tableSubject={resource.subject}
+                tableClass={tableClass}
+                collection={collection}
+                startProp={timer.startProp}
+                endProp={timer.endProp}
+                exclusive={viewTimerExclusive}
+                setExclusive={setViewTimerExclusive}
+                onEntryCreated={notifyEntryCreated}
+              />
+            )}
             <FancyTable
               readOnly={!canWrite}
-              columns={columns}
-              columnSizes={columnSizes}
+              columns={gridColumns}
+              columnSizes={gridColumnSizes}
               itemCount={
                 ready
                   ? memberCount + newRowSubjects.length
@@ -643,15 +1160,30 @@ export const TableResource: React.FC<TableResourceProps> = ({ resource }) => {
               onCopyCommand={handleCopyCommand}
               onPasteCommand={handlePaste}
               onUndoCommand={undoLastItem}
-              onColumnReorder={reorderColumns}
+              onColumnReorder={handleColumnReorder}
               onRowExpand={handleRowExpand}
               onInsertRowBelow={handleInsertRowBelow}
               onSelectedCellChange={handleSelectedCellChange}
               HeadingComponent={TableHeading}
               NewColumnButtonComponent={NewColumnButton}
+              FooterComponent={TableTotalsFooter}
             >
               {Row}
             </FancyTable>
+            {/* Under the grid, where a spreadsheet's totals live. The numbers
+             *  come from the store, over every row the view matches. Not
+             *  mounted at all without totals: it resolves a title per column,
+             *  and a table with no totals should pay nothing for that. */}
+            {viewAggregates.length > 0 && viewGroupByColumn && (
+              <TableSummaryBar
+                aggregates={viewAggregates}
+                outcomes={aggregateOutcomes}
+                classProperties={allColumns}
+                derivedColumns={derivedSpecs}
+                groupByColumn={viewGroupByColumn}
+                granularity={viewGroupGranularity}
+              />
+            )}
           </>
         )}
         <ExpandedRowDialog

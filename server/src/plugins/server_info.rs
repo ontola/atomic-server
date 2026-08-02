@@ -26,6 +26,12 @@ pub struct ServerInfo {
     pub managed: Arc<AtomicBool>,
     /// The portal a managed node is administered from, learned from the control plane.
     pub managed_dashboard_url: Arc<RwLock<Option<String>>>,
+    /// The Drive served as this server's front page (`ATOMIC_HOME_DRIVE`), if any.
+    ///
+    /// The browser learns this from the injected HTML rather than from here —
+    /// it must know before the first render. This is for every other client:
+    /// the desktop app, the SaaS portal, scripts asking "what does `/` show?".
+    pub home_drive: Option<String>,
 }
 
 pub fn server_info_endpoint(info: ServerInfo) -> Endpoint {
@@ -144,6 +150,13 @@ fn handle_get(
 
         if let Some(portal_url) = portal_url {
             resource.set_unsafe(urls::SERVER_PORTAL_URL.into(), Value::String(portal_url))?;
+        }
+
+        if let Some(home_drive) = info.home_drive.clone() {
+            resource.set_unsafe(
+                urls::SERVER_HOME_DRIVE.into(),
+                Value::AtomicUrl(home_drive.into()),
+            )?;
         }
 
         Ok(resource.into())

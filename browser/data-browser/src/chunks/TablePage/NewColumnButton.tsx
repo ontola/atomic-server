@@ -1,6 +1,8 @@
 import { Datatype, useCanWrite, useResource } from '@tomic/react';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
+  FaBolt,
+  FaCalculator,
   FaCircleChevronDown,
   FaFile,
   FaHashtag,
@@ -11,6 +13,8 @@ import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import { NewPropertyDialog } from './PropertyForm/NewPropertyDialog';
 import { TablePageContext } from './tablePageContext';
 import { ExternalPropertyDialog } from './PropertyForm/ExternalPropertyDialog';
+import { DerivedColumnDialog } from './DerivedColumnDialog';
+import { RowActionDialog } from './RowActionDialog';
 import { dataTypeIconMap } from '../../helpers/iconMap';
 import { FaCode } from 'react-icons/fa6';
 
@@ -28,9 +32,17 @@ const LocalizedTextIcon = dataTypeIconMap.get(Datatype.LOCALIZEDTEXT)!;
 export const NewColumnButton: React.FC = () => {
   const [showDialog, setShowDialog] = useState(false);
   const [showExternalDialog, setShowExternalDialog] = useState(false);
+  const [showDerivedDialog, setShowDerivedDialog] = useState(false);
+  const [showActionDialog, setShowActionDialog] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>();
 
-  const { tableClassSubject } = useContext(TablePageContext);
+  const {
+    tableClassSubject,
+    showColumn,
+    classProperties,
+    addDerivedColumn,
+    addRowAction,
+  } = useContext(TablePageContext);
   const tableClassResource = useResource(tableClassSubject);
 
   const canWrite = useCanWrite(tableClassResource);
@@ -101,6 +113,19 @@ export const NewColumnButton: React.FC = () => {
       },
       DIVIDER,
       {
+        id: 'computed',
+        label: 'Computed',
+        onClick: () => setShowDerivedDialog(true),
+        icon: <FaCalculator />,
+      },
+      {
+        id: 'action',
+        label: 'Action',
+        helper: 'A button on every row: "Watered", "Mark done", "+1".',
+        onClick: () => setShowActionDialog(true),
+        icon: <FaBolt />,
+      },
+      {
         id: 'external',
         label: 'External Property',
         onClick: () => setShowExternalDialog(true),
@@ -121,12 +146,35 @@ export const NewColumnButton: React.FC = () => {
         tableClassResource={tableClassResource}
         selectedCategory={selectedCategory}
         bindShow={setShowDialog}
+        // A view with an explicit column list treats anything absent from it as
+        // hidden, so without this a column you just made never appears.
+        onCreated={showColumn}
       />
       <ExternalPropertyDialog
         open={showExternalDialog}
         tableClassResource={tableClassResource}
         bindShow={setShowExternalDialog}
+        onCreated={showColumn}
       />
+      {/* Computed columns are view config, not properties on the class — so
+       *  this one writes to the active view rather than creating anything. */}
+      <DerivedColumnDialog
+        open={showDerivedDialog}
+        bindShow={setShowDerivedDialog}
+        classProperties={classProperties}
+        onSave={addDerivedColumn}
+      />
+      {/* An action is view config too: it writes a button onto the active view
+       *  rather than adding anything to the class. Mounted only while open, so
+       *  its fields cannot be confused with an action column's edit dialog. */}
+      {showActionDialog && (
+        <RowActionDialog
+          open
+          bindShow={setShowActionDialog}
+          classProperties={classProperties}
+          onSave={addRowAction}
+        />
+      )}
     </>
   );
 };

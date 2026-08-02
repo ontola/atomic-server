@@ -108,6 +108,9 @@ pub const SERVER_NODE_ID: &str = "https://atomicdata.dev/properties/server/nodeI
 pub const SERVER_VERSION: &str = "https://atomicdata.dev/properties/server/version";
 pub const SERVER_MANAGED: &str = "https://atomicdata.dev/properties/server/managed";
 pub const SERVER_PORTAL_URL: &str = "https://atomicdata.dev/properties/server/portalUrl";
+/// The Drive this server serves as its front page, if configured
+/// (`ATOMIC_HOME_DRIVE`). Absent when `/` should fall back to the sign-in flow.
+pub const SERVER_HOME_DRIVE: &str = "https://atomicdata.dev/properties/server/homeDrive";
 /// The devices this node syncs with directly — nested [PEER] resources.
 pub const SERVER_PEERS: &str = "https://atomicdata.dev/properties/server/peers";
 
@@ -134,6 +137,7 @@ pub const COLLECTION_INCLUDE_EXTERNAL: &str =
 pub const COLLECTION_PAGE_SIZE: &str = "https://atomicdata.dev/properties/collection/pageSize";
 pub const COLLECTION_SORT_BY: &str = "https://atomicdata.dev/properties/collection/sortBy";
 pub const COLLECTION_SORT_DESC: &str = "https://atomicdata.dev/properties/collection/sortDesc";
+pub const COLLECTION_AGGREGATES: &str = "https://atomicdata.dev/properties/collection/aggregates";
 // ... for Endpoints
 pub const ENDPOINT_PARAMETERS: &str = "https://atomicdata.dev/properties/endpoint/parameters";
 pub const ENDPOINT_RESULTS: &str = "https://atomicdata.dev/properties/endpoint/results";

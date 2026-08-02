@@ -13,8 +13,33 @@ import {
   useString,
   useValue,
 } from '@tomic/react';
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { TableFilter, FilterOperator } from './tableFiltering';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
+import { ShowRoute } from '../../routes/ShowRoute';
+import {
+  filterKey,
+  parseFilterKey,
+  type FilterOperator,
+  type TableFilter,
+} from './tableFiltering';
+import {
+  parseDerivedColumnSpecs,
+  type DerivedColumnSpec,
+} from './derivedColumns';
+import { parseColumnOrder } from './columnOrder';
+import {
+  parseAggregates,
+  type GroupGranularity,
+  type TableAggregate,
+} from './tableAggregates';
+import { parseRowActions, type RowActionSpec } from './rowActions';
+import { parseQuickAdd, type QuickAddSpec } from './quickAdd';
 import { TableSorting, DEFAULT_SORT_PROP } from './tableSorting';
 import {
   ViewKind,
@@ -48,10 +73,12 @@ function sortReducer(state: TableSorting, action: SortAction): TableSorting {
 
 export interface UseTableViewResult {
   filters: TableFilter[];
-  addFilter: (property: string) => void;
-  setFilterValue: (property: string, value: string) => void;
-  setFilterOperator: (property: string, operator: FilterOperator) => void;
-  removeFilter: (property: string) => void;
+  /** Adds an empty filter for a target (`filterKey`: a property subject, or
+   *  `derived:<id>` for a computed column). No-op if one already exists. */
+  addFilter: (key: string) => void;
+  setFilterValue: (key: string, value: string) => void;
+  setFilterOperator: (key: string, operator: FilterOperator) => void;
+  removeFilter: (key: string) => void;
   clearFilters: () => void;
   sorting: TableSorting;
   setSortBy: (property: string) => void;
@@ -68,11 +95,11 @@ export interface UseTableViewResult {
   views: string[];
   /** The active View subject (undefined until one exists). */
   activeView: string | undefined;
-  /** Switch the active view (session-scoped). */
+  /** Switch the active view, via the `?view=` search param. */
   setActiveView: (subject: string) => void;
   /** Create a new (empty) view of the given kind, link it, and switch to it. */
   createView: (kind?: ViewKind) => void;
-  /** Change a view's renderer kind (table/kanban). */
+  /** Change a view's renderer kind (table/kanban/calendar/timer). */
   setViewKind: (subject: string, kind: ViewKind) => void;
   /** Copy a view (its config) into a new "<name> copy" view and switch to it. */
   duplicateView: (subject: string) => void;
@@ -80,14 +107,79 @@ export interface UseTableViewResult {
   deleteView: (subject: string) => void;
   /** Which renderer the active view uses ('table' until a View exists). */
   viewKind: ViewKind;
-  /** For kanban views: the SelectProperty whose tags define the columns. */
+  /**
+   * The property this view arranges rows by: a SelectProperty (kanban), a date
+   * property (calendar), or the start timestamp (timer).
+   */
   viewGroupBy: string | undefined;
   /** Persist the group-by property to the active View (lazy-creates it). */
   setViewGroupBy: (property: string) => void;
+  /** For timer views: the timestamp property holding each entry's end. */
+  viewEndProp: string | undefined;
+  /** Persist the end property to the active View (lazy-creates it). */
+  setViewEndProp: (property: string) => void;
+  /**
+   * For timer views: whether starting an entry stops whatever else is running.
+   * Defaults to true (one timer at a time) when the View has no stored value.
+   */
+  viewTimerExclusive: boolean;
+  /** Persist the exclusivity toggle to the active View (lazy-creates it). */
+  setViewTimerExclusive: (exclusive: boolean) => void;
   /** LocalizedText properties split into one column per language tag. */
   viewSplitLanguages: string[];
   /** Persist the split-language property list to the active View (lazy-creates it). */
   setViewSplitLanguages: (properties: string[]) => void;
+  /**
+   * The computed columns this view shows next to its stored ones — a duration,
+   * a days-since. Pure configuration: see `derivedColumns.ts`.
+   */
+  viewDerivedColumns: DerivedColumnSpec[];
+  /**
+   * Whether the View has a derived-column list at all. An empty list is a
+   * decision ("I removed the last one"); an absent one is silence, which is what
+   * lets a timer view supply its Duration without ever writing config.
+   */
+  viewDerivedColumnsSet: boolean;
+  /** Persist the derived columns to the active View (lazy-creates it). */
+  setViewDerivedColumns: (specs: DerivedColumnSpec[]) => void;
+  /**
+   * The display order of this view's columns, by key — property subjects for
+   * stored columns, `derived:<id>` / `timer-action` for the ones a view adds.
+   * Empty = the default order for the view kind.
+   */
+  viewColumnOrder: string[];
+  /** Persist the column order to the active View (lazy-creates it). */
+  setViewColumnOrder: (order: string[]) => void;
+  /**
+   * The statistics shown under the rows. The store computes them over every row
+   * the view matches, so they are exact regardless of paging.
+   */
+  viewAggregates: TableAggregate[];
+  /** Persist the statistics to the active View (lazy-creates it). */
+  setViewAggregates: (aggregates: TableAggregate[]) => void;
+  /**
+   * The buttons this view puts on each row — "Watered", "Mark done", "+1".
+   * Configuration, like the computed columns: a closed set of patches the store
+   * can execute, never code. See `rowActions.ts`.
+   */
+  viewRowActions: RowActionSpec[];
+  /** Persist the row actions to the active View (lazy-creates it). */
+  setViewRowActions: (actions: RowActionSpec[]) => void;
+  /**
+   * The button this view offers for creating a row — "Log a feed", "Add item".
+   * Undefined when the view offers none.
+   */
+  viewQuickAdd: QuickAddSpec | undefined;
+  /** Persist the quick-add (undefined removes it). */
+  setViewQuickAdd: (spec: QuickAddSpec | undefined) => void;
+  /** The property the statistics are broken down by, if any. */
+  viewGroupByColumn: string | undefined;
+  /** Persist the breakdown property (empty string clears it). */
+  setViewGroupByColumn: (property: string) => void;
+  /** How a date/timestamp breakdown column is bucketed. */
+  viewGroupGranularity: GroupGranularity;
+  /** Persist the bucket size of the breakdown. */
+  setViewGroupGranularity: (granularity: GroupGranularity) => void;
 }
 
 /**
@@ -98,7 +190,15 @@ export interface UseTableViewResult {
  * is lazily created on the first change (writers only) — until then a table
  * behaves exactly as before.
  */
-export function useTableView(table: Resource): UseTableViewResult {
+export function useTableView(
+  table: Resource,
+  /**
+   * Which view to show, when the caller decides rather than the URL. A dashboard
+   * embeds a table per block, so `?view=` — one param for the whole page —
+   * cannot say which view each of them shows.
+   */
+  viewOverride?: string,
+): UseTableViewResult {
   const store = useStore();
   const canWrite = useCanWrite(table);
 
@@ -108,13 +208,18 @@ export function useTableView(table: Resource): UseTableViewResult {
   );
   const [views] = useArray(table, dataBrowser.properties.tableViews);
 
-  // The active view is session-scoped; it defaults to the table's
-  // `default-view` (or the first view) once they load.
-  const [activeViewOverride, setActiveViewOverride] = useState<
-    string | undefined
-  >(undefined);
+  // The active view lives in the URL (`?view=`), so a tab is linkable, survives
+  // a reload, and lands in browser history — back/forward moves between views
+  // instead of leaving the page. Absent = the table's `default-view` (or the
+  // first one) once they load.
+  const activeViewParam = ShowRoute.useSearch({ select: s => s.view });
+  const navigate = ShowRoute.useNavigate();
   const activeView =
-    activeViewOverride ?? defaultViewSubject ?? views[0] ?? undefined;
+    viewOverride ??
+    activeViewParam ??
+    defaultViewSubject ??
+    views[0] ??
+    undefined;
   const view = useResource(activeView ?? unknownSubject);
 
   // Reactive reads of the View's persisted config.
@@ -128,9 +233,83 @@ export function useTableView(table: Resource): UseTableViewResult {
   const [storedColumns] = useArray(view, dataBrowser.properties.viewColumns);
   const [storedKind] = useString(view, dataBrowser.properties.viewKind);
   const [viewGroupBy] = useString(view, dataBrowser.properties.viewGroupBy);
+  const [viewEndProp] = useString(view, dataBrowser.properties.viewEndProp);
+  // Deliberately NOT `useBoolean`: it treats an unset value as `false` AND
+  // writes that back, which would silently flip this toggle off (its default is
+  // on) the first time any timer view rendered.
+  const [storedTimerExclusive] = useValue(
+    view,
+    dataBrowser.properties.viewTimerExclusive,
+  );
   const [storedSplitLanguages] = useArray(
     view,
     dataBrowser.properties.viewSplitLanguages,
+  );
+  const [storedDerivedColumns] = useValue(
+    view,
+    dataBrowser.properties.viewDerivedColumns,
+  );
+  const [storedColumnOrder] = useValue(
+    view,
+    dataBrowser.properties.viewColumnOrder,
+  );
+  const [storedAggregates] = useValue(
+    view,
+    dataBrowser.properties.viewAggregates,
+  );
+  const [storedRowActions] = useValue(
+    view,
+    dataBrowser.properties.viewRowActions,
+  );
+  const [storedQuickAdd] = useValue(view, dataBrowser.properties.viewQuickAdd);
+  const [storedGroupByColumn] = useString(
+    view,
+    dataBrowser.properties.viewGroupByColumn,
+  );
+  const [storedGroupGranularity] = useString(
+    view,
+    dataBrowser.properties.viewGroupGranularity,
+  );
+
+  // Parsing JSON hands back a fresh array every render, and this one reaches the
+  // grid's context — so key it on the stored shape instead. Without it every
+  // render of the table re-renders every cell.
+  const derivedColumnsKey = JSON.stringify(storedDerivedColumns ?? null);
+  const viewDerivedColumns = useMemo(
+    () => parseDerivedColumnSpecs(JSON.parse(derivedColumnsKey)),
+    [derivedColumnsKey],
+  );
+
+  // Value-stable for the same reason as the derived columns: this one is a
+  // dependency of the rendered column list.
+  const columnOrderKey = JSON.stringify(storedColumnOrder ?? null);
+  const viewColumnOrder = useMemo(
+    () => parseColumnOrder(JSON.parse(columnOrderKey)),
+    [columnOrderKey],
+  );
+
+  // Same reason: this feeds the collection query, and a fresh array every render
+  // would rebuild the collection (and re-query) on every render.
+  const aggregatesKey = JSON.stringify(storedAggregates ?? null);
+  const viewAggregates = useMemo(
+    () => parseAggregates(JSON.parse(aggregatesKey)),
+    [aggregatesKey],
+  );
+
+  // Same reason as the aggregates: this reaches the rendered column list, and a
+  // fresh array every render would remount every action button.
+  const rowActionsKey = JSON.stringify(storedRowActions ?? null);
+  const viewRowActions = useMemo(
+    () => parseRowActions(JSON.parse(rowActionsKey)),
+    [rowActionsKey],
+  );
+
+  // Serialized dep, like the rest of the JSON config: this reaches the rendered
+  // bar, and a fresh object every render would remount it.
+  const quickAddKey = JSON.stringify(storedQuickAdd ?? null);
+  const viewQuickAdd = useMemo(
+    () => parseQuickAdd(JSON.parse(quickAddKey)),
+    [quickAddKey],
   );
 
   const [filters, setFilters] = useState<TableFilter[]>([]);
@@ -140,11 +319,20 @@ export function useTableView(table: Resource): UseTableViewResult {
   // Tracks which view's config the local state currently mirrors.
   const hydratedForRef = useRef<string | null>(null);
   const lastPersistedRef = useRef<string>('');
+  /** True while lazily creating the View that will hold local state. */
+  const creatingViewRef = useRef(false);
 
   useEffect(() => {
     const key = activeView ?? '__none__';
 
     if (hydratedForRef.current === key) {
+      return;
+    }
+
+    // Mid-creation of the View that is about to hold local state — see
+    // `ensureView`. Reading it now would hydrate from a View whose config
+    // hasn't been written yet and wipe the change that caused the creation.
+    if (creatingViewRef.current) {
       return;
     }
 
@@ -253,16 +441,35 @@ export function useTableView(table: Resource): UseTableViewResult {
     [views.length, defaultViewSubject, store, table],
   );
 
-  const setActiveView = useCallback((subject: string) => {
-    setActiveViewOverride(subject);
-  }, []);
+  /**
+   * Switches the active view by rewriting `?view=`. Picking a tab is a
+   * navigation, so it pushes history; the programmatic switches below (after
+   * creating or deleting a view) replace instead, so Back doesn't return to a
+   * view that no longer exists or that the user never chose.
+   */
+  const goToView = useCallback(
+    (subject: string | undefined, replace: boolean) => {
+      void navigate({
+        // `.` keeps us on this resource; only the search param changes.
+        to: '.',
+        search: prev => ({ ...prev, view: subject }),
+        replace,
+      });
+    },
+    [navigate],
+  );
+
+  const setActiveView = useCallback(
+    (subject: string) => goToView(subject, false),
+    [goToView],
+  );
 
   const createView = useCallback(
     (kind: ViewKind = DEFAULT_VIEW_KIND) => {
       void (async () => {
-        // A new view is named after its kind ("Table" / "Kanban" / "Calendar").
+        // A new view is named after its kind ("Table" / "Kanban" / …).
         const created = await createViewResource(VIEW_KIND_LABELS[kind], kind);
-        setActiveViewOverride(created.subject);
+        goToView(created.subject, true);
       })().catch(() => undefined);
     },
     [createViewResource],
@@ -274,7 +481,26 @@ export function useTableView(table: Resource): UseTableViewResult {
       return store.getResourceLoading(activeView);
     }
 
-    return createViewResource('Default View');
+    // Creating the View flips `activeView` from undefined to its subject, which
+    // trips the hydrate effect below — and it reads the View BEFORE the caller
+    // has written the config that prompted the creation, hydrating local state
+    // back to empty and dropping the change. This View exists precisely to hold
+    // what's already in local state, so hydration must not run for it at all.
+    //
+    // The flag is raised synchronously, before the first await: the re-render
+    // can land midway through `createViewResource`, so marking it hydrated
+    // afterwards is already too late. Without this, adding the first filter to
+    // a table silently lost it whenever the re-render won that race.
+    creatingViewRef.current = true;
+
+    try {
+      const created = await createViewResource('Default View');
+      hydratedForRef.current = created.subject;
+
+      return created;
+    } finally {
+      creatingViewRef.current = false;
+    }
   }, [activeView, store, createViewResource]);
 
   useEffect(() => {
@@ -307,38 +533,55 @@ export function useTableView(table: Resource): UseTableViewResult {
         );
         await v.save();
         lastPersistedRef.current = snapshot;
-      })().catch(() => undefined);
+      })().catch(error => {
+        // Never swallow this: a filter or sort that fails to persist is silently
+        // lost on the next reload, and the user has no way to know.
+        console.error('Could not persist the view configuration:', error);
+      });
     }, 600);
 
     return () => clearTimeout(timer);
   }, [filters, sorting, canWrite, ensureView, store, activeView]);
 
   // --- Filter mutators (same shape as the old `useTableFilters`). ---
-  const addFilter = useCallback((property: string) => {
+  // Keyed by `filterKey`: a property subject, or `derived:<id>` for a constraint
+  // on a computed column. One key keeps every setter working for both kinds.
+  const addFilter = useCallback((key: string) => {
     setFilters(prev =>
-      prev.some(f => f.property === property)
+      prev.some(f => filterKey(f) === key)
         ? prev
-        : [...prev, { property, operator: 'eq', value: '' }],
+        : [
+            ...prev,
+            {
+              ...parseFilterKey(key),
+              // A computed column's value is a number, so the useful default is
+              // a comparison rather than equality.
+              operator: key.startsWith('derived:')
+                ? ('gte' as FilterOperator)
+                : ('eq' as FilterOperator),
+              value: '',
+            },
+          ],
     );
   }, []);
 
-  const setFilterValue = useCallback((property: string, value: string) => {
+  const setFilterValue = useCallback((key: string, value: string) => {
     setFilters(prev =>
-      prev.map(f => (f.property === property ? { ...f, value } : f)),
+      prev.map(f => (filterKey(f) === key ? { ...f, value } : f)),
     );
   }, []);
 
   const setFilterOperator = useCallback(
-    (property: string, operator: FilterOperator) => {
+    (key: string, operator: FilterOperator) => {
       setFilters(prev =>
-        prev.map(f => (f.property === property ? { ...f, operator } : f)),
+        prev.map(f => (filterKey(f) === key ? { ...f, operator } : f)),
       );
     },
     [],
   );
 
-  const removeFilter = useCallback((property: string) => {
-    setFilters(prev => prev.filter(f => f.property !== property));
+  const removeFilter = useCallback((key: string) => {
+    setFilters(prev => prev.filter(f => filterKey(f) !== key));
   }, []);
 
   const clearFilters = useCallback(() => setFilters([]), []);
@@ -397,6 +640,42 @@ export function useTableView(table: Resource): UseTableViewResult {
     [ensureView],
   );
 
+  const setViewEndProp = useCallback(
+    (property: string) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        await v.set(dataBrowser.properties.viewEndProp, property, false);
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
+  const setViewTimerExclusive = useCallback(
+    (exclusive: boolean) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        await v.set(
+          dataBrowser.properties.viewTimerExclusive,
+          exclusive,
+          false,
+        );
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
   const setViewSplitLanguages = useCallback(
     (splitProperties: string[]) => {
       void (async () => {
@@ -409,6 +688,129 @@ export function useTableView(table: Resource): UseTableViewResult {
         await v.set(
           dataBrowser.properties.viewSplitLanguages,
           splitProperties,
+          false,
+        );
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
+  const setViewDerivedColumns = useCallback(
+    (specs: DerivedColumnSpec[]) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        await v.set(dataBrowser.properties.viewDerivedColumns, specs, false);
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
+  const setViewColumnOrder = useCallback(
+    (order: string[]) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        await v.set(dataBrowser.properties.viewColumnOrder, order, false);
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
+  const setViewAggregates = useCallback(
+    (aggregates: TableAggregate[]) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        await v.set(dataBrowser.properties.viewAggregates, aggregates, false);
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
+  const setViewRowActions = useCallback(
+    (actions: RowActionSpec[]) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        await v.set(dataBrowser.properties.viewRowActions, actions, false);
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
+  const setViewQuickAdd = useCallback(
+    (spec: QuickAddSpec | undefined) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        if (spec === undefined) {
+          v.remove(dataBrowser.properties.viewQuickAdd);
+        } else {
+          // Validated (no `false`): the property fetch is what records the JSON
+          // datatype tag, without which a plain object is stored as a string.
+          await v.set(dataBrowser.properties.viewQuickAdd, spec as never);
+        }
+
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
+  const setViewGroupByColumn = useCallback(
+    (property: string) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        await v.set(dataBrowser.properties.viewGroupByColumn, property, false);
+        await v.save();
+      })().catch(() => undefined);
+    },
+    [ensureView],
+  );
+
+  const setViewGroupGranularity = useCallback(
+    (granularity: GroupGranularity) => {
+      void (async () => {
+        const v = await ensureView();
+
+        if (!v) {
+          return;
+        }
+
+        await v.set(
+          dataBrowser.properties.viewGroupGranularity,
+          granularity,
           false,
         );
         await v.save();
@@ -449,7 +851,16 @@ export function useTableView(table: Resource): UseTableViewResult {
           dataBrowser.properties.viewSortDesc,
           dataBrowser.properties.viewColumns,
           dataBrowser.properties.viewGroupBy,
+          dataBrowser.properties.viewEndProp,
+          dataBrowser.properties.viewTimerExclusive,
           dataBrowser.properties.viewSplitLanguages,
+          dataBrowser.properties.viewDerivedColumns,
+          dataBrowser.properties.viewColumnOrder,
+          dataBrowser.properties.viewAggregates,
+          dataBrowser.properties.viewRowActions,
+          dataBrowser.properties.viewQuickAdd,
+          dataBrowser.properties.viewGroupByColumn,
+          dataBrowser.properties.viewGroupGranularity,
         ]) {
           const value = src.get(prop);
 
@@ -470,7 +881,7 @@ export function useTableView(table: Resource): UseTableViewResult {
           true,
         );
         await table.save();
-        setActiveViewOverride(created.subject);
+        goToView(created.subject, true);
       })().catch(() => undefined);
     },
     [store, table],
@@ -495,7 +906,7 @@ export function useTableView(table: Resource): UseTableViewResult {
 
         // Switch off the deleted tab before destroying it.
         if (activeView === subject) {
-          setActiveViewOverride(next[0]);
+          goToView(next[0], true);
         }
 
         await store.getResourceLoading(subject).destroy();
@@ -530,9 +941,29 @@ export function useTableView(table: Resource): UseTableViewResult {
     viewKind: normalizeViewKind(storedKind),
     viewGroupBy,
     setViewGroupBy,
+    viewEndProp,
+    setViewEndProp,
+    viewTimerExclusive:
+      storedTimerExclusive === undefined ? true : !!storedTimerExclusive,
+    setViewTimerExclusive,
     viewSplitLanguages: Array.isArray(storedSplitLanguages)
       ? (storedSplitLanguages as string[])
       : [],
     setViewSplitLanguages,
+    viewDerivedColumns,
+    viewDerivedColumnsSet: Array.isArray(storedDerivedColumns),
+    setViewDerivedColumns,
+    viewColumnOrder,
+    setViewColumnOrder,
+    viewAggregates,
+    setViewAggregates,
+    viewRowActions,
+    setViewRowActions,
+    viewQuickAdd,
+    setViewQuickAdd,
+    viewGroupByColumn: storedGroupByColumn || undefined,
+    setViewGroupByColumn,
+    viewGroupGranularity: (storedGroupGranularity as GroupGranularity) || 'day',
+    setViewGroupGranularity,
   };
 }

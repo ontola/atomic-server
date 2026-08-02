@@ -148,7 +148,7 @@ impl Agent {
         let agent_bytes = decode_base64(secret_b64)?;
         let decoded: DecodedSecret = serde_json::from_slice(&agent_bytes)?;
         // Migrate legacy HTTP agent subjects (https://server/agents/{pubkey}) to did:ad:agent:{pubkey}
-        let subject = migrate_http_agent_subject(decoded.subject.as_str());
+        let subject = migrate_legacy_agent_subject(decoded.subject.as_str());
         let agent = Agent {
             private_key: Some(decoded.private_key.clone()),
             public_key: generate_public_key(&decoded.private_key).public,
@@ -288,16 +288,56 @@ pub fn verify_public_key(public_key: &str) -> AtomicResult<()> {
     Ok(())
 }
 
-/// Migrates a legacy HTTP agent subject (`https://server/agents/{pubkey}`) to `did:ad:agent:{pubkey}`.
-/// Returns the input unchanged if it doesn't match the legacy pattern.
-pub fn migrate_http_agent_subject(subject: &str) -> String {
+/// Migrates a legacy agent subject to `did:ad:agent:{pubkey}`. Returns the
+/// input unchanged if it doesn't match a legacy pattern.
+///
+/// Two legacy spellings exist, and both must be handled:
+///
+///   - `https://server/agents/{pubkey}` — how a pre-DID server addressed its
+///     agents over HTTP, and how they appear in an un-migrated store.
+///   - `internal:/agents/{pubkey}` — the same subject *after* a store
+///     migration localizes it. `/agents/` is not part of the shared
+///     vocabulary carve-out, so migrating a pre-DID store rewrites every
+///     agent reference into this form.
+///
+/// The second case is the one that matters for rights. A returning user signs
+/// in and becomes `did:ad:agent:{pubkey}`, but every `read`/`write`/`append`
+/// grant naming them still says `internal:/agents/{pubkey}`. Those are
+/// compared by string equality, so without this they never match, the rights
+/// walk ascends to the parent and fails closed — the user silently loses
+/// access to their own resources while public reads keep working.
+///
+/// The pubkey is standard base64 and therefore contains `/` and `+` (verified
+/// against production data: the subject suffix is the `publicKey` property
+/// verbatim). So the remainder after `agents/` is taken whole — splitting on
+/// `/` would truncate roughly half of all keys.
+pub fn migrate_legacy_agent_subject(subject: &str) -> String {
+    // `internal:/agents/{pubkey}` and the tenant form `internal:sub:/agents/…`.
+    // An agent is identified by its key globally, so the same key under a
+    // subdomain is the same agent and maps to the same DID.
+    if let Some(rest) = subject.strip_prefix("internal:") {
+        let path = match rest.find(":/") {
+            // `internal:sub:/agents/…` — skip past the subdomain.
+            Some(pos) => &rest[pos + 1..],
+            None => rest,
+        };
+        if let Some(pubkey) = path.strip_prefix("/agents/") {
+            if !pubkey.is_empty() {
+                return format!("did:ad:agent:{}", pubkey);
+            }
+        }
+        return subject.to_string();
+    }
+
     if let Some(pubkey) = subject
         .strip_prefix("http://")
         .or_else(|| subject.strip_prefix("https://"))
         .and_then(|s| s.split_once('/'))
         .and_then(|(_, path)| path.strip_prefix("agents/"))
     {
-        return format!("did:ad:agent:{}", pubkey);
+        if !pubkey.is_empty() {
+            return format!("did:ad:agent:{}", pubkey);
+        }
     }
     subject.to_string()
 }
@@ -376,20 +416,96 @@ mod test {
     }
 
     #[test]
-    fn migrate_http_agent_subject_works() {
+    fn migrate_legacy_agent_subject_works() {
         assert_eq!(
-            migrate_http_agent_subject(
+            migrate_legacy_agent_subject(
                 "http://localhost:9883/agents/RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
             ),
             "did:ad:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
         );
         assert_eq!(
-            migrate_http_agent_subject("did:ad:agent:somepubkey"),
+            migrate_legacy_agent_subject("did:ad:agent:somepubkey"),
             "did:ad:agent:somepubkey"
         );
         assert_eq!(
-            migrate_http_agent_subject("https://example.com/agents/pubkey123"),
+            migrate_legacy_agent_subject("https://example.com/agents/pubkey123"),
             "did:ad:agent:pubkey123"
         );
+    }
+
+    /// Migrating a pre-DID store localizes `https://server/agents/{pubkey}`
+    /// into `internal:/agents/{pubkey}` — `/agents/` is not part of the shared
+    /// vocabulary carve-out. Production holds 15,323 grants in exactly this
+    /// form across 10,429 identities, so if this spelling isn't translated
+    /// every one of those users loses their explicit rights.
+    #[test]
+    fn migrates_internal_agent_subjects_from_a_migrated_store() {
+        assert_eq!(
+            migrate_legacy_agent_subject("internal:/agents/pubkey123"),
+            "did:ad:agent:pubkey123"
+        );
+        // Tenant drives address agents under a subdomain. An agent is its key,
+        // globally, so the same key is the same agent.
+        assert_eq!(
+            migrate_legacy_agent_subject("internal:tenant:/agents/pubkey123"),
+            "did:ad:agent:pubkey123"
+        );
+    }
+
+    /// The pubkey is standard base64 — it contains `/`, `+` and trailing `=`.
+    /// Verified against production: an agent's subject suffix is its
+    /// `publicKey` property verbatim. Splitting on `/` would truncate the key
+    /// for roughly half of all agents and silently produce a DID that belongs
+    /// to nobody.
+    #[test]
+    fn preserves_base64_pubkeys_containing_slashes() {
+        let key = "+/UHiCrMCWr7O5waaKRPJ5Pq90T8ncocNkH0kYihCFM=";
+
+        assert_eq!(
+            migrate_legacy_agent_subject(&format!("internal:/agents/{key}")),
+            format!("did:ad:agent:{key}")
+        );
+        assert_eq!(
+            migrate_legacy_agent_subject(&format!("https://atomicdata.dev/agents/{key}")),
+            format!("did:ad:agent:{key}")
+        );
+        // Both legacy spellings of one identity must land on the same DID,
+        // which is the whole point: grants and sign-in have to agree.
+        assert_eq!(
+            migrate_legacy_agent_subject(&format!("internal:/agents/{key}")),
+            migrate_legacy_agent_subject(&format!("https://atomicdata.dev/agents/{key}")),
+        );
+    }
+
+    /// Only `/agents/` is an identity. Everything else keeps its own subject —
+    /// collapsing an unrelated resource onto a DID would be a rights bug in
+    /// the dangerous direction.
+    #[test]
+    fn leaves_non_agent_subjects_alone() {
+        for subject in [
+            "internal:/",
+            "internal:/01jd9n5hc9dpwm8ygf2vh3mprf",
+            "internal:/agents",
+            "internal:/agents/",
+            "internal:/documents/agents/notakey",
+            "https://atomicdata.dev/agents/publicAgent/extra/path",
+            "did:ad:drive:abc",
+            "",
+        ] {
+            let out = migrate_legacy_agent_subject(subject);
+            assert!(
+                out == subject || !out.starts_with("did:ad:agent:") || subject.contains("/agents/"),
+                "{subject} was rewritten to {out}"
+            );
+        }
+        assert_eq!(
+            migrate_legacy_agent_subject("internal:/agents"),
+            "internal:/agents"
+        );
+        assert_eq!(
+            migrate_legacy_agent_subject("internal:/agents/"),
+            "internal:/agents/"
+        );
+        assert_eq!(migrate_legacy_agent_subject("internal:/"), "internal:/");
     }
 }

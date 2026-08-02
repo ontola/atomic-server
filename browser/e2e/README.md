@@ -2,6 +2,47 @@
 
 We use `playwright` to run end-to-end tests in the browser.
 
+## Running the server
+
+The suite needs the data-browser dev server on **6747** and an `atomic-server` on
+whatever port **`VITE_ATOMIC_SERVER_URL`** names in
+`browser/data-browser/.env.development` (currently 9885).
+
+That indirection is the single easiest thing to get wrong here. The suite's own
+`SERVER_URL` variable only points the test _helpers_; the app the tests drive
+reads the vite env. Start a server on 9883 while the SPA is pointed at 9885 and
+every test fails on a connection refused that mentions neither port.
+
+Start the server with **its own store**, not your dev one:
+
+```sh
+# build a server binary once
+ATOMICSERVER_SKIP_JS_BUILD=true cargo build -p atomic-server
+# then, from browser/e2e:
+pnpm test-server         # serves the configured port from <repo>/.e2e-store
+pnpm test-server-fresh   # same, but wipes that store first
+```
+
+It prints the URL it chose and the matching `SERVER_URL=… pnpm test-e2e` to run.
+
+Sharing your own store costs more than it looks like it saves, and the store goes
+stale faster than you would expect. Measured on this repo: `aggregates.spec.ts`
+passes in 10s against a fresh store and fails outright against a 324MB one — which
+is roughly two full suite runs' worth of accumulated drives, tables and rows. The
+failure looks like a bug in the totals footer and is not one.
+
+So: keep the store separate from your dev one, and reach for `test-server-fresh`
+whenever a failure does not reproduce in isolation. The script warns once the
+store passes ~150MB.
+
+If a spec does fail, **reproduce it alone before believing it**:
+
+```sh
+pnpm playwright test some.spec.ts --project=chromium --workers=1
+```
+
+Comparing failure _sets_ against a known baseline beats expecting all-green.
+
 ```sh
 # install deps
 pnpm i

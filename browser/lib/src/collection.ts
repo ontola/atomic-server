@@ -112,6 +112,117 @@ export interface QueryFilter {
   sort_by?: string;
   sort_desc?: boolean;
   drive?: string;
+  /**
+   * Statistics to compute over **every** matching resource, not just the
+   * current page. Computed by the store (server or local DB), so a total costs
+   * one number rather than a fetch of every member.
+   */
+  aggregation?: Aggregation;
+  /**
+   * Constraints on values *computed* per resource — a duration, an amount, a
+   * days-since — rather than stored on it. ANDed with `filters`.
+   *
+   * These can't use the query index (a running duration has no stable value to
+   * key by), so the store evaluates them over the set the index narrows to. The
+   * count and any aggregates describe the filtered set.
+   */
+  expression_filters?: ExpressionFilter[];
+}
+
+/** One constraint on a computed value: "logged more than an hour". */
+export interface ExpressionFilter {
+  expression: Expression;
+  /** Numeric comparison, in the expression's own unit (milliseconds for a
+   *  duration, days for a days-since). Defaults to `eq`. */
+  operator?: 'eq' | 'gt' | 'gte' | 'lt' | 'lte';
+  value: number;
+  /** The instant to measure "now" against, for expressions that do. Send the
+   *  same one for every filter in a query. */
+  now_ms?: number;
+}
+
+/** One statistic to compute. `count` needs no property. */
+export interface Aggregate {
+  /** Your own name for this statistic, echoed on the outcome. Needed to tell two
+   *  statistics apart when neither names a property (two computed values). */
+  id?: string;
+  property?: string;
+  /** A value computed per resource instead of read off it. Takes precedence over
+   *  `property`. */
+  expression?: Expression;
+  function: AggregateFunction;
+}
+
+export type AggregateFunction = 'sum' | 'count' | 'avg' | 'min' | 'max';
+
+/** A property to read off the resource, or a fixed number. */
+export type Operand = string | number;
+
+/**
+ * A value computed from a resource rather than stored on it: a duration, an
+ * amount, a days-since, a next-due date. Evaluated by the store, so a total or a
+ * filter can name one wherever it can name a property.
+ *
+ * A fixed set of five, not a formula language — the same five the data-browser's
+ * computed columns offer, in the same argument names.
+ */
+export type Expression =
+  /** `to − from`, in milliseconds. */
+  | { kind: 'difference'; from: Operand; to: Operand }
+  /** `(until ?? now) − from`, in milliseconds: still running while `until` is
+   *  empty. */
+  | { kind: 'elapsed'; from: Operand; until?: Operand | null }
+  /** Whole days between `from` and now. */
+  | { kind: 'daysSince'; from: Operand }
+  /** `a × b` — quantity × price, hours × rate. */
+  | { kind: 'product'; a: Operand; b: Operand }
+  /** `from + days`, as an instant. */
+  | { kind: 'offset'; from: Operand; days: Operand };
+
+/** Break the statistics down per distinct value of a property. */
+export interface AggregateGrouping {
+  property: string;
+  /** Date and timestamp properties are bucketed; `exact` gives one group per
+   *  distinct value, which for a timestamp means one per row. */
+  granularity?: 'exact' | 'day' | 'month';
+  /** Minutes to add before bucketing, so days are the caller's days.
+   *  `-new Date().getTimezoneOffset()`. */
+  tz_offset_minutes?: number;
+  /** Most buckets to return (the store defaults to 100). */
+  limit?: number;
+}
+
+export interface Aggregation {
+  aggregates: Aggregate[];
+  group_by?: AggregateGrouping;
+  /** The instant a computed value that measures against "now" (a running
+   *  duration, a days-since) is evaluated at. Send `Date.now()` so the number
+   *  agrees with the cells the client computed itself. */
+  now_ms?: number;
+}
+
+/** One bucket of a breakdown. */
+export interface AggregateGroup {
+  /** A value's string form, an ISO day (`2026-07-30`) or month (`2026-07`).
+   *  Empty for the resources that have no value for the grouping property. */
+  key: string;
+  value: number | null;
+  count: number;
+}
+
+/** The answer to one requested statistic, over every matching resource. */
+export interface AggregateOutcome {
+  /** Echoes the request's `id`. */
+  id?: string;
+  property?: string;
+  function: AggregateFunction;
+  /** `null` when no resource had a usable value — not the same as `0`. */
+  value: number | null;
+  /** How many resources contributed a value. */
+  count: number;
+  groups?: AggregateGroup[];
+  /** True when there were more buckets than the limit allowed. */
+  groups_truncated?: boolean;
 }
 
 export interface CollectionParams extends QueryFilter {
@@ -155,6 +266,10 @@ export class Collection {
   private params: CollectionParams;
 
   private _totalMembers = 0;
+
+  /** Statistics from the last loaded page. The store computes them over every
+   *  matching resource, so any page carries the same numbers. */
+  private _aggregates: AggregateOutcome[] = [];
 
   private _waitForReady: Promise<void>;
 
@@ -216,6 +331,25 @@ export class Collection {
 
   public get totalPages(): number {
     return Math.ceil(this.totalMembers / this.pageSize);
+  }
+
+  /** The constraints on computed values this collection was built with. */
+  public get expressionFilters(): ExpressionFilter[] {
+    return this.params.expression_filters ?? [];
+  }
+
+  /** The aggregation this collection was built with, if any. */
+  public get aggregation(): Aggregation | undefined {
+    return this.params.aggregation;
+  }
+
+  /**
+   * The statistics this collection asked for, over every matching resource.
+   * Empty until a page has loaded (or when none were requested). They do not
+   * change as you page: the store computed them over the whole filtered set.
+   */
+  public get aggregates(): AggregateOutcome[] {
+    return this._aggregates;
   }
 
   public waitForReady(): Promise<void> {
@@ -594,9 +728,14 @@ export class Collection {
     const url = new URL(`${this.server}/query`);
 
     for (const [key, value] of Object.entries(this.params)) {
-      // `filters` is an array of constraints — serialise it as JSON below,
-      // not via the scalar `set()` (which would stringify to "[object Object]").
-      if (key === 'filters') {
+      // `filters` and `aggregation` are structured — serialised as JSON
+      // below, not via the scalar `set()` (which would stringify to
+      // "[object Object]").
+      if (
+        key === 'filters' ||
+        key === 'aggregation' ||
+        key === 'expression_filters'
+      ) {
         continue;
       }
 
@@ -609,6 +748,22 @@ export class Collection {
     // server parses in `construct_collection_from_params`.
     if (this.params.filters && this.params.filters.length > 0) {
       url.searchParams.set('filters', JSON.stringify(this.params.filters));
+    }
+
+    // Statistics over the whole matching set, computed by the store.
+    if (this.params.aggregation?.aggregates.length) {
+      url.searchParams.set(
+        'aggregation',
+        JSON.stringify(this.params.aggregation),
+      );
+    }
+
+    // Constraints the index can't answer, evaluated by the store per row.
+    if (this.params.expression_filters?.length) {
+      url.searchParams.set(
+        'expression_filters',
+        JSON.stringify(this.params.expression_filters),
+      );
     }
 
     url.searchParams.set('current_page', `${page}`);
@@ -703,8 +858,9 @@ export class Collection {
    * Resolve a page from the local WASM DB. Returns:
    *   - `'ok'` — query ran and the page is populated (possibly with zero
    *     members, which is a legitimate empty result for this filter).
-   *   - `'no-db'` — local DB isn't available (no clientDb, or query failed).
-   *     Caller may fall back to a server `/query`.
+   *   - `'no-db'` — local DB can't answer (no clientDb, query failed, or an
+   *     indexed query with no drive scope to run it under). Caller may fall
+   *     back to a server `/query`.
    *
    * After the first drive-sync the WASM index is the source of truth for
    * `parent=…` queries; an empty result means "this parent really has no
@@ -739,17 +895,43 @@ export class Collection {
     const hasExtraFilters =
       !!this.params.filters && this.params.filters.length > 0;
 
+    // Resolve the drive scope at query time, not at construction time.
+    // `CollectionBuilder` snapshots `store.getDrive()` in its constructor, and
+    // a Collection built during cold start — before `setDrive` ran, or while
+    // an async drive adoption (deep link) is still resolving — would keep
+    // `drive: undefined` for the rest of its life even once the drive is
+    // known. Falling back to the store's current drive here is the same value
+    // the builder would have captured a moment later.
+    const drive = this.params.drive ?? this.store.getDrive();
+
+    // Extra AND constraints route through the indexed path
+    // (`query_complex`), which REQUIRES a drive scope: the query index is
+    // keyed by drive. Without one the worker can only answer with
+    // "Indexed queries require a drive scope", so don't ask — fall back to
+    // the server `/query` instead of burning a worker round-trip on a
+    // guaranteed error.
+    if (hasExtraFilters && !drive) {
+      return 'no-db';
+    }
+
     const result = await this.store.queryLocalDb({
       property: this.params.property,
       value: this.params.value,
       filters: this.params.filters,
-      // Extra AND constraints route through the indexed path
-      // (`query_complex`), which requires a drive scope. Single
-      // property/value queries use the basic path and intentionally omit
-      // `drive` (see the sort note above). We still don't pass `sort_by`, so
-      // the indexed query stays drive-scoped without the DID-sort issue.
-      drive: hasExtraFilters ? this.params.drive : undefined,
+      // Single property/value queries use the basic path and intentionally
+      // omit `drive` (see the sort note above). We still don't pass
+      // `sort_by`, so the indexed query stays drive-scoped without the
+      // DID-sort issue.
+      drive: hasExtraFilters ? drive : undefined,
       includeResources: true,
+      // Aggregated in WASM over the whole matching set, exactly as the server
+      // would — the local DB is not a lesser source here.
+      expressionFilters: this.params.expression_filters?.length
+        ? this.params.expression_filters
+        : undefined,
+      aggregation: this.params.aggregation?.aggregates.length
+        ? this.params.aggregation
+        : undefined,
     });
 
     // Worker returned no result (query error / DB not available). Don't
@@ -762,11 +944,15 @@ export class Collection {
 
     if (result.count === 0) {
       // Empty local result is normally authoritative — but it's ambiguous
-      // on a fresh page load before the drive sync has touched the store
-      // yet (the index may be mid-populate). Once any drive sync has
-      // completed we trust the empty: a freshly-created table or folder
-      // just has no children. Pre-sync, fall back to `/query`.
-      if (this.store.hasCompletedDriveSync()) {
+      // until THIS drive has been synced (the index may be mid-populate, or
+      // never populated at all). Once its sync has completed we trust the
+      // empty: a freshly-created table or folder just has no children.
+      // Otherwise fall back to `/query`.
+      //
+      // Per-drive on purpose. Asking whether *any* sync had finished meant a
+      // synced personal drive vouched for every other drive too, so browsing
+      // a drive that was never synced locally showed nothing at all.
+      if (this.store.hasCompletedDriveSyncFor(drive)) {
         // `fetchPage` races us against `/query`. If the server already
         // populated the page with non-empty data, leave it — server is
         // authoritative for the instant of the query.
@@ -869,6 +1055,9 @@ export class Collection {
     // skip the just-added resource. `fetchPageFromServer` already does this.
     const mergedTotal = resource.props.totalMembers;
     this._totalMembers = isNumber(mergedTotal) ? mergedTotal : result.count;
+    // Computed by the same Rust code the server runs, so an offline table shows
+    // the same totals rather than none.
+    this._aggregates = result.aggregates ?? [];
 
     return 'ok';
   }
@@ -922,7 +1111,15 @@ export class Collection {
     }
 
     this._totalMembers = totalMembers;
+    this._aggregates = readAggregates(resource);
   }
+}
+
+/** Reads the aggregates the server computed off a collection page. */
+function readAggregates(resource: Resource): AggregateOutcome[] {
+  const value = resource.get(collections.properties.aggregates);
+
+  return Array.isArray(value) ? (value as unknown as AggregateOutcome[]) : [];
 }
 
 export function proxyCollection(collection: Collection): Collection {

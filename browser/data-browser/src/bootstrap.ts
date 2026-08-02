@@ -2,6 +2,7 @@ import { JSONADParser, type Store } from '@tomic/react';
 import baseModels from '@repo-lib-defaults/default_base_models.json';
 import defaultStore from '@repo-lib-defaults/default_store.json';
 import tableDefaults from '@repo-lib-defaults/table.json';
+import dashboardDefaults from '@repo-lib-defaults/dashboard.json';
 import chatroomDefaults from '@repo-lib-defaults/chatroom.json';
 import ontologiesDefaults from '@repo-lib-defaults/ontologies.json';
 import aiDefaults from '@repo-lib-defaults/ai.json';
@@ -36,6 +37,7 @@ export function bootstrap(store: Store): void {
     addBootstrapped(baseModels);
     addBootstrapped(defaultStore);
     addBootstrapped(tableDefaults);
+    addBootstrapped(dashboardDefaults);
     addBootstrapped(chatroomDefaults);
     addBootstrapped(ontologiesDefaults);
     addBootstrapped(aiDefaults);

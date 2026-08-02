@@ -107,6 +107,24 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_BASE_DOMAIN")]
     pub base_domain: Option<String>,
 
+    /// Serve one Drive as this server's front page.
+    ///
+    /// Set this to a Drive's subject (e.g. `internal:/` for the Drive at the
+    /// server root, or a `did:ad:drive:...`) and visiting `/` opens that Drive
+    /// directly — for signed-out visitors too. This is what you want when the
+    /// server hosts a single site or wiki that the public should just see.
+    ///
+    /// Unset by default. Without it, `/` sends visitors without an Agent to the
+    /// sign-in / welcome flow, which is the right behaviour for a multi-tenant
+    /// server where the root is not a Drive, or not one everybody may read.
+    ///
+    /// The value is injected into the served HTML, so the browser routes to it
+    /// on the first render without an extra request. Make sure the Drive is
+    /// readable by the public Agent, or signed-out visitors will get an
+    /// authorization error instead of the front page.
+    #[clap(long, env = "ATOMIC_HOME_DRIVE")]
+    pub home_drive: Option<String>,
+
     /// Friendly display name exchanged with other Atomic nodes on peer sync
     /// (`HELLO` frame). Pure display — never used for authorization. Defaults
     /// to the OS hostname if unset, then to "Unknown" if that fails.

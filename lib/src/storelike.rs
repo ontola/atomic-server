@@ -41,6 +41,21 @@ impl ResourceResponse {
         }
     }
 
+    /// Re-label the main resource, so a response served from one stored
+    /// subject can answer under the subject the client actually asked for.
+    /// No-op for Redirects.
+    pub fn set_subject(&mut self, subject: Subject) {
+        match self {
+            ResourceResponse::Resource(resource) => {
+                resource.set_subject(subject.to_string());
+            }
+            ResourceResponse::ResourceWithReferenced(resource, _) => {
+                resource.set_subject(subject.to_string());
+            }
+            ResourceResponse::Redirect(_) => {}
+        }
+    }
+
     /// Get the subject of the main resource.
     /// Returns None for Redirects.
     pub fn get_subject(&self) -> Option<&Subject> {
@@ -739,6 +754,20 @@ pub struct Query {
     /// start with the drive's prefix are included. Also scopes the query index so watched queries
     /// are drive-specific, preventing spurious cross-tenant index updates.
     pub drive: Option<Subject>,
+    /// Statistics to compute over **every** matching row, independent of
+    /// `limit`/`offset`. `None` (the default) costs nothing. See
+    /// [crate::aggregate].
+    pub aggregation: Option<crate::aggregate::Aggregation>,
+    /// Constraints on values *computed* per row — a duration, an amount, a
+    /// days-since — rather than stored on it. ANDed with `filters`.
+    ///
+    /// These can't be answered by the query index, which is keyed by stored
+    /// values (and a running duration has no stable value to key by), so they are
+    /// evaluated over the set the index narrows to. That costs a pass over the
+    /// matching rows, the same pass an aggregation already makes — which is why
+    /// they're a separate field rather than folded into `filters`: nothing else
+    /// should silently lose its index.
+    pub expression_filters: Vec<crate::expression::ExpressionFilter>,
 }
 
 impl Query {
@@ -747,6 +776,7 @@ impl Query {
             property: None,
             value: None,
             filters: Vec::new(),
+            expression_filters: Vec::new(),
             limit: None,
             start_val: None,
             end_val: None,
@@ -757,6 +787,7 @@ impl Query {
             include_nested: true,
             for_agent: ForAgent::Sudo,
             drive: None,
+            aggregation: None,
         }
     }
 
@@ -806,4 +837,7 @@ pub struct QueryResult {
     pub resources: Vec<Resource>,
     /// The amount of hits that were found, including the ones that were out of bounds or not authorized.
     pub count: usize,
+    /// One outcome per requested aggregate, in the order they were asked for.
+    /// Empty unless the query carried an [crate::aggregate::Aggregation].
+    pub aggregates: Vec<crate::aggregate::AggregateOutcome>,
 }

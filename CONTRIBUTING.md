@@ -215,14 +215,33 @@ So please first send an e-mail to <joep@ontola.io> describing the issue, and the
 1. Commit changes
 1. Make sure all tests run properly
 1. Pick one version for the release, including pre-release suffixes when needed (for example `0.41.0-beta.0`).
-1. Test, build and update the `/browser` versions (`package.json` files, see `./browser/CONTRIBUTING.md`). Keep the `@tomic/*` package versions aligned with the Rust release version.
-1. Update the Rust package versions in `lib`, `cli`, `server`, and desktop to the same version. Also update internal `atomic_lib` dependency constraints. `cargo workspaces version <patch|minor|major> --no-git-commit` can help for regular semver bumps, but pre-releases may need manual edits.
+1. Bump every version site in lockstep — 15 of them across the Rust crates, the
+   `@tomic/*` packages, the starter templates' dependency constraints and
+   `desktop/tauri.conf.json`:
+
+   ```sh
+   node scripts/bump-version.mjs <old-version> <new-version>
+   ```
+
+   Do not do this by hand. The sites do not share a single source of truth, and
+   a `grep` for the old version has been observed to silently miss one
+   (`browser/lib/package.json`), which would publish a mismatched set to npm.
 1. Regenerate lockfiles after version changes:
-   - `cargo metadata --format-version 1 --no-deps`
+   - `cargo update --workspace` — **not** `cargo metadata --no-deps`, which
+     skips resolution and leaves the workspace members' own versions stale in
+     `Cargo.lock`.
    - `cd browser && pnpm install --lockfile-only`
+1. Confirm nothing lagged behind:
+
+   ```sh
+   node scripts/bump-version.mjs --check <new-version>
+   ```
+1. Update the `CHANGELOG.md` files (browser and root). Only ever add a section
+   for a version you are actually about to tag — a section for a release that
+   never shipped is worse than no section, see the `[v0.40.2]` entry for how
+   confusing that gets.
 1. Publish to cargo: `cargo publish`. First `lib`, then `cli` and `server`.
 1. Publish to `npm` (see `browser/CONTRIBUTING.md`)
-1. Update the `CHANGELOG.md` files (browser and root)
 
 The following should be triggered automatically:
 
@@ -239,6 +258,79 @@ Note:
 - Github Action for `push`: builds + tests + docker (using `dagger`, see `.dagger` and the `.github` folders)
 - Github Action for `tag`: create release + publish binaries
 - Docker tags should include immutable release tags such as `0.41.0-beta.0`. `latest` is useful as a convenience tag, but downstream consumers such as Home Assistant add-ons need a changing version tag to reliably detect updates.
+
+### Deployments
+
+Nothing deploys until its pipeline is green.
+
+| Trigger | Deploys to | Docs |
+| --- | --- | --- |
+| push to `develop` | staging.atomicdata.dev | Netlify preview URL |
+| push to `master` | — | the live docs + typedoc sites |
+| a `v*` **tag** | atomicdata.dev | — |
+
+Staging follows a branch; **production runs a tagged release**. A branch pointer
+answers "what was merged most recently", which is not the question you are
+asking when production is misbehaving — "which release is this" is, and a tag
+answers it. It also means the deployed thing has a name that appears in the
+changelog, and that redeploying it later gets you the same bytes.
+
+Pre-release tags (`v0.41.0-beta.2` and friends) do **not** deploy. They exist to
+be published and tested. Put one on production deliberately via the
+`workflow_dispatch` if you want it there.
+
+There is no `main` branch, and nothing refers to one.
+
+`release-plz` used to live here, triggered on pushes to `main` — a branch this
+repo does not have — so it never ran once, while holding a
+`CARGO_REGISTRY_TOKEN`. It is gone rather than repointed. It versions Cargo
+crates, and a release here is one version across four Rust crates, twelve
+`@tomic/*` packages and `desktop/tauri.conf.json`; it would have bumped one half
+and left the other failing `bump-version.mjs --check`. It also generates
+changelogs from commit subjects, and these changelogs are written by hand on
+purpose.
+
+Both deploy workflows refuse to run against a commit whose pipeline has not
+passed. They used to trigger on `push`, which ran the deploy and the pipeline at
+the same time, so a red build did not stop the deploy — it just told you
+afterwards. Removing that gate is easy to do by accident, so:
+
+- **Staging** waits on `workflow_run`: _Main pipeline: build, lint, test_ must
+  **conclude successfully** on `develop`, and only then does the tested commit
+  deploy. Moving it back to `push` removes the gate, not just the delay.
+- **Production** cannot use `workflow_run` — that event has no tag filter — so
+  its `verify` job asks the API whether a successful pipeline exists for the
+  tagged commit, and the deploy `needs:` it. `skip_ci_check` exists for
+  emergencies and should feel like a decision.
+
+Two consequences worth knowing:
+
+- `workflow_run` checks out the **default branch**, not the commit that passed.
+  Staging therefore passes `github.event.workflow_run.head_sha` into
+  `deployment.yml`'s required `ref` input; production passes the resolved tag
+  SHA. Leaving it out deploys something other than what CI tested, silently.
+- Docs publishing is opt-in per branch. `dagger call ci` takes `--publish-docs`,
+  and `main.yml` passes it only from `master`. Without it Netlify gets a preview
+  deploy. This used to be unconditional `--prod`, which meant pushing any
+  feature branch republished the public documentation.
+
+Every deploy then has to prove itself: the job polls `/server` on the target
+until it answers `200` (with enough patience for a store migration). A deploy
+that "succeeds" while the process crash-loops is otherwise invisible — that
+happened, and staging stayed dead for over an hour behind a green checkmark.
+
+If the health check fails, the job restores the previous binary automatically.
+Each deploy leaves a timestamped copy, so the last one that actually served
+traffic is still on disk. The rollback deliberately **does not touch the
+store**: if the new binary migrated it on boot, an older binary may not read it
+back, and a rollback that quietly mangles data is worse than an outage. Use the
+export taken during the deploy, and expect to think.
+
+To deploy a specific commit — a rollback, or a fix that cannot wait for a full
+pipeline — use the `workflow_dispatch` on either deploy workflow and give it a
+ref. To require human approval for production, add reviewers to the `production`
+environment in the repository settings; the environment is already declared, so
+no workflow change is needed.
 
 ### Publishing manually - doing the CI's work
 

@@ -533,6 +533,8 @@ pub async fn collect_drive_subjects(
                 // count-drift fix path for unauthorized rows, which
                 // is the wrong layer.
                 for_agent: crate::agents::ForAgent::Sudo,
+                aggregation: None,
+                expression_filters: Vec::new(),
                 drive: None,
             };
 

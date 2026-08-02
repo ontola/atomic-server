@@ -364,8 +364,10 @@ test.describe('sync', () => {
 
     // Sign in with the same agent
     await page2.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await page2.getByLabel('Agent secret').fill(secret);
-    await page2.getByRole('button', { name: 'Continue' }).click();
+    // No confirm button: the flow signs in as soon as the secret parses.
+    const secretField = page2.getByLabel('Agent secret');
+    await secretField.fill(secret);
+    await secretField.blur();
 
     // Wait for the second page to connect
     await waitForConnected(page2);

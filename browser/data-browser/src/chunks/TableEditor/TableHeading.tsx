@@ -40,7 +40,11 @@ export function TableHeading<T>({
   const { dragAreaRef, isDragging, dragAreaListeners } =
     useResizable<HTMLDivElement>({
       initialSize: DEFAULT_SIZE_PX,
-      minSize: 100,
+      // Low enough for the narrow columns a view can add — a start/stop button
+      // is 70px wide, and a 100px floor made dragging it snap wider instead of
+      // resizing it. Spreadsheets let you make a column narrow; this is the
+      // width of the resize handle plus a little.
+      minSize: 40,
       onResize: size => onResize(index, `${size}px`),
       targetRef,
     });

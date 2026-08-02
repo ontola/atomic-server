@@ -15,12 +15,24 @@ val tauriProperties = Properties().apply {
     }
 }
 
+// Whether a release keystore is available at all. Absent on any clean checkout:
+// this file used to be committed WITH ITS PASSWORDS, which is why it is now
+// gitignored and written from GitHub secrets at build time (see
+// .github/workflows/tauri-release.yml and scripts/setup-android-signing.sh).
+//
+// Read once here so `signingConfigs` and `buildTypes` cannot disagree about it.
+// Assigning the signing config unconditionally, as this file used to, makes an
+// unsigned build fail outright: the config exists but its storeFile is null, and
+// AGP rejects that at packaging time rather than falling back to unsigned.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+
 android {
     compileSdk = 36
-    namespace = "com.atomicdata.dev"
+    namespace = "io.ontola.atomicserver"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "com.atomicdata.dev"
+        applicationId = "io.ontola.atomicserver"
         minSdk = 24
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
@@ -28,8 +40,7 @@ android {
     }
     signingConfigs {
         create("release") {
-            val keystorePropertiesFile = rootProject.file("keystore.properties")
-            if (keystorePropertiesFile.exists()) {
+            if (hasReleaseKeystore) {
                 val keystoreProperties = Properties()
                 keystoreProperties.load(FileInputStream(keystorePropertiesFile))
                 keyAlias = keystoreProperties.getProperty("keyAlias")
@@ -58,7 +69,13 @@ android {
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
                     .toList().toTypedArray()
             )
-            signingConfig = signingConfigs.getByName("release")
+            // Only when there is actually a key. Without this guard an
+            // unsigned build fails instead of producing
+            // app-universal-release-unsigned.apk, which is a perfectly good
+            // artifact for sideloading and for CI to prove the build works.
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     kotlinOptions {

@@ -31,6 +31,7 @@ async fn seed_watched_queries_with_drive(store: &atomic_lib::Db, count: usize, d
             property: Some(format!("https://example.com/bench/prop/{i}")),
             value: None,
             filters: vec![],
+            expression_filters: vec![],
             limit: Some(1),
             offset: 0,
             // `sort_by` makes `requires_query_index(q)` return true, which
@@ -45,6 +46,7 @@ async fn seed_watched_queries_with_drive(store: &atomic_lib::Db, count: usize, d
             include_nested: false,
             for_agent: atomic_lib::agents::ForAgent::Sudo,
             drive: Some(drive.clone()),
+            aggregation: None,
         };
         // Ignore the result — we only care about the side-effect (a new
         // entry in Tree::WatchedQueries).

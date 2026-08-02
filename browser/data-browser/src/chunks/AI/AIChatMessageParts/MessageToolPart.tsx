@@ -85,12 +85,15 @@ const getIcon = (toolName: string) => {
       return FaGraduationCap;
     case TOOL_NAMES.GET_SCHEMA:
     case TOOL_NAMES.GET_USER_CLASSES:
+    case TOOL_NAMES.DESCRIBE_DASHBOARD:
       return FaBook;
     case TOOL_NAMES.EDIT_ATOMIC_RESOURCE:
     case TOOL_NAMES.EDIT_DOCUMENT_RESOURCE:
+    case TOOL_NAMES.CONFIGURE_BLOCK:
       return FaPencil;
     case TOOL_NAMES.CREATE_RESOURCE:
     case TOOL_NAMES.CREATE_TABLE:
+    case TOOL_NAMES.CREATE_DASHBOARD:
       return FaPlus;
     default:
       return FaWrench;

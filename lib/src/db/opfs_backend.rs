@@ -26,6 +26,48 @@ impl std::fmt::Debug for OpfsBackend {
 unsafe impl Send for OpfsBackend {}
 unsafe impl Sync for OpfsBackend {}
 
+impl Drop for OpfsBackend {
+    /// A `FileSystemSyncAccessHandle` holds an exclusive lock on the file until
+    /// it is closed — an unclosed handle survives until GC, and while it lives
+    /// `removeEntry` fails with `NoModificationAllowedError` and a re-open
+    /// fails to acquire the handle. Every open that does NOT end in a live
+    /// redb `Database` (a bad header, the wrong encryption key, a redb open
+    /// error) would otherwise leak the lock, which is exactly the state the
+    /// wrong-key self-heal needs to delete the file from. `close()` is
+    /// idempotent, so the explicit `StorageBackend::close` calls stay valid.
+    fn drop(&mut self) {
+        self.handle.close();
+    }
+}
+
+/// Whether an OPFS failure means the browser is refusing storage to this
+/// origin outright, rather than something being wrong with our file.
+///
+/// `navigator.storage.getDirectory()` throws `SecurityError` (or
+/// `NotAllowedError`) when the origin has no access to storage at all —
+/// Safari private browsing, "Prevent cross-site tracking" on an embedded or
+/// partitioned origin, or site data blocked by the user. It is a property of
+/// the browsing session, not of the data: retrying cannot help, and there is
+/// nothing to repair or delete.
+///
+/// `UnknownError` is included for a different reason: it is what Safari
+/// reports when another sync access handle for the file is still open, and
+/// [OpfsBackend::open] only surfaces it after backing off for several seconds.
+/// Its message — "an unknown transient reason (e.g. out of memory)" — is
+/// misleading enough that showing it to a user is worse than useless. By the
+/// time it reaches here the practical outcome is identical to blocked storage:
+/// no local cache this session, the app runs against the server, and a reload
+/// usually clears it.
+///
+/// Callers use this to degrade to server-only mode with one plain sentence,
+/// instead of surfacing a wasm stack trace on every page load for a condition
+/// the user may well have chosen deliberately.
+pub fn is_storage_blocked_error(error: &str) -> bool {
+    error.contains("SecurityError")
+        || error.contains("NotAllowedError")
+        || error.contains("UnknownError")
+}
+
 /// The OPFS root directory of this origin.
 async fn opfs_root() -> Result<web_sys::FileSystemDirectoryHandle, JsValue> {
     let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
@@ -159,10 +201,27 @@ impl OpfsBackend {
                 .await?
                 .unchecked_into();
 
-        // Retry createSyncAccessHandle a few times — in dev (HMR), a previous
-        // worker may still hold the lock briefly before being GC'd.
+        // Only one sync access handle may exist for a file at a time, and the
+        // previous holder's is released when its worker is torn down — not
+        // when we take the Web Lock. Stealing the lock (`client-db.ts`) makes
+        // us the leader; it does not close anyone's handle. So a reload races
+        // the old worker's teardown and we have to wait it out.
+        //
+        // Chromium usually frees it within a few hundred ms. Safari routinely
+        // takes longer, and reports the conflict as a bare `UnknownError`
+        // whose message claims "an unknown transient reason (e.g. out of
+        // memory)" — misleading, but "transient" is the accurate part.
+        //
+        // The old budget was 4 waits of 200ms: comfortable for Chromium, and
+        // consistently short for Safari, where every load then fell back to
+        // server-only with a stack trace in the console. Back off instead, up
+        // to a few seconds. Nothing is blocked while we wait — the app is
+        // already usable without the cache, and this runs in the worker.
+        const BACKOFF_MS: [i32; 6] = [100, 200, 400, 800, 1_500, 2_000];
+
         let mut last_err = JsValue::NULL;
-        for attempt in 0..5 {
+
+        for attempt in 0..=BACKOFF_MS.len() {
             match JsFuture::from(file_handle.create_sync_access_handle()).await {
                 Ok(handle) => {
                     return Ok(OpfsBackend {
@@ -171,19 +230,18 @@ impl OpfsBackend {
                 }
                 Err(e) => {
                     last_err = e;
-                    if attempt < 4 {
-                        // Wait 200ms before retrying
-                        let promise = js_sys::Promise::new(&mut |resolve, _| {
-                            let global: web_sys::WorkerGlobalScope =
-                                js_sys::global().unchecked_into();
-                            global
-                                .set_timeout_with_callback_and_timeout_and_arguments_0(
-                                    &resolve, 200,
-                                )
-                                .unwrap();
-                        });
-                        JsFuture::from(promise).await.unwrap();
-                    }
+
+                    let Some(delay) = BACKOFF_MS.get(attempt) else {
+                        break;
+                    };
+
+                    let promise = js_sys::Promise::new(&mut |resolve, _| {
+                        let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
+                        global
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, *delay)
+                            .unwrap();
+                    });
+                    JsFuture::from(promise).await.unwrap();
                 }
             }
         }

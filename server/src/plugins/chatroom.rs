@@ -52,12 +52,15 @@ pub fn construct_chatroom<'a>(
             include_nested: true,
             for_agent: for_agent.clone(),
             drive: Some(drive_prefix_from_subject(resource.get_subject())),
+            aggregation: None,
+            expression_filters: Vec::new(),
         };
 
         let QueryResult {
             mut subjects,
             resources,
             count,
+            ..
         } = store.query(&query_children).await?;
 
         // An attempt at creating a `next_page` URL on the server. But to be honest, it's probably better to do this in the front-end.

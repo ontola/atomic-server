@@ -227,7 +227,15 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
         },
     ];
 
+    // Only ever ADD. This runs again on a store that already holds part of the
+    // vocabulary (see `bootstrap`), and on atomicdata.dev itself those
+    // resources are the site's own authored content — re-seeding must not
+    // replace a human-written description with the hardcoded one.
     for p in properties {
+        if store.has_stored_resource(&p.subject.as_str().into()) {
+            continue;
+        }
+
         let mut resource = p.to_resource()?;
         resource.set_unsafe(
             urls::PARENT.into(),
@@ -239,6 +247,10 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
     }
 
     for c in classes {
+        if store.has_stored_resource(&c.subject.as_str().into()) {
+            continue;
+        }
+
         let mut resource = c.to_resource()?;
         resource.set_unsafe(
             urls::PARENT.into(),
@@ -284,6 +296,13 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
         .map_err(|e| format!("Failed to import table.json: {e}"))?;
     store
         .import(
+            include_str!("../defaults/dashboard.json"),
+            &ParseOpts::default(),
+        )
+        .await
+        .map_err(|e| format!("Failed to import dashboard.json: {e}"))?;
+    store
+        .import(
             include_str!("../defaults/ontologies.json"),
             &ParseOpts::default(),
         )
@@ -317,16 +336,40 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
 /// Bootstraps the store with core models and default ontologies.
 /// Uses `begin_batch`/`commit_batch` to fold all writes into a single DB transaction.
 pub async fn bootstrap(store: &impl Storelike) -> AtomicResult<()> {
-    // Skip on already-seeded stores. This must be a local storage check,
-    // not `get_resource`: `get_resource` may fetch external Atomic URLs
-    // and can make a fresh store look seeded after fetching only the
-    // sentinel resource.
-    if store.has_stored_resource(&crate::urls::SHORTNAME.into()) {
+    // "Seeded" cannot be decided from one sentinel. `shortname` has existed
+    // since the beginning, so a store migrated from an older release passes
+    // that check while missing every property added to the vocabulary since
+    // its snapshot was taken — and the seeding is then skipped wholesale, so
+    // they are never added. On a store migrated from the pre-DID era that
+    // means `loroUpdate`, `genesis`, `drive` and `sortOrder` are simply
+    // absent, and since commit validation resolves `loroUpdate`'s Property
+    // definition, EVERY write fails: the server can't find it locally, tries
+    // to fetch `https://atomicdata.dev/properties/loroUpdate` from the real
+    // atomicdata.dev, and gets a 404 back.
+    //
+    // So probe for the newest thing the vocabulary is expected to contain as
+    // well. Both must be present to call the store seeded.
+    //
+    // This must be a local storage check, not `get_resource`: `get_resource`
+    // may fetch external Atomic URLs and can make a fresh store look seeded
+    // after fetching only the sentinel resource.
+    let has_legacy_sentinel = store.has_stored_resource(&crate::urls::SHORTNAME.into());
+    let has_current_sentinel = store.has_stored_resource(&crate::urls::LORO_UPDATE.into());
+
+    if has_legacy_sentinel && has_current_sentinel {
         tracing::debug!("populate::bootstrap: store already seeded, skipping");
         return Ok(());
     }
 
-    tracing::info!("populate::bootstrap: seeding base models and ontologies");
+    if has_legacy_sentinel {
+        tracing::info!(
+            "populate::bootstrap: store predates part of the current vocabulary; \
+             adding what is missing (existing resources are left untouched)"
+        );
+    } else {
+        tracing::info!("populate::bootstrap: seeding base models and ontologies");
+    }
+
     store.begin_batch();
     populate_base_models(store).await?;
     populate_default_store(store).await?;

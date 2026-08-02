@@ -65,6 +65,7 @@ async fn sort_order_falls_back_to_created_at() {
         property: Some(urls::PARENT.into()),
         value: Some(Value::AtomicUrl(table.clone().into())),
         filters: Vec::new(),
+        expression_filters: Vec::new(),
         limit: None,
         start_val: None,
         end_val: None,
@@ -77,6 +78,7 @@ async fn sort_order_falls_back_to_created_at() {
         drive: Some(atomic_lib::db::drive_prefix_from_subject(&Subject::from(
             table.clone(),
         ))),
+        aggregation: None,
     };
 
     let QueryResult { subjects, .. } = store.query(&query).await.unwrap();
@@ -108,6 +110,7 @@ async fn fallback_applies_to_incrementally_indexed_rows() {
         property: Some(urls::PARENT.into()),
         value: Some(Value::AtomicUrl(table.clone().into())),
         filters: Vec::new(),
+        expression_filters: Vec::new(),
         limit: None,
         start_val: None,
         end_val: None,
@@ -120,6 +123,7 @@ async fn fallback_applies_to_incrementally_indexed_rows() {
         drive: Some(atomic_lib::db::drive_prefix_from_subject(&Subject::from(
             table.clone(),
         ))),
+        aggregation: None,
     };
 
     // Watch the filter while the table is still empty, like a table page

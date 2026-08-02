@@ -1,0 +1,130 @@
+[
+  {
+    "@id": "https://atomicdata.dev/classes/Dashboard",
+    "https://atomicdata.dev/properties/description": "A composed page of Blocks over a Drive's data: embedded views, numbers and charts, arranged in a grid. Authorable both by a person and by an assistant, because both write the same resources.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/dashboard-blocks",
+      "https://atomicdata.dev/properties/dashboard-layout"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/shortname": "dashboard"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Block",
+    "https://atomicdata.dev/properties/description": "One widget of a Dashboard. What it shows is decided by its block-kind ('view', 'stat', 'chart', 'create' or 'text') and the configuration properties that kind reads, in the same way a View's view-kind decides which of its config properties matter. A Block is a resource of its own so it can also be embedded outside a Dashboard later.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/block-source",
+      "https://atomicdata.dev/properties/block-view",
+      "https://atomicdata.dev/properties/block-query",
+      "https://atomicdata.dev/properties/block-aggregate",
+      "https://atomicdata.dev/properties/block-chart-spec",
+      "https://atomicdata.dev/properties/block-quick-add",
+      "https://atomicdata.dev/properties/description"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/block-kind"
+    ],
+    "https://atomicdata.dev/properties/shortname": "block"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/dashboard-blocks",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The Blocks a Dashboard shows, in order. The order is the fallback layout: a Dashboard with no stored layout still renders every block, so a block added by an assistant that never wrote a layout is never invisible.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "dashboard-blocks"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/dashboard-layout",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "How big each Block is, as a JSON array of { subject, w, h } in a 12-column grid. Size only: *where* a block sits comes from its order in dashboard-blocks and the grid's own wrapping. A block with no entry uses its kind's default size, so layout is an enhancement rather than a requirement. (Free positioning — drag and drop — would add coordinates here, together with a renderer that honours them.)",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "dashboard-layout"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/block-kind",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Which kind of widget a Block is: 'view' (an embedded table/kanban/calendar), 'stat' (one number over a filtered set), 'chart' (a number per bucket, drawn), 'create' (a button that makes a row) or 'text' (a heading or a note). An unknown kind renders as a placeholder rather than breaking the page.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "block-kind"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/block-source",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The Table (or other parent resource) whose children a Block describes. Every kind but 'text' needs one.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "block-source"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/block-view",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "A View of the source whose configuration this Block borrows: a 'view' block renders it, and a 'stat' or 'chart' block inherits its filters and computed columns so a number describes exactly the rows that view lists. Absent means the source's default view.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "block-view"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/block-query",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Extra constraints a Block narrows its source by, ANDed onto whatever its view already filters. Same JSON shape as view-filters: an array of { property | derived, operator, value }.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "block-query"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/block-aggregate",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The number a 'stat' or 'chart' block shows, as a JSON object { function, property?, derived? } — function is one of sum / count / avg / min / max. 'count' needs no property; 'derived' names a computed column of the block's view instead of a stored property. The store computes it over every matching row, so the number is exact without fetching them.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "block-aggregate"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/block-chart-spec",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "How a 'chart' block draws its buckets, as a Vega-Lite-shaped JSON object: { mark, encoding: { x: { field, granularity? }, y: {} } }. A constrained subset the renderer draws itself — the grammar is the contract, not a charting library.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "block-chart-spec"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/block-quick-add",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "What a 'create' block's button does, as a JSON object { label, field?, placeholder?, presets? } — the same shape a View's view-quick-add holds, so the table and the dashboard describe a create button identically. Each preset is { kind, property, value? } from the row-action verb vocabulary, applied to the row being created.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "block-quick-add"
+  }
+]

@@ -118,16 +118,26 @@ export function TableRow({
 
   return (
     <>
-      {columns.map((column, cIndex) => (
-        <TableCellMemo
-          key={column.key}
-          rowIndex={index}
-          columnIndex={cIndex + 1}
-          subject={displaySubject}
-          property={column.property}
-          languageTag={column.languageTag}
-        />
-      ))}
+      {columns.map((column, cIndex) =>
+        column.property ? (
+          <TableCellMemo
+            key={column.key}
+            rowIndex={index}
+            columnIndex={cIndex + 1}
+            subject={displaySubject}
+            property={column.property}
+            languageTag={column.languageTag}
+          />
+        ) : column.virtual ? (
+          // A column the view computes for itself — a duration, a row action.
+          <column.virtual.Cell
+            key={column.key}
+            subject={displaySubject}
+            rowIndex={index}
+            columnIndex={cIndex + 1}
+          />
+        ) : null,
+      )}
     </>
   );
 }
@@ -225,17 +235,23 @@ export function TableNewRow({
 
   return (
     <>
-      {columns.map((column, cIndex) => (
-        <TableCellMemo
-          key={column.key}
-          rowIndex={index}
-          columnIndex={cIndex + 1}
-          subject={subject}
-          property={column.property}
-          languageTag={column.languageTag}
-          onFirstContent={handleFirstContent}
-        />
-      ))}
+      {columns.map((column, cIndex) =>
+        column.property ? (
+          <TableCellMemo
+            key={column.key}
+            rowIndex={index}
+            columnIndex={cIndex + 1}
+            subject={subject}
+            property={column.property}
+            languageTag={column.languageTag}
+            onFirstContent={handleFirstContent}
+          />
+        ) : (
+          // Virtual columns read from a saved row; the trailing draft row has
+          // nothing for them to show yet.
+          <div key={column.key} />
+        ),
+      )}
     </>
   );
 }

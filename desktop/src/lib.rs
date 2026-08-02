@@ -1,9 +1,14 @@
-#[cfg(not(target_os = "android"))]
+// Menus and the tray are desktop concepts — `set_menu` and `TrayIcon` do not
+// exist on mobile. These were gated `not(android)`, which still let them
+// through on iOS; nothing caught it because iOS has never been built.
+#[cfg(desktop)]
 mod menu;
-#[cfg(not(target_os = "android"))]
+#[cfg(desktop)]
 mod system_tray;
-// The NFS virtual drive is desktop-only (mobile can't mount NFS).
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+// The NFS virtual drive is unix-desktop-only: mobile can't mount NFS, and
+// `nfsserve` does not build for windows (see the dependency note in
+// Cargo.toml). `desktop` here is the alias tauri-build sets, i.e. not mobile.
+#[cfg(all(desktop, unix))]
 mod vfs;
 
 /// Hand the Android system certificate verifier the app's JVM context.
@@ -145,7 +150,7 @@ async fn adopt_agent(
 
 /// Start the read-only NFS virtual drive (desktop only — mobile can't mount
 /// NFS). Returns the current status, including the `mount` command to run.
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(all(desktop, unix))]
 #[tauri::command]
 fn virtual_drive_start(
   node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
@@ -161,14 +166,14 @@ fn virtual_drive_start(
   Ok(vfs.status())
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(all(desktop, unix))]
 #[tauri::command]
 fn virtual_drive_stop(vfs: tauri::State<'_, std::sync::Arc<vfs::VfsController>>) -> vfs::VfsStatus {
   vfs.stop();
   vfs.status()
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(all(desktop, unix))]
 #[tauri::command]
 fn virtual_drive_status(
   vfs: tauri::State<'_, std::sync::Arc<vfs::VfsController>>,
@@ -177,7 +182,7 @@ fn virtual_drive_status(
 }
 
 /// Open the mounted virtual drive in the OS file manager.
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(all(desktop, unix))]
 #[tauri::command]
 fn virtual_drive_open() -> Result<(), String> {
   vfs::open_mount()
@@ -201,7 +206,7 @@ pub fn run() {
 
   // The virtual-drive NFS mount is desktop-only; register its state + commands
   // only there (mobile can't mount NFS).
-  #[cfg(not(any(target_os = "android", target_os = "ios")))]
+  #[cfg(all(desktop, unix))]
   let builder = builder
     .manage(std::sync::Arc::new(vfs::VfsController::default()))
     .invoke_handler(tauri::generate_handler![
@@ -211,7 +216,7 @@ pub fn run() {
       virtual_drive_status,
       virtual_drive_open
     ]);
-  #[cfg(any(target_os = "android", target_os = "ios"))]
+  #[cfg(not(all(desktop, unix)))]
   let builder = builder.invoke_handler(tauri::generate_handler![adopt_agent]);
 
   builder
@@ -337,7 +342,7 @@ pub fn run() {
         .unwrap();
       });
 
-      #[cfg(not(target_os = "android"))]
+      #[cfg(desktop)]
       {
         let menu = crate::menu::build(app.handle())?;
         app.handle().set_menu(menu)?;

@@ -41,8 +41,10 @@ test.describe('signing in on a device that holds none of the account’s data', 
     await page
       .getByRole('button', { name: 'Sign in', exact: true })
       .click({ timeout: 20_000 });
-    await page.getByLabel('Agent secret').fill(await strangerSecret());
-    await page.getByRole('button', { name: 'Continue' }).click();
+    // No confirm button: the flow signs in as soon as the secret parses.
+    const field = page.getByLabel('Agent secret');
+    await field.fill(await strangerSecret());
+    await field.blur();
   }
 
   test('stops, and says so, instead of opening a workspace', async ({

@@ -2,6 +2,7 @@ import { Client } from './client.js';
 import {
   generateKeyPair,
   JSCryptoProvider,
+  legacySubjectFromSecret,
   SubtleCryptoProvider,
   type CryptoProvider,
 } from './CryptoProvider.js';
@@ -21,6 +22,14 @@ export class Agent implements AgentInterface {
   public client: Client;
   private _subject?: string;
   public initialDrive?: string;
+  /**
+   * The `https://server/agents/{pubkey}` subject this identity was issued
+   * under, when the secret predates DIDs. Set only for such secrets; see
+   * `legacySubjectFromSecret`. The Store uses it to find the Agent resource
+   * the old server stored, which holds the name and `drives` the DID has no
+   * way of knowing about.
+   */
+  public legacySubject?: string;
 
   #cryptoProvider: CryptoProvider;
 
@@ -56,8 +65,10 @@ export class Agent implements AgentInterface {
     if (type === 'js') {
       const [provider, subject, initialDrive] =
         JSCryptoProvider.fromSecret(secretB64);
+      const agent = new Agent(provider, subject, initialDrive);
+      agent.legacySubject = legacySubjectFromSecret(secretB64);
 
-      return new Agent(provider, subject, initialDrive);
+      return agent;
     }
 
     return new Promise((resolve, reject) => {
@@ -65,6 +76,7 @@ export class Agent implements AgentInterface {
         .then(([keys, subject, initialDrive]) => {
           const provider = new SubtleCryptoProvider(keys);
           const agent = new Agent(provider, subject, initialDrive);
+          agent.legacySubject = legacySubjectFromSecret(secretB64);
 
           resolve(agent);
         })
@@ -74,7 +86,9 @@ export class Agent implements AgentInterface {
           try {
             const [provider, subject, initialDrive] =
               JSCryptoProvider.fromSecret(secretB64);
-            resolve(new Agent(provider, subject, initialDrive));
+            const fallback = new Agent(provider, subject, initialDrive);
+            fallback.legacySubject = legacySubjectFromSecret(secretB64);
+            resolve(fallback);
           } catch (e) {
             reject(e);
           }

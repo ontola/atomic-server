@@ -345,6 +345,116 @@ export async function setupAIToolCallMocks(
   return state;
 }
 
+/** One scripted assistant turn: call this tool with these arguments. */
+export interface ScriptedToolCall {
+  tool: string;
+  /** Either the arguments, or a function of the tool results so far. */
+  args: object | ((results: string[]) => object);
+}
+
+/**
+ * Mocks the LLM so it makes exactly the tool calls a test asks for, in order,
+ * then says `finalText`. Lets a test exercise a tool end-to-end — the tool
+ * really runs against the store — without depending on what a model decides.
+ *
+ * Must be called before `page.goto()`: it intercepts `/models`, which fires on
+ * page load.
+ */
+export async function setupScriptedToolCallMocks(
+  page: Page,
+  script: ScriptedToolCall[],
+  finalText = 'Done.',
+): Promise<{ toolResults: string[] }> {
+  const state = { toolResults: [] as string[] };
+  let streamingCallCount = 0;
+
+  await page.route(`${OPENROUTER_BASE}/models**`, route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            id: TEST_MODEL,
+            name: 'Gemini Flash',
+            description: '',
+            architecture: {
+              input_modalities: ['text', 'image'],
+              output_modalities: ['text'],
+            },
+            pricing: { prompt: 0, completion: 0, web_search: 0 },
+            supported_parameters: ['temperature'],
+          },
+        ],
+      }),
+    }),
+  );
+
+  await page.route(`${OPENROUTER_BASE}/credits**`, route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { total_credits: 100, usage: 0 } }),
+    }),
+  );
+
+  await page.route(`${OPENROUTER_BASE}/chat/completions**`, async route => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+
+    if (body?.stream !== true) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: buildJSONCompletionBody(),
+      });
+
+      return;
+    }
+
+    // Every tool result the app has sent back so far, so a later call can use
+    // what an earlier one returned (a created subject, for instance).
+    const messages =
+      (body.messages as Array<{ role: string; content: string }>) ?? [];
+    state.toolResults = messages
+      .filter(message => message.role === 'tool')
+      .map(message =>
+        typeof message.content === 'string'
+          ? message.content
+          : JSON.stringify(message.content),
+      );
+
+    const step = script[streamingCallCount++];
+
+    const headers = {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+    };
+
+    if (!step) {
+      await route.fulfill({
+        status: 200,
+        headers,
+        body: buildSSEBody(finalText),
+      });
+
+      return;
+    }
+
+    const args =
+      typeof step.args === 'function'
+        ? step.args(state.toolResults)
+        : step.args;
+
+    await route.fulfill({
+      status: 200,
+      headers,
+      body: buildToolCallSSE(step.tool, args, `call_${step.tool}_1`),
+    });
+  });
+
+  return state;
+}
+
 /** Register page.route() intercepts for all OpenRouter endpoints. Must be called before page.goto(). */
 export async function setupAIRouteMocks(
   page: Page,

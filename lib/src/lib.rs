@@ -63,6 +63,7 @@ tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().bloc
 */
 
 pub mod agents;
+pub mod aggregate;
 pub mod atoms;
 pub mod authentication;
 #[cfg(feature = "db")]
@@ -80,6 +81,7 @@ pub mod discovery;
 #[cfg(feature = "db")]
 pub mod endpoints;
 pub mod errors;
+pub mod expression;
 pub mod genesis;
 pub mod hierarchy;
 pub mod history;

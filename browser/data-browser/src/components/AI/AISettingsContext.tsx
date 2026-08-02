@@ -67,7 +67,9 @@ const initialState: AISettingsContextType = {
   ollamaAvailable: false,
   openRouterApiKey: undefined,
   setOpenRouterApiKey: () => undefined,
-  ollamaUrl: 'http://localhost:11434',
+  // Unset until the user asks for local AI — see the note on the real default
+  // in `AISettingsContextProvider` below.
+  ollamaUrl: undefined,
   setOllamaUrl: () => undefined,
   shouldGenerateTitles: true,
   setShouldGenerateTitles: () => undefined,
@@ -94,9 +96,26 @@ export const AISettingsContextProvider = (
     'atomic.ai.mcpServers',
     defaultMCPServers,
   );
+  // Deliberately unset by default, even though `http://localhost:11434` is the
+  // address almost every Ollama install uses — it stays as the input's
+  // placeholder in AISettings / AISetupPanel instead.
+  //
+  // A default here is not inert: this provider is mounted app-wide and runs a
+  // reachability probe against the URL (`useProviderAvailability` below), so a
+  // default meant every visitor's browser fetched `localhost:11434` on page
+  // load. Browsers now gate requests from a public origin into the loopback
+  // address space, so opening any page raised "<site> wants to access other
+  // apps and services on this device" — before the visitor had asked for
+  // anything AI-related. Beyond being alarming for someone who just opened a
+  // document, a reflexive "Block" is remembered per-site and then silently
+  // breaks Ollama for the people who actually want it.
+  //
+  // Unset means no probe (`useIsOllamaUrlValid` returns early on a falsy URL),
+  // so the permission prompt only ever appears in response to someone
+  // deliberately configuring local AI.
   const [ollamaUrl, setOllamaUrl] = useLocalStorage<string | undefined>(
     'atomic.ai.ollama-url',
-    'http://localhost:11434',
+    undefined,
   );
   const [showTokenUsage, setShowTokenUsage] = useLocalStorage(
     'atomic.ai.showTokenUsage',

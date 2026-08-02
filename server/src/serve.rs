@@ -218,6 +218,24 @@ where
         "Atomic-server {} \nUse --help for instructions. Visit https://docs.atomicdata.dev and https://github.com/atomicdata-dev/atomic-server for more info.",
         env!("CARGO_PKG_VERSION")
     );
+
+    // rustls 0.23 will not choose a CryptoProvider for itself when more than
+    // one is compiled in, and both `ring` and `aws-lc-rs` reach us through the
+    // dependency graph regardless of our own features. Without an explicit
+    // choice, the first rustls call panics -- and the first rustls call is the
+    // ACME path, so a server whose certificates have expired does not fail to
+    // renew, it fails to BOOT. Staging died exactly this way (status 101 on
+    // every restart until systemd gave up).
+    //
+    // Installed here rather than in bin.rs because the desktop app and the
+    // managed-node wrapper embed this function instead of going through main().
+    // Ignoring the error is intentional: it only reports that a provider was
+    // already installed, which is the outcome we want anyway.
+    #[cfg(feature = "rustls")]
+    {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+
     let tracing_chrome_flush_guard = crate::trace::init_tracing(&config);
 
     // Setup the database and more

@@ -114,21 +114,21 @@ async function signOut(page: Page) {
 /**
  * Sign back in on a device that just signed out.
  *
- * Not `test-utils`' `signIn`: that one assumes the secret form always ends at a
- * "Continue" button, and here the app can jump straight past it to the
- * "Your data is on another device" screen. Waiting for a button that will
- * never come reports a locator timeout, which says nothing about what actually
- * went wrong — this reports the screen it landed on instead.
+ * Not `test-utils`' `signIn`: that one waits for the signed-in sidebar, and
+ * here the app may land on the "Your data is on another device" screen
+ * instead. Waiting for a sidebar that will never come reports a locator
+ * timeout, which says nothing about what actually went wrong — this asserts on
+ * the screen it landed on instead.
+ *
+ * There is no button to confirm the secret: the flow signs in as soon as the
+ * value parses (on change, and again on blur).
  */
 async function signInAgain(page: Page, secret: string) {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.getByLabel('Agent secret').fill(secret);
 
-  const continueButton = page.getByRole('button', { name: 'Continue' });
-
-  if (await continueButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await continueButton.click();
-  }
+  const field = page.getByLabel('Agent secret');
+  await field.fill(secret);
+  await field.blur();
 
   // The whole point of this spec. This device made the workspace moments ago
   // and is still talking to the same server, so "your data is elsewhere" is

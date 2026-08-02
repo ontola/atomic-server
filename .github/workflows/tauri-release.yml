@@ -1,0 +1,698 @@
+name: Tauri apps (desktop & mobile)
+
+# Builds the Tauri app for all five targets and attaches the installers to the
+# GitHub release for the tag.
+#
+# Separate from release.yml on purpose. That workflow publishes crates and the
+# headless server binary; this one is slow (each target compiles the embedded
+# `atomic-server` AND builds the frontend twice — see the note in `desktop`),
+# platform-fragile, and much more likely to need a re-run on its own. Keeping it
+# apart means a broken Android SDK image cannot fail a crates.io publish, and a
+# re-run here does not re-attempt anything already published.
+#
+# It waits for release.yml to create the release rather than creating one
+# itself, so the two workflows cannot race to create the same tag's release.
+#
+# SIGNING DEGRADES, IT DOES NOT BLOCK. Every platform builds without any secrets
+# configured and simply produces an unsigned artifact, which is installable with
+# a warning. Add the secrets listed under each job and that platform starts
+# signing on the next tag, with no edit here. This is deliberate: a release
+# pipeline that fails closed on a missing certificate is a pipeline that stops
+# shipping the moment a cert expires.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag, branch or commit to build"
+        required: false
+        default: develop
+        type: string
+      upload:
+        description: "Attach the artifacts to the release for this tag"
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "v*"
+
+# A second tag push should not leave two sets of installers half-uploaded to the
+# same release. Newest wins.
+concurrency:
+  group: tauri-release-${{ github.event.inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  # Secrets are not readable from a job-level `if:`, so the availability of each
+  # signing identity is resolved once here and passed down as plain booleans.
+  # Steps CAN read secrets directly, but repeating the check at every step makes
+  # it easy for one to drift out of sync with the others.
+  preflight:
+    name: Resolve what we can sign
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      upload: ${{ steps.resolve.outputs.upload }}
+      sign_apple: ${{ steps.secrets.outputs.sign_apple }}
+      notarize: ${{ steps.secrets.outputs.notarize }}
+      sign_android: ${{ steps.secrets.outputs.sign_android }}
+      sign_ios: ${{ steps.secrets.outputs.sign_ios }}
+    steps:
+      - name: Resolve tag and whether to upload
+        id: resolve
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "upload=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
+            echo "upload=${{ inputs.upload }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check which signing identities are configured
+        id: secrets
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+        run: |
+          set -euo pipefail
+          emit() { echo "$1=$2" >> "$GITHUB_OUTPUT"; echo "$1=$2"; }
+
+          [ -n "$APPLE_CERTIFICATE" ] && emit sign_apple true || emit sign_apple false
+          [ -n "$APPLE_ID" ]          && emit notarize   true || emit notarize   false
+          [ -n "$ANDROID_KEYSTORE_BASE64" ] && emit sign_android true || emit sign_android false
+          # An iOS build needs BOTH a distribution certificate and a matching
+          # provisioning profile; one without the other cannot produce an IPA.
+          if [ -n "$IOS_CERTIFICATE" ] && [ -n "$IOS_MOBILE_PROVISION" ]; then
+            emit sign_ios true
+          else
+            emit sign_ios false
+          fi
+
+      - name: Summarise
+        run: |
+          {
+            echo "### Tauri release ${{ steps.resolve.outputs.tag }}"
+            echo ""
+            echo "| identity | configured |"
+            echo "|---|---|"
+            echo "| macOS code signing | ${{ steps.secrets.outputs.sign_apple }} |"
+            echo "| macOS notarization | ${{ steps.secrets.outputs.notarize }} |"
+            echo "| Android keystore | ${{ steps.secrets.outputs.sign_android }} |"
+            echo "| iOS distribution | ${{ steps.secrets.outputs.sign_ios }} |"
+            echo ""
+            echo "Unconfigured platforms still build; their artifacts are unsigned."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------- desktop --
+  #
+  # macOS, Linux and Windows via tauri-action, which handles the per-OS bundling
+  # (.dmg/.app, .deb/.rpm/.AppImage, .msi/.exe) and knows where each lands.
+  #
+  # Windows only became possible in this release: `nfsserve`, which backs the
+  # virtual drive, uses std::os::unix and was pulled in for every non-mobile
+  # target, so the Windows build could never link. It is now gated to
+  # unix-desktop (see desktop/Cargo.toml), and Windows ships without the virtual
+  # drive. Everything else works there.
+  desktop:
+    name: ${{ matrix.name }}
+    needs: preflight
+    strategy:
+      # One platform failing should not deny you the other two. A release with
+      # macOS and Linux installers beats a release with none because a Windows
+      # runner image changed.
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (universal)
+            os: macos-latest
+            args: "--target universal-apple-darwin"
+            # wasm32 is on every row: `build:tauri` runs `build:wasm` first, and
+            # atomic-server's own build.rs runs the plain `pnpm run build`,
+            # which does the same. Both need the wasm target present.
+            rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin,wasm32-unknown-unknown"
+          - name: Linux (x86_64)
+            # Deliberately NOT ubuntu-latest. AppImage and .deb link against the
+            # glibc of the machine that built them, so building on the newest
+            # Ubuntu silently drops support for every older distro. 22.04 is the
+            # oldest image GitHub still provides with webkit2gtk 4.1.
+            os: ubuntu-22.04
+            args: ""
+            rust-targets: "wasm32-unknown-unknown"
+          - name: Windows (x86_64)
+            os: windows-latest
+            # NSIS only, no .msi. WiX encodes the version as a packed 32-bit
+            # integer and so requires any pre-release identifier to be numeric
+            # and <= 65535 — `0.41.0-beta.2` is neither, and bundling dies with
+            # `optional pre-release identifier in app version must be
+            # numeric-only`. Since betas are a normal part of this project's
+            # release flow, the choice is NSIS-only or no Windows build during a
+            # beta, and the .exe installer is what most users want anyway.
+            #
+            # Worth revisiting for stable tags, where msi would bundle fine.
+            args: "--bundles nsis"
+            rust-targets: "wasm32-unknown-unknown"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      # webkit2gtk is the webview Tauri embeds on Linux; libappindicator backs
+      # the tray icon; patchelf is what the AppImage bundler uses to rewrite
+      # rpaths. Without these the Linux bundle step fails late, after the whole
+      # Rust build.
+      - name: Linux system dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev librsvg2-dev \
+            patchelf libssl-dev build-essential curl wget file \
+            libgtk-3-dev libayatana-appindicator3-dev
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          key: tauri-${{ matrix.os }}
+
+      # Two things the Tauri build assumes are already done, and are not.
+      #
+      # 1. Dependencies. tauri-action installs them itself only when it finds a
+      #    package.json at `projectPath`; desktop/ has none, because the JS
+      #    workspace lives in browser/. Without this, `beforeBuildCommand` dies
+      #    with `vite: command not found` — after the whole Rust build.
+      #
+      # 2. server/assets_tmp. desktop/.cargo/config.toml sets
+      #    ATOMICSERVER_SKIP_JS_BUILD=true so the embedded server does not
+      #    redundantly rebuild the frontend the Tauri webview never loads. But
+      #    handlers/single_page_app.rs does
+      #    `include_str!("../../assets_tmp/index.html")`, so those assets must
+      #    exist to COMPILE regardless of whether they are ever served. On a dev
+      #    machine one is left over from an earlier plain `cargo build`; a clean
+      #    runner has neither it nor `dist` to fall back to, and build.rs fails
+      #    with a bare `Os { code: 2, kind: NotFound }`.
+      #
+      # Building `dist` here rather than clearing the skip flag is deliberate.
+      # build.rs shells out via `Command::new("pnpm")`, and on Windows that
+      # resolves through CreateProcess, which does not find the `pnpm.cmd` shim —
+      # so letting build.rs do the work would break the Windows job specifically,
+      # in a way that looks identical to this failure.
+      - name: Install dependencies and prepare embedded assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm -C browser install --frozen-lockfile
+          # The workspace root build, not `-C browser/data-browser build`.
+          # data-browser imports @tomic/lib, which is a workspace package that
+          # has to be BUILT before anything can resolve it — the root script
+          # does `--filter "@tomic/lib" run build` first for exactly that
+          # reason. Building the leaf alone fails with
+          # `Rolldown failed to resolve import "@tomic/lib"`. Same command
+          # release.yml uses to build the assets it embeds in the crate.
+          pnpm -C browser build
+          rm -rf server/assets_tmp
+          cp -r browser/data-browser/dist server/assets_tmp
+          test -f server/assets_tmp/index.html
+
+      # Imports the Developer ID certificate into a throwaway keychain.
+      # tauri-action reads APPLE_SIGNING_IDENTITY and signs during bundling.
+      #
+      # Worth knowing why this matters beyond the Gatekeeper warning: the app
+      # stores the agent keypair as a non-extractable CryptoKey, which WebKit
+      # wraps under a login-keychain master key whose ACL is matched against the
+      # app's code signature. An ad-hoc signed build has no stable identity, so
+      # macOS re-prompts on every launch and "Always Allow" never sticks. See
+      # desktop/README.md.
+      - name: Import Apple signing certificate
+        if: matrix.os == 'macos-latest' && needs.preflight.outputs.sign_apple == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN=build.keychain
+          KEYCHAIN_PASSWORD=$(uuidgen)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # Otherwise the keychain re-locks mid-build and codesign fails with a
+          # misleading "User interaction is not allowed".
+          security set-keychain-settings -t 3600 -u "$KEYCHAIN"
+
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security import certificate.p12 -k "$KEYCHAIN" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          rm certificate.p12
+
+          echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+      # Signing credentials go through $GITHUB_ENV, not the build step's `env:`.
+      #
+      # A workflow expression that evaluates to '' still SETS the variable, to
+      # the empty string — and tauri checks presence, not emptiness. So the
+      # obvious `${{ cond && secrets.X || '' }}` made an unsigned macOS build
+      # announce `Signing with identity ""` and die on `: no identity found`.
+      # Writing the keys only when they have a value is the only way to leave
+      # them genuinely unset.
+      #
+      # `-` is codesign's ad-hoc identity, and is what a plain local
+      # `cargo tauri build` produces. Not a no-op: macOS refuses to run an
+      # unsigned arm64 binary at all, so the fallback has to be ad-hoc rather
+      # than nothing. It is still not a substitute for a real certificate — see
+      # the keychain note above.
+      - name: Use ad-hoc signing when no certificate is configured
+        if: matrix.os == 'macos-latest' && needs.preflight.outputs.sign_apple != 'true'
+        run: echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+
+      - name: Enable notarization
+        if: matrix.os == 'macos-latest' && needs.preflight.outputs.notarize == 'true'
+        run: |
+          {
+            echo "APPLE_ID=${{ secrets.APPLE_ID }}"
+            echo "APPLE_PASSWORD=${{ secrets.APPLE_PASSWORD }}"
+            echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Build and bundle
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          args: ${{ matrix.args }}
+          # No tagName/releaseId: this must NOT create or publish a release.
+          # release.yml owns the release object; artifacts are attached below.
+          includeUpdaterJson: false
+
+      - name: Collect installers
+        id: collect
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-artifacts
+          # Bundle layout differs per platform and per tauri version, so match on
+          # extension rather than hardcoding paths. -print0/-d '' survives the
+          # spaces in "Atomic Server_0.41.0_x64.dmg".
+          find target -type d -name bundle -print0 | while IFS= read -r -d '' bundle; do
+            find "$bundle" -type f \
+              \( -name '*.dmg' -o -name '*.app.tar.gz' \
+              -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \
+              -o -name '*.msi' -o -name '*.exe' \) -print0 \
+            | while IFS= read -r -d '' f; do cp "$f" dist-artifacts/; done
+          done
+
+          count=$(find dist-artifacts -type f | wc -l | tr -d ' ')
+          echo "Collected ${count} installer(s):"
+          ls -la dist-artifacts || true
+          if [ "$count" -eq 0 ]; then
+            echo "::error::tauri-action reported success but produced no installers for ${{ matrix.name }}."
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.os }}
+          path: dist-artifacts/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------- android --
+  #
+  # Secrets: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+  #          ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+  # Generate them with scripts/setup-android-signing.sh, which never puts the
+  # key material through a shell history or this repo.
+  android:
+    name: Android (apk + aab)
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      # The NDK provides the cross-linkers (aarch64-linux-android*-clang) that
+      # `ring` and every other -sys crate need. `cargo tauri android build`
+      # locates it through NDK_HOME.
+      - name: Install Android NDK
+        run: |
+          set -euo pipefail
+          sdkmanager --install "ndk;27.2.12479018" >/dev/null
+          echo "NDK_HOME=${ANDROID_SDK_ROOT}/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android,wasm32-unknown-unknown
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          key: tauri-android
+
+      # Two things the Tauri build assumes are already done, and are not.
+      #
+      # 1. Dependencies. tauri-action installs them itself only when it finds a
+      #    package.json at `projectPath`; desktop/ has none, because the JS
+      #    workspace lives in browser/. Without this, `beforeBuildCommand` dies
+      #    with `vite: command not found` — after the whole Rust build.
+      #
+      # 2. server/assets_tmp. desktop/.cargo/config.toml sets
+      #    ATOMICSERVER_SKIP_JS_BUILD=true so the embedded server does not
+      #    redundantly rebuild the frontend the Tauri webview never loads. But
+      #    handlers/single_page_app.rs does
+      #    `include_str!("../../assets_tmp/index.html")`, so those assets must
+      #    exist to COMPILE regardless of whether they are ever served. On a dev
+      #    machine one is left over from an earlier plain `cargo build`; a clean
+      #    runner has neither it nor `dist` to fall back to, and build.rs fails
+      #    with a bare `Os { code: 2, kind: NotFound }`.
+      #
+      # Building `dist` here rather than clearing the skip flag is deliberate.
+      # build.rs shells out via `Command::new("pnpm")`, and on Windows that
+      # resolves through CreateProcess, which does not find the `pnpm.cmd` shim —
+      # so letting build.rs do the work would break the Windows job specifically,
+      # in a way that looks identical to this failure.
+      - name: Install dependencies and prepare embedded assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm -C browser install --frozen-lockfile
+          # The workspace root build, not `-C browser/data-browser build`.
+          # data-browser imports @tomic/lib, which is a workspace package that
+          # has to be BUILT before anything can resolve it — the root script
+          # does `--filter "@tomic/lib" run build` first for exactly that
+          # reason. Building the leaf alone fails with
+          # `Rolldown failed to resolve import "@tomic/lib"`. Same command
+          # release.yml uses to build the assets it embeds in the crate.
+          pnpm -C browser build
+          rm -rf server/assets_tmp
+          cp -r browser/data-browser/dist server/assets_tmp
+          test -f server/assets_tmp/index.html
+
+      - name: Install tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
+      # app/build.gradle.kts reads keystore.properties if it exists and produces
+      # an unsigned release build if it does not, so this whole step is
+      # skippable without a conditional further down.
+      - name: Configure signing
+        if: needs.preflight.outputs.sign_android == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/release.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+
+          # Written, not committed: the plaintext-password version of this file
+          # was tracked in this public repo until 2026-08-02.
+          cat > desktop/gen/android/keystore.properties <<PROPS
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=$keystore
+          PROPS
+          echo "Signing configured (keystore at $keystore)."
+
+      - name: Build
+        run: cargo tauri android build --apk --aab
+        working-directory: desktop
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-artifacts
+          find desktop/gen/android -type f \( -name '*.apk' -o -name '*.aab' \) \
+            ! -path '*/intermediates/*' -print0 \
+          | while IFS= read -r -d '' f; do cp "$f" dist-artifacts/; done
+
+          count=$(find dist-artifacts -type f | wc -l | tr -d ' ')
+          echo "Collected ${count} artifact(s):"
+          ls -la dist-artifacts || true
+          [ "$count" -gt 0 ] || { echo "::error::No APK/AAB produced."; exit 1; }
+
+      # Never leave decoded signing material on a runner that later steps (or a
+      # re-run of this job) could pick up.
+      - name: Scrub signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" desktop/gen/android/keystore.properties
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-android
+          path: dist-artifacts/*
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------- ios --
+  #
+  # Secrets: IOS_CERTIFICATE (base64 .p12 of an Apple Distribution cert),
+  #          IOS_CERTIFICATE_PASSWORD, IOS_MOBILE_PROVISION (base64
+  #          .mobileprovision), APPLE_TEAM_ID.
+  #
+  # Without them this job still compiles the app for the simulator, which is a
+  # real check that the iOS target builds — it caught nothing before, because
+  # iOS had never been built at all: `menu` and `system_tray` were gated
+  # `not(android)`, so they were compiled into an iOS build where `set_menu` and
+  # `TrayIcon` do not exist. It cannot produce an installable .ipa, since Apple
+  # requires a signed build for any real device.
+  ios:
+    name: iOS
+    needs: preflight
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,wasm32-unknown-unknown
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          key: tauri-ios
+
+      # Two things the Tauri build assumes are already done, and are not.
+      #
+      # 1. Dependencies. tauri-action installs them itself only when it finds a
+      #    package.json at `projectPath`; desktop/ has none, because the JS
+      #    workspace lives in browser/. Without this, `beforeBuildCommand` dies
+      #    with `vite: command not found` — after the whole Rust build.
+      #
+      # 2. server/assets_tmp. desktop/.cargo/config.toml sets
+      #    ATOMICSERVER_SKIP_JS_BUILD=true so the embedded server does not
+      #    redundantly rebuild the frontend the Tauri webview never loads. But
+      #    handlers/single_page_app.rs does
+      #    `include_str!("../../assets_tmp/index.html")`, so those assets must
+      #    exist to COMPILE regardless of whether they are ever served. On a dev
+      #    machine one is left over from an earlier plain `cargo build`; a clean
+      #    runner has neither it nor `dist` to fall back to, and build.rs fails
+      #    with a bare `Os { code: 2, kind: NotFound }`.
+      #
+      # Building `dist` here rather than clearing the skip flag is deliberate.
+      # build.rs shells out via `Command::new("pnpm")`, and on Windows that
+      # resolves through CreateProcess, which does not find the `pnpm.cmd` shim —
+      # so letting build.rs do the work would break the Windows job specifically,
+      # in a way that looks identical to this failure.
+      - name: Install dependencies and prepare embedded assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm -C browser install --frozen-lockfile
+          # The workspace root build, not `-C browser/data-browser build`.
+          # data-browser imports @tomic/lib, which is a workspace package that
+          # has to be BUILT before anything can resolve it — the root script
+          # does `--filter "@tomic/lib" run build` first for exactly that
+          # reason. Building the leaf alone fails with
+          # `Rolldown failed to resolve import "@tomic/lib"`. Same command
+          # release.yml uses to build the assets it embeds in the crate.
+          pnpm -C browser build
+          rm -rf server/assets_tmp
+          cp -r browser/data-browser/dist server/assets_tmp
+          test -f server/assets_tmp/index.html
+
+      - name: Install tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Import distribution certificate and provisioning profile
+        if: needs.preflight.outputs.sign_ios == 'true'
+        env:
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN=ios-build.keychain
+          KEYCHAIN_PASSWORD=$(uuidgen)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -t 3600 -u "$KEYCHAIN"
+
+          echo "$IOS_CERTIFICATE" | base64 --decode > cert.p12
+          security import cert.p12 -k "$KEYCHAIN" \
+            -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          rm cert.p12
+
+          # Xcode only looks for profiles in this exact directory.
+          profiles=~/Library/MobileDevice/Provisioning\ Profiles
+          mkdir -p "$profiles"
+          echo "$IOS_MOBILE_PROVISION" | base64 --decode \
+            > "$profiles/build.mobileprovision"
+
+      - name: Build signed IPA
+        if: needs.preflight.outputs.sign_ios == 'true'
+        working-directory: desktop
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: cargo tauri ios build --export-method release-testing
+
+      # Compile-only fallback. `--target aarch64-apple-ios-sim` needs no
+      # signing identity, so this keeps the iOS target honest on every tag even
+      # before the certificates exist.
+      - name: Build for simulator (unsigned)
+        if: needs.preflight.outputs.sign_ios != 'true'
+        working-directory: desktop
+        run: cargo tauri ios build --target aarch64-apple-ios-sim || cargo build -p atomic-server-tauri --target aarch64-apple-ios
+
+      - name: Collect artifacts
+        id: collect
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-artifacts
+          find desktop/gen/apple -type f -name '*.ipa' -print0 \
+          | while IFS= read -r -d '' f; do cp "$f" dist-artifacts/; done
+
+          count=$(find dist-artifacts -type f | wc -l | tr -d ' ')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "Collected ${count} artifact(s)."
+          if [ "$count" -eq 0 ]; then
+            echo "::notice::No .ipa produced — expected when iOS signing secrets are not configured."
+          fi
+
+      - name: Scrub signing material
+        if: always()
+        run: |
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/build.mobileprovision || true
+          security delete-keychain ios-build.keychain 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: steps.collect.outputs.count != '0'
+        with:
+          name: tauri-ios
+          path: dist-artifacts/*
+          if-no-files-found: error
+
+  # ----------------------------------------------------------------- attach --
+  attach:
+    name: Attach to the GitHub release
+    needs: [preflight, desktop, android, ios]
+    # Runs even when a platform failed, so the ones that DID build still ship.
+    # Skipped entirely for a manual run that did not ask to upload.
+    if: always() && needs.preflight.outputs.upload == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: tauri-*
+          merge-multiple: true
+
+      # release.yml creates the release for this tag in parallel with this
+      # workflow. It is normally done long before these builds finish, but a
+      # re-run of just this workflow could get here first.
+      - name: Wait for the release to exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.preflight.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "Release $TAG exists."
+              exit 0
+            fi
+            echo "attempt ${attempt}: no release for $TAG yet; waiting..."
+            sleep 20
+          done
+          echo "::error::No GitHub release for $TAG after 10 minutes. Did release.yml fail?"
+          exit 1
+
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.preflight.outputs.tag }}
+        run: |
+          set -euo pipefail
+          count=$(find artifacts -type f | wc -l | tr -d ' ')
+          if [ "$count" -eq 0 ]; then
+            echo "::error::Every platform failed — nothing to attach."
+            exit 1
+          fi
+
+          echo "Attaching ${count} artifact(s) to $TAG:"
+          find artifacts -type f -exec ls -la {} +
+
+          # --clobber so re-running this workflow replaces its own artifacts
+          # rather than erroring on names that already exist.
+          find artifacts -type f -print0 \
+            | xargs -0 gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber
+
+          {
+            echo "### Attached to $TAG"
+            find artifacts -type f -printf '- %f\n'
+          } >> "$GITHUB_STEP_SUMMARY"

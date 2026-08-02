@@ -5,6 +5,8 @@
  * The WASM module URL is passed as the first message after creation.
  */
 
+import { openClientDb, isStorageBlockedDbError } from './client-db-open.js';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WasmModule = any;
 
@@ -51,6 +53,12 @@ export type WorkerRequest =
       offset?: number;
       includeResources?: boolean;
       drive?: string;
+      /** Statistics over every matching resource — computed in WASM by the same
+       *  Rust code the server runs. */
+      aggregation?: unknown;
+      /** Constraints on values computed per resource, evaluated in the same WASM
+       *  pass. */
+      expressionFilters?: unknown;
     }
   | { id: number; type: 'allSubjects' }
   | { id: number; type: 'populate' }
@@ -197,6 +205,8 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.includeResources ?? null,
         msg.drive ?? null,
         msg.filters ?? null,
+        msg.aggregation ?? null,
+        msg.expressionFilters ?? null,
       );
     }
 
@@ -307,17 +317,27 @@ async function doInit(
     try {
       await wasm.migrateLegacyClientDb(dbName, dbKey ?? undefined);
     } catch (e) {
-      console.warn('[ClientDb] legacy DB migration failed:', e);
+      // When the browser is withholding storage there is no legacy file to
+      // migrate and never will be, so this failure is expected and says
+      // nothing the open below won't say better. Staying quiet here avoids
+      // reporting the same condition twice, with a stack trace, per load.
+      if (!isStorageBlockedDbError(e)) {
+        console.warn('[ClientDb] legacy DB migration failed:', e);
+      }
     }
   }
 
   // `new ClientDb` opens the OPFS-backed database (acquire OPFS handle, open
-  // redb, run migrations).
-  db = await new wasm.ClientDb(
-    baseUrl ?? undefined,
-    dbName ?? undefined,
-    dbKey ?? undefined,
-  );
+  // redb, run migrations). `openClientDb` adds one recovery step: an existing
+  // file this agent's key can no longer decrypt is deleted and recreated,
+  // because it is a cache whose contents are unreadable either way. Every
+  // other open failure still propagates.
+  const opened = await openClientDb(wasm, {
+    baseUrl: baseUrl ?? undefined,
+    dbName: dbName ?? undefined,
+    dbKey: dbKey ?? undefined,
+  });
+  db = opened.db;
   const t3 = performance.now();
 
   return {

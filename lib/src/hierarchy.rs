@@ -232,7 +232,14 @@ fn check_rights_impl<'a, S: Storelike>(
             return Ok("Sudo has root access, and can edit anything.".into());
         }
         let for_agent = for_agent_enum.to_string();
-        let normalized_for_agent = store.normalize_subject(&for_agent.clone().into());
+        // Translated on this side too, so both operands of every comparison
+        // below are in the same (DID) form regardless of which spelling the
+        // caller arrived with. Idempotent for an already-DID agent.
+        let normalized_for_agent = store.normalize_subject(
+            &crate::agents::migrate_legacy_agent_subject(&for_agent)
+                .as_str()
+                .into(),
+        );
         if resource.get_subject() == &normalized_for_agent {
             return Ok("Agents can always edit themselves or their children.".into());
         }
@@ -278,7 +285,16 @@ fn check_rights_impl<'a, S: Storelike>(
                             ))
                         }
                         agent => {
-                            let normalized_agent = store.normalize_subject(&agent.into());
+                            // A store migrated from the pre-DID era holds its
+                            // grants as `internal:/agents/{pubkey}`, while the
+                            // agent signing in is `did:ad:agent:{pubkey}`.
+                            // Same key, same identity, two spellings — and
+                            // this is a string comparison, so without the
+                            // translation the owner of a resource silently
+                            // loses every explicit right to it.
+                            let migrated = crate::agents::migrate_legacy_agent_subject(agent);
+                            let normalized_agent =
+                                store.normalize_subject(&migrated.as_str().into());
                             if normalized_agent == normalized_for_agent {
                                 return Ok(format!(
                                     "Right has been explicitly set in {}",
@@ -370,6 +386,56 @@ fn check_rights_impl<'a, S: Storelike>(
 mod test {
     // use super::*;
     use crate::{datatype::DataType, Storelike, Value};
+
+    /// End-to-end guard for the migration's biggest rights hazard.
+    ///
+    /// A pre-DID store records grants as `internal:/agents/{pubkey}` (the
+    /// localized form of `https://server/agents/{pubkey}`), but the same user
+    /// signs in as `did:ad:agent:{pubkey}`. Rights are matched by string
+    /// equality, so an untranslated grant means the resource's own owner is
+    /// refused — and because the walk then ascends and fails closed, the
+    /// failure is a silent 401 rather than anything that looks like a bug.
+    #[tokio::test]
+    async fn legacy_internal_agent_grant_still_authorizes_its_did() {
+        use crate::agents::ForAgent;
+        use crate::hierarchy::{check_rights, Right};
+
+        let store = crate::db::Db::init_temp("legacy_agent_grant_rights")
+            .await
+            .unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
+
+        // A real production-shaped key: standard base64, with a `/` in it.
+        let pubkey = "+/UHiCrMCWr7O5waaKRPJ5Pq90T8ncocNkH0kYihCFM=";
+
+        let mut resource = crate::Resource::new_instance(crate::urls::TAG, &store)
+            .await
+            .unwrap();
+        resource
+            .set(
+                crate::urls::SHORTNAME.into(),
+                Value::Slug("owned".into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        // The grant exactly as a migrated store holds it.
+        resource
+            .push(
+                crate::urls::WRITE,
+                format!("internal:/agents/{pubkey}").as_str().into(),
+                true,
+            )
+            .unwrap();
+        resource.save_locally(&store).await.unwrap();
+
+        // ...and the agent exactly as it signs in today.
+        let signed_in = ForAgent::AgentSubject(format!("did:ad:agent:{pubkey}").as_str().into());
+
+        check_rights(&store, &resource, &signed_in, Right::Write)
+            .await
+            .expect("the legacy grant names this very key — its owner must keep write access");
+    }
 
     // TODO: Add tests for:
     // - basic check_write (should be false for newly created agent)
