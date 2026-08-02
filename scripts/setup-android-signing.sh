@@ -71,18 +71,44 @@ keytool -genkeypair \
 
 chmod 600 "$KEYSTORE"
 
-echo "Uploading secrets to $repo..."
-# base64 -w0 is GNU; macOS base64 has no -w and does not wrap by default.
-if base64 --help 2>&1 | grep -q -- '-w'; then
-  b64() { base64 -w0 "$1"; }
-else
-  b64() { base64 "$1" | tr -d '\n'; }
-fi
+# From here until the secrets are stored, these passwords exist ONLY in this
+# shell's memory, and the keystore on disk cannot be opened without them. If we
+# die in between — as happened when base64 was called in a way BSD rejects — the
+# key is silently stranded. Print them instead of losing them. Cleared once the
+# uploads succeed, so a normal run never puts them on screen.
+trap 'status=$?; [ $status -eq 0 ] && exit $status; {
+  echo
+  echo "!! Aborted before the secrets were stored."
+  echo "!! The keystore below cannot be opened without these passwords, and"
+  echo "!! they are written nowhere else. Save them, or delete the keystore"
+  echo "!! and re-run this script."
+  echo "!!   keystore:      $KEYSTORE"
+  echo "!!   storePassword: $STORE_PASS"
+  echo "!!   keyPassword:   $KEY_PASS"
+} >&2' EXIT
 
-b64 "$KEYSTORE"        | gh secret set ANDROID_KEYSTORE_BASE64   --repo "$repo"
+echo "Uploading secrets to $repo..."
+# Read the file on stdin rather than as an argument. BSD/macOS base64 does not
+# accept a positional file at all (it wants -i, or stdin) — it exits with
+# "invalid argument <path>", which under `set -o pipefail` aborts this script
+# AFTER the keystore exists but BEFORE its passwords have been stored anywhere,
+# stranding a keystore nobody can open. Feeding stdin works identically on GNU
+# and BSD, so no detection is needed: GNU wraps at 76 columns and BSD does not,
+# and `tr -d '\n'` flattens both.
+b64() { base64 < "$1" | tr -d '\n'; }
+
+# Passwords BEFORE the keystore blob. All four are needed for a usable signing
+# config, so an interrupted run is broken either way — but a run that stored the
+# passwords can be finished by hand from the keystore on disk, whereas one that
+# stored only the blob has lost the passwords for good.
 printf '%s' "$STORE_PASS" | gh secret set ANDROID_KEYSTORE_PASSWORD --repo "$repo"
 printf '%s' "$KEY_PASS"   | gh secret set ANDROID_KEY_PASSWORD     --repo "$repo"
 printf '%s' "$ALIAS"      | gh secret set ANDROID_KEY_ALIAS        --repo "$repo"
+b64 "$KEYSTORE"           | gh secret set ANDROID_KEYSTORE_BASE64  --repo "$repo"
+
+# From here the secrets are safely stored, so the passwords no longer need to be
+# recoverable from this shell.
+trap - EXIT
 
 # Fingerprint is safe to print and is what the Play Console shows you, so it is
 # how you confirm a build was signed with this key rather than another.
