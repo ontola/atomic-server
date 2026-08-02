@@ -170,6 +170,60 @@ jobs:
           # (required)
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # The static musl binaries — the ones that run anywhere.
+  #
+  # `upload-assets` below builds for each runner's NATIVE target, so its Linux
+  # leg produces a glibc binary linked against whatever ubuntu-latest ships.
+  # That is currently glibc 2.38, which will not start on Ubuntu 22.04 (2.35,
+  # supported into 2027) or Debian 12 (2.36) — including our own staging box,
+  # where v0.41.0-beta.2 failed with `version 'GLIBC_2.38' not found`.
+  #
+  # Cross-compiling them statically is the entire reason the Dagger pipeline
+  # exists (`releaseAssets` / `TARGET_IMAGE_MAP`), but no workflow ever called
+  # it: releases up to v0.40.0 carried `x86_64-unknown-linux-musl` and
+  # `armv7-unknown-linux-musleabihf`, then v0.40.1 through v0.41.0-beta.1
+  # shipped nothing at all (the build.rs failure noted below), and when that was
+  # repaired the job had become native-only. The musl targets never came back.
+  #
+  # Separate job rather than another matrix leg: one Dagger invocation emits all
+  # three targets, and it needs no Node/Rust toolchain on the runner.
+  upload-musl-assets:
+    name: Cross-compile and upload the static musl binaries
+    # Needs the release to exist before anything can be attached to it.
+    needs: create-release
+    # Deliberately NOT CI_RUNNER, for the same reason the other release jobs
+    # avoid it: a release must not wait on one machine being switched on.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dagger/dagger-for-github@8.0.0
+        with:
+          version: "latest"
+          verb: call
+          args: release-assets export --path ./release-assets
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+
+      - name: Attach them to the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Fail loudly on an empty export. Without this the upload silently
+          # succeeds with nothing attached, which is how the musl binaries went
+          # missing for four releases without anyone noticing.
+          count=$(find ./release-assets -type f | wc -l)
+          echo "Exported ${count} binaries:"
+          ls -l ./release-assets
+
+          if [ "$count" -eq 0 ]; then
+            echo "::error::release-assets produced no binaries."
+            exit 1
+          fi
+
+          gh release upload "${GITHUB_REF_NAME}" ./release-assets/* --clobber
+
   upload-assets:
     strategy:
       matrix:
