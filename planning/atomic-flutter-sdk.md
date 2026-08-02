@@ -96,7 +96,7 @@ showAgentSettings(context);
 - [x] `rust/cargokit.yaml` with public key + GitHub release URL prefix
 - [x] CI workflow `.github/workflows/atomic_lib_precompile.yml`
 - [x] Minimal `example/` app
-- [ ] Set repo secret `CARGOKIT_PRIVATE_KEY` (generated; not in git)
+- [x] Set repo secret `CARGOKIT_PRIVATE_KEY` (generated; not in git)
 - [ ] `dart pub publish --dry-run` clean (except needing a real pub login)
 
 ### Before first pub.dev release
