@@ -21,8 +21,10 @@ mod jsonerrors;
 mod metrics;
 pub mod node_key;
 pub mod plugins;
-/// Phase 5 push wake helpers (payload contract + mention match). Transport TBD.
+/// Phase 5 push wake helpers (payload contract + mention/watch match).
 pub mod push_wake;
+/// Env-configured FCM/APNs sender (`ATOMIC_FCM_*` / `ATOMIC_APNS_*`).
+pub mod push_provider;
 pub mod rate_limit;
 pub mod routes;
 pub mod serve;

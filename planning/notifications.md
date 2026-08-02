@@ -15,7 +15,9 @@
 > watch→item / mention / multi-device / invite A→B backlog), **Phase 4 local
 > OS notifications**, **Phase 5** client wake path + hub DevicePushToken lookup
 > stub, plugin choice (`tauri-plugin-push-notifications`) + cold-start local
-> drain. Live APNs/FCM **provider send** still open (needs secrets + Cargo enable).
+> drain. Hub ships `EnvPushSender` (FCM/APNs HTTP when `ATOMIC_FCM_*` /
+> `ATOMIC_APNS_*` env set; otherwise log-only). Client: `--features mobile-push`
+> after Firebase/APNs project files exist. Product sign-off still open.
 
 ## Problem
 
@@ -511,16 +513,42 @@ mentions/watches — still no trusted body in the push (see payload contract).
 - [x] Choose Tauri push plugin: **`tauri-plugin-push-notifications`** (npm +
       crates.io `0.1.x`) — cold-start tap queue / `start_notification_events`
       matches our drain-then-arm pattern; mobile-only (desktop keeps local
-      `tauri-plugin-notification`). Cargo dep commented until
-      `google-services.json` + iOS Push entitlement exist (see checklist).
+      `tauri-plugin-notification`). Enable client with
+      `--features mobile-push` once project files exist (below).
 - [x] `DevicePushToken` ontology + register/refresh helper (client; call on launch when token exists)
-- [x] Hub: wake payload + mention **and watch** match helpers (`server/src/push_wake.rs`); `commit_monitor` → `wakes_for_committed_resource` + DevicePushToken lookup + [`PushSender`] (`LoggingPushSender` default; APNs/FCM impl still TODO)
+- [x] Hub: wake payload + mention **and watch** match helpers (`server/src/push_wake.rs`); `commit_monitor` → `wakes_for_committed_resource` + DevicePushToken lookup + [`PushSender`] / [`EnvPushSender`] (`LoggingPushSender` fallback)
 - [x] Client: suppress-if-read helpers + cold-start tap queue wired to navigate (`pushWakeTap` → `NotificationOsPresenter`)
 - [x] `useDevicePushRegistration` on launch (real token via bridge; DEV desktop stub)
 - [x] Client: on push → sync → materialize (`handlePushWake` / `processPushWake` + `queuePushWakeReceive`) — needs plugin wake delivery to exercise end-to-end
 - [x] Cold-start tap: drain `active()` local notifs in `tauriPushBridge` (module-scope) + `onAction` warm path; remote launch details once Cargo plugin is enabled
+- [x] Env-based hub send scaffold (`server/src/push_provider.rs`) — live when bearer env vars set
 - Track operational secrets (APNs `.p8`, FCM service account) with hub deploy;
   product behavior stays aligned with social-apps P2.3.
+
+#### Enablement checklist (when you have credentials)
+
+**Hub (atomic-server process)**
+
+| Env var | Purpose |
+| --- | --- |
+| `ATOMIC_FCM_PROJECT_ID` | Firebase project id |
+| `ATOMIC_FCM_BEARER_TOKEN` | Short-lived OAuth2 access token (scope `https://www.googleapis.com/auth/firebase.messaging`) minted from the service account JSON |
+| `ATOMIC_APNS_TOPIC` | iOS app bundle id (APNs topic) |
+| `ATOMIC_APNS_BEARER_TOKEN` | APNs provider JWT signed with your `.p8` key |
+| `ATOMIC_APNS_HOST` | Optional; default `api.push.apple.com` (use `api.sandbox.push.apple.com` for sandbox) |
+
+`serve` calls `push_provider::install_from_env()` at boot. Missing vars → log-only wakes (safe default). Refresh FCM/APNs bearers out-of-band (cron / sidecar); in-process JWT minting can land later.
+
+Payload remains **wake-only** (`data.about` + `data.type` on FCM; `aps.content-available` + same fields on APNs).
+
+**Tauri mobile client**
+
+1. Place `google-services.json` under the generated Android app; apply Google Services Gradle plugin.
+2. Xcode: Push Notifications + Background Modes → Remote notifications; `aps-environment` entitlement.
+3. Build with feature: `cargo tauri android build --features mobile-push` (same for iOS).
+4. JS already depends on `tauri-plugin-push-notifications` and registers tokens via `tauriPushBridge` → `DevicePushToken`.
+
+Do **not** commit `.p8`, service-account JSON, or `google-services.json` with private keys.
 
 ## Test plan (where tests belong)
 

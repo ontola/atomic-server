@@ -20,6 +20,7 @@ mod jsonerrors;
 mod metrics;
 mod node_key;
 pub mod plugins;
+mod push_provider;
 mod push_wake;
 mod rate_limit;
 mod routes;
