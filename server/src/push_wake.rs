@@ -5,12 +5,13 @@
 //! if the item is already read. See `planning/notifications.md` Phase 5 and
 //! `social-apps.md` P2.3.
 //!
-//! This module is intentionally transport-free — no Firebase/APNs SDK yet.
-//! `CommitMonitor` calls [`mention_wakes_for_resource`] and logs candidates;
-//! provider send lands when DevicePushToken lookup + credentials are wired.
+//! Transport-free: `CommitMonitor` builds wake candidates, looks up
+//! `DevicePushToken`s, and logs them. Provider send lands when APNs/FCM
+//! credentials are configured.
 
-use atomic_lib::{urls, Resource, Storelike};
-use serde_json::{json, Value};
+use atomic_lib::storelike::Query;
+use atomic_lib::{urls, Resource, Storelike, Value};
+use serde_json::{json, Value as JsonValue};
 
 /// Wake hint the push provider delivers to a device.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,7 +30,7 @@ impl PushWakeHint {
     }
 
     /// Serialize to the on-the-wire data payload (no alert body).
-    pub fn to_data_payload(&self) -> Value {
+    pub fn to_data_payload(&self) -> JsonValue {
         json!({
             "about": self.about,
             "type": self.notification_type,
@@ -42,6 +43,14 @@ impl PushWakeHint {
 pub struct PendingPushWake {
     pub agent: String,
     pub hint: PushWakeHint,
+}
+
+/// Registered device token row for an agent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DevicePushTokenRow {
+    pub subject: String,
+    pub token: String,
+    pub platform: String,
 }
 
 /// Agents that should be woken for a mention commit: everyone in `mentions`
@@ -65,9 +74,6 @@ pub fn should_surface_after_sync(read: bool, dismissed: bool) -> bool {
 }
 
 /// Build wake-only mention hints from a committed resource (no provider send).
-///
-/// Reads `mentions` + commit actor (`signer` / `lastCommit` path is left to
-/// the caller — pass `actor` from the commit when available).
 pub fn mention_wakes_for_resource(
     resource: &Resource,
     actor: Option<&str>,
@@ -94,22 +100,57 @@ pub fn mention_wakes_for_resource(
         .collect()
 }
 
-/// Log wake candidates. Replace with DevicePushToken lookup + APNs/FCM send.
-pub fn enqueue_push_wakes_stub(store: &impl Storelike, wakes: &[PendingPushWake]) {
+/// Look up `DevicePushToken` resources whose `devicePushAgent` matches.
+pub async fn lookup_device_push_tokens(
+    store: &impl Storelike,
+    agent: &str,
+) -> Vec<DevicePushTokenRow> {
+    let mut q = Query::new_prop_val(urls::DEVICE_PUSH_AGENT, agent);
+    q.limit = Some(20);
+    q.include_nested = true;
+
+    let Ok(result) = store.query(&q).await else {
+        return vec![];
+    };
+
+    let mut rows = Vec::new();
+
+    for resource in result.resources {
+        let token = match resource.get(urls::PUSH_TOKEN) {
+            Ok(Value::String(s)) if !s.is_empty() => s.clone(),
+            _ => continue,
+        };
+        let platform = match resource.get(urls::PUSH_PLATFORM) {
+            Ok(Value::String(s)) => s.clone(),
+            _ => "unknown".to_string(),
+        };
+
+        rows.push(DevicePushTokenRow {
+            subject: resource.get_subject().to_string(),
+            token,
+            platform,
+        });
+    }
+
+    rows
+}
+
+/// Look up tokens for each wake and log candidates. Replace the log with
+/// APNs/FCM send when credentials are configured.
+pub async fn enqueue_push_wakes(store: &impl Storelike, wakes: &[PendingPushWake]) {
     if wakes.is_empty() {
         return;
     }
 
-    // Token registry query + provider send are Phase 5 remaining work.
-    // Keep a visible trace so ops can confirm the match path without a
-    // Firebase/APNs dependency in CI.
-    let _ = store;
     for wake in wakes {
+        let tokens = lookup_device_push_tokens(store, &wake.agent).await;
         tracing::debug!(
             agent = %wake.agent,
             about = %wake.hint.about,
             notification_type = %wake.hint.notification_type,
             payload = %wake.hint.to_data_payload(),
+            token_count = tokens.len(),
+            platforms = ?tokens.iter().map(|t| t.platform.as_str()).collect::<Vec<_>>(),
             "push_wake: mention candidate (provider send not wired)"
         );
     }

@@ -9,6 +9,8 @@ import './helpers/wheelSession';
 // Side-effect import: queues atomic:// deep links forwarded by the Tauri
 // shell so a link that launched the app isn't lost before React mounts.
 import './helpers/deepLinkQueue';
+// Side-effect: drain local notification cold-start taps + optional push token.
+import './helpers/tauriPushBridge';
 
 /**
  * Polyfill for crypto.subtle.digest in non-secure contexts (e.g., local IPs).

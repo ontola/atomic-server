@@ -92,6 +92,7 @@
     "remark-math": "^6.0.0",
     "styled-components": "^6.4.2",
     "stylis": "4.4.0",
+    "tauri-plugin-push-notifications": "0.1.0",
     "trystero": "0.25.3",
     "unist-util-visit": "^5.1.0",
     "uqr": "^0.1.3",

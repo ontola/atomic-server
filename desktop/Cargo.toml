@@ -41,6 +41,11 @@ tauri-plugin-mcp-bridge = "0.12"
 tauri-plugin-notification = "2"
 tokio = { version = "1", features = ["rt", "sync", "time"] }
 
+# Mobile-only remote push (APNs / FCM). Enable when google-services.json +
+# iOS Push entitlement are in place — see planning/notifications.md Phase 5.
+# [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+# tauri-plugin-push-notifications = "0.1"
+
 # Mobile-only: the in-app QR scanner for device pairing. The Android WebView
 # doesn't grant getUserMedia to web content, so a web BarcodeDetector scanner
 # can't work — this native scanner owns the camera + permission instead.
