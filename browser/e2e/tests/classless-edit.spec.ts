@@ -54,15 +54,17 @@ test.describe('classless resource edit', () => {
       page.getByText(/is not a Class\. Only resources with valid classes/),
     ).toHaveCount(0);
 
-    // Existing properties are editable (ResourceField uses shortname test ids).
-    await expect(page.getByTestId('input-name')).toBeVisible();
-    await expect(page.getByTestId('input-description')).toBeVisible();
+    // Existing properties render (name textbox + description markdown body).
+    await expect(
+      page.getByRole('textbox', { name: 'name', exact: true }),
+    ).toHaveValue('Classless Thing');
+    await expect(page.getByText('No class, still editable')).toBeVisible();
 
     // Advanced still offers adding another property.
     await page.getByRole('button', { name: /Advanced/ }).click();
     await expect(page.getByText('Add another property...')).toBeVisible();
 
-    // Save stays available (form is valid with the existing fields).
-    await expect(page.getByTestId('save')).toBeEnabled();
+    // Save stays available.
+    await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 });
