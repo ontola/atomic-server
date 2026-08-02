@@ -676,51 +676,59 @@ export function useStore(): Store {
 export function useCanWrite(resource: Resource): boolean {
   const store = useStore();
   const agent = store.getAgent();
-  // Initialize optimistically for brand-new local resources — they have no
-  // parent on the server yet, so `resource.canWrite()` would be skipped by
-  // the effect below. Without this, the ResourceForm shows "Agent does not
-  // have edit rights" on every new-resource page until the async permission
-  // check runs (which never runs for `.new` resources).
-  const [canWrite, setCanWrite] = useState<boolean>(
-    () => !!agent?.subject && !!resource.new,
-  );
+  const subject = resource.subject;
+  const isNew = !!resource.new;
+  const agentSubject = agent?.subject;
+
+  // Optimistic write while the async parent-walk settles. Brand-new resources
+  // are always editable by their creator. DID resources fall back to writable
+  // for a DID agent (same rule as the async path below) so a cancelled /
+  // superseded check during genesis subject remaps cannot leave the UI stuck
+  // read-only — that previously hid Share → Create Invite on new documents.
+  const optimistic =
+    !!agentSubject &&
+    (isNew ||
+      (!!subject?.startsWith('did:ad:') &&
+        agentSubject.startsWith('did:ad:')));
+
+  const [canWrite, setCanWrite] = useState<boolean>(optimistic);
 
   useOnValueChange(
     () => {
-      if (agent?.subject === undefined) {
+      if (agentSubject === undefined) {
         setCanWrite(false);
 
         return;
       }
 
-      if (resource.new) {
-        setCanWrite(true);
-      }
+      setCanWrite(
+        isNew ||
+          (!!subject?.startsWith('did:ad:') &&
+            agentSubject.startsWith('did:ad:')),
+      );
     },
-    [resource, agent?.subject],
+    [subject, isNew, agentSubject],
     true,
   );
 
-  // Re-check write permissions when the subject or agent changes.
-  // Using resource.subject instead of the full proxy to avoid re-running
-  // on every property change.
+  // Re-check write permissions when the subject, agent, or newness changes.
+  // Including `isNew` matters: genesis often keeps the same hook instance while
+  // `resource.new` flips false after sign — without it the effect early-returns
+  // forever and never confirms rights.
   useEffect(() => {
-    if (!agent || resource.new) return;
-    // Cancellation guard: `canWrite` recurses across parents and can take
-    // a few hundred ms; without it, a fast subject swap leaves an
-    // in-flight check that writes a stale result after the effect re-ran
-    // for the new subject.
+    if (!agentSubject || isNew) return;
+
     let cancelled = false;
     resource
-      .canWrite(agent.subject)
+      .canWrite(agentSubject)
       .then(([result]) => {
         if (cancelled) return;
 
         if (result) {
           setCanWrite(true);
         } else if (
-          resource.subject?.startsWith('did:ad:') &&
-          agent.subject?.startsWith('did:ad:')
+          subject?.startsWith('did:ad:') &&
+          agentSubject.startsWith('did:ad:')
         ) {
           // DID resources are self-sovereign — the owning agent always has write access.
           // The normal canWrite check fails because DID drives don't have explicit write rights.
@@ -734,8 +742,8 @@ export function useCanWrite(resource: Resource): boolean {
 
         // Offline fallback: assume write access for DID resources
         if (
-          resource.subject?.startsWith('did:ad:') &&
-          agent.subject?.startsWith('did:ad:')
+          subject?.startsWith('did:ad:') &&
+          agentSubject.startsWith('did:ad:')
         ) {
           setCanWrite(true);
         }
@@ -745,7 +753,7 @@ export function useCanWrite(resource: Resource): boolean {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resource.subject, agent?.subject]);
+  }, [subject, agentSubject, isNew]);
 
   return canWrite;
 }

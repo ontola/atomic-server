@@ -544,8 +544,6 @@ test.describe('notifications', () => {
     expect(driveSubject).toBeTruthy();
 
     // Share the drive via context menu (same path as e2e authorization invite).
-    // Top-bar Share on a freshly UI-created document can leave useCanWrite
-    // stuck false so "Create Invite" never appears.
     await currentDriveTitle(page).click();
     await contextMenuClick('share', page);
     await expect(

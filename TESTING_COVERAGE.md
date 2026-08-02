@@ -149,7 +149,9 @@ Both matter because `iroh_transport` holds the router and node identity in
 | OS notification id hash + surface heuristics | unit | `osNotifications.test.ts` |
 | Local OS banner (browser / Tauri) | flow | manual / desktop smoke — Phase 4 wired |
 | DevicePushToken wake payload contract | unit | `devicePushToken.test.ts` + `push_wake` Rust tests |
-| Cold-start push tap queue | unit | `pushWakeTap.test.ts` |
+| Push wake sync→suppress-if-read | unit | `handlePushWake` in `devicePushToken.test.ts` |
+| Cold-start push tap / receive queues | unit | `pushWakeTap.test.ts` |
+| Hub mention → wake candidates | unit | `push_wake::mention_wakes_for_resource` |
 | Mention → NotificationItem materialization (engine) | flow | `notifications.spec.ts` (fake other-agent actor) |
 | A mentions B → B sees unread (two agents / invite) | flow | `notifications.spec.ts` (invite + reconcile backlog) |
 | Mark read on A clears badge on B | flow | `notifications.spec.ts` (same agent, two contexts) |

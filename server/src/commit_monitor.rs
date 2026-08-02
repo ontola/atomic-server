@@ -771,9 +771,15 @@ impl Handler<CommitMessage> for CommitMonitor {
         // per-connection.
         let frame = encode_commit_frame(&self.store, &msg);
 
-        // Phase 5 hook point: after frame fan-out, match mentions / watches →
-        // DevicePushToken lookup → wake-only push (see `crate::push_wake`).
-        // Not wired to a provider yet — helpers + unit tests land first.
+        // Phase 5: match mentions → wake candidates (provider send still stub).
+        if let Some(resource) = msg.commit_response.resource_new.as_ref() {
+            let actor = msg.commit_response.commit.signer.to_string();
+            let wakes = crate::push_wake::mention_wakes_for_resource(
+                resource,
+                Some(actor.as_str()),
+            );
+            crate::push_wake::enqueue_push_wakes_stub(&self.store, &wakes);
+        }
 
         if let Some(frame) = frame.as_ref() {
             // Per-resource subscribers

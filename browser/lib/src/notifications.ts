@@ -110,6 +110,11 @@ export class NotificationEngine {
     this.watchCoalesceMs = opts.watchCoalesceMs ?? 2000;
   }
 
+  /** Personal drive where NotificationItems / watches are stored. */
+  getPersonalDrive(): string {
+    return this.personalDrive;
+  }
+
   /** Wire OS / toast presentation without coupling the engine to UI. */
   setOnItemCreated(
     cb?: (item: {

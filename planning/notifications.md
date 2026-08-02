@@ -1,8 +1,8 @@
 # Notifications (mentions + watch subscriptions)
 
-> Status: **In progress (2026-08-01).** Design + initial implementation for
-> in-app notifications in the data-browser (and later Tauri). Scope: **mentions**
-> of agents, and **watch settings** for updated queries / collections / tables.
+> Status: **In progress (2026-08-02).** Design + implementation for in-app
+> notifications in the data-browser (and later Tauri). Scope: **mentions** of
+> agents, and **watch settings** for updated queries / collections / tables.
 > Complements [`social-apps.md`](./social-apps.md) P2.3 (push as hint-to-sync) and
 > [`authorization-sync.md`](./authorization-sync.md) (inbox reserved; actor-side
 > social preferred).
@@ -13,9 +13,9 @@
 > table **and collection** Watch toggle, Settings watches list, App Settings
 > blurb + OS permission, Playwright e2e (inbox / mark-read / Watch /
 > watch→item / mention / multi-device / invite A→B backlog), **Phase 4 local
-> OS notifications**, **Phase 5 scaffold** (`DevicePushToken`,
-> `registerDevicePushToken`, hub `push_wake`, cold-start tap queue). Live
-> APNs/FCM transport still open.
+> OS notifications**, **Phase 5 client wake path** (`handlePushWake` /
+> `processPushWake` / receive queue) + hub mention→wake stub in
+> `commit_monitor`. Live APNs/FCM provider transport still open.
 
 ## Problem
 
@@ -510,10 +510,10 @@ mentions/watches — still no trusted body in the push (see payload contract).
 
 - [ ] Choose/integrate Tauri push plugin; iOS entitlements + Android Firebase
 - [x] `DevicePushToken` ontology + register/refresh helper (client; call on launch when token exists)
-- [x] Hub: wake payload + mention-match helpers (`server/src/push_wake.rs`); commit_monitor hook point documented — provider fan-out still TODO
+- [x] Hub: wake payload + mention-match helpers (`server/src/push_wake.rs`); `commit_monitor` calls `mention_wakes_for_resource` + stub enqueue (provider fan-out still TODO)
 - [x] Client: suppress-if-read helpers + cold-start tap queue wired to navigate (`pushWakeTap` → `NotificationOsPresenter`)
 - [x] `useDevicePushRegistration` on launch (no-ops without token; Tauri DEV stub)
-- [ ] Client: on push → sync → materialize (needs plugin token + wake delivery)
+- [x] Client: on push → sync → materialize (`handlePushWake` / `processPushWake` + `queuePushWakeReceive`) — needs plugin token + wake delivery to exercise end-to-end
 - [ ] Cold-start tap wired from plugin launch details (queue consumer is ready)
 - Track operational secrets (APNs `.p8`, FCM service account) with hub deploy;
   product behavior stays aligned with social-apps P2.3.

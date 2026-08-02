@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildPushWakePayload,
+  handlePushWake,
   shouldOpenAfterPushWake,
   shouldSurfaceAfterPushSync,
   type PushPlatform,
@@ -34,6 +35,64 @@ describe('shouldOpenAfterPushWake', () => {
 
   it('skips when already read', () => {
     expect(shouldOpenAfterPushWake({ itemRead: true })).toBe(false);
+  });
+});
+
+describe('handlePushWake', () => {
+  it('surfaces when no item exists yet', async () => {
+    const fetchResourceFromServer = vi.fn(async () => undefined);
+    const result = await handlePushWake({
+      store: { fetchResourceFromServer } as never,
+      about: 'did:ad:doc1',
+      type: 'mention',
+      reconcile: async () => undefined,
+      findItemForAbout: async () => undefined,
+    });
+    expect(result).toEqual({
+      action: 'surface',
+      about: 'did:ad:doc1',
+      type: 'mention',
+      itemSubject: undefined,
+      summary: undefined,
+    });
+    expect(fetchResourceFromServer).toHaveBeenCalledWith('did:ad:doc1');
+  });
+
+  it('suppresses when item is already read', async () => {
+    const result = await handlePushWake({
+      store: { fetchResourceFromServer: async () => undefined } as never,
+      about: 'did:ad:doc1',
+      type: 'mention',
+      reconcile: async () => undefined,
+      findItemForAbout: async () => ({
+        subject: 'did:ad:item1',
+        read: true,
+        dismissed: false,
+      }),
+    });
+    expect(result).toEqual({ action: 'suppress', reason: 'read' });
+  });
+
+  it('surfaces unread item with summary', async () => {
+    const result = await handlePushWake({
+      store: { fetchResourceFromServer: async () => undefined } as never,
+      about: 'did:ad:doc1',
+      type: 'mention',
+      reconcile: async () => undefined,
+      findItemForAbout: async () => ({
+        subject: 'did:ad:item1',
+        read: false,
+        dismissed: false,
+        summary: 'Mentioned you',
+      }),
+    });
+    expect(result).toEqual({
+      action: 'surface',
+      about: 'did:ad:doc1',
+      type: 'mention',
+      itemSubject: 'did:ad:item1',
+      summary: 'Mentioned you',
+    });
   });
 });
 

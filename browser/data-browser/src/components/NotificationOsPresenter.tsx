@@ -21,7 +21,8 @@ import {
   showOsNotification,
 } from '../helpers/osNotifications';
 import { isRunningInTauri } from '../helpers/tauri';
-import { onPushWakeTap } from '../helpers/pushWakeTap';
+import { onPushWakeReceive, onPushWakeTap } from '../helpers/pushWakeTap';
+import { processPushWake } from '../helpers/processPushWake';
 import { useDevicePushRegistration } from '../hooks/useDevicePushRegistration';
 
 type CreatedItem = {
@@ -66,6 +67,33 @@ export function NotificationOsPresenter(): null {
     // Cold-start / background push tap → navigate once React listeners arm.
     const unsubTap = onPushWakeTap(about => {
       openAbout(about);
+    });
+
+    // Data / silent wake → sync + materialize; surface only if still unread.
+    const unsubReceive = onPushWakeReceive(wake => {
+      void (async () => {
+        const result = await processPushWake({
+          store,
+          engine,
+          about: wake.about,
+          type: wake.type,
+        });
+
+        if (result.action === 'suppress') {
+          return;
+        }
+
+        liveRef.current = true;
+        await present(
+          {
+            subject: result.itemSubject ?? `wake:${result.about}`,
+            summary: result.summary ?? 'New notification',
+            about: result.about,
+            type: result.type,
+          },
+          openAbout,
+        );
+      })();
     });
 
     const handleCreated = (item: CreatedItem) => {
@@ -141,6 +169,7 @@ export function NotificationOsPresenter(): null {
       clearTimeout(timer);
       liveRef.current = false;
       unsubTap();
+      unsubReceive();
       unsubStore();
       engine.setOnItemCreated(undefined);
     };
