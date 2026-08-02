@@ -16,7 +16,7 @@ other devices or an always-on AtomicServer is optional.
 
 ```yaml
 dependencies:
-  atomic_lib: ^0.1.0
+  atomic_lib: ^0.41.0-beta.2
 ```
 
 ```sh

@@ -19,7 +19,7 @@ Or in `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  atomic_lib: ^0.1.0
+  atomic_lib: ^0.41.0-beta.2
 ```
 
 On first native build, Cargokit fetches **signed precompiled binaries** for your

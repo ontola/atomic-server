@@ -11,7 +11,7 @@ not run Postgres or rebuild QR screens.
 
 ```yaml
 dependencies:
-  atomic_lib: ^0.1.0
+  atomic_lib: ^0.41.0-beta.2
 ```
 
 Until the first pub.dev release, use a path or git dependency:
