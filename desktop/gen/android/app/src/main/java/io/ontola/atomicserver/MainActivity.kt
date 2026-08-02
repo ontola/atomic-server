@@ -1,4 +1,4 @@
-package com.atomicdata.dev
+package io.ontola.atomicserver
 
 import android.os.Bundle
 import androidx.core.view.WindowCompat
