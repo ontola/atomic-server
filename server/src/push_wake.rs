@@ -5,10 +5,13 @@
 //! if the item is already read. See `planning/notifications.md` Phase 5 and
 //! `social-apps.md` P2.3.
 //!
-//! Transport-free: `CommitMonitor` builds wake candidates, looks up
-//! `DevicePushToken`s, and logs them. Provider send lands when APNs/FCM
-//! credentials are configured.
+//! `CommitMonitor` builds mention + watch wake candidates, looks up
+//! `DevicePushToken`s, and delivers via [`PushSender`] (default:
+//! [`LoggingPushSender`]). Swap in an FCM/APNs sender when credentials exist.
 
+use std::sync::{Arc, OnceLock};
+
+use async_trait::async_trait;
 use atomic_lib::storelike::Query;
 use atomic_lib::{urls, Resource, Storelike, Value};
 use serde_json::{json, Value as JsonValue};
@@ -51,6 +54,55 @@ pub struct DevicePushTokenRow {
     pub subject: String,
     pub token: String,
     pub platform: String,
+}
+
+/// Sends a wake-only payload to one device token.
+#[async_trait]
+pub trait PushSender: Send + Sync {
+    async fn send_wake(
+        &self,
+        token: &DevicePushTokenRow,
+        hint: &PushWakeHint,
+    ) -> Result<(), String>;
+}
+
+/// Default sender: logs at info. Replace with FCM/APNs when secrets are wired.
+pub struct LoggingPushSender;
+
+#[async_trait]
+impl PushSender for LoggingPushSender {
+    async fn send_wake(
+        &self,
+        token: &DevicePushTokenRow,
+        hint: &PushWakeHint,
+    ) -> Result<(), String> {
+        tracing::info!(
+            token_subject = %token.subject,
+            platform = %token.platform,
+            // Never log the raw push token — only a short prefix for ops.
+            token_prefix = %token.token.chars().take(8).collect::<String>(),
+            about = %hint.about,
+            notification_type = %hint.notification_type,
+            payload = %hint.to_data_payload(),
+            "push_wake: would send (LoggingPushSender — no provider)"
+        );
+        Ok(())
+    }
+}
+
+static PUSH_SENDER: OnceLock<Arc<dyn PushSender>> = OnceLock::new();
+
+/// Install the process-wide push sender (call once at server boot). Defaults to
+/// [`LoggingPushSender`] if never set.
+pub fn set_push_sender(sender: Arc<dyn PushSender>) {
+    let _ = PUSH_SENDER.set(sender);
+}
+
+fn push_sender() -> Arc<dyn PushSender> {
+    PUSH_SENDER
+        .get()
+        .cloned()
+        .unwrap_or_else(|| Arc::new(LoggingPushSender) as Arc<dyn PushSender>)
 }
 
 /// Agents that should be woken for a mention commit: everyone in `mentions`
@@ -100,6 +152,151 @@ pub fn mention_wakes_for_resource(
         .collect()
 }
 
+/// Owner agent of a WatchSubscription (`createdBy`, else first `write` agent).
+pub fn watch_owner_agent(watch: &Resource) -> Option<String> {
+    if let Ok(v) = watch.get(urls::CREATED_BY) {
+        if let Ok(subs) = v.to_subjects(None) {
+            if let Some(s) = subs.into_iter().next() {
+                return Some(s);
+            }
+        }
+    }
+
+    if let Ok(v) = watch.get(urls::WRITE) {
+        if let Ok(subs) = v.to_subjects(None) {
+            for s in subs {
+                if s.starts_with("did:ad:agent:") {
+                    return Some(s);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn watch_is_active(watch: &Resource, now_ms: i64) -> bool {
+    if let Ok(Value::Boolean(false)) = watch.get(urls::NOTIFICATION_ENABLED) {
+        return false;
+    }
+
+    if let Ok(Value::Timestamp(muted)) = watch.get(urls::MUTED_UNTIL) {
+        if *muted > now_ms {
+            return false;
+        }
+    }
+    // Integer mutedUntil (JS stores Date.now() number)
+    if let Ok(Value::Integer(muted)) = watch.get(urls::MUTED_UNTIL) {
+        if *muted > now_ms {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn watch_kind(watch: &Resource) -> &'static str {
+    match watch.get(urls::WATCH_KIND) {
+        Ok(Value::String(s)) => match s.as_str() {
+            "content" => "content",
+            "both" => "both",
+            _ => "membership",
+        },
+        _ => "membership",
+    }
+}
+
+/// Collect watch wakes for a committed resource: subscriptions whose
+/// `watchTarget` is the resource itself (content) or its parent (membership).
+pub async fn watch_wakes_for_resource(
+    store: &impl Storelike,
+    resource: &Resource,
+    actor: Option<&str>,
+) -> Vec<PendingPushWake> {
+    let about = resource.get_subject().to_string();
+    let parent = resource
+        .get(urls::PARENT)
+        .ok()
+        .and_then(|v| v.to_subjects(None).ok())
+        .and_then(|mut s| s.pop());
+
+    let mut targets = vec![about.clone()];
+    if let Some(p) = parent {
+        if p != about {
+            targets.push(p);
+        }
+    }
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    let mut wakes = Vec::new();
+
+    for target in targets {
+        let mut q = Query::new_prop_val(urls::WATCH_TARGET, &target);
+        q.limit = Some(50);
+        q.include_nested = true;
+
+        let Ok(result) = store.query(&q).await else {
+            continue;
+        };
+
+        for watch in result.resources {
+            // Ensure it's a WatchSubscription when isA is present.
+            if let Ok(is_a) = watch.get(urls::IS_A) {
+                if let Ok(classes) = is_a.to_subjects(None) {
+                    if !classes.is_empty()
+                        && !classes.iter().any(|c| c == urls::WATCH_SUBSCRIPTION)
+                    {
+                        continue;
+                    }
+                }
+            }
+
+            if !watch_is_active(&watch, now_ms) {
+                continue;
+            }
+
+            let Some(owner) = watch_owner_agent(&watch) else {
+                continue;
+            };
+
+            if actor.map(|a| a == owner.as_str()).unwrap_or(false) {
+                continue;
+            }
+
+            let watch_target = watch
+                .get(urls::WATCH_TARGET)
+                .ok()
+                .and_then(|v| v.to_subjects(None).ok())
+                .and_then(|mut s| s.pop())
+                .unwrap_or_else(|| target.clone());
+
+            let is_target_self = about == watch_target;
+            let kind = watch_kind(&watch);
+
+            if kind == "membership" && is_target_self {
+                continue;
+            }
+
+            let notification_type = if is_target_self || kind == "content" {
+                "watch-content"
+            } else {
+                "watch-membership"
+            };
+
+            wakes.push(PendingPushWake {
+                agent: owner,
+                hint: PushWakeHint::new(about.clone(), notification_type),
+            });
+        }
+    }
+
+    wakes
+}
+
 /// Look up `DevicePushToken` resources whose `devicePushAgent` matches.
 pub async fn lookup_device_push_tokens(
     store: &impl Storelike,
@@ -135,25 +332,49 @@ pub async fn lookup_device_push_tokens(
     rows
 }
 
-/// Look up tokens for each wake and log candidates. Replace the log with
-/// APNs/FCM send when credentials are configured.
+/// Look up tokens for each wake and deliver via [`push_sender`].
 pub async fn enqueue_push_wakes(store: &impl Storelike, wakes: &[PendingPushWake]) {
     if wakes.is_empty() {
         return;
     }
 
+    let sender = push_sender();
+
     for wake in wakes {
         let tokens = lookup_device_push_tokens(store, &wake.agent).await;
-        tracing::debug!(
-            agent = %wake.agent,
-            about = %wake.hint.about,
-            notification_type = %wake.hint.notification_type,
-            payload = %wake.hint.to_data_payload(),
-            token_count = tokens.len(),
-            platforms = ?tokens.iter().map(|t| t.platform.as_str()).collect::<Vec<_>>(),
-            "push_wake: mention candidate (provider send not wired)"
-        );
+
+        if tokens.is_empty() {
+            tracing::debug!(
+                agent = %wake.agent,
+                about = %wake.hint.about,
+                notification_type = %wake.hint.notification_type,
+                "push_wake: no DevicePushToken for agent"
+            );
+            continue;
+        }
+
+        for token in &tokens {
+            if let Err(e) = sender.send_wake(token, &wake.hint).await {
+                tracing::warn!(
+                    agent = %wake.agent,
+                    platform = %token.platform,
+                    error = %e,
+                    "push_wake: send failed"
+                );
+            }
+        }
     }
+}
+
+/// Collect mention + watch wakes for a newly committed resource.
+pub async fn wakes_for_committed_resource(
+    store: &impl Storelike,
+    resource: &Resource,
+    actor: Option<&str>,
+) -> Vec<PendingPushWake> {
+    let mut wakes = mention_wakes_for_resource(resource, actor);
+    wakes.extend(watch_wakes_for_resource(store, resource, actor).await);
+    wakes
 }
 
 #[cfg(test)]
@@ -208,5 +429,39 @@ mod tests {
         assert_eq!(wakes[0].agent, "did:ad:agent:bob");
         assert_eq!(wakes[0].hint.about, "did:ad:doc1");
         assert_eq!(wakes[0].hint.notification_type, "mention");
+    }
+
+    #[test]
+    fn watch_owner_prefers_created_by() {
+        let mut watch = Resource::new("did:ad:watch1".into());
+        watch
+            .set_unsafe(
+                urls::CREATED_BY.into(),
+                Value::AtomicUrl("did:ad:agent:bob".into()),
+            )
+            .unwrap();
+        assert_eq!(
+            watch_owner_agent(&watch).as_deref(),
+            Some("did:ad:agent:bob")
+        );
+    }
+
+    #[test]
+    fn watch_inactive_when_disabled() {
+        let mut watch = Resource::new("did:ad:watch1".into());
+        watch
+            .set_unsafe(urls::NOTIFICATION_ENABLED.into(), Value::Boolean(false))
+            .unwrap();
+        assert!(!watch_is_active(&watch, 1_000));
+    }
+
+    #[test]
+    fn watch_inactive_when_muted() {
+        let mut watch = Resource::new("did:ad:watch1".into());
+        watch
+            .set_unsafe(urls::MUTED_UNTIL.into(), Value::Integer(5_000))
+            .unwrap();
+        assert!(!watch_is_active(&watch, 1_000));
+        assert!(watch_is_active(&watch, 6_000));
     }
 }

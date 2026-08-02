@@ -771,19 +771,9 @@ impl Handler<CommitMessage> for CommitMonitor {
         // per-connection.
         let frame = encode_commit_frame(&self.store, &msg);
 
-        // Phase 5: mention → wake candidates (token lookup + stub enqueue in async).
-        let push_wakes = msg
-            .commit_response
-            .resource_new
-            .as_ref()
-            .map(|resource| {
-                let actor = msg.commit_response.commit.signer.to_string();
-                crate::push_wake::mention_wakes_for_resource(
-                    resource,
-                    Some(actor.as_str()),
-                )
-            })
-            .unwrap_or_default();
+        // Phase 5: mention + watch → wake candidates (token lookup + sender in async).
+        let push_resource = msg.commit_response.resource_new.clone();
+        let push_actor = msg.commit_response.commit.signer.to_string();
 
         if let Some(frame) = frame.as_ref() {
             // Per-resource subscribers
@@ -850,8 +840,14 @@ impl Handler<CommitMessage> for CommitMonitor {
 
         Box::pin(
             async move {
-                if !push_wakes.is_empty() {
-                    crate::push_wake::enqueue_push_wakes(&store, &push_wakes).await;
+                if let Some(resource) = push_resource.as_ref() {
+                    let wakes = crate::push_wake::wakes_for_committed_resource(
+                        &store,
+                        resource,
+                        Some(push_actor.as_str()),
+                    )
+                    .await;
+                    crate::push_wake::enqueue_push_wakes(&store, &wakes).await;
                 }
 
                 // Skip vector re-indexing when only non-text properties changed (e.g. parent adding

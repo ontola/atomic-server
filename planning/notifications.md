@@ -514,7 +514,7 @@ mentions/watches — still no trusted body in the push (see payload contract).
       `tauri-plugin-notification`). Cargo dep commented until
       `google-services.json` + iOS Push entitlement exist (see checklist).
 - [x] `DevicePushToken` ontology + register/refresh helper (client; call on launch when token exists)
-- [x] Hub: wake payload + mention-match helpers (`server/src/push_wake.rs`); `commit_monitor` → `enqueue_push_wakes` + **DevicePushToken lookup** (provider fan-out still TODO)
+- [x] Hub: wake payload + mention **and watch** match helpers (`server/src/push_wake.rs`); `commit_monitor` → `wakes_for_committed_resource` + DevicePushToken lookup + [`PushSender`] (`LoggingPushSender` default; APNs/FCM impl still TODO)
 - [x] Client: suppress-if-read helpers + cold-start tap queue wired to navigate (`pushWakeTap` → `NotificationOsPresenter`)
 - [x] `useDevicePushRegistration` on launch (real token via bridge; DEV desktop stub)
 - [x] Client: on push → sync → materialize (`handlePushWake` / `processPushWake` + `queuePushWakeReceive`) — needs plugin wake delivery to exercise end-to-end
