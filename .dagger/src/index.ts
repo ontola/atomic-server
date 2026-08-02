@@ -81,6 +81,74 @@ export class AtomicServer {
     this.source = source;
   }
 
+  /**
+   * Cold/warm timing for the install caches this module relies on.
+   * Run twice: first populates volumes, second should be near-instant
+   * `cargo install` / `npm install -g` no-ops.
+   */
+  @func()
+  async cacheBench(): Promise<string> {
+    const cargoBinPath =
+      '/opt/cargo-bin/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+
+    const [mdbookOut, netlifyOut, pubOut] = await Promise.all([
+      dag
+        .container()
+        .from(RUST_IMAGE)
+        .withMountedCache('/usr/local/cargo/registry', dag.cacheVolume('cargo'), {
+          sharing: CacheSharingMode.Shared,
+        })
+        .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
+          sharing: CacheSharingMode.Shared,
+        })
+        .withEnvVariable('CARGO_INSTALL_ROOT', '/opt/cargo-bin')
+        .withEnvVariable('PATH', cargoBinPath)
+        .withExec([
+          'sh',
+          '-c',
+          'echo "=== mdbook install ===" && ' +
+            'START=$(date +%s) && ' +
+            'cargo install mdbook mdbook-linkcheck --quiet && ' +
+            'END=$(date +%s) && ' +
+            'echo "elapsed_s=$((END-START))" && ' +
+            'mdbook --version && mdbook-linkcheck --version',
+        ])
+        .stdout(),
+      this.netlifyCliContainer()
+        .withExec([
+          'sh',
+          '-c',
+          'echo "=== netlify-cli install ===" && ' +
+            'START=$(date +%s) && ' +
+            'npm install -g netlify-cli --quiet && ' +
+            'END=$(date +%s) && ' +
+            'echo "elapsed_s=$((END-START))" && ' +
+            'netlify --version',
+        ])
+        .stdout(),
+      dag
+        .container()
+        .from(FLUTTER_IMAGE)
+        .withEnvVariable('CI', 'true')
+        .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
+        .withMountedCache('/root/.pub-cache', dag.cacheVolume('flutter-pub-cache'))
+        .withDirectory('/workspace/flutter', this.source.directory('flutter'))
+        .withWorkdir('/workspace/flutter')
+        .withExec([
+          'bash',
+          '-lc',
+          'echo "=== flutter pub get ===" && ' +
+            'START=$(date +%s) && ' +
+            'flutter --version >/dev/null && flutter pub get && ' +
+            'END=$(date +%s) && ' +
+            'echo "elapsed_s=$((END-START))"',
+        ])
+        .stdout(),
+    ]);
+
+    return [mdbookOut, netlifyOut, pubOut].join('\n');
+  }
+
   @func()
   async ci(
     @argument() netlifyAuthToken: Secret,
@@ -143,8 +211,14 @@ export class AtomicServer {
    */
   @func()
   async flutterTest(): Promise<string> {
-    const cargoCache = dag.cacheVolume('cargo');
+    // Dedicated registry volume — do NOT share the main `cargo` volume used
+    // by the rust/wasm lanes. A Locked mount here used to serialize pub get /
+    // analyze / dart test behind the rust pipeline (~10+ min of lock wait on
+    // the step that merely ran `flutter pub get`).
+    const flutterCargoCache = dag.cacheVolume('flutter-cargo');
     const flutterRustTarget = dag.cacheVolume('flutter-plugin-rust-target');
+    const flutterPubCache = dag.cacheVolume('flutter-pub-cache');
+    const flutterRustup = dag.cacheVolume('flutter-rustup');
     const pathPrefix = 'export PATH="$HOME/.cargo/bin:$PATH"';
 
     return (
@@ -152,6 +226,12 @@ export class AtomicServer {
         .container()
         .from(FLUTTER_IMAGE)
         .withEnvVariable('CI', 'true')
+        // Persist hosted Dart packages across CI runs.
+        .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
+        .withMountedCache('/root/.pub-cache', flutterPubCache)
+        // Persist the rustup toolchain so a layer-cache miss doesn't
+        // re-download rustc. Idempotent install below.
+        .withMountedCache('/root/.rustup', flutterRustup)
         .withExec(['apt-get', 'update', '-qq'])
         .withExec([
           'apt-get',
@@ -171,11 +251,8 @@ export class AtomicServer {
         .withExec([
           'sh',
           '-c',
-          'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal',
+          'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi',
         ])
-        .withMountedCache('/root/.cargo/registry', cargoCache, {
-          sharing: CacheSharingMode.Locked,
-        })
         .withDirectory('/workspace/lib', this.source.directory('lib'))
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
         .withMountedCache('/workspace/flutter/rust/target', flutterRustTarget, {
@@ -191,6 +268,11 @@ export class AtomicServer {
         // Dart package — analyzing the whole repo without its own pub get fails.
         .withExec(['bash', '-lc', `${pathPrefix} && flutter analyze lib test`])
         .withExec(['bash', '-lc', `${pathPrefix} && flutter test --no-pub`])
+        // Mount cargo registry only for the Rust step so Dart work above
+        // never contends for a cache volume.
+        .withMountedCache('/root/.cargo/registry', flutterCargoCache, {
+          sharing: CacheSharingMode.Shared,
+        })
         // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
         // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
         // `flutter test` only runs Dart. Without this step the entire bridge —
@@ -199,7 +281,9 @@ export class AtomicServer {
         .withExec([
           'bash',
           '-lc',
-          `${pathPrefix} && cargo test --manifest-path rust/Cargo.toml`,
+          `${pathPrefix} && ` +
+            'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi && ' +
+            'cargo test --manifest-path rust/Cargo.toml',
         ])
         .stdout()
     );
@@ -217,7 +301,10 @@ export class AtomicServer {
         .container()
         .from(RUST_IMAGE)
         .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          sharing: CacheSharingMode.Locked,
+          // Shared: Locked serialized every parallel CI lane (docs/wasm/
+          // rust-slim/rust-checks) behind whichever job held the volume.
+          // Cargo's own flock handles concurrent registry writers.
+          sharing: CacheSharingMode.Shared,
         })
         // Cache `cargo install`-built binaries (wasm-pack here). Without
         // this, each CI run recompiled wasm-pack from source (~2 min).
@@ -228,7 +315,8 @@ export class AtomicServer {
         // \`cargo install\` no-ops when the latest version is already
         // present.
         .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
-          sharing: CacheSharingMode.Locked,
+          // Shared so wasm-pack and mdbook installs can proceed in parallel.
+          sharing: CacheSharingMode.Shared,
         })
         .withEnvVariable('CARGO_INSTALL_ROOT', '/opt/cargo-bin')
         .withEnvVariable(
@@ -304,7 +392,10 @@ export class AtomicServer {
         .withExec(['apt-get', 'update', '-qq'])
         .withExec(['apt', 'install', '-y', 'protobuf-compiler'])
         .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          sharing: CacheSharingMode.Locked,
+          // Shared: Locked serialized every parallel CI lane (docs/wasm/
+          // rust-slim/rust-checks) behind whichever job held the volume.
+          // Cargo's own flock handles concurrent registry writers.
+          sharing: CacheSharingMode.Shared,
         })
         .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
         .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
@@ -433,6 +524,16 @@ export class AtomicServer {
         '/repo/browser/tsconfig.build.json',
         browser.file('tsconfig.build.json'),
       )
+      // Same pnpm-store volume as jsBuild() — without this, every
+      // integration-test run re-downloaded the registry graph.
+      .withMountedCache('/repo/browser/.pnpm-store', dag.cacheVolume('pnpm-store'))
+      .withExec([
+        'pnpm',
+        'config',
+        'set',
+        'store-dir',
+        '/repo/browser/.pnpm-store',
+      ])
       .withExec([
         'sh',
         '-c',
@@ -487,22 +588,49 @@ export class AtomicServer {
   ): Promise<string> {
     const target = prod ? '--prod' : '';
 
-    return dag
-      .container()
-      .from(NODE_IMAGE)
-      .withExec(['npm', 'install', '-g', 'netlify-cli'])
-      .withDirectory('/deploy', directory)
-      .withWorkdir('/deploy')
-      .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
-      .withExec([
-        'sh',
-        '-c',
-        // Skip silently when no auth token is configured (PR builds from
-        // forks, branches without secret access). Netlify CLI 23+ rejects
-        // empty `--auth ""` instead of treating it as missing.
-        `if [ -z "$NETLIFY_AUTH_TOKEN" ]; then echo 'NETLIFY_AUTH_TOKEN not set — skipping ${siteName} deploy'; exit 0; fi; for i in $(seq 1 5); do netlify link --name ${siteName} --auth "$NETLIFY_AUTH_TOKEN" && break || sleep 2; done && netlify deploy --dir . ${target} --auth "$NETLIFY_AUTH_TOKEN"`,
-      ])
-      .stdout();
+    return (
+      this.netlifyCliContainer()
+        .withDirectory('/deploy', directory)
+        .withWorkdir('/deploy')
+        .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
+        .withExec([
+          'sh',
+          '-c',
+          // Skip silently when no auth token is configured (PR builds from
+          // forks, branches without secret access). Netlify CLI 23+ rejects
+          // empty `--auth ""` instead of treating it as missing.
+          `if [ -z "$NETLIFY_AUTH_TOKEN" ]; then echo 'NETLIFY_AUTH_TOKEN not set — skipping ${siteName} deploy'; exit 0; fi; for i in $(seq 1 5); do netlify link --name ${siteName} --auth "$NETLIFY_AUTH_TOKEN" && break || sleep 2; done && netlify deploy --dir . ${target} --auth "$NETLIFY_AUTH_TOKEN"`,
+        ])
+        .stdout()
+    );
+  }
+
+  /**
+   * Node image with a cached global `netlify-cli`. Routed through
+   * `NPM_CONFIG_PREFIX=/opt/npm-global` so the cache mount can't hide
+   * the image's preinstalled npm/node. `npm install -g` no-ops when the
+   * package is already present at that prefix.
+   */
+  private netlifyCliContainer(): Container {
+    return (
+      dag
+        .container()
+        .from(NODE_IMAGE)
+        .withMountedCache('/opt/npm-global', dag.cacheVolume('npm-global'))
+        .withMountedCache('/root/.npm', dag.cacheVolume('npm-cache'))
+        .withEnvVariable('NPM_CONFIG_PREFIX', '/opt/npm-global')
+        .withEnvVariable(
+          'PATH',
+          '/opt/npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        )
+        // Install + version check in one exec so a cleared volume can't
+        // leave `netlify` missing on a dagger layer-cache hit.
+        .withExec([
+          'sh',
+          '-c',
+          'npm install -g netlify-cli --quiet && netlify --version',
+        ])
+    );
   }
 
   /** Extracts the unique deploy URL from netlify output */
@@ -522,7 +650,10 @@ export class AtomicServer {
         .container()
         .from(RUST_IMAGE)
         .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          sharing: CacheSharingMode.Locked,
+          // Shared: Locked serialized every parallel CI lane (docs/wasm/
+          // rust-slim/rust-checks) behind whichever job held the volume.
+          // Cargo's own flock handles concurrent registry writers.
+          sharing: CacheSharingMode.Shared,
         })
         // Same cargo-install binary cache as wasmBuild() — without it,
         // every CI run recompiled mdbook + mdbook-linkcheck from source
@@ -531,7 +662,8 @@ export class AtomicServer {
         // at `/usr/local/cargo/bin`. `cargo install` no-ops when the
         // binaries are already present at the install root.
         .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
-          sharing: CacheSharingMode.Locked,
+          // Shared so wasm-pack and mdbook installs can proceed in parallel.
+          sharing: CacheSharingMode.Shared,
         })
         .withEnvVariable('CARGO_INSTALL_ROOT', '/opt/cargo-bin')
         .withEnvVariable(
@@ -687,7 +819,8 @@ export class AtomicServer {
       .withExec(['apt-get', 'update', '-qq'])
       .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler'])
       .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-        sharing: CacheSharingMode.Locked,
+        // Shared: see wasmBuild — Locked serialized parallel CI lanes.
+        sharing: CacheSharingMode.Shared,
       })
       .withExec(['rustup', 'component', 'add', 'clippy'])
       .withExec(['rustup', 'component', 'add', 'rustfmt']);
@@ -829,7 +962,10 @@ export class AtomicServer {
         // and the package was missed.
         .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler'])
         .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          sharing: CacheSharingMode.Locked,
+          // Shared: Locked serialized every parallel CI lane (docs/wasm/
+          // rust-slim/rust-checks) behind whichever job held the volume.
+          // Cargo's own flock handles concurrent registry writers.
+          sharing: CacheSharingMode.Shared,
         })
         .withExec(['rustup', 'component', 'add', 'clippy'])
         .withExec(['rustup', 'component', 'add', 'rustfmt'])
@@ -880,20 +1016,19 @@ export class AtomicServer {
   rustTest(): Promise<string> {
     return (
       this.rustChecksContainer()
-        // Install nextest from a prebuilt tarball — the `cargo install`
-        // path fails on the musl-cross image. The `linux-musl` URL is
-        // required: the default `linux` artifact is the glibc binary,
-        // which silently exits 1 on the musl-cross container (cargo
-        // then reports "no such command: nextest" because the
-        // subcommand returned nonzero). Place the binary in
-        // `$CARGO_HOME/bin` (resolved at runtime — the rust-musl-cross
-        // image puts it under /root/.cargo, the official rust:bookworm
-        // under /usr/local/cargo).
-        .withExec([
-          'sh',
-          '-c',
-          'BIN_DIR="${CARGO_HOME:-$HOME/.cargo}/bin" && mkdir -p "$BIN_DIR" && curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR" && "$BIN_DIR/cargo-nextest" --version',
-        ])
+        // Persist nextest in the shared cargo-bin volume. Previously the
+        // curl install sat *after* the source mount, so every Rust source
+        // change re-downloaded it. The `linux-musl` URL is required: the
+        // default `linux` artifact is glibc and silently exits 1 on the
+        // musl-cross image. Bundle install + run so a cleared volume
+        // can't leave nextest missing on a dagger layer-cache hit.
+        .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
+          sharing: CacheSharingMode.Shared,
+        })
+        .withEnvVariable(
+          'PATH',
+          '/opt/cargo-bin/bin:/root/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        )
         // `--exclude atomic-server-tauri`: same reason as `rustClippy` —
         // the Tauri desktop crate needs system libs (glib-2.0, pkg-config)
         // that aren't installed in the musl-cross CI image.
@@ -919,17 +1054,13 @@ export class AtomicServer {
         // (runtime test parallelism), only how many rustc/link jobs run
         // at once during compilation.
         .withExec([
-          'cargo',
-          'nextest',
-          'run',
-          '--workspace',
-          '--exclude',
-          'atomic-server-tauri',
-          '--no-default-features',
-          '--features',
-          'light',
-          '--build-jobs',
-          '2',
+          'sh',
+          '-c',
+          'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
+            'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
+            'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
+            'cargo nextest run --workspace --exclude atomic-server-tauri ' +
+            '--no-default-features --features light --build-jobs 2',
         ])
         .stdout()
     );
@@ -1153,21 +1284,26 @@ export class AtomicServer {
   async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
     const browserContainer = this.jsBuild();
 
-    // Setup Playwright container - debug and fix package manager
+    // Setup Playwright container. Reuses the npm-global volume so
+    // `netlify-cli` isn't re-downloaded when docs deploy already warmed it.
     const playwrightContainer = dag
       .container()
       .from(`mcr.microsoft.com/playwright:${PLAYWRIGHT_VERSION}`)
+      .withMountedCache('/opt/npm-global', dag.cacheVolume('npm-global'))
+      .withMountedCache('/root/.npm', dag.cacheVolume('npm-cache'))
+      .withEnvVariable('NPM_CONFIG_PREFIX', '/opt/npm-global')
+      .withEnvVariable(
+        'PATH',
+        '/root/.local/share/pnpm:/opt/npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+      )
       .withExec([
         '/bin/sh',
         '-c',
-        'curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=10.15.1 ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && export PATH=/root/.local/share/pnpm:$PATH && /bin/apt update && /bin/apt install -y zip',
-      ])
-      .withEnvVariable(
-        'PATH',
-        '/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-      )
-      // .withExec(['pnpm', 'dlx', 'playwright', 'install', '--with-deps'])
-      .withExec(['npm', 'install', '-g', 'netlify-cli']);
+        'curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=10.15.1 ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && ' +
+          'export PATH=/root/.local/share/pnpm:/opt/npm-global/bin:$PATH && ' +
+          '/bin/apt update && /bin/apt install -y zip && ' +
+          'npm install -g netlify-cli --quiet && netlify --version',
+      ]);
 
     // Setup e2e test environment
     // Bug fix (2026-07-02): `pnpm install` used to run right after mounting
@@ -1214,7 +1350,18 @@ export class AtomicServer {
         browserContainer.directory('/app/node_modules'),
       )
       .withWorkdir('/app/e2e')
+      // Reuse jsBuild's pnpm-store so e2e's `pnpm install` is a cache hit
+      // for packages already fetched by the workspace build.
+      .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
+      .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
       .withExec(['pnpm', 'install'])
+      // Persist Playwright browser binaries across runs. The base image
+      // ships Chromium, but `playwright install` still fetches matching
+      // revision payloads when the e2e package pins a different build.
+      .withMountedCache(
+        '/root/.cache/ms-playwright',
+        dag.cacheVolume('playwright-browsers'),
+      )
       .withExec(['pnpm', 'exec', 'playwright', 'install'])
       .withEnvVariable('LANGUAGE', 'en_GB')
       // The browser hits a `*.localhost` URL so chromium considers it a
