@@ -155,6 +155,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Hub mention → wake candidates | unit | `push_wake::mention_wakes_for_resource` |
 | Hub watch → wake candidates | unit | `push_wake::watch_owner_agent` / mute / enabled |
 | Hub DevicePushToken lookup + PushSender | unit | `push_wake` enqueue path (`LoggingPushSender`) |
+| Env FCM/APNs sender config | unit | `push_provider::tests` (no network) |
 | Mention → NotificationItem materialization (engine) | flow | `notifications.spec.ts` (fake other-agent actor) |
 | A mentions B → B sees unread (two agents / invite) | flow | `notifications.spec.ts` (invite + reconcile backlog) |
 | Mark read on A clears badge on B | flow | `notifications.spec.ts` (same agent, two contexts) |

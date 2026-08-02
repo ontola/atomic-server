@@ -473,10 +473,10 @@ pub fn run() {
       .build(),
   );
 
-  // Remote push (APNs/FCM): uncomment Cargo dep + init when
-  // google-services.json / iOS Push entitlement are present:
-  // #[cfg(mobile)]
-  // let builder = builder.plugin(tauri_plugin_push_notifications::init());
+  // Remote push (APNs/FCM): `cargo tauri … --features mobile-push` after
+  // google-services.json / iOS Push entitlement are present.
+  #[cfg(all(mobile, feature = "mobile-push"))]
+  let builder = builder.plugin(tauri_plugin_push_notifications::init());
 
   // In-app QR scanner for device pairing (Android/iOS only).
   #[cfg(mobile)]
