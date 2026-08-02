@@ -122,21 +122,36 @@ jobs:
 
               newest=$(ls -1t ~/atomic-server-2* 2>/dev/null | head -1)
               current=$(sha256sum ~/atomic-server 2>/dev/null | cut -d" " -f1 || echo none)
+              newest_sum=""
+              [ -n "$newest" ] && newest_sum=$(sha256sum "$newest" | cut -d" " -f1)
 
-              # A deploy can fail before it touches this host at all — the
-              # cross-compile happens in the Dagger container, so a build or
-              # rsync failure never reaches the `mv`. Rolling back then would
-              # take a perfectly healthy server BACKWARDS a version and restart
-              # it for nothing. If the installed binary still matches the newest
-              # backup, this run changed nothing: leave it alone.
+              # Whether to skip needs BOTH signals, because neither alone is
+              # enough.
               #
-              # Only valid for a deploy failure. When the health check is what
-              # failed, the deploy completed and copied its own (bad) binary, so
-              # installed matching newest is the expected state, not a sign that
-              # nothing happened.
-              if [ "$reason" = "deploy" ] && [ -n "$newest" ] &&
-                 [ "$(sha256sum "$newest" | cut -d" " -f1)" = "$current" ]; then
-                echo "Installed binary still matches the newest backup — this deploy never replaced it. Nothing to roll back."
+              # Service state alone is not: a build or rsync failure never
+              # reaches the `mv`, so the old process is still serving and a
+              # rollback would drag a healthy host BACKWARDS a version for
+              # nothing.
+              #
+              # Checksums alone are not either — and this is the trap the
+              # previous version fell into. The remote script copies its backup
+              # IMMEDIATELY after the `mv`, so "installed == newest backup" is
+              # equally true when nothing happened and when the deploy died
+              # three steps later in `export`/`start`/`status` with the service
+              # down. Skipping on that alone declined to roll back in exactly
+              # the outage this exists to end.
+              #
+              # Together they separate the three real cases:
+              #   unit dead                       -> roll back, whatever the sums say
+              #   unit up   + installed == newest -> host untouched, leave it
+              #   unit up   + installed != newest -> binary swapped but the old
+              #                                      process still serving; restore
+              #                                      it before the next restart
+              #                                      picks up the bad one
+              if [ "$reason" = "deploy" ] &&
+                 systemctl is-active --quiet atomic &&
+                 [ -n "$newest_sum" ] && [ "$newest_sum" = "$current" ]; then
+                echo "atomic is still serving and the installed binary is unchanged — this deploy never touched the host. Nothing to roll back."
                 exit 0
               fi
 
