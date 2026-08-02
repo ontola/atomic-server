@@ -514,19 +514,46 @@ export class AtomicServer {
 
   @func()
   docsFolder(): Directory {
-    const mdBookContainer = dag
-      .container()
-      .from(RUST_IMAGE)
-      .withExec(['cargo', 'install', 'mdbook'])
-      .withExec(['cargo', 'install', 'mdbook-linkcheck']);
-
+    const cargoCache = dag.cacheVolume('cargo');
     const actualDocsDirectory = this.source.directory('docs');
 
-    return mdBookContainer
-      .withMountedDirectory('/docs', actualDocsDirectory)
-      .withWorkdir('/docs')
-      .withExec(['mdbook', 'build'])
-      .directory('/docs/build');
+    return (
+      dag
+        .container()
+        .from(RUST_IMAGE)
+        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
+          sharing: CacheSharingMode.Locked,
+        })
+        // Same cargo-install binary cache as wasmBuild() — without it,
+        // every CI run recompiled mdbook + mdbook-linkcheck from source
+        // (~4 min). Routed through `CARGO_INSTALL_ROOT` so the cache
+        // mount can't hide the rust image's preinstalled `cargo`/`rustc`
+        // at `/usr/local/cargo/bin`. `cargo install` no-ops when the
+        // binaries are already present at the install root.
+        .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
+          sharing: CacheSharingMode.Locked,
+        })
+        .withEnvVariable('CARGO_INSTALL_ROOT', '/opt/cargo-bin')
+        .withEnvVariable(
+          'PATH',
+          '/opt/cargo-bin/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        )
+        .withMountedDirectory('/docs', actualDocsDirectory)
+        .withWorkdir('/docs')
+        // Install + build in a single exec so the install is part of the
+        // build step's own cache key. Splitting them lets dagger cache the
+        // `cargo install` step as "already ran" while the mounted
+        // `cargo-bin` cache volume can be cleared by the engine (e.g. after
+        // a restart with `Locked` sharing), leaving mdbook missing from
+        // PATH on replay. Bundling makes any cache hit imply the binaries
+        // are present too; `cargo install` no-ops when they are current.
+        .withExec([
+          'sh',
+          '-c',
+          'cargo install mdbook mdbook-linkcheck --quiet && mdbook build',
+        ])
+        .directory('/docs/build')
+    );
   }
 
   @func()
