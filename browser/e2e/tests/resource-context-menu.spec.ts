@@ -22,6 +22,13 @@ test.describe('resource context menu', () => {
       .first();
     await sidebarLink.click({ button: 'right' });
     await expect(page.getByRole('menu')).toBeVisible();
+    // Right-click menus are searchable: filter is focused, typing narrows items.
+    const rightClickFilter = page.getByPlaceholder(/Filter actions/);
+    await expect(rightClickFilter).toBeFocused();
+    await rightClickFilter.fill('histo');
+    await expect(page.getByTestId('menu-item-history')).toBeVisible();
+    await expect(page.getByTestId('menu-item-edit')).toHaveCount(0);
+    await rightClickFilter.fill('');
     await expect(page.getByTestId('menu-item-history')).toBeVisible();
     // Close it.
     await page.keyboard.press('Escape');

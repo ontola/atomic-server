@@ -78,8 +78,8 @@ export interface ResourceContextMenuProps {
 
 /**
  * Dropdown menu that opens a bunch of actions for some resource. Items come
- * from the central action registry; the main menu (navbar kebab / cmd+m) is
- * searchable, right-click menus are plain.
+ * from the central action registry. All instances are searchable (type-to-
+ * filter); the main menu (navbar kebab) also binds the cmd+m shortcut.
  */
 export function ResourceContextMenu({
   subject,
@@ -227,7 +227,6 @@ export function ResourceContextMenu({
         items={filteredItems}
         Trigger={triggerComp}
         isMainMenu={isMainMenu}
-        searchable={isMainMenu}
         bindActive={handleBindActive}
         anchorPoint={anchorPoint}
       />

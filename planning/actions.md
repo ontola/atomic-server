@@ -60,7 +60,7 @@ Three kinds of actions, modeled by what `run` does:
 | Surface | How it projects the registry |
 |---|---|
 | Right-click / kebab menus | `ResourceContextMenu` builds `DropdownItem[]` from definitions; `showOnly` keeps filtering by id (17 call sites unchanged) |
-| ⌘M "more" menu | Same menu, `searchable`: filter input at top, type-to-filter over label+keywords, arrows+enter. Only the main menu is searchable; right-click stays a plain instant dropdown (mouse intent) |
+| ⌘M "more" menu | Same menu with the ⌘M shortcut bound. Every `DropdownMenu` is searchable by default: filter input at top, type-to-filter over label+keywords, arrows+enter (right-click / kebab included). |
 | ⌘K overlay | Actions appear as a section next to search results. **Placement policy, not unified ranking**: actions section capped at ~3, shown only on a strong prefix/synonym match against the action vocabulary, never interleaved with resource results |
 | Hotkeys | `HotKeyWrapper` registers definitions that carry `shortcut` |
 | Shortcuts help page | Rendered from the registry (kills the hand-synced prose) |
@@ -72,7 +72,7 @@ Three kinds of actions, modeled by what `run` does:
 1. **Registry + searchable ⌘M menu** (this slice): `src/actions/` with all
    current context-menu actions + move-to-parent (⌘↑, Finder convention);
    `ResourceContextMenu` renders from the registry; `DropdownMenu` gains a
-   `searchable` mode used by the main menu.
+   `searchable` mode (on by default for all dropdown-style context menus).
 2. **⌘K**: actions section in `SearchOverlay` per the placement policy.
 3. **Hotkeys + shortcuts page** derived from the registry; collapse the
    remaining scattered delete implementations onto the delete action.
@@ -94,5 +94,6 @@ Three kinds of actions, modeled by what `run` does:
   dedicated actions palette, scoped to the current resource.
 - **Action ids keep the old `ContextMenuOptions` string values** so `showOnly`
   call sites and `menu-item-<id>` test ids don't churn.
-- **Right-click menus are not searchable**; ⌘M and the navbar kebab are.
+- **All dropdown-style context menus are searchable** (right-click, kebab, ⌘M).
+  Pass `searchable={false}` only for tiny menus where a filter would be noise.
 - **Move to parent** gets ⌘↑, matching Finder's "go to enclosing folder".

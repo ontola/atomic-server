@@ -4,8 +4,8 @@ import type { Resource, Store } from '@tomic/react';
 /**
  * Central action system (see planning/actions.md): each user-invocable action
  * on a resource is defined ONCE as an {@link ActionDefinition}, and every
- * surface — context menus, the searchable ⌘M menu, hotkeys, the ⌘K palette,
- * AI tools — is a projection of that definition.
+ * surface — searchable context menus (right-click / kebab / ⌘M), hotkeys, the
+ * ⌘K palette, AI tools — is a projection of that definition.
  */
 
 /** Whether the action targets a specific resource or the app as a whole. */
@@ -70,12 +70,11 @@ export interface ActionDefinition {
   icon?: (ctx: ActionContext) => ReactNode;
   /** From the `shortcuts` registry; rendered as a chip wherever listed. */
   shortcut?: string;
-  /** Extra search terms for searchable surfaces (⌘M filter, ⌘K palette). */
+  /** Extra search terms for searchable menus and the ⌘K palette. */
   keywords?: string[];
   /**
-   * Hidden from the default menu listing; only surfaces in searchable menus
-   * while the filter query matches. For secondary actions that would clutter
-   * the list.
+   * Hidden from the default menu listing; only surfaces while the filter
+   * query matches. For secondary actions that would clutter the list.
    */
   searchOnly?: boolean;
   /** Surfaces must confirm before running (unless explicitly bypassed). */

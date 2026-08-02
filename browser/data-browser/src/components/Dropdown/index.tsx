@@ -66,6 +66,8 @@ interface DropdownMenuProps {
   /**
    * Renders a filter input at the top of the menu that narrows the items by
    * label/keywords while keeping arrow+enter keyboard navigation.
+   * Defaults to true — every dropdown-style context menu is searchable.
+   * Pass `false` for tiny menus where a filter would be noise.
    */
   searchable?: boolean;
   bindActive?: (active: boolean) => void;
@@ -144,7 +146,7 @@ export function DropdownMenu({
   items,
   Trigger,
   isMainMenu,
-  searchable,
+  searchable = true,
   bindActive = () => undefined,
   anchorPoint,
 }: DropdownMenuProps): JSX.Element {

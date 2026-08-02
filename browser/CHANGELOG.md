@@ -4,6 +4,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+### Atomic Browser
+
+- [#1224](https://github.com/atomicdata-dev/atomic-server/issues/1224) Every dropdown-style context menu is searchable: type-to-filter is on by default for right-click, kebab, and ⌘M menus (pass `searchable={false}` to opt out of tiny menus).
+
 ## [v0.41.0-beta.2] - 2026-08-01
 
 ### Atomic Browser
