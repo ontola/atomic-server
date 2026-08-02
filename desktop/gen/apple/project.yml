@@ -53,8 +53,42 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         CFBundleShortVersionString: 0.41.0
         CFBundleVersion: "0.41.0.2"
+        # The in-app QR scanner for device pairing
+        # (tauri-plugin-barcode-scanner, see capabilities/mobile.json). The
+        # Android WebView does not grant getUserMedia to web content, so the
+        # native scanner owns the camera on both mobile platforms.
+        NSCameraUsageDescription:
+          Atomic Server scans pairing QR codes with the camera to connect this
+          device to your other devices.
+        # Iroh builds its endpoint with `.discovery_local_network()` alongside
+        # `.discovery_n0()` (lib/src/sync/peer.rs) so two devices on the same
+        # Wi-Fi dial each other directly instead of round-tripping through a
+        # relay and hoping hole-punching succeeds. iOS 14+ blocks mDNS outright
+        # without this key AND a matching NSBonjourServices entry — and it
+        # fails silently, degrading to exactly the relay path the local
+        # discovery was added to avoid.
+        NSLocalNetworkUsageDescription:
+          Atomic Server finds your other devices on this network to sync
+          directly with them, instead of relaying your data via the internet.
+        # iroh 0.35 registers the swarm under `N0_LOCAL_SWARM`
+        # ("iroh.local.swarm"), and swarm-discovery 0.3.1 formats the service
+        # name as `_{name}.{protocol}.local.` — hence this exact string.
+        NSBonjourServices:
+          - _iroh.local.swarm._udp
     entitlements:
       path: atomic-server-tauri_iOS/atomic-server-tauri_iOS.entitlements
+      properties:
+        # Passkeys. The webview serves from `tauri://localhost`, which is not a
+        # registrable domain, so WebAuthn has no effective domain to derive an
+        # RP ID from — this entitlement is what lets the app claim
+        # `atomicserver.eu` as its RP instead (see `passkeyRpId` in
+        # browser/data-browser/src/helpers/managed/recovery.ts).
+        #
+        # Requires the App ID to have the Associated Domains capability, and
+        # https://atomicserver.eu/.well-known/apple-app-site-association to
+        # serve `{"webcredentials":{"apps":["Q9WPWRTU7G.io.ontola.atomicserver"]}}`.
+        com.apple.developer.associated-domains:
+          - webcredentials:atomicserver.eu
     scheme:
       environmentVariables:
         RUST_BACKTRACE: full
