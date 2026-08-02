@@ -123,7 +123,22 @@ impl Subject {
 
         // Some URL parsers might strip the slash for 'internal:' scheme.
         // We MUST have it for consistent internal subjects.
-        if !url.as_str().starts_with("internal:/") && url.scheme() == "internal" {
+        //
+        // Only for the subdomain-less form. A tenant subject is deliberately
+        // `internal:{sub}:/path`, which does not start with `internal:/` and so
+        // used to land here too — and the fix-up inserts its slash after the
+        // FIRST colon, turning `internal:staging:/drive/x` into
+        // `internal:/staging:/drive/x`. That is not a cosmetic difference: the
+        // subdomain then reads as part of the path, so `path()` returns
+        // `/staging:/drive/x` and `resolve()` emits the subdomain twice
+        // (`https://staging.example.com/staging:/drive/x`), while a re-parse
+        // sees a leading slash and drops the subdomain entirely. Every tenant
+        // subject ever written went through here, which is why stores are full
+        // of `internal:/{sub}:/...`.
+        if subdomain.is_none()
+            && !url.as_str().starts_with("internal:/")
+            && url.scheme() == "internal"
+        {
             let mut s = url.as_str().to_string();
             if let Some(colon_pos) = s.find(':') {
                 s.insert(colon_pos + 1, '/');
@@ -489,10 +504,46 @@ impl Subject {
         }
 
         if s.starts_with("internal:") {
+            // Repair the historical mangled tenant spelling on the way in.
+            //
+            // `new_local` used to emit `internal:/{sub}:/path` (see the note
+            // there), and stores are full of it. Read literally the subdomain
+            // is lost and the colon becomes part of the path, so the subject
+            // resolves to the wrong host — which is how a tenant's drives
+            // became unreachable. Normalising here fixes those rows as they are
+            // read, with no store rewrite.
+            //
+            // Deliberately narrow: the segment must be non-empty, contain no
+            // slash, and be followed by exactly `:/`. A genuine path segment
+            // ending in a colon before a slash would be misread, but
+            // `internal:/a:/b` is not a shape anything produces on purpose.
+            if let Some(rest) = s.strip_prefix("internal:/") {
+                if let Some(colon_pos) = rest.find(':') {
+                    let sub = &rest[..colon_pos];
+                    if !sub.is_empty() && !sub.contains('/') && rest[colon_pos..].starts_with(":/")
+                    {
+                        // Rebuild from the original string so any query or
+                        // fragment survives.
+                        if let Ok(u) = Url::parse(&format!("internal:{}", rest)) {
+                            return Subject::Internal {
+                                url: u,
+                                subdomain: Some(sub.to_string()),
+                            };
+                        }
+                    }
+                }
+            }
+
             if let Ok(u) = Url::parse(s) {
                 let opaque = u.path();
+                // `internal:{sub}:/path` — the subdomain ends at the colon, not
+                // at the first slash. Taking it to the slash kept the trailing
+                // colon (`"staging:"`), which then failed every comparison
+                // against a real subdomain.
                 let subdomain = if opaque.starts_with('/') {
                     None
+                } else if let Some(colon_pos) = opaque.find(':') {
+                    Some(opaque[..colon_pos].to_string())
                 } else if let Some(slash_pos) = opaque.find('/') {
                     Some(opaque[..slash_pos].to_string())
                 } else {
@@ -713,6 +764,79 @@ impl<'de> Deserialize<'de> for Subject {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    /// A tenant subject must survive being written down and read back.
+    ///
+    /// It did not. `new_local` emitted `internal:/{sub}:/path` — the fix-up for
+    /// parsers that strip the slash after `internal:` fired on the tenant form
+    /// too and inserted one after the first colon. The subdomain then read as
+    /// part of the path, so `resolve` emitted it twice and a re-parse dropped
+    /// it altogether, pointing the subject at the wrong host.
+    #[test]
+    fn tenant_subjects_round_trip() {
+        let base = Some("example.com");
+        let origin = "https://example.com";
+
+        let made = Subject::new_local("/drive/abc", Some("tenant"));
+        assert_eq!(made.as_str(), "internal:tenant:/drive/abc");
+        assert_eq!(made.subdomain().as_deref(), Some("tenant"));
+        assert_eq!(made.path(), "/drive/abc");
+        assert_eq!(made.resolve(origin), "https://tenant.example.com/drive/abc");
+
+        // Written down and read back: same subject, same resolution.
+        let reparsed = Subject::from_raw(made.as_str(), base);
+        assert_eq!(reparsed.as_str(), made.as_str());
+        assert_eq!(reparsed.subdomain().as_deref(), Some("tenant"));
+        assert_eq!(reparsed.resolve(origin), made.resolve(origin));
+
+        // And arriving as a URL agrees with both.
+        let from_url = Subject::from_raw("https://tenant.example.com/drive/abc", base);
+        assert_eq!(from_url.as_str(), made.as_str());
+        assert_eq!(from_url.resolve(origin), made.resolve(origin));
+    }
+
+    /// Stores already contain the mangled spelling, so it has to be readable.
+    /// Normalising on parse repairs those rows without rewriting the store.
+    #[test]
+    fn the_mangled_tenant_spelling_is_repaired_on_read() {
+        let repaired =
+            Subject::from_raw("internal:/staging:/drive/ckggjb1d3md", Some("example.com"));
+
+        assert_eq!(repaired.as_str(), "internal:staging:/drive/ckggjb1d3md");
+        assert_eq!(repaired.subdomain().as_deref(), Some("staging"));
+        assert_eq!(repaired.path(), "/drive/ckggjb1d3md");
+        assert_eq!(
+            repaired.resolve("https://example.com"),
+            "https://staging.example.com/drive/ckggjb1d3md"
+        );
+    }
+
+    /// The repair must not swallow ordinary subjects.
+    #[test]
+    fn plain_internal_subjects_are_left_alone() {
+        let base = Some("example.com");
+
+        for raw in [
+            "internal:/",
+            "internal:/drive/abc",
+            "internal:/agents/QmfpRIBn2JYEatT0MjSkMNoBJzstz19orwnT5oT2rcQ=",
+        ] {
+            let s = Subject::from_raw(raw, base);
+            assert_eq!(s.as_str(), raw, "{raw} should be unchanged");
+            assert_eq!(s.subdomain(), None, "{raw} has no subdomain");
+        }
+    }
+
+    /// A query or fragment must survive the repair.
+    #[test]
+    fn the_repair_keeps_query_and_fragment() {
+        let s = Subject::from_raw("internal:/staging:/drive/abc?page=2", Some("example.com"));
+
+        assert_eq!(
+            s.resolve("https://example.com"),
+            "https://staging.example.com/drive/abc?page=2"
+        );
+    }
 
     #[test]
     fn test_did_parsing_and_resolution() {
