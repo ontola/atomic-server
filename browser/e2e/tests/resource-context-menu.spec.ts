@@ -1,8 +1,36 @@
 import { test, expect, type Page } from '@playwright/test';
 import { before, newResource } from './test-utils';
 
+async function createWidgetsTable(page: Page) {
+  await newResource('table', page);
+  await page.getByRole('button', { name: /Blank/ }).click();
+  await page.getByPlaceholder('New Table').fill('Widgets');
+  await page.getByRole('button', { name: 'Create' }).click();
+}
+
 test.describe('resource context menu', () => {
   test.beforeEach(before);
+
+  test('right-click opens a searchable resource menu', async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await createWidgetsTable(page);
+
+    const sidebarLink = page
+      .getByRole('navigation')
+      .getByRole('button', { name: 'Widgets' })
+      .first();
+    await sidebarLink.click({ button: 'right' });
+    await expect(page.getByRole('menu')).toBeVisible();
+    // Right-click menus share the ⌘M filter. Type-to-filter is covered by the
+    // cmd+m test; here we only assert the filter is present and focused.
+    await expect(page.getByPlaceholder(/Filter actions/)).toBeFocused();
+    await expect(page.getByTestId('menu-item-history')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu')).toHaveCount(0);
+  });
 
   test('sidebar link + table cell open the resource menu on right-click', async ({
     page,
@@ -10,10 +38,7 @@ test.describe('resource context menu', () => {
     page: Page;
   }) => {
     // A plain table with one row.
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Blank/ }).click();
-    await page.getByPlaceholder('New Table').fill('Widgets');
-    await page.getByRole('button', { name: 'Create' }).click();
+    await createWidgetsTable(page);
 
     // --- Sidebar link (AtomicLink seam) ---
     const sidebarLink = page
@@ -22,13 +47,6 @@ test.describe('resource context menu', () => {
       .first();
     await sidebarLink.click({ button: 'right' });
     await expect(page.getByRole('menu')).toBeVisible();
-    // Right-click menus are searchable: filter is focused, typing narrows items.
-    const rightClickFilter = page.getByPlaceholder(/Filter actions/);
-    await expect(rightClickFilter).toBeFocused();
-    await rightClickFilter.fill('histo');
-    await expect(page.getByTestId('menu-item-history')).toBeVisible();
-    await expect(page.getByTestId('menu-item-edit')).toHaveCount(0);
-    await rightClickFilter.fill('');
     await expect(page.getByTestId('menu-item-history')).toBeVisible();
     // Close it.
     await page.keyboard.press('Escape');
@@ -74,10 +92,7 @@ test.describe('resource context menu', () => {
     )?.[0];
     expect(driveDid).toBeTruthy();
 
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Blank/ }).click();
-    await page.getByPlaceholder('New Table').fill('Widgets');
-    await page.getByRole('button', { name: 'Create' }).click();
+    await createWidgetsTable(page);
     await expect(page.getByRole('columnheader').nth(1)).toBeVisible();
     // Leave the table's cell editor — hotkeys are ignored while an input has
     // focus.
