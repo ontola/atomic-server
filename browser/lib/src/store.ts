@@ -2133,9 +2133,11 @@ export class Store {
     // server-side state (isA, publicKey, read, etc.) was never merged into
     // the local Loro doc, so it isn't part of the outgoing snapshot, and
     // isn't written to clientDb. On reload the SPA reads the partial cache
-    // and the agent's edit form errors with "<class> is not a Class"
-    // because `isA` is missing. Forcing a fetch seeds the local resource
-    // with the full server state before we layer the new properties on top.
+    // and the agent's edit form used to hard-error with "<class> is not a
+    // Class" because `isA` was missing (the form now tolerates classless
+    // resources, but a partial agent cache is still wrong). Forcing a fetch
+    // seeds the local resource with the full server state before we layer
+    // the new properties on top.
     //
     // Use HTTP (not WS): the WS may still be authenticated as a previous
     // agent (e.g. onboarding switches from a dev-drive agent to a freshly-
