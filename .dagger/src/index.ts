@@ -1035,13 +1035,14 @@ export class AtomicServer {
         // default `linux` artifact is glibc and silently exits 1 on the
         // musl-cross image. Bundle install + run so a cleared volume
         // can't leave nextest missing on a dagger layer-cache hit.
+        //
+        // Prepend to PATH in-shell — do NOT replace the container PATH.
+        // The musl-cross image needs `/usr/local/musl/bin` (for
+        // `x86_64-unknown-linux-musl-gcc`); a hardcoded PATH drop caused
+        // "linker not found" while compiling plugin-example tests.
         .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
           sharing: CacheSharingMode.Shared,
         })
-        .withEnvVariable(
-          'PATH',
-          '/opt/cargo-bin/bin:/root/.cargo/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-        )
         // `--exclude atomic-server-tauri`: same reason as `rustClippy` —
         // the Tauri desktop crate needs system libs (glib-2.0, pkg-config)
         // that aren't installed in the musl-cross CI image.
@@ -1069,7 +1070,8 @@ export class AtomicServer {
         .withExec([
           'sh',
           '-c',
-          'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
+          'export PATH="/opt/cargo-bin/bin:$PATH" && ' +
+            'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
             'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
             'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
             'cargo nextest run --workspace --exclude atomic-server-tauri ' +
