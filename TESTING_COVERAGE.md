@@ -573,7 +573,8 @@ Not covered: table `contains`; Playwright search overlay on the KV path and asse
 | Cold-start push tap / receive queues | unit | `pushWakeTap.test.ts` |
 | Remote push payload → receive queue | unit | `tauriPushBridge.test.ts` |
 | Hub mention → wake candidates | unit | `push_wake::mention_wakes_for_resource` |
-| Hub DevicePushToken lookup | unit | `push_wake::lookup_device_push_tokens` (via enqueue path) |
+| Hub watch → wake candidates | unit | `push_wake::watch_owner_agent` / mute / enabled |
+| Hub DevicePushToken lookup + PushSender | unit | `push_wake` enqueue path (`LoggingPushSender`) |
 | Mention → NotificationItem materialization (engine) | flow | `notifications.spec.ts` (fake other-agent actor) |
 | A mentions B → B sees unread (two agents / invite) | flow | `notifications.spec.ts` (invite + reconcile backlog) |
 | Mark read on A clears badge on B | flow | `notifications.spec.ts` (same agent, two contexts) |
