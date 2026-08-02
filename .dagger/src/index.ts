@@ -143,8 +143,14 @@ export class AtomicServer {
    */
   @func()
   async flutterTest(): Promise<string> {
-    const cargoCache = dag.cacheVolume('cargo');
+    // Dedicated registry volume — do NOT share the Locked `cargo` volume
+    // used by rustFmt/clippy/test/wasmBuild. Mounting that volume for the
+    // whole flutterTest container serialized pub get / analyze / dart test
+    // behind the rust pipeline (~10+ min of lock wait on the step that
+    // merely ran `flutter pub get`).
+    const flutterCargoCache = dag.cacheVolume('flutter-cargo');
     const flutterRustTarget = dag.cacheVolume('flutter-plugin-rust-target');
+    const flutterPubCache = dag.cacheVolume('flutter-pub-cache');
     const pathPrefix = 'export PATH="$HOME/.cargo/bin:$PATH"';
 
     return (
@@ -152,6 +158,11 @@ export class AtomicServer {
         .container()
         .from(FLUTTER_IMAGE)
         .withEnvVariable('CI', 'true')
+        // Persist hosted Dart packages across CI runs. Without this,
+        // every push re-downloaded the pub.dev graph into a fresh
+        // `~/.pub-cache`.
+        .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
+        .withMountedCache('/root/.pub-cache', flutterPubCache)
         .withExec(['apt-get', 'update', '-qq'])
         .withExec([
           'apt-get',
@@ -173,9 +184,6 @@ export class AtomicServer {
           '-c',
           'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal',
         ])
-        .withMountedCache('/root/.cargo/registry', cargoCache, {
-          sharing: CacheSharingMode.Locked,
-        })
         .withDirectory('/workspace/lib', this.source.directory('lib'))
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
         .withMountedCache('/workspace/flutter/rust/target', flutterRustTarget, {
@@ -191,6 +199,11 @@ export class AtomicServer {
         // Dart package — analyzing the whole repo without its own pub get fails.
         .withExec(['bash', '-lc', `${pathPrefix} && flutter analyze lib test`])
         .withExec(['bash', '-lc', `${pathPrefix} && flutter test --no-pub`])
+        // Mount cargo registry only for the Rust step so Dart work above
+        // never contends for a Locked cache volume.
+        .withMountedCache('/root/.cargo/registry', flutterCargoCache, {
+          sharing: CacheSharingMode.Locked,
+        })
         // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
         // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
         // `flutter test` only runs Dart. Without this step the entire bridge —
