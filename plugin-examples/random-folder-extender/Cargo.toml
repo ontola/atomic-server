@@ -2,6 +2,9 @@
 name = "random-folder-extender"
 version = "0.1.0"
 edition = "2021"
+# Sample plugin, built to .wasm and loaded by the server — not a crate. See the
+# note on `publish` in ../../wasm/Cargo.toml.
+publish = false
 
 [lib]
 # This is important for the Wasm build.

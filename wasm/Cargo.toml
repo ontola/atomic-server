@@ -3,6 +3,26 @@ name = "atomic-wasm"
 version = "0.1.0"
 edition = "2021"
 description = "WASM bindings for Atomic Data client-side database"
+# Only three crates in this workspace go to crates.io: atomic_lib, atomic-cli
+# and atomic-server. Everything else is marked `publish = false`, and that is
+# load-bearing rather than tidiness.
+#
+# The release job runs `katyo/publish-crates`, which walks every workspace
+# member and refuses any normal dependency without a `version` field, because
+# a path-only dep cannot be resolved by anyone downloading the crate. This
+# crate reaches atomic_lib by path alone, so it fails that check — and the
+# check runs before ANY crate is published, so one unpublishable member blocks
+# the whole release. That is what happened on the v0.41.0-beta.2 tag.
+#
+# Until 0.40.0 the workspace was server/cli/lib and the question never came up.
+# The members added since (this one, desktop, atomic-plugin, the plugin
+# examples, tools/cargo-bin) are all consumed from within the repo or shipped
+# some other way — this one is loaded by the data-browser as a .wasm artifact.
+#
+# So: adding a workspace member means deciding whether it belongs on crates.io.
+# If not, say so here. If it does, give its path deps a version alongside the
+# path, the way cli/Cargo.toml does.
+publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
