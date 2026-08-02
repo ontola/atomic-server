@@ -89,6 +89,13 @@ export function ResourceForm({
   const [newPropErr, setNewPropErr] = useState<Error | undefined>(undefined);
   /** A list of custom properties, set by the User while editing this form */
   const [tempOtherProps, setTempOtherProps] = useState<string[]>([]);
+  // Class is optional: when missing or invalid we still edit current props
+  // (otherProps) and let the user add more via Advanced.
+  const hasValidClass =
+    !!classSubject &&
+    !klass.loading &&
+    !klass.error &&
+    klass.hasClasses(core.classes.class);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const store = useStore();
   const wasNew: boolean = resource.new;
@@ -157,17 +164,10 @@ export function ResourceForm({
     return <ErrMessage>{resource.error.message}</ErrMessage>;
   }
 
-  if (klass.loading) {
+  // Only wait on the Class when one was requested. Classless resources skip
+  // requires/recommends and render whatever properties already exist.
+  if (classSubject && klass.loading) {
     return <>Loading class...</>;
-  }
-
-  if (!klass.hasClasses(core.classes.class)) {
-    return (
-      <ErrMessage>
-        {classSubject} is not a Class. Only resources with valid classes can be
-        created or edited at this moment.
-      </ErrMessage>
-    );
   }
 
   function handleAddProp(newProp: string | undefined) {
@@ -218,31 +218,39 @@ export function ResourceForm({
                 {klass.error.message}`
               </ErrMessage>
             )}
+            {classSubject && !klass.loading && !klass.error && !hasValidClass && (
+              <ErrMessage>
+                {classSubject} is not a Class. Showing existing properties
+                instead of the usual required / recommended fields.
+              </ErrMessage>
+            )}
             {!canWrite && (
               <ErrMessage>
                 Cannot save edits: Agent does not have edit rights
               </ErrMessage>
             )}
-            {requires.map(property => {
-              return (
-                <ResourceField
-                  key={property + ' field'}
-                  propertyURL={property}
-                  resource={resource}
-                  required
-                />
-              );
-            })}
-            {recommends.map(property => {
-              return (
-                <ResourceField
-                  key={property + ' field'}
-                  disabled={!canWrite}
-                  propertyURL={property}
-                  resource={resource}
-                />
-              );
-            })}
+            {hasValidClass &&
+              requires.map(property => {
+                return (
+                  <ResourceField
+                    key={property + ' field'}
+                    propertyURL={property}
+                    resource={resource}
+                    required
+                  />
+                );
+              })}
+            {hasValidClass &&
+              recommends.map(property => {
+                return (
+                  <ResourceField
+                    key={property + ' field'}
+                    disabled={!canWrite}
+                    propertyURL={property}
+                    resource={resource}
+                  />
+                );
+              })}
             {otherProps.map(property => {
               return (
                 <ResourceField
