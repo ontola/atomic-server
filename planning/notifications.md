@@ -13,9 +13,9 @@
 > table **and collection** Watch toggle, Settings watches list, App Settings
 > blurb + OS permission, Playwright e2e (inbox / mark-read / Watch /
 > watch→item / mention / multi-device / invite A→B backlog), **Phase 4 local
-> OS notifications**, **Phase 5 client wake path** (`handlePushWake` /
-> `processPushWake` / receive queue) + hub mention→wake stub in
-> `commit_monitor`. Live APNs/FCM provider transport still open.
+> OS notifications**, **Phase 5** client wake path + hub DevicePushToken lookup
+> stub, plugin choice (`tauri-plugin-push-notifications`) + cold-start local
+> drain. Live APNs/FCM **provider send** still open (needs secrets + Cargo enable).
 
 ## Problem
 
@@ -508,13 +508,17 @@ mentions/watches — still no trusted body in the push (see payload contract).
 
 ### Phase 5 — Remote push wake (iOS APNs + Android FCM + optional web-push)
 
-- [ ] Choose/integrate Tauri push plugin; iOS entitlements + Android Firebase
+- [x] Choose Tauri push plugin: **`tauri-plugin-push-notifications`** (npm +
+      crates.io `0.1.x`) — cold-start tap queue / `start_notification_events`
+      matches our drain-then-arm pattern; mobile-only (desktop keeps local
+      `tauri-plugin-notification`). Cargo dep commented until
+      `google-services.json` + iOS Push entitlement exist (see checklist).
 - [x] `DevicePushToken` ontology + register/refresh helper (client; call on launch when token exists)
-- [x] Hub: wake payload + mention-match helpers (`server/src/push_wake.rs`); `commit_monitor` calls `mention_wakes_for_resource` + stub enqueue (provider fan-out still TODO)
+- [x] Hub: wake payload + mention-match helpers (`server/src/push_wake.rs`); `commit_monitor` → `enqueue_push_wakes` + **DevicePushToken lookup** (provider fan-out still TODO)
 - [x] Client: suppress-if-read helpers + cold-start tap queue wired to navigate (`pushWakeTap` → `NotificationOsPresenter`)
-- [x] `useDevicePushRegistration` on launch (no-ops without token; Tauri DEV stub)
-- [x] Client: on push → sync → materialize (`handlePushWake` / `processPushWake` + `queuePushWakeReceive`) — needs plugin token + wake delivery to exercise end-to-end
-- [ ] Cold-start tap wired from plugin launch details (queue consumer is ready)
+- [x] `useDevicePushRegistration` on launch (real token via bridge; DEV desktop stub)
+- [x] Client: on push → sync → materialize (`handlePushWake` / `processPushWake` + `queuePushWakeReceive`) — needs plugin wake delivery to exercise end-to-end
+- [x] Cold-start tap: drain `active()` local notifs in `tauriPushBridge` (module-scope) + `onAction` warm path; remote launch details once Cargo plugin is enabled
 - Track operational secrets (APNs `.p8`, FCM service account) with hub deploy;
   product behavior stays aligned with social-apps P2.3.
 
@@ -549,9 +553,12 @@ Per [`TESTING_COVERAGE.md`](../TESTING_COVERAGE.md) preference for cheaper layer
    P3.7).
 6. **Flutter canvas.** Same ontology + push payload; native stack is
    firebase_messaging, not Tauri plugins. v1 is data-browser + Tauri.
-7. **Which Tauri push plugin?** Community options exist (`tauri-plugin-push-notifications`,
-   `tauri-plugin-mobile-push`, …); pick at Phase 5 by cold-start tap reliability
-   and maintenance. Not blocking Phases 1–4.
+7. ~~**Which Tauri push plugin?**~~ **Chosen:** `tauri-plugin-push-notifications`
+   (npm/crates `0.1.x`). Rationale: documented cold-start event replay via
+   `start_notification_events`, mobile-only (no desktop false hope), pairs with
+   existing `tauri-plugin-notification` for local banners. Enable Cargo dep +
+   Firebase/APNs project files when shipping mobile push; JS bridge already
+   dynamic-imports the npm package.
 8. **Alert push vs silent wake on iOS.** Silent pushes are best-effort and
    throttled; may need visible APNs with generic copy + client cancel-on-read.
    Validate on device before locking.
