@@ -149,3 +149,76 @@ export function shouldOpenAfterPushWake(opts: {
     opts.itemDismissed === true,
   );
 }
+
+export type PushWakeItemFlags = {
+  subject: string;
+  read: boolean;
+  dismissed: boolean;
+  summary?: string;
+};
+
+export type PushWakeHandleResult =
+  | { action: 'suppress'; reason: 'read' | 'dismissed' }
+  | {
+      action: 'surface';
+      about: string;
+      type: string;
+      itemSubject?: string;
+      summary?: string;
+    };
+
+export interface HandlePushWakeOpts {
+  store: Store;
+  about: string;
+  type: string;
+  /**
+   * Run {@link NotificationEngine.reconcileMentionBacklog} (and any other
+   * materialization) after fetching `about`.
+   */
+  reconcile: () => Promise<void>;
+  /**
+   * Locate the personal-drive NotificationItem for `about` after reconcile.
+   * Return undefined if none yet (still allow surface so the client can open
+   * `about` / inbox).
+   */
+  findItemForAbout: (about: string) => Promise<PushWakeItemFlags | undefined>;
+}
+
+/**
+ * Client path for an incoming push wake (data / silent):
+ * fetch `about` → reconcile engine → suppress if already read/dismissed.
+ *
+ * Transport-agnostic — call from FCM/APNs/web-push handlers once a plugin
+ * delivers the wake payload. Does not show UI; callers present locally when
+ * `action === 'surface'`.
+ */
+export async function handlePushWake(
+  opts: HandlePushWakeOpts,
+): Promise<PushWakeHandleResult> {
+  const { store, about, type, reconcile, findItemForAbout } = opts;
+
+  try {
+    await store.fetchResourceFromServer(about);
+  } catch {
+    // Offline / missing — reconcile may still find a local item.
+  }
+
+  await reconcile();
+
+  const item = await findItemForAbout(about);
+
+  if (item && !shouldSurfaceAfterPushSync(item.read, item.dismissed)) {
+    return {
+      action: 'suppress',
+      reason: item.dismissed ? 'dismissed' : 'read',
+    };
+  }
+
+  return {
+    action: 'surface',
+    about,
+    type,
+    itemSubject: item?.subject,
+    summary: item?.summary,
+  };
+}
