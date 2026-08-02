@@ -18,6 +18,7 @@ Aligns with [`SDK-API-design.md`](./SDK-API-design.md),
 | pub.dev (target) | **`atomic_lib`** — matches Rust `atomic_lib` / JS `@tomic/lib` |
 | Path in repo | `dart/atomic_lib/` |
 | Native cdylib | `rust_lib_atomic_lib` |
+| Version | Lockstep with monorepo (`0.41.0-beta.2`, via `scripts/bump-version.mjs`) |
 
 `atomic_lib` is taken on pub.dev (unrelated state-management package).
 

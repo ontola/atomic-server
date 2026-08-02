@@ -3,7 +3,7 @@ description: >
   Atomic Data SDK for Flutter — local-first auth, workspaces, sync, and
   reusable UI (pairing, drive switcher, sync settings). Backed by the Rust
   atomic_lib crate via flutter_rust_bridge; no Postgres or server setup required.
-version: 0.1.0
+version: 0.41.0-beta.2
 homepage: https://atomicdata.dev
 repository: https://github.com/ontola/atomic-server
 issue_tracker: https://github.com/ontola/atomic-server/issues

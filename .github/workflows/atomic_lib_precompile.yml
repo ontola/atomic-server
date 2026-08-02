@@ -10,7 +10,9 @@ name: atomic_lib
 on:
   push:
     branches: [develop, master, main]
-    tags: ['atomic_lib-v*']
+    # Same release tags as the rest of the monorepo; atomic_lib-v* kept for
+    # Flutter-only republishes if needed.
+    tags: ['v*', 'atomic_lib-v*']
     paths:
       - 'dart/atomic_lib/**'
       - 'lib/**'
