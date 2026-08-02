@@ -213,7 +213,14 @@ jobs:
         run: |
           set -euo pipefail
           pnpm -C browser install --frozen-lockfile
-          pnpm -C browser/data-browser build
+          # The workspace root build, not `-C browser/data-browser build`.
+          # data-browser imports @tomic/lib, which is a workspace package that
+          # has to be BUILT before anything can resolve it — the root script
+          # does `--filter "@tomic/lib" run build` first for exactly that
+          # reason. Building the leaf alone fails with
+          # `Rolldown failed to resolve import "@tomic/lib"`. Same command
+          # release.yml uses to build the assets it embeds in the crate.
+          pnpm -C browser build
           rm -rf server/assets_tmp
           cp -r browser/data-browser/dist server/assets_tmp
           test -f server/assets_tmp/index.html
@@ -374,7 +381,14 @@ jobs:
         run: |
           set -euo pipefail
           pnpm -C browser install --frozen-lockfile
-          pnpm -C browser/data-browser build
+          # The workspace root build, not `-C browser/data-browser build`.
+          # data-browser imports @tomic/lib, which is a workspace package that
+          # has to be BUILT before anything can resolve it — the root script
+          # does `--filter "@tomic/lib" run build` first for exactly that
+          # reason. Building the leaf alone fails with
+          # `Rolldown failed to resolve import "@tomic/lib"`. Same command
+          # release.yml uses to build the assets it embeds in the crate.
+          pnpm -C browser build
           rm -rf server/assets_tmp
           cp -r browser/data-browser/dist server/assets_tmp
           test -f server/assets_tmp/index.html
@@ -502,7 +516,14 @@ jobs:
         run: |
           set -euo pipefail
           pnpm -C browser install --frozen-lockfile
-          pnpm -C browser/data-browser build
+          # The workspace root build, not `-C browser/data-browser build`.
+          # data-browser imports @tomic/lib, which is a workspace package that
+          # has to be BUILT before anything can resolve it — the root script
+          # does `--filter "@tomic/lib" run build` first for exactly that
+          # reason. Building the leaf alone fails with
+          # `Rolldown failed to resolve import "@tomic/lib"`. Same command
+          # release.yml uses to build the assets it embeds in the crate.
+          pnpm -C browser build
           rm -rf server/assets_tmp
           cp -r browser/data-browser/dist server/assets_tmp
           test -f server/assets_tmp/index.html
