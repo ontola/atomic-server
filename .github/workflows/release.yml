@@ -72,6 +72,25 @@ jobs:
           cp -r browser/data-browser/dist server/assets_tmp
           test -f server/assets_tmp/index.html
 
+          # crates.io rejects any .crate over 10 MiB, and these assets are most
+          # of ours — the atomic_wasm and loro_wasm blobs alone are ~9 MiB
+          # uncompressed. Measured 7.4 MiB at v0.41.0-beta.2, so there is room,
+          # but not a lot. Fail here with a readable number rather than at the
+          # upload, which happens AFTER atomic_lib has already gone out and
+          # taken its version number with it.
+          #
+          # Note `dist` never contains the brotli `.br` siblings: build.rs
+          # writes those into assets_tmp on release builds, downstream of this.
+          # They would add ~4 MiB and put the crate over the limit, so if this
+          # ever starts failing, check that something has not started copying
+          # them in before looking for real asset growth.
+          size=$(du -sm server/assets_tmp | cut -f1)
+          echo "Embedded assets: ${size} MiB uncompressed"
+          if [ "$size" -gt 40 ]; then
+            echo "::error::Embedded assets are ${size} MiB uncompressed — the .crate is likely to exceed the 10 MiB crates.io limit."
+            exit 1
+          fi
+
       # Runs BEFORE publishing, because crates.io is append-only: a version
       # pushed with (say) browser/lib/package.json still on the previous
       # number cannot be withdrawn, only yanked, and the mismatched pair stays
@@ -90,6 +109,23 @@ jobs:
         uses: katyo/publish-crates@v1
         with:
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          # `--allow-dirty` is required by the assets step above, not sloppiness.
+          #
+          # server/assets_tmp is gitignored, and cargo refuses to package a file
+          # that `include` names but git does not track — it reports the whole
+          # tree as having uncommitted changes and aborts. Since the assets are
+          # a build output that must nevertheless ship inside the crate, the two
+          # rules cannot both hold, and this is the one to relax.
+          #
+          # It does mean the .crate is not byte-reproducible from the tag alone;
+          # it is the tag plus a frontend build. That was already true of the
+          # 0.40.1 crate on crates.io, just implicitly.
+          #
+          # The blast radius is contained: the only untracked thing in the tree
+          # is assets_tmp, because this job builds nothing else. Anything that
+          # starts writing into the working tree before this step widens that,
+          # and should be looked at rather than waved through.
+          args: --allow-dirty
 
   # I'd like to skip this one, as the publish-tauri action already creates a release
   create-release:

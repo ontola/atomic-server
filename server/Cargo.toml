@@ -4,7 +4,17 @@ default-run = "atomic-server"
 description = "Create, share and model Atomic Data with this graph database server. Run atomic-server without any arguments to start the server. Use --help to learn about the options."
 edition = "2021"
 homepage = "https://atomicserver.eu/"
-include = ["src/**/*", "Cargo.toml", "assets_tmp", "build.rs"]
+# Everything the crate needs to COMPILE once unpacked from crates.io, which is
+# more than just src/. `assets_tmp` holds the built frontend and is
+# `include_str!`d by handlers/single_page_app.rs; `wit/` is read at macro
+# expansion time by `wasmtime::component::bindgen!` in plugins/wasm.rs, which is
+# on by default via the `wasm-plugins` feature.
+#
+# Nothing in normal development notices when this list is wrong — a git checkout
+# has all these files regardless. It only shows up as a compile error inside
+# `cargo publish`'s verification build, i.e. mid-release. `wit/` was missing here
+# until v0.41.0-beta.2 and cost a tag to find.
+include = ["src/**/*", "Cargo.toml", "assets_tmp", "build.rs", "wit/**/*"]
 license = "MIT"
 name = "atomic-server"
 readme = "./README.md"
