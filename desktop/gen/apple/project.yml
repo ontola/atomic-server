@@ -1,6 +1,6 @@
 name: atomic-server-tauri
 options:
-  bundleIdPrefix: com.atomicdata.dev
+  bundleIdPrefix: io.ontola.atomicserver
   deploymentTarget:
     iOS: 14.0
 fileGroups: [../../src]
@@ -11,7 +11,7 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: Atomic Server
-      PRODUCT_BUNDLE_IDENTIFIER: com.atomicdata.dev
+      PRODUCT_BUNDLE_IDENTIFIER: io.ontola.atomicserver
 targetTemplates:
   app:
     type: application
