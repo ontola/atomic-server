@@ -148,7 +148,16 @@ jobs:
             rust-targets: "wasm32-unknown-unknown"
           - name: Windows (x86_64)
             os: windows-latest
-            args: ""
+            # NSIS only, no .msi. WiX encodes the version as a packed 32-bit
+            # integer and so requires any pre-release identifier to be numeric
+            # and <= 65535 — `0.41.0-beta.2` is neither, and bundling dies with
+            # `optional pre-release identifier in app version must be
+            # numeric-only`. Since betas are a normal part of this project's
+            # release flow, the choice is NSIS-only or no Windows build during a
+            # beta, and the .exe installer is what most users want anyway.
+            #
+            # Worth revisiting for stable tags, where msi would bundle fine.
+            args: "--bundles nsis"
             rust-targets: "wasm32-unknown-unknown"
     runs-on: ${{ matrix.os }}
     steps:
