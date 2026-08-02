@@ -1,3 +1,4 @@
+import { isRunningInTauri } from '../tauri';
 import { PRODUCT_NAME } from './product';
 import { getManagedApiBase } from './api';
 import { writeManagedAccountBinding } from './binding';
@@ -328,6 +329,48 @@ type PrfExtensionOutputs = {
 /** How long to wait for the user's authenticator before giving up. */
 const WEBAUTHN_TIMEOUT_MS = 60_000;
 
+/**
+ * The Relying Party the recovery passkey belongs to.
+ *
+ * The parent domain, not the app host, so one credential works from both the
+ * portal (`atomicserver.eu`) and the app (`app.atomicserver.eu`) — an RP ID may
+ * be any registrable-domain suffix of the origin. It must match
+ * `webcredentials:` in the iOS entitlement and the `apple-app-site-association`
+ * served by that domain.
+ */
+const PASSKEY_RP_ID = 'atomicserver.eu';
+
+/**
+ * The `rp.id` to use here, or `undefined` to let the browser default to the
+ * origin's effective domain.
+ *
+ * This used to be omitted everywhere, on the reasoning that the default is
+ * right in both dev and production. That holds in a browser but breaks in the
+ * Tauri app: the webview serves from `tauri://localhost` (macOS/iOS) or
+ * `http://tauri.localhost` (Windows/Android), neither of which is a registrable
+ * domain, so there is no effective domain to default to and the ceremony fails.
+ * Naming the RP explicitly is what lets the Associated Domains entitlement
+ * vouch for the app.
+ *
+ * Returning `undefined` on plain localhost is deliberate rather than lazy:
+ * `rp.id` must be a suffix of the origin's domain, so naming a real domain
+ * during local dev throws SecurityError. Dev passkeys stay bound to localhost,
+ * which is correct — they are not meant to unlock production backups.
+ */
+export function passkeyRpId(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+
+  const host = window.location.hostname;
+
+  if (host === PASSKEY_RP_ID || host.endsWith(`.${PASSKEY_RP_ID}`)) {
+    return PASSKEY_RP_ID;
+  }
+
+  // Tauri's hostname is also literally "localhost", so the check above cannot
+  // tell the app apart from local dev — this has to come after it.
+  return isRunningInTauri() ? PASSKEY_RP_ID : undefined;
+}
+
 /** Thrown when this browser/authenticator can't do PRF — the caller should
  * fall back to the generated-code wrapper rather than surface an error. */
 export class PrfUnsupportedError extends Error {
@@ -405,6 +448,10 @@ async function evaluatePrf(
   const assertion = (await navigator.credentials.get({
     publicKey: {
       challenge: randomBytes(32),
+      // Must name the same RP the credential was created under, for the same
+      // reason `create` does — see {@link passkeyRpId}. An assertion whose
+      // rpId does not match the one in the credential is simply not found.
+      rpId: passkeyRpId(),
       allowCredentials: [{ type: 'public-key', id: credentialId }],
       userVerification: 'required',
       // Without this the browser's own (multi-minute) default applies, and a
@@ -501,9 +548,7 @@ async function wrapDekWithPasskey(
   const credential = (await navigator.credentials.create({
     publicKey: {
       challenge: randomBytes(32),
-      // No `rp.id`: it defaults to the current origin's effective domain,
-      // which is what we want in both dev (localhost) and production.
-      rp: { name: PRODUCT_NAME },
+      rp: { name: PRODUCT_NAME, id: passkeyRpId() },
       user: {
         // Opaque by design — we never do discoverable-credential login, so
         // this identifies nothing and leaks nothing.
