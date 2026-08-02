@@ -1,16 +1,28 @@
 on: [push, workflow_dispatch]
 
-# Which machine the Linux jobs run on is a repository variable, not a literal,
-# so switching between the self-hosted runner and GitHub's takes one settings
-# change instead of an edit to every workflow.
+# Which machine this pipeline runs on is a repository variable, not a literal,
+# so switching between the self-hosted runner and GitHub's is one settings
+# change rather than an edit here.
 #
 #   Settings -> Secrets and variables -> Actions -> Variables
 #   CI_RUNNER = ["self-hosted", "Linux", "X64"]
 #
-# Unset or delete it and everything falls back to `ubuntu-latest`. There is no
+# Unset or delete it and this falls back to `ubuntu-latest`. There is NO
 # automatic failover: if the self-hosted runner is offline, jobs QUEUE (GitHub
 # gives up after 24h) rather than moving to a hosted runner. Clearing
 # CI_RUNNER is the manual escape hatch.
+#
+# Only this workflow uses it, on purpose. Releasing and deploying are pinned to
+# `ubuntu-latest` and must stay that way: a tag push once left the crates.io
+# publish queued for a day because the runner was switched off, and a release
+# that depends on a particular PC being awake is not a release process. Here a
+# stall costs slow CI and nothing else, and the warm Dagger cache is worth the
+# trade.
+#
+# (Automatic fallback is not available. The usual trick -- a picker job that
+# queries the runner API and emits labels for the rest -- needs
+# `administration:read`, which GITHUB_TOKEN cannot be granted, so it would mean
+# storing a long-lived PAT purely to decide where to run.)
 #
 # SECURITY: this repo is public, and a self-hosted runner must never execute
 # untrusted code -- a fork's PR branch is code anyone can write, and running it

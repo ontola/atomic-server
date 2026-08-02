@@ -26,8 +26,13 @@ on:
 jobs:
   deploy:
     environment: ${{ inputs.environment }}
-    # See main.yml for what CI_RUNNER is and how to switch it off.
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["ubuntu-latest"]')) }}
+    # Deliberately NOT CI_RUNNER. Publishing and deploying must not depend on a
+    # particular machine being switched on: GitHub does not fall back when a
+    # self-hosted runner is offline, it queues for 24h and then fails. A tag
+    # push once left crates.io publishing queued for a day for exactly that
+    # reason. Self-hosted is for main.yml, where a warm Dagger cache is worth
+    # having and a stall only costs slow CI.
+    runs-on: ubuntu-latest
     env:
       REMOTE_USER: ${{ secrets.REMOTE_USER }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}

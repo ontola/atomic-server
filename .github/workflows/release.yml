@@ -10,8 +10,13 @@ on:
 jobs:
   crates:
     name: Publish crates to crates.io
-    # See main.yml for what CI_RUNNER is and how to switch it off.
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["ubuntu-latest"]')) }}
+    # Deliberately NOT CI_RUNNER. Publishing and deploying must not depend on a
+    # particular machine being switched on: GitHub does not fall back when a
+    # self-hosted runner is offline, it queues for 24h and then fails. A tag
+    # push once left crates.io publishing queued for a day for exactly that
+    # reason. Self-hosted is for main.yml, where a warm Dagger cache is worth
+    # having and a stall only costs slow CI.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -41,7 +46,7 @@ jobs:
   # I'd like to skip this one, as the publish-tauri action already creates a release
   create-release:
     name: Create Release on GitHub
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["ubuntu-latest"]')) }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: pnpm/action-setup@v2.0.1
