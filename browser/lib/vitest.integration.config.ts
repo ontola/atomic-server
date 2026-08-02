@@ -8,6 +8,11 @@ export default defineConfig({
     // to actually open. The shared unit-test setup mocks the WS away.
     setupFiles: ['tests/integration-setup.ts'],
     testTimeout: 60_000,
+    // `startServer()` waits up to 30s for atomic-server to become ready.
+    // Vitest's default hookTimeout is 10s, so under CI load (parallel
+    // rust/js lanes) beforeAll was aborted while the server was still
+    // booting — flake: "Hook timed out in 10000ms" on server-fixture.
+    hookTimeout: 60_000,
     // The integration tests share a single WASM runtime via NodeClientDb;
     // running files in parallel surfaces "Rust value borrowed" panics at
     // teardown. Run each file in its own fresh fork (a new process) so the
