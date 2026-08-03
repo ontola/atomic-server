@@ -86,6 +86,19 @@ export async function getOrCreateMeetingsFolder(
   );
 }
 
+/** The Drive's Contacts folder: home for Address Book resources. */
+export async function getOrCreateContactsFolder(
+  store: Store,
+  driveSubject: string,
+): Promise<string> {
+  return getOrCreateDriveLocation(
+    store,
+    driveSubject,
+    dataBrowser.properties.contactsFolder,
+    { isA: dataBrowser.classes.folder, name: /* @wc-ignore */ 'Contacts' },
+  );
+}
+
 /** The Drive's follow-sessions ChatRoom: while an agent is being followed,
  *  their client logs which resources they visit here (issue #1229). */
 export async function getOrCreateFollowSessionsChatroom(

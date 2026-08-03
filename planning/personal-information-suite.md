@@ -2,9 +2,9 @@
 
 ## Status
 
-Exploration. This plan sketches what it would take to make Atomic a credible
-home for contacts, calendars, and email while preserving Atomic's local-first
-resource model.
+Exploration (suite). Contacts MVP is tracked separately in
+[`contacts.md`](./contacts.md) (ontology, Address Book UI, VCF import, Agent
+link). This document remains the umbrella for calendar, mail, and connectors.
 
 ## Goal
 

@@ -2,6 +2,10 @@ import { dataBrowser, core, classes, ai, canvas } from '@tomic/react';
 import { registerBasicInstanceHandler } from '../useNewResourceUI';
 import { DEFAULT_AICHAT_NAME } from '../../../AI/aiContstants';
 import { getOrCreateMeetingsFolder } from '../../../../helpers/standardLocations';
+import {
+  resolveAddressBookParent,
+  resolveContactParent,
+} from '../../../../views/Contacts/contactLocations';
 
 /**
  * These handlers do not show any UI / inputs when creating new instances.
@@ -81,6 +85,32 @@ export const registerBasicInstanceHandlers = () => {
         dataBrowser.classes.meeting,
         { [core.properties.name]: 'Meeting' },
         { parent: meetingsFolder },
+      );
+    },
+  );
+
+  registerBasicInstanceHandler(
+    dataBrowser.classes.addressBook,
+    async (parent, createAndNavigate, { store }) => {
+      const bookParent = await resolveAddressBookParent(store, parent);
+
+      await createAndNavigate(
+        dataBrowser.classes.addressBook,
+        { [core.properties.name]: 'Address Book' },
+        { parent: bookParent },
+      );
+    },
+  );
+
+  registerBasicInstanceHandler(
+    dataBrowser.classes.contact,
+    async (parent, createAndNavigate, { store }) => {
+      const contactParent = await resolveContactParent(store, parent);
+
+      await createAndNavigate(
+        dataBrowser.classes.contact,
+        { [core.properties.name]: 'Contact' },
+        { parent: contactParent },
       );
     },
   );

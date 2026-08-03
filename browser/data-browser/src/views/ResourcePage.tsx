@@ -41,6 +41,8 @@ import { PluginPage } from '@views/Plugin/PluginPage';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { PluginView } from './PluginView/PluginView';
 import { MeetingPage } from './Meeting/MeetingPage';
+import { AddressBookPage } from './Contacts/AddressBookPage';
+import { ContactPage } from './Contacts/ContactPage';
 
 const TablePage = lazy(() =>
   import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
@@ -228,6 +230,10 @@ function selectComponent(klass: string | undefined) {
       return DocumentV2FullPage;
     case dataBrowser.classes.meeting:
       return MeetingPage;
+    case dataBrowser.classes.addressBook:
+      return AddressBookPage;
+    case dataBrowser.classes.contact:
+      return ContactPage;
     case canvas.classes.canvas:
       return CanvasPage;
     case server.classes.plugin:

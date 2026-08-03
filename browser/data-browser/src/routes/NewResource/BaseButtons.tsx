@@ -15,6 +15,8 @@ const buttons = [
   dataBrowser.classes.folder,
   dataBrowser.classes.documentV2,
   dataBrowser.classes.meeting,
+  dataBrowser.classes.addressBook,
+  dataBrowser.classes.contact,
   dataBrowser.classes.chatroom,
   dataBrowser.classes.bookmark,
   canvas.classes.canvas,
