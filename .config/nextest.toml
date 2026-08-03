@@ -32,9 +32,9 @@ retries = 5
 
 # Cap the `it` integration binary. Each test boots one or more actix
 # servers (and iroh_pairing spawns *extra* OS processes). CI overrides
-# `--test-threads` for Mancave; without this group, 8 concurrent `it`
-# tests + their child servers starve peer boot and trip
-# "peer server never reported its port".
+# `--test-threads` for Mancave; without this group, concurrent `it`
+# tests + their child servers starve peer boot / lib db setup and tip
+# ntest ceilings.
 [[profile.default.overrides]]
 filter = 'package(atomic-server) and binary(it)'
 test-group = 'it-limited'
