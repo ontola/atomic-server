@@ -48,9 +48,11 @@ const ATOMIC_DOMAIN = 'atomic';
 // Hosted runners (2 vCPU) still get Playwright/nextest defaults when
 // these env vars aren't set.
 const E2E_SHARD_COUNT = 3;
-const E2E_PLAYWRIGHT_WORKERS = '3'; // 3 shards × 3 workers ≈ 9 browsers
+const E2E_PLAYWRIGHT_WORKERS = '2'; // 3 shards × 2 workers ≈ 6 browsers
 const E2E_PLAYWRIGHT_RETRIES = '1';
-const NEXTEST_TEST_THREADS = '4';
+// Leave headroom for co-running e2e: with threads=4, lib db tests were
+// starving beside `it` servers and hitting their ntest ceilings.
+const NEXTEST_TEST_THREADS = '3';
 const NEXTEST_RETRIES = '1';
 // Link concurrency: previously capped at 2 for a ~15GB Docker VM that
 // OOM-killed `ld`. Mancave has 64GB — 4 concurrent musl links is fine.
