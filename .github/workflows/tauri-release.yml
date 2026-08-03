@@ -342,7 +342,8 @@ jobs:
   # ---------------------------------------------------------------- android --
   #
   # Secrets: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
-  #          ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+  #          ANDROID_KEY_ALIAS
+  # (no ANDROID_KEY_PASSWORD — see the note in "Configure signing")
   # Generate them with scripts/setup-android-signing.sh, which never puts the
   # key material through a shell history or this repo.
   android:
@@ -438,7 +439,6 @@ jobs:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           keystore="$RUNNER_TEMP/release.jks"
@@ -446,9 +446,18 @@ jobs:
 
           # Written, not committed: the plaintext-password version of this file
           # was tracked in this public repo until 2026-08-02.
+          #
+          # keyPassword is the STORE password, deliberately — not a separate
+          # ANDROID_KEY_PASSWORD secret. The keystore is PKCS12, and PKCS12 has
+          # no concept of a per-key password: keytool warns "Different store and
+          # key passwords not supported for PKCS12 KeyStores. Ignoring
+          # user-specified -keypass value" and encrypts the key under the store
+          # password anyway. Feeding Gradle a different value produced
+          # "Get Key failed: Given final block not properly padded" — the store
+          # opening fine and the key then failing to decrypt.
           cat > desktop/gen/android/keystore.properties <<PROPS
           storePassword=$ANDROID_KEYSTORE_PASSWORD
-          keyPassword=$ANDROID_KEY_PASSWORD
+          keyPassword=$ANDROID_KEYSTORE_PASSWORD
           keyAlias=$ANDROID_KEY_ALIAS
           storeFile=$keystore
           PROPS
