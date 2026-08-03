@@ -53,10 +53,19 @@ read -r -p "Generate a NEW release signing key and overwrite the GitHub secrets?
 
 # 32 bytes of entropy, base64'd. Long enough that the password is not the weak
 # part, and free of characters that need shell quoting downstream.
+#
+# ONE password, for the store and the key alike. This is not a simplification:
+# PKCS12 has no per-key password, so passing a distinct -keypass makes keytool
+# warn "Different store and key passwords not supported for PKCS12 KeyStores.
+# Ignoring user-specified -keypass value" and encrypt the key under the store
+# password regardless. Generating two and storing the second as
+# ANDROID_KEY_PASSWORD produced a keystore CI could open but not read a key
+# from — "Get Key failed: Given final block not properly padded".
 STORE_PASS=$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)
-KEY_PASS=$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)
 
 echo "Generating keystore..."
+# Output is NOT suppressed. It was, and that is precisely how the PKCS12
+# keypass warning above went unnoticed until a release build failed on it.
 keytool -genkeypair \
   -alias "$ALIAS" \
   -keyalg RSA \
@@ -65,9 +74,7 @@ keytool -genkeypair \
   -keystore "$KEYSTORE" \
   -storetype PKCS12 \
   -storepass "$STORE_PASS" \
-  -keypass "$KEY_PASS" \
-  -dname "$DNAME" \
-  >/dev/null 2>&1
+  -dname "$DNAME"
 
 chmod 600 "$KEYSTORE"
 
@@ -84,7 +91,7 @@ trap 'status=$?; [ $status -eq 0 ] && exit $status; {
   echo "!! and re-run this script."
   echo "!!   keystore:      $KEYSTORE"
   echo "!!   storePassword: $STORE_PASS"
-  echo "!!   keyPassword:   $KEY_PASS"
+  echo "!!   (the key password is the same value — PKCS12 has only one)"
 } >&2' EXIT
 
 echo "Uploading secrets to $repo..."
@@ -102,7 +109,6 @@ b64() { base64 < "$1" | tr -d '\n'; }
 # passwords can be finished by hand from the keystore on disk, whereas one that
 # stored only the blob has lost the passwords for good.
 printf '%s' "$STORE_PASS" | gh secret set ANDROID_KEYSTORE_PASSWORD --repo "$repo"
-printf '%s' "$KEY_PASS"   | gh secret set ANDROID_KEY_PASSWORD     --repo "$repo"
 printf '%s' "$ALIAS"      | gh secret set ANDROID_KEY_ALIAS        --repo "$repo"
 b64 "$KEYSTORE"           | gh secret set ANDROID_KEYSTORE_BASE64  --repo "$repo"
 
@@ -120,7 +126,12 @@ keytool -list -v -keystore "$KEYSTORE" -storepass "$STORE_PASS" -alias "$ALIAS" 
 cat <<EOF
 
 Secrets set: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
-             ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+             ANDROID_KEY_ALIAS
+
+             There is no ANDROID_KEY_PASSWORD: PKCS12 stores the key under the
+             store password. The workflow passes ANDROID_KEYSTORE_PASSWORD for
+             both. If an old ANDROID_KEY_PASSWORD secret exists, delete it —
+             it is unused and misleading.
 
 NEXT, AND DO NOT SKIP THIS:
 
