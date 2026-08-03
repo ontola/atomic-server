@@ -91,6 +91,42 @@ const PAIR_LINK_RETRY_WINDOW: std::time::Duration = std::time::Duration::from_se
 struct EmbeddedNode {
   store: std::sync::OnceLock<atomic_lib::Db>,
   config_file: std::sync::OnceLock<std::path::PathBuf>,
+  /// Why the node never came up, if it didn't. The server runs on its own
+  /// thread, so a boot failure there used to be an unwind into nothing: the
+  /// window stayed open, `store` stayed empty, and every node-backed feature
+  /// reported "still starting up" forever. Recording the reason lets the UI say
+  /// what actually went wrong.
+  startup_error: std::sync::OnceLock<String>,
+}
+
+impl EmbeddedNode {
+  /// The store, or an explanation of why there isn't one.
+  fn require_store(&self) -> Result<atomic_lib::Db, String> {
+    if let Some(store) = self.store.get() {
+      return Ok(store.clone());
+    }
+
+    Err(match self.startup_error.get() {
+      Some(error) => format!("The local node failed to start: {error}"),
+      None => "The local node has not finished starting up.".to_string(),
+    })
+  }
+}
+
+/// Turn a store-open failure into advice, because the common cause has a cure
+/// the message doesn't hint at. The desktop app and a command-line
+/// `atomic-server` default to the same data directory, and the store may only be
+/// opened once — so a server left running in a terminal keeps the app's node
+/// locked out.
+fn explain_startup_failure(error: &str) -> String {
+  if error.contains("Database already open") {
+    format!(
+      "{error}\n\nAnother atomic-server is already using this data directory. \
+       Quit it (or start it with --data-dir pointing elsewhere) and restart the app."
+    )
+  } else {
+    error.to_string()
+  }
 }
 
 /// Make this device's node act as the signed-in user, rather than as the
@@ -115,11 +151,7 @@ async fn adopt_agent(
   secret: String,
   node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
 ) -> Result<(), String> {
-  let store = node
-    .store
-    .get()
-    .ok_or("The local node has not finished starting up.")?
-    .clone();
+  let store = node.require_store()?;
   let config_file = node
     .config_file
     .get()
@@ -156,11 +188,7 @@ fn virtual_drive_start(
   node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
   vfs: tauri::State<'_, std::sync::Arc<vfs::VfsController>>,
 ) -> Result<vfs::VfsStatus, String> {
-  let store = node
-    .store
-    .get()
-    .ok_or("The local node has not finished starting up.")?
-    .clone();
+  let store = node.require_store()?;
   vfs.start(store)?;
 
   Ok(vfs.status())
@@ -333,13 +361,20 @@ pub fn run() {
         let rt = actix_rt::Runtime::new().unwrap();
         // The hook hands us the store once it's up, so `adopt_agent` can point
         // the node's identity at the signed-in user.
-        rt.block_on(atomic_server_lib::serve::serve_with_hook(
+        let result = rt.block_on(atomic_server_lib::serve::serve_with_hook(
           config_clone,
           |appstate| {
             let _ = node_for_server.store.set(appstate.store.clone());
           },
-        ))
-        .unwrap();
+        ));
+
+        // Don't panic: this thread has no one to unwind to, and the window
+        // outlives it either way. Record the reason so the UI can show it.
+        if let Err(e) = result {
+          let reason = explain_startup_failure(&e.to_string());
+          eprintln!("[node] the embedded server stopped: {reason}");
+          let _ = node_for_server.startup_error.set(reason);
+        }
       });
 
       #[cfg(desktop)]
