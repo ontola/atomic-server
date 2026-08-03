@@ -42,10 +42,14 @@ const ATOMIC_DOMAIN = 'atomic';
 
 // CI host profiles. Main.yml passes `--host-profile mancave` only on the
 // self-hosted job; the GitHub-hosted fallback keeps the conservative
-// `hosted` defaults (2 vCPU). Earlier "8 threads saturated the box"
-// failures were actually on ubuntu-latest while we thought CI_RUNNER was
-// set — real Mancave (12c/64GB) can take the hotter knobs. `.config/nextest.toml`
-// still caps `it` at 2 and serializes `iroh_pairing::*`.
+// `hosted` defaults (2 vCPU). `.config/nextest.toml` still caps `it` at 2
+// and serializes `iroh_pairing::*`.
+//
+// `cargoBuildJobs` is the important one on Mancave: dagger containers see
+// all host CPUs (24 threads on the current box), so bare `cargo build` /
+// `clippy` / `wasm-pack` default to -j24 and burn ~30% of wall time in
+// system/context-switch. `nextest --build-jobs` only covers the nextest
+// invocation — pin `CARGO_BUILD_JOBS` on every cargo container too.
 type HostProfile = 'mancave' | 'hosted';
 
 type HostKnobs = {
@@ -55,10 +59,14 @@ type HostKnobs = {
   nextestTestThreads: string;
   nextestRetries: string;
   nextestBuildJobs: string;
+  /** Caps rustc parallelism inside each container via CARGO_BUILD_JOBS. */
+  cargoBuildJobs: string;
 };
 
 const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
   // 4 shards × 3 workers ≈ 12 browsers; nextest 6-wide with it capped at 2.
+  // cargoBuildJobs=8: leaves headroom for co-running e2e/browsers instead
+  // of 24-way thrash (profile: 88% CPU but 31% system time).
   mancave: {
     e2eShardCount: 4,
     e2ePlaywrightWorkers: '3',
@@ -66,6 +74,7 @@ const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
     nextestTestThreads: '6',
     nextestRetries: '1',
     nextestBuildJobs: '4',
+    cargoBuildJobs: '8',
   },
   hosted: {
     e2eShardCount: 2,
@@ -74,6 +83,7 @@ const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
     nextestTestThreads: '2',
     nextestRetries: '2',
     nextestBuildJobs: '2',
+    cargoBuildJobs: '2',
   },
 };
 
@@ -133,9 +143,11 @@ export class AtomicServer {
   }
 
   /**
-   * Mount shared crates.io + git dependency caches under `cargoHome`.
-   * Registry content is identical across glibc/musl images, so both
-   * share the `cargo` / `cargo-git` volumes — only the mount path differs.
+   * Mount shared crates.io + git dependency caches under `cargoHome`, and
+   * pin `CARGO_BUILD_JOBS` so rustc doesn't spawn one job per visible host
+   * CPU (containers see the full Mancave SMT count). Registry content is
+   * identical across glibc/musl images, so both share the `cargo` /
+   * `cargo-git` volumes — only the mount path differs.
    */
   private withCargoHomeCache(
     container: Container,
@@ -149,7 +161,11 @@ export class AtomicServer {
       })
       .withMountedCache(`${cargoHome}/git`, dag.cacheVolume('cargo-git'), {
         sharing: CacheSharingMode.Shared,
-      });
+      })
+      .withEnvVariable(
+        'CARGO_BUILD_JOBS',
+        this.hostKnobs.cargoBuildJobs,
+      );
   }
 
   /**
@@ -312,6 +328,9 @@ export class AtomicServer {
         .container()
         .from(FLUTTER_IMAGE)
         .withEnvVariable('CI', 'true')
+        // Same pin as withCargoHomeCache — flutter's cargokit build would
+        // otherwise see all host CPUs.
+        .withEnvVariable('CARGO_BUILD_JOBS', this.hostKnobs.cargoBuildJobs)
         // Persist hosted Dart packages across CI runs.
         .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
         .withMountedCache('/root/.pub-cache', flutterPubCache)
