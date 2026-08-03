@@ -9,6 +9,32 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## [v0.41.0-beta.2] - 2026-08-01
 
+**This is the local-first release.** Atomic Data no longer needs a server to exist.
+
+It is also the first release with new features since **v0.40.0 in October 2024** — v0.40.2 and v0.40.3 were security-only patches. That is 1,222 commits and ~334,000 lines. The highlights below cover the whole 0.41 line; per-release detail continues in the v0.41.0-beta.1 and v0.41.0-beta.0 sections of [the changelog](https://github.com/atomicdata-dev/atomic-server/blob/develop/CHANGELOG.md), and everything front-end is in [the browser changelog](https://github.com/atomicdata-dev/atomic-server/blob/develop/browser/CHANGELOG.md).
+
+### Highlights
+
+**Your data works without us.** Create a drive, write to it, and read it back with no server in reach. Every write is a signed CRDT commit against a local database, so the app is fully usable offline and syncs when it can. This is not a cache in front of a server — the browser runs the same Rust storage and query engine through WASM, which is why an offline table computes the same totals as an online one.
+
+**`did:ad` — identifiers that don't belong to a hostname.** Resources are addressed by a decentralized identifier rather than a URL on someone's domain, and resolved peer-to-peer over the Mainline DHT. No DNS, no certificate authority, no hosting company in the trust path. Combined with self-verifying genesis certificates, a resource proves who created it on its own terms. Your agent is now just a private key: no account on any server, nothing to be locked out of.
+
+**Peers, not clients.** A sync protocol (#1178) and Iroh/Mainline peer sync let two devices converge directly. Pair a phone by scanning a QR code, mount a drive, and edits flow between them. A server, when you use one, is now described as just another device you sync with — it is a convenience, not the source of truth.
+
+**Live everything.** Live queries (#1174) mean a collection updates as the data does, rather than when you reload. On top of that sits a full presence layer (#1229): see who else is here as avatars, follow someone through the app, watch "typing…" appear in chats and comments, and see live cursors while co-editing a document. Presence rides a drive-scoped ephemeral relay, so it never touches your stored data.
+
+**A new document editor.** A ground-up rich text editor backed by a Loro CRDT, so two people can edit the same document at once without a lock or a merge conflict — with slash commands, resource mentions, tables, math and a collaborative canvas alongside it. And peer-to-peer **video and audio calls** in the meeting panel, where media never passes through a server at all.
+
+**Tables became apps.** A **Kanban board** (#1198) with drag-and-drop and custom card ordering, plus **calendar** and **timer** views — all the same grid underneath, so cells stay editable and columns sortable whichever way you look at them. Then: **dashboards** that compose numbers, charts and embedded tables over your data; **computed columns** (a live duration, days-since, quantity × price); **totals** computed by the store across every matching row rather than the page on screen; **row actions** and **one-tap create** buttons that turn a table into something you press rather than something you fill in; and **thirteen ready-made templates** — issue tracker, CRM, expenses, grocery list, plant care, workout log and more. None of it ships a custom renderer: a mini-app is configuration, so the built-in assistant can build and reshape one for you.
+
+**Private by default.** The browser's local database is now one encrypted store per agent (XChaCha20-Poly1305 at rest), so switching accounts or signing out genuinely closes the door. Account backup is passkey-first — one prompt, no secret to write down — and a device lock can seal the keypair after inactivity or when the browser closes.
+
+**And it got much faster.** A query and indexing rework cut a 1000-member collection query by ~88% at the Rust level and ~70% over HTTP.
+
+Also in this line: content localization with a `LocalizedText` datatype and locale-routed site templates, a desktop app that mounts your drives as a real **virtual drive** in Finder or your file manager, emoji and cover images on any resource, favorites, stateless invites, and the removal of `SERVER_URL` so a server can answer on several domains at once.
+
+Beta, and honest about it: the storage format changed, so your database migrates on first run — **take a backup first**. See [STATUS.md](https://github.com/atomicdata-dev/atomic-server/blob/develop/server/STATUS.md) for what is expected to stay stable.
+
 ### Security
 
 All four fixes documented under [v0.40.3](#v0403---2026-07-06) are present here — they reached this line through the `develop` merge, not through that tag. One deliberate divergence:
