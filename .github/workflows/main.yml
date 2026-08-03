@@ -62,9 +62,23 @@ jobs:
 
           # Any online runner carrying the self-hosted label counts as
           # available (busy is fine — the job will wait its turn).
-          if gh api "repos/$REPO/actions/runners" --jq \
+          # On API errors (bad/insufficient PAT), prefer Mancave — do NOT
+          # treat a 403 as "offline" or we skip the warm box forever.
+          set +e
+          body=$(gh api "repos/$REPO/actions/runners" 2>/tmp/runner-api.err)
+          api_status=$?
+          set -e
+          if [ "$api_status" -ne 0 ]; then
+            echo "Runner API failed (is CI_RUNNER_STATUS_TOKEN a fine-grained PAT with Repository Administration: Read?):"
+            cat /tmp/runner-api.err || true
+            echo "Assuming Mancave online"
+            echo "host=mancave" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if printf '%s' "$body" | jq -e \
             'any(.runners[]; .status == "online" and any(.labels[]; .name == "self-hosted"))' \
-            | grep -qx true; then
+            >/dev/null; then
             echo "Self-hosted runner online — using Mancave"
             echo "host=mancave" >> "$GITHUB_OUTPUT"
           else
