@@ -14,6 +14,10 @@ on:
         description: upload-artifact name (must differ across Mancave / fallback)
         type: string
         required: true
+      host-profile:
+        description: Dagger `--host-profile` — mancave (hot) or hosted (conservative)
+        type: string
+        required: true
     secrets:
       NETLIFY_TOKEN:
         required: true
@@ -53,7 +57,8 @@ jobs:
           # to every branch, and netlifyDeploy used to pass `--prod`
           # unconditionally — so any feature branch republished the public docs
           # and typedoc. Every other branch now gets a preview URL instead.
-          args: ci --netlify-auth-token env://NETLIFY_TOKEN ${{ github.ref == 'refs/heads/master' && '--publish-docs' || '' }}
+          # `--host-profile` selects parallelism (mancave hot / hosted quiet).
+          args: ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} ${{ github.ref == 'refs/heads/master' && '--publish-docs' || '' }}
       - name: Dagger docker images (build images & publish)
         # develop and master only. There is no `main` branch here — that clause
         # could never fire, and left in place it invites someone to conclude

@@ -40,6 +40,7 @@ jobs:
     with:
       runner: ${{ vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]' }}
       artifact-name: build-artifacts-mancave
+      host-profile: mancave
     secrets:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -62,6 +63,7 @@ jobs:
     with:
       runner: '["ubuntu-latest"]'
       artifact-name: build-artifacts-github
+      host-profile: hosted
     secrets:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
