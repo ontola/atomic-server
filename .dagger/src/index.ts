@@ -917,8 +917,22 @@ export class AtomicServer {
     // Same fix as `rustChecksContainer`'s clippy/test path and
     // `rustBuildSlim`'s glibc path (different symptom there — ABI mismatch,
     // not a missing binary — same root cause).
+    //
+    // E2E exception: `plugin.spec.ts` needs `wasm-plugins` so the test
+    // plugin's `after_commit` can rename folders. `light` is https-only and
+    // silently makes that assertion hang until timeout. Defaults minus
+    // `vector-search` (the ort/musl gap above) is enough — wasmtime builds
+    // fine on this musl-cross image.
     if (target.includes('musl')) {
-      buildArgs.push('--no-default-features', '--features', 'light');
+      if (e2e) {
+        buildArgs.push(
+          '--no-default-features',
+          '--features',
+          'https,wasm-plugins',
+        );
+      } else {
+        buildArgs.push('--no-default-features', '--features', 'light');
+      }
     }
     const targetPath = release
       ? `/code/target/${target}/release/atomic-server`

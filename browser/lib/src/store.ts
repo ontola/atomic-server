@@ -1286,12 +1286,63 @@ export class Store {
     // Capture {bytes, version} atomically so the cursor advances to
     // the version that's in this commit — not to a later one that
     // arrived during the await on `postCommit`.
-    const exported = resource.exportLoroDeltaForDrain(
+    let exported = resource.exportLoroDeltaForDrain(
       isFirstCommit,
       commitToken,
     );
 
+    // Offline-edit recovery (continued): an empty export WITH a durable
+    // `baseVersion` means the in-memory Loro doc is missing the offline
+    // ops — typically a cold reload that hydrated server state (or a
+    // skeleton) before OPFS landed the offline snapshot. Clearing dirty
+    // here permanently drops the edit: `waitForSynced` / local search
+    // look green while a fresh device still sees the pre-offline title
+    // (see sync.spec "offline edits sync to server…"). Prefer OPFS
+    // rehydrate + one retry; if that still yields nothing, leave the
+    // entry dirty for a later drain rather than silently discarding it.
+    if (!exported && entry.baseVersion && this.clientDb?.isReady) {
+      try {
+        const { jsonAd, snapshot } =
+          await this.clientDb.getResourceWithSnapshot(subject);
+
+        if (jsonAd) {
+          this.hydrateResourceFromJson(subject, JSON.parse(jsonAd));
+        }
+
+        const refreshed = this.resources.get(subject);
+
+        if (refreshed && snapshot && snapshot.length > 0) {
+          // OPFS stores a full snapshot — replace any server-hydrated
+          // doc that raced ahead of the offline local state.
+          refreshed.importLoroUpdate(snapshot, true);
+        }
+
+        if (refreshed) {
+          resource = refreshed;
+          resource.restoreSaveCursor(entry.baseVersion);
+          exported = resource.exportLoroDeltaForDrain(
+            isFirstCommit,
+            commitToken,
+          );
+        }
+      } catch (e) {
+        console.warn(
+          `[Outbox] OPFS rehydrate before offline drain failed for ${subject}:`,
+          e,
+        );
+      }
+    }
+
     if (!exported) {
+      if (entry.baseVersion) {
+        console.warn(
+          `[Outbox] empty Loro export for ${subject} with offline baseVersion; leaving dirty for retry`,
+        );
+        this.emitSyncStatus();
+
+        return;
+      }
+
       this.outbox.clearBaseVersion(subject);
       this.outbox.clearDirty(subject);
       this.emitSyncStatus();
