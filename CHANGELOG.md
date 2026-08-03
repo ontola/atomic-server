@@ -7,7 +7,6 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
-<<<<<<< HEAD
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub
@@ -325,6 +324,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   returns the `CommitResponse` instead of `()`. See
   `planning/runtime-boundary-decision.md`.
 - Commit path performance (`atomic-lib`): `Resource::clone` / `build_state_doc` fork the live Loro doc instead of snapshot round-trips; `apply_changes` no longer double-clones the pre-edit resource; `sign_at` exports incremental `loroUpdate` deltas against the persisted baseline for follow-up edits (genesis still ships a full snapshot). Cuts per-commit CPU and history/wire payload growth. See `planning/commit-performance.md`.
+- `Db::init_temp` performance (`atomic-lib`): process-local template clone of the bootstrapped `atomic.redb` (warm init ~10 ms vs ~120 ms), and redb file opens use a 64 MiB page cache (16 MiB for temp DBs) instead of redb's 1 GiB default.
 
 ## [v0.41.0-beta.2] - 2026-08-01
 

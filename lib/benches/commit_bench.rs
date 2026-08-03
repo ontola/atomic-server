@@ -27,6 +27,24 @@ fn bench_commit_stages(c: &mut Criterion) {
     let mut group = c.benchmark_group("commit_stages");
     group.sample_size(20);
 
+    // --- Db::init_temp (ontology bootstrap dominates cold; template-copy after)
+    group.bench_function("init_temp", |b| {
+        b.iter_custom(|iters| {
+            rt.block_on(async {
+                // Warm the process-local template so we measure the common
+                // (Nth call) path that tests actually hit in a suite.
+                let _ = Db::init_temp("cb_init_warm").await.unwrap();
+                let mut total = std::time::Duration::ZERO;
+                for i in 0..iters {
+                    let start = std::time::Instant::now();
+                    let _ = Db::init_temp(&format!("cb_init_{i}")).await.unwrap();
+                    total += start.elapsed();
+                }
+                total
+            })
+        })
+    });
+
     // --- Resource::clone of a saved resource (live Loro doc present) --------
     // Before the fork() change this was export_snapshot + from_snapshot.
     group.bench_function("resource_clone_after_save", |b| {
