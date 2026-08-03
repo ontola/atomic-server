@@ -190,9 +190,15 @@ test.describe('row actions', () => {
     await milk.getByTestId('row-action-two-more').click();
     await expect(milk).toContainText('2', { timeout: 15_000 });
 
-    // Configuration lives on the View, so it comes back.
+    // Configuration lives on the View, so it comes back. Column headers
+    // hydrate from the View resource after the grid mounts — a one-shot
+    // `headings()` read right after `reloadGrid`'s 500ms settle often saw
+    // `[]` under CI load even though the action column appeared a moment
+    // later.
     await reloadGrid(page);
-    expect(await headings(page)).toContain('Two more');
+    await expect
+      .poll(() => headings(page), { timeout: 15_000 })
+      .toContain('Two more');
     await row(page, 'Milk').getByTestId('row-action-two-more').click();
     await expect(row(page, 'Milk')).toContainText('4', { timeout: 15_000 });
   });

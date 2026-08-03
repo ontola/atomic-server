@@ -61,19 +61,27 @@ test.describe('calendar view', () => {
     await page.getByRole('button', { name: 'Today' }).click();
     await expect(event).toBeVisible();
 
-    // Persisted: after a reload (which lands on the default Board view), the
-    // calendar tab — named after its kind — still renders as a calendar with
-    // the item on today.
-    // The active view is in the URL, so a reload comes back to the calendar
-    // rather than the table's default view.
-    await page.reload();
-    await expect(page.getByTestId('calendar-view')).toBeVisible();
+    // Persisted: the active view is in the URL (`?view=`), so a reload comes
+    // back to the calendar rather than the table's default Board. While the
+    // View resource is still loading, `normalizeViewKind(undefined)` falls
+    // back to `table`, so `calendar-view` is absent until that fetch lands —
+    // under a contended CI server that routinely exceeds the default 10s
+    // expect budget.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().serverConnected === true,
+      undefined,
+      { timeout: 30000 },
+    );
+    await expect(page.getByTestId('calendar-view')).toBeVisible({
+      timeout: 30000,
+    });
     await expect(
       page
         .locator(`[data-testid="calendar-day"][data-date="${todayKey}"]`)
         .getByTestId('calendar-event')
         .filter({ hasText: 'Ship calendar' }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15000 });
 
     // The auto-created Date property landed on the item: open it and check.
     await event.click();
