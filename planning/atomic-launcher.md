@@ -232,6 +232,245 @@ of docs/tables can deep-link into data-browser (Custom Tab / WebView to the
 user's hub) or a future embedded editor. Don't block the launcher MVP on
 shipping TipTap-in-Compose.
 
+## Presenting Atomic to the user
+
+SearchLauncher today is almost entirely **launch-and-leave**: icon + title +
+subtitle → tap → leave. Empty home is wallpaper + optional Android widgets +
+favorites strip — not a content feed. Atomic should respect that grammar and
+add depth only where it earns a stay-in-launcher moment.
+
+Think in **layers**, not one mega-surface:
+
+```
+Layer 0  Identity crumbs     icon · title · class · snippet
+Layer 1  Search hits         same row as apps/contacts
+Layer 2  Chrome strip        favorites / recents / pinned Atomic
+Layer 3  Verbs               todo/note/bm — create without opening an app
+Layer 4  Ambient home        optional glance (dashboard / next actions)
+Layer 5  Hosted surfaces     Atomic apps: warm PWA / WebView / plugins
+Layer 6  System widgets      AppWidgetProvider(s) for glance + tap-in
+```
+
+Layers 0–3 are the MVP. 4–6 are where "Atomic feels like the OS" — and where
+PWAs / widgets become first-class.
+
+### A. Resources as search results (foundation)
+
+Match today's `SearchResultItem`: 40dp glyph, title, one subtitle line,
+overflow menu. No heavy `ResourceCard` from the web ⌘K overlay — phones need
+the compact row (`ResourceRow` / `ResourceInline` shape on web).
+
+| Field | Source |
+|---|---|
+| Icon | `isA` → class glyph / emoji / cover (same map as `iconMap.ts`) |
+| Title | resource name / title |
+| Subtitle | class shortname · parent name · snippet hit |
+| Overflow | Favorite, Open, Copy link, Share, Open in browser, Quick-add sibling |
+
+**Ranking:** boost Atomic hits that are favorites, recently opened, or match
+a reserved verb's default target (Todo table). Cap Atomic rows so they don't
+drown apps (e.g. interleaved, max N per namespace) — same discipline as
+`LIVE_SEARCH_RESULT_LIMIT = 16`.
+
+**Tap target by class (default):**
+
+| Class | Tap |
+|---|---|
+| Table row (todo/grocery) | Toggle done / open parent table focused on row |
+| Table / Folder | Open Atomic app surface (see E) |
+| Document / Chat / Canvas | Open Atomic app surface |
+| Bookmark / File | Open URL / viewer (browser or system) |
+| Person / Event (later) | Contact/calendar actions |
+
+Stay-in-launcher exception: **toggle done** and **quick-create confirm**
+(toast + optional undo) — snippet-copy pattern, not a new detail panel.
+
+### B. Favorites strip & recents
+
+SearchLauncher already has an icon-only favorites/history row when the query
+is empty. Atomic favorites should join it:
+
+- Mirror data-browser's `favorites` ResourceArray on the personal drive
+  (cross-device), *and* allow launcher-local favorite keys for offline speed.
+- Pin high-value Atomic "apps": Todo table, Inbox chat, Today dashboard —
+  they appear as icons next to WhatsApp, same muscle memory.
+- Recents: data-browser only tracks recent *drives* today; launcher should
+  keep a **resource MRU** (local, syncable later) so the strip stays useful.
+
+This is the cheapest "Atomic on the home screen" — no new widgets, no PWA.
+
+### C. Ambient home (empty-query glance) — optional, easy to overbuild
+
+Empty home is currently atmosphere (wallpaper), not a dashboard. Resist
+turning it into a Notion home by default.
+
+Ideas, lightest first:
+
+1. **Nothing new** — favorites strip is enough for v1.
+2. **One peek chip** above the bar: "3 todos due · Grocery · 2 unread" —
+   tap expands a small sheet or fills a search query (`todo `).
+3. **Dashboard mode** — if the user pins an Atomic Dashboard resource as
+   "home glance", render its *stat/create* blocks as a thin Compose strip
+   (not the full web grid). Maps to shipped Dashboard block kinds
+   (`view|stat|chart|create|text` in `dashboards.md`).
+4. **Full feed** — reject for the launcher; that's the data-browser.
+
+Rule: ambient content must be **dismissible / hideable** like widgets today
+(tap wallpaper toggles widget visibility). Keyboard-first identity stays.
+
+### D. Widgets
+
+Two different "widget" concepts — don't conflate them:
+
+#### D1. Host Android AppWidgets (already works)
+
+SearchLauncher's `AppWidgetHost` can show *any* installed provider. If Atomic
+Launcher (or a companion) ships `AppWidgetProvider`s, users add them via the
+existing `widgets` search shortcut — zero new host UX.
+
+Candidate Atomic AppWidgets:
+
+| Widget | Job |
+|---|---|
+| **Search** | Existing SearchLauncher widget; keep |
+| **Todo / Grocery** | Next N unchecked rows; tap row toggles or opens; " +" → voice/type |
+| **Favorites** | Icon grid of pinned Atomic subjects |
+| **Stat** | One Dashboard `stat` block (count, sum) |
+| **Next event** | Personal-info suite later |
+
+Implementation: widget process talks to the in-app Atomic host (same process
+or Binder). Updates via resource watch → `AppWidgetManager.notifyAppWidgetViewDataChanged`.
+
+#### D2. Atomic Dashboard blocks ≠ AppWidgets
+
+Web dashboards are resources laid out in a CSS grid. On Android they should
+*feed* AppWidgets (one block → one widget instance) or the ambient strip —
+not be reimplemented as a second layout engine inside the launcher.
+
+### E. Preloaded PWA / Atomic apps as first-class citizens
+
+This is the interesting one. Atomic's rich UI (tables, TipTap docs, chats,
+plugins, dashboards) already lives in the **data-browser**, which is already
+a Vite PWA. The launcher should not rewrite those editors in Compose. Instead
+treat **Atomic surfaces as apps** the launcher owns specially.
+
+#### Model: Atomic App = (subject or route) + warm WebView/PWA shell
+
+| Android app | Atomic app |
+|---|---|
+| APK in package manager | Resource (Table, ChatRoom, Dashboard, Plugin UI, Drive) |
+| Launcher icon | Class glyph / emoji / cover |
+| `am start` | Open in **Atomic Shell** (privileged WebView) |
+| App drawer entry | Indexed as `SearchResult` *and* optional drawer row |
+
+**Atomic Shell** (first-class, not "just another tab"):
+
+- Dedicated WebView (or Custom Tab with warm process) bound to the local
+  node / hub — cookies, agent, OPFS/WASM as needed.
+- Preload: keep a **warm process** with data-browser assets cached (the PWA
+  service worker + a small set of pin routes: `/app`, last N subjects).
+- Open animation: from search row / favorite icon → shell expands like
+  opening an app (SearchLauncher already does full-bleed tab swipe
+  previews — reuse that feel).
+- Task affinity: optional separate recents entry per pinned Atomic app
+  (`documentLaunchMode` / multiple tasks) so "Todo" and "Notes" feel like
+  apps in Android Recents, not browser tabs.
+- Offline: shell talks to **in-process Atomic node** (Phase 1+), not only
+  the network hub — this is what makes "preloaded PWA" real rather than
+  "cached website".
+
+Contrast with ordinary browser tabs: Wikipedia stays a tab; your Todo table
+is an **Atomic app** with an icon in favorites and a warm shell.
+
+#### What gets to be an Atomic app?
+
+Ladder from `table-templates-and-mini-apps.md` fits perfectly:
+
+1. **Any resource** — open in shell (baseline).
+2. **Pinned / favorited resources** — drawer + favorites strip + warm start.
+3. **Templates as installable apps** — "Install Grocery List" creates the
+   table *and* pins it as an Atomic app (icon, alias `buy`, widget offer).
+4. **Plugins / external mini-apps** — data-browser plugin iframe UI or a
+   standalone PWA (`habits-app.md`) registered with a subject + origin;
+   launcher indexes them like apps. Sandbox stays the web one; launcher
+   only does discovery + open.
+5. **True TWA / Play-packaged PWA** — optional later for store distribution;
+   not required if the shell WebView is good.
+
+#### Preload strategy (practical)
+
+| When | What to warm |
+|---|---|
+| Launcher boot (idle) | Shell process + PWA shell assets + agent session |
+| Favorite pinned | Prefetch JSON-AD + Loro snapshot for those subjects into node cache |
+| User types `todo` | Ensure Todo table shell route is ready before Enter |
+| After create verb | Open shell on the new/ parent resource *or* stay with toast — user preference |
+
+Don't preload the entire drive into a WebView. Preload **shell chrome +
+pins**; everything else is node-backed and fetched on open.
+
+### F. App drawer parity
+
+SearchLauncher's swipe-up app drawer is currently Android packages only.
+Options:
+
+- **A.** Atomic apps appear in the **same drawer**, sectioned ("Atomic" /
+  "Apps") or merged by usage ranking.
+- **B.** Drawer stays Android-only; Atomic apps are search + favorites only.
+- **C.** Typing in drawer search already hits unified search — enough.
+
+Lean **C then A**: unified search first; if pinned Atomic apps feel
+second-class next to APKs, merge into the drawer with a clear glyph badge
+("A" / Atomic mark) so users know what's local-graph vs Play app.
+
+### G. Browser chrome integration
+
+Because the launcher *is* the browser:
+
+- Address bar / overflow: **Save to Atomic**, **Open related resources**
+  (backlinks later), **Share drive link**.
+- Bookmarks folder = Atomic Bookmark table (or dual-write).
+- A warm Atomic Shell tab can sit in the tab strip like other tabs *or*
+  be excluded from the normal tab overview and only appear as an app —
+  product choice. Recommendation: **pinned Atomic apps ≠ tabs**; ad-hoc
+  "open this resource" may reuse a shell tab.
+
+### H. Presentation anti-patterns
+
+- Recreating TipTap / FancyTable / canvas in Compose for v1.
+- Turning empty HOME into a widget-dense dashboard by default.
+- Showing full web `ResourceCard` stacks in the results list.
+- Treating every resource as an "installed app" (icon explosion) — pin /
+  favorite / template-install should be explicit.
+- Loading the data-browser from the network on every open with no warm
+  shell (feels like a bookmark, not a first-class app).
+
+### I. Suggested presentation roadmap
+
+| Step | Ship |
+|---|---|
+| P0 | Compact Atomic search rows + overflow Favorite/Open |
+| P1 | Favorites strip includes Atomic pins; `todo`/`note` verbs with toast |
+| P2 | Atomic Shell WebView (warm PWA) for Open; bookmarks dual-write |
+| P3 | Todo/Grocery `AppWidgetProvider`; optional ambient peek chip |
+| P4 | "Install as Atomic app" from templates; drawer section; Dashboard→widget |
+| P5 | Plugin/mini-app registration; personal-info result types + actions |
+
+### J. Open product questions (presentation)
+
+1. **Open vs stay:** after `todo get bread`, toast-only or jump into the
+   Todo Atomic app?
+2. **Shell vs tab:** are Atomic apps in the browser tab overview or only in
+   Recents/favorites?
+3. **Whose UI kit renders tables on phone —** data-browser PWA in shell
+   (reuse everything) vs a future native Compose table for the hottest
+   paths (Todo)? Recommendation: shell first; native only if shell latency
+   fails the "feels like an app" test.
+4. **Default pins on first Atomic sign-in:** auto-create Grocery + Tasks
+   templates and pin them?
+5. **Multi-drive:** favorites strip mixed across drives, or drive switcher
+   first?
+
 ## Runtime / FFI — answer to "do we need Rust FFI to Kotlin?"
 
 **Yes.** Prefer **uniffi**, not ad-hoc JNI and not `flutter_rust_bridge`.
@@ -342,6 +581,9 @@ Throw away or thin-wrap this client once uniffi lands.
 6. **Does the dedicated daemon APK ever make sense** if the launcher is the
    high-priority host? (`android-data-reuse` OQ — likely "no" if launcher
    is the flagship Android app.)
+7. **Presentation** — see §J under "Presenting Atomic to the user"
+   (open-vs-stay after create, shell-vs-tab, native Compose vs PWA shell,
+   default pins, multi-drive favorites).
 
 ## Decision record (proposed)
 
@@ -352,6 +594,10 @@ Throw away or thin-wrap this client once uniffi lands.
 | Store ownership | Launcher is preferred on-device Atomic host |
 | Search UX | Project Atomic into AppSearch; AtomicNode owns graph/FTS |
 | Quick-add | Reserved aliases + SmartActionManager; semantics from web `quickAdd` |
+| Presentation MVP | Compact search rows + favorites pins + create toasts |
+| Rich Atomic UI | Warm **Atomic Shell** (data-browser PWA in privileged WebView), not Compose rewrite |
+| Home widgets | Ship real `AppWidgetProvider`s; map Dashboard blocks → widgets later |
+| Empty home | Keep atmosphere-first; optional peek chip, not a feed |
 | First milestone | Phase 0 HTTP spike for UX; Phase 1 uniffi local node |
 | Packaging | FFI in atomic-server monorepo; launcher stays/ evolves in its repo |
 
