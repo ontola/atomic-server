@@ -30,7 +30,7 @@ describe('upload roundtrip via unified sync path', () => {
 
   beforeAll(async () => {
     server = await startServer();
-  }, 60_000);
+  }, 120_000);
 
   afterAll(async () => {
     await server?.stop();

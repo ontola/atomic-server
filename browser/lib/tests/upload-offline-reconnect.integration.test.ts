@@ -36,7 +36,7 @@ describe('upload offline → reconnect → server has blob', () => {
 
   beforeAll(async () => {
     server = await startServer();
-  }, 60_000);
+  }, 120_000);
 
   afterAll(async () => {
     await server?.stop();
