@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, newDrive, signIn } from './test-utils';
+import { before, FRONTEND_URL, newDrive, signIn } from './test-utils';
 import {
   enableAIForTesting,
   setupScriptedToolCallMocks,
@@ -132,7 +132,7 @@ test.describe('assistant table tools', () => {
     expect(subject).not.toBe('');
 
     await page.goto(
-      `http://localhost:6747/app/show?subject=${encodeURIComponent(subject)}`,
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(subject)}`,
     );
     await expect(page.getByRole('tab', { name: 'All entries' })).toBeVisible({
       timeout: 15_000,
