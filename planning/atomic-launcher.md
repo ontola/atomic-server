@@ -48,46 +48,133 @@ that needs a real editor can stay "just an app" (APK or Atomic Shell).
 HOME matters because it deletes *open Atomic* from the hot path for the
 verbs you run constantly.
 
-### Value that does *not* require merging into the launcher process
+### Three architectures (don't conflate them)
 
-- Atomic ships a great app with shortcuts / share targets / `CREATE` intents.
-- SearchLauncher keeps a prefix `a bread` → deep-link into Atomic search.
-- User still pays: result → cold/warm app start → Atomic's own chrome.
+The doubt "if intents get us 80%, why merge?" mixes two different axes:
 
-That's a **thin integration** and worth doing early. It is not the same
-product as typing on Home and having the graph answer *here*.
+| | SearchLauncher stays HOME | Atomic is also/instead HOME |
+|---|---|---|
+| **Two APKs + APIs** | A. Launcher *calls* Atomic (Binder / intents) | Weird — two HOME candidates |
+| **One APK embeds `atomic_lib`** | B. Launcher *is* the Atomic node | C. Rebrand: Atomic Launcher |
 
-### Value that *only* drops out of deep integration
+**Capture + unified find need (A) or (B), not a separate "open Atomic app"
+flow.** They do *not* by themselves require renaming the product. The open
+question is really: **what does (B)/(C) buy over (A)?** And separately:
+**what does owning HOME buy that no Atomic APK can?**
 
-1. **Capture without app switch** — commit happens in the launcher (toast +
-   undo). This is the Raycast test. If we don't nail it, don't merge.
-2. **One ranking list** — apps, contacts, *and* `Bread` the grocery row in
-   the same 16 results. Not "Atomic" the app icon.
-3. **Browser = graph edge** — save bookmark/note from the same WebView that
-   is already Home-adjacent; identity and store are shared.
-4. **Device host** — one agent/store/Iroh node for canvas and friends
-   (`android-data-reuse.md`). Users feel "sign in once"; engineers feel one
-   NodeID. Secondary to (1)–(3) but real.
+### What intents / Binder already get you (the real ~80%)
 
-### Value traps (feel productive, aren't the reason to merge)
+If SearchLauncher remains HOME and Atomic (or an `atomic-android` host)
+exposes search + commit over Binder — exactly
+[`android-data-reuse.md`](./android-data-reuse.md) — you already get:
 
-- Ambient home feeds / dense widget grids (Notion-on-HOME).
-- Recreating data-browser UI in Compose.
-- "Atomic appears in the app drawer" as the headline — that's just an app
-  with a badge.
-- Sync/collab marketed as a launcher feature — those work fine in a
-  separate APK.
+| Capability | How |
+|---|---|
+| Search graph from the home bar | `call("query"/"search")` → project into AppSearch / live results |
+| `todo get bread` without opening Atomic UI | `call("commit")` / createChild; toast in launcher |
+| Open a resource | Intent / shell Activity in either APK |
+| Live updates | AIDL subscribe / `ContentObserver` |
+| One logical store | Host owns redb; launcher is thin client |
+| Sign-in once (first-party) | Cert-bound "act as user" tier |
 
-### Decision test
+So yes: **most of the Raycast loop is an API-shape problem, not a merge
+problem.** A spike should assume (A) until (A) hurts.
 
-Ship (or prototype) this loop on a real phone:
+### What owning HOME buys (vs Atomic as a normal app)
 
-> Home → type `todo get bread` → Enter → done, still on Home.  
-> Home → type `bread` → see the grocery row next to Browser → open.
+These accrue to *whoever is the default launcher* — today SearchLauncher —
+whether Atomic is in-process or over Binder. This is the value you feel
+("one tap away") and that a beautiful Atomic APK **cannot** buy with
+polish:
 
-If that loop isn't *obviously* better than opening Atomic, stop; keep thin
-deep-links. If it is, the HOME slot is the product — Atomic Shell/widgets
-are delivery for the slower jobs, not the reason to exist.
+1. **Default destination** — Home button / gesture / post-unlock lands on
+   *your* keyboard, not an icon in a grid. Invocation tax ≈ 0.
+2. **You own empty home** — wallpaper, widget host, favorites strip,
+   gesture layer (swipe → tabs / drawer / QS). Atomic-the-app only gets a
+   widget *on someone else's* home, if the user bothers.
+3. **Always-warm interaction process** — users open HOME constantly; the
+   process is hot. Great for low-latency search *and* for being the
+   Atomic store host (cold-start via ContentProvider is fine; hot host is
+   better).
+4. **System roles that stack** — SearchLauncher already combines HOME +
+   http/https VIEW (browser) + optional `ROLE_BROWSER`. One settings
+   dance. A separate Atomic app that also wants browser/share defaults
+   competes with the launcher for the same roles.
+5. **Browser task split already designed** — browser is a separate task
+   affinity so Home *returns to the search surface*. That's the
+   capture-loop geometry. A second APK's Activities don't sit in that
+   choreography unless carefully integrated.
+6. **OS-shaped permissions** — `QUERY_ALL_PACKAGES`, usage stats, contacts,
+   status-bar expand: launcher-plausible. A notes app asking for
+   `QUERY_ALL_PACKAGES` is sketchy; a launcher isn't.
+7. **Psychological slot** — "my phone's front door" vs "an app I use."
+   Product narrative and habit formation, not a tech feature — still
+   real.
+
+**Net:** wanting Atomic *at* HOME is right. That means Atomic capability
+in the HOME app's bar — not that Atomic must replace Nova/SearchLauncher
+as a second launcher.
+
+### What one-APK / in-process still buys over Binder intents (the other ~20%)
+
+Honest list — only keep items that survive scrutiny:
+
+| Advantage | Why intents/Binder lose |
+|---|---|
+| **No second install / pairing** | (A) needs Atomic host installed (or a stub). (B) works on first launcher install. Onboarding death rate matters more than IPC elegance. |
+| **No grant / discovery UX** | First-party Binder still needs package presence + election. In-process: no "connect to Atomic." |
+| **Keystroke latency** | Per-query Binder + host cold-start can miss the "results as I type" bar. In-process ranks apps+graph on one heap. Mitigations exist (warm host, cache in launcher) but they're work. |
+| **Browser ↔ graph with zero seam** | Same process WebView → node: save bookmark, "note this page", agent cookie, warm Atomic Shell — no cross-app identity. Two APKs = grants, two backups, two possible agents. |
+| **Uninstall / backup atomicity** | Host APK uninstalled ⇒ store gone (`android-data-reuse` hard problem). Launcher-as-host: uninstalling HOME is a decision users understand; data lifecycle matches the app they face daily. |
+| **One default stack** | HOME + browser + graph + share target + widgets from one package. Two APKs fight for VIEW/browser/share and split widgets across packages. |
+| **Single privacy / store listing story** | F-Droid/Play: one package that is local-first launcher *with* optional sync. Two packages ⇒ explain a private Binder bridge. |
+| **Recents / back-stack choreography** | Home→shell→Home without "wrong task" is easier in one app (SearchLauncher already splits browser task on purpose). |
+| **Host election trivial** | Launcher *is* the high-priority host; canvas binds to it. No "which APK owns redb today?" |
+
+Soft / narrative (real for some users, not engineering proof):
+
+- **"My OS is Atomic"** — only credible if the front door *is* Atomic-powered,
+  not "my launcher talks to my Atomic app."
+- **Distribution** — one viral HOME app carries the graph; a graph app
+  rarely becomes HOME later.
+
+### What is *not* an advantage of merging (don't kid yourself)
+
+- Sync, CRDT, collab, rights — independent of launcher.
+- FancyTable / TipTap / canvas — still a shell or separate UI.
+- "We can search Atomic" — Binder search is enough if latency is fine.
+- "We can create todos from search" — `commit` over Binder is enough.
+- Ambient dashboard eye candy — optional in (A) or (B).
+
+### Reframed recommendation
+
+1. **Must have:** Atomic actions + search **at HOME** (keep SearchLauncher
+   as HOME). This is the product instinct. Don't give it up.
+2. **Start with (A):** launcher client + Atomic APIs (Binder preferred over
+   flimsy intents for search-as-you-type). Validates the 80%.
+3. **Graduate to (B) when (A) hurts** — usually onboarding (second APK),
+   typing latency, or browser↔graph identity — by **embedding `atomic_lib`
+   in the launcher** so the HOME app *is* the node. That's the meaningful
+   "merge": one process owns the store. Not "rewrite SearchLauncher in
+   Flutter," and not "Atomic ships a second HOME."
+4. **(C) rebrand** when the graph is default-on and the listing should say
+   Atomic Launcher — packaging/name, not a third architecture.
+
+### Decision tests
+
+**HOME value (product):**
+
+> Home → `todo get bread` → still on Home.  
+> Home → `bread` → grocery row beside Browser.
+
+If that isn't obviously better than opening Atomic, stop.
+
+**(A) vs (B) (engineering):**
+
+> Two-APK Binder prototype: is first-run ("install Atomic companion?") or
+> per-keystroke jank bad enough that users feel it?
+
+If no, stay (A) and ship. If yes, embed the node in the launcher (B).
 
 ## Why this is a natural fit
 
