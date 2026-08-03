@@ -607,7 +607,11 @@ jobs:
         working-directory: desktop
         env:
           APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
-        run: cargo tauri ios build --export-method release-testing
+        # app-store-connect, not release-testing: the latter is Ad Hoc, which
+        # only installs on UDIDs registered in the portal and cannot be
+        # uploaded to App Store Connect. TestFlight needs this one, and the
+        # provisioning profile in IOS_MOBILE_PROVISION must match it.
+        run: cargo tauri ios build --export-method app-store-connect
 
       # Compile-only fallback. `--target aarch64-apple-ios-sim` needs no
       # signing identity, so this keeps the iOS target honest on every tag even
