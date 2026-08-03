@@ -41,9 +41,10 @@ impl CommitResponse {
 }
 
 pub struct CommitApplied {
-    /// The resource before the Commit was applied
-    pub resource_old: Resource,
-    /// The modified resources where the commit has been applied to
+    /// The modified resource where the commit has been applied.
+    /// Callers that need the pre-edit resource should keep their own copy —
+    /// `apply_changes` used to clone internally for `resource_old`, which
+    /// doubled the Loro fork cost on every commit.
     pub resource_new: Resource,
     /// The atoms that should be added to the store (for updating indexes)
     pub add_atoms: Vec<Atom>,
@@ -578,15 +579,21 @@ impl Commit {
             .into());
         }
 
-        let mut applied = commit
-            .apply_changes(resource_old.clone())
-            .await
-            .map_err(|e| {
-                format!(
-                    "Error applying changes to Resource {}. {}",
-                    commit.subject, e
-                )
-            })?;
+        // Keep one pre-edit copy for the response / rights check; move the
+        // other into apply_changes. Previously apply_changes cloned again
+        // internally (two full Loro forks per commit).
+        let resource_old_kept = if is_new {
+            None
+        } else {
+            Some(resource_old.clone())
+        };
+
+        let mut applied = commit.apply_changes(resource_old).await.map_err(|e| {
+            format!(
+                "Error applying changes to Resource {}. {}",
+                commit.subject, e
+            )
+        })?;
 
         // NOTE: `createdAt` / `createdBy` are server-managed creation metadata
         // (materialized from the genesis oplog change). We do NOT reject commits
@@ -771,7 +778,13 @@ impl Commit {
                 }
             } else {
                 // This should use the _old_ resource, not the new one, as the new one might maliciously give itself write rights.
-                crate::hierarchy::check_write(store, &resource_old, &validate_for.into()).await?;
+                let old = resource_old_kept.as_ref().ok_or_else(|| {
+                    format!(
+                        "Missing pre-edit resource for rights check on {}",
+                        commit.subject
+                    )
+                })?;
+                crate::hierarchy::check_write(store, old, &validate_for.into()).await?;
             }
 
             // `drive` is a rights shortcut: `check_rights` consults it *before* it
@@ -877,11 +890,7 @@ impl Commit {
             } else {
                 Some(applied.resource_new)
             },
-            resource_old: if is_new {
-                None
-            } else {
-                Some(applied.resource_old)
-            },
+            resource_old: resource_old_kept,
             changed_props: applied.changed_props,
             source_id: opts.source_id.clone(),
         })
@@ -895,10 +904,11 @@ impl Commit {
 
     /// Applies the Loro CRDT update and/or destroy to the Resource.
     /// Returns the diff as atoms for index updates, plus the set of changed property URLs.
+    ///
+    /// Takes ownership of `resource` and returns it as `resource_new`. Callers
+    /// that need the pre-edit state should clone before calling.
     #[tracing::instrument(skip_all)]
     pub async fn apply_changes(&self, mut resource: Resource) -> AtomicResult<CommitApplied> {
-        let resource_unedited = resource.clone();
-
         let mut remove_atoms: Vec<Atom> = Vec::new();
         let mut add_atoms: Vec<Atom> = Vec::new();
         let mut changed_props: HashSet<String> = HashSet::new();
@@ -907,6 +917,7 @@ impl Commit {
         if let Some(loro_update_bytes) = &self.loro_update {
             // Seed from the current resource state when no snapshot exists yet so
             // older resources can still apply snapshot/delta updates correctly.
+            // `build_state_doc` forks the live doc (no serialize round-trip).
             let loro_doc = resource.build_state_doc()?;
 
             // Whether the import actually advances the oplog tells idempotent
@@ -945,7 +956,6 @@ impl Commit {
         }
 
         Ok(CommitApplied {
-            resource_old: resource_unedited,
             resource_new: resource,
             add_atoms,
             remove_atoms,
@@ -1194,7 +1204,7 @@ impl CommitBuilder {
         // If the resource has a live Loro doc but no snapshot was eagerly
         // exported to the commit builder, export it now (single export).
         // Skip when `set`/`remove` are pending — sign_at must merge those onto
-        // `existing_loro_snapshot`. Exporting the live doc here would freeze a
+        // the existing doc. Exporting the live doc here would freeze a
         // stale snapshot and ignore commitbuilder.set (e.g. gallery folderId).
         if self.loro_update.is_none() && self.set.is_empty() && self.remove.is_empty() {
             if let Some(snapshot) = resource.export_open_state() {
@@ -1202,28 +1212,47 @@ impl CommitBuilder {
             }
         }
 
-        // Pass the resource's existing Loro snapshot so sign_at can build
-        // incremental updates on top of it instead of creating a detached doc.
-        //
-        // Prefer the in-memory Loro doc over the persisted `loroUpdate` propval.
-        // `push_list_item` (strokes) updates the live doc but not the propval
-        // until after save. Using the propval here drops stroke edits when
-        // `touch_date_edited` also dirtied the commit builder via `set_unsafe`.
-        //
-        // Fall back to propvals / build_state_doc for resources without a live doc.
-        let existing_snapshot: Option<Vec<u8>> =
-            resource
-                .export_open_state()
-                .or_else(|| match resource.get(urls::LORO_UPDATE) {
-                    Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
-                    _ => resource
-                        .build_state_doc()
-                        .ok()
-                        .map(|doc| doc.export_snapshot()),
-                });
+        // Prefer the in-memory Loro doc over the persisted `loroUpdate` propval
+        // as the *source of edits*: `push_list_item` / `set_unsafe` update the
+        // live doc (and the latter also fills the commit builder). The
+        // persisted propval is still passed as the *baseline VV* so sign_at
+        // can export an incremental update that includes those live writes
+        // (diffing against the live doc's current VV would drop them).
+        let existing_doc = resource.loro_doc();
+        // Only a *really persisted* snapshot is a valid incremental baseline.
+        // A propvals-rebuilt snapshot must NOT be passed as the baseline: the
+        // server starts from empty on first save and can only apply a full
+        // snapshot (or a delta against state it already has). See
+        // `resources::test::push_propval`.
+        let persisted_snapshot: Option<Vec<u8>> =
+            match resource.get(urls::LORO_UPDATE) {
+                Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
+                _ => None,
+            };
+        // Working-doc fallback when there is no live doc and no persisted
+        // snapshot (legacy / shallow / first save via CommitBuilder.set only).
+        // Passed separately so sign_at still exports a *full* snapshot.
+        let working_snapshot: Option<Vec<u8>> =
+            if existing_doc.is_none() && persisted_snapshot.is_none() {
+                resource
+                    .build_state_doc()
+                    .ok()
+                    .map(|doc| doc.export_snapshot())
+            } else {
+                None
+            };
 
         let now = crate::utils::now();
-        sign_at(self, agent, now, store, existing_snapshot.as_deref()).await
+        sign_at(
+            self,
+            agent,
+            now,
+            store,
+            existing_doc,
+            persisted_snapshot.as_deref(),
+            working_snapshot.as_deref(),
+        )
+        .await
     }
 
     /// Set a property value. On sign, this gets converted to a Loro update.
@@ -1269,24 +1298,41 @@ impl CommitBuilder {
 }
 
 /// Signs a CommitBuilder at a specific unix timestamp.
-/// `existing_loro_snapshot` is the resource's current Loro state, if any.
-/// When provided, the set/remove operations are applied on top of it and
-/// an incremental update is exported. Without it, a full snapshot is created
-/// (appropriate for genesis commits or when no prior state exists).
+///
+/// `existing_doc` is the resource's live Loro doc (preferred source of edits —
+/// `Resource::set_unsafe` / strokes already wrote there). `persisted_snapshot`
+/// is the last **saved** state (the `loroUpdate` propval); when present, the
+/// commit's `loroUpdate` is an **incremental** update since that snapshot's
+/// version vector. `working_snapshot` is an unsaved rebuilt base used only
+/// when there is no live doc and no persisted snapshot — it must never be
+/// treated as an incremental baseline (the receiver would lack that state).
+/// Without a persisted baseline, a full snapshot is exported.
 #[tracing::instrument(skip_all)]
 async fn sign_at(
     commitbuilder: CommitBuilder,
     agent: &crate::agents::Agent,
     sign_date: i64,
     store: &impl Storelike,
-    existing_loro_snapshot: Option<&[u8]>,
+    existing_doc: Option<&crate::loro::AtomicLoroDoc>,
+    persisted_snapshot: Option<&[u8]>,
+    working_snapshot: Option<&[u8]>,
 ) -> AtomicResult<Commit> {
     // Build the Loro payload: merge set/remove onto existing state when present.
     // If both `loro_update` and set/remove are set, apply set/remove on top of the
-    // builder update (import as snapshot or incremental — prefer full snapshot from
-    // existing_loro_snapshot + set/remove when set/remove exist).
+    // builder update.
     let loro_update = if !commitbuilder.set.is_empty() || !commitbuilder.remove.is_empty() {
-        let doc = if let Some(snapshot) = existing_loro_snapshot {
+        // Working doc: fork the live doc (already has Resource::set writes) when
+        // available; otherwise rebuild from the persisted / working snapshot /
+        // builder update / empty. Avoids export→reimport on the live path.
+        let started_from_builder_update = existing_doc.is_none()
+            && persisted_snapshot.is_none()
+            && working_snapshot.is_none()
+            && commitbuilder.loro_update.is_some();
+        let doc = if let Some(existing) = existing_doc {
+            existing.fork()
+        } else if let Some(snapshot) = persisted_snapshot {
+            crate::loro::AtomicLoroDoc::from_snapshot(snapshot)?
+        } else if let Some(snapshot) = working_snapshot {
             crate::loro::AtomicLoroDoc::from_snapshot(snapshot)?
         } else if let Some(update) = &commitbuilder.loro_update {
             crate::loro::AtomicLoroDoc::from_snapshot(update)?
@@ -1295,8 +1341,11 @@ async fn sign_at(
         };
         // Incremental loro_update from `sync_loro_changes_to_commit_builder`
         // (stroke appends) must be merged before applying commitbuilder.set.
-        if let Some(update) = &commitbuilder.loro_update {
-            let _ = doc.import_update(update);
+        // Skip when those bytes were already used as the base document above.
+        if !started_from_builder_update {
+            if let Some(update) = &commitbuilder.loro_update {
+                let _ = doc.import_update(update);
+            }
         }
         for (prop, val) in &commitbuilder.set {
             doc.set_property(prop, val)?;
@@ -1304,7 +1353,27 @@ async fn sign_at(
         for prop in &commitbuilder.remove {
             doc.remove_property(prop)?;
         }
-        Some(doc.export_snapshot())
+        // Diff against the *persisted* VV only. `Resource::set_unsafe` already
+        // wrote the new ops into the live doc; exporting since its current VV
+        // would drop them. Header-decode the VV so we don't pay a full
+        // snapshot import just to read it.
+        if let Some(snapshot) = persisted_snapshot {
+            let base_vv = crate::loro::AtomicLoroDoc::vv_from_map(
+                &crate::loro::AtomicLoroDoc::vv_map_from_snapshot(snapshot)?,
+            );
+            let delta = doc.export_updates_since(&base_vv);
+            if delta.is_empty() {
+                // No new ops (e.g. re-setting the same value with no live-doc
+                // divergence). Fall back to a snapshot so apply still accepts
+                // the commit — rare path.
+                Some(doc.export_snapshot())
+            } else {
+                Some(delta)
+            }
+        } else {
+            // No persisted baseline — full snapshot (genesis / first save).
+            Some(doc.export_snapshot())
+        }
     } else {
         commitbuilder.loro_update
     };
@@ -1529,7 +1598,7 @@ mod test {
         let property2 = crate::urls::SHORTNAME;
         let value2 = Value::new("someval", &DataType::String).unwrap();
         commitbuilder.set(property2.into(), value2);
-        let commit = sign_at(commitbuilder, &agent, 0, &store, None)
+        let commit = sign_at(commitbuilder, &agent, 0, &store, None, None, None)
             .await
             .unwrap();
         let serialized = commit
@@ -1891,6 +1960,69 @@ mod test {
             stored2.get(urls::PUBLIC_KEY).unwrap().to_string(),
             agent.public_key,
             "publicKey from genesis should still be present"
+        );
+    }
+
+    /// Non-genesis `save_locally` must put an incremental `loroUpdate` on the
+    /// wire — not a full snapshot — once the resource has a persisted baseline.
+    #[cfg(feature = "db")]
+    #[tokio::test]
+    async fn sign_at_exports_incremental_loro_update_after_first_save() {
+        let store = crate::Db::init_temp("sign_at_incremental").await.unwrap();
+        let (_agent, drive) = store.setup("Bench").await.unwrap();
+        let did = store
+            .create_resource(
+                urls::CLASS,
+                &drive,
+                "item",
+                Some(vec![(urls::SHORTNAME, Value::Slug("inc-bench".into()))]),
+            )
+            .await
+            .unwrap();
+
+        // Grow the resource so a full snapshot is clearly larger than a delta.
+        for h in 0..8 {
+            let mut resource = store
+                .get_resource(&did.clone().into())
+                .await
+                .unwrap();
+            resource
+                .set(
+                    urls::DESCRIPTION.into(),
+                    Value::Markdown(format!("history {h} {}", "x".repeat(128))),
+                    &store,
+                )
+                .await
+                .unwrap();
+            resource.save_locally(&store).await.unwrap();
+        }
+
+        let mut resource = store.get_resource(&did.into()).await.unwrap();
+        let snapshot_len = resource
+            .materialized_state()
+            .map(|s| s.len())
+            .expect("resource should have a Loro snapshot after saves");
+
+        resource
+            .set(
+                urls::DESCRIPTION.into(),
+                Value::Markdown("tiny edit".into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        let resp = resource.save_locally(&store).await.unwrap();
+        let delta_len = resp
+            .commit
+            .loro_update
+            .as_ref()
+            .map(|u| u.len())
+            .expect("commit should carry loroUpdate");
+
+        assert!(
+            delta_len < snapshot_len / 2,
+            "follow-up commit loroUpdate ({delta_len} bytes) should be incremental \
+             vs full snapshot ({snapshot_len} bytes)"
         );
     }
 

@@ -63,13 +63,12 @@ scales with the file, for two reasons the code already documents:
 
 Three compounding behaviors, all in code:
 
-1. **Full Loro snapshots on every commit — not deltas.** `sign_at`
-   (`lib/src/commit.rs:1121`) calls `doc.export_snapshot()`, serializing the
-   resource's **entire** CRDT document after applying the change. A 1-character
-   title edit re-stores the whole resource's Loro state. **NB:** the docstring
-   at `commit.rs:1088` says *"an incremental update is exported"*, but the call
-   is `export_snapshot()` (full). This mismatch looks **unintended** and is the
-   single biggest growth lever.
+1. **Full Loro snapshots on every commit — not deltas.** ~~`sign_at`
+   called `doc.export_snapshot()`~~ **Fixed (2026-08-03):** `sign_at` now
+   exports `export_updates_since(persisted_vv)` when a prior snapshot exists.
+   See [`commit-performance.md`](./commit-performance.md). Per-commit history
+   growth and wire payload size were the main levers; `Tree::LoroSnapshots`
+   still stores a full current-state snapshot per resource for fast reads.
 2. **History retention.** Each commit is retained (the `previousCommit` audit
    chain), and each carries that full-snapshot `loroUpdate`. Storage grows as
    **O(edits × resource size)**, not O(change size). (Retention is meant to be

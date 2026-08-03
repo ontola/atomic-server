@@ -165,6 +165,20 @@ impl AtomicLoroDoc {
         VersionID::from_frontiers(&self.doc.state_frontiers())
     }
 
+    /// Independent in-memory copy of the current document (new PeerID).
+    ///
+    /// Prefer this over [`Self::export_snapshot`] + [`Self::from_snapshot`]
+    /// when the copy stays in-process: fork avoids a full serialize/deserialize
+    /// round-trip, which dominates `Resource::clone` and commit apply.
+    pub fn fork(&self) -> Self {
+        let doc = self.doc.fork();
+        doc.set_record_timestamp(true);
+        Self {
+            doc,
+            undo_manager: std::sync::Mutex::new(None),
+        }
+    }
+
     /// An independent document, as this one was at `version`.
     ///
     /// Prefer this over [Self::checkout] for reads: the receiver keeps its
