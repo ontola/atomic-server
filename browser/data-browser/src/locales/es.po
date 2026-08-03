@@ -144,6 +144,7 @@ msgstr "<0/> Crear Nuevo Agente"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
+#: src/views/Contacts/ImportVCardDialog.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/Plugin/AssignRights.tsx
@@ -541,6 +542,7 @@ msgstr "Encabezados HTTP opcionales para enviar al conectarse a este servidor MC
 #: src/chunks/TablePage/RowActionHeading.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/routes/EditRoute.tsx
+#: src/views/Contacts/ContactPage.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
 #: src/views/ResourcePageDefault.tsx
 msgid "Edit"
@@ -1240,6 +1242,7 @@ msgid "Importing..."
 msgstr "Importando..."
 
 #: src/actions/resourceActions.tsx
+#: src/views/Contacts/ImportVCardDialog.tsx
 #: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr "Importar"
@@ -5526,6 +5529,7 @@ msgstr ""
 
 #: src/helpers/knownPeers.test.ts
 #: src/helpers/knownPeers.test.ts
+#: src/views/Contacts/ContactPage.tsx
 msgid "Phone"
 msgstr ""
 
@@ -6594,4 +6598,103 @@ msgstr ""
 #. 0: quickAdd.label; 1: preset.column
 #: src/chunks/TablePage/tableTemplates.test.ts
 msgid "{0} presets \"{1}\", which is not a column"
+msgstr ""
+
+#: src/views/Contacts/AddressBookPage.tsx
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "<0/> Import vCard"
+msgstr ""
+
+#: src/views/Contacts/AddressBookPage.tsx
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "<0/> New Contact"
+msgstr ""
+
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "Filter contacts…"
+msgstr ""
+
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "Filter contacts"
+msgstr ""
+
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "Loading contacts…"
+msgstr ""
+
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "No contacts yet. Create one or import a `.vcf` export from Google, iCloud, or Microsoft."
+msgstr ""
+
+#: src/views/Contacts/ContactPage.tsx
+msgid "Email"
+msgstr ""
+
+#: src/views/Contacts/ContactPage.tsx
+msgid "Website"
+msgstr ""
+
+#: src/views/Contacts/ContactPage.tsx
+msgid "Atomic Agent"
+msgstr ""
+
+#: src/views/Contacts/ContactPage.tsx
+msgid "No contact details yet — use Edit to add them."
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+#: src/views/Contacts/AddressBookCard.tsx
+msgid "Address Book"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+#: src/views/Contacts/ContactCard.tsx
+msgid "Contact"
+msgstr ""
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "No contacts found in this file."
+msgstr ""
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Failed to read file"
+msgstr ""
+
+#. 0: result.created; 1: result.created === 1 ? '' \\: 's'
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Imported {0} contact{1}"
+msgstr ""
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Import failed"
+msgstr ""
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Import vCard"
+msgstr ""
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Drop vCard here…"
+msgstr ""
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Drop a .vcf file, or click to browse"
+msgstr ""
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Export contacts from Google Contacts, iCloud, or Microsoft as a `.vcf` file, then drop it here."
+msgstr ""
+
+#. 0: cards.length - 8
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "…and {0} more"
+msgstr ""
+
+#. 0: cards.length; 1: cards.length === 1 ? '' \\: 's'
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "{0} contact{1} ready"
+msgstr ""
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Importing…"
 msgstr ""
