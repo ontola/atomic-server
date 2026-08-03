@@ -40,23 +40,46 @@ const TARGET_IMAGE_MAP = {
 // chromium below so the test browser exposes the secure-context APIs.
 const ATOMIC_DOMAIN = 'atomic';
 
-// Self-hosted Main runner ("Mancave"): 12 cores / 64GB RAM, WSL + Docker.
-// Sized hot but not maxed — nextest `it` boots actix servers (and
-// iroh_pairing spawns extra OS processes) while e2e shards run Chromium
-// against more servers. 8 nextest threads + 4×3 browsers saturated the
-// box: peer handoffs timed out and `it` tests sat at 180–266s.
-// Hosted runners (2 vCPU) still get Playwright/nextest defaults when
-// these env vars aren't set.
-const E2E_SHARD_COUNT = 3;
-const E2E_PLAYWRIGHT_WORKERS = '2'; // 3 shards × 2 workers ≈ 6 browsers
-const E2E_PLAYWRIGHT_RETRIES = '1';
-// Leave headroom for co-running e2e: with threads=4, lib db tests were
-// starving beside `it` servers and hitting their ntest ceilings.
-const NEXTEST_TEST_THREADS = '3';
-const NEXTEST_RETRIES = '1';
-// Link concurrency: previously capped at 2 for a ~15GB Docker VM that
-// OOM-killed `ld`. Mancave has 64GB — 4 concurrent musl links is fine.
-const NEXTEST_BUILD_JOBS = '4';
+// CI host profiles. Main.yml passes `--host-profile mancave` only on the
+// self-hosted job; the GitHub-hosted fallback keeps the conservative
+// `hosted` defaults (2 vCPU). Earlier "8 threads saturated the box"
+// failures were actually on ubuntu-latest while we thought CI_RUNNER was
+// set — real Mancave (12c/64GB) can take the hotter knobs. `.config/nextest.toml`
+// still caps `it` at 2 and serializes `iroh_pairing::*`.
+type HostProfile = 'mancave' | 'hosted';
+
+type HostKnobs = {
+  e2eShardCount: number;
+  e2ePlaywrightWorkers: string;
+  e2ePlaywrightRetries: string;
+  nextestTestThreads: string;
+  nextestRetries: string;
+  nextestBuildJobs: string;
+};
+
+const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
+  // 4 shards × 3 workers ≈ 12 browsers; nextest 6-wide with it capped at 2.
+  mancave: {
+    e2eShardCount: 4,
+    e2ePlaywrightWorkers: '3',
+    e2ePlaywrightRetries: '1',
+    nextestTestThreads: '6',
+    nextestRetries: '1',
+    nextestBuildJobs: '4',
+  },
+  hosted: {
+    e2eShardCount: 2,
+    e2ePlaywrightWorkers: '1',
+    e2ePlaywrightRetries: '2',
+    nextestTestThreads: '2',
+    nextestRetries: '2',
+    nextestBuildJobs: '2',
+  },
+};
+
+function resolveHostProfile(value: string): HostProfile {
+  return value === 'mancave' ? 'mancave' : 'hosted';
+}
 
 // Official `rust:*` images set `CARGO_HOME=/usr/local/cargo`. The
 // rust-musl-cross images set `CARGO_HOME=/root/.cargo`. Cache mounts
@@ -68,6 +91,9 @@ const CARGO_HOME_MUSL = '/root/.cargo';
 @object()
 export class AtomicServer {
   source: Directory;
+  /** Active host knobs for this `ci()` invocation. Standalone func calls
+   *  (rustTest/endToEnd alone) keep the conservative hosted defaults. */
+  private hostKnobs: HostKnobs = HOST_PROFILES.hosted;
 
   constructor(
     @argument({
@@ -212,7 +238,15 @@ export class AtomicServer {
      * whatever master last put there.
      */
     @argument() publishDocs = false,
+    /**
+     * `mancave` = hot parallelism for the 12c/64GB self-hosted runner.
+     * `hosted` (default) = conservative knobs for ubuntu-latest fallback.
+     * Passed from `.github/workflows/main.yml` per job.
+     */
+    @argument() hostProfile: string = 'hosted',
   ): Promise<string> {
+    this.hostKnobs = HOST_PROFILES[resolveHostProfile(hostProfile)];
+
     // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
     // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
     await Promise.all([this.jsLint(), this.rustFmt()]);
@@ -1094,12 +1128,9 @@ export class AtomicServer {
         // scope only strips `atomic-server`'s own defaults — other members
         // don't define a `light` feature and are unaffected.
         //
-        // `--build-jobs` / `--test-threads` / `--retries`: sized for the
-        // Mancave self-hosted runner (12c/64GB). `.config/nextest.toml`
-        // still defaults to test-threads=2 / retries=2 for local/hosted
-        // use; CLI flags here override for Main CI only. The toml also
-        // caps `it` at 2 threads and serializes `iroh_pairing::*` so
-        // peer subprocess boots aren't starved under CI load.
+        // `--build-jobs` / `--test-threads` / `--retries`: from
+        // `--host-profile` (mancave hot / hosted quiet). The toml still
+        // caps `it` at 2 and serializes `iroh_pairing::*`.
         .withExec([
           'sh',
           '-c',
@@ -1109,9 +1140,9 @@ export class AtomicServer {
             'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
             'cargo nextest run --workspace --exclude atomic-server-tauri ' +
             '--no-default-features --features light ' +
-            `--build-jobs ${NEXTEST_BUILD_JOBS} ` +
-            `--test-threads ${NEXTEST_TEST_THREADS} ` +
-            `--retries ${NEXTEST_RETRIES}`,
+            `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +
+            `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
+            `--retries ${this.hostKnobs.nextestRetries}`,
         ])
         .stdout()
     );
@@ -1369,9 +1400,15 @@ export class AtomicServer {
     // `pnpm install` — see git history for ERR_PNPM_WORKSPACE_PKG_NOT_FOUND.
     return playwrightContainer
       .withEnvVariable('CI', 'true')
-      // Mancave (12c/64GB WSL): see module-level E2E_* constants.
-      .withEnvVariable('PLAYWRIGHT_WORKERS', E2E_PLAYWRIGHT_WORKERS)
-      .withEnvVariable('PLAYWRIGHT_RETRIES', E2E_PLAYWRIGHT_RETRIES)
+      // Host-profile knobs — see HOST_PROFILES / `--host-profile`.
+      .withEnvVariable(
+        'PLAYWRIGHT_WORKERS',
+        this.hostKnobs.e2ePlaywrightWorkers,
+      )
+      .withEnvVariable(
+        'PLAYWRIGHT_RETRIES',
+        this.hostKnobs.e2ePlaywrightRetries,
+      )
       .withFile('/app/package.json', browserContainer.file('/app/package.json'))
       .withFile(
         '/app/pnpm-lock.yaml',
@@ -1441,20 +1478,19 @@ export class AtomicServer {
         '/bin/bash',
         '-c',
         'set -o pipefail; ' +
-          `pnpm exec playwright test --config=./playwright.config.ts --shard=${shardIndex}/${E2E_SHARD_COUNT} 2>&1 | tee /test-output.log; ` +
+          `pnpm exec playwright test --config=./playwright.config.ts --shard=${shardIndex}/${this.hostKnobs.e2eShardCount} 2>&1 | tee /test-output.log; ` +
           'echo ${PIPESTATUS[0]} > /test-exit-code; exit 0',
       ]);
   }
 
   @func()
   async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
-    // 4 shards × own atomic-server, sized for Mancave (12c/64GB). Dagger
-    // dedupes the shared debug `rustBuild(e2e)` / base-container graph.
+    // Shards × own atomic-server. Count comes from `--host-profile`
+    // (Mancave hot / hosted conservative). Dagger dedupes the shared
+    // debug `rustBuild(e2e)` / base-container graph.
+    const shardCount = this.hostKnobs.e2eShardCount;
     const base = this.e2eBaseContainer();
-    const shardIndexes = Array.from(
-      { length: E2E_SHARD_COUNT },
-      (_, i) => i + 1,
-    );
+    const shardIndexes = Array.from({ length: shardCount }, (_, i) => i + 1);
     const shardContainers = shardIndexes.map(i =>
       this.e2eShardContainer(base, i),
     );
@@ -1490,7 +1526,7 @@ export class AtomicServer {
         netlifyAuthToken,
       );
       reportUrls.push(
-        `shard ${r.shard}/${E2E_SHARD_COUNT}: ${this.extractDeployUrl(deployOutput)}`,
+        `shard ${r.shard}/${shardCount}: ${this.extractDeployUrl(deployOutput)}`,
       );
     }
 
@@ -1498,11 +1534,11 @@ export class AtomicServer {
       const tails = failed
         .map(
           r =>
-            `===== SHARD ${r.shard}/${E2E_SHARD_COUNT} (exit ${r.exitCode}) =====\n${r.testOutput.slice(-20000)}`,
+            `===== SHARD ${r.shard}/${shardCount} (exit ${r.exitCode}) =====\n${r.testOutput.slice(-20000)}`,
         )
         .join('\n\n');
       throw new Error(
-        `E2E tests failed on ${failed.length}/${E2E_SHARD_COUNT} shard(s).\n` +
+        `E2E tests failed on ${failed.length}/${shardCount} shard(s).\n` +
           `Reports:\n${reportUrls.join('\n')}\n\n${tails}`,
       );
     }
