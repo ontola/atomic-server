@@ -1395,11 +1395,17 @@ export class AtomicServer {
         '/app/e2e/tests',
         this.source.directory('browser/e2e/tests'),
       )
-      // Wait for the server to be ready
+      // Chromium reaches the server via `--host-resolver-rules` (see
+      // playwright.config.ts), but Node side-channels — create-template,
+      // anything reading `window.store.getServerUrl()` then fetching from
+      // the test process — resolve `*.localhost` to 127.0.0.1 and miss the
+      // service binding. Mirror the map in /etc/hosts for those.
       .withExec([
         'sh',
         '-c',
-        `for i in $(seq 1 10); do curl http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
+        `IP=$(getent ahostsv4 ${ATOMIC_DOMAIN} | awk '{print $1; exit}'); ` +
+          `test -n "$IP" && echo "$IP atomic.localhost" >> /etc/hosts; ` +
+          `for i in $(seq 1 10); do curl http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
       ])
       // Test the server is running
       .withExec([

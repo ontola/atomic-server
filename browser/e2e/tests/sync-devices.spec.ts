@@ -57,11 +57,17 @@ test.describe('sync page devices', () => {
     // A pairing code is routing only. Anything key-shaped in here would mean
     // a printed or photographed code could hand over the account.
     expect(uri).not.toMatch(/secret|privateKey|private_key/i);
-    // Only the documented fields; `drives` may repeat.
+    // Only the documented fields; `drives` may repeat. `url` is an optional
+    // LAN/WS fast-path hint — present when the server isn't localhost (e.g.
+    // dagger's `atomic.localhost`), absent for a loopback server.
     const keys = new Set([
       ...new URL(uri.replace('atomic://', 'https://')).searchParams.keys(),
     ]);
-    expect([...keys].sort()).toEqual(['drives', 'node', 'v']);
+    expect([...keys].sort()).toEqual(
+      keys.has('url')
+        ? ['drives', 'node', 'url', 'v']
+        : ['drives', 'node', 'v'],
+    );
   });
 
   test('copying the pairing code puts that exact code on the clipboard', async ({

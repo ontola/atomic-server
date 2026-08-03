@@ -34,6 +34,12 @@ const config: PlaywrightTestConfig = {
           origin: 'http://atomic:9883',
           localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
         },
+        {
+          // Dagger e2e FRONTEND_URL — chromium treats `*.localhost` as a
+          // secure context (needed for WASM ClientDb / crypto.subtle).
+          origin: 'http://atomic.localhost:9883',
+          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
+        },
       ],
     },
   },
