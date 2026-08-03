@@ -51,6 +51,16 @@ exports again for `Tree::LoroSnapshots`. Skipping the first export needs
 care around tests that assert a propval snapshot immediately after
 `apply_changes`. Left for a follow-up.
 
+### Finding 5 — `Db::init_temp` re-bootstraps + 1 GiB redb cache
+
+Unrelated to commit apply, but every lifecycle / unit test pays it:
+
+- Cold `init_temp` ≈ **120 ms** in release, almost all in `populate::bootstrap`
+  (import ~200 KB of ontology JSON into a ~4 MiB `atomic.redb`).
+- `RedbStore::new_file` still used `Database::create` with redb's **1 GiB**
+  default cache despite a comment saying Builder would drop it.
+- Second `populate()` in `init_temp` is already a sentinel no-op (~100 µs).
+
 ## Fixes (this pass)
 
 | Fix | Status |
@@ -59,10 +69,22 @@ care around tests that assert a propval snapshot immediately after
 | Drop inner clone in `apply_changes`; caller keeps `resource_old` | **this pass** |
 | `sign_at` exports `export_updates_since(base_vv)` when prior state exists | **this pass** |
 | `sign()` forks live doc instead of export→reimport before set/remove | **this pass** |
+| `Db::init_temp` clones a process-local bootstrapped `atomic.redb` | **this pass** |
+| redb file open uses 64 MiB cache (16 MiB for temp); was 1 GiB default | **this pass** |
 | Defer first post-apply snapshot export | deferred |
-| Criterion `commit_bench` for clone / sign / apply stages | **this pass** |
+| Criterion `commit_bench` for clone / sign / apply / `init_temp` | **this pass** |
 
 ## Benchmarks
+
+Paired before/after on the same machine (release, `time_commit_*` examples /
+`commit_bench`). "Before" = `develop` @ 7863501b.
+
+| Metric | Before | After |
+| --- | --- | --- |
+| `Db::init_temp` (warm, Nth call) | ~120 ms | ~10 ms |
+| `edit_save_locally` (10 prior edits) | ~2.1 ms | ~1.7 ms |
+| Follow-up `loroUpdate` size (20-edit history) | ~6585 B (≈ full snapshot) | **157 B** |
+| `Resource::clone` (50-edit doc) | ~195 µs/op | ~197 µs/op (fork ≈ snapshot cost at this size) |
 
 ```
 cargo bench -p atomic_lib --bench commit_bench --features db-redb

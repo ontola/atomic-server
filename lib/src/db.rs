@@ -460,6 +460,24 @@ impl Db {
         base_domain: Option<String>,
         uploads_path: &std::path::Path,
     ) -> AtomicResult<Db> {
+        Self::init_redb_file_with_cache(
+            path,
+            base_domain,
+            uploads_path,
+            redb_store::DEFAULT_FILE_CACHE_BYTES,
+        )
+        .await
+    }
+
+    /// Like [`Self::init_redb_file`], but with an explicit redb page-cache size.
+    /// Used by [`Self::init_temp`] so throwaway test DBs don't each reserve
+    /// redb's default 1 GiB cache.
+    pub async fn init_redb_file_with_cache(
+        path: &std::path::Path,
+        base_domain: Option<String>,
+        uploads_path: &std::path::Path,
+        cache_bytes: usize,
+    ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
         std::fs::create_dir_all(path).map_err(|e| {
@@ -518,7 +536,7 @@ impl Db {
         #[cfg(not(feature = "db-sled"))]
         let _ = uploads_path;
 
-        let redb_store = redb_store::RedbStore::new_file(&redb_path)?;
+        let redb_store = redb_store::RedbStore::new_file_with_cache(&redb_path, cache_bytes)?;
 
         let store = Db {
             path: path.to_path_buf(),
@@ -734,23 +752,99 @@ impl Db {
     }
 
     /// Create a temporary Db backed by ReDB. Useful for testing.
+    ///
+    /// Bootstrapping the ontology (~4 MiB `atomic.redb`) dominates cold
+    /// `init_temp` cost. Within a process we build that file once, then
+    /// `fs::copy` it for each call — subsequent inits skip the import and
+    /// only pay open + `create_agent`. See `planning/commit-performance.md`.
     #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
     pub async fn init_temp(id: &str) -> AtomicResult<Db> {
+        let template_redb = Self::ensure_init_temp_template().await?;
+
         let tmp_dir_path = format!(".temp/db/{}", id);
         let uploads_path = format!(".temp/db/{}/uploads", id);
         let _try_remove_existing = std::fs::remove_dir_all(&tmp_dir_path);
         std::fs::create_dir_all(&uploads_path)
             .map_err(|e| format!("Failed to create temp dir: {e}"))?;
-        let store = Db::init_redb_file(
+
+        let dst_redb = std::path::Path::new(&tmp_dir_path).join("atomic.redb");
+        // Parent dir created with uploads above; copy the bootstrapped file
+        // before open so `bootstrap` hits its sentinel short-circuit.
+        std::fs::copy(&template_redb, &dst_redb).map_err(|e| {
+            format!(
+                "Failed to copy init_temp template {} → {}: {e}",
+                template_redb.display(),
+                dst_redb.display()
+            )
+        })?;
+
+        let store = Db::init_redb_file_with_cache(
             std::path::Path::new(&tmp_dir_path),
             Some("https://localhost".into()),
             std::path::Path::new(&uploads_path),
+            redb_store::TEMP_FILE_CACHE_BYTES,
         )
         .await?;
         let agent = store.create_agent(None).await?;
         store.set_default_agent(agent);
+        // Idempotent: template is already seeded; keep the call so a stale
+        // template missing a newer vocabulary sentinel still gets repaired.
         store.populate().await?;
         Ok(store)
+    }
+
+    /// Process-local path to a bootstrapped `atomic.redb` used by [`Self::init_temp`].
+    /// Built once; callers copy the file (the template Db is dropped so the
+    /// OS file lock is released).
+    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    async fn ensure_init_temp_template() -> AtomicResult<std::path::PathBuf> {
+        use std::sync::OnceLock;
+        use tokio::sync::Mutex;
+
+        static TEMPLATE_PATH: OnceLock<std::path::PathBuf> = OnceLock::new();
+        static INIT: Mutex<()> = Mutex::const_new(());
+
+        if let Some(path) = TEMPLATE_PATH.get() {
+            return Ok(path.clone());
+        }
+
+        let _guard = INIT.lock().await;
+        if let Some(path) = TEMPLATE_PATH.get() {
+            return Ok(path.clone());
+        }
+
+        // Per-process dir so parallel `cargo test` processes don't share a
+        // half-written template.
+        let template_dir = std::env::temp_dir().join(format!(
+            "atomic_init_temp_template_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&template_dir);
+        let uploads = template_dir.join("uploads");
+        std::fs::create_dir_all(&uploads)
+            .map_err(|e| format!("Failed to create init_temp template dir: {e}"))?;
+
+        // Build + bootstrap, then drop so `atomic.redb` can be copied.
+        let store = Db::init_redb_file_with_cache(
+            &template_dir,
+            Some("https://localhost".into()),
+            &uploads,
+            redb_store::TEMP_FILE_CACHE_BYTES,
+        )
+        .await?;
+        drop(store);
+
+        let redb_path = template_dir.join("atomic.redb");
+        if !redb_path.exists() {
+            return Err(format!(
+                "init_temp template missing after bootstrap: {}",
+                redb_path.display()
+            )
+            .into());
+        }
+
+        let _ = TEMPLATE_PATH.set(redb_path.clone());
+        Ok(redb_path)
     }
 
     // ── High-level SDK helpers ──────────────────────────────────────────────────
