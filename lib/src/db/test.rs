@@ -1703,8 +1703,13 @@ async fn add_resource_opts_always_writes_loro_snapshot() {
 /// Note this test would pass against the old code too: with no DID resolver
 /// reachable, the fetch fails fast instead of hanging. It pins the predicate,
 /// not the latency — the hang only reproduces where resolution can stall.
+///
+/// Timeout is 30s (was 10s): under dagger's parallel nextest load,
+/// `Db::init_temp` + `setup` routinely take ~8s on a lucky run and tip
+/// past 10s on a contended one — nextest then retries twice and still
+/// fail-fasts the rest of the suite. The predicate itself is instant.
 #[tokio::test]
-#[timeout(10000)]
+#[timeout(30000)]
 async fn load_agent_from_secret_reports_a_missing_drive_without_materialising_it() {
     let db_a = Db::init_temp("agent_secret_local_drive_a").await.unwrap();
     let (agent_a, drive) = db_a.setup("Alice").await.unwrap();
