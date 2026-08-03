@@ -1386,6 +1386,14 @@ export class AtomicServer {
       // hardcodes `*.localhost` to 127.0.0.1.
       .withEnvVariable('FRONTEND_URL', `http://atomic.localhost:9883`)
       .withEnvVariable('SERVER_URL', `http://atomic.localhost:9883`)
+      // Node-side fetches (Playwright `route.fetch`, create-template) cannot
+      // use `atomic.localhost`: chromium maps it via host-resolver-rules,
+      // and `/etc/hosts` is read-only in this container. Tests rewrite to
+      // this service-binding hostname when they need to talk from Node.
+      .withEnvVariable(
+        'ATOMIC_SERVICE_URL',
+        `http://${ATOMIC_DOMAIN}:9883`,
+      )
       .withEnvVariable(
         'ATOMIC_TEST_HOST_MAP',
         `MAP atomic.localhost ${ATOMIC_DOMAIN}`,
@@ -1395,17 +1403,11 @@ export class AtomicServer {
         '/app/e2e/tests',
         this.source.directory('browser/e2e/tests'),
       )
-      // Chromium reaches the server via `--host-resolver-rules` (see
-      // playwright.config.ts), but Node side-channels — create-template,
-      // anything reading `window.store.getServerUrl()` then fetching from
-      // the test process — resolve `*.localhost` to 127.0.0.1 and miss the
-      // service binding. Mirror the map in /etc/hosts for those.
+      // Wait for the server to be ready
       .withExec([
         'sh',
         '-c',
-        `IP=$(getent ahostsv4 ${ATOMIC_DOMAIN} | awk '{print $1; exit}'); ` +
-          `test -n "$IP" && echo "$IP atomic.localhost" >> /etc/hosts; ` +
-          `for i in $(seq 1 10); do curl http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
+        `for i in $(seq 1 10); do curl http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
       ])
       // Test the server is running
       .withExec([
