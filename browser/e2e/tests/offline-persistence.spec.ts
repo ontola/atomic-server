@@ -12,14 +12,38 @@ import { before } from './test-utils';
  */
 test('cached drive survives reload while offline', async ({ page }) => {
   await before({ page }); // devDrive — creates + visits a drive online
-  // Give the worker's 1s flush tick time to persist the drive to OPFS.
-  await page.waitForTimeout(2000);
+
+  // Wait for ClientDb + the drive's OPFS write — a bare timeout races
+  // WASM init under dagger (clientdb.init alone can exceed 2s). Mirror
+  // `offline-reload.spec.ts`.
+  await page.waitForFunction(
+    () => window.store.getClientDb()?.isReady === true,
+    undefined,
+    { timeout: 30000 },
+  );
+  await page.waitForFunction(
+    async () => {
+      const drive = window.store.getDrive();
+      if (!drive) return false;
+      const jsonAd = await window.store.getClientDb()?.getResource?.(drive);
+
+      return !!jsonAd;
+    },
+    undefined,
+    { timeout: 15000 },
+  );
+
   const drive = await page.evaluate(() => window.store.getDrive());
 
   // Go offline (what the Sync-page "disconnect" does) and reload.
   await page.evaluate(() => localStorage.setItem('ws-disconnected', '1'));
   await page.reload();
-  await page.waitForTimeout(2500);
+
+  await page.waitForFunction(
+    () => window.store.getClientDb()?.isReady === true,
+    undefined,
+    { timeout: 30000 },
+  );
 
   const r = await page.evaluate(async d => {
     const s = window.store;
@@ -35,11 +59,15 @@ test('cached drive survives reload while offline', async ({ page }) => {
     return {
       serverConnected: s.getSyncStatus?.()?.serverConnected,
       viaGetProps: viaGet,
+      error: s.resources.get(d)?.error?.message,
     };
   }, drive ?? '');
 
   // We must actually be offline (proves we're testing the local cache, not a
   // server re-fetch), and the drive must still resolve from the ClientDb.
   expect(r.serverConnected).toBe(false);
-  expect(r.viaGetProps).toBeGreaterThan(0);
+  expect(
+    r.viaGetProps,
+    `drive should load from OPFS offline; got props=${r.viaGetProps} error=${r.error}`,
+  ).toBeGreaterThan(0);
 });
