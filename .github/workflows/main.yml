@@ -1,23 +1,22 @@
 on: [push, workflow_dispatch]
 
-# Which machine this pipeline runs on is a repository variable, not a literal,
-# so switching between the self-hosted runner and GitHub's is one settings
-# change rather than an edit here.
+# Main runs on Mancave (self-hosted) by default so Dagger cache volumes stay
+# warm. Override with a repo variable only when you intentionally want GitHub-
+# hosted runners:
 #
 #   Settings -> Secrets and variables -> Actions -> Variables
-#   CI_RUNNER = ["self-hosted", "Linux", "X64"]
+#   CI_RUNNER = ["ubuntu-latest"]
 #
-# Unset or delete it and this falls back to `ubuntu-latest`. There is NO
-# automatic failover: if the self-hosted runner is offline, jobs QUEUE (GitHub
-# gives up after 24h) rather than moving to a hosted runner. Clearing
-# CI_RUNNER is the manual escape hatch.
+# There is NO automatic failover: if Mancave is offline, jobs QUEUE (GitHub
+# gives up after 24h) rather than moving to a hosted runner. Setting
+# CI_RUNNER to ["ubuntu-latest"] is the manual escape hatch.
 #
-# Only this workflow uses it, on purpose. Releasing and deploying are pinned to
-# `ubuntu-latest` and must stay that way: a tag push once left the crates.io
-# publish queued for a day because the runner was switched off, and a release
-# that depends on a particular PC being awake is not a release process. Here a
-# stall costs slow CI and nothing else, and the warm Dagger cache is worth the
-# trade.
+# Only this workflow uses the self-hosted runner, on purpose. Releasing and
+# deploying are pinned to `ubuntu-latest` and must stay that way: a tag push
+# once left the crates.io publish queued for a day because the runner was
+# switched off, and a release that depends on a particular PC being awake is
+# not a release process. Here a stall costs slow CI and nothing else, and the
+# warm Dagger cache is worth the trade.
 #
 # (Automatic fallback is not available. The usual trick -- a picker job that
 # queries the runner API and emits labels for the rest -- needs
@@ -34,7 +33,7 @@ on: [push, workflow_dispatch]
 # triggers on either, and this stays correct if someone adds one later: the
 # guard is structural, not a convention to remember. Trusted events (push,
 # workflow_dispatch, workflow_call -- all requiring write access) still get
-# CI_RUNNER and its warm Dagger cache.
+# Mancave and its warm Dagger cache.
 #
 # Do not "simplify" this back to a bare `vars.CI_RUNNER` lookup.
 
@@ -42,7 +41,7 @@ name: "Main pipeline: build, lint, test"
 jobs:
   Main:
     name: Main
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["ubuntu-latest"]')) }}
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]')) }}
     env:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
     steps:
