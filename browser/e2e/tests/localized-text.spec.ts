@@ -66,21 +66,49 @@ async function fillCell(
   colIndex: number,
   text: string,
 ) {
-  const target = cell(page, rowIndex, colIndex);
-  await target.scrollIntoViewIfNeeded();
-  await target.click();
-
   const input = page.locator(
     `[aria-rowindex="${rowIndex}"] > [aria-colindex="${colIndex}"] > input`,
   );
 
-  if (!(await input.isVisible({ timeout: 1000 }).catch(() => false))) {
-    await page.keyboard.press('Enter');
+  // The grid remounts cells while columns/rows settle (LocalizedText column
+  // create, language split, collection refresh). `scrollIntoViewIfNeeded`
+  // throws "Element is not attached to the DOM" when its handle goes stale
+  // mid-wait — retry against a fresh locator instead of failing the suite.
+  const deadline = Date.now() + 15000;
+  let lastError: unknown;
+
+  while (Date.now() < deadline) {
+    const target = cell(page, rowIndex, colIndex);
+
+    try {
+      await expect(target).toBeVisible({ timeout: 2000 });
+      await target.scrollIntoViewIfNeeded();
+      await target.click();
+
+      if (!(await input.isVisible({ timeout: 1000 }).catch(() => false))) {
+        await page.keyboard.press('Enter');
+      }
+
+      await expect(input).toBeFocused({ timeout: 2000 });
+      await input.fill(text);
+      await page.keyboard.press('Escape');
+
+      return;
+    } catch (err) {
+      lastError = err;
+      const message = err instanceof Error ? err.message : String(err);
+
+      if (
+        !message.includes('not attached') &&
+        !message.includes('not stable') &&
+        !message.includes('detached')
+      ) {
+        throw err;
+      }
+    }
   }
 
-  await expect(input).toBeFocused();
-  await input.fill(text);
-  await page.keyboard.press('Escape');
+  throw lastError;
 }
 
 /** Declares the drive's language set through the chip's Edit languages dialog. */
