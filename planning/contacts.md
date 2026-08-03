@@ -221,16 +221,18 @@ Outlook exports (minimal representative cards, not full dumps).
 
 ## TypeScript / Rust wiring checklist
 
-- [ ] `lib/defaults/contacts.json` + import in `populate.rs`
-- [ ] URL constants in `lib/src/urls.rs` (optional if only used via JSON)
-- [ ] Hand-update `browser/lib/src/ontologies/dataBrowser.ts` (classes,
+- [x] `lib/defaults/contacts.json` + import in `populate.rs`
+- [x] URL constants in `lib/src/urls.rs` (optional if only used via JSON)
+- [x] Hand-update `browser/lib/src/ontologies/dataBrowser.ts` (classes,
       properties, prop type maps) — CLI regen later if desired
-- [ ] `getOrCreateContactsFolder` in `standardLocations.ts`
-- [ ] Basic instance handlers + BaseButtons
-- [ ] `AddressBookPage` + `ContactPage` + ResourcePage / Card / iconMap
-- [ ] VCF parser + import dialog + tests
-- [ ] Docs blurb optional; update `planning/README.md` + suite plan pointer
-- [ ] `pnpm typecheck` in data-browser; focused unit tests
+- [x] `getOrCreateContactsFolder` in `standardLocations.ts`
+- [x] Basic instance handlers + BaseButtons
+- [x] `AddressBookPage` + `ContactPage` + ResourcePage / Card / iconMap
+- [x] VCF parser + import dialog + tests
+- [x] Docs blurb optional; update `planning/README.md` + suite plan pointer
+- [x] Focused VCF unit tests (5 passing). Full data-browser typecheck still
+      fails on pre-existing `pairing.test.ts` `@types/node` issue; Contacts
+      files have no type errors.
 
 ## Out of scope (stay in personal-information-suite)
 
@@ -244,14 +246,16 @@ Outlook exports (minimal representative cards, not full dumps).
 
 ## Acceptance
 
-- [ ] Fresh server bootstrap includes Contact + AddressBook vocabulary
-- [ ] User can create an Address Book and Contacts from New Resource
-- [ ] Address Book page lists Contacts via `useCollection` (query), searchable
-- [ ] Contact page edits fields and links an Agent through ResourceSelector
-- [ ] Importing a `.vcf` creates Contacts with name/email/phone/uid populated
-- [ ] Re-import with same UID updates rather than duplicating
-- [ ] Contacts sync/search like any other resource (no special server path)
-- [ ] UI reuses Dialog, ResourceSelector, EditableTitle, layout primitives
+- [x] Fresh server bootstrap includes Contact + AddressBook vocabulary
+      (`contacts.json` wired into `populate_default_store`)
+- [x] User can create an Address Book and Contacts from New Resource
+- [x] Address Book page lists Contacts via `useCollection` (query), searchable
+- [x] Contact page edits fields and links an Agent through ResourceSelector
+      (`classtype=Agent` on `contactAgent` + Edit form / AllProps)
+- [x] Importing a `.vcf` creates Contacts with name/email/phone/uid populated
+- [x] Re-import with same UID updates rather than duplicating
+- [x] Contacts sync/search like any other resource (no special server path)
+- [x] UI reuses Dialog, ResourceSelector, EditableTitle, layout primitives
 
 ## Relationship to other plans
 

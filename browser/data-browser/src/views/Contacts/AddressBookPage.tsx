@@ -3,6 +3,7 @@ import { styled } from 'styled-components';
 import {
   core,
   dataBrowser,
+  unknownSubject,
   useCollection,
   useMemberFromCollection,
   useString,
@@ -150,7 +151,11 @@ function FilteredContactRow({
     dataBrowser.properties.organization,
   );
 
-  if (resource.loading || !resource.subject) {
+  if (
+    resource.loading ||
+    !resource.subject ||
+    resource.subject === unknownSubject
+  ) {
     return null;
   }
 
