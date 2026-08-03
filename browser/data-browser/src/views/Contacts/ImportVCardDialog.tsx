@@ -187,7 +187,7 @@ const DropZone = styled.div<{ $active: boolean }>`
   border: 2px dashed
     ${p => (p.$active ? p.theme.colors.main : p.theme.colors.bg2)};
   border-radius: ${p => p.theme.radius};
-  background: ${p => (p.$active ? p.theme.colors.mainLight : p.theme.colors.bg)};
+  background: ${p => (p.$active ? p.theme.colors.bg1 : p.theme.colors.bg)};
   color: ${p => p.theme.colors.textLight};
   cursor: pointer;
   text-align: center;

@@ -113,7 +113,7 @@ function decodeQuotedPrintable(value: string): string {
 }
 
 function firstType(params: Record<string, string>): string | undefined {
-  const raw = params.TYPE ?? params.TYPE;
+  const raw = params.TYPE;
 
   if (!raw) {
     return undefined;
