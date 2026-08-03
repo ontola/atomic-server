@@ -20,6 +20,75 @@ Related plans (do not duplicate; this doc owns the product merge):
 - External repo: [`ontola/searchlauncher`](https://github.com/ontola/searchlauncher)
   (Kotlin + Compose + AppSearch; ~20k LOC main sources).
 
+## Where the real value emerges
+
+The skeptical take is fair: *Atomic can just be another app; SearchLauncher
+already finds apps.* If open-Atomic → search-there is enough, a deep merge
+is vanity.
+
+**What SearchLauncher already won** (and Atomic-as-an-app never gets for
+free): it *is* the home screen. Unlock / Home → keyboard. That slot is why
+Alfred/Raycast matter on desktops. One tap (really: zero taps past Home)
+away from a verb. We want that for Atomic — but only for the actions that
+pay rent at that frequency.
+
+### Two products, different jobs
+
+| Job | Frequency | Needs HOME? | Enough as separate Atomic app? |
+|---|---|---|---|
+| Capture: `todo get bread`, `note …`, `bm` | Dozens/day | **Yes** — app switch kills it | Weak: open app → navigate → add |
+| Find across *phone + graph* in one box | Many/day | **Yes** — two search boxes is the failure mode | Weak: launcher finds the *app*, not `bread` inside your table |
+| Browse/edit table, doc, chat, canvas | Fewer, longer | No — full UI anyway | **Yes** — this *is* an app (or warm shell) |
+| Sync / collab / multi-device | Background | No | **Yes** — pure Atomic value |
+| Widgets / ambient dashboard | Glance | Nice | Optional; easy to overbuild |
+
+**The merge's unique value is capture + unified find at the home bar** —
+not "Atomic wallpaper" and not rewriting FancyTable in Compose. Everything
+that needs a real editor can stay "just an app" (APK or Atomic Shell).
+HOME matters because it deletes *open Atomic* from the hot path for the
+verbs you run constantly.
+
+### Value that does *not* require merging into the launcher process
+
+- Atomic ships a great app with shortcuts / share targets / `CREATE` intents.
+- SearchLauncher keeps a prefix `a bread` → deep-link into Atomic search.
+- User still pays: result → cold/warm app start → Atomic's own chrome.
+
+That's a **thin integration** and worth doing early. It is not the same
+product as typing on Home and having the graph answer *here*.
+
+### Value that *only* drops out of deep integration
+
+1. **Capture without app switch** — commit happens in the launcher (toast +
+   undo). This is the Raycast test. If we don't nail it, don't merge.
+2. **One ranking list** — apps, contacts, *and* `Bread` the grocery row in
+   the same 16 results. Not "Atomic" the app icon.
+3. **Browser = graph edge** — save bookmark/note from the same WebView that
+   is already Home-adjacent; identity and store are shared.
+4. **Device host** — one agent/store/Iroh node for canvas and friends
+   (`android-data-reuse.md`). Users feel "sign in once"; engineers feel one
+   NodeID. Secondary to (1)–(3) but real.
+
+### Value traps (feel productive, aren't the reason to merge)
+
+- Ambient home feeds / dense widget grids (Notion-on-HOME).
+- Recreating data-browser UI in Compose.
+- "Atomic appears in the app drawer" as the headline — that's just an app
+  with a badge.
+- Sync/collab marketed as a launcher feature — those work fine in a
+  separate APK.
+
+### Decision test
+
+Ship (or prototype) this loop on a real phone:
+
+> Home → type `todo get bread` → Enter → done, still on Home.  
+> Home → type `bread` → see the grocery row next to Browser → open.
+
+If that loop isn't *obviously* better than opening Atomic, stop; keep thin
+deep-links. If it is, the HOME slot is the product — Atomic Shell/widgets
+are delivery for the slower jobs, not the reason to exist.
+
 ## Why this is a natural fit
 
 SearchLauncher already is the surface Atomic wants on a phone:
