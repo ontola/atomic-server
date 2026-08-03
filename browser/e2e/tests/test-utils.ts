@@ -19,6 +19,37 @@ export const SECRET =
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
 
+/**
+ * Hostname the Node test process can actually reach.
+ *
+ * Dagger serves the SPA at `http://atomic.localhost:9883` so Chromium treats
+ * it as a secure context (`crypto.subtle` / WASM ClientDb). Chromium is told
+ * to map that name via `--host-resolver-rules`; Node is not, and `/etc/hosts`
+ * is read-only in the playwright container. When `ATOMIC_SERVICE_URL` is set
+ * (dagger: `http://atomic:9883`), rewrite browser-facing URLs to that
+ * service-binding host for anything fetched from the test process itself
+ * (`route.fetch`, create-template, …).
+ */
+export function nodeReachableServerUrl(browserFacingUrl: string): string {
+  const service = process.env.ATOMIC_SERVICE_URL?.replace(/\/$/, '');
+
+  if (!service) {
+    return browserFacingUrl.replace(/\/$/, '');
+  }
+
+  try {
+    const from = new URL(browserFacingUrl);
+    const to = new URL(service);
+    from.hostname = to.hostname;
+    from.port = to.port;
+    from.protocol = to.protocol;
+
+    return from.toString().replace(/\/$/, '');
+  } catch {
+    return browserFacingUrl.replace(/\/$/, '');
+  }
+}
+
 export const DEMO_INVITE_NAME = 'document demo invite';
 
 export const testFilePath = (filename: string) => {

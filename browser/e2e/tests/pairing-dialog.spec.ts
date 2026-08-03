@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, FRONTEND_URL, SERVER_URL } from './test-utils';
+import {
+  before,
+  FRONTEND_URL,
+  nodeReachableServerUrl,
+  SERVER_URL,
+} from './test-utils';
 
 /**
  * Taking someone else's pairing code — the paste path, and what the dialog
@@ -37,7 +42,9 @@ const VALID_CODE = `atomic://pair?v=1&node=${NODE}&drives=*`;
  */
 async function pretendToBeTheApp(page: Page) {
   const embeddedOrigin = 'http://localhost:9883';
-  const realOrigin = SERVER_URL.replace(/\/$/, '');
+  // Fetch from Node via the service-binding host — not SERVER_URL's
+  // `atomic.localhost`, which only Chromium can resolve in dagger.
+  const realOrigin = nodeReachableServerUrl(SERVER_URL);
 
   if (realOrigin !== embeddedOrigin) {
     await page.route(`${embeddedOrigin}/**`, async route => {
