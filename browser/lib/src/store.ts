@@ -1286,10 +1286,7 @@ export class Store {
     // Capture {bytes, version} atomically so the cursor advances to
     // the version that's in this commit — not to a later one that
     // arrived during the await on `postCommit`.
-    let exported = resource.exportLoroDeltaForDrain(
-      isFirstCommit,
-      commitToken,
-    );
+    let exported = resource.exportLoroDeltaForDrain(isFirstCommit, commitToken);
 
     // Offline-edit recovery (continued): an empty export WITH a durable
     // `baseVersion` means the in-memory Loro doc is missing the offline
