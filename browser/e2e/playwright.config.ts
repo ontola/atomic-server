@@ -53,13 +53,15 @@ const config: PlaywrightTestConfig = {
       },
     ],
   ],
-  // Up to 2 retries on CI — the dagger container has noticeably less
-  // CPU than a dev laptop, and the shared atomic-server occasionally
-  // surfaces transient WS / search-index / multi-context-sync races
-  // that don't reproduce serially. Two retries (3 attempts total)
-  // catches genuinely flaky paths without hiding real regressions:
-  // a regression fails three times. Matches nextest's `retries = 2`.
-  retries: process.env.CI ? 2 : 0,
+  // CI retries: default 1 (was 2 — triple runtime on flakes dominated the
+  // ~50 min e2e budget). Override with PLAYWRIGHT_RETRIES. Dagger Main sets
+  // it explicitly; hosted/local CI without the env still get 1.
+  retries:
+    process.env.PLAYWRIGHT_RETRIES !== undefined
+      ? Number(process.env.PLAYWRIGHT_RETRIES)
+      : process.env.CI
+        ? 1
+        : 0,
   // Per-test budget — not a race-prevention timeout. Playwright's
   // default is 30s; some tests (chatroom invite flow, share menu,
   // tables) legitimately run 25–35s when the shared atomic-server is
@@ -137,13 +139,11 @@ const config: PlaywrightTestConfig = {
   // Worker count:
   // - local (no CI): 2
   // - CI without override: 1 (safe for 2-vCPU hosted runners)
-  // - dagger Main on the self-hosted desktop: PLAYWRIGHT_WORKERS=4
-  //   (set in `.dagger/src/index.ts` `endToEnd`)
+  // - dagger Main on Mancave (12c/64GB WSL): PLAYWRIGHT_WORKERS=3 per
+  //   shard, 4 shards in `.dagger/src/index.ts` (≈12 browsers total)
   //
-  // The limit is contention on the SHARED atomic-server, not CPU alone:
-  // more workers means more WS / search-index / multi-context-sync races
-  // that `retries: 2` can quietly turn into slow passes. Raise via the
-  // env var rather than changing the hosted-runner default.
+  // Per-shard limit is contention on that shard's atomic-server. Raise
+  // via the env var rather than changing the hosted-runner default.
   workers: process.env.PLAYWRIGHT_WORKERS
     ? Number(process.env.PLAYWRIGHT_WORKERS)
     : process.env.CI

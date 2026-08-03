@@ -40,6 +40,18 @@ const TARGET_IMAGE_MAP = {
 // chromium below so the test browser exposes the secure-context APIs.
 const ATOMIC_DOMAIN = 'atomic';
 
+// Self-hosted Main runner ("Mancave"): 12 cores / 64GB RAM, WSL + Docker.
+// These knobs are sized for that box. Hosted runners (2 vCPU) still get the
+// conservative Playwright/nextest defaults when these env vars aren't set.
+const E2E_SHARD_COUNT = 4;
+const E2E_PLAYWRIGHT_WORKERS = '3'; // 4 shards × 3 workers ≈ 12 browsers
+const E2E_PLAYWRIGHT_RETRIES = '1';
+const NEXTEST_TEST_THREADS = '8';
+const NEXTEST_RETRIES = '1';
+// Link concurrency: previously capped at 2 for a ~15GB Docker VM that
+// OOM-killed `ld`. Mancave has 64GB — 4 concurrent musl links is fine.
+const NEXTEST_BUILD_JOBS = '4';
+
 @object()
 export class AtomicServer {
   source: Directory;
@@ -170,22 +182,21 @@ export class AtomicServer {
      */
     @argument() publishDocs = false,
   ): Promise<string> {
-    // Rust tasks (test/clippy/fmt) all extend `rustBuild()` and share the
-    // `rust-target` cache mount. Running them via `Promise.all` makes the
-    // parallel cargo processes fight for cargo's per-target file lock —
-    // we observed ~16-minute lock waits ending in `exit 101`. Serialize
-    // the rust pipeline (cheap: build is cached after the first run),
-    // and parallelize only the genuinely-independent JS + publish work.
+    // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
+    // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
+    await Promise.all([this.jsLint(), this.rustFmt()]);
+
+    // Rust clippy/test still share the `rust-target` cache mount — keep
+    // them serialized (parallel cargo contended the target lock for
+    // ~16 minutes and exited 101). Everything else is independent.
     await Promise.all([
       this.docsPublish(netlifyAuthToken, publishDocs),
       this.typedocPublish(netlifyAuthToken, publishDocs),
       this.endToEnd(netlifyAuthToken),
-      this.jsLint(),
       this.jsTest(),
       this.jsTestIntegration(),
       this.flutterTest(),
       (async () => {
-        await this.rustFmt();
         await this.rustClippy();
         await this.rustTest();
       })(),
@@ -1072,20 +1083,10 @@ export class AtomicServer {
         // scope only strips `atomic-server`'s own defaults — other members
         // don't define a `light` feature and are unaffected.
         //
-        // `--build-jobs 2`: this workspace produces a lot of large,
-        // `-static-pie`-linked musl test binaries (one per integration
-        // test file). Left at nextest's default (num-cpus), several link
-        // concurrently and the linker gets OOM-killed (`ld terminated
-        // with signal 9`) partway through — observed locally even with
-        // 15GB available to the Docker VM. Capping build (link)
-        // concurrency avoids the spike; doesn't affect `--test-threads`
-        // (runtime test parallelism), only how many rustc/link jobs run
-        // at once during compilation.
-        //
-        // `--test-threads 4` overrides `.config/nextest.toml`'s
-        // `test-threads = 2`. That default was tuned for contended /
-        // hosted runners; the self-hosted Main desktop has the headroom,
-        // and once e2e is parallelized nextest becomes the long pole.
+        // `--build-jobs` / `--test-threads` / `--retries`: sized for the
+        // Mancave self-hosted runner (12c/64GB). `.config/nextest.toml`
+        // still defaults to test-threads=2 / retries=2 for local/hosted
+        // use; CLI flags here override for Main CI only.
         .withExec([
           'sh',
           '-c',
@@ -1094,8 +1095,10 @@ export class AtomicServer {
             'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
             'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
             'cargo nextest run --workspace --exclude atomic-server-tauri ' +
-            '--no-default-features --features light --build-jobs 2 ' +
-            '--test-threads 4',
+            '--no-default-features --features light ' +
+            `--build-jobs ${NEXTEST_BUILD_JOBS} ` +
+            `--test-threads ${NEXTEST_TEST_THREADS} ` +
+            `--retries ${NEXTEST_RETRIES}`,
         ])
         .stdout()
     );
@@ -1290,8 +1293,11 @@ export class AtomicServer {
   @func()
   /** Returns a Service running atomic-server for use in tests */
   atomicService(@argument() e2e: boolean = false): Service {
+    // E2E uses a debug musl binary — release was 15–30 min of cold compile
+    // before Playwright could start. Deploy still goes through
+    // `rustBuildRelease` (release=true). Non-e2e probes keep release.
     const atomicServerBinary = this.rustBuild(
-      true,
+      !e2e,
       'x86_64-unknown-linux-musl',
       e2e,
     ).file('/atomic-server-binary');
@@ -1315,12 +1321,18 @@ export class AtomicServer {
     );
   }
 
-  @func()
-  async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
+  /**
+   * Shared Playwright + workspace install for e2e shards. No service binding
+   * and no test run yet — each shard forks from this and binds its own
+   * `atomicService` so 4 servers don't share state.
+   */
+  private e2eBaseContainer(): Container {
+    // Workspace deps only — SPA assets come from `atomicService(true)` →
+    // `rustBuild(..., e2e=true)` → `jsBuild(true)`.
     const browserContainer = this.jsBuild();
 
-    // Setup Playwright container. Reuses the npm-global volume so
-    // `netlify-cli` isn't re-downloaded when docs deploy already warmed it.
+    // Reuses the npm-global volume so `netlify-cli` isn't re-downloaded when
+    // docs deploy already warmed it.
     const playwrightContainer = dag
       .container()
       .from(`mcr.microsoft.com/playwright:${PLAYWRIGHT_VERSION}`)
@@ -1340,26 +1352,13 @@ export class AtomicServer {
           'if [ ! -x /opt/npm-global/bin/netlify ]; then npm install -g netlify-cli --quiet; fi && netlify --version',
       ]);
 
-    // Setup e2e test environment
-    // Bug fix (2026-07-02): `pnpm install` used to run right after mounting
-    // only `/app/e2e`, before the rest of the pnpm workspace (root
-    // package.json/pnpm-workspace.yaml, and the sibling `lib`/`cli`/etc.
-    // packages `@tomic/lib` et al. resolve against via the `workspace:*`
-    // protocol) was mounted at all — `pnpm install` failed outright with
-    // `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`. This path had never actually been
-    // exercised before (every prior CI run failed earlier in the pipeline),
-    // so the bug was latent. Fix: mount the full workspace context — root
-    // manifest files (borrowed from `browserContainer`, i.e. `jsBuild()`'s
-    // already-fully-installed container, for consistency) and every sibling
-    // package — before running `pnpm install`, not after.
-    const e2eContainer = playwrightContainer
+    // Bug fix (2026-07-02): mount the full pnpm workspace before
+    // `pnpm install` — see git history for ERR_PNPM_WORKSPACE_PKG_NOT_FOUND.
+    return playwrightContainer
       .withEnvVariable('CI', 'true')
-      // Self-hosted Main runner is a beefy desktop; 1 worker left ~50 min of
-      // e2e on the critical path. 4 workers is what local beefy machines
-      // already tolerate — override here rather than changing the CI
-      // default of 1 (which still applies if someone runs without this env
-      // on a 2-vCPU hosted runner). See playwright.config.ts.
-      .withEnvVariable('PLAYWRIGHT_WORKERS', '4')
+      // Mancave (12c/64GB WSL): see module-level E2E_* constants.
+      .withEnvVariable('PLAYWRIGHT_WORKERS', E2E_PLAYWRIGHT_WORKERS)
+      .withEnvVariable('PLAYWRIGHT_RETRIES', E2E_PLAYWRIGHT_RETRIES)
       .withFile('/app/package.json', browserContainer.file('/app/package.json'))
       .withFile(
         '/app/pnpm-lock.yaml',
@@ -1391,31 +1390,17 @@ export class AtomicServer {
         browserContainer.directory('/app/node_modules'),
       )
       .withWorkdir('/app/e2e')
-      // Reuse jsBuild's pnpm-store so e2e's `pnpm install` is a cache hit
-      // for packages already fetched by the workspace build.
       .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
       .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
       .withExec(['pnpm', 'install'])
-      // Persist Playwright browser binaries across runs. The base image
-      // ships Chromium, but `playwright install` still fetches matching
-      // revision payloads when the e2e package pins a different build.
       .withMountedCache(
         '/root/.cache/ms-playwright',
         dag.cacheVolume('playwright-browsers'),
       )
       .withExec(['pnpm', 'exec', 'playwright', 'install'])
       .withEnvVariable('LANGUAGE', 'en_GB')
-      // The browser hits a `*.localhost` URL so chromium considers it a
-      // secure context (required for `crypto.subtle` → WASM ClientDb init).
-      // The host-resolver rule below tells chromium to route that hostname
-      // to the dagger `atomic` service binding, since chromium otherwise
-      // hardcodes `*.localhost` to 127.0.0.1.
       .withEnvVariable('FRONTEND_URL', `http://atomic.localhost:9883`)
       .withEnvVariable('SERVER_URL', `http://atomic.localhost:9883`)
-      // Node-side fetches (Playwright `route.fetch`, create-template) cannot
-      // use `atomic.localhost`: chromium maps it via host-resolver-rules,
-      // and `/etc/hosts` is read-only in this container. Tests rewrite to
-      // this service-binding hostname when they need to talk from Node.
       .withEnvVariable(
         'ATOMIC_SERVICE_URL',
         `http://${ATOMIC_DOMAIN}:9883`,
@@ -1424,46 +1409,92 @@ export class AtomicServer {
         'ATOMIC_TEST_HOST_MAP',
         `MAP atomic.localhost ${ATOMIC_DOMAIN}`,
       )
-      .withServiceBinding('atomic', this.atomicService(true))
       .withDirectory(
         '/app/e2e/tests',
         this.source.directory('browser/e2e/tests'),
-      )
-      // Wait for the server to be ready
+      );
+  }
+
+  /** One Playwright shard against its own atomic-server service. */
+  private e2eShardContainer(base: Container, shardIndex: number): Container {
+    return base
+      .withServiceBinding('atomic', this.atomicService(true))
       .withExec([
         'sh',
         '-c',
-        `for i in $(seq 1 10); do curl http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
+        `for i in $(seq 1 30); do curl -fsS http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
       ])
-      // Test the server is running
       .withExec([
         '/bin/bash',
         '-c',
-        'set -o pipefail; pnpm run test-e2e 2>&1 | tee /test-output.log; echo ${PIPESTATUS[0]} > /test-exit-code; exit 0',
+        'set -o pipefail; ' +
+          `pnpm exec playwright test --config=./playwright.config.ts --shard=${shardIndex}/${E2E_SHARD_COUNT} 2>&1 | tee /test-output.log; ` +
+          'echo ${PIPESTATUS[0]} > /test-exit-code; exit 0',
       ]);
+  }
 
-    // Extract the test results directory and upload to Netlify
-    const testReportDirectory = e2eContainer.directory('playwright-report');
-    const testOutput = await e2eContainer.file('/test-output.log').contents();
-    const deployOutput = await this.netlifyDeploy(
-      testReportDirectory,
-      'atomic-tests',
-      netlifyAuthToken,
+  @func()
+  async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
+    // 4 shards × own atomic-server, sized for Mancave (12c/64GB). Dagger
+    // dedupes the shared debug `rustBuild(e2e)` / base-container graph.
+    const base = this.e2eBaseContainer();
+    const shardIndexes = Array.from(
+      { length: E2E_SHARD_COUNT },
+      (_, i) => i + 1,
+    );
+    const shardContainers = shardIndexes.map(i =>
+      this.e2eShardContainer(base, i),
     );
 
-    // Extract the deploy URL
-    const deployUrl = this.extractDeployUrl(deployOutput);
+    const results = await Promise.all(
+      shardContainers.map(async (container, idx) => {
+        const shard = idx + 1;
+        const [exitCode, testOutput] = await Promise.all([
+          container.file('/test-exit-code').contents(),
+          container.file('/test-output.log').contents(),
+        ]);
 
-    // Check the test exit code and fail if tests failed
-    const exitCode = await e2eContainer.file('/test-exit-code').contents();
+        return {
+          shard,
+          exitCode: exitCode.trim(),
+          testOutput,
+          report: container.directory('playwright-report'),
+        };
+      }),
+    );
 
-    if (exitCode.trim() !== '0') {
-      throw new Error(
-        `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n${deployUrl}\n\n===== TEST OUTPUT (tail) =====\n${testOutput.slice(-60000)}\n===== END TEST OUTPUT =====`,
+    const failed = results.filter(r => r.exitCode !== '0');
+    const reportUrls: string[] = [];
+
+    // Deploy reports sequentially — concurrent `netlify deploy` to the same
+    // site races. Prefer failed shards so the error message has a URL.
+    const toDeploy = failed.length > 0 ? failed : results.slice(0, 1);
+
+    for (const r of toDeploy) {
+      const deployOutput = await this.netlifyDeploy(
+        r.report,
+        'atomic-tests',
+        netlifyAuthToken,
+      );
+      reportUrls.push(
+        `shard ${r.shard}/${E2E_SHARD_COUNT}: ${this.extractDeployUrl(deployOutput)}`,
       );
     }
 
-    return deployUrl;
+    if (failed.length > 0) {
+      const tails = failed
+        .map(
+          r =>
+            `===== SHARD ${r.shard}/${E2E_SHARD_COUNT} (exit ${r.exitCode}) =====\n${r.testOutput.slice(-20000)}`,
+        )
+        .join('\n\n');
+      throw new Error(
+        `E2E tests failed on ${failed.length}/${E2E_SHARD_COUNT} shard(s).\n` +
+          `Reports:\n${reportUrls.join('\n')}\n\n${tails}`,
+      );
+    }
+
+    return reportUrls.join('\n') || 'e2e ok (no report URL)';
   }
 
   @func()
