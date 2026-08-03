@@ -1,86 +1,85 @@
 on: [push, workflow_dispatch]
 
-# Main runs on Mancave (self-hosted) by default so Dagger cache volumes stay
-# warm. Override with a repo variable only when you intentionally want GitHub-
-# hosted runners:
+# Main prefers Mancave (self-hosted) so Dagger cache volumes stay warm, then
+# retries on GitHub-hosted runners if that job fails or is cancelled.
 #
+# Flow:
+#   1. Main (Mancave) — default for trusted push / workflow_dispatch
+#   2. Main (GitHub fallback) — only if Mancave failed/cancelled, or if the
+#      CI_RUNNER escape hatch forces hosted runners
+#   3. Main — aggregator so branch protection still sees one "Main" check
+#
+# Escape hatch (skip Mancave, run hosted only):
 #   Settings -> Secrets and variables -> Actions -> Variables
 #   CI_RUNNER = ["ubuntu-latest"]
 #
-# There is NO automatic failover: if Mancave is offline, jobs QUEUE (GitHub
-# gives up after 24h) rather than moving to a hosted runner. Setting
-# CI_RUNNER to ["ubuntu-latest"] is the manual escape hatch.
+# Offline note: if Mancave is offline the Mancave job QUEUES (GitHub does not
+# time out queued jobs). The fallback cannot start until that job fails or is
+# cancelled. Cancel the queued run (or set CI_RUNNER) if the machine is down.
+# A runner-status PAT would enable preflight routing; GITHUB_TOKEN cannot list
+# self-hosted runners.
 #
 # Only this workflow uses the self-hosted runner, on purpose. Releasing and
-# deploying are pinned to `ubuntu-latest` and must stay that way: a tag push
-# once left the crates.io publish queued for a day because the runner was
-# switched off, and a release that depends on a particular PC being awake is
-# not a release process. Here a stall costs slow CI and nothing else, and the
-# warm Dagger cache is worth the trade.
+# deploying stay on ubuntu-latest — a release must not depend on one PC being
+# awake.
 #
-# (Automatic fallback is not available. The usual trick -- a picker job that
-# queries the runner API and emits labels for the rest -- needs
-# `administration:read`, which GITHUB_TOKEN cannot be granted, so it would mean
-# storing a long-lived PAT purely to decide where to run.)
-#
-# SECURITY: this repo is public, and a self-hosted runner must never execute
-# untrusted code -- a fork's PR branch is code anyone can write, and running it
-# on your own machine hands over arbitrary code execution, plus any secret and
-# any cached credential that machine can reach.
-#
-# So `pull_request` and `pull_request_target` are forced onto GitHub-hosted
-# runners in the expression itself, whatever CI_RUNNER says. Today nothing here
-# triggers on either, and this stays correct if someone adds one later: the
-# guard is structural, not a convention to remember. Trusted events (push,
-# workflow_dispatch, workflow_call -- all requiring write access) still get
-# Mancave and its warm Dagger cache.
-#
-# Do not "simplify" this back to a bare `vars.CI_RUNNER` lookup.
+# SECURITY: this repo is public. `pull_request` / `pull_request_target` are
+# forced onto GitHub-hosted runners (never Mancave), whatever CI_RUNNER says.
 
 name: "Main pipeline: build, lint, test"
+
 jobs:
+  # Prefer Mancave. Skipped when CI_RUNNER forces hosted, or on PR events.
+  mancave:
+    name: Main (Mancave)
+    if: >-
+      github.event_name != 'pull_request'
+      && github.event_name != 'pull_request_target'
+      && vars.CI_RUNNER != '["ubuntu-latest"]'
+    uses: ./.github/workflows/main-ci.yml
+    with:
+      runner: ${{ vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]' }}
+      artifact-name: build-artifacts-mancave
+    secrets:
+      NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+
+  # GitHub-hosted fallback: Mancave failed/cancelled, escape hatch, or PR.
+  github:
+    name: Main (GitHub fallback)
+    needs: mancave
+    if: >-
+      always()
+      && (
+        github.event_name == 'pull_request'
+        || github.event_name == 'pull_request_target'
+        || vars.CI_RUNNER == '["ubuntu-latest"]'
+        || needs.mancave.result == 'failure'
+        || needs.mancave.result == 'cancelled'
+      )
+    uses: ./.github/workflows/main-ci.yml
+    with:
+      runner: '["ubuntu-latest"]'
+      artifact-name: build-artifacts-github
+    secrets:
+      NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+
+  # Single required check name for branch protection / PR status.
   Main:
     name: Main
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]')) }}
-    env:
-      NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
+    needs: [mancave, github]
+    if: always()
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: joepmeneer
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
-        with:
-          images: joepmeneer/atomic-server
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Dagger CI (test, lint, build)
-        uses: dagger/dagger-for-github@8.0.0
-        with:
-          version: "latest"
-          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
-          verb: call
-          # `--publish-docs` only from master. This pipeline runs on every push
-          # to every branch, and netlifyDeploy used to pass `--prod`
-          # unconditionally — so any feature branch republished the public docs
-          # and typedoc. Every other branch now gets a preview URL instead.
-          args: ci --netlify-auth-token env://NETLIFY_TOKEN ${{ github.ref == 'refs/heads/master' && '--publish-docs' || '' }}
-      - name: Dagger docker images (build images & publish)
-        # develop and master only. There is no `main` branch here — that clause
-        # could never fire, and left in place it invites someone to conclude
-        # one exists.
-        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'
-        uses: dagger/dagger-for-github@8.0.0
-        with:
-          version: "latest"
-          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
-          verb: call
-          args: create-docker-images --tags ${{ steps.meta.outputs.tags }}
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: ./artifact
+      - name: Resolve Mancave / GitHub outcome
+        run: |
+          m="${{ needs.mancave.result }}"
+          g="${{ needs.github.result }}"
+          echo "mancave=$m github=$g"
+          if [ "$m" = "success" ] || [ "$g" = "success" ]; then
+            exit 0
+          fi
+          exit 1
