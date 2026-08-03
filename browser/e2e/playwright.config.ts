@@ -134,19 +134,16 @@ const config: PlaywrightTestConfig = {
       : []),
   ],
   fullyParallel: true,
-  // 2 workers for speed. CI defaults to 1 worker + retries=2; locally we
-  // prefer the speed and depend on the tests themselves to be robust
-  // against the contention storms the shared atomic-server produces.
+  // Worker count:
+  // - local (no CI): 2
+  // - CI without override: 1 (safe for 2-vCPU hosted runners)
+  // - dagger Main on the self-hosted desktop: PLAYWRIGHT_WORKERS=4
+  //   (set in `.dagger/src/index.ts` `endToEnd`)
   //
-  // PLAYWRIGHT_WORKERS overrides both. The CI default of 1 was chosen for
-  // GitHub-hosted runners, which have 2 vCPUs -- a self-hosted machine with
-  // real cores is being wasted at one worker. Raise it there rather than
-  // changing the default, because the limit is contention on the SHARED
-  // atomic-server, not CPU alone: more workers means more of the WS,
-  // search-index and multi-context-sync races the retries above exist to
-  // absorb, and `retries: 2` would quietly convert them into slow passes.
-  // Start at 2 (what local dev already survives) and only go higher with
-  // the trace to show it is actually the long pole.
+  // The limit is contention on the SHARED atomic-server, not CPU alone:
+  // more workers means more WS / search-index / multi-context-sync races
+  // that `retries: 2` can quietly turn into slow passes. Raise via the
+  // env var rather than changing the hosted-runner default.
   workers: process.env.PLAYWRIGHT_WORKERS
     ? Number(process.env.PLAYWRIGHT_WORKERS)
     : process.env.CI
