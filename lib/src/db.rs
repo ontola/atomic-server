@@ -472,6 +472,7 @@ impl Db {
     /// Like [`Self::init_redb_file`], but with an explicit redb page-cache size.
     /// Used by [`Self::init_temp`] so throwaway test DBs don't each reserve
     /// redb's default 1 GiB cache.
+    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
     pub async fn init_redb_file_with_cache(
         path: &std::path::Path,
         base_domain: Option<String>,
