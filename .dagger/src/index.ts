@@ -41,12 +41,16 @@ const TARGET_IMAGE_MAP = {
 const ATOMIC_DOMAIN = 'atomic';
 
 // Self-hosted Main runner ("Mancave"): 12 cores / 64GB RAM, WSL + Docker.
-// These knobs are sized for that box. Hosted runners (2 vCPU) still get the
-// conservative Playwright/nextest defaults when these env vars aren't set.
-const E2E_SHARD_COUNT = 4;
-const E2E_PLAYWRIGHT_WORKERS = '3'; // 4 shards × 3 workers ≈ 12 browsers
+// Sized hot but not maxed — nextest `it` boots actix servers (and
+// iroh_pairing spawns extra OS processes) while e2e shards run Chromium
+// against more servers. 8 nextest threads + 4×3 browsers saturated the
+// box: peer handoffs timed out and `it` tests sat at 180–266s.
+// Hosted runners (2 vCPU) still get Playwright/nextest defaults when
+// these env vars aren't set.
+const E2E_SHARD_COUNT = 3;
+const E2E_PLAYWRIGHT_WORKERS = '3'; // 3 shards × 3 workers ≈ 9 browsers
 const E2E_PLAYWRIGHT_RETRIES = '1';
-const NEXTEST_TEST_THREADS = '8';
+const NEXTEST_TEST_THREADS = '4';
 const NEXTEST_RETRIES = '1';
 // Link concurrency: previously capped at 2 for a ~15GB Docker VM that
 // OOM-killed `ld`. Mancave has 64GB — 4 concurrent musl links is fine.
@@ -1086,7 +1090,9 @@ export class AtomicServer {
         // `--build-jobs` / `--test-threads` / `--retries`: sized for the
         // Mancave self-hosted runner (12c/64GB). `.config/nextest.toml`
         // still defaults to test-threads=2 / retries=2 for local/hosted
-        // use; CLI flags here override for Main CI only.
+        // use; CLI flags here override for Main CI only. The toml also
+        // caps `it` at 2 threads and serializes `iroh_pairing::*` so
+        // peer subprocess boots aren't starved under CI load.
         .withExec([
           'sh',
           '-c',

@@ -149,8 +149,15 @@ async fn spawn_server_process(tag: &str) -> (String, std::process::Child) {
         tag,
         std::process::id()
     ));
+    let stderr_path = std::env::temp_dir().join(format!(
+        "atomic-iroh-pair-{}-{}.stderr",
+        tag,
+        std::process::id()
+    ));
     let _ = std::fs::remove_file(&handoff);
+    let _ = std::fs::remove_file(&stderr_path);
 
+    let stderr_file = std::fs::File::create(&stderr_path).expect("peer stderr file");
     let exe = std::env::current_exe().expect("test binary path");
     let mut child = std::process::Command::new(exe)
         // Module-qualified: this suite is one binary shared by every module, so
@@ -164,24 +171,32 @@ async fn spawn_server_process(tag: &str) -> (String, std::process::Child) {
         ])
         .env(CHILD_FILE_ENV, &handoff)
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stderr(stderr_file)
         .spawn()
         .expect("spawn peer server");
 
-    for _ in 0..900 {
+    // 180s: under Mancave CI the `it` binary can share the host with other
+    // nextest workers and e2e Chromium shards; peer boot regularly exceeds
+    // the old 90s ceiling without being wedged.
+    for _ in 0..1800 {
         if let Ok(port) = std::fs::read_to_string(&handoff) {
             if let Ok(port) = port.trim().parse::<u16>() {
+                let _ = std::fs::remove_file(&stderr_path);
                 return (format!("http://localhost:{port}"), child);
             }
         }
         if let Ok(Some(status)) = child.try_wait() {
-            panic!("peer server exited before it was ready: {status}");
+            let stderr = std::fs::read_to_string(&stderr_path).unwrap_or_default();
+            let _ = std::fs::remove_file(&stderr_path);
+            panic!("peer server exited before it was ready: {status}\nstderr:\n{stderr}");
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
     let _ = child.kill();
-    panic!("peer server never reported its port");
+    let stderr = std::fs::read_to_string(&stderr_path).unwrap_or_default();
+    let _ = std::fs::remove_file(&stderr_path);
+    panic!("peer server never reported its port within 180s\nstderr:\n{stderr}");
 }
 
 /// Ask a server to pair with `node_did` and pull `drive`. This is byte-for-byte
