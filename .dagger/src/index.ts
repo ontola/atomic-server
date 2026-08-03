@@ -1081,6 +1081,11 @@ export class AtomicServer {
         // concurrency avoids the spike; doesn't affect `--test-threads`
         // (runtime test parallelism), only how many rustc/link jobs run
         // at once during compilation.
+        //
+        // `--test-threads 4` overrides `.config/nextest.toml`'s
+        // `test-threads = 2`. That default was tuned for contended /
+        // hosted runners; the self-hosted Main desktop has the headroom,
+        // and once e2e is parallelized nextest becomes the long pole.
         .withExec([
           'sh',
           '-c',
@@ -1089,7 +1094,8 @@ export class AtomicServer {
             'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
             'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
             'cargo nextest run --workspace --exclude atomic-server-tauri ' +
-            '--no-default-features --features light --build-jobs 2',
+            '--no-default-features --features light --build-jobs 2 ' +
+            '--test-threads 4',
         ])
         .stdout()
     );
@@ -1348,6 +1354,12 @@ export class AtomicServer {
     // package — before running `pnpm install`, not after.
     const e2eContainer = playwrightContainer
       .withEnvVariable('CI', 'true')
+      // Self-hosted Main runner is a beefy desktop; 1 worker left ~50 min of
+      // e2e on the critical path. 4 workers is what local beefy machines
+      // already tolerate — override here rather than changing the CI
+      // default of 1 (which still applies if someone runs without this env
+      // on a 2-vCPU hosted runner). See playwright.config.ts.
+      .withEnvVariable('PLAYWRIGHT_WORKERS', '4')
       .withFile('/app/package.json', browserContainer.file('/app/package.json'))
       .withFile(
         '/app/pnpm-lock.yaml',
