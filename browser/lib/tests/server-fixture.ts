@@ -142,12 +142,18 @@ export async function startServer(): Promise<ServerHandle> {
 
   const serverUrl = `http://localhost:${port}`;
 
+  // 90s: under dagger Main the host also runs nextest (8 threads) + 4 e2e
+  // servers + clippy. Cold `ATOMIC_INITIALIZE` boot of the slim binary has
+  // been observed near the old 30s ceiling (server-fixture.it took 28.6s
+  // in the same run that timed upload-roundtrip out with empty stderr).
   try {
-    await waitForReady(serverUrl, 30_000);
+    await waitForReady(serverUrl, 90_000);
   } catch (e) {
+    const exit =
+      child.exitCode !== null ? ` (exited ${child.exitCode})` : ' (still running)';
     child.kill('SIGTERM');
     throw new Error(
-      `${(e as Error).message}\nServer stderr:\n${stderrChunks.join('')}`,
+      `${(e as Error).message}${exit}\nServer stderr:\n${stderrChunks.join('')}`,
     );
   }
 
