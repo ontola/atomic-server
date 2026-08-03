@@ -7,6 +7,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+### Changed
+
+- Commit path performance (`atomic-lib`): `Resource::clone` / `build_state_doc` fork the live Loro doc instead of snapshot round-trips; `apply_changes` no longer double-clones the pre-edit resource; `sign_at` exports incremental `loroUpdate` deltas against the persisted baseline for follow-up edits (genesis still ships a full snapshot). Cuts per-commit CPU and history/wire payload growth. See `planning/commit-performance.md`.
+
 ## [v0.41.0-beta.2] - 2026-08-01
 
 **This is the local-first release.** Atomic Data no longer needs a server to exist.
