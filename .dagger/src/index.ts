@@ -56,6 +56,13 @@ const NEXTEST_RETRIES = '1';
 // OOM-killed `ld`. Mancave has 64GB — 4 concurrent musl links is fine.
 const NEXTEST_BUILD_JOBS = '4';
 
+// Official `rust:*` images set `CARGO_HOME=/usr/local/cargo`. The
+// rust-musl-cross images set `CARGO_HOME=/root/.cargo`. Cache mounts
+// must match the image in use — a mount at the other path is a silent
+// no-op and every `cargo fetch` re-downloads the world.
+const CARGO_HOME_BOOKWORM = '/usr/local/cargo';
+const CARGO_HOME_MUSL = '/root/.cargo';
+
 @object()
 export class AtomicServer {
   source: Directory;
@@ -98,6 +105,26 @@ export class AtomicServer {
   }
 
   /**
+   * Mount shared crates.io + git dependency caches under `cargoHome`.
+   * Registry content is identical across glibc/musl images, so both
+   * share the `cargo` / `cargo-git` volumes — only the mount path differs.
+   */
+  private withCargoHomeCache(
+    container: Container,
+    cargoHome: string,
+  ): Container {
+    return container
+      .withMountedCache(`${cargoHome}/registry`, dag.cacheVolume('cargo'), {
+        // Shared: Locked serialized every parallel CI lane behind whichever
+        // job held the volume. Cargo's own flock handles concurrent writers.
+        sharing: CacheSharingMode.Shared,
+      })
+      .withMountedCache(`${cargoHome}/git`, dag.cacheVolume('cargo-git'), {
+        sharing: CacheSharingMode.Shared,
+      });
+  }
+
+  /**
    * Cold/warm timing for the install caches this module relies on.
    * Run twice: first populates volumes, second should be near-instant
    * `cargo install` / `npm install -g` no-ops.
@@ -108,12 +135,10 @@ export class AtomicServer {
       '/opt/cargo-bin/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
     const [mdbookOut, netlifyOut, pubOut] = await Promise.all([
-      dag
-        .container()
-        .from(RUST_IMAGE)
-        .withMountedCache('/usr/local/cargo/registry', dag.cacheVolume('cargo'), {
-          sharing: CacheSharingMode.Shared,
-        })
+      this.withCargoHomeCache(
+        dag.container().from(RUST_IMAGE),
+        CARGO_HOME_BOOKWORM,
+      )
         .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
           sharing: CacheSharingMode.Shared,
         })
@@ -319,18 +344,11 @@ export class AtomicServer {
    *  emitted `pkg/` artifacts. */
   @func()
   wasmBuild(): Directory {
-    const cargoCache = dag.cacheVolume('cargo');
-
     return (
-      dag
-        .container()
-        .from(RUST_IMAGE)
-        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          // Shared: Locked serialized every parallel CI lane (docs/wasm/
-          // rust-slim/rust-checks) behind whichever job held the volume.
-          // Cargo's own flock handles concurrent registry writers.
-          sharing: CacheSharingMode.Shared,
-        })
+      this.withCargoHomeCache(
+        dag.container().from(RUST_IMAGE),
+        CARGO_HOME_BOOKWORM,
+      )
         // Cache `cargo install`-built binaries (wasm-pack here). Without
         // this, each CI run recompiled wasm-pack from source (~2 min).
         // Routed through `CARGO_INSTALL_ROOT` to a non-default path so
@@ -401,27 +419,22 @@ export class AtomicServer {
    *  tests that don't render the front-end. */
   @func()
   rustBuildSlim(): File {
-    const cargoCache = dag.cacheVolume('cargo');
-
     return (
-      dag
-        .container()
-        .from(RUST_IMAGE)
-        // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
-        // build script (transitive dep via the default `vector-search`
-        // feature, which this container builds with — unlike `rustBuild`'s
-        // musl targets, this glibc container doesn't need `--features
-        // light`, since `ort`'s missing-prebuilt-binary gap is musl-cuda
-        // specific). Matches the apt list already on `rustBuild()` /
-        // `rustChecksContainer()` — this container just never had it.
-        .withExec(['apt-get', 'update', '-qq'])
-        .withExec(['apt', 'install', '-y', 'protobuf-compiler'])
-        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          // Shared: Locked serialized every parallel CI lane (docs/wasm/
-          // rust-slim/rust-checks) behind whichever job held the volume.
-          // Cargo's own flock handles concurrent registry writers.
-          sharing: CacheSharingMode.Shared,
-        })
+      this.withCargoHomeCache(
+        dag
+          .container()
+          .from(RUST_IMAGE)
+          // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
+          // build script (transitive dep via the default `vector-search`
+          // feature, which this container builds with — unlike `rustBuild`'s
+          // musl targets, this glibc container doesn't need `--features
+          // light`, since `ort`'s missing-prebuilt-binary gap is musl-cuda
+          // specific). Matches the apt list already on `rustBuild()` /
+          // `rustChecksContainer()` — this container just never had it.
+          .withExec(['apt-get', 'update', '-qq'])
+          .withExec(['apt', 'install', '-y', 'protobuf-compiler']),
+        CARGO_HOME_BOOKWORM,
+      )
         .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
         .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
         .withDirectory('/code/server', this.source.directory('server'))
@@ -670,19 +683,13 @@ export class AtomicServer {
 
   @func()
   docsFolder(): Directory {
-    const cargoCache = dag.cacheVolume('cargo');
     const actualDocsDirectory = this.source.directory('docs');
 
     return (
-      dag
-        .container()
-        .from(RUST_IMAGE)
-        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          // Shared: Locked serialized every parallel CI lane (docs/wasm/
-          // rust-slim/rust-checks) behind whichever job held the volume.
-          // Cargo's own flock handles concurrent registry writers.
-          sharing: CacheSharingMode.Shared,
-        })
+      this.withCargoHomeCache(
+        dag.container().from(RUST_IMAGE),
+        CARGO_HOME_BOOKWORM,
+      )
         // Same cargo-install binary cache as wasmBuild() — without it,
         // every CI run recompiled mdbook + mdbook-linkcheck from source
         // (~4 min). Routed through `CARGO_INSTALL_ROOT` so the cache
@@ -837,19 +844,18 @@ export class AtomicServer {
     @argument() e2e: boolean = false,
   ): Container {
     const source = this.source;
-    const cargoCache = dag.cacheVolume('cargo');
 
     const image = TARGET_IMAGE_MAP[target as keyof typeof TARGET_IMAGE_MAP];
 
-    const rustContainer = dag
-      .container()
-      .from(image)
-      .withExec(['apt-get', 'update', '-qq'])
-      .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler'])
-      .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-        // Shared: see wasmBuild — Locked serialized parallel CI lanes.
-        sharing: CacheSharingMode.Shared,
-      })
+    // musl-cross: CARGO_HOME=/root/.cargo (NOT /usr/local/cargo).
+    const rustContainer = this.withCargoHomeCache(
+      dag
+        .container()
+        .from(image)
+        .withExec(['apt-get', 'update', '-qq'])
+        .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler']),
+      CARGO_HOME_MUSL,
+    )
       .withExec(['rustup', 'component', 'add', 'clippy'])
       .withExec(['rustup', 'component', 'add', 'rustfmt']);
     // cargo-nextest used to be installed here, but recent versions need
@@ -988,27 +994,26 @@ export class AtomicServer {
    */
   private rustChecksContainer(): Container {
     const source = this.source;
-    const cargoCache = dag.cacheVolume('cargo');
     const image = TARGET_IMAGE_MAP['x86_64-unknown-linux-musl'];
 
+    // musl-cross: CARGO_HOME=/root/.cargo (NOT /usr/local/cargo). Mounting
+    // the bookworm path here was a silent miss — every CI run re-ran
+    // `Downloading crates ...` for nextest/clippy/fmt.
     return (
-      dag
-        .container()
-        .from(image)
-        .withExec(['apt-get', 'update', '-qq'])
-        // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
-        // build script (a transitive dep via the vector-search feature) —
-        // without it `cargo fetch`-triggered builds under this container
-        // (nextest, clippy) fail with "Could not find `protoc`". Matches
-        // `rustBuild()`'s apt list; this container split off from it later
-        // and the package was missed.
-        .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler'])
-        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          // Shared: Locked serialized every parallel CI lane (docs/wasm/
-          // rust-slim/rust-checks) behind whichever job held the volume.
-          // Cargo's own flock handles concurrent registry writers.
-          sharing: CacheSharingMode.Shared,
-        })
+      this.withCargoHomeCache(
+        dag
+          .container()
+          .from(image)
+          .withExec(['apt-get', 'update', '-qq'])
+          // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
+          // build script (a transitive dep via the vector-search feature) —
+          // without it `cargo fetch`-triggered builds under this container
+          // (nextest, clippy) fail with "Could not find `protoc`". Matches
+          // `rustBuild()`'s apt list; this container split off from it later
+          // and the package was missed.
+          .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler']),
+        CARGO_HOME_MUSL,
+      )
         .withExec(['rustup', 'component', 'add', 'clippy'])
         .withExec(['rustup', 'component', 'add', 'rustfmt'])
         .withFile('/code/Cargo.toml', source.file('Cargo.toml'))
