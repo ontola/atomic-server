@@ -398,7 +398,16 @@ test.describe('sync', () => {
     // tick. The reload below would roll the edit back, and the server would
     // never hear about it — which is exactly this test's failure mode, right
     // down to the fresh context reading the pre-offline title.
-    await page.evaluate(() => window.store.getClientDb()?.flush());
+    await page.evaluate(async () => {
+      const db = window.store.getClientDb();
+
+      // Not optional-chained: `?.flush()` on an absent ClientDb is a silent
+      // no-op, and this test would then fail exactly as it does without the
+      // flush at all — blaming durability for a database that was never there.
+      if (!db) throw new Error('ClientDb missing when asking for a flush');
+
+      await db.flush();
+    });
 
     // 4. Go back online — navigate to force fresh WS connection
     await context.setOffline(false);
