@@ -837,10 +837,18 @@ export const SEARCHBOX_PROPERTY_PLACEHOLDER = /Search for a .+ or enter a URL/;
 /** Create a new Resource in the current Drive.
  * Class can be an Class URL or a shortname available in the new page. */
 export async function newResource(klass: string, page: Page) {
-  await sidebarNewResourceButton(page).click();
   // Sidebar "New" navigates to /app/new?parentSubject=<parent> to preserve
   // the container context (see QuickCreateRow). Match pathname only.
-  await expect(page).toHaveURL(/\/app\/new(\?|$)/);
+  //
+  // Retry the click AND the navigation as a unit: the button can be clicked
+  // before its handler is attached, and the click is then simply swallowed —
+  // the app stays where it was, and no amount of waiting on a navigation that
+  // was never started will produce one. Seen in CI as this assertion timing
+  // out with the URL still on `/app/show`.
+  await expect(async () => {
+    await sidebarNewResourceButton(page).click();
+    await expect(page).toHaveURL(/\/app\/new(\?|$)/, { timeout: 3_000 });
+  }).toPass({ timeout: 20_000 });
 
   const waitForResourceForm = async () => {
     await Promise.any([
