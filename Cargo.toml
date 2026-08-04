@@ -20,6 +20,23 @@ exclude = ["flutter/rust"]
 [profile.dev]
 debug = "line-tables-only"
 
+# The e2e server. Debug is ~7x slower per commit round-trip (36ms vs 5ms
+# measured), and the suite runs four of these servers against a shared box
+# alongside eight browsers — so the debug binary spends CPU the browsers need,
+# and slow commits show up as timing failures rather than as slowness.
+#
+# Full `--release` was tried and reverted for costing 15-30 minutes of cold
+# compile before Playwright could start. Nearly all of that is LTO and the
+# single codegen unit, which buy runtime performance a test server does not
+# need. This keeps the parts that matter (optimisation, no debug assertions)
+# and drops the parts that only cost compile time.
+[profile.e2e]
+inherits = "release"
+opt-level = 2
+lto = false
+codegen-units = 16
+debug = false
+
 [profile.dev.package."*"]
 debug = false
 
