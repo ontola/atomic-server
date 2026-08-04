@@ -1573,20 +1573,6 @@ export class AtomicServer {
       );
     }
 
-    // Put the failed shards' artifacts where the workflow's upload step can
-    // reach them. Reports were netlify-only, and `NETLIFY_TOKEN` is empty on
-    // this pipeline — so every trace was being thrown away and the log tail
-    // was all anyone had to debug from. Never let an export failure mask the
-    // test failure that matters.
-    for (const r of failed) {
-      try {
-        await r.report.export(`./artifact/e2e/shard-${r.shard}/report`);
-        await r.testResults.export(`./artifact/e2e/shard-${r.shard}/results`);
-      } catch (e) {
-        console.error(`Could not export shard ${r.shard} artifacts:`, e);
-      }
-    }
-
     if (failed.length > 0) {
       const tails = failed
         .map(
@@ -1594,13 +1580,51 @@ export class AtomicServer {
             `===== SHARD ${r.shard}/${shardCount} (exit ${r.exitCode}) =====\n${r.testOutput.slice(-20000)}`,
         )
         .join('\n\n');
+      const contexts = (await Promise.all(failed.map(r => this.errorContexts(r))))
+        .filter(Boolean)
+        .join('\n\n');
       throw new Error(
         `E2E tests failed on ${failed.length}/${shardCount} shard(s).\n` +
-          `Reports:\n${reportUrls.join('\n')}\n\n${tails}`,
+          `Reports:\n${reportUrls.join('\n')}\n\n${tails}` +
+          (contexts ? `\n\n${contexts}` : ''),
       );
     }
 
     return reportUrls.join('\n') || 'e2e ok (no report URL)';
+  }
+
+  /**
+   * The page snapshot Playwright writes beside each failed test.
+   *
+   * The stdout tail says which assertion failed; this says what the page
+   * actually was at that moment, which is the difference between diagnosing a
+   * CI-only failure and guessing at it. Reports go to netlify and nowhere
+   * else, and `NETLIFY_TOKEN` is empty on this pipeline, so without this the
+   * snapshots are simply discarded when the run ends.
+   *
+   * Capped per file and per shard: this lands in a CI log, and a trace dump
+   * nobody scrolls through is no more useful than no trace at all.
+   */
+  private async errorContexts(r: {
+    shard: number;
+    testResults: Directory;
+  }): Promise<string> {
+    try {
+      const paths = await r.testResults.glob('**/error-context.md');
+      const bodies = await Promise.all(
+        paths.slice(0, 12).map(async path => {
+          const body = await r.testResults.file(path).contents();
+
+          return `--- ${path} ---\n${body.slice(0, 3000)}`;
+        }),
+      );
+
+      return bodies.length
+        ? `===== SHARD ${r.shard} PAGE SNAPSHOTS =====\n${bodies.join('\n\n')}`
+        : '';
+    } catch (e) {
+      return `===== SHARD ${r.shard}: could not read error contexts: ${e} =====`;
+    }
   }
 
   @func()
