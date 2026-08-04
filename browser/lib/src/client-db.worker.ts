@@ -62,6 +62,7 @@ export type WorkerRequest =
     }
   | { id: number; type: 'allSubjects' }
   | { id: number; type: 'populate' }
+  | { id: number; type: 'flush' }
   | { id: number; type: 'exportAllResources' }
   | { id: number; type: 'importAllResources'; jsonArray: string }
   | { id: number; type: 'getLoroSnapshot'; subject: string }
@@ -219,6 +220,20 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
     case 'populate': {
       await ensureInit();
       await db!.populate();
+
+      return;
+    }
+
+    case 'flush': {
+      await ensureInit();
+      // Durability on demand. Writes commit with `Durability::None` and are
+      // only persisted by a later Immediate commit, which otherwise happens
+      // on the periodic tick below — so until it lands, a reload rolls the
+      // writes back. Callers that are about to do something a rollback would
+      // ruin (reload, navigate away, go offline) need to be able to ask for
+      // it rather than wait and hope.
+      db!.flush();
+      dirty = false;
 
       return;
     }

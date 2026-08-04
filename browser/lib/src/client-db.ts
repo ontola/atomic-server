@@ -676,6 +676,19 @@ export class ClientDbWorker {
     await this.send({ type: 'populate' });
   }
 
+  /**
+   * Persist everything written so far, and resolve once it is durable.
+   *
+   * Writes commit without fsync for throughput and are only persisted by a
+   * later Immediate commit, which the worker otherwise schedules on a 1s
+   * tick. Anything that would lose un-persisted writes — a reload, going
+   * offline — has no way to know whether that tick has landed. This is that
+   * signal.
+   */
+  async flush(): Promise<void> {
+    await this.send({ type: 'flush' });
+  }
+
   async exportAllResources(): Promise<string> {
     const r = await this.send({ type: 'exportAllResources' });
 
