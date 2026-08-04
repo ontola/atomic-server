@@ -1001,9 +1001,14 @@ export class AtomicServer {
     // Scope the build to `atomic-server` so cargo doesn't try to build
     // workspace siblings like the wasm cdylib plugin examples — which
     // can't be compiled for the host musl target.
-    const buildArgs = release
-      ? ['cargo', 'build', '--release', '-p', 'atomic-server']
-      : ['cargo', 'build', '-p', 'atomic-server'];
+    // `e2e` selects the `e2e` cargo profile (see the workspace Cargo.toml):
+    // optimised enough that commit round-trips stop dominating, cheap enough
+    // to compile that Playwright is not left waiting on LTO.
+    const buildArgs = e2e
+      ? ['cargo', 'build', '--profile', 'e2e', '-p', 'atomic-server']
+      : release
+        ? ['cargo', 'build', '--release', '-p', 'atomic-server']
+        : ['cargo', 'build', '-p', 'atomic-server'];
 
     // ⚠️ PRODUCTION IMPACT, not just CI plumbing (2026-07-02): this
     // function backs BOTH the e2e test server (atomicService) AND the real
@@ -1053,9 +1058,12 @@ export class AtomicServer {
         buildArgs.push('--no-default-features', '--features', 'light');
       }
     }
-    const targetPath = release
-      ? `/code/target/${target}/release/atomic-server`
-      : `/code/target/${target}/debug/atomic-server`;
+    // A named profile lands in `target/<triple>/<profile>/`, not `release/`.
+    const targetPath = e2e
+      ? `/code/target/${target}/e2e/atomic-server`
+      : release
+        ? `/code/target/${target}/release/atomic-server`
+        : `/code/target/${target}/debug/atomic-server`;
 
     return (
       containerWithAssets
@@ -1404,9 +1412,12 @@ export class AtomicServer {
   @func()
   /** Returns a Service running atomic-server for use in tests */
   atomicService(@argument() e2e: boolean = false): Service {
-    // E2E uses a debug musl binary — release was 15–30 min of cold compile
-    // before Playwright could start. Deploy still goes through
-    // `rustBuildRelease` (release=true). Non-e2e probes keep release.
+    // E2E builds with the `e2e` cargo profile (workspace Cargo.toml): a debug
+    // server costs ~7x per commit round-trip, and four of them run alongside
+    // eight browsers, so the slowness lands as timing failures. Full
+    // `--release` was reverted once for 15-30 min of cold compile; the `e2e`
+    // profile drops LTO and the single codegen unit, which is where that time
+    // went. Deploy still goes through `rustBuildRelease` (release=true).
     const atomicServerBinary = this.rustBuild(
       !e2e,
       'x86_64-unknown-linux-musl',
