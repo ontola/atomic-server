@@ -367,11 +367,14 @@ test.describe('tables', async () => {
     // Exit edit mode
     await page.keyboard.press('Escape');
 
-    // Wait for all debounced saves to drain into the server.
+    // Wait for all debounced saves to drain into the server. 15s to match the
+    // other drain waits in the suite: this one was the odd 10s out, and the
+    // counter now also covers the window a new row spends waiting on its
+    // materialize timer, which it previously (wrongly) reported as settled.
     await page.waitForFunction(
       () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
-      { timeout: 10000 },
+      { timeout: 15_000 },
     );
 
     // Spot-check the bottom of the list is rendered (the active cell stayed in
