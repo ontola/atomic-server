@@ -2679,10 +2679,7 @@ export class Store {
               current && current.loading === false && !current.error;
 
             if (!alreadyResolved) {
-              this.failResource(
-                subject,
-                new Error(OFFLINE_NOT_LOCAL),
-              );
+              this.failResource(subject, new Error(OFFLINE_NOT_LOCAL));
             }
           }
         }
