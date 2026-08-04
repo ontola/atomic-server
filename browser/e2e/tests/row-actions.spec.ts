@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, createTableFromDialog, inDialog } from './test-utils';
+import {
+  before,
+  createTableFromDialog,
+  inDialog,
+  reloadGrid,
+} from './test-utils';
 
 /**
  * A row action is a button on every row that writes one thing — the verb a
@@ -64,17 +69,6 @@ const headings = (page: Page) =>
       .slice(1)
       .map(el => (el.textContent ?? '').replace('Drag column', '').trim()),
   );
-
-async function reloadGrid(page: Page) {
-  await page.waitForFunction(
-    () => window.store.getSyncStatus().pendingDirtyCount === 0,
-    undefined,
-    { timeout: 15_000 },
-  );
-  await page.reload();
-  await expect(page.getByRole('grid')).toBeVisible();
-  await page.waitForTimeout(500);
-}
 
 test.describe('row actions', () => {
   test.beforeEach(before);

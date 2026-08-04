@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, createTableFromDialog, inDialog } from './test-utils';
+import {
+  before,
+  createTableFromDialog,
+  inDialog,
+  reloadGrid,
+} from './test-utils';
 
 /**
  * A quick-add is the button a personal app is mostly used through: name a thing
@@ -26,17 +31,6 @@ async function createFromTemplate(
 
   await expect(page.getByRole('grid')).toBeVisible();
   await page.waitForTimeout(1000);
-}
-
-async function reloadGrid(page: Page) {
-  await page.waitForFunction(
-    () => window.store.getSyncStatus().pendingDirtyCount === 0,
-    undefined,
-    { timeout: 15_000 },
-  );
-  await page.reload();
-  await expect(page.getByRole('grid')).toBeVisible();
-  await page.waitForTimeout(500);
 }
 
 test.describe('quick add', () => {
