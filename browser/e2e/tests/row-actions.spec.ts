@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, inDialog, newResource } from './test-utils';
+import { before, createTableFromDialog, inDialog } from './test-utils';
 
 /**
  * A row action is a button on every row that writes one thing — the verb a
@@ -22,17 +22,10 @@ async function createFromTemplate(
   name: string,
   openView?: string,
 ) {
-  await newResource('table', page);
-  await page.getByRole('button', { name: template }).click();
-  await page.getByPlaceholder('New Table').fill(name);
-  await page.getByRole('button', { name: 'Create' }).click();
+  await createTableFromDialog(page, { template, name });
 
   if (openView) {
-    const tab = page.getByRole('tab', { name: openView });
-    // The tab bar renders once the table's views load, which is after Create
-    // returns.
-    await expect(tab).toBeVisible({ timeout: 15_000 });
-    await tab.click();
+    await page.getByRole('tab', { name: openView }).click();
   }
 
   await expect(page.getByRole('grid')).toBeVisible();

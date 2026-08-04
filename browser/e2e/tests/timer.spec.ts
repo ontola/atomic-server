@@ -1,13 +1,21 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, inDialog, newResource } from './test-utils';
+import {
+  before,
+  createTableFromDialog,
+  inDialog,
+  pickTotal,
+} from './test-utils';
 
 /** Creates an Issue Tracker table (Board + All issues views, no timestamps). */
 async function createIssueTracker(page: Page, name: string) {
-  await newResource('table', page);
-  await page.getByRole('button', { name: /Issue Tracker/ }).click();
-  await page.getByPlaceholder('New Table').fill(name);
-  await page.getByRole('button', { name: 'Create' }).click();
+  await createTableFromDialog(page, { template: /Issue Tracker/, name });
   await expect(page.getByTestId('kanban-board')).toBeVisible();
+}
+
+/** Creates a Time tracker table and waits for the timer it opens on. */
+async function createTimeTracker(page: Page, name: string) {
+  await createTableFromDialog(page, { template: /Time tracker/, name });
+  await expect(page.getByTestId('timer-new-input')).toBeVisible();
 }
 
 /** Adds a Timer view and waits for its toolbar (the view's marker). */
@@ -195,14 +203,10 @@ test.describe('timer view', () => {
     page,
   }) => {
     // The template is the whole setup: no adding a view, no auto-created
-    // Start/End, no column toggling.
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Time tracker/ }).click();
-    await page.getByPlaceholder('New Table').fill('My hours');
-    await page.getByRole('button', { name: 'Create' }).click();
+    // Start/End, no column toggling. It opens straight into the timer.
+    await createTimeTracker(page, 'My hours');
 
-    // It opens straight into the timer, its Project column already present.
-    await expect(page.getByTestId('timer-new-input')).toBeVisible();
+    // Its Project column is already present.
     // Attached, not in-viewport: the timer's own columns come first, pushing the
     // data columns to the right of the fold.
     await expect(
@@ -228,12 +232,7 @@ test.describe('timer view', () => {
   test('the duration is view config, so a plain table renders it too', async ({
     page,
   }) => {
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Time tracker/ }).click();
-    await page.getByPlaceholder('New Table').fill('Config not code');
-    await page.getByRole('button', { name: 'Create' }).click();
-
-    await expect(page.getByTestId('timer-new-input')).toBeVisible();
+    await createTimeTracker(page, 'Config not code');
     await expect(page.getByRole('grid')).toBeVisible();
     await page.waitForTimeout(500);
 
@@ -276,12 +275,7 @@ test.describe('timer view', () => {
     // Wide enough that the footer cell under Duration can be clicked.
     await page.setViewportSize({ width: 1800, height: 900 });
 
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Time tracker/ }).click();
-    await page.getByPlaceholder('New Table').fill('Totalled hours');
-    await page.getByRole('button', { name: 'Create' }).click();
-
-    await expect(page.getByTestId('timer-new-input')).toBeVisible();
+    await createTimeTracker(page, 'Totalled hours');
     await expect(page.getByRole('grid')).toBeVisible();
     await page.waitForTimeout(500);
 
@@ -298,8 +292,7 @@ test.describe('timer view', () => {
     // row-count one. A duration is COMPUTED, not stored — totalling one is what
     // this covers.
     const footer = page.getByTestId('table-totals');
-    await footer.locator('[aria-colindex="2"]').click();
-    await page.getByTestId('menu-item-sum').click();
+    await pickTotal(page, footer.locator('[aria-colindex="2"]'), 'sum');
 
     // Formatted as a clock, like the column itself: milliseconds would be
     // unreadable. Both entries were sub-minute, so the total is 0:00:0x.

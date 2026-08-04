@@ -1,10 +1,32 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import {
   newResource,
   before,
+  createTableFromDialog,
   inDialog,
+  waitForTableBuild,
   REBUILD_INDEX_TIME,
 } from './test-utils';
+
+/**
+ * Creates a blank table from the drive page's quick-create button and leaves
+ * the caller on its grid, out of the title's edit mode and ready to type.
+ */
+async function createBlankTable(page: Page, name: string) {
+  await page.getByTitle('New Table').first().click();
+  await page.getByPlaceholder('New Table').fill(name);
+  await page.locator('dialog[open] button:has-text("Create")').click();
+  // The dialog carries the wait: it closes once the table exists and the app
+  // has navigated to it, so nothing below races the create.
+  await waitForTableBuild(page);
+  // EditableTitle auto-enters edit mode on creation (renders an input); when
+  // not editing it renders an h1. Match either form by test-id.
+  await expect(page.getByTestId('editable-title').first()).toBeVisible();
+  // Exit edit mode so subsequent keyboard actions (Tab to move into the grid)
+  // don't get swallowed by the title input.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('gridcell').first()).toBeVisible();
+}
 
 type Row = {
   name: string;
@@ -133,12 +155,9 @@ test.describe('tables', async () => {
     };
 
     // --- Test Start ---
-    await newResource('table', page);
-
     // Name table (pre-filled with "table", replace it)
     const tableName = 'Made up music genres';
-    await page.getByPlaceholder('New Table').fill(tableName);
-    await page.locator('dialog[open] button:has-text("Create")').click();
+    await createTableFromDialog(page, { name: tableName });
     // Newly-created resources auto-enter edit mode, so the title renders as
     // an input. Match either form.
     await expect(
@@ -304,29 +323,9 @@ test.describe('tables', async () => {
   test('fast row entry - rapidly adding rows with Enter', async ({ page }) => {
     test.slow();
     // Use the quick-create "New Table" button on the drive page directly.
-    await page.getByTitle('New Table').first().click();
+    await createBlankTable(page, 'Fast Entry Test');
 
-    await page.getByPlaceholder('New Table').fill('Fast Entry Test');
-    await page.locator('dialog[open] button:has-text("Create")').click();
-    // Wait for navigation away from the drive page — the dialog's
-    // createResourceAndNavigate is async and slower than the default 5s assert.
-    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
-      timeout: 15000,
-    });
-    // EditableTitle auto-enters edit mode on creation (renders an input);
-    // when not editing it renders an h1. Match either form by test-id.
-    await expect(page.getByTestId('editable-title').first()).toBeVisible({
-      timeout: 15000,
-    });
-    // Exit edit mode so subsequent keyboard actions (Tab to move into the
-    // grid) don't get swallowed by the title input.
-    await page.keyboard.press('Escape');
-
-    // Wait for the table grid to be ready before clicking. Under suite-wide
-    // load the row-virtualizer mounts more slowly than the default 5s click
-    // timeout, so wait for the first gridcell explicitly.
     const firstCell = page.getByRole('gridcell').first();
-    await expect(firstCell).toBeVisible({ timeout: 15000 });
 
     // Click first cell to focus the table
     await firstCell.click({ force: true });
@@ -410,19 +409,9 @@ test.describe('tables', async () => {
 
   test('sorting reorders freshly-entered (virtual) rows', async ({ page }) => {
     test.slow();
-    await page.getByTitle('New Table').first().click();
-    await page.getByPlaceholder('New Table').fill('Sort Test');
-    await page.locator('dialog[open] button:has-text("Create")').click();
-    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
-      timeout: 15000,
-    });
-    await expect(page.getByTestId('editable-title').first()).toBeVisible({
-      timeout: 15000,
-    });
-    await page.keyboard.press('Escape');
+    await createBlankTable(page, 'Sort Test');
 
     const firstCell = page.getByRole('gridcell').first();
-    await expect(firstCell).toBeVisible({ timeout: 15000 });
     await firstCell.click({ force: true });
     await page.waitForTimeout(300);
 
@@ -467,19 +456,9 @@ test.describe('tables', async () => {
 
   test('Shift+Enter inserts a row below the current row', async ({ page }) => {
     test.slow();
-    await page.getByTitle('New Table').first().click();
-    await page.getByPlaceholder('New Table').fill('Insert Below Test');
-    await page.locator('dialog[open] button:has-text("Create")').click();
-    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
-      timeout: 15000,
-    });
-    await expect(page.getByTestId('editable-title').first()).toBeVisible({
-      timeout: 15000,
-    });
-    await page.keyboard.press('Escape');
+    await createBlankTable(page, 'Insert Below Test');
 
     const firstCell = page.getByRole('gridcell').first();
-    await expect(firstCell).toBeVisible({ timeout: 15000 });
     await firstCell.click({ force: true });
     await page.waitForTimeout(300);
 
@@ -555,19 +534,9 @@ test.describe('tables', async () => {
     page,
   }) => {
     test.slow();
-    await page.getByTitle('New Table').first().click();
-    await page.getByPlaceholder('New Table').fill('Insert Session Test');
-    await page.locator('dialog[open] button:has-text("Create")').click();
-    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
-      timeout: 15000,
-    });
-    await expect(page.getByTestId('editable-title').first()).toBeVisible({
-      timeout: 15000,
-    });
-    await page.keyboard.press('Escape');
+    await createBlankTable(page, 'Insert Session Test');
 
     const firstCell = page.getByRole('gridcell').first();
-    await expect(firstCell).toBeVisible({ timeout: 15000 });
     await firstCell.click({ force: true });
     await page.waitForTimeout(300);
 

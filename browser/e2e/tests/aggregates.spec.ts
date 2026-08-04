@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, inDialog, newResource } from './test-utils';
+import {
+  before,
+  createTableFromDialog,
+  inDialog,
+  pickTotal,
+} from './test-utils';
 
 /** The grid row containing `text`. */
 const row = (page: Page, text: string) =>
@@ -47,10 +52,10 @@ test.describe('table totals', () => {
 
     // The Time tracker template gives a timestamp column and a fast way to make
     // rows: start an entry and stop it.
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Time tracker/ }).click();
-    await page.getByPlaceholder('New Table').fill('Totals');
-    await page.getByRole('button', { name: 'Create' }).click();
+    await createTableFromDialog(page, {
+      template: /Time tracker/,
+      name: 'Totals',
+    });
 
     await expect(page.getByTestId('timer-new-input')).toBeVisible();
     await expect(page.getByRole('grid')).toBeVisible();
@@ -98,8 +103,7 @@ test.describe('table totals', () => {
     // Total the Hours column from its own footer cell — the totals live under
     // the columns they describe.
     const footer = page.getByTestId('table-totals');
-    await footer.locator(`[aria-colindex="${hours}"]`).click();
-    await page.getByTestId('menu-item-sum').click();
+    await pickTotal(page, footer.locator(`[aria-colindex="${hours}"]`), 'sum');
 
     // The store computed it over every matching row.
     await expect(footer).toContainText('5', { timeout: 15_000 });
@@ -110,27 +114,25 @@ test.describe('table totals', () => {
 
     // The menu must come back on the same cell, again and again: a cell whose
     // menu opens once and then goes dead is the failure this covers.
-    await footer.locator(`[aria-colindex="${hours}"]`).click();
-    await expect(page.getByTestId('menu-item-avg')).toBeVisible();
-    await page.getByTestId('menu-item-avg').click();
+    await pickTotal(page, footer.locator(`[aria-colindex="${hours}"]`), 'avg');
     await expect(footer).toContainText('Average', { timeout: 15_000 });
 
     // ...including after visiting another column's cell in between.
     await footer.locator('[aria-colindex="2"]').click();
     await expect(page.getByTestId('menu-item-count')).toBeVisible();
     await page.keyboard.press('Escape');
-    await footer.locator(`[aria-colindex="${hours}"]`).click();
-    await expect(page.getByTestId('menu-item-sum')).toBeVisible();
-    await page.getByTestId('menu-item-sum').click();
+    await pickTotal(page, footer.locator(`[aria-colindex="${hours}"]`), 'sum');
     await expect(footer).toContainText('Sum', { timeout: 15_000 });
 
     // A second totals row: the same column can show a sum and an average.
-    await footer.locator('[aria-colindex="1"]').click();
-    await page.getByTestId('menu-item-add-row').click();
+    await pickTotal(page, footer.locator('[aria-colindex="1"]'), 'add-row');
     const secondRow = page.getByTestId('table-totals-1');
     await expect(secondRow).toBeVisible();
-    await secondRow.locator(`[aria-colindex="${hours}"]`).click();
-    await page.getByTestId('menu-item-avg').click();
+    await pickTotal(
+      page,
+      secondRow.locator(`[aria-colindex="${hours}"]`),
+      'avg',
+    );
 
     // 2 and 4 → sum 6, average 3, each in its own row under Hours.
     await expect(footer).toContainText('6', { timeout: 15_000 });
@@ -139,8 +141,7 @@ test.describe('table totals', () => {
     // Break the totals down per day, from the row-count cell's menu. (Its menu
     // was used a moment ago, so let that one finish closing first.)
     await expect(page.locator('[role="menu"]')).toHaveCount(0);
-    await footer.locator('[aria-colindex="1"]').click();
-    await page.getByTestId('menu-item-breakdown').click();
+    await pickTotal(page, footer.locator('[aria-colindex="1"]'), 'breakdown');
     await inDialog(page, async () => {
       await page
         .getByTestId('breakdown-column')

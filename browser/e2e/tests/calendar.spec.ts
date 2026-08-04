@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, newResource } from './test-utils';
+import { before, createTableFromDialog } from './test-utils';
 
 /** Local YYYY-MM-DD key, same derivation the CalendarDay cells use. */
 function localDayKey(d: Date): string {
@@ -11,10 +11,7 @@ function localDayKey(d: Date): string {
 
 /** Creates an Issue Tracker table (Board + All issues views, no date property). */
 async function createIssueTracker(page: Page, name: string) {
-  await newResource('table', page);
-  await page.getByRole('button', { name: /Issue Tracker/ }).click();
-  await page.getByPlaceholder('New Table').fill(name);
-  await page.getByRole('button', { name: 'Create' }).click();
+  await createTableFromDialog(page, { template: /Issue Tracker/, name });
   await expect(page.getByTestId('kanban-board')).toBeVisible();
 }
 
