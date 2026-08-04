@@ -34,7 +34,11 @@ test.describe('resource context menu', () => {
     await page.getByRole('gridcell').nth(1).click();
     await page.keyboard.type('hello');
     await page.keyboard.press('Enter');
-    // Reloading before the row reaches the server throws the edit away.
+    // Reloading before the row reaches the server throws the edit away. The
+    // beat is not redundant with the drain wait below: under CI load the row
+    // can still be missing afterwards, so whatever this covers is not only
+    // the materialize timer (which the store now counts as pending work).
+    await page.waitForTimeout(1000);
     await page.waitForFunction(
       () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
