@@ -33,6 +33,13 @@ test('cached drive survives reload while offline', async ({ page }) => {
     { timeout: 15000 },
   );
 
+  // The write landing is not the same as the write being durable: per-write
+  // commits use `Durability::None` and are only persisted by a later Immediate
+  // commit, which the worker otherwise schedules on a 1s tick. A reload before
+  // that tick rolls the write back — which is the exact bug under test, so ask
+  // for the flush and wait for it rather than racing the timer.
+  await page.evaluate(() => window.store.getClientDb()?.flush());
+
   const drive = await page.evaluate(() => window.store.getDrive());
 
   // Go offline (what the Sync-page "disconnect" does) and reload.
