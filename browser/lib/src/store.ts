@@ -388,6 +388,16 @@ function commitLogValuesEqual(
  * Subscribers (components that use the Resource), and for managing the current
  * Agent (User).
  */
+/**
+ * Why a resource failed when it was neither cached locally nor fetchable.
+ *
+ * Shared so `setClientDb` can recognise its own failures: a resource that
+ * failed this way before the ClientDb was attached is very likely readable
+ * once it is.
+ */
+const OFFLINE_NOT_LOCAL =
+  'Offline: resource not available locally. Reconnect to fetch.';
+
 export class Store {
   /** A list of all functions that need to be called when a certain resource is updated */
   public subscribers: Map<string, ResourceCallback[]>;
@@ -653,6 +663,24 @@ export class Store {
     this.emitSyncStatus();
 
     if (!isNew) return;
+
+    // Retry whatever failed because this worker was not here yet.
+    //
+    // The OPFS lookup in `fetchResourceWithLocalFallback` is gated on
+    // `this.clientDb`, so a resource requested before the worker is attached
+    // skips local storage entirely and — offline — fails as "not available
+    // locally". The data can be sitting in OPFS the whole time, and nothing
+    // retries: the error is cached on the resource, so the UI shows a broken
+    // drive built from data it already has. Seen as `offline-persistence`
+    // failing with the drive present in the ClientDb (storedProps=12) while a
+    // fresh request for the same subject returned it fine.
+    for (const [subject, resource] of this.resources) {
+      if (resource.error?.message === OFFLINE_NOT_LOCAL) {
+        void this.fetchResourceWithLocalFallback(subject).catch(
+          () => undefined,
+        );
+      }
+    }
 
     // NB: the in-memory `LocalSearch` (MiniSearch) index is NOT eagerly rebuilt
     // here. The local index is only ever consulted OFFLINE — online searches go
@@ -2653,9 +2681,7 @@ export class Store {
             if (!alreadyResolved) {
               this.failResource(
                 subject,
-                new Error(
-                  'Offline: resource not available locally. Reconnect to fetch.',
-                ),
+                new Error(OFFLINE_NOT_LOCAL),
               );
             }
           }
