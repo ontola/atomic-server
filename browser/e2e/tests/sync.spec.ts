@@ -425,7 +425,10 @@ test.describe('sync', () => {
     // No confirm button: the flow signs in as soon as the secret parses.
     const secretField = page2.getByLabel('Agent secret');
     await secretField.fill(secret);
-    await secretField.blur();
+    // No blur: the field disables itself the moment the secret parses (it
+    // shows "Signing in…"), and `blur()` on a disabled input waits for an
+    // actionability that never comes. `waitForConnected` below is the real
+    // signal that the sign-in took, so wait for that instead.
 
     // Wait for the second page to connect
     await waitForConnected(page2);
