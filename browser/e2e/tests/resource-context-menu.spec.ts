@@ -34,12 +34,7 @@ test.describe('resource context menu', () => {
     await page.getByRole('gridcell').nth(1).click();
     await page.keyboard.type('hello');
     await page.keyboard.press('Enter');
-    // The row's commit is debounced, so `pendingDirtyCount` is still 0 the
-    // instant Enter lands — this beat is what lets the outbox pick the work up.
-    await page.waitForTimeout(1000);
-    // Only then is draining a meaningful signal. Reloading before the row
-    // reaches the server throws the edit away, and under load the debounce
-    // beat alone is not enough to get it there.
+    // Reloading before the row reaches the server throws the edit away.
     await page.waitForFunction(
       () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
