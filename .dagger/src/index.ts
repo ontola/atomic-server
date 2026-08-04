@@ -1547,6 +1547,10 @@ export class AtomicServer {
           exitCode: exitCode.trim(),
           testOutput,
           report: container.directory('playwright-report'),
+          // Traces, screenshots and `error-context.md` per failed test. The
+          // 20k-char log tail below says WHICH assertion failed; this is the
+          // only thing that says why.
+          testResults: container.directory('test-results'),
         };
       }),
     );
@@ -1567,6 +1571,20 @@ export class AtomicServer {
       reportUrls.push(
         `shard ${r.shard}/${shardCount}: ${this.extractDeployUrl(deployOutput)}`,
       );
+    }
+
+    // Put the failed shards' artifacts where the workflow's upload step can
+    // reach them. Reports were netlify-only, and `NETLIFY_TOKEN` is empty on
+    // this pipeline — so every trace was being thrown away and the log tail
+    // was all anyone had to debug from. Never let an export failure mask the
+    // test failure that matters.
+    for (const r of failed) {
+      try {
+        await r.report.export(`./artifact/e2e/shard-${r.shard}/report`);
+        await r.testResults.export(`./artifact/e2e/shard-${r.shard}/results`);
+      } catch (e) {
+        console.error(`Could not export shard ${r.shard} artifacts:`, e);
+      }
     }
 
     if (failed.length > 0) {

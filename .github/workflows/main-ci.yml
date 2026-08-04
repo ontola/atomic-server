@@ -71,7 +71,12 @@ jobs:
           verb: call
           args: create-docker-images --tags ${{ steps.meta.outputs.tags }}
       - name: Upload artifacts
+        # `always()`: the e2e traces exported above are only interesting when
+        # the CI step failed, and without this the upload is skipped exactly
+        # then.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact-name }}
           path: ./artifact
+          if-no-files-found: ignore
