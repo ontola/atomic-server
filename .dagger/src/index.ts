@@ -1002,8 +1002,9 @@ export class AtomicServer {
     // workspace siblings like the wasm cdylib plugin examples — which
     // can't be compiled for the host musl target.
     // `e2e` selects the `e2e` cargo profile (see the workspace Cargo.toml):
-    // optimised enough that commit round-trips stop dominating, cheap enough
-    // to compile that Playwright is not left waiting on LTO.
+    // the debug build's behaviour — assertions and overflow checks included —
+    // at an optimisation level where commit round-trips stop dominating, and
+    // cheap enough to compile that Playwright is not left waiting on LTO.
     const buildArgs = e2e
       ? ['cargo', 'build', '--profile', 'e2e', '-p', 'atomic-server']
       : release
