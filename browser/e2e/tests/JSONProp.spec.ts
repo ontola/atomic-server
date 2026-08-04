@@ -1,23 +1,75 @@
-import { test, expect } from '@playwright/test';
-import { before, newDrive, newResource, signIn } from './test-utils';
+import { test, expect, type Page } from '@playwright/test';
+import { before, FRONTEND_URL, newDrive, signIn } from './test-utils';
+
+const props = {
+  name: 'https://atomicdata.dev/properties/name',
+  shortname: 'https://atomicdata.dev/properties/shortname',
+  description: 'https://atomicdata.dev/properties/description',
+  datatype: 'https://atomicdata.dev/properties/datatype',
+  recommends: 'https://atomicdata.dev/properties/recommends',
+};
+
+/**
+ * A class with one JSON property, built in the drive under test.
+ *
+ * This used to point at a class hosted on the public `atomicdata.dev`, which
+ * made the test fail whenever that server was slow or unreachable — and fail
+ * as "the form never rendered", which names neither the server nor the
+ * network. Nothing here needs a *remote* class, only a JSON-typed field, so
+ * build one locally and keep the test's dependencies inside its own drive.
+ */
+async function createClassWithJsonProp(page: Page): Promise<string> {
+  await page.waitForFunction(
+    () =>
+      window.store.getClientDb()?.isReady === true &&
+      window.store.getSyncStatus().serverConnected === true,
+    undefined,
+    { timeout: 30_000 },
+  );
+
+  return page.evaluate(async p => {
+    const store = window.store;
+    const drive = store.getDrive();
+
+    const jsonProp = await store.newResource({
+      parent: drive,
+      isA: 'https://atomicdata.dev/classes/Property',
+      propVals: {
+        [p.shortname]: 'test-json-prop',
+        [p.datatype]: 'https://atomicdata.dev/datatypes/json',
+        [p.description]: 'A JSON field, for testing the JSON editor',
+      },
+    });
+    await jsonProp.save();
+
+    const cls = await store.newResource({
+      parent: drive,
+      isA: 'https://atomicdata.dev/classes/Class',
+      propVals: {
+        [p.shortname]: 'test-class-with-json-prop',
+        [p.description]: 'A class with a JSON prop, made for this test',
+        [p.recommends]: [p.name, jsonProp.subject],
+      },
+    });
+    await cls.save();
+
+    return cls.subject;
+  }, props);
+}
 
 test.describe('JSON prop', () => {
   test.beforeEach(before);
 
-  // FLAKY (local, intermittent): depends on a class hosted on the public
-  // `atomicdata.dev` (line 13: `01k10mtpp8fkkmsd6tkm9qrqyw/...`). When
-  // the public server is slow / unreachable, the form fields never
-  // render and `getByLabel('Name').fill(...)` times out at 10s.
-  // Investigation: inline the class definition or host a copy on the
-  // test atomic-server instead of crossing the internet.
   test('create JSON prop', async ({ page }) => {
     await signIn(page);
     await newDrive(page);
 
-    // A class with a JSON prop, made for this test.
-    await newResource(
-      'https://atomicdata.dev/01k10mtpp8fkkmsd6tkm9qrqyw/defaultontology/class/test-class-with-json-prop',
-      page,
+    const classSubject = await createClassWithJsonProp(page);
+    // Straight to the form for that class. `newResource` cannot be used here:
+    // it treats anything not starting with `https://` as a shortname, and a
+    // class built in this drive has a `did:ad:` subject.
+    await page.goto(
+      `${FRONTEND_URL}/app/new?classSubject=${encodeURIComponent(classSubject)}`,
     );
 
     await expect(
@@ -27,13 +79,8 @@ test.describe('JSON prop', () => {
     const name = `Instance: ${Date.now()}`;
     await page.getByLabel('Name').fill(name);
 
-    // The `Test-Json-Prop` property is hosted on the public
-    // `atomicdata.dev` server (see the class URL above). The form's
-    // `useProperty` renders this field with a `loading` placeholder
-    // until the shortname fetches. Bump visibility timeout to 30s to
-    // absorb cold-fetch latency from the public host.
     const jsonEditor = page.getByLabel('Test-Json-Prop');
-    await expect(jsonEditor).toBeVisible({ timeout: 30000 });
+    await expect(jsonEditor).toBeVisible();
     await jsonEditor.fill('{"valid": false,}');
 
     const saveButton = page.getByRole('button', { name: 'Save' });
