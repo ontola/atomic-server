@@ -20,10 +20,14 @@ const RUST_IMAGE = 'rust:bookworm';
 // The image bakes in the browser builds its own Playwright wants, and each
 // release wants different revisions (1.58.2 → chromium-1208, 1.60.0 →
 // chromium-1223). Drift here does not fail loudly: `playwright install`
-// quietly re-downloads chromium, firefox AND webkit on every single run —
-// ~52s a shard — and a cache volume cannot rescue it, because the image sets
-// `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` and the download lands there
-// rather than in `~/.cache`. Match the versions and the install is a no-op.
+// quietly re-downloads chromium, firefox AND webkit — measured at 30s in the
+// image, ~52s on Mancave, against 0s when the versions agree.
+//
+// That cost lands whenever the install layer is invalidated, which is any
+// change under `browser/` outside `e2e/tests` (the tests mount AFTER it, so
+// test-only commits stay cached). A cache volume cannot rescue it either: the
+// image sets `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`, so the download lands
+// there rather than in `~/.cache`.
 const PLAYWRIGHT_PACKAGE_VERSION = '1.60.0';
 const PLAYWRIGHT_VERSION = `v${PLAYWRIGHT_PACKAGE_VERSION}-noble`;
 // Keep in sync with `flutter/.mise.toml` (`[tools].flutter`).
@@ -71,12 +75,16 @@ type HostKnobs = {
 };
 
 const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
-  // 4 shards × 3 workers ≈ 12 browsers; nextest 6-wide with it capped at 2.
-  // cargoBuildJobs=8: leaves headroom for co-running e2e/browsers instead
-  // of 24-way thrash (profile: 88% CPU but 31% system time).
+  // 4 shards × 2 workers ≈ 8 browsers. `ci()` runs endToEnd concurrently with
+  // clippy/nextest/flutter/vitest, so the box carries those browsers AND their
+  // four debug atomic-servers AND cargoBuildJobs=8 AND a 6-wide nextest at the
+  // same time. At 3 workers that was 12 browsers on 12 cores and the suite
+  // failed accordingly — including a chromium killed outright ("Target page,
+  // context or browser has been closed"), which is starvation, not a race.
+  // Raise this only alongside the cargo/nextest widths it shares the host with.
   mancave: {
     e2eShardCount: 4,
-    e2ePlaywrightWorkers: '3',
+    e2ePlaywrightWorkers: '2',
     e2ePlaywrightRetries: '1',
     nextestTestThreads: '6',
     nextestRetries: '1',
