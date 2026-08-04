@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, createTableFromDialog } from './test-utils';
+import { before, createTableFromDialog, reloadReconnected } from './test-utils';
 
 /** Local YYYY-MM-DD key, same derivation the CalendarDay cells use. */
 function localDayKey(d: Date): string {
@@ -64,12 +64,7 @@ test.describe('calendar view', () => {
     // back to `table`, so `calendar-view` is absent until that fetch lands —
     // under a contended CI server that routinely exceeds the default 10s
     // expect budget.
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === true,
-      undefined,
-      { timeout: 30000 },
-    );
+    await reloadReconnected(page);
     await expect(page.getByTestId('calendar-view')).toBeVisible({
       timeout: 30000,
     });
