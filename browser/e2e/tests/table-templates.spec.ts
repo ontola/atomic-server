@@ -72,6 +72,14 @@ async function setCell(
   await page.waitForTimeout(200);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
+
+  // Check the value actually arrived. Keystrokes can land on a grid that is
+  // not listening yet and nothing above would notice — the cell stays empty
+  // and the failure surfaces much later as a total with nothing to add or a
+  // filter that matches nothing, pointing at the wrong feature entirely.
+  // Matched loosely because a column may reformat what it was given ("4.50"
+  // renders as "4.5"); what is being ruled out is the cell being empty.
+  await expect(cell).toContainText(/\S/);
 }
 
 /**

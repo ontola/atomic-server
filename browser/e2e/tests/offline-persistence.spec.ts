@@ -38,7 +38,17 @@ test('cached drive survives reload while offline', async ({ page }) => {
   // commit, which the worker otherwise schedules on a 1s tick. A reload before
   // that tick rolls the write back — which is the exact bug under test, so ask
   // for the flush and wait for it rather than racing the timer.
-  await page.evaluate(() => window.store.getClientDb()?.flush());
+  await page.evaluate(async () => {
+    const db = window.store.getClientDb();
+
+    // Not optional-chained: `?.flush()` on an absent ClientDb is a silent
+    // no-op, and the test would go on to reload and fail with the same
+    // props=0 it was written to catch — blaming durability for a database
+    // that was never there.
+    if (!db) throw new Error('ClientDb missing when asking for a flush');
+
+    await db.flush();
+  });
 
   const drive = await page.evaluate(() => window.store.getDrive());
 
