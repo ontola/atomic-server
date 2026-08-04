@@ -78,9 +78,22 @@ test('cached drive survives reload while offline', async ({ page }) => {
     // whether the drive was persisted to OPFS at all, or whether it was
     // persisted and the store declines to read it while offline.
     let inClientDb = false;
+    let storedProps = -1;
+    let storedHasClass = false;
 
     try {
-      inClientDb = !!(await s.getClientDb()?.getResource?.(d));
+      const jsonAd = await s.getClientDb()?.getResource?.(d);
+      inClientDb = !!jsonAd;
+
+      if (jsonAd) {
+        // What the store's "renderable" guard looks at when deciding whether
+        // an OPFS hit counts: a resource with no class and nothing beyond the
+        // server-managed skeleton is discarded as a miss, which offline means
+        // failing rather than falling back.
+        const parsed = JSON.parse(jsonAd) as Record<string, unknown>;
+        storedProps = Object.keys(parsed).length;
+        storedHasClass = 'https://atomicdata.dev/properties/isA' in parsed;
+      }
     } catch {
       inClientDb = false;
     }
@@ -89,6 +102,8 @@ test('cached drive survives reload while offline', async ({ page }) => {
       serverConnected: s.getSyncStatus?.()?.serverConnected,
       viaGetProps: viaGet,
       inClientDb,
+      storedProps,
+      storedHasClass,
       error: s.resources.get(d)?.error?.message,
     };
   }, drive ?? '');
@@ -99,7 +114,8 @@ test('cached drive survives reload while offline', async ({ page }) => {
   expect(
     r.viaGetProps,
     `drive should load from OPFS offline; got props=${r.viaGetProps} ` +
-      `inClientDb=${r.inClientDb} error=${r.error}. ` +
+      `inClientDb=${r.inClientDb} storedProps=${r.storedProps} ` +
+      `storedHasClass=${r.storedHasClass} error=${r.error}. ` +
       (r.inClientDb
         ? 'The drive IS in OPFS, so this is the store refusing to read it offline.'
         : 'The drive is NOT in OPFS, so the write did not survive the reload.'),
