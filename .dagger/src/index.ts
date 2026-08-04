@@ -84,7 +84,7 @@ type HostKnobs = {
  * explains the failure.
  */
 function condenseErrorContext(body: string): string {
-  const details = body.match(/# Error details\n```\n([\s\S]{0,900}?)```/);
+  const details = body.match(/# Error details\s*```\n([\s\S]{0,900}?)```/);
   const main = body.indexOf('- main:');
   const region =
     main === -1
