@@ -890,13 +890,15 @@ export async function waitForTableBuild(page: Page, timeoutMs = 60_000) {
 /**
  * Creates a table through the New Table dialog and returns once it exists.
  *
- * `template` names the card to start from — omit it for a blank table. The
- * caller is left on the new table's own page, on whichever view the template
- * defaults to, and still has to wait for that view: a board, a grid, a timer.
+ * `template` names the card to start from — omit it for a blank table. Omit
+ * `name` to keep the one the dialog pre-fills, which is the template's own
+ * title. The caller is left on the new table's page, on whichever view the
+ * template defaults to, and still has to wait for that view: a board, a grid,
+ * a timer.
  */
 export async function createTableFromDialog(
   page: Page,
-  { template, name }: { template?: RegExp; name: string },
+  { template, name }: { template?: RegExp; name?: string },
 ) {
   await newResource('table', page);
 
@@ -904,7 +906,10 @@ export async function createTableFromDialog(
     await page.getByRole('button', { name: template }).click();
   }
 
-  await page.getByPlaceholder('New Table').fill(name);
+  if (name !== undefined) {
+    await page.getByPlaceholder('New Table').fill(name);
+  }
+
   await page.getByRole('button', { name: 'Create' }).click();
   await waitForTableBuild(page);
 }
