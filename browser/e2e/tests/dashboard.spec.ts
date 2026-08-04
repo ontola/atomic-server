@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, editableTitle, FRONTEND_URL, newResource } from './test-utils';
+import {
+  before,
+  editableTitle,
+  FRONTEND_URL,
+  newResource,
+  pickFromMenu,
+} from './test-utils';
 
 /**
  * A dashboard is stored configuration and nothing else, so what is worth proving
@@ -388,8 +394,10 @@ test.describe('dashboards', () => {
     // The fixture stores w: 3 for this block.
     expect(await spanOf()).toBe('span 3');
 
-    await total.getByTitle('Block options').click();
-    await page.getByRole('menuitem', { name: /Full width/ }).click();
+    await pickFromMenu(
+      total.getByTitle('Block options'),
+      page.getByRole('menuitem', { name: /Full width/ }),
+    );
     await page.keyboard.press('Escape');
 
     // Stored layout has to actually reach the grid — it was written and read by
@@ -419,8 +427,10 @@ test.describe('dashboards', () => {
 
     // Everything the create tool can write, the dialog can change — otherwise
     // the assistant builds dashboards their owner cannot edit.
-    await block(page, 'Total spent').getByTitle('Block options').click();
-    await page.getByRole('menuitem', { name: 'Configure' }).click();
+    await pickFromMenu(
+      block(page, 'Total spent').getByTitle('Block options'),
+      page.getByRole('menuitem', { name: 'Configure' }),
+    );
 
     await page.getByTestId('block-name').fill('Average spend');
     await page.getByTestId('block-function').selectOption('avg');
@@ -453,8 +463,10 @@ test.describe('dashboards', () => {
       timeout: 15_000,
     });
 
-    await block(page, 'Total spent').getByTitle('Block options').click();
-    await page.getByRole('menuitem', { name: 'Configure' }).click();
+    await pickFromMenu(
+      block(page, 'Total spent').getByTitle('Block options'),
+      page.getByRole('menuitem', { name: 'Configure' }),
+    );
 
     // Clearing the column leaves "sum of nothing", which used to save happily
     // and render as an em-dash forever.
@@ -480,8 +492,10 @@ test.describe('dashboards', () => {
       timeout: 15_000,
     });
 
-    await page.getByTitle('Add block').click();
-    await page.getByRole('menuitem', { name: 'Number' }).click();
+    await pickFromMenu(
+      page.getByTitle('Add block'),
+      page.getByRole('menuitem', { name: 'Number' }),
+    );
 
     // Adding a block opens its config dialog: a block that arrives empty and
     // silent is worse than one that asks what it should show.
