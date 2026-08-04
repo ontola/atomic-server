@@ -73,9 +73,22 @@ test('cached drive survives reload while offline', async ({ page }) => {
       viaGet = -1;
     }
 
+    // Ask the ClientDb directly as well as through the store. These answer
+    // different questions and the failure has been ambiguous between them:
+    // whether the drive was persisted to OPFS at all, or whether it was
+    // persisted and the store declines to read it while offline.
+    let inClientDb = false;
+
+    try {
+      inClientDb = !!(await s.getClientDb()?.getResource?.(d));
+    } catch {
+      inClientDb = false;
+    }
+
     return {
       serverConnected: s.getSyncStatus?.()?.serverConnected,
       viaGetProps: viaGet,
+      inClientDb,
       error: s.resources.get(d)?.error?.message,
     };
   }, drive ?? '');
@@ -85,6 +98,10 @@ test('cached drive survives reload while offline', async ({ page }) => {
   expect(r.serverConnected).toBe(false);
   expect(
     r.viaGetProps,
-    `drive should load from OPFS offline; got props=${r.viaGetProps} error=${r.error}`,
+    `drive should load from OPFS offline; got props=${r.viaGetProps} ` +
+      `inClientDb=${r.inClientDb} error=${r.error}. ` +
+      (r.inClientDb
+        ? 'The drive IS in OPFS, so this is the store refusing to read it offline.'
+        : 'The drive is NOT in OPFS, so the write did not survive the reload.'),
   ).toBeGreaterThan(0);
 });
