@@ -41,9 +41,9 @@ Here's what a JSON-AD Authentication Resource looks like for a WebSocket:
 
 ```json
 {
-  "https://atomicdata.dev/properties/auth/agent": "http://example.com/agents/N32zQnZHoj1LbTaWI5CkA4eT2AaJNBPhWcNriBgy6CE=",
+  "https://atomicdata.dev/properties/auth/agent": "did:ad:agent:N32zQnZHoj1LbTaWI5CkA4eT2AaJNBPhWcNriBgy6CE",
   "https://atomicdata.dev/properties/auth/requestedSubject": "wss://example.com/ws",
-  "https://atomicdata.dev/properties/auth/publicKey": "N32zQnZHoj1LbTaWI5CkA4eT2AaJNBPhWcNriBgy6CE=",
+  "https://atomicdata.dev/properties/auth/publicKey": "N32zQnZHoj1LbTaWI5CkA4eT2AaJNBPhWcNriBgy6CE",
   "https://atomicdata.dev/properties/auth/timestamp": 1661757470002,
   "https://atomicdata.dev/properties/auth/signature": "19Ce38zFu0E37kXWn8xGEAaeRyeP6EK0S2bt03s36gRrWxLiBbuyxX3LU9qg68pvZTzY3/P3Pgxr6VrOEvYAAQ=="
 }

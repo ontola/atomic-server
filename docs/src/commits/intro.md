@@ -9,6 +9,11 @@ small signed receipt the transport is not allowed to omit.
 
 See [concepts](concepts.md) for the field list.
 
+Today every write is a signed commit whose payload is a **Loro CRDT update**
+(`loroUpdate`). The older `set` / `push` / `remove` commit fields are deprecated
+and rejected by current servers. See [Concepts](concepts.md) for the live shape
+of a commit.
+
 ## Design goals
 
 - **Verifiable writes**: cryptographic proof of who changed what, and when.

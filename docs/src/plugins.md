@@ -45,7 +45,7 @@ Handlers receive JSON-AD payloads that describe the Resource or Commit they shou
 ### Installing a WASM class extender
 
 1. Build a component that targets `wasm32-wasip2`. Use `wit-bindgen` or `cargo component` to satisfy the interface defined in `lib/wit/class-extender.wit`.
-2. Copy the resulting `.wasm` file into the `wasm-class-extenders/` directory inside your Atomic data directory (next to the sled store).
+2. Copy the resulting `.wasm` file into the `wasm-class-extenders/` directory inside your Atomic data directory (next to the redb store).
 3. Restart `atomic-server` (or recreate the `Db`) so it scans the folder and instantiates your component.
 
 All `.wasm` files in that folder are loaded on startup. Errors are logged but do not prevent the server from running, making it safe to iterate on plugins.
