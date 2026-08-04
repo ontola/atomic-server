@@ -926,28 +926,6 @@ export async function createTableFromDialog(
  * Picking an option closes the menu, so retry while it is gone: a click that
  * took effect ends the loop, one that lost the race gets a fresh menu.
  */
-export async function pickTotal(page: Page, cell: Locator, option: string) {
-  const item = page.getByTestId(`menu-item-${option}`);
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (!(await item.isVisible())) {
-      await cell.click();
-      await item.waitFor({ state: 'visible', timeout: 10_000 });
-    }
-
-    try {
-      await item.click({ timeout: 5_000 });
-
-      return;
-    } catch {
-      // Lost the race; open the menu again and aim at the new one.
-    }
-  }
-
-  // Bounded, so a menu that is genuinely dead still fails loudly.
-  await item.click({ timeout: 5_000 });
-}
-
 /**
  * Reloads, and waits until the app is talking to the server again.
  *
@@ -968,6 +946,40 @@ export async function reloadReconnected(page: Page) {
     undefined,
     { timeout: 30_000 },
   );
+}
+
+export async function pickTotal(page: Page, cell: Locator, option: string) {
+  // Scope to a VISIBLE instance. The dropdown mounts `visibility: hidden` and
+  // only reveals itself a frame after it has been positioned, and a dismissed
+  // menu can still be in the DOM — so a bare `getByTestId` can resolve to a
+  // hidden item and wait out its whole budget on something that never appears.
+  const item = page
+    .getByTestId(`menu-item-${option}`)
+    .filter({ visible: true })
+    .first();
+
+  // Retry opening as well as picking. Clicking the cell toggles its menu, so a
+  // click that lands while the previous menu is still closing closes this one
+  // instead of opening it — and the menu re-renders whenever an aggregate
+  // recomputes, which detaches the item under the pointer.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (!(await item.isVisible())) {
+        await cell.click();
+        await item.waitFor({ state: 'visible', timeout: 5_000 });
+      }
+
+      await item.click({ timeout: 5_000 });
+
+      return;
+    } catch {
+      // Fall through and try the whole open-and-pick again.
+    }
+  }
+
+  // Bounded, so a menu that is genuinely dead still fails loudly.
+  await cell.click();
+  await item.click({ timeout: 5_000 });
 }
 
 /** Opens a new browser page for multi-user testing */
