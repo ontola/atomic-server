@@ -948,6 +948,28 @@ export async function pickTotal(page: Page, cell: Locator, option: string) {
   await item.click({ timeout: 5_000 });
 }
 
+/**
+ * Reloads, and waits until the app is talking to the server again.
+ *
+ * Which view a table opens in is configuration on its View resource, fetched
+ * after the page boots. Until that lands `normalizeViewKind(undefined)` falls
+ * back to `table`, so the marker for a board / calendar / timer is simply
+ * absent, and any filter the view carries has not been applied yet. Asserting
+ * on either straight after `reload()` races that fetch rather than testing the
+ * view — on a contended CI server, well past the default 10s budget.
+ *
+ * Callers still need a budget of their own on the view marker: being
+ * reconnected is when the fetch can start, not when it has finished.
+ */
+export async function reloadReconnected(page: Page) {
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(
+    () => window.store.getSyncStatus().serverConnected === true,
+    undefined,
+    { timeout: 30_000 },
+  );
+}
+
 /** Opens a new browser page for multi-user testing */
 export async function openNewSubjectWindow(
   browser: Browser,
