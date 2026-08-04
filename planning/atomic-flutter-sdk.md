@@ -114,6 +114,30 @@ showAgentSettings(context);
 - [x] End-to-end “build an app” tutorial — `docs/src/flutter-guide/` + `docs/src/flutter.md`
 - [ ] Web / WASM story (today: pure-Dart HTTP stopgap)
 
+### Next after this PR merges (Android / multi-app substrate)
+
+This package is the Flutter/FRB face of the embedded node. It does **not**
+by itself let AtomicServer-on-Android expose APIs to other apps (a
+ContentProvider must not boot a Flutter engine). The next move — shared with
+[`android-data-reuse.md`](./android-data-reuse.md) (and the Atomic Launcher
+exploration on `develop` / #1252) — is:
+
+1. **Split the generic node API** out of `dart/atomic_lib/rust/src/api/simple.rs`
+   (db / agent / drive / resource / query / commit / history / sync). Keep
+   canvas CRUD as a separate consumer module. Prefer converging on
+   `AtomicNode` from [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
+2. **uniffi → Kotlin** over that same Rust surface (parallel to FRB, not a
+   replacement for Dart). Smoke-test in-process from the Tauri Android app
+   or a tiny Kotlin harness: open store, get, createChild — no Flutter.
+3. **`atomic-android` AAR** — `AtomicProvider` + AIDL (`get` / `query` /
+   `commit` / subscribe) so SearchLauncher, canvas-as-client, and later
+   third parties talk Binder to one host store.
+
+Do **not** block the first `atomic_lib` pub.dev publish on (1)–(3). Do treat
+(1) as the first post-merge engineering PR: it unblocks Dart query/blobs
+*and* the Kotlin host path. Launcher product merge stays optional; Binder
+against this API is enough to validate Home capture/search.
+
 ## Twin files (keep in step with browser)
 
 | Concern | Package | Browser |
