@@ -31,14 +31,26 @@ test.describe('resource context menu', () => {
     // Type into the first cell, then Enter to advance off the row so it
     // materializes into a real (persisted) resource, and reload so it renders
     // as a collection member with a real subject.
-    await page.getByRole('gridcell').nth(1).click();
+    // Drive the cell the way `tables.spec` does for a blank table's virtual
+    // row — a forced click, then Enter to open the editor. The cell element
+    // itself never takes focus here, so no focus assertion is possible; what
+    // makes this honest is checking the row exists before going on. The CI
+    // snapshot for this failure showed both gridcells empty and a row count of
+    // 0: the keystrokes went nowhere, and no amount of waiting for saves
+    // afterwards can recover a row that was never created.
+    const firstCell = page.getByRole('gridcell').first();
+    await firstCell.click({ force: true });
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Enter');
     await page.keyboard.type('hello');
     await page.keyboard.press('Enter');
-    // Reloading before the row reaches the server throws the edit away. The
-    // beat is not redundant with the drain wait below: under CI load the row
-    // can still be missing afterwards, so whatever this covers is not only
-    // the materialize timer (which the store now counts as pending work).
-    await page.waitForTimeout(1000);
+
+    await expect(
+      page.getByRole('gridcell', { name: 'hello', exact: true }),
+    ).toBeVisible();
+
+    // Only now is waiting for the outbox meaningful; reloading before the row
+    // reaches the server throws it away.
     await page.waitForFunction(
       () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
