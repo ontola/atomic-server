@@ -948,28 +948,30 @@ export async function reloadReconnected(page: Page) {
   );
 }
 
-export async function pickTotal(page: Page, cell: Locator, option: string) {
-  // Scope to a VISIBLE instance. The dropdown mounts `visibility: hidden` and
-  // only reveals itself a frame after it has been positioned, and a dismissed
-  // menu can still be in the DOM — so a bare `getByTestId` can resolve to a
-  // hidden item and wait out its whole budget on something that never appears.
-  const item = page
-    .getByTestId(`menu-item-${option}`)
-    .filter({ visible: true })
-    .first();
+/**
+ * Opens the menu behind `trigger` and clicks `item` in it.
+ *
+ * Two things go wrong with a plain click-then-click. The dropdown mounts
+ * `visibility: hidden` and reveals itself a frame after it has been
+ * positioned, and a dismissed menu can linger in the DOM — so an unscoped
+ * locator can resolve to a hidden item and wait out its whole budget on
+ * something that will never appear. And the trigger TOGGLES its menu, so a
+ * click landing while a previous menu is still closing closes this one
+ * instead of opening it.
+ *
+ * Hence: scope to a visible instance, and retry the open as well as the pick.
+ */
+export async function pickFromMenu(trigger: Locator, item: Locator) {
+  const visible = item.filter({ visible: true }).first();
 
-  // Retry opening as well as picking. Clicking the cell toggles its menu, so a
-  // click that lands while the previous menu is still closing closes this one
-  // instead of opening it — and the menu re-renders whenever an aggregate
-  // recomputes, which detaches the item under the pointer.
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      if (!(await item.isVisible())) {
-        await cell.click();
-        await item.waitFor({ state: 'visible', timeout: 5_000 });
+      if (!(await visible.isVisible())) {
+        await trigger.click();
+        await visible.waitFor({ state: 'visible', timeout: 5_000 });
       }
 
-      await item.click({ timeout: 5_000 });
+      await visible.click({ timeout: 5_000 });
 
       return;
     } catch {
@@ -978,8 +980,13 @@ export async function pickTotal(page: Page, cell: Locator, option: string) {
   }
 
   // Bounded, so a menu that is genuinely dead still fails loudly.
-  await cell.click();
-  await item.click({ timeout: 5_000 });
+  await trigger.click();
+  await visible.click({ timeout: 5_000 });
+}
+
+/** {@link pickFromMenu} for a totals footer cell's aggregate menu. */
+export async function pickTotal(page: Page, cell: Locator, option: string) {
+  await pickFromMenu(cell, page.getByTestId(`menu-item-${option}`));
 }
 
 /** Opens a new browser page for multi-user testing */
