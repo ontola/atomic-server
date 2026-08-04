@@ -141,6 +141,7 @@ msgstr "<0/> Crear Nuevo Agente"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
@@ -171,6 +172,7 @@ msgstr "Nombre del agente"
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/routes/NewDriveRoute.tsx
 msgid "Name"
@@ -817,6 +819,7 @@ msgstr "Introduce una consulta de búsqueda"
 msgid "Loading results..."
 msgstr "Cargando resultados..."
 
+#: src/chunks/FormBuilder/FormBuilderPage.tsx
 #: src/routes/Search/SearchRoute.tsx
 msgid "Results"
 msgstr "Resultados"
@@ -887,6 +890,7 @@ msgstr "Iniciar sesión / Nuevo usuario"
 msgid "See and edit the current Agent / User (u)"
 msgstr "Ver y editar el Agente / Usuario actual (u)"
 
+#: src/chunks/FormBuilder/FormBuilderPage.tsx
 #: src/components/SideBar/AppMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Settings"
@@ -1215,6 +1219,7 @@ msgstr "Lea más sobre cómo funciona la importación de Atomic Data{0} <0>en la
 msgid "Paste your JSON-AD..."
 msgstr "Pega tu JSON-AD..."
 
+#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
 #: src/views/ImporterPage.tsx
 msgid "Options"
 msgstr "Opciones"
@@ -1600,10 +1605,12 @@ msgstr "Superior"
 msgid "Bottom"
 msgstr "Inferior"
 
+#: src/chunks/FormBuilder/SettingsTab.tsx
 #: src/routes/AppSettings.tsx
 msgid "Main color"
 msgstr "Color principal"
 
+#: src/chunks/FormBuilder/SettingsTab.tsx
 #: src/routes/AppSettings.tsx
 msgid "Appearance"
 msgstr "Apariencia"
@@ -2107,6 +2114,7 @@ msgid "Clear"
 msgstr "Borrar"
 
 #: src/actions/resourceActions.tsx
+#: src/hooks/useAfterResourceDelete.ts
 msgid "Resource deleted!"
 msgstr "¡Recurso eliminado!"
 
@@ -2375,6 +2383,7 @@ msgstr "Shortname"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/ResourceSelector/DropdownInput.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
@@ -2829,6 +2838,7 @@ msgstr "Nueva propiedad"
 msgid "Invalid value"
 msgstr "Valor inválido"
 
+#: src/chunks/FormBuilder/FieldSettingsPanel.tsx
 #: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 #: src/components/forms/FilePicker/FilePicker.tsx
 #: src/components/forms/InputDate.tsx
@@ -2867,6 +2877,7 @@ msgstr "<0/> Borrar"
 msgid "Remove all items from this list"
 msgstr "Eliminar todos los elementos de esta lista"
 
+#: src/chunks/FormBuilder/ReorderableList.tsx
 #: src/components/forms/InputResourceArray.tsx
 msgid "Move item"
 msgstr "Mover elemento"
@@ -3138,10 +3149,12 @@ msgstr "{0} Permisos heredados"
 msgid "<0><0/> Back</0> Create Invite"
 msgstr "<0><0/> Atrás</0> Crear invitación"
 
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Link copied to clipboard"
 msgstr "Enlace copiado al portapapeles"
 
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "<0/> Copy link"
 msgstr "<0/> Copiar enlace"
@@ -4584,58 +4597,46 @@ msgstr "Seleccionar Archivo"
 msgid "{0} preview"
 msgstr ""
 
-#. 0: imports; 1: await this.generateJSCodeBasic(); 2: propSubjectRef
-#: src/views/CodeUsage/generators/BasicCodeGenerator.ts
-msgid ""
-"{0}{1}\n"
-"const value = resource.get({2});\n"
-""
-msgstr ""
+#~ msgid ""
+#~ "{0}{1}\n"
+#~ "const value = resource.get({2});\n"
+#~ ""
+#~ msgstr ""
 
-#. 0: imports; 1: genericName ?? ''; 2: this.resource.subject
-#: src/views/CodeUsage/generators/BasicCodeGenerator.ts
-msgid "{0}const resource = await store.getResource{1}('{2}');"
-msgstr ""
+#~ msgid "{0}const resource = await store.getResource{1}('{2}');"
+#~ msgstr ""
 
-#. 0: await this.generateTSCodeBasic(); 1: resourceShorthand ?? `resource.get('${prop}')`
-#: src/views/CodeUsage/generators/BasicCodeGenerator.ts
-msgid ""
-"{0}\n"
-"const value = {1};\n"
-""
-msgstr ""
+#~ msgid ""
+#~ "{0}\n"
+#~ "const value = {1};\n"
+#~ ""
+#~ msgstr ""
 
-#. 0: imports; 1: this.resource.subject
-#: src/views/CodeUsage/generators/BasicCodeGenerator.ts
-msgid ""
-"{0}const Component = () => {\n"
-"  const resource = useResource('{1}');\n"
-"\n"
-"  return <div>{resource.title}</div>;\n"
-"}"
-msgstr ""
+#~ msgid ""
+#~ "{0}const Component = () => {\n"
+#~ "  const resource = useResource('{1}');\n"
+#~ "\n"
+#~ "  return <div>{resource.title}</div>;\n"
+#~ "}"
+#~ msgstr ""
 
-#. 0: imports; 1: this.resource.subject; 2: hook; 3: propSubjectRef
-#: src/views/CodeUsage/generators/BasicCodeGenerator.ts
-msgid ""
-"{0}\n"
-"const Component = () => {\n"
-"  const resource = useResource('{1}');\n"
-"  const [value] = {2}(resource, {3});\n"
-"\n"
-"  return <div>{value}</div>;\n"
-"}"
-msgstr ""
+#~ msgid ""
+#~ "{0}\n"
+#~ "const Component = () => {\n"
+#~ "  const resource = useResource('{1}');\n"
+#~ "  const [value] = {2}(resource, {3});\n"
+#~ "\n"
+#~ "  return <div>{value}</div>;\n"
+#~ "}"
+#~ msgstr ""
 
-#. 0: imports; 1: genericName; 2: this.resource.subject; 3: propUsage
-#: src/views/CodeUsage/generators/BasicCodeGenerator.ts
-msgid ""
-"{0}\n"
-"const Component = () => {\n"
-"  const resource = useResource{1}('{2}');\n"
-"{3}\n"
-"}"
-msgstr ""
+#~ msgid ""
+#~ "{0}\n"
+#~ "const Component = () => {\n"
+#~ "  const resource = useResource{1}('{2}');\n"
+#~ "{3}\n"
+#~ "}"
+#~ msgstr ""
 
 #. 0: prefix; 1: formatImportNames(prefix, names); 2: file
 #: src/views/CodeUsage/generators/generatorUtils.ts
@@ -5279,6 +5280,7 @@ msgstr ""
 msgid "Mounted at {0}"
 msgstr ""
 
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
 #: src/components/Settings/VirtualDriveSettings.tsx
 msgid "<0/> Open"
 msgstr ""
@@ -5713,6 +5715,7 @@ msgstr ""
 msgid "Are you sure you've stored this code somewhere safe? You cannot recover your account without it."
 msgstr ""
 
+#: src/chunks/FormBuilder/FormAccessSection.tsx
 #: src/components/NewIdentitySection.tsx
 #: src/components/NewIdentitySection.tsx
 msgid "Generating…"
@@ -6444,6 +6447,8 @@ msgstr ""
 msgid "What are you adding?"
 msgstr ""
 
+#: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
+#: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 msgid "Placeholder"
 msgstr ""
@@ -6594,4 +6599,359 @@ msgstr ""
 #. 0: quickAdd.label; 1: preset.column
 #: src/chunks/TablePage/tableTemplates.test.ts
 msgid "{0} presets \"{1}\", which is not a column"
+msgstr ""
+
+#: src/chunks/FormBuilder/DeleteFormDialog.tsx
+msgid "Are you sure you want to delete this form?"
+msgstr ""
+
+#: src/chunks/FormBuilder/DeleteFormDialog.tsx
+msgid "<0/> Also delete the results table and its responses"
+msgstr ""
+
+#: src/chunks/FormBuilder/DeleteFormDialog.tsx
+msgid "Delete form"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormBuilderPage.tsx
+msgid "Fields"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormBuilderPage.tsx
+msgid "Summary"
+msgstr ""
+
+#: src/chunks/FormBuilder/FieldSettingsPanel.tsx
+msgid "Heading text"
+msgstr ""
+
+#: src/chunks/FormBuilder/FieldSettingsPanel.tsx
+msgid "Paragraph text"
+msgstr ""
+
+#: src/chunks/FormBuilder/FieldSettingsPanel.tsx
+msgid "Label"
+msgstr ""
+
+#: src/chunks/FormBuilder/FieldSettingsPanel.tsx
+msgid "Helper text"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Anyone with the share link can view and submit"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Only visitors with a valid, unused invite link can view and submit"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Anyone with the link"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Invite only"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Who can open this form"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Switch to invite only to hand out single-use invite links instead of one public link."
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Enter how many invite links to create"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Could not create all invite links"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "No invite links to export"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Could not export invite links"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Full links"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Codes only"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Number of invite links"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Amount"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Generate codes"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "No invite links yet."
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Each invite link can be used for exactly one submission. Deleting a link revokes it."
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Invite link copied to clipboard"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Copy invite link"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Revoke"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormAccessSection.tsx
+msgid "Used"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormPreviewDialog.tsx
+#: src/chunks/FormBuilder/FormPreviewDialog.tsx
+msgid "Preview"
+msgstr ""
+
+#: src/chunks/FormBuilder/FormPreviewDialog.tsx
+msgid "Loading preview…"
+msgstr ""
+
+#: src/chunks/FormBuilder/PublishToggle.tsx
+msgid "Unpublish"
+msgstr ""
+
+#: src/chunks/FormBuilder/PublishToggle.tsx
+msgid "Publish"
+msgstr ""
+
+#: src/chunks/FormBuilder/FieldRow.tsx
+msgid "Delete field"
+msgstr ""
+
+#: src/chunks/FormBuilder/ResultsTab.tsx
+msgid "No results table found for this form."
+msgstr ""
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Form access"
+msgstr ""
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Form image"
+msgstr ""
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Image position"
+msgstr ""
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Text color"
+msgstr ""
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Background color"
+msgstr ""
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Roundness"
+msgstr ""
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "<0/> Show progress bar on multi-page forms"
+msgstr ""
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Default"
+msgstr ""
+
+#. 0: label.toLowerCase()
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Pick {0}"
+msgstr ""
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Reset"
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Preparing share link…"
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Share form"
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "<0/> Share"
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "QR code for the form link"
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Share form view"
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Link"
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Embed"
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "This form is invite only — the plain link and embed won't open without a valid invite code. Create and copy invite links in Settings → Form access."
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
+msgid "Form"
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Paste this where you want the form to appear."
+msgstr ""
+
+#. 0: pages.length + 1
+#: src/chunks/FormBuilder/PageTabBar.tsx
+msgid "Page {0}"
+msgstr ""
+
+#: src/chunks/FormBuilder/PageTabBar.tsx
+msgid "<0/> Add page"
+msgstr ""
+
+#: src/chunks/FormBuilder/PageTabBar.tsx
+msgid "Untitled page"
+msgstr ""
+
+#: src/chunks/FormBuilder/PageTabBar.tsx
+msgid "Delete page"
+msgstr ""
+
+#: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
+msgid "Min"
+msgstr ""
+
+#: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
+msgid "Max"
+msgstr ""
+
+#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+msgid "Remove option"
+msgstr ""
+
+#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+msgid "<0/> Add option"
+msgstr ""
+
+#. 0: list.length + 1
+#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+msgid "Option {0}"
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/AnswerList.tsx
+msgid "Showing first"
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/AnswerList.tsx
+msgid "answers"
+msgstr ""
+
+#. 0: summary.responses
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "{0} responses"
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "Loading summary..."
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "Could not load the summary from the server. Check your connection and try refreshing."
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "No summary available. The server may need to be updated."
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "No responses yet"
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "skipped"
+msgstr ""
+
+#. 0: field.answered
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "{0} answered"
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "Yes"
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "No"
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "No numeric answers yet"
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "No answers yet"
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/Histogram.tsx
+msgid "min"
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/Histogram.tsx
+msgid "· mean"
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/Histogram.tsx
+msgid "· max"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
+msgid "Response"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
+msgid "Page 1"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
+msgid "New Form"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
+msgid "Each response is a"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
+msgid "Names the class of a single submission — e.g. every response of a Job Application form is an Application."
 msgstr ""
