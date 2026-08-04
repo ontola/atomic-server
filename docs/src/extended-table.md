@@ -1,9 +1,14 @@
-- [Commits](commits/intro.md) communicate state changes. These Commits are signed using cryptographic keys, which ensures that every change can be audited. Commits are also used to construct a history of versions.
-- [Agents](agents.md) are Users that enable [authentication](authentication.md). They are Resources with their own Public and Private keys, which they use to identify themselves.
+- [Commits](commits/intro.md) communicate state changes. These Commits are signed using cryptographic keys, which ensures that every change can be audited. Commits are also used to construct a history of versions. Live writes carry [Loro](https://loro.dev) CRDT updates.
+- [Agents](agents.md) are Users that enable [authentication](authentication.md). They are Resources identified by `did:ad:agent:{publicKey}`.
+- [Decentralized Identifiers (DIDs)](did.md): portable `did:ad` subjects for resources, agents, commits, blobs, and nodes.
 - [Collections](schema/collections.md): querying, filtering, sorting and pagination.
 - [Paths](core/paths.md): traverse graphs.
 - [Hierarchies](hierarchy.md) used for authorization and keeping data organized. Similar to folder structures on file-systems.
 - [Invites](invitations.md): create new users and provide them with rights.
-- [WebSockets](websockets.md): real-time updates.
+- [WebSockets / sync protocol](websockets.md): real-time updates, drive sync, and peer transport (also over Iroh).
 - [Endpoints](endpoints.md): provide machine-readable descriptions of web services.
-- [Files](files.md): upload, download and metadata for files.
+- [Files](files.md): upload, download and metadata for files (content-addressed `did:ad:blob:`).
+- [Translations](schema/translations.md): document-level and field-level (`LocalizedText`) localization.
+- [Local-first](atomicserver/local-first.md): offline stores, encryption, and sync without a central source of truth.
+- [Presence](atomicserver/gui/presence.md): ephemeral cursors, avatars, and follow-me (not persisted as commits).
+- [CMS, drafts & forks](atomicserver/cms.md): publishing by location, and Fork-based proposed edits.

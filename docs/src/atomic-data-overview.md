@@ -6,6 +6,7 @@
 ![Venn diagram showing Atomic Data is the combination of JSON, RDF and Type-Safety](assets/venn.svg)
 
 Atomic Data uses links to connect pieces of data, and therefore makes it easier to connect datasets to each other - even when these datasets exist on separate machines.
+Resources are addressed with portable [`did:ad` identifiers](did.md), edited with signed [CRDT commits](commits/intro.md), and can live [entirely local-first](atomicserver/local-first.md) before syncing to peers.
 
 ## AtomicServer
 
@@ -37,11 +38,11 @@ Atomic Data Extended is a set of extra modules (on top of Atomic Data Core) that
 
 ## Tools & libraries
 
-- Browser app [atomic-data-browser](https://github.com/atomicdata-dev/atomic-data-browser) ([demo on atomicdata.dev](https://atomicdata.dev))
-- Build a react app using [typescript & react libraries](https://github.com/atomicdata-dev/atomic-data-browser). Start with the [react template on codesandbox](https://codesandbox.io/s/atomic-data-react-template-4y9qu?file=/src/MyResource.tsx)
+- Web app (data-browser) in the [`atomic-server` monorepo](https://github.com/atomicdata-dev/atomic-server/tree/master/browser) ([demo on atomicdata.dev](https://atomicdata.dev))
+- Typescript libraries: [`@tomic/lib`](js.md), [`@tomic/react`](usecases/react.md), [`@tomic/svelte`](svelte.md)
 - Host your own [atomic-server](https://github.com/atomicdata-dev/atomic-server) (powers [atomicdata.dev](https://atomicdata.dev), run with `docker run -p 80:80 -v atomic-storage:/atomic-storage joepmeneer/atomic-server`)
-- Discover the command line tool: [atomic-cli](https://github.com/atomicdata-dev/atomic-server) (`cargo install atomic-cli`)
-- Use the Rust library: [atomic-lib](https://github.com/atomicdata-dev/atomic-server)
+- Command line tool: [atomic-cli](https://github.com/atomicdata-dev/atomic-server) (`cargo install atomic-cli`)
+- Rust library: [atomic-lib](https://github.com/atomicdata-dev/atomic-server)
 
 ## Get involved
 
@@ -50,12 +51,13 @@ Make sure to [join our Discord](https://discord.gg/a72Rv2P) if you'd like to dis
 ## Status
 
 Keep in mind that none of the Atomic Data projects has reached a v1, which means that breaking changes can happen.
+The 0.41 line is the local-first / `did:ad` release — see the [roadmap](roadmap.md) and [changelog](https://github.com/atomicdata-dev/atomic-server/blob/develop/CHANGELOG.md).
 
 ## Reading these docs
 
 This is written mostly as a book, so reading it in the order of the Table of Contents will probably give you the best experience.
 That being said, feel free to jump around - links are often used to refer to earlier discussed concepts.
-If you encounter any issues while reading, please leave an [issue on Github](https://github.com/ontola/atomic-data/issues).
+If you encounter any issues while reading, please leave an [issue on Github](https://github.com/atomicdata-dev/atomic-server/issues).
 Use the arrows on the side / bottom to go to the next page.
 
 {{#include SUMMARY.md}}

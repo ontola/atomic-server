@@ -1,10 +1,13 @@
 {{#title Atomic Commits - Event standard for Atomic Data}}
 # Atomic Commits
 
-_Disclaimer: Work in progress, prone to change._
-
 Atomic Commits is a specification for communicating _state changes_ (events / transactions / patches / deltas / mutations) of [Atomic Data](../core/concepts.md).
 It is the part of Atomic Data that is concerned with writing, editing, removing and updating information.
+
+Today every write is a signed commit whose payload is a **Loro CRDT update**
+(`loroUpdate`). The older `set` / `push` / `remove` commit fields are deprecated
+and rejected by current servers. See [Concepts](concepts.md) for the live shape
+of a commit.
 
 ## Design goals
 

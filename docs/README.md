@@ -5,7 +5,7 @@
 _Atomic Data is a specification for sharing, modifying and modeling graph data._
 
 View it on [docs.atomicdata.dev](https://docs.atomicdata.dev).
-If you're looking for **implementations of Atomic Data**, check out [atomic-server](https://github.com/atomicdata-dev/atomic-server) (server + cli + lib written in Rust) and [atomic-data-browser](https://github.com/atomicdata-dev/atomic-data-browser) (react / typescript).
+If you're looking for **implementations of Atomic Data**, check out [atomic-server](https://github.com/atomicdata-dev/atomic-server) (server + cli + lib + web app, written in Rust / TypeScript).
 
 ## About this repo
 

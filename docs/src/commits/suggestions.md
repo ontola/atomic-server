@@ -1,44 +1,60 @@
-# Atomic Suggestions
+# Atomic Suggestions and Forks
 
-Atomic Suggestions is a proposed standard that enables decentralized collaboration on resources.
-It's basically Git for linked data.
-Practically, it should enable right-clicking on any piece of Atomic Data on the web, and suggesting an edit to the owner.
+Atomic Data supports proposing a change to an existing resource without editing
+it in place. The shipped mechanism is a **Fork**.
+
+> Historical note: an earlier draft of this page described HTTP POST "Suggestions"
+> to an Owner Inbox. That design was never the product path and is superseded by
+> Forks below. See also the CMS guide: [Drafts and forks](../atomicserver/cms.md).
 
 ## Design goals
 
-- **Asynchronous collaboration**: Various users can work on the same thing at the same time.
-- **Branching & merging**: Issues that result from async changes (merge conflicts) can be resolved.
+- **Asynchronous collaboration**: Several people can prepare changes without
+  blocking the live resource.
+- **Safe staging**: The original stays readable and stable until a deliberate
+  merge.
+- **Ordinary resources**: A proposal is itself Atomic Data — with a subject,
+  history, and rights — not a side-channel patch format.
 
-## Concepts
+## Fork
 
-### Fork
+Forking:
 
-Forking is the first step to making a suggestion.
-Forking refers to:
+1. Copies the resource (or creates a resource that carries the same content
+   class).
+2. Places it under the drive's private Forks folder (not publicly readable by
+   default).
+3. Sets `originalSubject` to the resource being changed.
+4. Records merge baselines (`forkBase` / `forkVersion`) so property and Loro-body
+   merges are well-defined.
 
-1. copying some resource
-1. changing the subject URL to some URL that you control
-1. adding a reference to the original URL using the `atomic:originalSubject` Property.
+The copy is a **Fork** (`isA` includes the `Fork` class). Because you (or your
+staging folder) control it, you edit it with normal [Commits](intro.md). The
+live resource is unchanged until merge.
 
-The newly created copy with the different URL is a _Fork_.
-Since the Fork is a resource that you own (see [Ownership](ownership.md)), you can make changes to is.
+### Merge
 
-Whenever you make changes, the app making the changes _should_ keep track of them as Atomic Commits.
-These Commits make it easier to apply (small) changes to (large) resources, even when multiple people are working on the same thing at the same time.
+Merging applies the fork onto `originalSubject` and retires the fork. Conflict
+handling uses the stored baseline plus Loro CRDT merge for collaborative
+document bodies.
 
-### Suggestion
+### Rights
 
-When you've forked some resource and made some changes, you can Suggest these changes to the original owner.
-This is done by sending an HTTP POST request containing the Commits to the Owner URL.
+A fork is authorized like any other resource under the hierarchy. Staging your
+own edit requires write access to create the fork; accepting a merge requires
+write access on the original. Cross-agent "suggest from outside" can use the
+same `originalSubject` shape once the productized invite/authorization path for
+that case is enabled — the data model does not need a second proposal type.
 
-A Suggestion is a (set of?) Commit(s?) that is proposed to be appended to some Ledger.
-The important difference between a Suggestion and a Commit, is that a Commit has been verified, signed and approved by the Controller.
+## Drafts (not forks)
 
-### Controller
+**Draft** means unpublished *new* content: a resource that lives in a private
+Drafts folder. Publishing is moving it to a public parent. Drafts do not use
+`originalSubject`; they are not proposals against an existing subject. See
+[Headless CMS, drafts, and forks](../atomicserver/cms.md).
 
-The actor (person / organization) that is in control of a specific Resource and its Commits.
+## Related
 
-### Inbox
-
-An Inbox represents a resource that contains incoming Suggestions.
-It's similar to an e-mail inbox.
+- [Commits](intro.md)
+- [Hierarchy](../hierarchy.md)
+- [Ownership](ownership.md) (historical companion notes)
