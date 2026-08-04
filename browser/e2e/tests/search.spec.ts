@@ -16,7 +16,6 @@ import {
 const SEARCH_RESULTS = 'https://atomicdata.dev/properties/search/results';
 const TAGS = 'https://atomicdata.dev/properties/tags';
 
-/** Waits until the server's index answers `query` with every expected doc. */
 async function waitForServerSearch(
   page: Page,
   query: string,
@@ -67,28 +66,6 @@ async function waitForServerSearch(
     },
     { timeout: 30000, polling: 1000 },
   );
-}
-
-/**
- * The result rows the overlay shows for `query`, from a genuinely fresh query.
- *
- * The overlay asks the server once per query and renders that answer — it
- * never refreshes it. Re-typing the same string changes nothing, so clearing
- * the box first is what makes it ask again. Polling this is the only way to
- * ride out an index that is briefly non-monotonic: no amount of probing
- * beforehand closes the gap between the last probe and the overlay's own
- * request.
- */
-async function resultsFor(page: Page, query: string): Promise<string[]> {
-  await typeInSearch(page, '');
-  await typeInSearch(page, query);
-  const rows = page.locator('[data-index]');
-  await rows
-    .first()
-    .waitFor({ state: 'visible', timeout: 5_000 })
-    .catch(() => undefined);
-
-  return rows.allTextContents();
 }
 
 async function waitForFilteredServerSearch(
@@ -220,19 +197,21 @@ test.describe('search', async () => {
 
     // Salad doc was indexed for an earlier scoped query (different `parents`)
     // so the un-scoped server index doesn't necessarily contain it yet.
+    // Poll the drive-scoped search (matching the overlay's `parents: drive`
+    // default) until both docs are returned — without this, a slow indexer
+    // under parallel load races the assertion.
     await waitForServerSearch(page, 'Avocado', driveSubject, [
       avocadoCakeSubject,
       avocadoSaladSubject,
     ]);
 
-    await expect
-      .poll(() => resultsFor(page, 'Avocado'), { timeout: 30_000 })
-      .toEqual(
-        expect.arrayContaining([
-          expect.stringContaining('Avocado Cake'),
-          expect.stringContaining('Avocado Salad'),
-        ]),
-      );
+    await typeInSearch(page, 'Avocado');
+    await expect(
+      searchResults.filter({ hasText: 'Avocado Cake' }).first(),
+    ).toBeVisible();
+    await expect(
+      searchResults.filter({ hasText: 'Avocado Salad' }).first(),
+    ).toBeVisible();
   });
 
   test('add tags and search for them', async ({ page }) => {
