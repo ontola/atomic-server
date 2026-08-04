@@ -15,10 +15,17 @@ import {
 const NODE_IMAGE = 'node:22';
 const RUST_IMAGE = 'rust:bookworm';
 
-// Must match `@playwright/test` in `browser/e2e/package.json`. A mismatch
-// makes the chromium browser binary missing inside the container — every
-// test times out at `page.goto`.
-const PLAYWRIGHT_VERSION = 'v1.58.2-noble';
+// Must match `@playwright/test` in `browser/e2e/package.json`.
+//
+// The image bakes in the browser builds its own Playwright wants, and each
+// release wants different revisions (1.58.2 → chromium-1208, 1.60.0 →
+// chromium-1223). Drift here does not fail loudly: `playwright install`
+// quietly re-downloads chromium, firefox AND webkit on every single run —
+// ~52s a shard — and a cache volume cannot rescue it, because the image sets
+// `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` and the download lands there
+// rather than in `~/.cache`. Match the versions and the install is a no-op.
+const PLAYWRIGHT_PACKAGE_VERSION = '1.60.0';
+const PLAYWRIGHT_VERSION = `v${PLAYWRIGHT_PACKAGE_VERSION}-noble`;
 // Keep in sync with `flutter/.mise.toml` (`[tools].flutter`).
 const FLUTTER_IMAGE = 'ghcr.io/cirruslabs/flutter:3.44.0';
 // See https://github.com/rust-cross/rust-musl-cross?tab=readme-ov-file#prebuilt-images
@@ -1287,7 +1294,12 @@ export class AtomicServer {
     return dag
       .container()
       .from(`mcr.microsoft.com/playwright:${PLAYWRIGHT_VERSION}`)
-      .withExec(['npm', 'install', '-g', 'playwright@1.58.2'])
+      .withExec([
+        'npm',
+        'install',
+        '-g',
+        `playwright@${PLAYWRIGHT_PACKAGE_VERSION}`,
+      ])
       .withExec(['npx', 'playwright', 'install', 'chromium'])
       .withServiceBinding('atomic', this.atomicService(true))
       .withNewFile(
@@ -1462,10 +1474,10 @@ export class AtomicServer {
       .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
       .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
       .withExec(['pnpm', 'install'])
-      .withMountedCache(
-        '/root/.cache/ms-playwright',
-        dag.cacheVolume('playwright-browsers'),
-      )
+      // No browser cache volume: the image already carries the builds this
+      // Playwright wants (see PLAYWRIGHT_VERSION), so this verifies them and
+      // exits. Mounting a volume over `~/.cache/ms-playwright` did nothing —
+      // the image points `PLAYWRIGHT_BROWSERS_PATH` at `/ms-playwright`.
       .withExec(['pnpm', 'exec', 'playwright', 'install'])
       .withEnvVariable('LANGUAGE', 'en_GB')
       .withEnvVariable('FRONTEND_URL', `http://atomic.localhost:9883`)
