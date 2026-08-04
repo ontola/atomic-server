@@ -98,7 +98,22 @@ test('cached drive survives reload while offline', async ({ page }) => {
       inClientDb = false;
     }
 
+    // Ask again, from scratch, now that the ClientDb is definitely attached
+    // and ready. If THIS succeeds while the first attempt failed, the drive
+    // was readable all along and the failure is a resource failed during boot
+    // — before the ClientDb was attached — that nothing ever retries.
+    let viaRetry = -1;
+
+    try {
+      s.resources.delete(d);
+      const again = await s.getResource(d);
+      viaRetry = again?.getEntries ? again.getEntries().length : 0;
+    } catch {
+      viaRetry = -1;
+    }
+
     return {
+      viaRetry,
       serverConnected: s.getSyncStatus?.()?.serverConnected,
       viaGetProps: viaGet,
       inClientDb,
@@ -115,7 +130,13 @@ test('cached drive survives reload while offline', async ({ page }) => {
     r.viaGetProps,
     `drive should load from OPFS offline; got props=${r.viaGetProps} ` +
       `inClientDb=${r.inClientDb} storedProps=${r.storedProps} ` +
-      `storedHasClass=${r.storedHasClass} error=${r.error}. ` +
+      `storedHasClass=${r.storedHasClass} viaRetry=${r.viaRetry} ` +
+      `error=${r.error}. ` +
+      (r.viaRetry > 0
+        ? 'A fresh request SUCCEEDS, so the drive was readable all along and ' +
+          'the first attempt failed before the ClientDb was attached.'
+        : 'A fresh request fails too, so the store genuinely cannot read it.') +
+      ' ' +
       (r.inClientDb
         ? 'The drive IS in OPFS, so this is the store refusing to read it offline.'
         : 'The drive is NOT in OPFS, so the write did not survive the reload.'),
