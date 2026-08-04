@@ -8,6 +8,7 @@ import {
   inDialog,
   DIALOG_CLOSE_BUTTON,
   SEARCHBOX_PROPERTY_PLACEHOLDER,
+  waitForSearchIndex,
 } from './test-utils';
 
 test.describe('Ontology', async () => {
@@ -253,7 +254,12 @@ test.describe('Ontology', async () => {
     await createInstance('Red arrow with circle');
     await createInstance('Green arrow with black border');
 
-    await page.waitForTimeout(REBUILD_INDEX_TIME);
+    // The picker offers what the SERVER search returns, so wait for the exact
+    // instance it is about to be asked for. A fixed sleep guesses at Tantivy's
+    // commit; a count of any-old-hits is not enough either — the dialog will
+    // happily come back holding "Create …" plus the other instance, and the
+    // `.nth(1)` below then selects the wrong arrow.
+    await waitForSearchIndex(page, 'green arrow with black border');
 
     await page
       .getByRole('button', { name: 'add an item to the allows-only list' })

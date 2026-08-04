@@ -709,8 +709,50 @@ export async function waitForCommitOnCurrentResource(
  * browser context (drive scoping) and the overlay's streaming re-render races a
  * click that fires too soon.
  */
-export async function waitForSearchIndex(page: Page): Promise<void> {
-  await page.waitForTimeout(REBUILD_INDEX_TIME);
+/**
+ * Waits until the server's search index can answer for `query`.
+ *
+ * Without a query this is the old fallback: a fixed sleep, hoping Tantivy
+ * committed inside it. That is a guess, and on a loaded server it is wrong —
+ * the search then returns fewer hits than the test expects and fails on
+ * whatever it was about to select.
+ *
+ * With a query it polls the real thing. `expected` is how many hits to wait
+ * for, which matters when a test is about to index into the results.
+ */
+export async function waitForSearchIndex(
+  page: Page,
+  query?: string,
+  expected = 1,
+): Promise<void> {
+  if (query === undefined) {
+    await page.waitForTimeout(REBUILD_INDEX_TIME);
+
+    return;
+  }
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          async args => {
+            try {
+              const hits = await window.store.search(args.query, {
+                parents: window.store.getDrive(),
+                include: false,
+                limit: 30,
+              });
+
+              return Array.isArray(hits) ? hits.length : 0;
+            } catch {
+              return 0;
+            }
+          },
+          { query },
+        ),
+      { timeout: 30_000, intervals: [500] },
+    )
+    .toBeGreaterThanOrEqual(expected);
 }
 
 export async function openAgentPage(page: Page) {
