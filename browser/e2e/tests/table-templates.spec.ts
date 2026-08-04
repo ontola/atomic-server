@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, createTableFromDialog, newResource } from './test-utils';
+import {
+  before,
+  createTableFromDialog,
+  newResource,
+  waitForRowsMaterialized,
+} from './test-utils';
 
 /**
  * The template catalogue, exercised as a user meets it: pick a starting point,
@@ -134,6 +139,10 @@ test.describe('table templates', () => {
     await setCell(page, 2, 2, 'Coffee');
     await setCell(page, 2, 5, '4.50');
     await expect(row(page, 'Coffee')).toBeVisible();
+    // The total is computed over the table's COLLECTION, which a still-virtual
+    // row is not part of — so it would render an em-dash rather than a wrong
+    // number, and the assertion below would be about an empty table.
+    await waitForRowsMaterialized(page);
 
     // The sum under Amount was configured by the template — nobody opened a
     // menu to ask for it.
