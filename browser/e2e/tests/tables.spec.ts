@@ -367,13 +367,31 @@ test.describe('tables', async () => {
     // Exit edit mode
     await page.keyboard.press('Escape');
 
-    // Wait for all debounced saves to drain into the server. 15s to match the
-    // other drain waits in the suite: this one was the odd 10s out, and the
-    // counter now also covers the window a new row spends waiting on its
-    // materialize timer, which it previously (wrongly) reported as settled.
+    // Wait for the two things the reload below actually depends on, rather
+    // than for the aggregate counter to happen to reach zero.
+    //
+    // A row keeps a `_new:` subject until its materialize timer fires: it
+    // exists in this tab and nowhere else, so the count above being right
+    // says nothing about whether it would survive. And a materialized row
+    // still has to reach the server. Assert both directly.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
+      expected => {
+        const NAME = 'https://atomicdata.dev/properties/name';
+        const rows = Array.from(
+          window.store.resources?.values?.() ?? [],
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ).filter((r: any) => /^row\d+$/.test(r.get?.(NAME) ?? ''));
+
+        if (rows.length !== expected) return false;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (rows.some((r: any) => String(r.subject).startsWith('_new:'))) {
+          return false;
+        }
+
+        return window.store.getSyncStatus().pendingDirtyCount === 0;
+      },
+      values.length,
       { timeout: 15_000 },
     );
 
