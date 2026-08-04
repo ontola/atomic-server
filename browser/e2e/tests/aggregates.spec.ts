@@ -118,8 +118,16 @@ test.describe('table totals', () => {
     await expect(footer).toContainText('Average', { timeout: 15_000 });
 
     // ...including after visiting another column's cell in between.
-    await footer.locator('[aria-colindex="2"]').click();
-    await expect(page.getByTestId('menu-item-count')).toBeVisible();
+    // Opening a menu is not idempotent — the cell TOGGLES its menu, so a click
+    // landing while the previous one is still closing closes this one instead.
+    // `pickFromMenu` cannot help here: this only checks what the menu offers,
+    // it does not choose anything.
+    await expect(async () => {
+      await footer.locator('[aria-colindex="2"]').click();
+      await expect(
+        page.getByTestId('menu-item-count').filter({ visible: true }).first(),
+      ).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
     await page.keyboard.press('Escape');
     await pickTotal(page, footer.locator(`[aria-colindex="${hours}"]`), 'sum');
     await expect(footer).toContainText('Sum', { timeout: 15_000 });

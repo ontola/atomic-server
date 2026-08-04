@@ -961,6 +961,41 @@ export async function reloadReconnected(page: Page) {
  *
  * Hence: scope to a visible instance, and retry the open as well as the pick.
  */
+/**
+ * Waits until every row typed into a grid is a real member of its table.
+ *
+ * A new row is held purely locally under a `_new:` subject until its
+ * materialize timer fires — no commit, no collection membership. Anything
+ * computed OVER that collection therefore cannot see it yet: a total renders
+ * an em-dash, a filter does not match it, a chart omits it. Asserting on such
+ * a value before this point is asserting about a table that does not contain
+ * the row yet, and it fails as a wrong number rather than as a missing row.
+ *
+ * Also waits for the outbox, since a materialized row still has to reach the
+ * server before anything server-side (search, a reload) will agree.
+ */
+export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
+  await page.waitForFunction(
+    () => {
+      const resources = Array.from(window.store.resources?.values?.() ?? []);
+      const stillVirtual = resources.some(
+        // A placeholder holds only its seeded `isA` + `parent`; anything more
+        // is a row someone typed into.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (r: any) =>
+          String(r.subject).startsWith('_new:') &&
+          (r.getEntries?.()?.length ?? 0) > 2,
+      );
+
+      return (
+        !stillVirtual && window.store.getSyncStatus().pendingDirtyCount === 0
+      );
+    },
+    undefined,
+    { timeout: timeoutMs },
+  );
+}
+
 export async function pickFromMenu(trigger: Locator, item: Locator) {
   const visible = item.filter({ visible: true }).first();
 
