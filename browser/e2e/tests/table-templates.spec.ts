@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, newResource } from './test-utils';
+import { before, createTableFromDialog, newResource } from './test-utils';
 
 /**
  * The template catalogue, exercised as a user meets it: pick a starting point,
@@ -18,10 +18,7 @@ const row = (page: Page, text: string) =>
 
 /** Creates a table from a template card and waits for its grid. */
 async function createFromTemplate(page: Page, template: RegExp, name: string) {
-  await newResource('table', page);
-  await page.getByRole('button', { name: template }).click();
-  await page.getByPlaceholder('New Table').fill(name);
-  await page.getByRole('button', { name: 'Create' }).click();
+  await createTableFromDialog(page, { template, name });
   await expect(page.getByRole('grid')).toBeVisible();
   // The grid binds its cell handlers after the first render; clicking before
   // that lands on nothing.

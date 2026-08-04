@@ -854,6 +854,95 @@ export async function newResource(klass: string, page: Page) {
   }
 }
 
+/**
+ * Waits out a table build started from the New Table dialog.
+ *
+ * A template is a few dozen commits, and the dialog carries that wait: the
+ * Create button sits in its "Creating table…" state until the build resolves,
+ * and only then does the dialog close and the app navigate to the new table.
+ * Asserting on the view the table opens in — a grid, a board, a timer — right
+ * after clicking Create therefore races the build, not the render. Under load
+ * the build is the long leg, so the assertion fails with the view "not found"
+ * while the dialog is still visibly building, which reads like a broken view.
+ *
+ * The dialog closing IS the build's completion signal, so wait for that first
+ * and let the view assertions keep their ordinary budget.
+ */
+export async function waitForTableBuild(page: Page, timeoutMs = 60_000) {
+  const dialog = currentDialog(page);
+
+  try {
+    await dialog.waitFor({ state: 'hidden', timeout: timeoutMs });
+  } catch (cause) {
+    // A build that throws leaves the dialog up with the reason inline. Say
+    // what it said, rather than "timed out waiting for hidden".
+    const footer = await dialog
+      .locator('footer')
+      .textContent({ timeout: 1_000 })
+      .catch(() => '');
+    throw new Error(
+      `The New Table dialog was still building after ${timeoutMs}ms: ${footer?.trim()}`,
+      { cause },
+    );
+  }
+}
+
+/**
+ * Creates a table through the New Table dialog and returns once it exists.
+ *
+ * `template` names the card to start from — omit it for a blank table. The
+ * caller is left on the new table's own page, on whichever view the template
+ * defaults to, and still has to wait for that view: a board, a grid, a timer.
+ */
+export async function createTableFromDialog(
+  page: Page,
+  { template, name }: { template?: RegExp; name: string },
+) {
+  await newResource('table', page);
+
+  if (template) {
+    await page.getByRole('button', { name: template }).click();
+  }
+
+  await page.getByPlaceholder('New Table').fill(name);
+  await page.getByRole('button', { name: 'Create' }).click();
+  await waitForTableBuild(page);
+}
+
+/**
+ * Opens a totals footer cell's menu and picks one of its options — an
+ * aggregate, a second totals row, a breakdown.
+ *
+ * Two things move under the pointer here: the menu plays an entrance
+ * transition (opacity + scale), and the totals footer re-renders whenever an
+ * aggregate recomputes — which takes the menu with it. A single click races
+ * both and fails as "element is not stable" or "element was detached".
+ *
+ * Picking an option closes the menu, so retry while it is gone: a click that
+ * took effect ends the loop, one that lost the race gets a fresh menu.
+ */
+export async function pickTotal(page: Page, cell: Locator, option: string) {
+  const item = page.getByTestId(`menu-item-${option}`);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (!(await item.isVisible())) {
+      await cell.click();
+      await item.waitFor({ state: 'visible', timeout: 10_000 });
+    }
+
+    try {
+      await item.click({ timeout: 5_000 });
+
+      return;
+    } catch {
+      // Lost the race; open the menu again and aim at the new one.
+    }
+  }
+
+  // Bounded, so a menu that is genuinely dead still fails loudly.
+  await item.click({ timeout: 5_000 });
+}
+
 /** Opens a new browser page for multi-user testing */
 export async function openNewSubjectWindow(
   browser: Browser,
