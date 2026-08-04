@@ -392,6 +392,14 @@ test.describe('sync', () => {
       { timeout: 15000 },
     );
 
+    // The offline edit is in the ClientDb, but "written" is not "durable":
+    // per-write commits use `Durability::None` and only survive a reload once
+    // an Immediate commit lands, which the worker otherwise schedules on a 1s
+    // tick. The reload below would roll the edit back, and the server would
+    // never hear about it — which is exactly this test's failure mode, right
+    // down to the fresh context reading the pre-offline title.
+    await page.evaluate(() => window.store.getClientDb()?.flush());
+
     // 4. Go back online — navigate to force fresh WS connection
     await context.setOffline(false);
     // Small delay to let the network stack come back up
