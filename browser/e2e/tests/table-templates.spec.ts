@@ -3,6 +3,7 @@ import {
   before,
   createTableFromDialog,
   newResource,
+  reloadGrid,
   waitForRowsMaterialized,
 } from './test-utils';
 
@@ -80,17 +81,6 @@ async function setCell(
  * computed at mount until the row is rendered afresh. See the React-Compiler gap
  * in `planning/table-templates-and-mini-apps.md`.
  */
-async function reloadGrid(page: Page) {
-  await page.waitForFunction(
-    () => window.store.getSyncStatus().pendingDirtyCount === 0,
-    undefined,
-    { timeout: 15_000 },
-  );
-  await page.reload();
-  await expect(page.getByRole('grid')).toBeVisible();
-  await page.waitForTimeout(500);
-}
-
 test.describe('table templates', () => {
   test.beforeEach(before);
 

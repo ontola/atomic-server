@@ -996,6 +996,22 @@ export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
   );
 }
 
+/**
+ * Reloads a table page once everything typed into it would survive the reload.
+ *
+ * Waiting on the outbox alone is not enough: a row typed into the grid stays
+ * virtual until it is deselected or edit mode is left, so `pendingDirtyCount`
+ * can legitimately read zero while a row exists only in this tab — and the
+ * reload then drops it. {@link waitForRowsMaterialized} covers both halves.
+ */
+export async function reloadGrid(page: Page) {
+  await waitForRowsMaterialized(page);
+  await page.reload();
+  await expect(page.getByRole('grid')).toBeVisible();
+  // The grid binds its cell handlers after the first render.
+  await page.waitForTimeout(500);
+}
+
 export async function pickFromMenu(trigger: Locator, item: Locator) {
   const visible = item.filter({ visible: true }).first();
 
