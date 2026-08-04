@@ -1,5 +1,21 @@
-import { test, expect, type Page } from '@playwright/test';
-import { before, newResource } from './test-utils';
+import { test, expect, type Locator, type Page } from '@playwright/test';
+import { before, focusCell, newResource } from './test-utils';
+
+/**
+ * Right-clicks `target` until its context menu is actually open.
+ *
+ * The menu mounts hidden and reveals a frame after positioning, and a
+ * right-click landing while a previous menu is still closing is swallowed —
+ * so the open has to be retried, not merely waited on.
+ */
+async function openContextMenu(page: Page, target: Locator) {
+  await expect(async () => {
+    await target.click({ button: 'right' });
+    await expect(
+      page.getByRole('menu').filter({ visible: true }).first(),
+    ).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
+}
 
 test.describe('resource context menu', () => {
   test.beforeEach(before);
@@ -20,8 +36,7 @@ test.describe('resource context menu', () => {
       .getByRole('navigation')
       .getByRole('button', { name: 'Widgets' })
       .first();
-    await sidebarLink.click({ button: 'right' });
-    await expect(page.getByRole('menu')).toBeVisible();
+    await openContextMenu(page, sidebarLink);
     await expect(page.getByTestId('menu-item-history')).toBeVisible();
     // Close it.
     await page.keyboard.press('Escape');
@@ -38,9 +53,9 @@ test.describe('resource context menu', () => {
     // snapshot for this failure showed both gridcells empty and a row count of
     // 0: the keystrokes went nowhere, and no amount of waiting for saves
     // afterwards can recover a row that was never created.
-    const firstCell = page.getByRole('gridcell').first();
-    await firstCell.click({ force: true });
-    await page.waitForTimeout(300);
+    // Focus must be IN the grid before typing: after a table is created it is
+    // on the title input, and keystrokes follow focus.
+    await focusCell(page, page.getByRole('gridcell').first());
     await page.keyboard.press('Enter');
     await page.keyboard.type('hello');
     await page.keyboard.press('Enter');
@@ -64,15 +79,13 @@ test.describe('resource context menu', () => {
       .first();
     await expect(persistedCell).toBeVisible();
     // Right-click the persisted cell → resource menu.
-    await persistedCell.click({ button: 'right' });
-    await expect(page.getByRole('menu')).toBeVisible();
+    await openContextMenu(page, persistedCell);
     await expect(page.getByTestId('menu-item-history')).toBeVisible();
     await page.keyboard.press('Escape');
 
     // --- Table header (column menu on right-click) ---
     // Right-clicking a column header opens the same menu as its kebab button.
-    await page.getByRole('columnheader').nth(1).click({ button: 'right' });
-    await expect(page.getByRole('menu')).toBeVisible();
+    await openContextMenu(page, page.getByRole('columnheader').nth(1));
     await expect(page.getByTestId('menu-item-hide')).toBeVisible();
     await expect(page.getByTestId('menu-item-remove')).toBeVisible();
   });

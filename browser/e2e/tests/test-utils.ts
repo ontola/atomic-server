@@ -1062,6 +1062,31 @@ export async function reloadGrid(page: Page) {
   await page.waitForTimeout(500);
 }
 
+/**
+ * Clicks a grid cell and confirms the grid actually took input focus.
+ *
+ * Typing goes wherever focus is, and after a table is created focus is on the
+ * title input — not the grid. A click that lands before the grid is listening
+ * leaves it there, so the keystrokes go into the title and the row is never
+ * created. Nothing about the page looks wrong afterwards: the cells are
+ * present and empty, and the failure surfaces later as a total with nothing
+ * to add or a row missing after a reload.
+ *
+ * There is no "grid is ready" flag to await, but focus landing inside the
+ * grid is observable and is the precondition that actually matters.
+ */
+export async function focusCell(page: Page, cell: Locator) {
+  await expect(async () => {
+    await cell.click({ force: true });
+
+    const inGrid = await page.evaluate(
+      () => !!document.activeElement?.closest('[role="grid"]'),
+    );
+
+    expect(inGrid, 'click did not give the grid focus').toBe(true);
+  }).toPass({ timeout: 15_000 });
+}
+
 export async function pickFromMenu(trigger: Locator, item: Locator) {
   const visible = item.filter({ visible: true }).first();
 
