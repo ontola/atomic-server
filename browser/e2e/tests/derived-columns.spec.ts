@@ -403,8 +403,13 @@ test.describe('computed columns', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('grid')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('filter-chip')).toContainText('1 hours');
-    await expect(row(page, 'Short task')).toHaveCount(0);
-    await expect(row(page, 'Long task')).toHaveCount(0);
+    // Same budget as the pre-reload assertions above, because this side has
+    // strictly more to do: the chip only proves the View loaded, and every
+    // row's Duration still has to be recomputed before the filter can exclude
+    // it. There is nothing positive to await instead — the expected end state
+    // is an empty grid, so `toHaveCount(0)` polling for it IS the signal.
+    await expect(row(page, 'Short task')).toHaveCount(0, { timeout: 15_000 });
+    await expect(row(page, 'Long task')).toHaveCount(0, { timeout: 15_000 });
 
     // Removing it brings both entries back, the running one included.
     await page.getByTestId('filter-chip').click();
