@@ -105,7 +105,15 @@ const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
   mancave: {
     e2eShardCount: 4,
     e2ePlaywrightWorkers: '2',
-    e2ePlaywrightRetries: '1',
+    // Back to the suite's own documented default (playwright.config.ts): three
+    // attempts catch a genuinely flaky path while a real regression still
+    // fails all three. This branch dropped it to 1 for runtime, and that trade
+    // stopped paying: what remains red here rotates run to run — a click that
+    // did not land, a menu that did not open — which is the shape of a
+    // contended host, not of a broken test. Mitigation, not a fix; the fix is
+    // headroom, and `ci()` still runs these browsers alongside clippy,
+    // nextest, flutter and two vitest suites.
+    e2ePlaywrightRetries: '2',
     nextestTestThreads: '6',
     nextestRetries: '1',
     nextestBuildJobs: '4',
