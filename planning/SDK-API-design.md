@@ -34,3 +34,7 @@ In the "old" HTTP based Atomic(Server) UX, an app developer had to:
 - [ ] Schema creation in-code. See [`json-schema-code-first.md`](./json-schema-code-first.md).
 - [x] Extract `dart/atomic_lib` package (canvas is first consumer). See [`atomic-flutter-sdk.md`](./atomic-flutter-sdk.md).
 - [ ] Update APIs / generic query·mutate·blobs on the bridge
+- [ ] Post-`atomic_lib` publish: extract generic Rust node API + **uniffi Kotlin**
+      bindings + `atomic-android` Binder host (see [`android-data-reuse.md`](./android-data-reuse.md)
+      Phase 1; checklist in [`atomic-flutter-sdk.md`](./atomic-flutter-sdk.md)
+      “Next after this PR merges”). Same extract feeds Dart query/blobs.
