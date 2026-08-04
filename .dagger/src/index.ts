@@ -74,6 +74,26 @@ type HostKnobs = {
   cargoBuildJobs: string;
 };
 
+/**
+ * Trim a Playwright `error-context.md` to the part worth reading in a CI log.
+ *
+ * The file leads with ~2.5k characters of breadcrumbs, sidebar and app menu —
+ * identical on every failure — and only then reaches the `main` region where
+ * the grid, board or form under test lives. A flat head-truncation therefore
+ * spends its whole budget on boilerplate and cuts off exactly the part that
+ * explains the failure.
+ */
+function condenseErrorContext(body: string): string {
+  const details = body.match(/# Error details\n```\n([\s\S]{0,900}?)```/);
+  const main = body.indexOf('- main:');
+  const region =
+    main === -1
+      ? body.slice(-2500)
+      : body.slice(main, main + 2500);
+
+  return `${details ? details[1].trim() : ''}\n\n${region}`;
+}
+
 const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
   // 4 shards × 2 workers ≈ 8 browsers. `ci()` runs endToEnd concurrently with
   // clippy/nextest/flutter/vitest, so the box carries those browsers AND their
@@ -1615,7 +1635,7 @@ export class AtomicServer {
         paths.slice(0, 12).map(async path => {
           const body = await r.testResults.file(path).contents();
 
-          return `--- ${path} ---\n${body.slice(0, 3000)}`;
+          return `--- ${path} ---\n${condenseErrorContext(body)}`;
         }),
       );
 
