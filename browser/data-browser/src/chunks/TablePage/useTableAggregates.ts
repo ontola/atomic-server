@@ -77,6 +77,10 @@ export function useTableAggregates(opts: {
 
       if (!cancelled) {
         setOutcomes(collection.aggregates);
+      } else {
+        // TEMPORARY [agg] diagnostics for the CI-only em-dash totals: a read
+        // whose result was thrown away looks identical to one that never ran.
+        console.info('[agg] read done but cancelled — outcomes dropped');
       }
     };
 
@@ -85,11 +89,18 @@ export function useTableAggregates(opts: {
       // Debounced: typing in a cell saves on every keystroke, and each save
       // would otherwise be a round trip.
       timer = setTimeout(() => {
-        void read().catch(() => undefined);
+        // TEMPORARY [agg]: a failed refresh leaves the totals frozen at
+        // whatever they showed before — nothing retries until the next save.
+        // Say so instead of swallowing it.
+        void read().catch(e =>
+          console.warn('[agg] refresh read failed:', String(e).slice(0, 200)),
+        );
       }, REFRESH_DEBOUNCE_MS);
     };
 
-    void read().catch(() => undefined);
+    void read().catch(e =>
+      console.warn('[agg] initial read failed:', String(e).slice(0, 200)),
+    );
 
     // Any save or delete can change a total — including one made in another
     // tab, which arrives through the same events.
