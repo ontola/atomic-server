@@ -1,12 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
   before,
-  collectAggLog,
   createTableFromDialog,
   newResource,
   reloadGrid,
   waitForRowsMaterialized,
-  withAggLog,
 } from './test-utils';
 
 /**
@@ -211,7 +209,6 @@ test.describe('table templates', () => {
     page,
   }) => {
     test.slow();
-    const aggLog = collectAggLog(page);
     await page.setViewportSize({ width: 1800, height: 900 });
 
     await createFromTemplate(page, /Inventory/, 'Stockroom');
@@ -245,17 +242,15 @@ test.describe('table templates', () => {
     // 2 + 20 pieces in stock, totalled by the template. 30s on both: the
     // total needs an aggregate read to get through the ClientDb worker, and
     // post-reload that queue sits behind the re-drain's write storm for 15s+
-    // on a loaded runner (measured ~18.5s in the [agg]-traced CI runs).
+    // on a loaded runner (measured ~18.5s in the instrumented CI runs).
     // Tracked as the OPFS write-amplification issue — when write count
     // drops, these budgets can too.
     await expect(page.getByTestId('table-totals')).toContainText('Sum', {
       timeout: 30_000,
     });
-    await withAggLog(aggLog, () =>
-      expect(page.getByTestId('table-totals')).toContainText('22', {
-        timeout: 30_000,
-      }),
-    );
+    await expect(page.getByTestId('table-totals')).toContainText('22', {
+      timeout: 30_000,
+    });
 
     // The second view is the same table with a filter on it: two bolts are low
     // stock, twenty crates are not.

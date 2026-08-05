@@ -68,9 +68,6 @@ export function useTableAggregates(opts: {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const read = async () => {
-      // TEMPORARY [agg]: pairs with the collection-side completion lines, so
-      // a read that starts and never answers is visible as an unmatched start.
-      console.info(`[agg] ${Math.round(performance.now())} read start`);
       const builder = new CollectionBuilder(store, server);
       builder.setProperty(property);
       builder.setValue(value);
@@ -91,10 +88,6 @@ export function useTableAggregates(opts: {
 
       if (!cancelled) {
         setOutcomes(collection.aggregates);
-      } else {
-        // TEMPORARY [agg] diagnostics for the CI-only em-dash totals: a read
-        // whose result was thrown away looks identical to one that never ran.
-        console.info('[agg] read done but cancelled — outcomes dropped');
       }
     };
 
@@ -110,11 +103,11 @@ export function useTableAggregates(opts: {
 
     const runRead = () => {
       pendingSince = undefined;
-      // TEMPORARY [agg]: a failed refresh leaves the totals frozen at
-      // whatever they showed before — nothing retries until the next save.
-      // Say so instead of swallowing it.
+      // A failed read leaves the totals frozen at whatever they showed
+      // before — nothing retries until the next trigger — so say so rather
+      // than swallowing it.
       void read().catch(e =>
-        console.warn('[agg] refresh read failed:', String(e).slice(0, 200)),
+        console.warn('[Aggregates] read failed:', String(e).slice(0, 200)),
       );
     };
 
@@ -129,18 +122,15 @@ export function useTableAggregates(opts: {
     };
 
     void read().catch(e =>
-      console.warn('[agg] initial read failed:', String(e).slice(0, 200)),
+      console.warn(
+        '[Aggregates] initial read failed:',
+        String(e).slice(0, 200),
+      ),
     );
 
     // Any save or delete can change a total — including one made in another
     // tab, which arrives through the same events.
-    const offSaved = store.on(StoreEvents.ResourceSaved, saved => {
-      // TEMPORARY [agg]: the local-save trigger, timestamped like the reads.
-      console.info(
-        `[agg] ${Math.round(performance.now())} saved ${saved.subject.slice(-8)}`,
-      );
-      refresh();
-    });
+    const offSaved = store.on(StoreEvents.ResourceSaved, refresh);
     const offRemoved = store.on(StoreEvents.ResourceRemoved, refresh);
 
     // ...but a member can also change WITHOUT a local save: a live push from
@@ -181,11 +171,6 @@ export function useTableAggregates(opts: {
       if (memberStamps.get(subject) === stamp) return;
 
       memberStamps.set(subject, stamp);
-      // TEMPORARY [agg]: which member advanced, and when — correlates the
-      // re-read triggers with the reads themselves in the CI trace.
-      console.info(
-        `[agg] ${Math.round(performance.now())} member advanced ${subject.slice(-8)}`,
-      );
       refresh();
     });
 
