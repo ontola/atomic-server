@@ -1063,7 +1063,21 @@ export async function reloadGrid(page: Page) {
   // answers post-reload queries with the pre-edit copy (the CI-only em-dash
   // totals: member indexed, its newest value missing). Ask for the flush —
   // the durability signal — instead of racing the tick.
-  await page.evaluate(() => window.store?.getClientDb()?.flush?.());
+  await page.evaluate(async () => {
+    const db = window.store?.getClientDb();
+
+    if (!db?.flush) {
+      // TEMPORARY [agg]: a silent no-op here would look exactly like the bug.
+      console.info('[agg] no flush available before reload');
+
+      return;
+    }
+
+    await db.flush();
+    console.info(
+      `[agg] ${Math.round(performance.now())} flushed before reload`,
+    );
+  });
   await page.reload();
   await expect(page.getByRole('grid')).toBeVisible();
   // The grid binds its cell handlers after the first render.
@@ -1540,6 +1554,9 @@ export function collectAggLog(page: Page): string[] {
       lines.push(`${message.type()}: ${text.slice(0, 300)}`);
     }
   });
+  // Timestamps in the [agg] lines are per-page (performance.now() restarts at
+  // 0 on navigation); mark the boundaries so the trace reads unambiguously.
+  page.on('load', () => lines.push('--- page load ---'));
 
   return lines;
 }
