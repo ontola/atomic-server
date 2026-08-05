@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import '../src/rust/api/meals.dart' as meals_ffi;
 import '../src/rust/api/simple.dart' as ffi;
 import '../src/rust/api/simple/types.dart' show AgentInfo, VersionMetadata;
 
@@ -14,6 +15,7 @@ export '../src/rust/api/simple/types.dart' show AgentInfo, VersionMetadata;
 ///   3. Drive     — createDrive(), listDrives(), getActiveDrive(), setActiveDrive()
 ///   4. Resource  — createResource(), getProperty(), setProperty(), renameResource(),
 ///                  deleteResource()
+///   4b. Meals    — ensureMealsContainer() — the one app-specific call here
 ///   5. History   — warmResourceHistory(), getResourceHistory(), getPropertyAtVersion()
 ///   6. Sync      — openWsSync(), syncDriveToServer(), resumeSession(), peers
 ///
@@ -53,6 +55,10 @@ class AtomicClient {
   static Future<AgentInfo?> getActiveAgent() => ffi.getActiveAgent();
 
   static AgentInfo createAgent(String name) => ffi.createAgent(name: name);
+
+  /// Forget the agent in the store. The secret is the account, so this only
+  /// signs out — it destroys nothing, and pasting the secret back restores it.
+  static Future<void> clearAgent() => ffi.clearAgent();
 
   static AgentInfo agentFromSecret(String secret) =>
       ffi.agentFromSecret(secret: secret);
@@ -94,6 +100,13 @@ class AtomicClient {
 
   static Future<void> deleteResource(String subject) =>
       ffi.deleteResource(subject: subject);
+
+  // ── 4b. Meals (this app's own, see rust/src/api/meals.rs) ────────────────
+
+  /// The container every meal hangs under, created on first use. Idempotent —
+  /// a device that synced the drive from elsewhere finds the existing one.
+  static Future<String> ensureMealsContainer() =>
+      meals_ffi.ensureMealsContainer();
 
   // ── 5. History ───────────────────────────────────────────────────────────
 

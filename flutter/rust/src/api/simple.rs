@@ -122,8 +122,18 @@ async fn nudge_peers_after_local_change(store: &atomic_lib::Db) {
 
 // ── 1. Database ────────────────────────────────────────────────────────────
 
-/// Open a local database. Call once on app start.
+/// Open a local database. Call once on app start; calling again is a no-op.
+///
+/// The second call has to be a no-op rather than a second open: redb holds an
+/// exclusive lock on the file, so re-opening it fails, and the recovery path
+/// below reads any failure as corruption and *deletes the database*. The store
+/// is already in a `OnceLock` that a second `set_db` would silently drop, so
+/// there was never anything to gain by getting that far.
 pub async fn open_db(path: String) -> Result<(), String> {
+    if db().is_ok() {
+        return Ok(());
+    }
+
     // Set up log filtering — suppress noisy TLS/mDNS/iroh internals
     #[cfg(target_os = "android")]
     {

@@ -11,27 +11,9 @@
 
 use super::*;
 
-/// One database for the whole test binary — `state::DB` is a `OnceLock` and
-/// cannot be re-set. Tests isolate by resource, not by store.
-async fn shared_drive() -> &'static str {
-    static SETUP: tokio::sync::OnceCell<String> = tokio::sync::OnceCell::const_new();
-
-    SETUP
-        .get_or_init(|| async {
-            let dir = std::env::temp_dir()
-                .join(format!("calorie-tracker-bridge-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).unwrap();
-
-            open_db(dir.to_string_lossy().into_owned()).await.unwrap();
-            setup("Test device".to_string())
-                .await
-                .unwrap()
-                .drive_subject
-        })
-        .await
-        .as_str()
-}
+/// One database for the whole test binary. It lives in `api::test_store`
+/// because the meal tests share it — see the note there.
+use crate::api::test_store::shared_drive;
 
 /// The onboarding call: one `setup` mints an agent, its secret, and a drive to
 /// hang everything else off. Nothing else in the app works until this does.
@@ -192,6 +174,39 @@ async fn a_resource_carries_the_history_of_its_edits() {
         history.len() >= 2,
         "two edits must leave at least two versions, got {}",
         history.len()
+    );
+}
+
+/// Opening twice must not cost anything, least of all the database.
+///
+/// redb locks the file, so a second `init_redb_file` fails — and the recovery
+/// path around it treats a failure as corruption and deletes the file. An app
+/// that opened the store twice (a relaunch inside one process, a retry after a
+/// slow start) would have wiped every meal it had.
+#[tokio::test]
+async fn opening_the_store_again_leaves_it_alone() {
+    let drive = shared_drive().await;
+
+    let elsewhere = std::env::temp_dir().join(format!("calorie-tracker-second-open-{}", drive.len()));
+    open_db(elsewhere.to_string_lossy().into_owned())
+        .await
+        .expect("a second open must be a no-op, not an error");
+
+    assert_eq!(
+        get_active_drive().as_deref(),
+        Some(drive),
+        "the second open must not have swapped the store out"
+    );
+    assert!(
+        !get_property(drive.to_string(), atomic_lib::urls::NAME.to_string())
+            .await
+            .unwrap()
+            .is_empty(),
+        "the drive that was there before the second open has to still be there"
+    );
+    assert!(
+        !elsewhere.exists(),
+        "a no-op open must not create a database at the path it was handed"
     );
 }
 

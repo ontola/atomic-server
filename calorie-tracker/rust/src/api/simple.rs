@@ -1,7 +1,10 @@
 use atomic_lib::Storelike;
 use flutter_rust_bridge::frb;
 
-mod state;
+// `pub(crate)` where the canvas twin has a private `mod state;`: the meal
+// bridge is a sibling module (`api::meals`) rather than app code wedged into
+// this copied file, and it needs the same store handle.
+pub(crate) mod state;
 #[cfg(test)]
 mod tests;
 pub mod types;
@@ -101,13 +104,24 @@ async fn nudge_peers_after_local_change(store: &atomic_lib::Db) {
 /// the network beyond the best-effort push a save makes when a session is open.
 ///
 /// This module is deliberately app-agnostic — no meal, no calorie, nothing this
-/// app owns. Meal CRUD lands beside it in Phase 2, so the two can be merged back
-/// into one shared crate with the Atomic Canvas bridge later.
+/// app owns. That lives in [`super::meals`] next door, which is what keeps this
+/// file a copy of the Atomic Canvas bridge: merging the two back into one shared
+/// crate later stays a copy rather than a diff.
 
 // ── 1. Database ────────────────────────────────────────────────────────────
 
-/// Open a local database. Call once on app start.
+/// Open a local database. Call once on app start; calling again is a no-op.
+///
+/// The second call has to be a no-op rather than a second open: redb holds an
+/// exclusive lock on the file, so re-opening it fails, and the recovery path
+/// below reads any failure as corruption and *deletes the database*. The store
+/// is already in a `OnceLock` that a second `set_db` would silently drop, so
+/// there was never anything to gain by getting that far.
 pub async fn open_db(path: String) -> Result<(), String> {
+    if db().is_ok() {
+        return Ok(());
+    }
+
     // Set up log filtering — suppress noisy TLS/mDNS/iroh internals
     #[cfg(target_os = "android")]
     {
