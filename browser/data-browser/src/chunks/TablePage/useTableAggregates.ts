@@ -15,6 +15,15 @@ import { useEffect, useState } from 'react';
 const REFRESH_DEBOUNCE_MS = 500;
 
 /**
+ * The longest a pending re-read may be pushed back by further triggers. A
+ * debounce alone starves under a continuous stream (the post-reload drain
+ * fires events more often than the debounce window for seconds on end), and a
+ * starved totals row shows stale numbers exactly when the data is changing
+ * most.
+ */
+const REFRESH_MAX_WAIT_MS = 1_500;
+
+/**
  * The totals for a table's rows, kept up to date as the data changes.
  *
  * A separate query from the one that renders the rows, on purpose. Totals are
@@ -59,6 +68,9 @@ export function useTableAggregates(opts: {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const read = async () => {
+      // TEMPORARY [agg]: pairs with the collection-side completion lines, so
+      // a read that starts and never answers is visible as an unmatched start.
+      console.info(`[agg] ${Math.round(performance.now())} read start`);
       const builder = new CollectionBuilder(store, server);
       builder.setProperty(property);
       builder.setValue(value);
@@ -86,18 +98,34 @@ export function useTableAggregates(opts: {
       }
     };
 
+    // When the first not-yet-served refresh request came in. The debounce
+    // resets on every trigger, and triggers are NOT guaranteed to be sparse:
+    // the post-reload drain/re-sync emits a save or member-update every
+    // ~50–150ms for many seconds on a loaded machine, so a plain debounce
+    // never fires at all during it — the totals sat frozen for the whole
+    // storm (the CI trace shows 15s of triggers with not one read between
+    // them). The max-wait turns "quiet for 500ms" into "quiet for 500ms, or
+    // overdue" so a continuous stream still gets a read periodically.
+    let pendingSince: number | undefined;
+
+    const runRead = () => {
+      pendingSince = undefined;
+      // TEMPORARY [agg]: a failed refresh leaves the totals frozen at
+      // whatever they showed before — nothing retries until the next save.
+      // Say so instead of swallowing it.
+      void read().catch(e =>
+        console.warn('[agg] refresh read failed:', String(e).slice(0, 200)),
+      );
+    };
+
     const refresh = () => {
+      const now = performance.now();
+      pendingSince ??= now;
       clearTimeout(timer);
       // Debounced: typing in a cell saves on every keystroke, and each save
       // would otherwise be a round trip.
-      timer = setTimeout(() => {
-        // TEMPORARY [agg]: a failed refresh leaves the totals frozen at
-        // whatever they showed before — nothing retries until the next save.
-        // Say so instead of swallowing it.
-        void read().catch(e =>
-          console.warn('[agg] refresh read failed:', String(e).slice(0, 200)),
-        );
-      }, REFRESH_DEBOUNCE_MS);
+      const overdue = now - pendingSince >= REFRESH_MAX_WAIT_MS;
+      timer = setTimeout(runRead, overdue ? 0 : REFRESH_DEBOUNCE_MS);
     };
 
     void read().catch(e =>
