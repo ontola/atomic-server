@@ -131,18 +131,38 @@ async fn clear_remote_cache(appstate: &crate::appstate::AppState) -> AtomicServe
 /// avoid broadcasting throwaway test drives to the DHT.
 const DEV_DRIVE_MARKER: &str = "[atomic-data:dev-drive]";
 
-/// Publish this server's Iroh NodeID to the pkarr DHT, one record per drive
-/// it hosts. Pkarr keys the record by a keypair derived from the drive's DID
-/// (see `atomic_lib::discovery::publish_node_id`), so clients resolving a
-/// `?drive=did:ad:...` hint can find the node(s) hosting that specific drive.
+/// Publish this server's Iroh NodeID to the pkarr DHT.
 ///
-/// Dev-drives are skipped (they accumulate by the hundreds during
-/// development and publishing each is pure noise).
+/// Primary path (zones): one **agent-keyed** record for the server's default
+/// agent (`discovery::publish_agent_node_id`) — pkarr/mainline find nodes, not
+/// data; zones resolve after dialing. See `planning/zones.md`.
+///
+/// Legacy path: still announces each hosted drive under a drive-derived key
+/// so existing `?drive=` resolvers keep working during migration.
+///
+/// Dev-drives are skipped on the legacy path (they accumulate by the hundreds
+/// during development and publishing each is pure noise).
 async fn announce_drives_pkarr(
     appstate: &crate::appstate::AppState,
     node_id: &str,
 ) -> Result<(), String> {
     use atomic_lib::Storelike;
+
+    // Agent-keyed announce (zones model).
+    if let Ok(agent) = appstate.store.get_default_agent() {
+        if let Some(private_key) = agent.private_key.as_deref() {
+            match atomic_lib::discovery::publish_agent_node_id(private_key, node_id, None).await {
+                Ok(()) => tracing::info!(
+                    "Pkarr: announced NodeID under agent {}",
+                    agent.subject
+                ),
+                Err(e) => tracing::warn!(
+                    "Pkarr: agent-keyed announce failed for {}: {e}",
+                    agent.subject
+                ),
+            }
+        }
+    }
 
     let mut published = 0;
     let mut skipped_dev = 0;
@@ -185,7 +205,7 @@ async fn announce_drives_pkarr(
         }
     }
     tracing::info!(
-        "Pkarr: announced {} drives ({} dev-drives skipped)",
+        "Pkarr: announced {} drives via legacy drive-keyed records ({} dev-drives skipped)",
         published,
         skipped_dev
     );

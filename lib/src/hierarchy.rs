@@ -111,10 +111,9 @@ pub fn check_read<'a>(
 
 /// Memo of rights outcomes for one agent, scoped to a single request/query.
 ///
-/// A collection query permission-checks every member, and every one of those
-/// checks ascends the same parent/drive chain. The memo caches the outcome
-/// per `(right, subject)` at every recursion boundary of [`check_rights`], so
-/// the ancestry is resolved once per query instead of once per member.
+/// A collection query permission-checks every member. Under the zone model each
+/// check resolves to a zone root and caches the outcome per `(right, zone)`,
+/// so a listing of many siblings in the same zone pays for one ACL lookup.
 ///
 /// Must not outlive a request (rights can change between requests) and must
 /// not be shared across agents — it does not key on the agent.
@@ -173,9 +172,13 @@ pub fn check_rights_cached<'a, S: Storelike>(
 }
 
 /// Does the Agent have the right to _append_ to its parent?
-/// This checks the `append` rights, and if that fails, checks the `write` right.
+/// This checks the `append` rights on the **parent's zone**, and if that fails,
+/// checks the `write` right on the resource itself (e.g. creator write).
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
+///
+/// Parentless resources (drives / born zones) may always be created — that is
+/// the explicit born-zone rule from `planning/zones.md`.
 #[tracing::instrument(skip_all)]
 pub async fn check_append(
     store: &impl Storelike,
@@ -198,7 +201,7 @@ pub async fn check_append(
                 .any(|c| c.subject == urls::DRIVE)
                 || resource.get_subject().to_string().starts_with("did:")
             {
-                // This string is not returned, it's just a check
+                // Born zone: Drive or parentless DID can be created.
                 Ok(String::from("Drive or DID without a parent can be created"))
             } else {
                 Err(e)
@@ -283,116 +286,110 @@ fn check_rights_impl<'a, S: Storelike>(
             };
         }
 
-        // Check if the resource's rights explicitly refers to the agent or the public agent
-        let mut properties_to_check = vec![right.to_string()];
-        if matches!(right, Right::Read | Right::Append) {
-            properties_to_check.push(urls::WRITE.to_string());
+        // Implicit creator rights on this resource (independent of zone ACL).
+        // Write implies read/append. See planning/authorization-sync.md.
+        if crate::zones::agent_is_resource_creator(resource, &normalized_for_agent) {
+            return Ok(format!(
+                "Genesis signer has implicit {} rights on {}",
+                right,
+                resource.get_subject()
+            ));
         }
 
-        for prop in properties_to_check {
-            if let Ok(arr_val) = resource.get(&prop) {
-                for s in arr_val.to_subjects(None)? {
-                    match s.as_str() {
-                        urls::PUBLIC_AGENT => {
-                            return Ok(format!(
-                                "PublicAgent has been granted rights in {}",
-                                resource.get_subject()
-                            ))
-                        }
-                        agent => {
-                            // A store migrated from the pre-DID era holds its
-                            // grants as `internal:/agents/{pubkey}`, while the
-                            // agent signing in is `did:ad:agent:{pubkey}`.
-                            // Same key, same identity, two spellings — and
-                            // this is a string comparison, so without the
-                            // translation the owner of a resource silently
-                            // loses every explicit right to it.
-                            let migrated = crate::agents::migrate_legacy_agent_subject(agent);
-                            let normalized_agent =
-                                store.normalize_subject(&migrated.as_str().into());
-                            if normalized_agent == normalized_for_agent {
-                                return Ok(format!(
-                                    "Right has been explicitly set in {}",
-                                    resource.get_subject()
-                                ));
-                            }
-                        }
-                    };
+        // Zone model: resolve nearest ACL-bearing (or born top-level) ancestor,
+        // then check only that zone's ACL. Nested zones replace outer ACLs
+        // completely — no additive parent walk. See planning/zones.md.
+        let zone = crate::zones::resolve_zone(store, resource).await?;
+
+        // Cache hit on the zone subject collapses repeated lookups in a query.
+        if let Some(cache) = cache {
+            let key = (right_discriminant(right), zone.get_subject().pure_id());
+            let hit = cache
+                .lock()
+                .ok()
+                .and_then(|guard| guard.outcomes.get(&key).copied());
+            match hit {
+                Some(true) => {
+                    return Ok(format!(
+                        "Allowed via zone {} (cached for this request)",
+                        zone.get_subject()
+                    ))
                 }
-            }
-        }
-
-        // Drive-first (race-free fast path): if this resource carries a `drive`
-        // stamp (set at genesis from its cert), check the grant on the drive
-        // directly. The drive is a stable, long-lived resource whose grants are
-        // always materialized, so this avoids the recursive parent walk that
-        // races a not-yet-materialized parent under concurrent creation (the
-        // parent-before-child 401 cascade). A deny at the drive falls through to
-        // the recursive walk below, which still honors explicit grants on
-        // intermediate parents.
-        if let Ok(drive_val) = resource.get(urls::DRIVE_PROP) {
-            let drive_subject = crate::Subject::from(drive_val.to_string());
-            if &drive_subject != resource.get_subject() {
-                // A cached deny short-circuits the drive fetch entirely.
-                let cached_deny = cache.and_then(|c| {
-                    let key = (right_discriminant(right), drive_subject.pure_id());
-                    c.lock().ok().and_then(|g| g.outcomes.get(&key).copied())
-                }) == Some(false);
-                if !cached_deny {
-                    if let Ok(drive_res) = store.get_resource(&drive_subject).await {
-                        if let Ok(reason) =
-                            check_rights_cached(store, &drive_res, for_agent_enum, right, cache)
-                                .await
-                        {
-                            return Ok(reason);
-                        }
+                Some(false) => {
+                    // Fall through only when checking a different resource than
+                    // the zone itself — a cached zone deny is authoritative for
+                    // every member of that zone (creator rights already handled).
+                    if zone.get_subject() == resource.get_subject() {
+                        return Err(crate::errors::AtomicError::unauthorized(format!(
+                            "No {} right found for {} (cached for this request)",
+                            right, for_agent_enum
+                        )));
                     }
                 }
+                None => {}
             }
         }
 
-        // Try the parents recursively
-        tracing::debug!(
-            subject = %resource.get_subject(),
-            "rights walk: no explicit grant here, ascending to parent"
-        );
-        match resource.get_parent(store).await {
-            Ok(parent) => {
-                tracing::debug!(
-                    subject = %resource.get_subject(),
-                    parent = %parent.get_subject(),
-                    "rights walk: ascending"
-                );
-                return check_rights_cached(store, &parent, for_agent_enum, right, cache).await;
-            }
-            Err(parent_err) => {
-                tracing::warn!(
-                    subject = %resource.get_subject(),
-                    agent = %for_agent,
-                    ?right,
-                    parent_err = %parent_err,
-                    "rights walk TERMINATED: get_parent failed (this is where the 401 originates)"
-                );
-            }
-        }
+        // Zone creator also has implicit write on the zone root (and thus can
+        // append children via check_append → write on parent).
+        if zone.get_subject() != resource.get_subject()
+            && crate::zones::agent_is_resource_creator(&zone, &normalized_for_agent)
         {
-            if for_agent_enum == &ForAgent::Public {
-                // resource has no parent and agent is not in rights array - check fails
-                let action = match right {
-                    Right::Read => "readable",
-                    Right::Write => "editable",
-                    Right::Append => "appendable",
-                };
-                return Err(crate::errors::AtomicError::unauthorized(format!(
-                    "This resource is not publicly {}. Try signing in",
-                    action,
-                )));
+            let reason = format!(
+                "Genesis signer of zone {} has implicit {} rights",
+                zone.get_subject(),
+                right
+            );
+            if let Some(cache) = cache {
+                if let Ok(mut guard) = cache.lock() {
+                    guard.outcomes.insert(
+                        (right_discriminant(right), zone.get_subject().pure_id()),
+                        true,
+                    );
+                }
             }
-            // resource has no parent and agent is not in rights array - check fails
-            Err(crate::errors::AtomicError::unauthorized(format!(
-                "No {} right has been found for {} in this resource or its parents",
-                right, for_agent
-            )))
+            return Ok(reason);
+        }
+
+        match crate::zones::agent_in_zone_acl(store, &zone, &normalized_for_agent, right)? {
+            Some(reason) => {
+                if let Some(cache) = cache {
+                    if let Ok(mut guard) = cache.lock() {
+                        guard.outcomes.insert(
+                            (right_discriminant(right), zone.get_subject().pure_id()),
+                            true,
+                        );
+                    }
+                }
+                Ok(reason)
+            }
+            None => {
+                if let Some(cache) = cache {
+                    if let Ok(mut guard) = cache.lock() {
+                        guard.outcomes.insert(
+                            (right_discriminant(right), zone.get_subject().pure_id()),
+                            false,
+                        );
+                    }
+                }
+                if for_agent_enum == &ForAgent::Public {
+                    let action = match right {
+                        Right::Read => "readable",
+                        Right::Write => "editable",
+                        Right::Append => "appendable",
+                    };
+                    return Err(crate::errors::AtomicError::unauthorized(format!(
+                        "This resource is not publicly {}. Try signing in",
+                        action,
+                    )));
+                }
+                Err(crate::errors::AtomicError::unauthorized(format!(
+                    "No {} right has been found for {} in zone {}",
+                    right,
+                    for_agent,
+                    zone.get_subject()
+                )))
+            }
         }
     })
 }

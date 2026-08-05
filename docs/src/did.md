@@ -189,14 +189,15 @@ This ensures:
 
 ### Drive replication
 
-A core principle is that **any node can replicate a Drive without holding the Drive's private key**.
+A core principle is that **any node can replicate a Drive (zone) without holding the owner's private key**.
 Trust comes from [Commit signatures](commits/intro.md), not from who serves the data:
 
-1. The Drive owner creates resources and signs [Commits](commits/intro.md) with their Agent key.
+1. The owner creates resources and signs [Commits](commits/intro.md) with their Agent key.
 2. A replica node syncs the data and verifies every Commit signature.
-3. The replica announces itself as a peer for this Drive (on Mainline DHT, Reticulum, or both) using the discovery hash derived from the Drive's DID string.
-4. Clients fetching data derive the same hash from the `?drive=` hint and look up peers.
-5. Clients fetch data and verify Commit signatures themselves — they don't need to trust the serving node.
+3. Discovery prefers the **agent-keyed** pkarr/Mainline record (NodeIDs for
+   `did:ad:agent:…`). Legacy drive-keyed announces still exist for migration.
+   Zones themselves are fetched after dialing — not flooded into the DHT.
+4. Clients fetch data and verify Commit signatures themselves — they don't need to trust the serving node.
 
 ## Resolution
 
@@ -218,19 +219,29 @@ Its addressing model is a natural fit for `did:ad`:
 
 This means two Atomic Server nodes on a Reticulum mesh (e.g. over LoRa radio) can exchange and resolve resources **without any internet access**, using the exact same `did:ad` identifiers they would use online.
 
-### 3. Mainline DHT (internet)
+### 3. Mainline DHT / pkarr (internet)
 
-[Mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT) is the BitTorrent distributed hash table — a decentralized network with millions of active nodes.
-It provides a way for any node to announce that it hosts a given Drive, and for clients to discover those nodes:
+[Mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT) and [pkarr](https://pkarr.org/)
+provide a way for any node to announce that it is reachable, and for clients to
+discover those nodes. Under the zone model, records find
+**nodes**, not data:
 
-1. A node hosting a Drive calls `announce_peer(SHA1(drive_did_string))` on the Mainline DHT.
-2. A client resolving a Drive calls `get_peers(SHA1(drive_did_string))` and receives a list of IP:port pairs.
-3. The client connects to any discovered peer and requests the resource using the original DID.
-4. Commit signatures are verified client-side.
+1. An agent publishes one opt-in record keyed by their own Ed25519 key
+   (`did:ad:agent:{pubkey}` — already a valid pkarr key). The record lists
+   current NodeIDs and optionally the agent's public zone DID.
+2. A client resolving an agent calls pkarr/Mainline with that public key and
+   receives NodeIDs; it dials a node and SYNCs the zone DID. Admission decides.
+3. Share links carry zone DID + agent / node hint — nothing per-share touches
+   the DHT. Per-zone announces remain only for owner-independent discovery
+   (community zones) as an explicit action.
 
-No special signing keys (BEP44) are needed at the DHT layer.
-The DHT is a pure _discovery_ mechanism — all trust and authenticity comes from the Commit signatures in the data itself.
-Any node — the original or a replica — can announce itself as a peer.
+Legacy drive-keyed announces (`SHA1(drive_did)` / genesis-derived pkarr seed)
+remain during migration so existing `?drive=` resolvers keep working. Trust
+still comes from Commit signatures, not from who published the record.
+
+No special signing keys (BEP44) are needed at the DHT layer for the legacy path;
+agent-keyed records are self-certifying because only the agent private key can
+sign them.
 
 ### 4. Direct connection
 

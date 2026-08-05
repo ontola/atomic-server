@@ -832,50 +832,20 @@ impl Commit {
                 // forever). No-op if there was nothing to clear.
                 store.clear_tombstone(commit.subject.as_str());
 
-                // For new DID resources, grant the signer explicit write access so future
-                // commits don't need drive-level rights. Agents are excluded because they
-                // already have self-write via their subject matching the agent check.
-                if matches!(applied.resource_new.get_subject(), Subject::Did { .. }) {
-                    let is_agent = applied
-                        .resource_new
-                        .get(urls::IS_A)
-                        .ok()
-                        .and_then(|v| v.to_subjects(None).ok())
-                        .unwrap_or_default()
-                        .iter()
-                        .any(|c| c == urls::AGENT);
-                    if !is_agent {
-                        let mut writers: Vec<String> = applied
-                            .resource_new
-                            .get(urls::WRITE)
-                            .ok()
-                            .and_then(|v| v.to_subjects(None).ok())
-                            .unwrap_or_default();
-                        if !writers.contains(&signer_str) {
-                            writers.push(signer_str.clone());
-                            applied
-                                .resource_new
-                                .set_unsafe(urls::WRITE.into(), writers.into())?;
-                        }
-                    }
-                }
+                // Creator write is implicit via the genesis signature (see
+                // `Resource::genesis_signer` + `zones::agent_is_resource_creator`).
+                // Do NOT insert the signer into `write` — that would make every
+                // DID resource a zone root under the ACL-zone model
+                // (`planning/zones.md`). Explicit `write` lists hold delegates only.
             } else {
                 // This should use the _old_ resource, not the new one, as the new one might maliciously give itself write rights.
                 crate::hierarchy::check_write(store, &resource_old, &validate_for.into()).await?;
             }
 
-            // `drive` is a rights shortcut: `check_rights` consults it *before* it
-            // walks the parent chain. It must therefore always agree with the
-            // current parent, and must be derived here rather than trusted from
-            // the client. Re-derive it at genesis and on any commit that moves the
-            // resource — otherwise a resource moved out of a publicly readable
-            // drive keeps that drive's grants and stays publicly readable from its
-            // new, private home.
-            //
-            // Deriving it also covers creation paths that never stamped it — a
-            // guest replying in a drive shared with them — which the commit fan-out
-            // needs in order to route to the owning drive's subscribers. See
-            // planning/commit-fanout-drive-isolation.md.
+            // `drive` remains a transport/fan-out stamp (claim-then-verify), not
+            // the authority source — zone membership is derived from parent + ACL
+            // presence (`planning/zones.md`). Re-derive the stamp at genesis and
+            // on re-parent so fan-out and share-link hints stay coherent.
             let parent_changed = applied.changed_props.iter().any(|p| p == urls::PARENT);
 
             if is_new || parent_changed {

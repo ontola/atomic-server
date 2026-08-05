@@ -43,6 +43,9 @@ pub async fn populate_collections(store: &impl Storelike) -> crate::errors::Atom
 }
 
 /// Creates a new DID-native Drive resource for tests.
+/// Seeds an explicit `write` ACL for the store's default agent so the drive is
+/// a proper zone root under the ACL-zone model (implicit creator write alone
+/// covers the genesis signer; the explicit grant mirrors `Db::create_drive`).
 pub async fn create_test_drive(store: &impl Storelike) -> crate::errors::AtomicResult<Subject> {
     let mut drive = Resource::new("did:ad:placeholder".into());
     drive
@@ -55,6 +58,15 @@ pub async fn create_test_drive(store: &impl Storelike) -> crate::errors::AtomicR
     drive
         .set(urls::NAME.into(), Value::String("Test Drive".into()), store)
         .await?;
+    if let Ok(agent) = store.get_default_agent() {
+        drive
+            .set(
+                urls::WRITE.into(),
+                Value::ResourceArray(vec![agent.subject.to_string().into()]),
+                store,
+            )
+            .await?;
+    }
 
     let commit_res = drive.save_as_genesis(store).await?;
     Ok(commit_res.resource_new.unwrap().get_subject().clone())
