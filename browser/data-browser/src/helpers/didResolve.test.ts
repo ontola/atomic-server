@@ -52,3 +52,34 @@ describe('parseDidOpenInput', () => {
     expect(looksLikeOpenableSubject('not a did')).toBe(false);
   });
 });
+
+describe('buildShareLink', () => {
+  it('builds an https show URL with agent and node hints', async () => {
+    const { buildShareLink } = await import('./didResolve');
+    const link = buildShareLink(RESOURCE, {
+      appOrigin: 'https://example.com',
+      agent: AGENT,
+      node: NODE,
+    });
+    expect(link).toContain('https://example.com/app/show?');
+    expect(link).toContain(`subject=${encodeURIComponent(RESOURCE)}`);
+    expect(link).toContain(`agent=${encodeURIComponent(AGENT)}`);
+    expect(link).toContain(`node=${encodeURIComponent(NODE)}`);
+  });
+
+  it('builds an atomic://open link for OS handoff', async () => {
+    const { buildShareLink } = await import('./didResolve');
+    const link = buildShareLink(RESOURCE, {
+      appOrigin: 'https://example.com',
+      agent: AGENT,
+      node: NODE,
+      format: 'atomic',
+    });
+    expect(link.startsWith('atomic://open?')).toBe(true);
+    expect(parseDidOpenInput(link)).toEqual({
+      subject: RESOURCE,
+      agent: AGENT,
+      node: NODE,
+    });
+  });
+});

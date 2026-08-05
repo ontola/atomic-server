@@ -150,9 +150,11 @@ Boundary and announce are decoupled. pkarr/mainline records are for finding
 6. [x] End-to-end DID open: search parses DIDs, `atomic://open` + bare
    `did:ad:` deep links, `/resolve-agent` endpoint, known-peers fallback on
    ErrorPage when the link has no node hint.
-7. [ ] Sync engine: `collect_drive_subjects` → `collect_zone_subjects` (BFS stops
+7. [x] Share menu / invite links embed `agent` + `node` resolve hints
+   (`buildShareLink`); Show route consumes them via `DidResolveOnShow`.
+8. [ ] Sync engine: `collect_drive_subjects` → `collect_zone_subjects` (BFS stops
    at nested zones).
-8. [ ] Share panel / invites UX for promote-demote.
+9. [ ] Share panel promote/demote UX (zones model).
 
 ## Acceptance test
 

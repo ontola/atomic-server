@@ -158,6 +158,55 @@ export function canonicalizeOpenSubject(subject: string): string {
   }
 }
 
+export type ShareLinkOptions = {
+  /** Absolute app origin, e.g. `https://atomicdata.dev` or `http://localhost:6747`. */
+  appOrigin: string;
+  /** Signed-in agent DID — pkarr key for recipients. */
+  agent?: string;
+  /** This device or hosting server's node DID. */
+  node?: string;
+  /**
+   * `https` — `/app/show?subject=&agent=&node=` (default, portable).
+   * `atomic` — `atomic://open?…` for OS / desktop handoff.
+   */
+  format?: 'https' | 'atomic';
+};
+
+/**
+ * Build a share link that carries resolve hints so a recipient can find a node
+ * without already knowing the drive. Prefer HTTPS show URLs for the clipboard;
+ * use `atomic` when handing off to another Atomic install via OS deep link.
+ */
+export function buildShareLink(
+  subject: string,
+  options: ShareLinkOptions,
+): string {
+  const canonical = canonicalizeOpenSubject(subject);
+  const format = options.format ?? 'https';
+  const params = new URLSearchParams();
+  params.set('subject', canonical);
+
+  if (options.agent?.startsWith(AGENT_DID_PREFIX)) {
+    params.set('agent', options.agent);
+  }
+
+  if (options.node?.startsWith(NODE_DID_PREFIX)) {
+    const hex = options.node.slice(NODE_DID_PREFIX.length).split(':')[0] ?? '';
+
+    if (/^[0-9a-f]{64}$/i.test(hex)) {
+      params.set('node', `${NODE_DID_PREFIX}${hex}`);
+    }
+  }
+
+  if (format === 'atomic') {
+    return `atomic://open?${params.toString()}`;
+  }
+
+  const origin = options.appOrigin.replace(/\/$/, '');
+
+  return `${origin}/app/show?${params.toString()}`;
+}
+
 /**
  * Try to materialize `subject` locally. If missing, dial an explicit node,
  * resolve an agent via pkarr, then walk known peers (Sync "contacts").
