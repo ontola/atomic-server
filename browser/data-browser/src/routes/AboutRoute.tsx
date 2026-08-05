@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { styled } from 'styled-components';
-import { FaGithub, FaDiscord, FaBook } from 'react-icons/fa6';
+import { FaGithub, FaDiscord, FaBook, FaGlobe } from 'react-icons/fa6';
 
 import { createRoute } from '@tanstack/react-router';
 import { ContainerNarrow } from '../components/Containers';
@@ -15,30 +15,44 @@ export const AboutRoute = createRoute({
   getParentRoute: () => appRoute,
 });
 
+/**
+ * Kept deliberately close to the feature table in the repo's README, which
+ * carries a comment naming itself the source for every copy of this list, and
+ * to the wording on atomicserver.eu so the product reads the same everywhere.
+ * When the README's table changes, change this too.
+ */
 const features: [title: string, description: string][] = [
   [
-    'Local-first & real-time',
-    'Keep working offline — changes are stored on your device and sync instantly across tabs and devices over WebSockets, merged conflict-free with CRDTs.',
+    'Local-first, no server required',
+    'Create and edit with no server at all. Resources are addressed by did:ad identifiers and resolve peer-to-peer, so your identity is a keypair you hold rather than an account on someone else’s machine.',
   ],
   [
-    'Typed, linked data',
-    'Every value has a datatype and every reference is a URL: the ease of JSON with the connectivity of linked data and the safety of types.',
+    'Encrypted at rest, per agent',
+    'Each agent’s in-browser database is encrypted under a key wrapped by that agent’s own private key. Signing out leaves the cache in place but unreadable to the next session.',
   ],
   [
-    'Documents, tables & chat',
-    'Write rich documents, build spreadsheet-like tables and chat in real time — all stored as open, portable Atomic Data.',
+    'Passkey-backed recovery',
+    'A passkey wraps the backup of your agent secret, so signing up hands you nothing to write down and a lost device does not have to mean a lost account.',
   ],
   [
-    'Versioned & signed history',
-    'Every edit is a cryptographically signed commit, so you get a complete, tamper-evident history and time-travel for free.',
+    'Documents, tables, chat and files',
+    'Write together in rich documents, organise structured work in typed tables, keep conversations next to the data they are about, and store the files alongside them.',
   ],
   [
-    'Search & collections',
-    'Full-text search and dynamic, filterable collections let you slice and navigate your whole graph.',
+    'Your own data models',
+    'Shape Atomic around your own concepts with the built-in Ontology Editor. Atomic Schema gives the data shared meaning, so another app can read the same documents and tables instead of forcing an import/export round trip.',
   ],
   [
-    'Open & self-hostable',
-    'An open protocol on an open-source stack. Own your data and run it anywhere.',
+    'Signed, versioned history',
+    'Every edit is a cryptographically signed commit, so you get a complete, tamper-evident history and time travel for free.',
+  ],
+  [
+    'Real-time sync, and offline',
+    'Keep working when the connection is gone. Changes merge conflict-free as CRDTs and sync instantly across tabs and devices over WebSockets when it comes back.',
+  ],
+  [
+    'Fast, open and self-hostable',
+    'Sub-millisecond median responses from a single self-contained binary with full-text search and the database built in. MIT licensed, with a REST API and libraries for JS, React, Svelte, Rust and Dart.',
   ],
 ];
 
@@ -66,6 +80,12 @@ const links: {
     description: 'Ask questions and chat with the community.',
     href: 'https://discord.gg/a72Rv2P',
   },
+  {
+    icon: <FaGlobe />,
+    label: 'Site',
+    description: 'AtomicServer.eu: hosted workspaces and pricing.',
+    href: 'https://atomicserver.eu',
+  },
 ];
 
 const buildDate = (() => {
@@ -87,13 +107,13 @@ export const About: React.FunctionComponent = () => {
         <Logo
           style={{ width: '22rem', maxWidth: '100%', marginBottom: '1.5rem' }}
         />
-        <Tagline>
-          The easiest way to create, share and model linked data.
-        </Tagline>
+        <Tagline>The one workspace for everything, owned by you.</Tagline>
         <Intro>
-          Atomic Data combines the ease of use of JSON, the connectivity of
-          linked data and the reliability of type-safety — one open protocol for
-          knowledge graphs, collaborative apps and shareable datasets.
+          Documents, tables, files, chat and custom apps in one place.
+          AtomicServer starts on your device, and can run with no server at all.
+          It adds backup, sharing and always-on availability when you want them.
+          Everything you make is Atomic Data: typed, linked and portable, so it
+          stays readable by other apps and by you.
         </Intro>
 
         <h2>Features</h2>
