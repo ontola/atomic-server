@@ -170,7 +170,7 @@ test.describe('perf: sidebar after reload', () => {
     // Wait for the commit to actually reach the server. Reloading
     // before this means the next session has nothing to sync.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -186,7 +186,7 @@ test.describe('perf: sidebar after reload', () => {
     //   - serverConnected: WS handshake + auth roundtrip done
     //   - sidebar item visible: drive resource + child collection populated
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === true,
+      () => window.store?.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );

@@ -67,7 +67,7 @@ test.describe('resource context menu', () => {
     // Only now is waiting for the outbox meaningful; reloading before the row
     // reaches the server throws it away.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 15_000 },
     );

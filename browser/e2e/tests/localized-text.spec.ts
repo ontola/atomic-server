@@ -14,7 +14,7 @@ const cell = (page: Page, rowIndex: number, colIndex: number) =>
 
 const waitForSaved = (page: Page) =>
   page.waitForFunction(
-    () => window.store.getSyncStatus().pendingDirtyCount === 0,
+    () => window.store?.getSyncStatus().pendingDirtyCount === 0,
     undefined,
     { timeout: 10000 },
   );

@@ -21,8 +21,8 @@ const props = {
 async function createClassWithJsonProp(page: Page): Promise<string> {
   await page.waitForFunction(
     () =>
-      window.store.getClientDb()?.isReady === true &&
-      window.store.getSyncStatus().serverConnected === true,
+      window.store?.getClientDb()?.isReady === true &&
+      window.store?.getSyncStatus().serverConnected === true,
     undefined,
     { timeout: 30_000 },
   );

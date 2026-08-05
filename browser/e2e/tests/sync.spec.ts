@@ -10,7 +10,7 @@ import {
 /** Wait for the WASM ClientDb to be initialized and seeded. */
 async function waitForClientDb(page: import('@playwright/test').Page) {
   await page.waitForFunction(
-    () => window.store.getClientDb()?.isReady === true,
+    () => window.store?.getClientDb()?.isReady === true,
     undefined,
     { timeout: 30000 },
   );
@@ -19,7 +19,7 @@ async function waitForClientDb(page: import('@playwright/test').Page) {
 /** Wait for the store to be connected to the server. */
 async function waitForConnected(page: import('@playwright/test').Page) {
   await page.waitForFunction(
-    () => window.store.getSyncStatus().serverConnected === true,
+    () => window.store?.getSyncStatus().serverConnected === true,
     undefined,
     { timeout: 30000 },
   );
@@ -30,7 +30,7 @@ async function waitForSynced(page: import('@playwright/test').Page) {
   try {
     await page.waitForFunction(
       () => {
-        const status = window.store.getSyncStatus();
+        const status = window.store?.getSyncStatus();
 
         return status.serverConnected && status.pendingDirtyCount === 0;
       },
@@ -113,7 +113,7 @@ test.describe('sync', () => {
 
     // Wait for server to process the commit and rebuild index
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -176,7 +176,7 @@ test.describe('sync', () => {
 
     // Wait until the store notices the disconnect
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === false,
+      () => window.store?.getSyncStatus().serverConnected === false,
       undefined,
       { timeout: 10000 },
     );
@@ -193,7 +193,7 @@ test.describe('sync', () => {
     // dirty bit, and a reload before the snapshot lands lets a server
     // GET of "Before Offline" win the race.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount > 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount > 0,
       undefined,
       { timeout: 10000 },
     );
@@ -350,7 +350,7 @@ test.describe('sync', () => {
     // `setServerConnected(false)` (and `rejectAllPending`) synchronously
     // itself, since the caller already knows it initiated the close.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === false,
+      () => window.store?.getSyncStatus().serverConnected === false,
       undefined,
       { timeout: 15000 },
     );
@@ -366,7 +366,7 @@ test.describe('sync', () => {
     // into an empty export that used to clear the dirty bit (see
     // `drainOutboxSubject` offline baseVersion recovery).
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount > 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount > 0,
       undefined,
       { timeout: 10000 },
     );
