@@ -1056,6 +1056,14 @@ export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
  */
 export async function reloadGrid(page: Page) {
   await waitForRowsMaterialized(page);
+  // `pendingDirtyCount === 0` means the rows reached the SERVER — not that
+  // their post-ack re-persist reached OPFS durably. Those writes commit with
+  // `Durability::None` and only survive a reload after the worker's 1s flush
+  // tick; reloading inside that window rolls them back, and the local db then
+  // answers post-reload queries with the pre-edit copy (the CI-only em-dash
+  // totals: member indexed, its newest value missing). Ask for the flush —
+  // the durability signal — instead of racing the tick.
+  await page.evaluate(() => window.store?.getClientDb()?.flush?.());
   await page.reload();
   await expect(page.getByRole('grid')).toBeVisible();
   // The grid binds its cell handlers after the first render.

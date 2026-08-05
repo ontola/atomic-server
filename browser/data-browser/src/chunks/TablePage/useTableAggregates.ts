@@ -1,4 +1,5 @@
 import {
+  commits,
   CollectionBuilder,
   StoreEvents,
   useStore,
@@ -6,6 +7,7 @@ import {
   type Aggregation,
   type ExpressionFilter,
   type PropVal,
+  type Resource,
 } from '@tomic/react';
 import { useEffect, useState } from 'react';
 
@@ -107,11 +109,53 @@ export function useTableAggregates(opts: {
     const offSaved = store.on(StoreEvents.ResourceSaved, refresh);
     const offRemoved = store.on(StoreEvents.ResourceRemoved, refresh);
 
+    // ...but a member can also change WITHOUT a local save: a live push from
+    // another client, or the drive re-sync repairing a stale local-db copy
+    // after a reload. Those only fire `ResourceUpdated` — the same signal that
+    // keeps the grid's own membership live. Without this subscription the
+    // totals keep whatever the last read returned; the CI-only "em-dash
+    // totals" was exactly that, a read racing (and losing to) the member's
+    // newest value arriving in the local db, with nothing ever re-asking.
+    //
+    // Two guards keep this from looping: `read()` itself hydrates every
+    // member it fetches, which re-emits `ResourceUpdated` for each — so a
+    // bare refresh here would poll forever. Only a member whose `lastCommit`
+    // ADVANCED since we last saw it warrants a re-read; a replay of known
+    // state does not.
+    const memberStamps = new Map<string, string>();
+    const offUpdated = store.on(StoreEvents.ResourceUpdated, changed => {
+      const subject = changed.subject;
+
+      // Placeholders and commit resources are never members (mirrors the
+      // membership filter in Collection).
+      if (changed.new || subject.startsWith('_new:')) return;
+      if (subject.startsWith('did:ad:commit:')) return;
+
+      // Only resources this query covers. The primary property/value pair is
+      // the membership constraint (`parent` = the table); extra filters only
+      // narrow it, so matching just the pair at worst refreshes a little too
+      // often — and a refresh is one cheap read.
+      const propVal = (changed as Resource).get(property);
+      const matches = Array.isArray(propVal)
+        ? propVal.some(v => `${v}` === value)
+        : `${propVal}` === value;
+
+      if (!matches) return;
+
+      const stamp = `${(changed as Resource).get(commits.properties.lastCommit) ?? ''}`;
+
+      if (memberStamps.get(subject) === stamp) return;
+
+      memberStamps.set(subject, stamp);
+      refresh();
+    });
+
     return () => {
       cancelled = true;
       clearTimeout(timer);
       offSaved();
       offRemoved();
+      offUpdated();
     };
   }, [
     store,
