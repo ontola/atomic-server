@@ -41,10 +41,12 @@ test.describe('signing in on a device that holds none of the account’s data', 
     await page
       .getByRole('button', { name: 'Sign in', exact: true })
       .click({ timeout: 20_000 });
-    // No confirm button: the flow signs in as soon as the secret parses.
-    const field = page.getByLabel('Agent secret');
-    await field.fill(await strangerSecret());
-    await field.blur();
+    // No confirm button: the flow signs in as soon as the secret parses —
+    // `onChange` runs the sign-in, and on success the dialog unmounts. So
+    // don't touch the field after filling it: a `blur()` here races the
+    // dialog teardown and fails on the success path itself. The callers'
+    // assertions on what the sign-in produced are the completion signal.
+    await page.getByLabel('Agent secret').fill(await strangerSecret());
   }
 
   test('stops, and says so, instead of opening a workspace', async ({
