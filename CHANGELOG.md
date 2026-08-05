@@ -7,6 +7,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- **`atomic-lib`: `Db::set_durable_writes()`, for stores in an app the OS can kill.** Per-commit redb writes are not fsynced (`Durability::None`), and redb rolls back to the last durable commit when the file is opened again. The server survives that because it flushes on a tick and shuts down cleanly; a mobile app gets neither, so everything written since launch disappeared on the next start. A store that turns this on makes each commit durable before it returns. Off by default — the server keeps its flush tick.
+
 ## [v0.41.0-beta.2] - 2026-08-01
 
 **This is the local-first release.** Atomic Data no longer needs a server to exist.

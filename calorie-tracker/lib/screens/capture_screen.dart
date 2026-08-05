@@ -297,14 +297,17 @@ class _Viewfinder extends StatelessWidget {
       // report: the build that first has a frame to draw.
       reportFirstPreview();
 
-      // The preview's aspect ratio is the sensor's, not the screen's. Cover
-      // rather than letterbox: black bars around a viewfinder read as a bug.
+      // The preview's aspect ratio is the sensor's, not the screen's, and the
+      // preview already knows it — so constrain the width and leave the height
+      // to it. A box that is tight on both axes silently wins that argument
+      // (`RenderAspectRatio` gives up under tight constraints) and stretches
+      // the frame to whatever ratio was guessed here. Cover rather than
+      // letterbox: black bars around a viewfinder read as a bug.
       return FittedBox(
         fit: BoxFit.cover,
         clipBehavior: Clip.hardEdge,
         child: SizedBox(
           width: MediaQuery.of(context).size.width,
-          height: MediaQuery.of(context).size.width * 4 / 3,
           child: camera.preview(),
         ),
       );

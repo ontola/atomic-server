@@ -182,7 +182,20 @@ be merged into one package once both apps' needs are known
 (`calorie-tracker-plan.md` §9). Until then, keep shared code structurally
 identical to its twin so the merge stays mechanical, and port fixes both ways.
 
-Fixed in both copies (found here, ported to `../flutter`): `open_db` and
+Fixed in both copies (found here, ported to `../flutter`): **`open_db` turns on
+`Db::set_durable_writes(true)`**. redb writes commits at `Durability::None` — no
+fsync — and rolls back to the last durable commit when the file is opened again.
+`atomic-server` covers that with a periodic flush thread and a clean shutdown; an
+app the OS reaps in the background gets neither, so every meal logged since
+launch was gone at the next start, and the meals container with it (which is why
+a relaunch also minted a fresh one). The store now fsyncs per commit, which on a
+phone is a handful of user actions a day. Note that nothing in `test/` or in
+`integration_test/` could have caught this: both relaunch inside one process,
+where the store is still open and nothing has been rolled back.
+`lib/tests/write_durability.rs` in `atomic_lib` is the test that does — it writes
+in a child process and `abort()`s it.
+
+Also fixed in both copies: `open_db` and
 `initRustBridge` are now idempotent. Both used to throw on a second call, and
 `open_db`'s recovery path reads any failure as corruption and **deletes the
 database** — so booting the app twice in one process wiped it. Nothing in

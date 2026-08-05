@@ -167,6 +167,15 @@ pub async fn open_db(path: String) -> Result<(), String> {
         .await
         .map_err(err)?;
 
+    // A phone app is killed, not shut down: the OS reaps it in the background
+    // and nothing gets to flush on the way out. redb's per-commit writes are
+    // not fsynced, so without this every commit since the last durable one is
+    // rolled back at the next launch — the user draws, the app is reaped, and
+    // the strokes were never there. A server amortizes the fsync over a flush
+    // tick (`serve.rs`); here a commit is a user action, so paying it per
+    // commit is the right trade. (Found in the calorie tracker, ported here.)
+    store.set_durable_writes(true);
+
     set_db(store);
     Ok(())
 }

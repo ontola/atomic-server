@@ -285,6 +285,26 @@ pub struct Db {
     /// blob forever, so `note_pending_blob_request` also lazily prunes
     /// anything older than `PENDING_BLOB_REQUEST_TTL`.
     pending_blob_requests: Arc<RwLock<HashMap<[u8; 32], (String, std::time::Instant)>>>,
+    /// Whether every commit is made durable before it returns. Off by default
+    /// — see [`Db::set_durable_writes`].
+    durable_writes: Arc<DurableWrites>,
+}
+
+/// Whether commits fsync as they land, and whether a batch is currently open.
+///
+/// Per-commit redb writes run at `Durability::None`, so redb rolls back
+/// everything since the last durable commit when the file is opened again. A
+/// server amortizes that with a periodic flush thread (`serve.rs`); an app that
+/// the OS reaps has no such tick, so everything its user wrote since launch is
+/// simply gone. [`Db::set_durable_writes`] is what those apps turn on.
+///
+/// `batching` is what keeps that from meaning an fsync per resource while a
+/// batch is open — seeding the default ontology into a fresh store is hundreds
+/// of writes that become durable together when the batch commits.
+#[derive(Default)]
+struct DurableWrites {
+    on: std::sync::atomic::AtomicBool,
+    batching: std::sync::atomic::AtomicBool,
 }
 
 /// How long an unanswered `BLOB_REQUEST` stays in `pending_blob_requests`
@@ -305,6 +325,47 @@ impl Db {
     pub fn set_sync_policy(&self, policy: Arc<dyn crate::sync::policy::SyncPolicy>) {
         if let Ok(mut guard) = self.sync_policy.write() {
             *guard = policy;
+        }
+    }
+
+    /// Make every commit durable before it returns. Off by default.
+    ///
+    /// Writes are cheap because they are not fsynced (`Durability::None`), and
+    /// redb discards every one of them that was not followed by a durable
+    /// commit when the file is opened again. A server can afford that: its
+    /// flush thread ticks (`serve.rs`) and it shuts down cleanly. An app the OS
+    /// kills gets neither, so without this everything written since launch is
+    /// rolled back on the next start — the user logs a meal, the app is
+    /// backgrounded and reaped, and the meal was never there.
+    ///
+    /// The cost is one fsync per commit, which is the right trade wherever
+    /// commits are user actions rather than traffic. Turn it on right after
+    /// opening the store, before anything is written.
+    pub fn set_durable_writes(&self, on: bool) {
+        self.durable_writes
+            .on
+            .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Whether [`Db::set_durable_writes`] is on.
+    pub fn durable_writes(&self) -> bool {
+        self.durable_writes
+            .on
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Make everything written so far durable, if this store asked for that.
+    ///
+    /// A no-op mid-batch: the batch's own writes are still buffered, so there
+    /// would be nothing to make durable and the fsync would be pure cost.
+    /// [`Storelike::commit_batch`] flushes once the batch has landed.
+    fn flush_if_durable(&self) {
+        use std::sync::atomic::Ordering::Relaxed;
+        if !self.durable_writes.on.load(Relaxed) || self.durable_writes.batching.load(Relaxed) {
+            return;
+        }
+        if let Err(e) = self.kv.flush() {
+            tracing::warn!("durable write flush failed: {e}");
         }
     }
 
@@ -375,6 +436,7 @@ impl Db {
             base_domain,
             sync_policy: default_sync_policy(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
+            durable_writes: Default::default(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -409,6 +471,7 @@ impl Db {
             base_domain,
             sync_policy: default_sync_policy(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
+            durable_writes: Default::default(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -441,6 +504,7 @@ impl Db {
             base_domain,
             sync_policy: default_sync_policy(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
+            durable_writes: Default::default(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -534,6 +598,7 @@ impl Db {
             base_domain,
             sync_policy: default_sync_policy(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
+            durable_writes: Default::default(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -683,6 +748,7 @@ impl Db {
             base_domain,
             sync_policy: default_sync_policy(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
+            durable_writes: Default::default(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -2931,6 +2997,11 @@ impl Storelike for Db {
             commit_response.source_id.as_deref(),
         )?;
 
+        // On a store that asked for it, the commit is on disk before anyone is
+        // told it happened — so an app that is killed a second later still has
+        // what its user just wrote. See [`Db::set_durable_writes`].
+        store.flush_if_durable();
+
         // Notify subscribers
         let subject = commit_response.commit.subject.without_params();
         let is_destroy = commit_response.commit.destroy.unwrap_or(false);
@@ -3423,11 +3494,20 @@ impl Storelike for Db {
     }
 
     fn begin_batch(&self) {
+        self.durable_writes
+            .batching
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         self.kv.begin_batch();
     }
 
     fn commit_batch(&self) -> AtomicResult<()> {
-        self.kv.commit_batch()
+        let result = self.kv.commit_batch();
+        self.durable_writes
+            .batching
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+        // Once, for the whole batch, rather than once per write inside it.
+        self.flush_if_durable();
+        result
     }
 }
 

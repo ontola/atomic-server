@@ -23,7 +23,9 @@ abstract class CameraFeed extends ChangeNotifier {
   /// app whether we let go or not; letting go is what makes coming back work.
   Future<void> stop();
 
-  /// A live preview, sized by its parent. Only valid while [isReady].
+  /// A live preview. Given a width, it takes the height its own aspect ratio
+  /// asks for — the sensor's, which is not the screen's, and which the capture
+  /// screen scales to cover. Only valid while [isReady].
   Widget preview();
 
   /// The frame, as the sensor gave it — full resolution, uncompressed.

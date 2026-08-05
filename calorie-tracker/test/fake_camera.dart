@@ -41,8 +41,14 @@ class FakeCamera extends CameraFeed {
     stopCount++;
   }
 
+  /// Wrapped in an [AspectRatio] like the real one, because that is the half of
+  /// the contract the viewfinder's layout leans on: it hands the preview a
+  /// width and lets it choose the height.
   @override
-  Widget preview() => const ColoredBox(color: Color(0xFF223322));
+  Widget preview() => const AspectRatio(
+        aspectRatio: 9 / 16,
+        child: ColoredBox(color: Color(0xFF223322)),
+      );
 
   @override
   Future<Uint8List> capture() async {
