@@ -44,6 +44,13 @@ export function initClientDb(store: Store): void {
   // contexts is handled inside ClientDbWorker with a clear message.
   if (typeof Worker === 'undefined') return;
 
+  // Announce the attach before starting it: deriving the database name and
+  // unwrapping the agent's key below takes a few hundred ms, and React renders
+  // (and starts fetching) in the meantime. Fetches that would otherwise fail a
+  // resource in that window ("Offline: resource not available locally") use
+  // this to wait out the attach instead — see Store.expectClientDb.
+  store.expectClientDb();
+
   scheduleStart(store, store.getAgent()?.subject);
 
   unsubscribeAgentListener?.();
