@@ -11,6 +11,53 @@ import { before } from './test-utils';
  * locally". The worker now flushes on a 1s tick after writes.
  */
 test('cached drive survives reload while offline', async ({ page }) => {
+  // Record who writes an EMPTY resource into the store's map.
+  //
+  // This test's remaining failure is a drive that is present in OPFS while
+  // the store holds a resource with zero properties and no error — deleting
+  // that cached entry makes the very next read return all ten. So something
+  // writes the empty entry, and knowing what does is the whole question. The
+  // hook goes on `window.store`'s assignment so it is installed before the
+  // app can populate anything, and it survives the reload because
+  // `addInitScript` runs on every navigation.
+  await page.addInitScript(() => {
+    const writes: { subject: string; stack: string }[] = [];
+    (window as unknown as Record<string, unknown>).__emptyWrites = writes;
+
+    let current: unknown;
+    Object.defineProperty(window, 'store', {
+      configurable: true,
+      get: () => current,
+      set: value => {
+        current = value;
+        const store = value as {
+          resources?: Map<string, { getEntries?(): unknown[] }>;
+          __emptyWatch?: boolean;
+        };
+
+        if (!store?.resources?.set || store.__emptyWatch) return;
+
+        store.__emptyWatch = true;
+        const original = store.resources.set.bind(store.resources);
+
+        store.resources.set = (key, resource) => {
+          try {
+            if ((resource?.getEntries?.()?.length ?? -1) === 0) {
+              writes.push({
+                subject: String(key),
+                stack: String(new Error().stack).slice(0, 700),
+              });
+            }
+          } catch {
+            // Never let instrumentation break the thing it observes.
+          }
+
+          return original(key, resource);
+        };
+      },
+    });
+  });
+
   await before({ page }); // devDrive — creates + visits a drive online
 
   // Wait for ClientDb + the drive's OPFS write — a bare timeout races
@@ -117,7 +164,14 @@ test('cached drive survives reload while offline', async ({ page }) => {
       viaRetry = -1;
     }
 
+    const emptyWrites = (
+      (window as unknown as Record<string, unknown>).__emptyWrites as
+        | { subject: string; stack: string }[]
+        | undefined
+    )?.filter(w => w.subject === d);
+
     return {
+      emptyWrites,
       viaRetry,
       serverConnected: s.getSyncStatus?.()?.serverConnected,
       viaGetProps: viaGet,
@@ -137,6 +191,7 @@ test('cached drive survives reload while offline', async ({ page }) => {
       `inClientDb=${r.inClientDb} storedProps=${r.storedProps} ` +
       `storedHasClass=${r.storedHasClass} viaRetry=${r.viaRetry} ` +
       `error=${r.error}. ` +
+      `Empty writes for this subject: ${JSON.stringify(r.emptyWrites)?.slice(0, 1500)}. ` +
       (r.viaRetry > 0
         ? 'A fresh request SUCCEEDS, so the drive was readable all along and ' +
           'the first attempt failed before the ClientDb was attached.'
