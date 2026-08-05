@@ -8,8 +8,10 @@ import type { OntologyBaseObject, BaseProps } from '../index.js';
 export const dataBrowser = {
   classes: {
     article: 'https://atomicdata.dev/classes/Article',
+    addressBook: 'https://atomicdata.dev/classes/AddressBook',
     bookmark: 'https://atomicdata.dev/class/Bookmark',
     chatroom: 'https://atomicdata.dev/classes/ChatRoom',
+    contact: 'https://atomicdata.dev/classes/Contact',
     currencyProperty:
       'https://atomicdata.dev/ontology/data-browser/class/currency-property',
     dateFormat: 'https://atomicdata.dev/classes/DateFormat',
@@ -38,17 +40,30 @@ export const dataBrowser = {
   },
   properties: {
     about: 'https://atomicdata.dev/properties/about',
+    addresses: 'https://atomicdata.dev/properties/addresses',
     color: 'https://atomicdata.dev/properties/color',
     commentsFolder: 'https://atomicdata.dev/properties/commentsFolder',
+    contactAgent: 'https://atomicdata.dev/properties/contactAgent',
+    contactsFolder: 'https://atomicdata.dev/properties/contactsFolder',
     coverImage: 'https://atomicdata.dev/properties/coverImage',
     coverImageFocus: 'https://atomicdata.dev/properties/coverImageFocus',
+    email: 'https://atomicdata.dev/properties/email',
+    emails: 'https://atomicdata.dev/properties/emails',
+    familyName: 'https://atomicdata.dev/properties/familyName',
     followSessionsChatroom:
       'https://atomicdata.dev/properties/followSessionsChatroom',
+    givenName: 'https://atomicdata.dev/properties/givenName',
+    jobTitle: 'https://atomicdata.dev/properties/jobTitle',
     currentMeetings: 'https://atomicdata.dev/properties/currentMeetings',
     meetingsFolder: 'https://atomicdata.dev/properties/meetingsFolder',
     meetingStartedAt: 'https://atomicdata.dev/properties/meetingStartedAt',
     meetingEndedAt: 'https://atomicdata.dev/properties/meetingEndedAt',
     meetingLeader: 'https://atomicdata.dev/properties/meetingLeader',
+    organization: 'https://atomicdata.dev/properties/organization',
+    telephone: 'https://atomicdata.dev/properties/telephone',
+    telephones: 'https://atomicdata.dev/properties/telephones',
+    vcardUid: 'https://atomicdata.dev/properties/vcardUid',
+    website: 'https://atomicdata.dev/properties/website',
     currency: 'https://atomicdata.dev/ontology/data-browser/property/currency',
     customNodePositioning:
       'https://atomicdata.dev/properties/custom-node-positioning',
@@ -246,9 +261,11 @@ export const dataBrowser = {
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace DataBrowser {
+  export type AddressBook = typeof dataBrowser.classes.addressBook;
   export type Article = typeof dataBrowser.classes.article;
   export type Bookmark = typeof dataBrowser.classes.bookmark;
   export type Chatroom = typeof dataBrowser.classes.chatroom;
+  export type Contact = typeof dataBrowser.classes.contact;
   export type CurrencyProperty = typeof dataBrowser.classes.currencyProperty;
   export type DateFormat = typeof dataBrowser.classes.dateFormat;
   export type DisplayStyle = typeof dataBrowser.classes.displayStyle;
@@ -275,6 +292,10 @@ export namespace DataBrowser {
 
 declare module '../index.js' {
   interface Classes {
+    [dataBrowser.classes.addressBook]: {
+      requires: BaseProps | 'https://atomicdata.dev/properties/name';
+      recommends: 'https://atomicdata.dev/properties/description';
+    };
     [dataBrowser.classes.article]: {
       requires:
         | BaseProps
@@ -297,6 +318,24 @@ declare module '../index.js' {
     [dataBrowser.classes.chatroom]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/name';
       recommends: typeof dataBrowser.properties.messages;
+    };
+    [dataBrowser.classes.contact]: {
+      requires: BaseProps | 'https://atomicdata.dev/properties/name';
+      recommends:
+        | typeof dataBrowser.properties.givenName
+        | typeof dataBrowser.properties.familyName
+        | typeof dataBrowser.properties.organization
+        | typeof dataBrowser.properties.jobTitle
+        | typeof dataBrowser.properties.email
+        | typeof dataBrowser.properties.telephone
+        | typeof dataBrowser.properties.emails
+        | typeof dataBrowser.properties.telephones
+        | typeof dataBrowser.properties.addresses
+        | typeof dataBrowser.properties.website
+        | 'https://atomicdata.dev/properties/description'
+        | typeof dataBrowser.properties.image
+        | typeof dataBrowser.properties.contactAgent
+        | typeof dataBrowser.properties.vcardUid;
     };
     [dataBrowser.classes.currencyProperty]: {
       requires: BaseProps | typeof dataBrowser.properties.currency;
@@ -466,16 +505,36 @@ declare module '../index.js' {
 
   interface PropTypeMapping {
     [dataBrowser.properties.about]: string;
+    [dataBrowser.properties.addresses]: Array<{
+      street?: string;
+      locality?: string;
+      region?: string;
+      postalCode?: string;
+      country?: string;
+      type?: string;
+    }>;
     [dataBrowser.properties.color]: string;
     [dataBrowser.properties.commentsFolder]: string;
+    [dataBrowser.properties.contactAgent]: string;
+    [dataBrowser.properties.contactsFolder]: string;
     [dataBrowser.properties.coverImage]: string;
     [dataBrowser.properties.coverImageFocus]: number;
+    [dataBrowser.properties.email]: string;
+    [dataBrowser.properties.emails]: Array<{ value: string; type?: string }>;
+    [dataBrowser.properties.familyName]: string;
     [dataBrowser.properties.followSessionsChatroom]: string;
+    [dataBrowser.properties.givenName]: string;
+    [dataBrowser.properties.jobTitle]: string;
     [dataBrowser.properties.currentMeetings]: string[];
     [dataBrowser.properties.meetingsFolder]: string;
     [dataBrowser.properties.meetingStartedAt]: number;
     [dataBrowser.properties.meetingEndedAt]: number;
     [dataBrowser.properties.meetingLeader]: string;
+    [dataBrowser.properties.organization]: string;
+    [dataBrowser.properties.telephone]: string;
+    [dataBrowser.properties.telephones]: Array<{ value: string; type?: string }>;
+    [dataBrowser.properties.vcardUid]: string;
+    [dataBrowser.properties.website]: string;
     [dataBrowser.properties.currency]: string;
     [dataBrowser.properties.customNodePositioning]: Record<
       string,
@@ -587,16 +646,29 @@ declare module '../index.js' {
 
   interface PropSubjectToNameMapping {
     [dataBrowser.properties.about]: 'about';
+    [dataBrowser.properties.addresses]: 'addresses';
     [dataBrowser.properties.color]: 'color';
     [dataBrowser.properties.commentsFolder]: 'commentsFolder';
+    [dataBrowser.properties.contactAgent]: 'contactAgent';
+    [dataBrowser.properties.contactsFolder]: 'contactsFolder';
     [dataBrowser.properties.coverImage]: 'coverImage';
     [dataBrowser.properties.coverImageFocus]: 'coverImageFocus';
+    [dataBrowser.properties.email]: 'email';
+    [dataBrowser.properties.emails]: 'emails';
+    [dataBrowser.properties.familyName]: 'familyName';
     [dataBrowser.properties.followSessionsChatroom]: 'followSessionsChatroom';
+    [dataBrowser.properties.givenName]: 'givenName';
+    [dataBrowser.properties.jobTitle]: 'jobTitle';
     [dataBrowser.properties.currentMeetings]: 'currentMeetings';
     [dataBrowser.properties.meetingsFolder]: 'meetingsFolder';
     [dataBrowser.properties.meetingStartedAt]: 'meetingStartedAt';
     [dataBrowser.properties.meetingEndedAt]: 'meetingEndedAt';
     [dataBrowser.properties.meetingLeader]: 'meetingLeader';
+    [dataBrowser.properties.organization]: 'organization';
+    [dataBrowser.properties.telephone]: 'telephone';
+    [dataBrowser.properties.telephones]: 'telephones';
+    [dataBrowser.properties.vcardUid]: 'vcardUid';
+    [dataBrowser.properties.website]: 'website';
     [dataBrowser.properties.currency]: 'currency';
     [dataBrowser.properties.customNodePositioning]: 'customNodePositioning';
     [dataBrowser.properties.dateFormat]: 'dateFormat';

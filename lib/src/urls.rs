@@ -195,8 +195,24 @@ pub const NEXT_PAGE: &str = "https://atomicdata.dev/properties/nextPage";
 pub const ABOUT: &str = "https://atomicdata.dev/properties/about";
 pub const COMMENTS_FOLDER: &str = "https://atomicdata.dev/properties/commentsFolder";
 pub const MEETINGS_FOLDER: &str = "https://atomicdata.dev/properties/meetingsFolder";
+pub const CONTACTS_FOLDER: &str = "https://atomicdata.dev/properties/contactsFolder";
 pub const FOLLOW_SESSIONS_CHATROOM: &str =
     "https://atomicdata.dev/properties/followSessionsChatroom";
+// ... for Contacts
+pub const ADDRESS_BOOK: &str = "https://atomicdata.dev/classes/AddressBook";
+pub const CONTACT: &str = "https://atomicdata.dev/classes/Contact";
+pub const GIVEN_NAME: &str = "https://atomicdata.dev/properties/givenName";
+pub const FAMILY_NAME: &str = "https://atomicdata.dev/properties/familyName";
+pub const ORGANIZATION: &str = "https://atomicdata.dev/properties/organization";
+pub const JOB_TITLE: &str = "https://atomicdata.dev/properties/jobTitle";
+pub const EMAIL: &str = "https://atomicdata.dev/properties/email";
+pub const TELEPHONE: &str = "https://atomicdata.dev/properties/telephone";
+pub const EMAILS: &str = "https://atomicdata.dev/properties/emails";
+pub const TELEPHONES: &str = "https://atomicdata.dev/properties/telephones";
+pub const ADDRESSES: &str = "https://atomicdata.dev/properties/addresses";
+pub const WEBSITE: &str = "https://atomicdata.dev/properties/website";
+pub const CONTACT_AGENT: &str = "https://atomicdata.dev/properties/contactAgent";
+pub const VCARD_UID: &str = "https://atomicdata.dev/properties/vcardUid";
 // ... for DocumentV2
 pub const DOCUMENT_CONTENT: &str = "https://atomicdata.dev/properties/documentContent";
 // ... for Importers

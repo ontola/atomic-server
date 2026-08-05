@@ -1,0 +1,175 @@
+[
+  {
+    "@id": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
+    "https://atomicdata.dev/properties/shortname": "contacts",
+    "https://atomicdata.dev/properties/description": "Address books and contacts. A Contact is an address-book entry (name, emails, phones) owned by a Drive. It is not an Agent: Agents are cryptographic actors that sign commits. Optionally link a Contact to an Agent with `contactAgent`.",
+    "https://atomicdata.dev/properties/classes": [
+      "https://atomicdata.dev/classes/AddressBook",
+      "https://atomicdata.dev/classes/Contact"
+    ],
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/properties/contactsFolder",
+      "https://atomicdata.dev/properties/givenName",
+      "https://atomicdata.dev/properties/familyName",
+      "https://atomicdata.dev/properties/organization",
+      "https://atomicdata.dev/properties/jobTitle",
+      "https://atomicdata.dev/properties/email",
+      "https://atomicdata.dev/properties/telephone",
+      "https://atomicdata.dev/properties/emails",
+      "https://atomicdata.dev/properties/telephones",
+      "https://atomicdata.dev/properties/addresses",
+      "https://atomicdata.dev/properties/website",
+      "https://atomicdata.dev/properties/contactAgent",
+      "https://atomicdata.dev/properties/vcardUid"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/contactsFolder",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Folder",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Points to the Folder in this Drive where Address Books are stored.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "contacts-folder"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/givenName",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Given / first name of a Contact (vCard N given).",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "given-name"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/familyName",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Family / last name of a Contact (vCard N family).",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "family-name"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/organization",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Organization or company associated with a Contact (vCard ORG).",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "organization"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/jobTitle",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Job title or role of a Contact (vCard TITLE).",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "job-title"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/email",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Primary email address of a Contact. Prefer this for search and Collection filters; full typed lists live in `emails`.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "email"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/telephone",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Primary telephone number of a Contact. Prefer this for search and Collection filters; full typed lists live in `telephones`.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "telephone"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/emails",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "All email addresses for a Contact as a JSON array of `{ \"value\": string, \"type\"?: string }` objects (vCard EMAIL).",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "emails"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/telephones",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "All telephone numbers for a Contact as a JSON array of `{ \"value\": string, \"type\"?: string }` objects (vCard TEL).",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "telephones"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/addresses",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Postal addresses for a Contact as a JSON array of objects with optional `street`, `locality`, `region`, `postalCode`, `country`, and `type` fields (vCard ADR).",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "addresses"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/website",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/uri",
+    "https://atomicdata.dev/properties/description": "Primary website or homepage of a Contact (vCard URL).",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "website"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/contactAgent",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "Optional Atomic Agent linked to this Contact. The Agent is the cryptographic identity (`did:ad:agent:…`); the Contact remains a separate address-book resource. Linking does not grant the Agent rights on the Contact.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "contact-agent"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/vcardUid",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Stable vCard UID used to deduplicate Contacts on re-import from Google Contacts, iCloud, Microsoft, or other CardDAV exports.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/shortname": "vcard-uid"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/AddressBook",
+    "https://atomicdata.dev/properties/description": "A container for Contact resources. Contacts are child resources (parent = this Address Book) and are listed with Collection queries.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Class"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/description"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/shortname": "address-book"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Contact",
+    "https://atomicdata.dev/properties/description": "An address-book entry for a person or organization. Distinct from Agent: a Contact holds contact details you maintain; an Agent is a cryptographic actor. Optionally link them with `contactAgent`.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Class"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/contacts",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/givenName",
+      "https://atomicdata.dev/properties/familyName",
+      "https://atomicdata.dev/properties/organization",
+      "https://atomicdata.dev/properties/jobTitle",
+      "https://atomicdata.dev/properties/email",
+      "https://atomicdata.dev/properties/telephone",
+      "https://atomicdata.dev/properties/emails",
+      "https://atomicdata.dev/properties/telephones",
+      "https://atomicdata.dev/properties/addresses",
+      "https://atomicdata.dev/properties/website",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/ontology/data-browser/property/image",
+      "https://atomicdata.dev/properties/contactAgent",
+      "https://atomicdata.dev/properties/vcardUid"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/shortname": "contact"
+  }
+]

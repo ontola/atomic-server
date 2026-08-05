@@ -144,6 +144,7 @@ msgstr "<0/> Create New Agent"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
+#: src/views/Contacts/ImportVCardDialog.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/Plugin/AssignRights.tsx
@@ -541,6 +542,7 @@ msgstr "Optional HTTP headers to send when connecting to this MCP server"
 #: src/chunks/TablePage/RowActionHeading.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/routes/EditRoute.tsx
+#: src/views/Contacts/ContactPage.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
 #: src/views/ResourcePageDefault.tsx
 msgid "Edit"
@@ -1240,6 +1242,7 @@ msgid "Importing..."
 msgstr "Importing..."
 
 #: src/actions/resourceActions.tsx
+#: src/views/Contacts/ImportVCardDialog.tsx
 #: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr "Import"
@@ -5560,6 +5563,7 @@ msgstr "Tablet"
 
 #: src/helpers/knownPeers.test.ts
 #: src/helpers/knownPeers.test.ts
+#: src/views/Contacts/ContactPage.tsx
 msgid "Phone"
 msgstr "Phone"
 
@@ -6629,3 +6633,102 @@ msgstr "{0} types into \"{1}\", which is not a column"
 #: src/chunks/TablePage/tableTemplates.test.ts
 msgid "{0} presets \"{1}\", which is not a column"
 msgstr "{0} presets \"{1}\", which is not a column"
+
+#: src/views/Contacts/AddressBookPage.tsx
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "<0/> Import vCard"
+msgstr "<0/> Import vCard"
+
+#: src/views/Contacts/AddressBookPage.tsx
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "<0/> New Contact"
+msgstr "<0/> New Contact"
+
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "Filter contacts…"
+msgstr "Filter contacts…"
+
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "Filter contacts"
+msgstr "Filter contacts"
+
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "Loading contacts…"
+msgstr "Loading contacts…"
+
+#: src/views/Contacts/AddressBookPage.tsx
+msgid "No contacts yet. Create one or import a `.vcf` export from Google, iCloud, or Microsoft."
+msgstr "No contacts yet. Create one or import a `.vcf` export from Google, iCloud, or Microsoft."
+
+#: src/views/Contacts/ContactPage.tsx
+msgid "Email"
+msgstr "Email"
+
+#: src/views/Contacts/ContactPage.tsx
+msgid "Website"
+msgstr "Website"
+
+#: src/views/Contacts/ContactPage.tsx
+msgid "Atomic Agent"
+msgstr "Atomic Agent"
+
+#: src/views/Contacts/ContactPage.tsx
+msgid "No contact details yet — use Edit to add them."
+msgstr "No contact details yet — use Edit to add them."
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+#: src/views/Contacts/AddressBookCard.tsx
+msgid "Address Book"
+msgstr "Address Book"
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+#: src/views/Contacts/ContactCard.tsx
+msgid "Contact"
+msgstr "Contact"
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "No contacts found in this file."
+msgstr "No contacts found in this file."
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Failed to read file"
+msgstr "Failed to read file"
+
+#. 0: result.created; 1: result.created === 1 ? '' \\: 's'
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Imported {0} contact{1}"
+msgstr "Imported {0} contact{1}"
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Import failed"
+msgstr "Import failed"
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Import vCard"
+msgstr "Import vCard"
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Drop vCard here…"
+msgstr "Drop vCard here…"
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Drop a .vcf file, or click to browse"
+msgstr "Drop a .vcf file, or click to browse"
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Export contacts from Google Contacts, iCloud, or Microsoft as a `.vcf` file, then drop it here."
+msgstr "Export contacts from Google Contacts, iCloud, or Microsoft as a `.vcf` file, then drop it here."
+
+#. 0: cards.length - 8
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "…and {0} more"
+msgstr "…and {0} more"
+
+#. 0: cards.length; 1: cards.length === 1 ? '' \\: 's'
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "{0} contact{1} ready"
+msgstr "{0} contact{1} ready"
+
+#: src/views/Contacts/ImportVCardDialog.tsx
+msgid "Importing…"
+msgstr "Importing…"
