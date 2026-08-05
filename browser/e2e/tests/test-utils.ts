@@ -1512,3 +1512,42 @@ export async function acceptInvite(page: Page) {
     40000,
   );
 }
+
+/**
+ * TEMPORARY [agg] diagnostics for the CI-only em-dash totals failures
+ * (row-actions:118, table-templates:208, dashboard:419): the totals label
+ * renders while the aggregate value stays "—", and it never recovers. The
+ * aggregate read path logs `[agg]`-tagged lines (which source answered, what
+ * outcomes came back, whether a read failed or was cancelled); this collects
+ * them so a failing assertion can say what the aggregates were doing instead
+ * of just "expected 3". Remove together with the `[agg]` logs in
+ * lib/src/collection.ts and useTableAggregates.ts once the cause is known.
+ */
+export function collectAggLog(page: Page): string[] {
+  const lines: string[] = [];
+  page.on('console', message => {
+    const text = message.text();
+
+    if (text.includes('[agg]')) {
+      lines.push(`${message.type()}: ${text.slice(0, 300)}`);
+    }
+  });
+
+  return lines;
+}
+
+/** Rethrow `assertion`'s failure with the collected `[agg]` log appended. */
+export async function withAggLog(
+  lines: string[],
+  assertion: () => Promise<void>,
+): Promise<void> {
+  try {
+    await assertion();
+  } catch (e) {
+    throw new Error(
+      `${e}\n\n[agg] log (${lines.length} lines, last 40):\n${lines
+        .slice(-40)
+        .join('\n')}`,
+    );
+  }
+}
