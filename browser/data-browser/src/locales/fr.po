@@ -831,9 +831,8 @@ msgstr "Résultat"
 msgid "With Tags:"
 msgstr "Avec les étiquettes :"
 
-#: src/routes/AboutRoute.tsx
-msgid "The easiest way to create, share and model linked data."
-msgstr "Le moyen le plus simple de créer, partager et modéliser des données liées."
+#~ msgid "The easiest way to create, share and model linked data."
+#~ msgstr "Le moyen le plus simple de créer, partager et modéliser des données liées."
 
 #: src/routes/AboutRoute.tsx
 msgid "Features"
@@ -1015,6 +1014,7 @@ msgstr "Échec de la persistance de l'agent après avoir accepté l'invitation"
 msgid "Invite accepted, but no destination was returned."
 msgstr "Invitation acceptée, mais aucune destination n'a été renvoyée."
 
+#: src/components/Logo.tsx
 #: src/views/InvitePage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "AtomicServer"
@@ -4280,9 +4280,8 @@ msgstr "Créé via `/app/dev-drive` pour le développement local et E2E. Vous po
 msgid "Atomic Data Browser"
 msgstr "Navigateur de données atomiques"
 
-#: src/routes/AboutRoute.tsx
-msgid "Atomic Data combines the ease of use of JSON, the connectivity of linked data and the reliability of type-safety — one open protocol for knowledge graphs, collaborative apps and shareable datasets."
-msgstr "Atomic Data combine la facilité d'utilisation de JSON, la connectivité des données liées et la fiabilité de la sécurité des types — un protocole ouvert pour les graphes de connaissances, les applications collaboratives et les jeux de données partageables."
+#~ msgid "Atomic Data combines the ease of use of JSON, the connectivity of linked data and the reliability of type-safety — one open protocol for knowledge graphs, collaborative apps and shareable datasets."
+#~ msgstr "Atomic Data combine la facilité d'utilisation de JSON, la connectivité des données liées et la fiabilité de la sécurité des types — un protocole ouvert pour les graphes de connaissances, les applications collaboratives et les jeux de données partageables."
 
 #. 0: ' '; 1: ' '
 #: src/routes/PruneTestsRoute.tsx
@@ -6594,4 +6593,15 @@ msgstr ""
 #. 0: quickAdd.label; 1: preset.column
 #: src/chunks/TablePage/tableTemplates.test.ts
 msgid "{0} presets \"{1}\", which is not a column"
+msgstr ""
+
+#: src/routes/AboutRoute.tsx
+msgid "The one workspace for everything, owned by you."
+msgstr ""
+
+#~ msgid "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device — it can run with no server at all — and adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
+#~ msgstr ""
+
+#: src/routes/AboutRoute.tsx
+msgid "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device, and can run with no server at all. It adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
 msgstr ""
