@@ -26,11 +26,15 @@ import { ErrorBoundary } from '../views/ErrorPage';
 import { ErrorLook } from './ErrorLook';
 
 import { InlineFormattedResourceList } from './InlineFormattedResourceList';
-import { FaMagnifyingGlass, FaComments } from 'react-icons/fa6';
+import { FaMagnifyingGlass, FaComments, FaLink } from 'react-icons/fa6';
 import ResourceCard from '../views/Card/ResourceCard';
 import ResourceRow from '@views/ResourceRow';
 import { DEFAULT_AICHAT_NAME } from './AI/aiContstants';
 import { setPendingFirstMessage } from '@chunks/AI/pendingFirstMessage';
+import {
+  parseDidOpenInput,
+  resolveDidForOpen,
+} from '../helpers/didResolve';
 
 // ─── Module-level overlay state ────────────────────────────────────────────────
 
@@ -240,6 +244,60 @@ const AIChatRow = styled.button<{ $selected?: boolean }>`
   }
 `;
 
+const DidOpenRow = styled.button<{ $selected?: boolean }>`
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  background: ${p => (p.$selected ? p.theme.colors.bg1 : 'transparent')};
+  color: ${p => p.theme.colors.text};
+  cursor: pointer;
+  text-align: left;
+  transition: background 80ms;
+
+  &:hover:not(:disabled) {
+    background: ${p => p.theme.colors.bg1};
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: wait;
+  }
+
+  > svg {
+    color: ${p => p.theme.colors.main};
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+  }
+`;
+
+const DidOpenText = styled.div`
+  min-width: 0;
+  flex: 1;
+`;
+
+const DidOpenTitle = styled.div`
+  font-size: 0.875rem;
+  font-weight: 600;
+`;
+
+const DidOpenSubject = styled.div`
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.textLight};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const DidOpenHint = styled.div`
+  font-size: 0.7rem;
+  color: ${p => p.theme.colors.textLight};
+  margin-top: 0.15rem;
+`;
+
 // ─── Search Overlay ────────────────────────────────────────────────────────────
 
 const tagTokenRegex = /\btag:([\w-]+)/g;
@@ -331,8 +389,49 @@ function SearchOverlay(): JSX.Element {
     allowEmptyQuery: !filterIsEmpty,
   });
 
-  const showAIChatRow = !!personalDrive && query && results.length === 0;
-  const totalItemCount = results.length + (showAIChatRow ? 1 : 0);
+  const didTarget = parseDidOpenInput(query);
+  const showDidOpen = didTarget !== null;
+  const didRowOffset = showDidOpen ? 1 : 0;
+  // Prefer Open DID over the empty-results AI chat row when the query is a subject.
+  const showAIChatRow =
+    !!personalDrive && !!query && results.length === 0 && !showDidOpen;
+  const totalItemCount =
+    results.length + didRowOffset + (showAIChatRow ? 1 : 0);
+  const [resolvingDid, setResolvingDid] = useState(false);
+
+  const openDidTarget = async () => {
+    const target = didTarget ?? parseDidOpenInput(query.trim());
+
+    if (!target) {
+      return;
+    }
+
+    setResolvingDid(true);
+
+    try {
+      await resolveDidForOpen(target.subject, {
+        drive,
+        agent: target.agent,
+        node: target.node,
+        tryPeers: !target.node && !target.agent,
+        isAvailable: async subject => {
+          try {
+            const resource = await store.getResource(subject);
+
+            return !resource.error;
+          } catch {
+            return false;
+          }
+        },
+      });
+    } finally {
+      setResolvingDid(false);
+    }
+
+    (document.activeElement as HTMLInputElement | null)?.blur();
+    navigate(constructOpenURL(target.subject));
+    closeOverlay();
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 50);
@@ -358,15 +457,26 @@ function SearchOverlay(): JSX.Element {
       case 'Enter':
         e.preventDefault();
 
-        if (results[selectedIndex]) {
-          const openURL = constructOpenURL(results[selectedIndex]);
-          navigate(openURL);
-          closeOverlay();
-        } else if (showAIChatRow && selectedIndex === results.length) {
-          // AI Chat row selected
-          if (personalDrive) {
-            await handleStartAIChat(query, store, personalDrive, navigate);
+        if (showDidOpen && selectedIndex === 0) {
+          void openDidTarget();
+          break;
+        }
+
+        {
+          const resultIndex = selectedIndex - didRowOffset;
+
+          if (results[resultIndex]) {
+            const openURL = constructOpenURL(results[resultIndex]);
+            navigate(openURL);
             closeOverlay();
+          } else if (
+            showAIChatRow &&
+            selectedIndex === results.length + didRowOffset
+          ) {
+            if (personalDrive) {
+              await handleStartAIChat(query, store, personalDrive, navigate);
+              closeOverlay();
+            }
           }
         }
 
@@ -406,10 +516,11 @@ function SearchOverlay(): JSX.Element {
     }
   }, [selectedIndex]);
 
-  // Sync results + index to module state for the preview
+  // Sync results + index to module state for the preview (skip DID row).
   useEffect(() => {
-    setSearchResults(results, selectedIndex);
-  }, [results, selectedIndex]);
+    const resultIndex = selectedIndex - didRowOffset;
+    setSearchResults(results, resultIndex >= 0 ? resultIndex : -1);
+  }, [results, selectedIndex, didRowOffset]);
 
   return (
     <ErrorBoundary>
@@ -420,7 +531,7 @@ function SearchOverlay(): JSX.Element {
           value={query}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder='Search for resources...'
+          placeholder='Search or paste a did:ad:…'
           autoComplete='off'
           autoCorrect='off'
           autoCapitalize='off'
@@ -452,26 +563,58 @@ function SearchOverlay(): JSX.Element {
             <ResultsList>
               <ResultsArea ref={resultsRef}>
                 <Column gap='0'>
-                  {results.map((subject, index) => (
-                    <ResultCard
-                      key={subject}
-                      subject={subject}
-                      index={index}
-                      selected={index === selectedIndex}
-                      onSelect={() => {
-                        setSelected(index);
-                        setTimeout(() => {
-                          const openURL = constructOpenURL(subject);
-                          navigate(openURL);
-                          closeOverlay();
-                        }, 80);
+                  {showDidOpen && didTarget && (
+                    <DidOpenRow
+                      data-index={0}
+                      $selected={selectedIndex === 0}
+                      onClick={() => {
+                        setSelected(0);
+                        void openDidTarget();
                       }}
-                    />
-                  ))}
+                      disabled={resolvingDid}
+                    >
+                      <FaLink size={14} />
+                      <DidOpenText>
+                        <DidOpenTitle>
+                          {resolvingDid ? 'Resolving DID…' : 'Open DID'}
+                        </DidOpenTitle>
+                        <DidOpenSubject title={didTarget.subject}>
+                          {didTarget.subject}
+                        </DidOpenSubject>
+                        {!didTarget.node && !didTarget.agent && (
+                          <DidOpenHint>
+                            No node hint — will try known devices if needed
+                          </DidOpenHint>
+                        )}
+                      </DidOpenText>
+                    </DidOpenRow>
+                  )}
+                  {results.map((subject, index) => {
+                    const rowIndex = index + didRowOffset;
+
+                    return (
+                      <ResultCard
+                        key={subject}
+                        subject={subject}
+                        index={rowIndex}
+                        selected={rowIndex === selectedIndex}
+                        onSelect={() => {
+                          setSelected(rowIndex);
+                          setTimeout(() => {
+                            const openURL = constructOpenURL(subject);
+                            navigate(openURL);
+                            closeOverlay();
+                          }, 80);
+                        }}
+                      />
+                    );
+                  })}
                   {showAIChatRow && (
                     <AIChatRow
-                      data-index={results.length}
-                      $selected={selectedIndex === results.length}
+                      data-index={results.length + didRowOffset}
+                      $selected={
+                        selectedIndex === results.length + didRowOffset
+                      }
                       onClick={async () => {
                         if (!personalDrive) {
                           return;

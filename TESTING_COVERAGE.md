@@ -132,7 +132,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Sync page status renders | `browser/e2e/tests/sync.spec.ts` |
 | Offline edits persist and sync on reconnect | `sync.spec.ts` |
 | Second device cold-loads a drive from the server | `second-device-load.spec.ts` |
-| Paste DID in search → Open DID → navigate | `browser/e2e/tests/did-open.spec.ts` |
+| Paste DID in search → Open DID → navigate | `browser/e2e/tests/did-open.spec.ts` | live overlay is `OverlayContainer` |
 | Copy link embeds `agent` / `node` resolve hints | `did-open.spec.ts` |
 | `/app/show` with `node` / `agent` hints dials stubbed `/iroh-sync` (and `/resolve-agent`) | `did-open.spec.ts` |
 | Error page “Try N known devices” dials seeded peers | `did-open.spec.ts` |

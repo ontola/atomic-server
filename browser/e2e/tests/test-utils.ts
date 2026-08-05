@@ -112,9 +112,12 @@ export const contextMenu = '[data-test="context-menu"]';
  * The search input inside the search overlay (modal). Only visible after the
  * overlay is opened via the Search button or cmd/ctrl+K. Replaces the old
  * inline contentEditable that had data-testid="adress-bar".
+ *
+ * Placeholder may mention DID paste (`Search or paste a did:ad:…`) or the
+ * older `Search for resources...` — match either so tests survive the rename.
  */
 export const searchInput = (page: Page) =>
-  page.getByPlaceholder('Search for resources...');
+  page.getByPlaceholder(/Search (for resources|or paste a did:ad:)/);
 
 /**
  * Opens the search overlay if not already open. Idempotent — returns the
