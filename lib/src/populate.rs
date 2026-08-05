@@ -289,6 +289,13 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
         .map_err(|e| format!("Failed to import meeting.json: {e}"))?;
     store
         .import(
+            include_str!("../defaults/calorie-tracker.json"),
+            &ParseOpts::default(),
+        )
+        .await
+        .map_err(|e| format!("Failed to import calorie-tracker.json: {e}"))?;
+    store
+        .import(
             include_str!("../defaults/table.json"),
             &ParseOpts::default(),
         )
@@ -375,4 +382,101 @@ pub async fn bootstrap(store: &impl Storelike) -> AtomicResult<()> {
     populate_default_store(store).await?;
     store.commit_batch()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::datatype::DataType;
+
+    /// The calorie tracker's ontology ships in this crate rather than in the
+    /// app, so a typo in `calorie-tracker.json` would otherwise surface as a
+    /// failed write on a phone at first launch. Resolving the Class and every
+    /// Property it names turns that into a test failure here.
+    #[tokio::test]
+    async fn the_meal_ontology_seeds() {
+        let store = crate::Db::init_temp("populate_meal_ontology")
+            .await
+            .unwrap();
+
+        let meal = store.get_class(urls::MEAL).await.unwrap();
+        assert_eq!(meal.shortname, "meal");
+        assert_eq!(
+            meal.requires,
+            vec![urls::CONSUMED_AT, urls::MEAL_STATUS],
+            "a meal is created before anyone knows what it was — only its \
+             instant and its status can be required of it"
+        );
+
+        for (subject, shortname, datatype) in [
+            (urls::CONSUMED_AT, "consumed-at", DataType::Timestamp),
+            (urls::CALORIES, "calories", DataType::Integer),
+            (urls::CALORIES_MIN, "calories-min", DataType::Integer),
+            (urls::CALORIES_MAX, "calories-max", DataType::Integer),
+            (urls::IMAGE_PATH, "image-path", DataType::String),
+            (urls::MEAL_STATUS, "meal-status", DataType::AtomicUrl),
+            (
+                urls::ESTIMATE_CONFIDENCE,
+                "estimate-confidence",
+                DataType::AtomicUrl,
+            ),
+            (
+                urls::ESTIMATED_BY_MODEL,
+                "estimated-by-model",
+                DataType::String,
+            ),
+            (urls::PROTEIN_GRAMS, "protein-grams", DataType::Float),
+            (urls::CARBS_GRAMS, "carbs-grams", DataType::Float),
+            (urls::FAT_GRAMS, "fat-grams", DataType::Float),
+        ] {
+            let prop = store
+                .get_property(subject)
+                .await
+                .unwrap_or_else(|e| panic!("{subject} did not seed: {e}"));
+            assert_eq!(prop.shortname, shortname);
+            assert_eq!(prop.data_type, datatype, "datatype of {subject}");
+        }
+
+        // The two enums are Tags, so every state a Meal can be in is a
+        // resolvable resource rather than a string the app happens to agree
+        // with itself about.
+        for (property, shortnames) in [
+            (
+                urls::MEAL_STATUS,
+                vec![
+                    "pending",
+                    "estimating",
+                    "estimated",
+                    "confirmed",
+                    "needs-info",
+                    "failed",
+                ],
+            ),
+            (urls::ESTIMATE_CONFIDENCE, vec!["high", "medium", "low"]),
+        ] {
+            let allowed = store
+                .get_property(property)
+                .await
+                .unwrap()
+                .allows_only
+                .unwrap_or_else(|| panic!("{property} is an enum"));
+
+            assert_eq!(
+                allowed,
+                shortnames
+                    .iter()
+                    .map(|s| format!("{property}/{s}"))
+                    .collect::<Vec<_>>()
+            );
+
+            for tag in &allowed {
+                let resource = store.get_resource(&tag.as_str().into()).await.unwrap();
+                assert_eq!(
+                    resource.get(urls::PARENT).unwrap().to_string(),
+                    property,
+                    "a tag hangs under the property it is a value of"
+                );
+            }
+        }
+    }
 }

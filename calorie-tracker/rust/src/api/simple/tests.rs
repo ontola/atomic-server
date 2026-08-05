@@ -187,7 +187,8 @@ async fn a_resource_carries_the_history_of_its_edits() {
 async fn opening_the_store_again_leaves_it_alone() {
     let drive = shared_drive().await;
 
-    let elsewhere = std::env::temp_dir().join(format!("calorie-tracker-second-open-{}", drive.len()));
+    let elsewhere =
+        std::env::temp_dir().join(format!("calorie-tracker-second-open-{}", drive.len()));
     open_db(elsewhere.to_string_lossy().into_owned())
         .await
         .expect("a second open must be a no-op, not an error");

@@ -51,8 +51,8 @@ void main() {
     await tester.tap(find.text('Start tracking'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Copy my secret'), findsOneWidget,
-        reason: 'the account screen is where a fresh signup lands');
+    expect(find.text('Log a meal'), findsOneWidget,
+        reason: 'a fresh signup lands on the day, ready to log to it');
     expect(store.mealsContainersCreated, 1);
   });
 
@@ -70,7 +70,7 @@ void main() {
     await tester.tap(find.text('Restore'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Copy my secret'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
   });
 
   testWidgets('a secret that is not one says so, on the screen it was typed on',
@@ -107,7 +107,7 @@ void main() {
 
     // The sync screen looks on arrival — nobody has to be told to tap "sync".
     expect(backend.syncCalls, 1);
-    expect(find.text('Copy my secret'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
   });
 
   testWidgets('the drive stays waiting when no other device answers',

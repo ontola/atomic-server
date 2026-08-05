@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `find_meals_container`
+// These functions are ignored because they are not marked as `pub`: `find_meals_container`, `float_prop`, `int_prop`, `status_subject`, `string_prop`, `tag_shortname`
 
 /// Find the meals container under the active drive, creating it the first time.
 /// Idempotent — call it on every launch.
@@ -22,3 +22,140 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// to the other one are not moved — Phase 2 owns that, once there are meals.
 Future<String> ensureMealsContainer() =>
     RustLib.instance.api.crateApiMealsEnsureMealsContainer();
+
+/// Log a meal under the meals container. Returns its subject.
+///
+/// `calories` decides the status, because those are the same fact: a meal
+/// somebody typed a number for is `confirmed` — a human said so, and no
+/// estimator should overwrite it — while one without a number is `pending`,
+/// which is exactly the queue Phase 4's estimator drains.
+Future<String> createMeal(
+        {required PlatformInt64 consumedAtMs,
+        required String name,
+        required String description,
+        required String imagePath,
+        PlatformInt64? calories}) =>
+    RustLib.instance.api.crateApiMealsCreateMeal(
+        consumedAtMs: consumedAtMs,
+        name: name,
+        description: description,
+        imagePath: imagePath,
+        calories: calories);
+
+/// Correct a meal by hand. `None` leaves a field as it was.
+///
+/// Typing a calorie count is a confirmation, so it moves the meal to
+/// `confirmed` — otherwise Phase 4's estimator would find a `pending` meal the
+/// user had already answered and overwrite the answer.
+Future<void> updateMeal(
+        {required String subject,
+        String? name,
+        String? description,
+        PlatformInt64? calories}) =>
+    RustLib.instance.api.crateApiMealsUpdateMeal(
+        subject: subject,
+        name: name,
+        description: description,
+        calories: calories);
+
+/// Move a meal to another status. See [`MEAL_STATUSES`].
+Future<void> setMealStatus({required String subject, required String status}) =>
+    RustLib.instance.api
+        .crateApiMealsSetMealStatus(subject: subject, status: status);
+
+/// Meals eaten in `[from_ms, to_ms)`, newest first.
+///
+/// Half-open on purpose: a day is `[midnight, next midnight)`, so a meal at
+/// exactly 00:00 belongs to the day starting then and to only one day. Both
+/// bounds are UTC milliseconds — the caller works out where its local midnights
+/// fall, because the device knows its timezone and its DST and the store does
+/// not.
+Future<List<MealItem>> listMeals(
+        {required PlatformInt64 fromMs, required PlatformInt64 toMs}) =>
+    RustLib.instance.api.crateApiMealsListMeals(fromMs: fromMs, toMs: toMs);
+
+/// One meal, flattened for the Dart side.
+///
+/// The estimate fields are `Option` rather than zero-defaulted: "nobody has
+/// worked out what this was yet" and "this had no calories" are different
+/// answers, and a day total that silently counts the first as the second is
+/// wrong in the direction that matters.
+class MealItem {
+  final String subject;
+  final String name;
+  final String description;
+
+  /// Unix epoch milliseconds, UTC. Which local day that falls in is the
+  /// caller's question — see [`list_meals`].
+  final PlatformInt64 consumedAtMs;
+
+  /// One of [`MEAL_STATUSES`].
+  final String status;
+  final PlatformInt64? calories;
+  final PlatformInt64? caloriesMin;
+  final PlatformInt64? caloriesMax;
+
+  /// Relative to the app documents directory. Empty for typed entries.
+  final String imagePath;
+
+  /// `high` · `medium` · `low`, or empty when nothing has estimated it.
+  final String confidence;
+  final String estimatedByModel;
+  final double? proteinGrams;
+  final double? carbsGrams;
+  final double? fatGrams;
+
+  const MealItem({
+    required this.subject,
+    required this.name,
+    required this.description,
+    required this.consumedAtMs,
+    required this.status,
+    this.calories,
+    this.caloriesMin,
+    this.caloriesMax,
+    required this.imagePath,
+    required this.confidence,
+    required this.estimatedByModel,
+    this.proteinGrams,
+    this.carbsGrams,
+    this.fatGrams,
+  });
+
+  @override
+  int get hashCode =>
+      subject.hashCode ^
+      name.hashCode ^
+      description.hashCode ^
+      consumedAtMs.hashCode ^
+      status.hashCode ^
+      calories.hashCode ^
+      caloriesMin.hashCode ^
+      caloriesMax.hashCode ^
+      imagePath.hashCode ^
+      confidence.hashCode ^
+      estimatedByModel.hashCode ^
+      proteinGrams.hashCode ^
+      carbsGrams.hashCode ^
+      fatGrams.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MealItem &&
+          runtimeType == other.runtimeType &&
+          subject == other.subject &&
+          name == other.name &&
+          description == other.description &&
+          consumedAtMs == other.consumedAtMs &&
+          status == other.status &&
+          calories == other.calories &&
+          caloriesMin == other.caloriesMin &&
+          caloriesMax == other.caloriesMax &&
+          imagePath == other.imagePath &&
+          confidence == other.confidence &&
+          estimatedByModel == other.estimatedByModel &&
+          proteinGrams == other.proteinGrams &&
+          carbsGrams == other.carbsGrams &&
+          fatGrams == other.fatGrams;
+}

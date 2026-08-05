@@ -1,0 +1,189 @@
+[
+  {
+    "@id": "https://atomicdata.dev/properties/consumedAt",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "When this was eaten or drunk. The day a Meal counts towards is this instant read in the eater's local timezone, not the store's.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "consumed-at"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/calories",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "Best estimate of the energy in this Meal, in kilocalories.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "calories"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/caloriesMin",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "Lower bound of the calorie estimate, in kilocalories. An estimate from a photo is a range; reporting only its middle hides how wide it was.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "calories-min"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/caloriesMax",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "Upper bound of the calorie estimate, in kilocalories.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "calories-max"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/imagePath",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Path to a photo of this Meal, relative to the app's documents directory. Device-local: the picture is not part of what syncs.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "image-path"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mealStatus",
+    "https://atomicdata.dev/properties/allowsOnly": [
+      "https://atomicdata.dev/properties/mealStatus/pending",
+      "https://atomicdata.dev/properties/mealStatus/estimating",
+      "https://atomicdata.dev/properties/mealStatus/estimated",
+      "https://atomicdata.dev/properties/mealStatus/confirmed",
+      "https://atomicdata.dev/properties/mealStatus/needs-info",
+      "https://atomicdata.dev/properties/mealStatus/failed"
+    ],
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Tag",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "How far a Meal has got through estimation. Tags rather than free text, so the states are enumerable by anything that reads this ontology and a typo is a rejected write rather than a meal that quietly matches no filter.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "meal-status"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mealStatus/pending",
+    "https://atomicdata.dev/properties/description": "Captured, but nothing has looked at it yet.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Tag"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties/mealStatus",
+    "https://atomicdata.dev/properties/shortname": "pending"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mealStatus/estimating",
+    "https://atomicdata.dev/properties/description": "An estimate is in flight.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Tag"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties/mealStatus",
+    "https://atomicdata.dev/properties/shortname": "estimating"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mealStatus/estimated",
+    "https://atomicdata.dev/properties/description": "Has numbers, which nobody has checked.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Tag"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties/mealStatus",
+    "https://atomicdata.dev/properties/shortname": "estimated"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mealStatus/confirmed",
+    "https://atomicdata.dev/properties/description": "Has numbers a human agreed with, or typed.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Tag"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties/mealStatus",
+    "https://atomicdata.dev/properties/shortname": "confirmed"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mealStatus/needs-info",
+    "https://atomicdata.dev/properties/description": "Too ambiguous to estimate — waiting on an answer from whoever ate it.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Tag"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties/mealStatus",
+    "https://atomicdata.dev/properties/shortname": "needs-info"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mealStatus/failed",
+    "https://atomicdata.dev/properties/description": "Estimation was tried and gave up.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Tag"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties/mealStatus",
+    "https://atomicdata.dev/properties/shortname": "failed"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/estimateConfidence",
+    "https://atomicdata.dev/properties/allowsOnly": [
+      "https://atomicdata.dev/properties/estimateConfidence/high",
+      "https://atomicdata.dev/properties/estimateConfidence/medium",
+      "https://atomicdata.dev/properties/estimateConfidence/low"
+    ],
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Tag",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "How sure the estimator was. `low` is the signal to ask the eater a question rather than to quietly guess.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "estimate-confidence"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/estimateConfidence/high",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Tag"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties/estimateConfidence",
+    "https://atomicdata.dev/properties/shortname": "high"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/estimateConfidence/medium",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Tag"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties/estimateConfidence",
+    "https://atomicdata.dev/properties/shortname": "medium"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/estimateConfidence/low",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Tag"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties/estimateConfidence",
+    "https://atomicdata.dev/properties/shortname": "low"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/estimatedByModel",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Identifier of the model that produced the estimate, so a number can be traced back to what made it. Empty when a human entered it.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "estimated-by-model"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/proteinGrams",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "Protein in this Meal, in grams.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "protein-grams"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/carbsGrams",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "Carbohydrates in this Meal, in grams.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "carbs-grams"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/fatGrams",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "Fat in this Meal, in grams.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "fat-grams"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Meal",
+    "https://atomicdata.dev/properties/description": "Something eaten or drunk at a moment in time, with an estimate of its energy content. Created the instant it is captured — before anyone knows what it was — so `consumed-at` and `meal-status` are all that is required of it; the name, the numbers and the macros arrive later, when it has been estimated.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Class"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/calories",
+      "https://atomicdata.dev/properties/caloriesMin",
+      "https://atomicdata.dev/properties/caloriesMax",
+      "https://atomicdata.dev/properties/imagePath",
+      "https://atomicdata.dev/properties/estimateConfidence",
+      "https://atomicdata.dev/properties/estimatedByModel",
+      "https://atomicdata.dev/properties/proteinGrams",
+      "https://atomicdata.dev/properties/carbsGrams",
+      "https://atomicdata.dev/properties/fatGrams"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/consumedAt",
+      "https://atomicdata.dev/properties/mealStatus"
+    ],
+    "https://atomicdata.dev/properties/shortname": "meal"
+  }
+]

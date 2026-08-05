@@ -16,7 +16,11 @@ use state::{db, err, set_db};
 pub use types::{AgentInfo, SetupResult, VersionMetadata};
 
 /// Save resource locally and push commit over WS when a session is open.
-async fn save_and_push(
+///
+/// `pub(crate)` where the canvas twin has it private, for the same reason
+/// `state` is: [`super::meals`] writes meals through it rather than growing a
+/// second, subtly different save path.
+pub(crate) async fn save_and_push(
     resource: &mut atomic_lib::Resource,
     store: &atomic_lib::Db,
 ) -> Result<(), String> {

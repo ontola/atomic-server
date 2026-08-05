@@ -108,6 +108,45 @@ class AtomicClient {
   static Future<String> ensureMealsContainer() =>
       meals_ffi.ensureMealsContainer();
 
+  /// Log a meal. Returns its subject. A [calories] count makes it `confirmed`
+  /// (a person said so); without one it is `pending`, for the estimator.
+  static Future<String> createMeal({
+    required int consumedAtMs,
+    String name = '',
+    String description = '',
+    String imagePath = '',
+    int? calories,
+  }) =>
+      meals_ffi.createMeal(
+        consumedAtMs: consumedAtMs,
+        name: name,
+        description: description,
+        imagePath: imagePath,
+        calories: calories,
+      );
+
+  /// Correct a meal by hand. A null argument leaves that field alone.
+  static Future<void> updateMeal(
+    String subject, {
+    String? name,
+    String? description,
+    int? calories,
+  }) =>
+      meals_ffi.updateMeal(
+        subject: subject,
+        name: name,
+        description: description,
+        calories: calories,
+      );
+
+  static Future<void> setMealStatus(String subject, String status) =>
+      meals_ffi.setMealStatus(subject: subject, status: status);
+
+  /// Meals eaten in `[fromMs, toMs)`, newest first. Both are UTC milliseconds;
+  /// working out where a local day's midnights fall is the caller's job.
+  static Future<List<meals_ffi.MealItem>> listMeals(int fromMs, int toMs) =>
+      meals_ffi.listMeals(fromMs: fromMs, toMs: toMs);
+
   // ── 5. History ───────────────────────────────────────────────────────────
 
   static Future<void> warmResourceHistory(String subject) =>

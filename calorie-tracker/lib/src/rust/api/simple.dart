@@ -26,9 +26,16 @@ import 'simple/types.dart';
 /// the network beyond the best-effort push a save makes when a session is open.
 ///
 /// This module is deliberately app-agnostic — no meal, no calorie, nothing this
-/// app owns. Meal CRUD lands beside it in Phase 2, so the two can be merged back
-/// into one shared crate with the Atomic Canvas bridge later.
-/// Open a local database. Call once on app start.
+/// app owns. That lives in [`super::meals`] next door, which is what keeps this
+/// file a copy of the Atomic Canvas bridge: merging the two back into one shared
+/// crate later stays a copy rather than a diff.
+/// Open a local database. Call once on app start; calling again is a no-op.
+///
+/// The second call has to be a no-op rather than a second open: redb holds an
+/// exclusive lock on the file, so re-opening it fails, and the recovery path
+/// below reads any failure as corruption and *deletes the database*. The store
+/// is already in a `OnceLock` that a second `set_db` would silently drop, so
+/// there was never anything to gain by getting that far.
 Future<void> openDb({required String path}) =>
     RustLib.instance.api.crateApiSimpleOpenDb(path: path);
 

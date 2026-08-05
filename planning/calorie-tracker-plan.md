@@ -54,9 +54,12 @@ Principles:
 - **Capture is decoupled from estimation.** Taking a picture only writes a file + a `pending`
   Meal resource. The estimation queue processes pending meals whenever the app is running.
   The user can kill the app immediately after the shutter; the meal is estimated on next launch
-  (background execution is a stretch goal, see §9).
+  (background execution is a stretch goal, see §10).
 - **Photos are local files**, not atomic resources. Meals store a relative file path. Syncing
   images is out of scope for v1 (open question for later).
+- **Photos are a cache, meals are the data.** Images are heavily compressed at capture and live
+  under a total disk budget; the oldest ones are evicted when it's exceeded (§6). A meal outlives
+  its photo — nothing in the record depends on the file still being there.
 - **LLM calls happen in Dart**, not Rust — it's a plain HTTPS call to OpenRouter and Dart has
   the better ecosystem for OAuth redirects, and it keeps the Rust crate app-agnostic.
 
@@ -69,22 +72,26 @@ calorie-tracker/
   Makefile / dev.sh            # copied from flutter/, device ids adjusted
   rust/                        # FRB crate: rust_lib_calorie_tracker
     Cargo.toml                 # atomic_lib = { path = "../../lib", ... }
-    src/api/simple.rs          #   generic agent/drive/sync API (copied) + meal API (new)
+    src/api/simple.rs          #   generic agent/drive/sync API (copied), stays app-agnostic
+    src/api/meals.rs           #   the meal API — everything this app owns
   rust_builder/                # copied from flutter/rust_builder, crate name adjusted
   lib/
     main.dart                  # fast path: init camera first, rust db in parallel
     atomic/                    # the SDK copied from flutter/lib/atomic (see Phase 0 decision)
-    models/meal.dart
+    models/meal.dart           # Meal, MealStatus, localDayBounds, DaySummary
     services/
-      meal_store.dart          # CRUD + day queries via AtomicClient, ChangeNotifier
+      app_session.dart         # who is signed in and where their meals go; owns the boot
+      meal_store.dart          # one day's meals + the writes to them, ChangeNotifier
       estimation_queue.dart    # drains pending meals through the LLM
       openrouter.dart          # OAuth PKCE + /chat/completions + /models
-      image_store.dart         # save/load capture files, thumbnails
+      image_store.dart         # save/load capture files, thumbnails, disk budget + eviction
       notifications.dart
     screens/
       capture_screen.dart      # camera-first home
-      text_entry_screen.dart
-      today_screen.dart
+      today_screen.dart        # home until the camera lands
+      meal_entry_sheet.dart    # type a meal, or correct one — the plan's TextEntryScreen,
+                               #   as a sheet: three fields do not want a screen
+      account_screen.dart      # agent + secret, until Settings exists
       history_screen.dart
       settings_screen.dart
       onboarding/
@@ -118,14 +125,19 @@ shortnames kebab-case, per repo convention):
 | `calories-max` (`caloriesMax`) | integer | upper bound |
 | `consumed-at` (`consumedAt`) | timestamp | when the picture was taken / entry made |
 | `image-path` (`imagePath`) | string | relative path inside app documents dir; empty for text entries |
-| `meal-status` (`mealStatus`) | string, `allows-only` | `pending` · `estimating` · `estimated` · `confirmed` · `needs-info` · `failed` |
-| `estimate-confidence` (`estimateConfidence`) | string, `allows-only` | `high` · `medium` · `low` (from the LLM) |
+| `meal-status` (`mealStatus`) | atomicURL, `allows-only` | Tags: `pending` · `estimating` · `estimated` · `confirmed` · `needs-info` · `failed` |
+| `estimate-confidence` (`estimateConfidence`) | atomicURL, `allows-only` | Tags: `high` · `medium` · `low` (from the LLM) |
 | `estimated-by-model` (`estimatedByModel`) | string | OpenRouter model id used |
 | `protein-grams` / `carbs-grams` / `fat-grams` | float | optional macros, nice-to-have from the same LLM call |
 
 (`status` and `model` get prefixed subjects because bare `https://atomicdata.dev/properties/status`
-/ `…/model` are too generic to claim for this app — check `lib/src/urls.rs` for collisions before
-finalizing names.)
+/ `…/model` are too generic to claim for this app. Confirmed against `lib/src/urls.rs`: `STATUS` is
+already the server ontology's endpoint-response status, so the bare name was never available.)
+
+The class **requires only `consumed-at` and `meal-status`**. A meal is created the instant it is
+captured, before anyone knows what it was, so nothing else can be required of it — and `calories`
+is `Option` all the way up to the UI for the same reason: "not estimated yet" is not "zero
+calories", and a day total that conflates them is wrong in the direction that matters.
 
 Implementation notes:
 
@@ -136,15 +148,21 @@ Implementation notes:
      `caloriesMin`, `consumedAt`), `isA: [Class Property]`, `datatype`, `description`,
      `shortname` (kebab-case), `parent: https://atomicdata.dev/properties`; the `Meal` class at
      `https://atomicdata.dev/classes/Meal` with `requires`/`recommends`, `parent:
-     https://atomicdata.dev/classes`. Enum-like properties (`status`, `confidence`) use
-     `allows-only`. Reuse existing core properties where they fit (`name`, `description`) instead
-     of minting duplicates.
+     https://atomicdata.dev/classes`. Reuse existing core properties where they fit (`name`,
+     `description`) instead of minting duplicates.
+     **`allows-only` only accepts subjects** — a plain `"pending"` in that list fails the JSON-AD
+     import with "Unable to parse string as URL". So the enums are `atomicURL` properties whose
+     allowed values are Tag resources hanging under the property itself
+     (`…/properties/mealStatus/pending`), following the `role` property in `ai.json`. The Rust
+     bridge speaks the shortnames and converts at the boundary, so nothing above `meals.rs` —
+     Dart included — ever handles a tag URL.
   2. Register it in `populate_default_store` in `lib/src/populate.rs` with a
      `store.import(include_str!("../defaults/calorie-tracker.json"), …)` block like the others —
      then it's seeded into every store by `bootstrap`, including the app's local redb store.
   3. Add the subject `const`s to `lib/src/urls.rs` (e.g. `pub const CALORIES: &str = "https://atomicdata.dev/properties/calories";`)
      so the app's Rust API uses `atomic_lib::urls::CALORIES` — no app-local ontology module.
-  4. Mirror the constants in a hand-written `lib/models/ontology.dart` for the Dart side.
+  4. The Dart side needs no mirror of the constants: `MealItem` crosses the bridge as a typed
+     struct, so the only vocabulary Dart holds is the status shortnames in `MealStatus`.
 - Verify the seeding with a `lib` test that runs `bootstrap` on a fresh store and resolves the
   `Meal` class and each property (this also catches JSON-AD typos at test time rather than at
   first app launch).
@@ -155,15 +173,33 @@ Implementation notes:
 - Daily summary = sum over `list_meals(day_start, day_end)` in Dart. No separate summary resource
   (avoids sync conflicts; recomputing is cheap).
 
-**New Rust API surface** (in `rust/src/api/simple.rs`, mirroring the canvas functions):
+**New Rust API surface** — in `rust/src/api/meals.rs`, *not* `simple.rs`: that file is a copy of
+the canvas bridge and stays app-agnostic so the two crates can be merged mechanically (§10).
+
+Built in Phase 2:
 
 ```rust
-pub async fn create_meal(consumed_at_ms: i64, image_path: String, description: String) -> Result<String, String>; // returns subject, status=pending
-pub async fn update_meal_estimate(subject: String, estimate_json: String) -> Result<(), String>; // sets name/calories/bounds/macros/confidence/model, status=estimated|needs-info
+pub async fn create_meal(consumed_at_ms: i64, name: String, description: String, image_path: String, calories: Option<i64>) -> Result<String, String>;
+pub async fn update_meal(subject: String, name: Option<String>, description: Option<String>, calories: Option<i64>) -> Result<(), String>;
 pub async fn set_meal_status(subject: String, status: String) -> Result<(), String>;
 pub async fn list_meals(from_ms: i64, to_ms: i64) -> Result<Vec<MealItem>, String>;
+```
+
+`calories` on `create_meal` decides the status, because those are the same fact: a number somebody
+typed is `confirmed` and no estimator may overwrite it, while no number is `pending` — the queue
+Phase 4 drains. `update_meal`'s `None` means "leave this alone"; setting `calories` confirms the
+meal for the same reason. `list_meals` is half-open, `[from_ms, to_ms)`, so a meal at exactly
+midnight belongs to one day and not two; the caller works out where its local midnights fall
+(`localDayBounds` in `lib/models/meal.dart`).
+
+Deleting goes through the generic `delete_resource` in `simple.rs` — a `delete_meal` alias would
+add nothing.
+
+Phase 4 adds:
+
+```rust
+pub async fn update_meal_estimate(subject: String, estimate_json: String) -> Result<(), String>; // sets name/calories/bounds/macros/confidence/model, status=estimated|needs-info
 pub async fn list_pending_meals() -> Result<Vec<MealItem>, String>;
-pub async fn delete_meal(subject: String) -> Result<(), String>;
 ```
 
 ## 5. LLM integration (OpenRouter)
@@ -182,7 +218,8 @@ includes `image`, show in Settings with a sane default (e.g. `google/gemini-2.5-
 fast, good vision; verify current catalog at build time).
 
 **Estimation call**: `POST /api/v1/chat/completions` with the photo as a base64 data-URL
-`image_url` part (downscale to ≤1024px longest edge before encoding — cuts tokens and latency),
+`image_url` part — read straight off disk, no resize step here: the stored file is *already* the
+compressed ≤1024px version (§6), which is what makes the vision call cheap,
 plus `response_format: {type: "json_schema"}` enforcing:
 
 ```json
@@ -211,7 +248,123 @@ Text entries use the same schema with the typed description instead of an image.
   appended and the meal re-estimated.
 - No API key yet → meals stay `pending`, Today screen shows a "Connect OpenRouter" banner.
 
-## 6. UX / screens
+## 6. Image storage — compression and disk budget
+
+Photos are the only part of this app that grows without bound, and they cost twice: every pixel
+sent to the vision model is billed, and every byte kept is device storage the user never asked us
+for. Both problems have the same answer — **store small, and cap the total.**
+
+**These two costs have different levers, and it matters which is which.** Vision models bill by
+*pixel dimensions*, not by file size: Claude charges `⌈w/28⌉ × ⌈h/28⌉` visual tokens, OpenAI tiles
+at 512px, Gemini tiles similarly. A 1024×768 photo is ~1040 visual tokens whether it arrives as a
+40 KB WebP or a 400 KB JPEG. So:
+
+- **Resolution is the token lever.** It's already set at 1024px, which is why the LLM cost is a
+  rounding error — ~1040 tokens/meal, ~$0.05/month at 5 meals/day on a cheap vision model. There
+  is no compression trick that improves on this; only sending fewer pixels would, at the cost of
+  the portion-size detail the estimate depends on.
+- **File format and quality are the disk lever, and only that.** Which is what the budget below is
+  for.
+
+Worth knowing when tuning quality down: Anthropic's vision guide explicitly warns that lossy
+artifacts degrade model accuracy, *especially after multiple compression passes*. q80 in one pass
+is the floor for that reason — chasing bytes below it trades estimate quality for storage we're
+already capping by other means.
+
+**Compress once, at capture. Keep one copy plus a thumbnail.** The full-resolution frame off the
+sensor (2–5 MB) is never written to disk. `ImageStore.save()` takes the camera bytes, re-encodes,
+writes the result, and drops the original. There is no "original" to fall back to — deliberately:
+a second copy would double storage to serve a use case (re-crop, re-estimate at higher fidelity)
+that v1 doesn't have, and the LLM never sees more than the compressed version anyway.
+
+| Artifact | Longest edge | JPEG quality (§6.1) | Typical size | Used for |
+| --- | --- | --- | --- | --- |
+| Camera capture | `ResolutionPreset.high` (~1280) | — | in memory only | never written |
+| Stored image | 1024 px | 80 | 100–200 KB | detail view **and** the LLM call |
+| Thumbnail | 256 px | 70 | 10–20 KB | Today/History lists |
+
+Use `flutter_image_compress` (native codecs, ~10× faster than the pure-Dart `image` package —
+this runs on the shutter path, where §7's <1s budget lives). Re-encoding also **strips EXIF**,
+which drops GPS coordinates from every food photo: a privacy win we get for free.
+
+At ~200 KB per meal and 5 meals/day that's ~1 MB/day, ~360 MB/year — small enough that most users
+never hit the cap, which is the point.
+
+### 6.1 Why JPEG and not WebP / AVIF / HEIC
+
+Verified against the vision docs of the three providers that OpenRouter routes most traffic to,
+plus Flutter's own decoder support:
+
+| Format | Claude | OpenAI | Gemini | Flutter display | `flutter_image_compress` encode |
+| --- | --- | --- | --- | --- | --- |
+| **JPEG** | ✅ | ✅ | ✅ | native | ✅ every platform |
+| **WebP** | ✅ | ✅ | ✅ | native | Android native; **iOS via SDWebImageWebPCoder, "noticeably slower"** |
+| **HEIC** | ❌ | ❌ | ✅ | ✗ | iOS 11+ / Android API 28+ *with* a working hw encoder |
+| **AVIF** | ❌ | ❌ | ❌ | ✗ (needs `flutter_avif`) | ✗ |
+
+- **AVIF is out.** No major vision API accepts it, Flutter can't display it without pulling in
+  `flutter_avif`/libavif, and no mainstream Flutter encoder produces it. It would mean transcoding
+  to JPEG for every LLM call — a second lossy pass, which is exactly what Anthropic warns costs
+  accuracy. Best compression of the four, and unusable for us.
+- **HEIC is out** for the same shape of reason: Claude and OpenAI both reject it, Flutter can't
+  render it, and even the encoder is conditional on device hardware.
+- **WebP is genuinely viable** — every provider above takes `image/webp`, Flutter renders it
+  natively — and buys ~25–30% at equal quality (~140 KB instead of ~200 KB, stretching the default
+  budget from ~8 to ~11 months). Two things keep it out of v1: iOS encoding goes through
+  SDWebImageWebPCoder, which the package's own docs call noticeably slower than JPEG, and that
+  lands squarely on the shutter path; and the model picker lets users select *any* vision model on
+  OpenRouter, including open-weight ones served by third parties whose image handling is
+  undocumented. JPEG is the one format nothing refuses.
+
+**Decision: JPEG for v1, held in a single constant.** `ImageStore` names its format and quality in
+one place so a switch is a one-line change, and the stored path's extension drives the mime type
+sent to OpenRouter — so a mixed-format store (some JPEG, some WebP) is already valid, which is what
+makes a later migration a no-op for existing photos. Revisit after Phase 4 with numbers, not
+guesses: measure iOS WebP encode time on the shutter path, measure the real byte saving on actual
+food photos, and confirm `image/webp` against the two or three models people actually pick. Note
+that the tradeoff is entirely about disk — per §6 above, WebP saves zero tokens.
+
+If WebP does land, follow the package's own advice and catch `UnsupportedError` with a JPEG
+fallback rather than assuming device support.
+
+**Disk budget.** `ImageStore` enforces a total byte budget over its directory, default **250 MB**
+(≈8 months of typical use), configurable in Settings (100 MB / 250 MB / 1 GB / unlimited). The
+running total is tracked in a `SharedPreferences` counter updated on every write and delete, with
+a full `Directory.list()` recount on app start (cheap for a few thousand files, and it self-heals
+drift from crashes).
+
+**Eviction — oldest first, and never something still in flight:**
+
+1. Sweep runs after each capture and once on app start, only when total > budget.
+2. Walk meals oldest `consumed-at` first, delete the **full image** of each, stop as soon as the
+   total is back under the budget minus a 10% hysteresis margin (so a sweep frees real headroom
+   instead of re-triggering on the next shot).
+3. **Skip any meal whose status is `pending`, `estimating`, or `needs-info`** — the estimation
+   queue still needs that file. A backlog large enough to fill the budget on its own is a bug,
+   not a storage problem; log it rather than deleting the queue's input.
+4. **Thumbnails are never evicted.** At ~15 KB they're ~7% of the full image, so a decade of
+   history costs ~10 MB — keeping them means old days still *look* like meals after their photos
+   are gone.
+5. Orphan sweep in the same pass: image files not referenced by any meal (crash between file write
+   and resource write) are deleted outright.
+
+Eviction is silent — no notification, no confirmation. It's a cache policy, not a deletion the
+user needs to weigh in on; the meal, its calories and its thumbnail all survive.
+
+**When a photo is gone**, the meal is untouched (the ontology needs no new property for this —
+`image-path` stays, the file just isn't there). The detail sheet shows the thumbnail with a
+"photo removed to free up space" note, and *re-estimate is disabled* for that meal. Every read
+path must tolerate a missing file; `ImageStore.load()` returns null rather than throwing.
+
+```dart
+// services/image_store.dart
+Future<StoredImage> save(Uint8List cameraBytes);  // compress → write image + thumb, return paths
+Future<File?> load(String relativePath);          // null if evicted
+Future<int> totalBytes();
+Future<int> sweep({required int budgetBytes});    // returns bytes freed
+```
+
+## 7. UX / screens
 
 - **CaptureScreen (home)**: full-screen camera preview, big shutter button. Overlaid: today's
   running kcal total (top), buttons for keyboard entry, history, settings (bottom). Shutter →
@@ -225,29 +378,30 @@ Text entries use the same schema with the typed description instead of an image.
 - **HistoryScreen**: calendar/list of past days with daily totals; taps into a day view.
 - **SettingsScreen**: OpenRouter connect/disconnect + model picker; agent info + secret export
   (QR, reusing the canvas widgets); sync (server URL / peer pairing — reuse canvas UI later);
+  photo storage (§6: current usage vs. budget, budget picker, "delete all photos now");
   Health integration toggle.
 - **Onboarding** (first launch only): one screen — "Create new agent" (default, zero-input) or
   "Import existing" (QR scan / paste secret). Then straight to CaptureScreen; OpenRouter connect
   is prompted contextually on first capture, not in onboarding, to keep the entry barrier low.
 
-## 7. Phased build plan
+## 8. Phased build plan
 
 Each phase ends green: `flutter analyze`, `flutter test`, and `cargo test` in `rust/` pass, and
 the acceptance criteria are demonstrated (integration test or manual run via `make`).
 
-### Phase 0 — Scaffold (the starting point; see §8)
+### Phase 0 — Scaffold (the starting point; see §9) ✅ done
 
 Copy the Atomic Canvas skeleton into `calorie-tracker/`, rename crate/app ids, strip canvas code.
 **Accept:** app builds & runs on iOS sim + Android, shows a placeholder home screen, Rust FRB
 call round-trips (`setup()` creates an agent), `cargo test` + `flutter analyze` pass.
 
-### Phase 1 — Atomic foundation
+### Phase 1 — Atomic foundation ✅ done
 
 Onboarding flow (new/import agent), `AtomicSession` persistence, drive + `meals` container
 created on first run. **Accept:** fresh install → onboard → kill → relaunch restores agent;
 integration test covers create-and-restore.
 
-### Phase 2 — Meal model + manual entry (no camera, no LLM yet)
+### Phase 2 — Meal model + manual entry (no camera, no LLM yet) ✅ done
 
 Ontology first, in `atomic_lib` (see §4): `lib/defaults/calorie-tracker.json`, its import in
 `populate_default_store` (`lib/src/populate.rs`), constants in `lib/src/urls.rs`, plus a seeding
@@ -259,9 +413,13 @@ seeds; add/edit/delete meals; totals correct across day boundaries (test the tim
 
 ### Phase 3 — Camera capture
 
-`camera` package, CaptureScreen as home, `ImageStore` (save JPEG + thumbnail), capture creates a
-`pending` meal instantly. **Accept:** cold start → live preview < 1s (measured); snap → meal
-appears in Today as pending; app killable right after shutter without data loss.
+`camera` package, CaptureScreen as home, `ImageStore` (compress → JPEG + thumbnail, budget
+tracking, eviction sweep — all of §6), capture creates a `pending` meal instantly.
+**Accept:** cold start → live preview < 1s (measured); snap → meal appears in Today as pending;
+app killable right after shutter without data loss; a stored image is ≤1024px and under ~250 KB
+with no EXIF; unit tests for the sweep with a fake filesystem — evicts oldest first, respects
+hysteresis, never touches a `pending`/`needs-info` meal's file, removes orphans, and a meal whose
+file was evicted still renders (thumbnail + note, re-estimate disabled).
 
 ### Phase 4 — OpenRouter + estimation pipeline
 
@@ -289,7 +447,7 @@ shows correct daily totals.
   launch plus a background task *when granted*). Timebox the investigation; next-launch
   processing is the guaranteed fallback and already works from Phase 4.
 
-## 8. Starting point — first concrete steps for the agent
+## 9. Starting point — first concrete steps for the agent
 
 Work in `calorie-tracker/`. Flutter SDK is managed via mise (see `flutter/.mise.toml` — copy it).
 
@@ -312,11 +470,16 @@ both `lib.rs` and `bin.rs` — not relevant here unless you touch `server/`, but
 lesson applies: after Rust changes, build the actual leaf targets, not just `cargo check` at the
 workspace root.
 
-## 9. Open questions (tracked, not blocking)
+## 10. Open questions (tracked, not blocking)
 
-- Background estimation on iOS (§7 Phase 6) — guaranteed fallback exists.
+- Background estimation on iOS (§8 Phase 6) — guaranteed fallback exists.
+- WebP instead of JPEG for stored photos (§6.1) — ~25–30% disk saving, zero token saving, blocked
+  on measuring iOS encode time and on how exotic the model picker's models get. Revisit after
+  Phase 4; the format constant makes it a one-line change and old JPEGs stay readable.
 - Image sync: photos are device-local in v1. Later options: atomic-server file uploads, or
-  iroh-blobs alongside the existing peer sync.
+  iroh-blobs alongside the existing peer sync. Note this interacts with §6 eviction — once a photo
+  has been uploaded somewhere durable, evicting the local copy becomes free rather than lossy, and
+  the budget could drop a lot. Don't design the sync around that, but don't make it impossible.
 - Ontology publishing: the classes/properties are seeded into every store via
   `lib/defaults/calorie-tracker.json`; publishing them on the public atomicdata.dev site (so the
   `https://atomicdata.dev/...` subjects actually resolve) can come when the model stabilizes.

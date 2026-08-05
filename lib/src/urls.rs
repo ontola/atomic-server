@@ -30,6 +30,7 @@ pub const TAG: &str = "https://atomicdata.dev/classes/Tag";
 pub const PEER: &str = "https://atomicdata.dev/classes/Peer";
 pub const PLAIN_TEXT: &str = "https://atomicdata.dev/classes/PlainText";
 pub const FORK: &str = "https://atomicdata.dev/classes/Fork";
+pub const MEAL: &str = "https://atomicdata.dev/classes/Meal";
 
 // Properties
 pub const ORIGINAL_SUBJECT: &str = "https://atomicdata.dev/properties/originalSubject";
@@ -197,6 +198,18 @@ pub const COMMENTS_FOLDER: &str = "https://atomicdata.dev/properties/commentsFol
 pub const MEETINGS_FOLDER: &str = "https://atomicdata.dev/properties/meetingsFolder";
 pub const FOLLOW_SESSIONS_CHATROOM: &str =
     "https://atomicdata.dev/properties/followSessionsChatroom";
+// ... for Meals (lib/defaults/calorie-tracker.json)
+pub const CONSUMED_AT: &str = "https://atomicdata.dev/properties/consumedAt";
+pub const CALORIES: &str = "https://atomicdata.dev/properties/calories";
+pub const CALORIES_MIN: &str = "https://atomicdata.dev/properties/caloriesMin";
+pub const CALORIES_MAX: &str = "https://atomicdata.dev/properties/caloriesMax";
+pub const IMAGE_PATH: &str = "https://atomicdata.dev/properties/imagePath";
+pub const MEAL_STATUS: &str = "https://atomicdata.dev/properties/mealStatus";
+pub const ESTIMATE_CONFIDENCE: &str = "https://atomicdata.dev/properties/estimateConfidence";
+pub const ESTIMATED_BY_MODEL: &str = "https://atomicdata.dev/properties/estimatedByModel";
+pub const PROTEIN_GRAMS: &str = "https://atomicdata.dev/properties/proteinGrams";
+pub const CARBS_GRAMS: &str = "https://atomicdata.dev/properties/carbsGrams";
+pub const FAT_GRAMS: &str = "https://atomicdata.dev/properties/fatGrams";
 // ... for DocumentV2
 pub const DOCUMENT_CONTENT: &str = "https://atomicdata.dev/properties/documentContent";
 // ... for Importers

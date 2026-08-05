@@ -71,7 +71,10 @@ pub async fn open_ws_sync(server_origin: &str) -> Result<(), String> {
         // under the drive fans out as `UPDATE` / `DESTROY` on this
         // subscription. See `planning/drop-query-update.md`.
         client.subscribe_drive(&drive).await.map_err(err)?;
-        tracing::info!("[ws_sync] subscribed to drive {}", &drive[..drive.len().min(24)]);
+        tracing::info!(
+            "[ws_sync] subscribed to drive {}",
+            &drive[..drive.len().min(24)]
+        );
     }
 
     let client_loop = client.clone();
@@ -132,16 +135,24 @@ async fn ensure_drive_materialized(store: &atomic_lib::Db, drive: &str) -> Resul
 
 async fn handle_ws_message(store: &atomic_lib::Db, msg: WsMessage) -> Result<(), String> {
     match msg {
-        WsMessage::Update { subject, loro_bytes, .. } => {
+        WsMessage::Update {
+            subject,
+            loro_bytes,
+            ..
+        } => {
             ws_apply::apply_state_update(store, &subject, &loro_bytes)
                 .await
                 .map_err(err)?;
         }
         WsMessage::Destroy { subject } => {
-            ws_apply::apply_destroy(store, &subject).await.map_err(err)?;
+            ws_apply::apply_destroy(store, &subject)
+                .await
+                .map_err(err)?;
         }
         WsMessage::Commit(json) => {
-            ws_apply::apply_commit_json(store, &json).await.map_err(err)?;
+            ws_apply::apply_commit_json(store, &json)
+                .await
+                .map_err(err)?;
         }
         WsMessage::Error(e) => tracing::warn!("[ws_sync] server error: {e}"),
         _ => {}
@@ -164,7 +175,11 @@ async fn fetch_resource_state(_store: &atomic_lib::Db, subject: &str) -> Result<
     match tokio::time::timeout(std::time::Duration::from_secs(15), async {
         while let Ok(msg) = rx.recv().await {
             match msg {
-                WsMessage::Update { subject: s, loro_bytes, .. } if s == subject => {
+                WsMessage::Update {
+                    subject: s,
+                    loro_bytes,
+                    ..
+                } if s == subject => {
                     return Ok(loro_bytes);
                 }
                 WsMessage::Error(e) => return Err(e),

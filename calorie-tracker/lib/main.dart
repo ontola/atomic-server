@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'screens/home_screen.dart';
 import 'screens/onboarding/needs_sync_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
+import 'screens/today_screen.dart';
 import 'services/app_session.dart';
 import 'theme.dart';
 
@@ -77,7 +77,7 @@ class SessionGate extends StatelessWidget {
           case SessionPhase.needsSync:
             return NeedsSyncScreen(session: session);
           case SessionPhase.ready:
-            return HomeScreen(session: session);
+            return TodayScreen(session: session);
           case SessionPhase.failed:
             return _StoreFailed(session: session);
         }

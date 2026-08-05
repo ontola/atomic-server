@@ -3,15 +3,14 @@ import 'package:flutter/services.dart';
 
 import '../services/app_session.dart';
 
-/// Stand-in for CaptureScreen (Phase 3).
+/// Who you are signed in as, and the secret that is the only way back in.
 ///
-/// Phase 1 has no meals to show yet, so what it shows instead is the thing it
-/// built: an account that survives a relaunch, and the container the meals will
-/// go in. The secret is here too, because until Settings exists (Phase 5) this
-/// is the only place to copy it from — and an account whose secret was never
-/// written down anywhere is one bad reinstall from gone.
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, required this.session});
+/// This was the placeholder home screen in Phase 1. Now that there is a day to
+/// show, it moved behind an icon — but it does not go away until Settings
+/// exists (Phase 5), because an account whose secret was never written down
+/// anywhere is one bad reinstall from gone.
+class AccountScreen extends StatelessWidget {
+  const AccountScreen({super.key, required this.session});
 
   final AppSession session;
 
@@ -40,6 +39,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   Future<void> _confirmSignOut(BuildContext context) async {
+    final navigator = Navigator.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -65,38 +65,27 @@ class HomeScreen extends StatelessWidget {
       ),
     );
 
-    if (confirmed == true) await session.signOut();
+    if (confirmed != true) return;
+    await session.signOut();
+    // Onboarding is what the session gate renders now, and it is not something
+    // this screen should be sitting on top of.
+    navigator.popUntil((route) => route.isFirst);
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
+      appBar: AppBar(title: const Text('Account')),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.photo_camera_outlined,
-                      size: 64, color: theme.colorScheme.primary),
-                  const SizedBox(height: 16),
-                  Text('Calorie Tracker',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineSmall),
-                  const SizedBox(height: 8),
-                  Text(
-                    'You are set up. Camera capture lands in Phase 3.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: theme.colorScheme.outline),
-                  ),
-                  const SizedBox(height: 28),
                   Card(
                     child: Column(
                       children: [

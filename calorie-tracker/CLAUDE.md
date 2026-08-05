@@ -7,11 +7,11 @@ Plan: [`../planning/calorie-tracker-plan.md`](../planning/calorie-tracker-plan.m
 (architecture, data model, phases). Product brief:
 [`../planning/calorie-tracker-app.md`](../planning/calorie-tracker-app.md).
 
-**Status: Phase 1 (atomic foundation) complete**, integration test green on an
-iOS simulator. The app onboards — one tap to a new account, or a pasted secret
-to restore one — persists the session, and creates the container every meal will
-hang under. There is no meal model, no camera and no LLM yet: those are
-Phases 2-4.
+**Status: Phase 2 (meal model + manual entry) complete.** The app onboards —
+one tap to a new account, or a pasted secret to restore one — persists the
+session, and lands on a day you can log meals to by hand and add up. There is
+no camera and no LLM yet: those are Phases 3 and 4, and the whole data layer is
+already testable without either.
 
 ## When writing code
 
@@ -21,29 +21,58 @@ Do not commit changes after you finish a task. The human will do it themselves.
 
 ```
 lib/
-  main.dart          app + SessionGate: renders whatever phase the session is in
+  main.dart            app + SessionGate: renders whatever phase the session is in
   theme.dart
-  atomic/            the Atomic Dart SDK — see "Shared SDK" below
+  atomic/              the Atomic Dart SDK — see "Shared SDK" below
+  models/meal.dart     Meal, MealStatus, localDayBounds, DaySummary
   services/
-    app_session.dart who is signed in and where their meals go; owns the boot
+    app_session.dart   who is signed in and where their meals go; owns the boot
+    meal_store.dart    one day's meals, and the writes to them
   screens/
-    home_screen.dart placeholder; becomes CaptureScreen in Phase 3
-    onboarding/      first launch, and the "my data is on the other phone" case
-    pair_screen.dart QR pairing, from the canvas app
-  widgets/           error_snack.dart
-  src/rust/          flutter_rust_bridge output — generated, never hand-edit
-rust/                the FRB crate, rust_lib_calorie_tracker
-  src/api/simple.rs  the generic bridge — copied from the canvas app
-  src/api/meals.rs   what this app owns; meal CRUD joins it in Phase 2
-rust_builder/        cargokit build integration (vendored, locally patched)
+    today_screen.dart  home: the day's total and its meals
+    meal_entry_sheet.dart  type a meal, or correct one
+    account_screen.dart    the agent, and the secret; behind the person icon
+    onboarding/        first launch, and the "my data is on the other phone" case
+    pair_screen.dart   QR pairing, from the canvas app
+  widgets/             error_snack.dart
+  src/rust/            flutter_rust_bridge output — generated, never hand-edit
+rust/                  the FRB crate, rust_lib_calorie_tracker
+  src/api/simple.rs    the generic bridge — copied from the canvas app
+  src/api/meals.rs     what this app owns: the container, meal CRUD, day queries
+rust_builder/          cargokit build integration (vendored, locally patched)
 ```
 
-Everything goes through `AppSession`. No screen calls `setup()`, opens the
-store, or touches `AtomicSession` itself — the boot happens once, in one place,
-and screens render `session.phase`. Its `AtomicBackend` seam is what makes the
-flow testable without a Rust library: `test/fake_atomic_backend.dart` models the
+Everything goes through `AppSession` and `MealStore`. No screen calls `setup()`,
+opens the store, or touches `AtomicSession` or the bridge itself — the boot
+happens once, in one place, and screens render `session.phase`. Both have a
+backend seam (`AtomicBackend`, `MealBackend`) and that is what makes the flows
+testable without a Rust library: `test/fake_atomic_backend.dart` models the
 store and the process separately, which is exactly the difference a relaunch
-tests.
+tests, and `test/fake_meal_backend.dart` models the meals table.
+
+## The meal vocabulary lives in `atomic_lib`, not here
+
+`Meal`, `consumed-at`, `calories`, `meal-status` and the rest are defined in
+`../lib/defaults/calorie-tracker.json`, imported by `populate_default_store`
+(`../lib/src/populate.rs`) and named by consts in `../lib/src/urls.rs`. So they
+are seeded into *every* atomic store, including this app's local redb one, and
+`rust/src/api/meals.rs` writes `atomic_lib::urls::CALORIES` rather than a
+string this app made up. `populate::tests::the_meal_ontology_seeds` resolves the
+class and every property, which is what turns a JSON-AD typo into a test failure
+instead of a failed write on a phone.
+
+Two things about that model are worth knowing before extending it:
+
+- **`meal-status` and `estimate-confidence` are Tags, not strings.** `allowsOnly`
+  only accepts subjects — a plain `"pending"` in that list fails the import — so
+  each state is a Tag resource under its property
+  (`…/properties/mealStatus/pending`). The bridge speaks the shortnames and
+  converts at the boundary; nothing above `meals.rs` sees a tag URL.
+- **A meal requires only `consumed-at` and `meal-status`.** It is created the
+  instant it is captured, before anyone knows what it was, so the name and the
+  numbers cannot be required of it. `calories` is `Option` all the way up for
+  the same reason: "not estimated yet" is not "zero calories", and a day total
+  that conflates them is wrong in the direction that matters.
 
 ## Shared SDK — keep it in step with the canvas app
 
@@ -75,8 +104,10 @@ What diverged deliberately:
 - Web is dropped. Target platforms are iOS and Android only, so
   `atomic_client_web.dart` was not copied.
 - `state.rs` is `pub(crate)` and `simple.rs` declares `pub(crate) mod state`, so
-  `api::meals` can reach the same store handle. App-specific bridge code goes in
-  `meals.rs`, never in `simple.rs` — that is what keeps the merge a copy.
+  `api::meals` can reach the same store handle. `save_and_push` is `pub(crate)`
+  for the same reason — meals save through it rather than growing a second,
+  subtly different save path. App-specific bridge code goes in `meals.rs`, never
+  in `simple.rs` — that is what keeps the merge a copy.
 
 ## Commands
 
@@ -88,7 +119,7 @@ What diverged deliberately:
 | `make check` | analyze + Dart tests + Rust tests |
 | `make ios` / `make android` | run the app, hot reload via `make reload-ios` from any terminal |
 | `make apk` | debug APK, one ABI (see below) |
-| `make integration-ios` / `make integration-android` | on-device test: onboard, relaunch, same account and meals container |
+| `make integration-ios` / `make integration-android` | on-device test: onboard, log a meal, relaunch, same account and same meal |
 | `make gen` | regenerate FRB bindings — **required after any signature change** in `rust/src/api/` |
 | `make clean-build` | wipe the build tree when the disk fills up |
 
@@ -127,13 +158,26 @@ These all cost an afternoon once. They are fixed in-tree; this is why.
 - **`calorie-tracker/rust` is excluded from the root Cargo workspace** (see the
   root `Cargo.toml`), like `flutter/rust`. Build it with
   `cargo test --manifest-path rust/Cargo.toml`, not from the workspace root.
+- **A test file that touches `AppSession` needs the storage mocks**
+  (`SharedPreferences.setMockInitialValues({})` and
+  `FlutterSecureStorage.setMockInitialValues({})` in `setUp`). `AtomicSession`
+  writes through both, and without the mocks those platform channels never
+  answer: the file does not fail, it *hangs* — `flutter test` sits there with no
+  output until you kill it, which reads as a broken toolchain rather than a
+  missing line.
+- **Changing the ontology means running `atomic_lib`'s tests too.**
+  `lib/defaults/calorie-tracker.json` is seeded into every store in the repo, so
+  `cargo test -p atomic_lib --features db-redb --lib --tests` from the repo root
+  is part of the check — `make check` here does not cover it. (Skip
+  `--lib --tests` and the run dies compiling `examples/list_sled_trees.rs`,
+  which wants the `db-sled` feature; CI uses nextest, which ignores examples.)
 
-## Next: Phase 2
+## Next: Phase 3
 
-The meal model. Ontology first, and it lives in `atomic_lib`, not here:
-`lib/defaults/calorie-tracker.json`, its import in `populate_default_store`, the
-subject consts in `lib/src/urls.rs`, plus a seeding test
-(`calorie-tracker-plan.md` §4). Then meal CRUD and the day queries in
-`rust/src/api/meals.rs` beside `ensure_meals_container`, a `MealStore`, manual
-kcal entry and a Today screen with real totals — no camera and no LLM yet, so
-every later phase is testable without hardware.
+The camera. The `camera` package, an `ImageStore` (JPEG + thumbnail into the
+documents dir), and CaptureScreen as home with `TodayScreen` moving behind it.
+The shutter writes a file and calls `create_meal` with no calories — which is
+already the `pending` state Phase 4's estimator drains — so the app is killable
+the instant the picture is taken. Cold start to live preview under a second is
+the acceptance criterion, and it is why `main()` does not await the session
+(`calorie-tracker-plan.md` §7).
