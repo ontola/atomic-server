@@ -7,11 +7,12 @@ Plan: [`../planning/calorie-tracker-plan.md`](../planning/calorie-tracker-plan.m
 (architecture, data model, phases). Product brief:
 [`../planning/calorie-tracker-app.md`](../planning/calorie-tracker-app.md).
 
-**Status: Phase 2 (meal model + manual entry) complete.** The app onboards —
-one tap to a new account, or a pasted secret to restore one — persists the
-session, and lands on a day you can log meals to by hand and add up. There is
-no camera and no LLM yet: those are Phases 3 and 4, and the whole data layer is
-already testable without either.
+**Status: Phase 3 (camera capture) complete.** The app onboards — one tap to a
+new account, or a pasted secret to restore one — persists the session, and lands
+on a viewfinder. The shutter writes a compressed photo and a `pending` meal and
+is done; the day's total is on top of the preview and the list is one tap
+behind it. Meals can still be typed in by hand. No LLM yet — that is Phase 4,
+and `pending` is already the queue it drains.
 
 ## When writing code
 
@@ -22,19 +23,23 @@ Do not commit changes after you finish a task. The human will do it themselves.
 ```
 lib/
   main.dart            app + SessionGate: renders whatever phase the session is in
+  startup.dart         the cold-start-to-live-preview stopwatch
   theme.dart
   atomic/              the Atomic Dart SDK — see "Shared SDK" below
   models/meal.dart     Meal, MealStatus, localDayBounds, DaySummary
   services/
     app_session.dart   who is signed in and where their meals go; owns the boot
     meal_store.dart    one day's meals, and the writes to them
+    camera_feed.dart   the camera, behind a seam; DeviceCamera is the real one
+    image_store.dart   compress, store, count, evict — all of the plan's §6
   screens/
-    today_screen.dart  home: the day's total and its meals
+    capture_screen.dart    home: the viewfinder, the shutter, the day's total
+    today_screen.dart      the day's total and its meals, one tap behind home
     meal_entry_sheet.dart  type a meal, or correct one
-    account_screen.dart    the agent, and the secret; behind the person icon
+    account_screen.dart    the agent, the secret, the photo budget
     onboarding/        first launch, and the "my data is on the other phone" case
     pair_screen.dart   QR pairing, from the canvas app
-  widgets/             error_snack.dart
+  widgets/             error_snack.dart, meal_photo.dart
   src/rust/            flutter_rust_bridge output — generated, never hand-edit
 rust/                  the FRB crate, rust_lib_calorie_tracker
   src/api/simple.rs    the generic bridge — copied from the canvas app
@@ -44,11 +49,41 @@ rust_builder/          cargokit build integration (vendored, locally patched)
 
 Everything goes through `AppSession` and `MealStore`. No screen calls `setup()`,
 opens the store, or touches `AtomicSession` or the bridge itself — the boot
-happens once, in one place, and screens render `session.phase`. Both have a
-backend seam (`AtomicBackend`, `MealBackend`) and that is what makes the flows
-testable without a Rust library: `test/fake_atomic_backend.dart` models the
-store and the process separately, which is exactly the difference a relaunch
-tests, and `test/fake_meal_backend.dart` models the meals table.
+happens once, in one place, and screens render `session.phase`. Every service
+with a platform behind it has a seam — `AtomicBackend`, `MealBackend`,
+`CameraFeed`, `ImageCompressor` — and that is what makes the flows testable
+without a Rust library, a camera or a codec: `test/fake_atomic_backend.dart`
+models the store and the process separately, which is exactly the difference a
+relaunch tests, `test/fake_meal_backend.dart` models the meals table, and
+`test/fake_camera.dart` models the three states a viewfinder is ever in.
+
+## Capture, and why nothing on that path waits
+
+The shutter compresses the frame, writes two files, and creates a meal with no
+name and no number. That is the whole path, and it is finished by the time the
+"Logged" chip appears — kill the app there and nothing is lost. What the meal is
+worth is Phase 4's problem, and `pending` is exactly the queue it will drain.
+
+Three things follow from that and are easy to undo by accident:
+
+- **`calories` is `Option` all the way up.** A capture has no number, and
+  "unknown" counted as zero is a day total that is wrong in the direction that
+  matters. `DaySummary` keeps the unestimated count separate for the same reason.
+- **The sweep runs *after* the meal is written**, never before. It decides what
+  to evict from the list of meals, so a photo whose meal does not exist yet is an
+  orphan it would delete on its way past.
+- **Photos are a cache; meals are the data.** Every read of a photo can come back
+  empty, and `ImageStore.load` returns null rather than throwing. Eviction is
+  silent by design — the meal, its calories and its thumbnail all survive, so
+  there is nothing to interrupt anyone about.
+
+`ImageStore` holds all of the plan's §6: one JPEG at 1024px/q80 plus a 256px
+thumbnail, both encoded straight off the camera frame (one lossy pass each, not
+two stacked); a byte budget with a `SharedPreferences` counter and a full
+recount on every sweep; eviction oldest-first to 10% below the budget, skipping
+any meal the estimator still needs and never touching a thumbnail; and an orphan
+pass every time. The format and the two sizes are constants in one place, which
+is what would make the WebP question (plan §10) a one-line change.
 
 ## The meal vocabulary lives in `atomic_lib`, not here
 
@@ -158,6 +193,18 @@ These all cost an afternoon once. They are fixed in-tree; this is why.
 - **`calorie-tracker/rust` is excluded from the root Cargo workspace** (see the
   root `Cargo.toml`), like `flutter/rust`. Build it with
   `cargo test --manifest-path rust/Cargo.toml`, not from the workspace root.
+- **A widget test cannot await `dart:io`.** `testWidgets` runs its body in a
+  fake-async zone, and a file `Future` completes on the real event loop, which
+  that zone never pumps. So anything touching the photo directory — the shutter,
+  an `ImageStore` call in a test body — has to go inside `tester.runAsync`, or
+  the test hangs half-way through a capture with the shutter spinner still up,
+  which reads as an app bug rather than a harness one.
+  `test/capture_screen_test.dart` has the two helpers for it. Plain `test()`
+  files, like `image_store_test.dart`, are unaffected.
+- **`pumpAndSettle` never returns while a `CircularProgressIndicator` is on
+  screen**: it is a repeating animation, so there is always another frame
+  scheduled. "The camera has not come up yet" is exactly that state, so the
+  capture tests count their pumps instead of settling.
 - **A test file that touches `AppSession` needs the storage mocks**
   (`SharedPreferences.setMockInitialValues({})` and
   `FlutterSecureStorage.setMockInitialValues({})` in `setUp`). `AtomicSession`
@@ -172,12 +219,18 @@ These all cost an afternoon once. They are fixed in-tree; this is why.
   `--lib --tests` and the run dies compiling `examples/list_sled_trees.rs`,
   which wants the `db-sled` feature; CI uses nextest, which ignores examples.)
 
-## Next: Phase 3
+- **The iOS simulator has no camera**, and neither does a CI machine. That is a
+  supported state, not a broken one: `DeviceCamera` reports it, the capture
+  screen says so and offers the keyboard instead, and everything else works. Do
+  not "fix" it by making the screen an error page — the simulator is where this
+  app is developed.
 
-The camera. The `camera` package, an `ImageStore` (JPEG + thumbnail into the
-documents dir), and CaptureScreen as home with `TodayScreen` moving behind it.
-The shutter writes a file and calls `create_meal` with no calories — which is
-already the `pending` state Phase 4's estimator drains — so the app is killable
-the instant the picture is taken. Cold start to live preview under a second is
-the acceptance criterion, and it is why `main()` does not await the session
-(`calorie-tracker-plan.md` §7).
+## Next: Phase 4
+
+OpenRouter. OAuth PKCE and key storage, a model picker, `OpenRouterClient`, and
+the `EstimationQueue` that drains `list_pending_meals()` — which is what every
+capture has been writing into since Phase 3. Two Rust functions are still to
+come (`update_meal_estimate`, `list_pending_meals`, plan §4), so it starts with
+`make gen`. `ImageStore.stateOf` is what decides whether a meal can be
+re-estimated at all: without the full image there is nothing to send, and the
+256px thumbnail is not a substitute.

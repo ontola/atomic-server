@@ -2,22 +2,33 @@ import 'package:flutter/material.dart';
 
 import '../models/meal.dart';
 import '../services/app_session.dart';
+import '../services/image_store.dart';
 import '../services/meal_store.dart';
+import '../widgets/meal_photo.dart';
 import 'account_screen.dart';
 import 'meal_entry_sheet.dart';
 
 /// The day so far: what it adds up to, and what went into it.
 ///
-/// Home until the camera arrives in Phase 3, which takes the top of the screen
-/// and leaves this as what you get to from it. The total is the reason the app
-/// exists, so it is the biggest thing on the screen and it is above the list.
+/// Reached from the capture screen, which is home. The total is the reason the
+/// app exists, so it is the biggest thing here and it is above the list.
 class TodayScreen extends StatefulWidget {
-  const TodayScreen({super.key, required this.session, this.store});
+  const TodayScreen({
+    super.key,
+    required this.session,
+    this.store,
+    this.images,
+  });
 
   final AppSession session;
 
-  /// Injected by tests, which have no Rust library to talk to.
+  /// Injected by tests, which have no Rust library to talk to. Usually the
+  /// capture screen's, so the total behind the viewfinder and the list here are
+  /// never two different answers.
   final MealStore? store;
+
+  /// Where the photos are, or null when they are not to be shown.
+  final ImageStore? images;
 
   @override
   State<TodayScreen> createState() => _TodayScreenState();
@@ -29,7 +40,12 @@ class _TodayScreenState extends State<TodayScreen> {
   @override
   void initState() {
     super.initState();
-    _store.load();
+    // After the frame, not during it. This screen usually shares the capture
+    // screen's store, and `load` notifies as it starts — which, called from
+    // here, marks a widget that is already building as needing to build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _store.load();
+    });
   }
 
   @override
@@ -40,7 +56,7 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   Future<void> _logMeal() async {
-    final entry = await MealEntrySheet.show(context);
+    final entry = await MealEntrySheet.show(context, images: widget.images);
     if (entry is SaveMeal) {
       await _store.logMeal(name: entry.name, calories: entry.calories);
       _reportFailure();
@@ -48,7 +64,8 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   Future<void> _editMeal(Meal meal) async {
-    final entry = await MealEntrySheet.show(context, meal: meal);
+    final entry =
+        await MealEntrySheet.show(context, meal: meal, images: widget.images);
     switch (entry) {
       case SaveMeal(:final name, :final calories):
         await _store.editMeal(meal.subject, name: name, calories: calories);
@@ -70,7 +87,8 @@ class _TodayScreenState extends State<TodayScreen> {
 
   void _openAccount() {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => AccountScreen(session: widget.session),
+      builder: (_) =>
+          AccountScreen(session: widget.session, images: widget.images),
     ));
   }
 
@@ -115,7 +133,11 @@ class _TodayScreenState extends State<TodayScreen> {
                   const _EmptyDay()
                 else
                   for (final meal in meals)
-                    _MealRow(meal: meal, onTap: () => _editMeal(meal)),
+                    _MealRow(
+                      meal: meal,
+                      images: widget.images,
+                      onTap: () => _editMeal(meal),
+                    ),
               ],
             ),
           ),
@@ -176,9 +198,14 @@ class _Total extends StatelessWidget {
 }
 
 class _MealRow extends StatelessWidget {
-  const _MealRow({required this.meal, required this.onTap});
+  const _MealRow({
+    required this.meal,
+    required this.images,
+    required this.onTap,
+  });
 
   final Meal meal;
+  final ImageStore? images;
   final VoidCallback onTap;
 
   @override
@@ -190,6 +217,7 @@ class _MealRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         onTap: onTap,
+        leading: MealThumbnail(images: images, imagePath: meal.imagePath),
         title: Text(meal.displayName, maxLines: 2, overflow: TextOverflow.ellipsis),
         subtitle: Row(
           children: [

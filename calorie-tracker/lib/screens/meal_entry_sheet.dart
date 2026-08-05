@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/meal.dart';
+import '../services/image_store.dart';
+import '../widgets/meal_photo.dart';
 
 /// What a meal sheet was closed with. Null means it was dismissed.
 sealed class MealEntry {
@@ -29,17 +31,24 @@ class DeleteMeal extends MealEntry {
 /// arithmetic — and the fields here stay what you fall back to when it is
 /// wrong.
 class MealEntrySheet extends StatefulWidget {
-  const MealEntrySheet({super.key, this.meal});
+  const MealEntrySheet({super.key, this.meal, this.images});
 
   /// The meal being corrected, or null when logging a new one.
   final Meal? meal;
 
+  /// Where the photo is, when the meal has one and it is still on disk.
+  final ImageStore? images;
+
   /// Show as a modal sheet. Resolves to null if dismissed.
-  static Future<MealEntry?> show(BuildContext context, {Meal? meal}) {
+  static Future<MealEntry?> show(
+    BuildContext context, {
+    Meal? meal,
+    ImageStore? images,
+  }) {
     return showModalBottomSheet<MealEntry>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => MealEntrySheet(meal: meal),
+      builder: (context) => MealEntrySheet(meal: meal, images: images),
     );
   }
 
@@ -90,7 +99,10 @@ class _MealEntrySheetState extends State<MealEntrySheet> {
       ),
       child: Form(
         key: _formKey,
-        child: Column(
+        // Scrollable because the photo can make this taller than what is left
+        // of the screen above the keyboard.
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -99,6 +111,12 @@ class _MealEntrySheetState extends State<MealEntrySheet> {
               style: theme.textTheme.titleLarge,
             ),
             const SizedBox(height: 20),
+            // Above the fields: it is what the meal is, and on a photographed
+            // meal it is the only thing there is to go on when filling them in.
+            MealPhoto(
+              images: widget.images,
+              imagePath: widget.meal?.imagePath ?? '',
+            ),
             TextFormField(
               controller: _name,
               autofocus: !_isEdit,
@@ -150,6 +168,7 @@ class _MealEntrySheetState extends State<MealEntrySheet> {
               ),
             ],
           ],
+          ),
         ),
       ),
     );

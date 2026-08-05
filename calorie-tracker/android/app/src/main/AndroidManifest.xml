@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The home screen is a viewfinder. `required="false"` so the app still
+         installs on a device without one — it degrades to typing meals in,
+         which is the same path the iOS simulator takes. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+
     <application
         android:label="calorie_tracker"
         android:name="${applicationName}"

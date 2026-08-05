@@ -14,6 +14,7 @@ abstract class MealBackend {
     required DateTime consumedAt,
     String name,
     String description,
+    String imagePath,
     int? calories,
   });
 
@@ -39,12 +40,14 @@ class FfiMealBackend implements MealBackend {
     required DateTime consumedAt,
     String name = '',
     String description = '',
+    String imagePath = '',
     int? calories,
   }) =>
       AtomicClient.createMeal(
         consumedAtMs: consumedAt.millisecondsSinceEpoch,
         name: name,
         description: description,
+        imagePath: imagePath,
         calories: calories,
       );
 
@@ -125,6 +128,18 @@ class MealStore extends ChangeNotifier {
     }
   }
 
+  /// Every meal there is, not just the day on screen, and not held on to.
+  ///
+  /// The photo sweep is the only caller and the only thing that should be: what
+  /// to evict is a decision about the whole history, and a store that kept all
+  /// of it in memory would have to decide when to let go again.
+  Future<List<Meal>> allMeals() => _backend.list(_minMs, _maxMs);
+
+  /// The full range `DateTime` can express, so "all of them" needs no special
+  /// case in the bridge — it is the same half-open query as a day.
+  static const _minMs = -8640000000000000;
+  static const _maxMs = 8640000000000000;
+
   Future<void> showDay(DateTime day) {
     _day = day;
     _meals = const [];
@@ -137,16 +152,22 @@ class MealStore extends ChangeNotifier {
   ///
   /// A meal eaten on another day is written all the same and simply isn't in
   /// this day's list; silently refusing it would lose what the user typed.
+  ///
+  /// Everything is optional because a photographed meal has none of it yet: no
+  /// name, no number, just an [imagePath] and the instant the shutter went. The
+  /// bridge reads that as `pending`, which is the queue Phase 4 drains.
   Future<void> logMeal({
-    required String name,
+    String name = '',
     int? calories,
     String description = '',
+    String imagePath = '',
     DateTime? consumedAt,
   }) async {
     await _guard(() => _backend.create(
           consumedAt: consumedAt ?? DateTime.now(),
           name: name,
           description: description,
+          imagePath: imagePath,
           calories: calories,
         ));
   }

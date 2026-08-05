@@ -12,6 +12,12 @@
 .swiftpm/
 migrate_working_dir/
 
+# Xcode writes these when a pod pulls a Swift Package — flutter_image_compress
+# brings in SDWebImage's libwebp on iOS. This project integrates through
+# CocoaPods (Podfile, podspec, `pod install`), so an SPM lockfile nothing here
+# reads is just build output that turns up in `git status` after every build.
+ios/**/xcshareddata/swiftpm/
+
 # IntelliJ related
 *.iml
 *.ipr

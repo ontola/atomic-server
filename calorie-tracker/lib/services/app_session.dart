@@ -130,6 +130,7 @@ class AppSession extends ChangeNotifier {
 
   SessionPhase _phase = SessionPhase.starting;
   bool _busy = false;
+  bool? _resumesAccount;
   AgentInfo? _agent;
   String? _drive;
   String? _mealsContainer;
@@ -141,6 +142,16 @@ class AppSession extends ChangeNotifier {
   /// must not throw the onboarding screen away and put a splash in its place —
   /// the button it was tapped on is where the spinner and any error belong.
   bool get busy => _busy;
+
+  /// Whether this launch is resuming a saved account rather than onboarding.
+  /// Null until the stored secret has been read — which is within a few
+  /// milliseconds of launch, well before the store is open.
+  ///
+  /// The camera keys off it (see `main.dart`). Warming it during onboarding
+  /// would put the OS permission dialog on top of the sign-up screen, and the
+  /// whole point of asking on first capture instead is that by then the user
+  /// knows what the camera is for.
+  bool? get resumesAccount => _resumesAccount;
 
   AgentInfo? get agent => _agent;
 
@@ -159,10 +170,18 @@ class AppSession extends ChangeNotifier {
   /// open, so there is no account to sign in to and nothing to retry from.
   Future<void> start() async {
     await _guard(() async {
-      await _backend.open();
+      // Read the stored account *before* opening the store, and say so: reading
+      // it is a preferences lookup, opening redb is the slow part of a cold
+      // start, and this is what lets the camera warm up alongside it rather
+      // than after it.
       final saved = await AtomicSession.load();
+      final resuming = saved != null && saved.secret.isNotEmpty;
+      _resumesAccount = resuming;
+      notifyListeners();
 
-      if (saved == null || saved.secret.isEmpty) {
+      await _backend.open();
+
+      if (!resuming) {
         _phase = SessionPhase.onboarding;
         return;
       }

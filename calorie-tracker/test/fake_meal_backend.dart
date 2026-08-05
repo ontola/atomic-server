@@ -20,6 +20,7 @@ class FakeMealBackend implements MealBackend {
     required DateTime consumedAt,
     String name = '',
     String description = '',
+    String imagePath = '',
     int? calories,
   }) async {
     if (writeError != null) throw writeError!;
@@ -32,6 +33,7 @@ class FakeMealBackend implements MealBackend {
       consumedAt: consumedAt,
       status: calories == null ? MealStatus.pending : MealStatus.confirmed,
       calories: calories,
+      imagePath: imagePath,
     ));
     return subject;
   }
@@ -58,6 +60,7 @@ class FakeMealBackend implements MealBackend {
       calories: calories ?? old.calories,
       caloriesMin: old.caloriesMin,
       caloriesMax: old.caloriesMax,
+      imagePath: old.imagePath,
     );
   }
 

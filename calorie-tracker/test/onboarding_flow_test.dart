@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fake_atomic_backend.dart';
+import 'fake_camera.dart';
 
 /// The flow as a thumb meets it: one screen, one tap to an account, and a way
 /// back in for someone who already has one. `app_session_test.dart` covers what
@@ -16,20 +17,27 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late FakeStore store;
+  late FakeCamera camera;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     store = FakeStore();
+    camera = FakeCamera();
   });
 
-  Widget app(FakeAtomicBackend backend) =>
-      CalorieTrackerApp(session: AppSession(backend: backend));
+  /// The camera is injected, and `images` deliberately is not: with no photo
+  /// directory the capture screen still logs meals, which is the state these
+  /// tests want anyway — they are about the flow that gets you to it.
+  Widget app(FakeAtomicBackend backend) => CalorieTrackerApp(
+        session: AppSession(backend: backend),
+        camera: camera,
+      );
 
   testWidgets('the first frame is up before the store is', (tester) async {
-    // Startup speed is a feature (`calorie-tracker-plan.md` §6): opening redb
-    // must never be the reason nothing is on screen. Phase 3 puts a camera
-    // preview behind this and has the same rule.
+    // Startup speed is a feature (`calorie-tracker-plan.md` §7): opening redb
+    // must never be the reason nothing is on screen. The camera comes up
+    // alongside it rather than after it — see `resumesAccount`.
     final backend = FakeAtomicBackend(store)..holdOpen = Completer<void>();
 
     await tester.pumpWidget(app(backend));
@@ -51,8 +59,8 @@ void main() {
     await tester.tap(find.text('Start tracking'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Log a meal'), findsOneWidget,
-        reason: 'a fresh signup lands on the day, ready to log to it');
+    expect(find.text('kcal today'), findsOneWidget,
+        reason: 'a fresh signup lands on the viewfinder, ready to shoot');
     expect(store.mealsContainersCreated, 1);
   });
 
@@ -70,7 +78,7 @@ void main() {
     await tester.tap(find.text('Restore'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Today'), findsOneWidget);
+    expect(find.text('kcal today'), findsOneWidget);
   });
 
   testWidgets('a secret that is not one says so, on the screen it was typed on',
@@ -107,7 +115,7 @@ void main() {
 
     // The sync screen looks on arrival — nobody has to be told to tap "sync".
     expect(backend.syncCalls, 1);
-    expect(find.text('Today'), findsOneWidget);
+    expect(find.text('kcal today'), findsOneWidget);
   });
 
   testWidgets('the drive stays waiting when no other device answers',

@@ -2,17 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/app_session.dart';
+import '../services/image_store.dart';
 
-/// Who you are signed in as, and the secret that is the only way back in.
+/// Who you are signed in as, the secret that is the only way back in, and what
+/// the photos are costing.
 ///
 /// This was the placeholder home screen in Phase 1. Now that there is a day to
-/// show, it moved behind an icon — but it does not go away until Settings
-/// exists (Phase 5), because an account whose secret was never written down
+/// show, it moved behind an icon — and it is standing in for Settings (Phase 5)
+/// until there is one, because an account whose secret was never written down
 /// anywhere is one bad reinstall from gone.
 class AccountScreen extends StatelessWidget {
-  const AccountScreen({super.key, required this.session});
+  const AccountScreen({super.key, required this.session, this.images});
 
   final AppSession session;
+
+  /// Where the photos are. Null before the documents directory is known, and in
+  /// tests — then there is nothing to report and the section is not shown.
+  final ImageStore? images;
 
   /// Subjects are DIDs and run off the screen; the tail identifies them.
   static String shorten(String? subject) {
@@ -103,6 +109,10 @@ class AccountScreen extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (images != null) ...[
+                    const SizedBox(height: 20),
+                    PhotoStorageSection(images: images!),
+                  ],
                   const SizedBox(height: 20),
                   OutlinedButton.icon(
                     onPressed: () => _copySecret(context),
@@ -123,6 +133,163 @@ class AccountScreen extends StatelessWidget {
     );
   }
 }
+
+/// What the photos cost, and the two things the user can do about it.
+///
+/// Eviction itself is silent — it is a cache policy, not a deletion worth
+/// interrupting anyone over — so this is the only place the budget is visible.
+/// Which is the point of showing it: a number that quietly deletes things is
+/// one the user should be able to find and change.
+class PhotoStorageSection extends StatefulWidget {
+  const PhotoStorageSection({super.key, required this.images});
+
+  final ImageStore images;
+
+  @override
+  State<PhotoStorageSection> createState() => _PhotoStorageSectionState();
+}
+
+class _PhotoStorageSectionState extends State<PhotoStorageSection> {
+  int? _used;
+  int? _budget;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    // Recount rather than read the counter: this is the screen where a drifted
+    // number is visible, so it is the screen that should not be showing one.
+    final used = await widget.images.recount();
+    final budget = await widget.images.budgetBytes();
+    if (!mounted) return;
+    setState(() {
+      _used = used;
+      _budget = budget;
+    });
+  }
+
+  Future<void> _setBudget(int bytes) async {
+    await widget.images.setBudgetBytes(bytes);
+    if (!mounted) return;
+    setState(() => _budget = bytes);
+    // Not swept here. The new budget applies from the next capture, and a
+    // settings screen is not where photos should start disappearing.
+  }
+
+  Future<void> _deleteAll() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete all photos?'),
+        content: const Text(
+          'Your meals and their calories stay. Only the pictures go, and they '
+          'cannot be brought back.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final freed = await widget.images.deleteAll();
+    await _refresh();
+    messenger.showSnackBar(
+      SnackBar(content: Text('Freed ${formatBytes(freed)}')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final used = _used;
+    final budget = _budget;
+
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+            child: Text('Photos', style: theme.textTheme.titleSmall),
+          ),
+          _Row(
+            label: 'On this device',
+            value: used == null ? '…' : formatBytes(used),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'When photos pass this, the oldest ones are deleted. Meals, '
+                  'calories and thumbnails are kept.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.outline),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final option in ImageStore.budgetOptions)
+                      ChoiceChip(
+                        label: Text(formatBudget(option)),
+                        selected: budget == option,
+                        onSelected: (_) => _setBudget(option),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: used == 0 ? null : _deleteAll,
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: const Text('Delete all photos now'),
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.colorScheme.error,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// `1.4 MB`. Base 1024, because that is what the budget is counted in.
+String formatBytes(int bytes) {
+  const units = ['B', 'KB', 'MB', 'GB'];
+  var value = bytes.toDouble();
+  var unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  // Whole bytes and kilobytes; a decimal only where it says something.
+  final digits = unit >= 2 && value < 100 ? 1 : 0;
+  return '${value.toStringAsFixed(digits)} ${units[unit]}';
+}
+
+String formatBudget(int bytes) =>
+    bytes == ImageStore.unlimitedBudget ? 'No limit' : formatBytes(bytes);
 
 class _Row extends StatelessWidget {
   const _Row({required this.label, required this.value});

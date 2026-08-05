@@ -411,7 +411,7 @@ phase testable without hardware. **Accept:** `cargo test -p atomic_lib` proves t
 seeds; add/edit/delete meals; totals correct across day boundaries (test the timezone edge: a
 23:59 meal belongs to that local day); Rust unit tests for `list_meals` ranges.
 
-### Phase 3 — Camera capture
+### Phase 3 — Camera capture ✅ done
 
 `camera` package, CaptureScreen as home, `ImageStore` (compress → JPEG + thumbnail, budget
 tracking, eviction sweep — all of §6), capture creates a `pending` meal instantly.
@@ -420,6 +420,20 @@ app killable right after shutter without data loss; a stored image is ≤1024px 
 with no EXIF; unit tests for the sweep with a fake filesystem — evicts oldest first, respects
 hysteresis, never touches a `pending`/`needs-info` meal's file, removes orphans, and a meal whose
 file was evicted still renders (thumbnail + note, re-estimate disabled).
+
+Two notes on how it landed:
+
+- **The sweep takes the meals rather than fetching them.** Eviction is a decision about the whole
+  history and `MealStore` holds one day, so `ImageStore.sweep({required List<Meal> meals})` is
+  pure with respect to the meal table and `MealStore.allMeals()` is what feeds it. That is also
+  what makes the sweep tests plain `test()`s over a real temp directory rather than widget tests.
+- **The compressor is a seam** (`ImageCompressor`), because the test VM has no native codec.
+  Everything §6 pins about the *bytes* — 1024px, <250 KB, JPEG, no EXIF — is therefore asserted in
+  `integration_test/bridge_test.dart` against the real encoder, not in `test/`.
+- **The camera warms up in parallel with redb**, keyed on `AppSession.resumesAccount`, which is
+  known within milliseconds of launch because the stored secret is now read before the store is
+  opened. It is deliberately *not* started on a launch that goes to onboarding: that would put the
+  OS permission dialog on top of the sign-up screen, and §7 asks for the opposite.
 
 ### Phase 4 — OpenRouter + estimation pipeline
 

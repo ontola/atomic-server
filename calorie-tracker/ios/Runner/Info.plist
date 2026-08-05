@@ -26,6 +26,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- The camera is the home screen, and it is also how a secret is imported
+	     by QR. iOS kills the app outright when a camera is opened without this
+	     key, so the missing entry was a crash on the pairing screen before the
+	     capture screen ever needed it. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Photograph your meals to log them, and scan a QR code to move your account to another device.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
