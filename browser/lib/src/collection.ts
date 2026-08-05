@@ -1059,16 +1059,6 @@ export class Collection {
     // the same totals rather than none.
     this._aggregates = result.aggregates ?? [];
 
-    // TEMPORARY [agg] diagnostics for the CI-only em-dash totals — remove
-    // once that failure is understood. See the [agg] log in useTableAggregates.
-    if (this.params.aggregation?.aggregates.length) {
-      console.info(
-        `[agg] ${Math.round(performance.now())} localDb count=${result.count} value=${String(
-          this.params.value,
-        ).slice(-12)} outcomes=${JSON.stringify(this._aggregates)}`,
-      );
-    }
-
     return 'ok';
   }
 
@@ -1122,15 +1112,6 @@ export class Collection {
 
     this._totalMembers = totalMembers;
     this._aggregates = readAggregates(resource);
-
-    // TEMPORARY [agg] diagnostics — see fetchPageFromLocalDb's twin.
-    if (this.params.aggregation?.aggregates.length) {
-      console.info(
-        `[agg] ${Math.round(performance.now())} server count=${totalMembers} value=${String(
-          this.params.value,
-        ).slice(-12)} outcomes=${JSON.stringify(this._aggregates)}`,
-      );
-    }
   }
 }
 

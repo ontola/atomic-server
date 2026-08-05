@@ -1,11 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
   before,
-  collectAggLog,
   createTableFromDialog,
   inDialog,
   reloadGrid,
-  withAggLog,
 } from './test-utils';
 
 /**
@@ -120,7 +118,6 @@ test.describe('row actions', () => {
   test('Inventory counts up and down without opening a cell', async ({
     page,
   }) => {
-    const aggLog = collectAggLog(page);
     await page.setViewportSize({ width: 1800, height: 900 });
     await createFromTemplate(page, /Inventory/, 'Stockroom');
 
@@ -143,14 +140,12 @@ test.describe('row actions', () => {
     // Value block: the totals footer sums the quantity the buttons changed.
     // 30s: the total needs an aggregate read to get through the ClientDb
     // worker, and post-reload that queue sits behind the re-drain's write
-    // storm for 15s+ on a loaded runner (measured ~18.5s in the [agg]-traced
+    // storm for 15s+ on a loaded runner (measured ~18.5s in the instrumented
     // CI runs). Tracked as the OPFS write-amplification issue — when write
     // count drops, this budget can too.
-    await withAggLog(aggLog, () =>
-      expect(page.getByTestId('table-totals')).toContainText('3', {
-        timeout: 30_000,
-      }),
-    );
+    await expect(page.getByTestId('table-totals')).toContainText('3', {
+      timeout: 30_000,
+    });
   });
 
   test('a person can add an action, and it works and persists', async ({

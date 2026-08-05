@@ -419,7 +419,7 @@ test.describe('tables', async () => {
     // 30s, not the default: the post-reload re-drain queues forty rows of
     // writes ahead of the member query in the ClientDb worker, and on a
     // loaded runner that queue takes 15s+ to drain (measured ~18.5s in the
-    // [agg]-traced CI runs). Tracked as the OPFS write-amplification issue —
+    // instrumented CI runs). Tracked as the OPFS write-amplification issue —
     // when write count drops, this budget can too.
     await expect.poll(namedRowCount, { timeout: 30000 }).toBe(values.length);
 

@@ -1,12 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
   before,
-  collectAggLog,
   editableTitle,
   FRONTEND_URL,
   newResource,
   pickFromMenu,
-  withAggLog,
 } from './test-utils';
 
 /**
@@ -421,14 +419,11 @@ test.describe('dashboards', () => {
   test('a person can reconfigure a block, and it survives a reload', async ({
     page,
   }) => {
-    const aggLog = collectAggLog(page);
     const fixture = await createSpendingTable(page);
     await createDashboard(page, fixture);
-    await withAggLog(aggLog, () =>
-      expect(block(page, 'Total spent')).toContainText('946.5', {
-        timeout: 15_000,
-      }),
-    );
+    await expect(block(page, 'Total spent')).toContainText('946.5', {
+      timeout: 15_000,
+    });
 
     // Everything the create tool can write, the dialog can change — otherwise
     // the assistant builds dashboards their owner cannot edit.
@@ -462,14 +457,11 @@ test.describe('dashboards', () => {
   test('a measure cannot be saved with nothing to measure', async ({
     page,
   }) => {
-    const aggLog = collectAggLog(page);
     const fixture = await createSpendingTable(page);
     await createDashboard(page, fixture);
-    await withAggLog(aggLog, () =>
-      expect(block(page, 'Total spent')).toContainText('946.5', {
-        timeout: 15_000,
-      }),
-    );
+    await expect(block(page, 'Total spent')).toContainText('946.5', {
+      timeout: 15_000,
+    });
 
     await pickFromMenu(
       block(page, 'Total spent').getByTitle('Block options'),
