@@ -106,7 +106,13 @@ export function useTableAggregates(opts: {
 
     // Any save or delete can change a total — including one made in another
     // tab, which arrives through the same events.
-    const offSaved = store.on(StoreEvents.ResourceSaved, refresh);
+    const offSaved = store.on(StoreEvents.ResourceSaved, saved => {
+      // TEMPORARY [agg]: the local-save trigger, timestamped like the reads.
+      console.info(
+        `[agg] ${Math.round(performance.now())} saved ${saved.subject.slice(-8)}`,
+      );
+      refresh();
+    });
     const offRemoved = store.on(StoreEvents.ResourceRemoved, refresh);
 
     // ...but a member can also change WITHOUT a local save: a live push from
@@ -147,6 +153,11 @@ export function useTableAggregates(opts: {
       if (memberStamps.get(subject) === stamp) return;
 
       memberStamps.set(subject, stamp);
+      // TEMPORARY [agg]: which member advanced, and when — correlates the
+      // re-read triggers with the reads themselves in the CI trace.
+      console.info(
+        `[agg] ${Math.round(performance.now())} member advanced ${subject.slice(-8)}`,
+      );
       refresh();
     });
 

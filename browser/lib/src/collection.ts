@@ -1063,7 +1063,7 @@ export class Collection {
     // once that failure is understood. See the [agg] log in useTableAggregates.
     if (this.params.aggregation?.aggregates.length) {
       console.info(
-        `[agg] localDb count=${result.count} value=${String(
+        `[agg] ${Math.round(performance.now())} localDb count=${result.count} value=${String(
           this.params.value,
         ).slice(-12)} outcomes=${JSON.stringify(this._aggregates)}`,
       );
@@ -1126,7 +1126,7 @@ export class Collection {
     // TEMPORARY [agg] diagnostics — see fetchPageFromLocalDb's twin.
     if (this.params.aggregation?.aggregates.length) {
       console.info(
-        `[agg] server count=${totalMembers} value=${String(
+        `[agg] ${Math.round(performance.now())} server count=${totalMembers} value=${String(
           this.params.value,
         ).slice(-12)} outcomes=${JSON.stringify(this._aggregates)}`,
       );
