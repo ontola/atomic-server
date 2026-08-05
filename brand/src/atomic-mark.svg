@@ -1,0 +1,37 @@
+<!--
+  Atomic — primary house mark. THE single source of truth for every Atomic
+  icon and favicon. Do not edit copies; edit this file and run
+  `node brand/generate.mjs`.
+
+  This is the open sweep: a 270-degree arc with a round cap, and the gradient
+  orb riding its leading end so the orb reads as the point that drew it. It
+  replaced the earlier closed ring-and-orb in 2026; that mark is still in git
+  history if it is ever needed.
+
+  The orb — its radius and the #01ECFF -> #2210FF ramp — is the constant
+  carried across the whole family. Atomic Canvas keeps the sweep and swaps
+  the orb for a pen; see canvas-mark.svg.
+
+  The white keyline is NOT decoration — it is the only thing that makes a
+  black mark legible on a dark background. Without it the sweep disappears
+  into a dark browser tab or dark-mode UI and all that survives is the orb,
+  floating on its own. It is invisible against white, so it costs nothing
+  where it is not needed.
+
+  It underlays the whole silhouette, arc and orb together. Outlining only
+  the orb makes it read as a badge stuck on top of the mark; outlining
+  everything reads as one deliberate keyline. 5 units — thinner stops
+  registering at 16px, thicker starts to dominate the black stroke.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512" fill="none">
+  <path d="M74 52 A 24 24 0 1 1 50 28" stroke="white" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="50" cy="28" r="17" fill="white"/>
+  <path d="M74 52 A 24 24 0 1 1 50 28" stroke="black" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="50" cy="28" r="12" fill="url(#atomicOrb)"/>
+  <defs>
+    <linearGradient id="atomicOrb" x1="62" y1="28" x2="38" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#01ECFF"/>
+      <stop offset="1" stop-color="#2210FF"/>
+    </linearGradient>
+  </defs>
+</svg>
