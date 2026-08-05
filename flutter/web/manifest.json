@@ -1,11 +1,11 @@
 {
-    "name": "atomiccanvas_flutter",
-    "short_name": "atomiccanvas_flutter",
+    "name": "Atomic Canvas",
+    "short_name": "Atomic Canvas",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#ffffff",
+    "theme_color": "#2210FF",
+    "description": "Atomic Canvas - infinite drawing canvas",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
