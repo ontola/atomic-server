@@ -116,6 +116,8 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Bridge known-peer bookkeeping (add / rename / dedupe / forget) | `flutter/rust/src/api/simple/peer_tests.rs` | |
 | Bridge `peer_sync` to an unreachable node errors rather than hanging | `flutter/rust/src/api/simple/peer_tests.rs` | |
 | **`POST /iroh-sync` request shape, both sides** | `testdata/pairing-request.json` + `pairing.test.ts` + `iroh_pairing.rs` | shared fixture binds them |
+| DID open: parse / buildShareLink / resolve order (local → node → agent pkarr → peers) | `data-browser/src/helpers/didResolve.test.ts` | stubbed fetch |
+| **`GET /resolve-agent` response fields the client reads** | `testdata/resolve-agent-response.json` + `didResolve.test.ts` | client-bound; live pkarr stays in `atomic_lib` |
 | Dart pairing-code parser, peer-sync result formatting | `flutter/test/atomic/` | pure parsers |
 
 ### Flow — the thin layer
@@ -130,6 +132,10 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Sync page status renders | `browser/e2e/tests/sync.spec.ts` |
 | Offline edits persist and sync on reconnect | `sync.spec.ts` |
 | Second device cold-loads a drive from the server | `second-device-load.spec.ts` |
+| Paste DID in search → Open DID → navigate | `browser/e2e/tests/did-open.spec.ts` |
+| Copy link embeds `agent` / `node` resolve hints | `did-open.spec.ts` |
+| `/app/show` with `node` / `agent` hints dials stubbed `/iroh-sync` (and `/resolve-agent`) | `did-open.spec.ts` |
+| Error page “Try N known devices” dials seeded peers | `did-open.spec.ts` |
 
 ---
 
@@ -171,6 +177,11 @@ pass both; the query-parameter name is asserted literally in each.
 Unbound: the `nodeId` property on `/server` as consumed by the browser — the
 replacement for `/iroh-node-id`.
 
+`GET /resolve-agent` success body is client-bound via
+`testdata/resolve-agent-response.json` (`didResolve.test.ts`). The handler's
+live pkarr lookup is not asserted on the server side in CI (same network
+constraint as other discovery tests).
+
 ### 4. Tauri-gated UI
 
 `ConnectToDeviceForm` (paste a code) and the pairing dialog are now covered —
@@ -180,9 +191,12 @@ replacement for `/iroh-node-id`.
 
 Paired-peer cards are covered too, by seeding `atomic-peers` in an init script.
 
-Still uncovered: `PairingLinkHandler`'s deep-link entry (the system camera
-launching the app) and `IdentityReconcileGate`. Anything that genuinely calls
-`invoke` needs a real desktop harness, not a faked global.
+Still uncovered: `PairingLinkHandler`'s OS deep-link entry (the system camera
+or OS handing `atomic://` / `did:ad:` into the app) and `IdentityReconcileGate`.
+Show-URL resolve hints (`?agent=` / `?node=`) and ErrorPage peer fallback are
+covered in `did-open.spec.ts` with stubbed `/iroh-sync` / `/resolve-agent`.
+Anything that genuinely calls `invoke` needs a real desktop harness, not a
+faked global.
 
 **Known wart, not a test gap:** `PairingLinkHandler` drops input that does not
 start with `atomic://` or `did:ad:node:`, so pasting something that is not a

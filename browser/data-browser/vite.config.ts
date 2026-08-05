@@ -457,10 +457,13 @@ export default defineConfig({
       ],
     },
     // Kept in step with VITE_ATOMIC_SERVER_URL in .env.development — these
-    // proxy to the same server the app talks to.
+    // proxy to the same server the app talks to. `/resolve-agent` is what
+    // `resolveDidForOpen` hits in a browser tab (getLocalServerOrigin →
+    // window.location.origin); without the proxy, agent→node lookup 404s.
     proxy: {
       '/server': 'http://localhost:9885',
       '/iroh-sync': 'http://localhost:9885',
+      '/resolve-agent': 'http://localhost:9885',
     },
   },
 });
