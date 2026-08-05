@@ -423,6 +423,8 @@ test.describe('tables', async () => {
     // when write count drops, this budget can too.
     await expect.poll(namedRowCount, { timeout: 30000 }).toBe(values.length);
 
+    // Same 30s budget as the count poll above, for the same reason: the
+    // spot-checked rows render from hydrations queued behind the re-drain.
     const grid = page.getByRole('grid');
     await grid.evaluate(g => g.scrollIntoView({ block: 'start' }));
     await page.mouse.move(600, 300);
@@ -430,13 +432,13 @@ test.describe('tables', async () => {
     await expect(
       page.getByRole('gridcell', { name: 'row1', exact: true }),
       'First row should be visible after refresh',
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
 
     await page.mouse.wheel(0, 5000); // scroll to bottom
     await expect(
       page.getByRole('gridcell', { name: last, exact: true }),
       `Last row "${last}" should be visible after refresh`,
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
   });
 
   test('sorting reorders freshly-entered (virtual) rows', async ({ page }) => {
