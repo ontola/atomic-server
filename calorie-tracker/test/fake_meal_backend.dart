@@ -22,7 +22,7 @@ class FakeMealBackend implements MealBackend {
   Future<String> create({
     required DateTime consumedAt,
     String name = '',
-    String description = '',
+    String notes = '',
     String imagePath = '',
     int? calories,
   }) async {
@@ -32,7 +32,8 @@ class FakeMealBackend implements MealBackend {
     meals.add(Meal(
       subject: subject,
       name: name,
-      description: description,
+      description: '',
+      notes: notes,
       consumedAt: consumedAt,
       status: calories == null ? MealStatus.pending : MealStatus.confirmed,
       calories: calories,
@@ -45,26 +46,29 @@ class FakeMealBackend implements MealBackend {
   Future<void> update(
     String subject, {
     String? name,
-    String? description,
+    String? notes,
     int? calories,
   }) async {
     if (writeError != null) throw writeError!;
 
     final index = meals.indexWhere((m) => m.subject == subject);
     if (index < 0) throw Exception('No such meal');
-    final old = meals[index];
 
-    meals[index] = Meal(
-      subject: old.subject,
-      name: name ?? old.name,
-      description: description ?? old.description,
-      consumedAt: old.consumedAt,
-      status: calories == null ? old.status : MealStatus.confirmed,
-      calories: calories ?? old.calories,
-      caloriesMin: old.caloriesMin,
-      caloriesMax: old.caloriesMax,
-      imagePath: old.imagePath,
+    meals[index] = _copy(
+      meals[index],
+      name: name,
+      notes: notes,
+      calories: calories,
+      status: calories == null ? null : MealStatus.confirmed,
     );
+  }
+
+  @override
+  Future<Meal?> bySubject(String subject) async {
+    if (readError != null) throw readError!;
+
+    final index = meals.indexWhere((m) => m.subject == subject);
+    return index < 0 ? null : meals[index];
   }
 
   @override
@@ -132,6 +136,7 @@ class FakeMealBackend implements MealBackend {
     Meal old, {
     String? name,
     String? description,
+    String? notes,
     MealStatus? status,
     int? calories,
     int? caloriesMin,
@@ -144,6 +149,10 @@ class FakeMealBackend implements MealBackend {
         subject: old.subject,
         name: name ?? old.name,
         description: description ?? old.description,
+        // Never passed by [applyEstimate], which is the point: `meal-notes` is
+        // the one text an estimate does not write, so the answer the eater gave
+        // survives every round of the clarify loop.
+        notes: notes ?? old.notes,
         consumedAt: old.consumedAt,
         status: status ?? old.status,
         calories: calories ?? old.calories,

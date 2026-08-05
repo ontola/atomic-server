@@ -430,6 +430,7 @@ mod tests {
                 "clarifying-question",
                 DataType::String,
             ),
+            (urls::MEAL_NOTES, "meal-notes", DataType::String),
             (urls::PROTEIN_GRAMS, "protein-grams", DataType::Float),
             (urls::CARBS_GRAMS, "carbs-grams", DataType::Float),
             (urls::FAT_GRAMS, "fat-grams", DataType::Float),

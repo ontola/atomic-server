@@ -29,6 +29,9 @@ dependencies:
   # browser that comes back on a custom scheme (flutter_web_auth_2).
   crypto: ^3.0.6
   flutter_web_auth_2: ^5.0.3
+  # A `needs-info` meal is the estimator asking something, and the person who
+  # could answer has put their phone away — see services/notifications.dart.
+  flutter_local_notifications: ^22.2.0
 
 dev_dependencies:
   flutter_test:
@@ -36,6 +39,23 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+
+# The launcher icon. `assets/icon/*.svg` is the source; the PNGs beside them are
+# rendered from it (`rsvg-convert -w 1024 -h 1024`) and are what this reads.
+# Regenerate the platform icons with `dart run flutter_launcher_icons` after
+# changing either.
+#
+# The Android foreground is a separate file rather than the same one scaled: an
+# adaptive icon is masked and parallaxed by the launcher, so the mark has to sit
+# inside the safe circle, and the background is a flat colour behind it.
+flutter_launcher_icons:
+  image_path: assets/icon/app_icon.png
+  ios: true
+  remove_alpha_ios: true
+  android: true
+  adaptive_icon_background: "#2ABB70"
+  adaptive_icon_foreground: assets/icon/app_icon_foreground.png

@@ -129,6 +129,7 @@ shortnames kebab-case, per repo convention):
 | `estimate-confidence` (`estimateConfidence`) | atomicURL, `allows-only` | Tags: `high` · `medium` · `low` (from the LLM) |
 | `estimated-by-model` (`estimatedByModel`) | string | OpenRouter model id used |
 | `clarifying-question` (`clarifyingQuestion`) | string | what the estimator could not tell; set with `needs-info`, cleared when a later estimate has nothing to ask (added in Phase 4) |
+| `meal-notes` (`mealNotes`) | string | what the *eater* wrote — the answer to a `clarifying-question`, or detail typed by hand. The one text no estimate writes, which is what stops the clarify loop feeding the model its own last answer (added in Phase 5) |
 | `protein-grams` / `carbs-grams` / `fat-grams` | float | optional macros, nice-to-have from the same LLM call |
 
 (`status` and `model` get prefixed subjects because bare `https://atomicdata.dev/properties/status`
@@ -180,8 +181,8 @@ the canvas bridge and stays app-agnostic so the two crates can be merged mechani
 Built in Phase 2:
 
 ```rust
-pub async fn create_meal(consumed_at_ms: i64, name: String, description: String, image_path: String, calories: Option<i64>) -> Result<String, String>;
-pub async fn update_meal(subject: String, name: Option<String>, description: Option<String>, calories: Option<i64>) -> Result<(), String>;
+pub async fn create_meal(consumed_at_ms: i64, name: String, notes: String, image_path: String, calories: Option<i64>) -> Result<String, String>;
+pub async fn update_meal(subject: String, name: Option<String>, notes: Option<String>, calories: Option<i64>) -> Result<(), String>;
 pub async fn set_meal_status(subject: String, status: String) -> Result<(), String>;
 pub async fn list_meals(from_ms: i64, to_ms: i64) -> Result<Vec<MealItem>, String>;
 ```
@@ -196,12 +197,26 @@ midnight belongs to one day and not two; the caller works out where its local mi
 Deleting goes through the generic `delete_resource` in `simple.rs` — a `delete_meal` alias would
 add nothing.
 
+`create_meal` takes `notes` rather than the `description` this section originally sketched, and
+`update_meal` likewise: at the moment a meal is logged nothing has estimated it, so every word about
+it is the eater's, and `description` is only ever written by an estimate (see `meal-notes` above).
+
 Phase 4 added:
 
 ```rust
 pub async fn update_meal_estimate(subject: String, estimate: MealEstimate) -> Result<(), String>; // sets name/calories/bounds/macros/confidence/model/question, status=estimated|needs-info
 pub async fn list_pending_meals() -> Result<Vec<MealItem>, String>; // pending + estimating, oldest first
 ```
+
+Phase 5 added:
+
+```rust
+pub async fn get_meal(subject: String) -> Result<Option<MealItem>, String>; // what a notification tap resolves through
+```
+
+`Option` rather than an error: a tap arrives holding a subject and nothing else, and the meal it
+names may have been deleted or answered on another device while the notification sat on a lock
+screen. That is an ordinary outcome, not something to show anybody.
 
 `estimate` is a typed struct rather than the JSON string this section originally sketched, for the
 same reason `MealItem` is one. `update_meal_estimate` leaves a `confirmed` meal untouched and
@@ -486,12 +501,49 @@ How it landed, and where it left the plan:
   than failing them, and `main.dart` fires another when the directory lands. §7 has those two
   things racing on purpose; failing the meal would delete the estimate's only input.
 
-### Phase 5 — Uncertainty loop + history + polish
+### Phase 5 — Uncertainty loop + history + polish ✅ done
 
 `needs-info` notifications (flutter_local_notifications) deep-linking to the meal, clarify → re-
 estimate flow, HistoryScreen, meal detail editing/confirming, empty/error states, app icon.
 **Accept:** low-confidence meal fires a notification; answering it updates the estimate; history
 shows correct daily totals.
+
+How it landed, and where it left the plan:
+
+- **The ontology grew `meal-notes`, and that is what makes the loop terminate.** §8 said the answer
+  is "appended" to the meal, and the only place to append it was `description` — which is the
+  estimator's reasoning and is replaced by every estimate. So round two would have sent the model
+  its own round-one output back as "the person who logged it wrote", and round three would have
+  sent both. `meal-notes` is the eater's words and *only* theirs: `update_meal_estimate` does not
+  write it, `EstimationQueue._words` reads nothing else, and the answer survives however many
+  estimates run over the meal. `MealEstimate.keeping()` — Phase 4's fold-the-words-in-first — is
+  gone with it, because the property it was working around no longer exists.
+- **`create_meal` and `update_meal` speak `notes`, not `description`.** At the moment a meal is
+  logged nothing has estimated it, so every word about it is the eater's; and there is no reason
+  for a human to edit a model's reasoning. That leaves exactly one writer per text field, which is
+  the invariant the loop rests on.
+- **Answering and re-estimating are one action, not two.** `SaveMeal` carries a `reEstimate` flag
+  and the sheet's filled button on a `needs-info` meal is "Answer and estimate again". An answer
+  saved but not sent leaves the meal as stuck as it was; a re-estimate that discards the answer
+  first is worse. (Phase 4's "Estimate it again" popped the sheet and threw away whatever had been
+  typed into it — same bug, quieter.)
+- **The queue owns the question's whole life**, because it is what asked: it posts on `needs-info`,
+  withdraws when a later estimate has nothing to ask, and `forget(subject)` covers a meal answered
+  by hand or deleted. A question outliving its meal is the one way a notification becomes a dead
+  end.
+- **Permission is asked for at the first question, not at launch.** There is nothing to notify
+  about on a fresh install, and a dialog in front of an app nobody has used yet is the reliable way
+  to be told no forever.
+- **A tap is resolved against the database, not against what is on screen.** `get_meal(subject)`
+  returns `Option` — the meal may have been deleted or answered on another device while the
+  notification sat on the lock screen — and `main.dart` listens to the session as well as to the
+  tap, because a tap that *launched* the app arrives before there is a store to look anything up in.
+- **History is a list of days, not the calendar §7 sketched.** A grid of four-digit totals is
+  unreadable at phone width, and days with nothing logged are left out rather than shown as zero —
+  an unbroken run of zeroes says the app was used and the food wasn't. One range query, grouped by
+  local day in Dart (`groupByLocalDay`), which is the same arithmetic `localDayBounds` already does.
+- **`meal_actions.dart` holds what a saved sheet means**, because four things open it now — the
+  viewfinder, today's list, a history day, and a notification tap with no screen behind it at all.
 
 ### Phase 6 — Integrations (each independently shippable)
 

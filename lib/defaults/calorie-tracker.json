@@ -147,6 +147,14 @@
     "https://atomicdata.dev/properties/shortname": "clarifying-question"
   },
   {
+    "@id": "https://atomicdata.dev/properties/mealNotes",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "What the person who ate this wrote about it themselves — the answer to a `clarifying-question`, or any detail they added by hand. Kept apart from `description`, which is the estimator's reasoning and is replaced by every new estimate: these words are the half of the record nobody can reconstruct, so an estimator only ever reads them.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "meal-notes"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/proteinGrams",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
     "https://atomicdata.dev/properties/description": "Protein in this Meal, in grams.",
@@ -185,6 +193,7 @@
       "https://atomicdata.dev/properties/estimateConfidence",
       "https://atomicdata.dev/properties/estimatedByModel",
       "https://atomicdata.dev/properties/clarifyingQuestion",
+      "https://atomicdata.dev/properties/mealNotes",
       "https://atomicdata.dev/properties/proteinGrams",
       "https://atomicdata.dev/properties/carbsGrams",
       "https://atomicdata.dev/properties/fatGrams"

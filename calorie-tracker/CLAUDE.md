@@ -7,14 +7,17 @@ Plan: [`../planning/calorie-tracker-plan.md`](../planning/calorie-tracker-plan.m
 (architecture, data model, phases). Product brief:
 [`../planning/calorie-tracker-app.md`](../planning/calorie-tracker-app.md).
 
-**Status: Phase 4 (OpenRouter + estimation) complete.** The app onboards — one
+**Status: Phase 5 (uncertainty loop + history) complete.** The app onboards — one
 tap to a new account, or a pasted secret to restore one — persists the session,
 and lands on a viewfinder. The shutter writes a compressed photo and a `pending`
 meal and is done; the day's total is on top of the preview and the list is one
 tap behind it. A queue drains those pending meals through a vision model on
 OpenRouter, on launch, after each capture and on resume, and writes back a name,
 a number and a range. Meals can still be typed in by hand — with a number, which
-confirms them, or without one, which asks the model instead.
+confirms them, or without one, which asks the model instead. When the model
+cannot finish without knowing something, it asks: the question goes on the meal
+*and* on the lock screen, tapping it opens that meal, and the answer re-estimates
+it. Past days are behind the calendar icon, one row each with what they came to.
 
 ## When writing code
 
@@ -36,10 +39,13 @@ lib/
     image_store.dart   compress, store, count, evict — all of the plan's §6
     openrouter.dart    the key, the model catalogue, and the estimate call
     estimation_queue.dart  drains the pending meals through one of those models
+    notifications.dart the question on the lock screen, and the tap back in
   screens/
     capture_screen.dart    home: the viewfinder, the shutter, the day's total
     today_screen.dart      the day's total and its meals, one tap behind home
-    meal_entry_sheet.dart  type a meal, or correct one
+    history_screen.dart    the days behind today, one row each
+    meal_entry_sheet.dart  type a meal, correct one, or answer its question
+    meal_actions.dart      what opening that sheet means, wherever it opened from
     account_screen.dart    the agent, the secret, the photo budget
     openrouter_screen.dart connect or disconnect, and pick the model
     onboarding/        first launch, and the "my data is on the other phone" case
@@ -118,10 +124,14 @@ The whole pipeline is `openrouter.dart` (the wire) plus `estimation_queue.dart`
   answer that is not the JSON the schema asked for gets one. Every attempt is
   billed, and a model that just broke a strict schema will break it again. The
   meal goes `failed`, keeps its photo, and offers the user a retry.
-- **It must not lose the user's words.** The estimate replaces every field it
-  touches, so `MealEstimate.keeping()` folds what the user typed in front of the
-  model's reasoning first. Their words are the more reliable half of the record
-  and the only part nobody can reconstruct.
+- **It must not lose the user's words.** Structurally, since Phase 5: what the
+  eater wrote lives in `meal-notes` and `update_meal_estimate` does not write
+  that property. Their words are the more reliable half of the record and the
+  only part nobody can reconstruct, and they are also the *only* thing the queue
+  sends as "the person who logged it wrote" — never the name or the description,
+  which after one estimate are the model's own. Phase 4 did this by folding the
+  words into the description first (`MealEstimate.keeping()`); that could not
+  survive a second re-estimate, which is exactly what the clarify loop does.
 
 Two more things about the shape:
 
@@ -129,8 +139,7 @@ Two more things about the shape:
   confidence on its own is a wide range, which `calories-min`/`calories-max`
   already say. A meal is only `needs-info` when the model asked something, and
   that question is stored on the meal — a "needs an answer" chip with nothing
-  behind it is a dead end. Phase 5 owns answering it; Phase 4 shows it in the
-  edit sheet.
+  behind it is a dead end.
 - **`estimating` is a queued status, not an in-flight one.** The only thing that
   sets it is a call in this process, so one found at launch is what a killed app
   left behind. `list_pending_meals` returns it alongside `pending` for exactly
@@ -146,6 +155,41 @@ development, `--dart-define=OPENROUTER_API_KEY=…` bakes one in as a *fallback*
 `make ios` / `make android` / `make apk` pass it through from the environment —
 and a key someone signed in with on the device always wins, so a dev build never
 quietly bills the wrong account.
+
+## The clarify loop, and why it terminates
+
+A `needs-info` meal is the estimator saying it cannot finish without knowing
+something. The loop that closes it: the queue posts the question through
+`Notifier`, a tap brings the app up on that meal's sheet, the answer goes into
+`meal-notes`, and the same button that saves it re-estimates. `test/
+clarify_flow_test.dart` is the whole thing end to end, on purpose — an answer
+saved but not sent, or sent but not saved, leaves the meal exactly as stuck as it
+was, and either half still passes on its own.
+
+- **`meal-notes` is the eater's words and nothing else.** `update_meal_estimate`
+  does not write it, `create_meal`/`update_meal` take it *instead of* a
+  description, and `EstimationQueue._words` reads nothing else. That is what
+  makes a second round work: without it the model gets its own last reasoning
+  back labelled as what the user wrote, and it compounds every time.
+- **Answering and re-estimating are one action.** `SaveMeal.reEstimate`, not a
+  second button — and the re-estimate re-reads the meal first, because the answer
+  that was just written is its entire input.
+- **The queue owns the question's whole life.** It posts on `needs-info`,
+  withdraws when a later estimate has nothing left to ask, and `forget(subject)`
+  is the meal being answered by hand or deleted. A question outliving its meal is
+  the one way a notification becomes a dead end.
+- **Permission is asked for at the first question, not at launch.** There is
+  nothing to notify about on a fresh install, and a dialog in front of an app
+  nobody has used yet is the reliable way to be told no forever.
+- **A tap is resolved against the database.** `get_meal` returns null for a meal
+  that has been deleted or answered elsewhere since, and `main.dart` waits for
+  `SessionPhase.ready` — a tap that *launched* the app arrives before there is a
+  store to look anything up in. It listens to the session and to the tap, because
+  those two land in either order.
+
+`meal_actions.dart` is where "what a saved sheet means" lives, because four
+things open that sheet now: the viewfinder, today's list, a history day, and a
+notification tap with no screen behind it at all.
 
 ## The meal vocabulary lives in `atomic_lib`, not here
 
@@ -318,23 +362,42 @@ These all cost an afternoon once. They are fixed in-tree; this is why.
   screen says so and offers the keyboard instead, and everything else works. Do
   not "fix" it by making the screen an error page — the simulator is where this
   app is developed.
+- **Notifications need one line of native setup each.**
+  `UNUserNotificationCenter.current().delegate` in `ios/Runner/AppDelegate.swift`
+  — without it a tap never reaches Dart and the deep link silently does nothing —
+  and `POST_NOTIFICATIONS` in the Android manifest for API 33+. Neither shows up
+  as a build failure; both show up as a notification that does nothing.
+- **`dart run flutter_launcher_icons` corrupts `project.pbxproj`.** It rewrites
+  `ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES` to
+  `= AppIcon` — it is matching the wrong key; the one it means,
+  `ASSETCATALOG_COMPILER_APPICON_NAME`, is already right. `git checkout --
+  ios/Runner.xcodeproj/project.pbxproj` after running it, and keep the icon
+  changes.
 
-## Next: Phase 5
+## Next: Phase 6
 
-The uncertainty loop, history and polish. `needs-info` meals already carry the
-question the model asked and show it in the edit sheet; what is missing is the
-notification that deep-links to it, the answer being appended and the meal
-re-estimated (`EstimationQueue.retry` is the call — it takes a `Meal` and does
-the whole thing, so the loop is a screen and a notification, not a new
-pipeline). Then `HistoryScreen` over past days, and the empty and error states.
+Integrations, each independently shippable (`calorie-tracker-plan.md` §8):
+Health (`DIETARY_ENERGY_CONSUMED` on estimate/confirm), surfacing the sync that
+already exists in Rust, and background estimation. Next-launch draining is the
+guaranteed fallback and has worked since Phase 4, so none of it is on the
+critical path.
 
-Two loose ends worth knowing about before then:
+Loose ends worth knowing about before then:
 
 - **Nothing re-estimates on a model change.** Change the model in Settings and
-  the meals already estimated keep the old one's numbers, which is right — but
-  there is no way to ask for a second opinion on a settled meal either. The edit
-  sheet's "Estimate it again" only appears where there is still something to
-  send.
+  the meals already estimated keep the old one's numbers, which is right. A
+  settled meal can now be asked again by hand — "Estimate it again" in its sheet
+  — but only where there is still something to send it.
 - **`waiting` is what the last drain found.** It is not a live count from the
   database, so a meal synced in from another device does not show up in the
   banner until the next drain. Every path that adds a meal here drains.
+- **The history reads 90 days and doubles on demand.** One range query, grouped
+  in Dart. That is fine for a phone's worth of meals and would not be for a
+  decade of them; the day it stops being fine, the grouping is what moves into
+  the bridge, not the screen.
+- **A `failed` meal keeps whatever question it had.** `set_meal_status` does not
+  clear `clarifying-question`, so a meal that was `needs-info` and then failed a
+  re-estimate still carries a stale one. Nothing shows it — `Meal.needsAnswer`
+  wants the status *and* the question, and that meal's status is `failed` — so it
+  is dead data rather than a wrong screen. Worth clearing if the property ever
+  grows a second reader.

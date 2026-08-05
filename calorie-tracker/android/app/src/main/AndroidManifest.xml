@@ -5,8 +5,14 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
+    <!-- Asking about a meal the estimator could not finish. Requested at the
+         moment there is a first question rather than at launch — see
+         LocalNotifications in lib/services/notifications.dart. Android 12 and
+         below grant it at install; 13+ needs the runtime prompt this declares. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <application
-        android:label="calorie_tracker"
+        android:label="Calorie Tracker"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

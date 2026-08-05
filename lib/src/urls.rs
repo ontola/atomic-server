@@ -208,6 +208,7 @@ pub const MEAL_STATUS: &str = "https://atomicdata.dev/properties/mealStatus";
 pub const ESTIMATE_CONFIDENCE: &str = "https://atomicdata.dev/properties/estimateConfidence";
 pub const ESTIMATED_BY_MODEL: &str = "https://atomicdata.dev/properties/estimatedByModel";
 pub const CLARIFYING_QUESTION: &str = "https://atomicdata.dev/properties/clarifyingQuestion";
+pub const MEAL_NOTES: &str = "https://atomicdata.dev/properties/mealNotes";
 pub const PROTEIN_GRAMS: &str = "https://atomicdata.dev/properties/proteinGrams";
 pub const CARBS_GRAMS: &str = "https://atomicdata.dev/properties/carbsGrams";
 pub const FAT_GRAMS: &str = "https://atomicdata.dev/properties/fatGrams";

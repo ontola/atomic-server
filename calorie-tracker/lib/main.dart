@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'screens/capture_screen.dart';
+import 'screens/meal_actions.dart';
 import 'screens/onboarding/needs_sync_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'services/app_session.dart';
@@ -11,6 +12,7 @@ import 'services/camera_feed.dart';
 import 'services/estimation_queue.dart';
 import 'services/image_store.dart';
 import 'services/meal_store.dart';
+import 'services/notifications.dart';
 import 'services/openrouter.dart';
 import 'theme.dart';
 
@@ -34,6 +36,7 @@ class CalorieTrackerApp extends StatefulWidget {
     this.meals,
     this.account,
     this.queue,
+    this.notifier,
   });
 
   /// Injected by tests, which have no Rust library to talk to. The app builds
@@ -56,6 +59,9 @@ class CalorieTrackerApp extends StatefulWidget {
   /// Injected by tests, which have no network.
   final EstimationQueue? queue;
 
+  /// Injected by tests, which have no notification centre.
+  final Notifier? notifier;
+
   @override
   State<CalorieTrackerApp> createState() => _CalorieTrackerAppState();
 }
@@ -70,14 +76,25 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
   late final MealStore _meals = widget.meals ?? MealStore();
   late final OpenRouterAccount _account =
       widget.account ?? OpenRouterAccount();
+  late final Notifier _notifier = widget.notifier ?? LocalNotifications();
   late final EstimationQueue _queue = widget.queue ??
       EstimationQueue(
         meals: _meals,
         account: _account,
         client: OpenRouterClient(account: _account),
+        notifier: _notifier,
       );
 
+  /// The navigator the deep link needs. A notification tap arrives with no
+  /// screen behind it — on a cold launch, before there is one at all — so the
+  /// sheet it opens cannot be pushed from a `BuildContext` anybody is holding.
+  final _navigator = GlobalKey<NavigatorState>();
+
   ImageStore? _images;
+
+  /// Whether a tapped meal is already being opened. Two taps on one
+  /// notification are one meal.
+  bool _opening = false;
 
   @override
   void initState() {
@@ -90,7 +107,10 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
     _session
       ..addListener(_warmCameraWhenResuming)
       ..addListener(_drainWhenReady)
+      ..addListener(_openTappedMeal)
       ..start();
+    _notifier.opened.addListener(_openTappedMeal);
+    unawaited(_notifier.start());
     if (widget.account == null) unawaited(_account.load());
     if (widget.images == null) unawaited(_findPhotoDirectory());
   }
@@ -99,7 +119,9 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
   void dispose() {
     _session
       ..removeListener(_warmCameraWhenResuming)
-      ..removeListener(_drainWhenReady);
+      ..removeListener(_drainWhenReady)
+      ..removeListener(_openTappedMeal);
+    _notifier.opened.removeListener(_openTappedMeal);
     // Only ours to dispose when it was ours to make.
     if (widget.session == null) _session.dispose();
     if (widget.camera == null) _camera.dispose();
@@ -107,6 +129,40 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
     if (widget.account == null) _account.dispose();
     if (widget.queue == null) _queue.dispose();
     super.dispose();
+  }
+
+  /// Show the meal a notification was tapped about.
+  ///
+  /// Listens to the session as well as to the tap, because the two arrive in
+  /// either order: a tap while the app is running finds the store open, and a
+  /// tap that *launched* the app beats it there by a second or two. Whichever
+  /// lands second is what runs this.
+  Future<void> _openTappedMeal() async {
+    final subject = _notifier.opened.value;
+    if (subject == null || _opening) return;
+    if (_session.phase != SessionPhase.ready) return;
+
+    _opening = true;
+    _notifier.handled();
+    try {
+      final meal = await _meals.mealAt(subject);
+      final context = _navigator.currentContext;
+      // The meal may have been deleted, or answered on another device, while
+      // the notification sat on the lock screen. Nothing to show and nothing
+      // worth saying about it.
+      if (meal == null || context == null || !context.mounted) return;
+      await openMeal(
+        context,
+        meal,
+        store: _meals,
+        images: _images,
+        queue: _queue,
+      );
+    } catch (e) {
+      debugPrint('Could not open $subject: $e');
+    } finally {
+      _opening = false;
+    }
   }
 
   /// Start estimating as soon as there is a store to read meals out of.
@@ -157,6 +213,7 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Calorie Tracker',
+      navigatorKey: _navigator,
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),

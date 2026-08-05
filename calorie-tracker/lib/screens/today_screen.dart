@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../models/meal.dart';
@@ -10,7 +8,8 @@ import '../services/meal_store.dart';
 import '../services/openrouter.dart';
 import '../widgets/meal_photo.dart';
 import 'account_screen.dart';
-import 'meal_entry_sheet.dart';
+import 'history_screen.dart';
+import 'meal_actions.dart';
 import 'openrouter_screen.dart';
 
 /// The day so far: what it adds up to, and what went into it.
@@ -68,63 +67,27 @@ class _TodayScreenState extends State<TodayScreen> {
     super.dispose();
   }
 
-  Future<void> _logMeal() async {
-    final entry = await MealEntrySheet.show(context, images: widget.images);
-    if (entry is SaveMeal) {
-      await _store.logMeal(name: entry.name, calories: entry.calories);
-      _reportFailure();
-      // No number typed means the user is asking the model for one.
-      if (entry.calories == null && _store.error == null) {
-        unawaited(widget.queue?.drain());
-      }
-    }
-  }
+  Future<void> _logMeal() =>
+      logMealByHand(context, store: _store, queue: widget.queue);
 
-  Future<void> _editMeal(Meal meal) async {
-    // Asked before the sheet is built, because whether the photo is still on
-    // disk is a question for the filesystem and the sheet is not going to wait
-    // on one.
-    final canReEstimate = await _canReEstimate(meal);
-    if (!mounted) return;
+  Future<void> _editMeal(Meal meal) => openMeal(
+        context,
+        meal,
+        store: _store,
+        images: widget.images,
+        queue: widget.queue,
+      );
 
-    final entry = await MealEntrySheet.show(
-      context,
-      meal: meal,
-      images: widget.images,
-      onRetry: canReEstimate ? () => _retry(meal) : null,
-    );
-    switch (entry) {
-      case SaveMeal(:final name, :final calories):
-        await _store.editMeal(meal.subject, name: name, calories: calories);
-      case DeleteMeal():
-        await _store.deleteMeal(meal.subject);
-      case null:
-        return;
-    }
-    _reportFailure();
-  }
-
-  /// Whether there is anything left to ask a model with.
-  ///
-  /// A photographed meal whose picture the sweep evicted has nothing to send —
-  /// the 256px thumbnail is not a substitute — so re-estimating it is not
-  /// offered rather than offered and failed.
-  Future<bool> _canReEstimate(Meal meal) async {
-    if (widget.queue == null) return false;
-    if (meal.imagePath.isEmpty) {
-      return meal.name.isNotEmpty || meal.description.isNotEmpty;
-    }
-    return await widget.images?.stateOf(meal.imagePath) == PhotoState.stored;
-  }
-
-  void _retry(Meal meal) => unawaited(widget.queue!.retry(meal));
-
-  /// A write that failed leaves the list as it was, which on its own looks like
-  /// nothing happened. Say what did.
-  void _reportFailure() {
-    final error = _store.error;
-    if (error == null || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+  void _openHistory() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => HistoryScreen(
+        session: widget.session,
+        store: _store,
+        images: widget.images,
+        account: widget.account,
+        queue: widget.queue,
+      ),
+    ));
   }
 
   void _openAccount() {
@@ -151,6 +114,15 @@ class _TodayScreenState extends State<TodayScreen> {
           appBar: AppBar(
             title: Text(_store.isToday ? 'Today' : formatDay(_store.day)),
             actions: [
+              // Only from today: a day view reached *from* the history is
+              // already inside it, and a second way back in from there is a
+              // loop rather than a route.
+              if (_store.isToday)
+                IconButton(
+                  onPressed: _openHistory,
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  tooltip: 'History',
+                ),
               IconButton(
                 onPressed: _openAccount,
                 icon: const Icon(Icons.person_outline),
@@ -195,7 +167,7 @@ class _TodayScreenState extends State<TodayScreen> {
                       onTap: () => _editMeal(meal),
                       onRetry: meal.status == MealStatus.failed &&
                               widget.queue != null
-                          ? () => _retry(meal)
+                          ? () => retryMeal(meal, widget.queue!)
                           : null,
                     ),
               ],

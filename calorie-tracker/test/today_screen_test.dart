@@ -156,6 +156,12 @@ void main() {
     expect(meal.name, 'Two slices of margherita');
     expect(meal.calories, isNull);
     expect(meal.status, MealStatus.pending);
+    expect(
+      meal.notes,
+      'Two slices of margherita',
+      reason: 'their words are what the estimator gets, and the estimate is '
+          'about to replace the name with its own',
+    );
   });
 
   testWidgets('tapping a meal edits it', (tester) async {

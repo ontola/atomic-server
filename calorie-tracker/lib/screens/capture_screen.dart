@@ -13,7 +13,7 @@ import '../services/openrouter.dart';
 import '../startup.dart';
 import '../widgets/meal_photo.dart';
 import 'account_screen.dart';
-import 'meal_entry_sheet.dart';
+import 'meal_actions.dart';
 import 'today_screen.dart';
 
 /// Home: a live camera preview and one big button.
@@ -184,18 +184,8 @@ class _CaptureScreenState extends State<CaptureScreen>
 
   // ── The other ways in ────────────────────────────────────────────────────
 
-  Future<void> _typeAMeal() async {
-    final entry = await MealEntrySheet.show(context);
-    if (entry is SaveMeal) {
-      await _store.logMeal(name: entry.name, calories: entry.calories);
-      if (_store.error != null) {
-        _say(_store.error!);
-      } else if (entry.calories == null) {
-        // No number typed means the user is asking the model for one.
-        unawaited(widget.queue?.drain());
-      }
-    }
-  }
+  Future<void> _typeAMeal() =>
+      logMealByHand(context, store: _store, queue: widget.queue);
 
   void _openToday() {
     Navigator.of(context).push(MaterialPageRoute(

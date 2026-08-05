@@ -13,7 +13,7 @@ abstract class MealBackend {
   Future<String> create({
     required DateTime consumedAt,
     String name,
-    String description,
+    String notes,
     String imagePath,
     int? calories,
   });
@@ -22,7 +22,7 @@ abstract class MealBackend {
   Future<void> update(
     String subject, {
     String? name,
-    String? description,
+    String? notes,
     int? calories,
   });
 
@@ -30,6 +30,9 @@ abstract class MealBackend {
 
   /// Meals in `[fromMs, toMs)`, newest first.
   Future<List<Meal>> list(int fromMs, int toMs);
+
+  /// One meal, or null when it is not there any more.
+  Future<Meal?> bySubject(String subject);
 
   /// Meals with no number on them yet, oldest first — the estimator's queue.
   Future<List<Meal>> listPending();
@@ -50,14 +53,14 @@ class FfiMealBackend implements MealBackend {
   Future<String> create({
     required DateTime consumedAt,
     String name = '',
-    String description = '',
+    String notes = '',
     String imagePath = '',
     int? calories,
   }) =>
       AtomicClient.createMeal(
         consumedAtMs: consumedAt.millisecondsSinceEpoch,
         name: name,
-        description: description,
+        notes: notes,
         imagePath: imagePath,
         calories: calories,
       );
@@ -66,13 +69,13 @@ class FfiMealBackend implements MealBackend {
   Future<void> update(
     String subject, {
     String? name,
-    String? description,
+    String? notes,
     int? calories,
   }) =>
       AtomicClient.updateMeal(
         subject,
         name: name,
-        description: description,
+        notes: notes,
         calories: calories,
       );
 
@@ -83,6 +86,12 @@ class FfiMealBackend implements MealBackend {
   Future<List<Meal>> list(int fromMs, int toMs) async {
     final items = await AtomicClient.listMeals(fromMs, toMs);
     return items.map(Meal.fromItem).toList();
+  }
+
+  @override
+  Future<Meal?> bySubject(String subject) async {
+    final item = await AtomicClient.getMeal(subject);
+    return item == null ? null : Meal.fromItem(item);
   }
 
   @override
@@ -160,6 +169,30 @@ class MealStore extends ChangeNotifier {
   /// of it in memory would have to decide when to let go again.
   Future<List<Meal>> allMeals() => _backend.list(_minMs, _maxMs);
 
+  /// The meals of the local days from [from] to [to] inclusive, newest first.
+  ///
+  /// One query rather than one per day: the history screen groups them with
+  /// [groupByLocalDay], which is the same arithmetic the bridge would do and
+  /// cheaper done once.
+  Future<List<Meal>> mealsAcross(DateTime from, DateTime to) {
+    final start = localDayBounds(from).fromMs;
+    final end = localDayBounds(to).toMs;
+    return _backend.list(start, end);
+  }
+
+  /// One meal as the database has it now, or null if it is gone.
+  ///
+  /// What a notification tap resolves through: it names a subject and the meal
+  /// may have been deleted, or answered, since it was posted.
+  Future<Meal?> mealAt(String subject) => _backend.bySubject(subject);
+
+  /// A second store over another day, talking to the same backend.
+  ///
+  /// How the history screen opens a day: the day view is the same screen as
+  /// today's, and giving it its own store keeps it from dragging the day behind
+  /// the viewfinder along with it.
+  MealStore viewOf(DateTime day) => MealStore(backend: _backend, day: day);
+
   /// The full range `DateTime` can express, so "all of them" needs no special
   /// case in the bridge — it is the same half-open query as a day.
   static const _minMs = -8640000000000000;
@@ -184,14 +217,14 @@ class MealStore extends ChangeNotifier {
   Future<void> logMeal({
     String name = '',
     int? calories,
-    String description = '',
+    String notes = '',
     String imagePath = '',
     DateTime? consumedAt,
   }) async {
     await _guard(() => _backend.create(
           consumedAt: consumedAt ?? DateTime.now(),
           name: name,
-          description: description,
+          notes: notes,
           imagePath: imagePath,
           calories: calories,
         ));
@@ -200,13 +233,13 @@ class MealStore extends ChangeNotifier {
   Future<void> editMeal(
     String subject, {
     String? name,
-    String? description,
+    String? notes,
     int? calories,
   }) async {
     await _guard(() => _backend.update(
           subject,
           name: name,
-          description: description,
+          notes: notes,
           calories: calories,
         ));
   }

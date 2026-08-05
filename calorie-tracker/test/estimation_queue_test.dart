@@ -14,6 +14,7 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fake_meal_backend.dart';
+import 'fake_notifier.dart';
 
 /// The queue against a fake meals table and a mocked OpenRouter.
 ///
@@ -28,6 +29,7 @@ void main() {
   late OpenRouterAccount account;
   late Directory root;
   late ImageStore images;
+  late FakeNotifier notifier;
 
   /// Every request the queue made, in order. The retry tests are entirely about
   /// how long this gets.
@@ -43,6 +45,7 @@ void main() {
     requests = [];
     root = await Directory.systemTemp.createTemp('estimation_queue_test');
     images = ImageStore(root: root);
+    notifier = FakeNotifier();
   });
 
   tearDown(() async {
@@ -74,6 +77,7 @@ void main() {
       meals: store,
       account: account,
       client: client,
+      notifier: notifier,
       wait: (_) async {},
     )..images = images;
   }
@@ -140,6 +144,7 @@ void main() {
     final subject = await backend.create(
       consumedAt: _noon,
       name: 'Two slices of margherita',
+      notes: 'Two slices of margherita',
     );
     final queue = await queueThat((_) async => _answers(_estimateJson()));
 
@@ -151,10 +156,37 @@ void main() {
     expect(parts.length, 1, reason: 'there is no photo to send');
     expect(parts.single['text'], contains('Two slices of margherita'));
     expect(
-      mealAt(subject).description,
-      startsWith('Two slices of margherita'),
-      reason: "the user's own words are the half nobody can reconstruct",
+      mealAt(subject).notes,
+      'Two slices of margherita',
+      reason: "the user's own words are the half nobody can reconstruct, and "
+          'an estimate replacing the name must not take them with it',
     );
+    expect(mealAt(subject).name, 'Cappuccino with oat milk');
+  });
+
+  /// The half of the clarify loop that lives here: an answer reaches the model
+  /// exactly once, however many estimates have run over the meal since.
+  test('a re-estimate sends the answer and never the last estimate', () async {
+    final subject = await photographedMeal();
+    final queue = await queueThat((_) async => _answers(_estimateJson(
+          confidence: 'low',
+          question: 'Was that milk or oat milk?',
+        )));
+
+    await queue.drain();
+    await backend.update(subject, notes: 'Oat milk');
+    await queue.retry(mealAt(subject));
+
+    final second = jsonDecode(requests.last.body);
+    final text = (((second['messages'] as List).last as Map)['content']
+        as List)[0]['text'] as String;
+    expect(text, contains('Oat milk'));
+    expect(
+      text,
+      isNot(contains('A takeaway cup')),
+      reason: "the model's own last reasoning is not something the eater wrote",
+    );
+    expect(mealAt(subject).notes, 'Oat milk');
   });
 
   test('a meal somebody put a number on is not estimated at all', () async {
@@ -181,6 +213,59 @@ void main() {
     expect(meal.status, MealStatus.needsInfo);
     expect(meal.clarifyingQuestion, 'Was that milk or oat milk?');
     expect(meal.calories, 120, reason: 'an uncertain guess is still a guess');
+    expect(
+      notifier.asked[subject],
+      'Was that milk or oat milk?',
+      reason: 'the point of a question is that nobody may be looking at the app',
+    );
+  });
+
+  /// The other half of the loop from the notification's side: once the answer
+  /// has been estimated with, the question on the lock screen is stale — and a
+  /// question that outlives its answer is the app not having listened.
+  test('an answered question is taken back off the lock screen', () async {
+    final subject = await photographedMeal();
+    var call = 0;
+    final queue = await queueThat((_) async {
+      call++;
+      return _answers(_estimateJson(
+        confidence: call == 1 ? 'low' : 'high',
+        question: call == 1 ? 'Was that milk or oat milk?' : null,
+      ));
+    });
+
+    await queue.drain();
+    expect(notifier.asked, contains(subject));
+
+    await backend.update(subject, notes: 'Oat milk');
+    await queue.retry(mealAt(subject));
+
+    expect(notifier.asked, isEmpty);
+    expect(notifier.history, [subject], reason: 'and it is not asked again');
+    expect(mealAt(subject).status, MealStatus.estimated);
+  });
+
+  test('a meal answered by hand stops being asked about', () async {
+    final subject = await photographedMeal();
+    final queue = await queueThat((_) async => _answers(_estimateJson(
+          confidence: 'low',
+          question: 'Was that milk or oat milk?',
+        )));
+
+    await queue.drain();
+    await queue.forget(subject);
+
+    expect(notifier.asked, isEmpty);
+  });
+
+  test('an estimate with nothing to ask asks nothing', () async {
+    await photographedMeal();
+    final queue = await queueThat((_) async => _answers(_estimateJson()));
+
+    await queue.drain();
+
+    expect(notifier.asked, isEmpty);
+    expect(notifier.history, isEmpty);
   });
 
   /// Low confidence on its own is a wide range, which the bounds already say.

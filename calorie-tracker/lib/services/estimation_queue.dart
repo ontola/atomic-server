@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/meal.dart';
 import 'image_store.dart';
 import 'meal_store.dart';
+import 'notifications.dart';
 import 'openrouter.dart';
 
 /// Turns photographs into calories, one meal at a time, whenever the app
@@ -18,15 +19,22 @@ class EstimationQueue extends ChangeNotifier {
     required MealStore meals,
     required OpenRouterAccount account,
     required OpenRouterClient client,
+    Notifier? notifier,
     Future<void> Function(Duration) wait = _realWait,
   })  : _meals = meals,
         _account = account,
         _client = client,
+        _notifier = notifier,
         _wait = wait;
 
   final MealStore _meals;
   final OpenRouterAccount _account;
   final OpenRouterClient _client;
+
+  /// Where a question goes when the app is not being looked at. Null in tests
+  /// that are not about the uncertainty loop, and on a platform with no
+  /// notification centre.
+  final Notifier? _notifier;
 
   /// Injected so the retry tests do not actually sleep through the backoff.
   final Future<void> Function(Duration) _wait;
@@ -126,6 +134,15 @@ class EstimationQueue extends ChangeNotifier {
     }
   }
 
+  /// Stop asking about a meal. What the user answering it by hand looks like
+  /// from here — a number typed, or the meal deleted outright.
+  ///
+  /// On the queue rather than on whoever is deleting because the queue is what
+  /// asked: a question outliving its meal is the one way a notification becomes
+  /// a dead end.
+  Future<void> forget(String subject) async =>
+      _notifier?.withdraw(subject);
+
   /// One meal, from `pending` to `estimated`, `needs-info` or `failed`.
   ///
   /// It is marked `estimating` before the call and the day is re-read, so the
@@ -140,7 +157,16 @@ class EstimationQueue extends ChangeNotifier {
       await _meals.load();
 
       final estimate = await _attempt(meal);
-      await _meals.saveEstimate(meal.subject, estimate.keeping(_words(meal)));
+      await _meals.saveEstimate(meal.subject, estimate);
+      // Asked here rather than by whoever is looking at the list, because the
+      // whole point of a question is that nobody may be looking. Withdrawn on
+      // the other branch for the same reason: a re-estimate that has nothing
+      // left to ask must not leave the old question sitting on a lock screen.
+      if (estimate.clarifyingQuestion.isEmpty) {
+        await _notifier?.withdraw(meal.subject);
+      } else {
+        await _notifier?.ask(meal.subject, estimate.clarifyingQuestion);
+      }
     } catch (e) {
       debugPrint('Could not estimate ${meal.subject}: $e');
       try {
@@ -193,13 +219,13 @@ class EstimationQueue extends ChangeNotifier {
   }
 
   /// What the user told us about this meal. On a typed entry it is everything
-  /// the model has to go on; on a photographed one it is usually empty.
-  static String _words(Meal meal) {
-    final parts = [meal.name.trim(), meal.description.trim()]
-        .where((s) => s.isNotEmpty)
-        .toSet();
-    return parts.join('. ');
-  }
+  /// the model has to go on; on a photographed one it is empty until they
+  /// answer a question.
+  ///
+  /// Only [Meal.notes] — never the name or the description, which after one
+  /// estimate are the model's own words. Handing those back as "the person who
+  /// logged it wrote" would be a lie that compounds every round.
+  static String _words(Meal meal) => meal.notes.trim();
 
   static Future<void> _realWait(Duration d) => Future.delayed(d);
 

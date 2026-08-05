@@ -79,6 +79,7 @@ class Meal {
     required this.description,
     required this.consumedAt,
     required this.status,
+    this.notes = '',
     this.calories,
     this.caloriesMin,
     this.caloriesMax,
@@ -93,7 +94,16 @@ class Meal {
 
   final String subject;
   final String name;
+
+  /// How the estimator got there. Replaced by every estimate, so nothing the
+  /// user wrote is ever kept here — see [notes].
   final String description;
+
+  /// What the person who ate this wrote themselves: the answer to a
+  /// [clarifyingQuestion], or detail they added by hand. The one text an
+  /// estimate never touches, which is what lets the clarify loop run twice
+  /// without feeding the model its own last answer back.
+  final String notes;
 
   /// Local time — [DateTime.fromMillisecondsSinceEpoch] without `isUtc`, so
   /// "which day was this" is asked in the timezone the phone is in.
@@ -122,6 +132,7 @@ class Meal {
         subject: item.subject,
         name: item.name,
         description: item.description,
+        notes: item.notes,
         consumedAt:
             DateTime.fromMillisecondsSinceEpoch(item.consumedAtMs.toInt()),
         status: MealStatus.fromWire(item.status),
@@ -141,9 +152,13 @@ class Meal {
   /// no name at all, and a blank row reads as a bug rather than as a queue.
   String get displayName {
     if (name.isNotEmpty) return name;
-    if (description.isNotEmpty) return description;
+    if (notes.isNotEmpty) return notes;
     return status == MealStatus.failed ? 'Could not estimate' : 'Not estimated yet';
   }
+
+  /// Whether this meal is waiting on an answer it could actually be given.
+  bool get needsAnswer =>
+      status == MealStatus.needsInfo && clarifyingQuestion.isNotEmpty;
 
   /// The low end of what this might have been: its own lower bound, or the one
   /// number it has.
@@ -175,9 +190,9 @@ class MealEstimate {
 
   final String name;
 
-  /// How the estimator got there. Replaces whatever the meal had, so anything
-  /// worth keeping — the words the user typed — has to be folded in first; see
-  /// [keeping].
+  /// How the estimator got there. Replaces the last estimate's reasoning and
+  /// nothing else — what the user wrote lives in [Meal.notes], which no
+  /// estimate writes.
   final String description;
   final int calories;
   final int? caloriesMin;
@@ -194,29 +209,6 @@ class MealEstimate {
   final double? proteinGrams;
   final double? carbsGrams;
   final double? fatGrams;
-
-  /// The same estimate with [words] kept in front of its reasoning.
-  ///
-  /// A typed meal is the user telling us what they ate, and the estimate
-  /// overwrites every field it touches. Their words are the more reliable half
-  /// of the record and the only part nobody can reconstruct, so they go first.
-  MealEstimate keeping(String words) {
-    final trimmed = words.trim();
-    if (trimmed.isEmpty || description.contains(trimmed)) return this;
-    return MealEstimate(
-      name: name,
-      description: '$trimmed\n\n$description',
-      calories: calories,
-      confidence: confidence,
-      model: model,
-      caloriesMin: caloriesMin,
-      caloriesMax: caloriesMax,
-      clarifyingQuestion: clarifyingQuestion,
-      proteinGrams: proteinGrams,
-      carbsGrams: carbsGrams,
-      fatGrams: fatGrams,
-    );
-  }
 
   ffi.MealEstimate toItem() => ffi.MealEstimate(
         name: name,
@@ -248,6 +240,43 @@ class MealEstimate {
     fromMs: start.millisecondsSinceEpoch,
     toMs: end.millisecondsSinceEpoch,
   );
+}
+
+/// The local calendar day [at] falls in, with the time thrown away.
+DateTime localDayOf(DateTime at) => DateTime(at.year, at.month, at.day);
+
+/// One day of history: which day, what it added up to, and what was in it.
+class MealDay {
+  const MealDay({required this.day, required this.meals});
+
+  final DateTime day;
+
+  /// Newest first, as the store hands them over.
+  final List<Meal> meals;
+
+  DaySummary get summary => DaySummary.of(meals);
+}
+
+/// Meals split into the local days they were eaten on, newest day first.
+///
+/// The split happens here rather than in the bridge for the reason
+/// [localDayBounds] exists: where a day starts is a question about the phone's
+/// timezone, and one range query plus this is cheaper and more honest than a
+/// query per day.
+List<MealDay> groupByLocalDay(Iterable<Meal> meals) {
+  final byDay = <DateTime, List<Meal>>{};
+  for (final meal in meals) {
+    byDay.putIfAbsent(localDayOf(meal.consumedAt), () => []).add(meal);
+  }
+
+  final days = byDay.keys.toList()..sort((a, b) => b.compareTo(a));
+  return [
+    for (final day in days)
+      MealDay(
+        day: day,
+        meals: byDay[day]!..sort((a, b) => b.consumedAt.compareTo(a.consumedAt)),
+      ),
+  ];
 }
 
 /// A day's meals, added up.

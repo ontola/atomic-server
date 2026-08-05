@@ -110,32 +110,38 @@ class AtomicClient {
 
   /// Log a meal. Returns its subject. A [calories] count makes it `confirmed`
   /// (a person said so); without one it is `pending`, for the estimator.
+  ///
+  /// [notes] is whatever the person logging it wrote. There is no description
+  /// here: nothing has estimated the meal yet, so every word about it is theirs.
   static Future<String> createMeal({
     required int consumedAtMs,
     String name = '',
-    String description = '',
+    String notes = '',
     String imagePath = '',
     int? calories,
   }) =>
       meals_ffi.createMeal(
         consumedAtMs: consumedAtMs,
         name: name,
-        description: description,
+        notes: notes,
         imagePath: imagePath,
         calories: calories,
       );
 
   /// Correct a meal by hand. A null argument leaves that field alone.
+  ///
+  /// Writing [notes] is how a `needs-info` meal gets answered — the next
+  /// estimate reads them, and no estimate ever overwrites them.
   static Future<void> updateMeal(
     String subject, {
     String? name,
-    String? description,
+    String? notes,
     int? calories,
   }) =>
       meals_ffi.updateMeal(
         subject: subject,
         name: name,
-        description: description,
+        notes: notes,
         calories: calories,
       );
 
@@ -159,6 +165,11 @@ class AtomicClient {
   /// The estimator's work queue: meals with no number yet, oldest first.
   static Future<List<meals_ffi.MealItem>> listPendingMeals() =>
       meals_ffi.listPendingMeals();
+
+  /// One meal by subject, or null when there is no such meal any more. What a
+  /// notification tap arrives holding — see `services/notifications.dart`.
+  static Future<meals_ffi.MealItem?> getMeal(String subject) =>
+      meals_ffi.getMeal(subject: subject);
 
   // ── 5. History ───────────────────────────────────────────────────────────
 

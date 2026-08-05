@@ -29,16 +29,21 @@ Future<String> ensureMealsContainer() =>
 /// somebody typed a number for is `confirmed` — a human said so, and no
 /// estimator should overwrite it — while one without a number is `pending`,
 /// which is exactly the queue Phase 4's estimator drains.
+///
+/// There is no `description` here on purpose: at the moment a meal is logged
+/// nothing has estimated it, so every word about it is the eater's and belongs
+/// in `notes`. `description` is the estimator's, and only [`update_meal_estimate`]
+/// writes it.
 Future<String> createMeal(
         {required PlatformInt64 consumedAtMs,
         required String name,
-        required String description,
+        required String notes,
         required String imagePath,
         PlatformInt64? calories}) =>
     RustLib.instance.api.crateApiMealsCreateMeal(
         consumedAtMs: consumedAtMs,
         name: name,
-        description: description,
+        notes: notes,
         imagePath: imagePath,
         calories: calories);
 
@@ -47,16 +52,18 @@ Future<String> createMeal(
 /// Typing a calorie count is a confirmation, so it moves the meal to
 /// `confirmed` — otherwise Phase 4's estimator would find a `pending` meal the
 /// user had already answered and overwrite the answer.
+///
+/// `notes` is the whole clarification loop: the answer to a
+/// `clarifying-question` is written here and the meal re-estimated, and because
+/// an estimate never touches this property the answer survives however many
+/// rounds it takes.
 Future<void> updateMeal(
         {required String subject,
         String? name,
-        String? description,
+        String? notes,
         PlatformInt64? calories}) =>
     RustLib.instance.api.crateApiMealsUpdateMeal(
-        subject: subject,
-        name: name,
-        description: description,
-        calories: calories);
+        subject: subject, name: name, notes: notes, calories: calories);
 
 /// Move a meal to another status. See [`MEAL_STATUSES`].
 Future<void> setMealStatus({required String subject, required String status}) =>
@@ -64,6 +71,10 @@ Future<void> setMealStatus({required String subject, required String status}) =>
         .crateApiMealsSetMealStatus(subject: subject, status: status);
 
 /// Write an estimate onto a meal, moving it to `estimated` or `needs-info`.
+///
+/// **`meal-notes` is not in the list of things it writes**, which is what makes
+/// the clarification loop terminate: the answer the eater gave goes into the
+/// next prompt and stays where it was put, however many estimates run over it.
 ///
 /// **A `confirmed` meal is left alone.** Confirmed means a human typed the
 /// number, and the estimate racing it — the user correcting a meal while its
@@ -99,6 +110,15 @@ Future<List<MealItem>> listMeals(
 Future<List<MealItem>> listPendingMeals() =>
     RustLib.instance.api.crateApiMealsListPendingMeals();
 
+/// One meal by subject, or None when it is not there or is not a meal.
+///
+/// What a notification tap arrives with. It carries a subject and nothing else —
+/// the meal it names may have been deleted, or answered and re-estimated, in the
+/// time the notification sat on the lock screen — so "no such meal" is an
+/// ordinary answer here rather than an error to show anybody.
+Future<MealItem?> getMeal({required String subject}) =>
+    RustLib.instance.api.crateApiMealsGetMeal(subject: subject);
+
 /// What an estimator worked out about a meal.
 ///
 /// A struct rather than the JSON string the plan sketched, for the reason
@@ -110,10 +130,9 @@ Future<List<MealItem>> listPendingMeals() =>
 class MealEstimate {
   final String name;
 
-  /// How the estimator got there. Overwrites what was on the meal, which for
-  /// a photographed one is nothing and for a typed one was the user's words —
-  /// so this must arrive with those words in it (the caller sends them to the
-  /// model in the first place).
+  /// How the estimator got there. Replaces the last estimate's reasoning and
+  /// nothing else: the eater's own words live in `notes`, which this call
+  /// never writes, so there is nothing here to be careful of.
   final String description;
   final PlatformInt64 calories;
   final PlatformInt64? caloriesMin;
@@ -190,7 +209,14 @@ class MealEstimate {
 class MealItem {
   final String subject;
   final String name;
+
+  /// How the estimator got there. Written by estimates, never by the eater.
   final String description;
+
+  /// What the eater wrote themselves — the answer to a
+  /// [`MealItem::clarifying_question`], or detail they added by hand. The one
+  /// text field [`update_meal_estimate`] does not touch.
+  final String notes;
 
   /// Unix epoch milliseconds, UTC. Which local day that falls in is the
   /// caller's question — see [`list_meals`].
@@ -220,6 +246,7 @@ class MealItem {
     required this.subject,
     required this.name,
     required this.description,
+    required this.notes,
     required this.consumedAtMs,
     required this.status,
     this.calories,
@@ -239,6 +266,7 @@ class MealItem {
       subject.hashCode ^
       name.hashCode ^
       description.hashCode ^
+      notes.hashCode ^
       consumedAtMs.hashCode ^
       status.hashCode ^
       calories.hashCode ^
@@ -260,6 +288,7 @@ class MealItem {
           subject == other.subject &&
           name == other.name &&
           description == other.description &&
+          notes == other.notes &&
           consumedAtMs == other.consumedAtMs &&
           status == other.status &&
           calories == other.calories &&

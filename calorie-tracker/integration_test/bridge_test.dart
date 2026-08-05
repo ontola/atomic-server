@@ -65,6 +65,7 @@ void main() {
     final subject = await AtomicClient.createMeal(
       consumedAtMs: noon.millisecondsSinceEpoch,
       name: 'Integration cappuccino',
+      notes: 'Oat milk',
       calories: 120,
     );
 
@@ -93,6 +94,10 @@ void main() {
     expect(meal.name, 'Integration cappuccino');
     expect(meal.calories, 120);
     expect(meal.consumedAt, noon);
+    expect(meal.notes, 'Oat milk',
+        reason: '`meal-notes` seeds with the rest of the ontology');
+    expect((await AtomicClient.getMeal(subject))?.name, 'Integration cappuccino',
+        reason: 'what a notification tap resolves through');
     expect(meal.status, MealStatus.confirmed,
         reason: 'a number a person typed is not waiting to be estimated');
 

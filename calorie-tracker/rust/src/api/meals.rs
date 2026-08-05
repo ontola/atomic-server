@@ -156,7 +156,12 @@ fn tag_shortname(resource: &atomic_lib::Resource, property: &str) -> String {
 pub struct MealItem {
     pub subject: String,
     pub name: String,
+    /// How the estimator got there. Written by estimates, never by the eater.
     pub description: String,
+    /// What the eater wrote themselves — the answer to a
+    /// [`MealItem::clarifying_question`], or detail they added by hand. The one
+    /// text field [`update_meal_estimate`] does not touch.
+    pub notes: String,
     /// Unix epoch milliseconds, UTC. Which local day that falls in is the
     /// caller's question — see [`list_meals`].
     pub consumed_at_ms: i64,
@@ -184,10 +189,15 @@ pub struct MealItem {
 /// somebody typed a number for is `confirmed` — a human said so, and no
 /// estimator should overwrite it — while one without a number is `pending`,
 /// which is exactly the queue Phase 4's estimator drains.
+///
+/// There is no `description` here on purpose: at the moment a meal is logged
+/// nothing has estimated it, so every word about it is the eater's and belongs
+/// in `notes`. `description` is the estimator's, and only [`update_meal_estimate`]
+/// writes it.
 pub async fn create_meal(
     consumed_at_ms: i64,
     name: String,
-    description: String,
+    notes: String,
     image_path: String,
     calories: Option<i64>,
 ) -> Result<String, String> {
@@ -210,8 +220,8 @@ pub async fn create_meal(
             Value::AtomicUrl(status.into()),
         ),
     ];
-    if !description.is_empty() {
-        props.push((atomic_lib::urls::DESCRIPTION, Value::String(description)));
+    if !notes.is_empty() {
+        props.push((atomic_lib::urls::MEAL_NOTES, Value::String(notes)));
     }
     if !image_path.is_empty() {
         props.push((atomic_lib::urls::IMAGE_PATH, Value::String(image_path)));
@@ -231,10 +241,15 @@ pub async fn create_meal(
 /// Typing a calorie count is a confirmation, so it moves the meal to
 /// `confirmed` — otherwise Phase 4's estimator would find a `pending` meal the
 /// user had already answered and overwrite the answer.
+///
+/// `notes` is the whole clarification loop: the answer to a
+/// `clarifying-question` is written here and the meal re-estimated, and because
+/// an estimate never touches this property the answer survives however many
+/// rounds it takes.
 pub async fn update_meal(
     subject: String,
     name: Option<String>,
-    description: Option<String>,
+    notes: Option<String>,
     calories: Option<i64>,
 ) -> Result<(), String> {
     let store = db()?;
@@ -248,12 +263,9 @@ pub async fn update_meal(
             .set_unsafe(atomic_lib::urls::NAME.into(), Value::String(name))
             .map_err(err)?;
     }
-    if let Some(description) = description {
+    if let Some(notes) = notes {
         resource
-            .set_unsafe(
-                atomic_lib::urls::DESCRIPTION.into(),
-                Value::String(description),
-            )
+            .set_unsafe(atomic_lib::urls::MEAL_NOTES.into(), Value::String(notes))
             .map_err(err)?;
     }
     if let Some(kcal) = calories {
@@ -298,10 +310,9 @@ pub async fn set_meal_status(subject: String, status: String) -> Result<(), Stri
 /// by handing the string on.
 pub struct MealEstimate {
     pub name: String,
-    /// How the estimator got there. Overwrites what was on the meal, which for
-    /// a photographed one is nothing and for a typed one was the user's words —
-    /// so this must arrive with those words in it (the caller sends them to the
-    /// model in the first place).
+    /// How the estimator got there. Replaces the last estimate's reasoning and
+    /// nothing else: the eater's own words live in `notes`, which this call
+    /// never writes, so there is nothing here to be careful of.
     pub description: String,
     pub calories: i64,
     pub calories_min: Option<i64>,
@@ -322,6 +333,10 @@ pub struct MealEstimate {
 }
 
 /// Write an estimate onto a meal, moving it to `estimated` or `needs-info`.
+///
+/// **`meal-notes` is not in the list of things it writes**, which is what makes
+/// the clarification loop terminate: the answer the eater gave goes into the
+/// next prompt and stays where it was put, however many estimates run over it.
 ///
 /// **A `confirmed` meal is left alone.** Confirmed means a human typed the
 /// number, and the estimate racing it — the user correcting a meal while its
@@ -459,6 +474,20 @@ pub async fn list_pending_meals() -> Result<Vec<MealItem>, String> {
     Ok(meals)
 }
 
+/// One meal by subject, or None when it is not there or is not a meal.
+///
+/// What a notification tap arrives with. It carries a subject and nothing else —
+/// the meal it names may have been deleted, or answered and re-estimated, in the
+/// time the notification sat on the lock screen — so "no such meal" is an
+/// ordinary answer here rather than an error to show anybody.
+pub async fn get_meal(subject: String) -> Result<Option<MealItem>, String> {
+    let store = db()?;
+    let Ok(resource) = store.get_resource(&subject.as_str().into()).await else {
+        return Ok(None);
+    };
+    Ok(read_meal(&resource))
+}
+
 /// Every meal in the container that [`keep`] wants, newest first.
 async fn collect_meals(keep: impl Fn(&MealItem) -> bool) -> Result<Vec<MealItem>, String> {
     let store = db()?;
@@ -512,6 +541,7 @@ fn read_meal(resource: &atomic_lib::Resource) -> Option<MealItem> {
         calories_min: int_prop(resource, atomic_lib::urls::CALORIES_MIN),
         calories_max: int_prop(resource, atomic_lib::urls::CALORIES_MAX),
         image_path: string_prop(resource, atomic_lib::urls::IMAGE_PATH),
+        notes: string_prop(resource, atomic_lib::urls::MEAL_NOTES),
         confidence: tag_shortname(resource, atomic_lib::urls::ESTIMATE_CONFIDENCE),
         estimated_by_model: string_prop(resource, atomic_lib::urls::ESTIMATED_BY_MODEL),
         clarifying_question: string_prop(resource, atomic_lib::urls::CLARIFYING_QUESTION),
@@ -593,6 +623,15 @@ mod tests {
         )
         .await
         .unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_meal_that_is_not_there_is_not_an_error() {
+        shared_drive().await;
+        assert!(get_meal("https://example.com/nothing".into())
+            .await
+            .unwrap()
+            .is_none());
     }
 
     #[tokio::test]
@@ -845,6 +884,50 @@ mod tests {
         assert_eq!(meal.calories, Some(300));
         assert_eq!(meal.name, "Porridge");
         assert_eq!(meal.status, "confirmed");
+    }
+
+    /// The clarification loop, from both ends: the answer has to reach the next
+    /// prompt, and it has to still be there after that prompt is answered — a
+    /// meal that gets re-estimated twice must not end up feeding the model its
+    /// own last reply as the eater's words.
+    #[tokio::test]
+    async fn an_estimate_reads_the_notes_and_leaves_them_alone() {
+        let window = 1_860_000_000_000;
+        let subject = meal_at(window, 9, "", None).await;
+
+        update_meal(subject.clone(), None, Some("Oat milk".into()), None)
+            .await
+            .unwrap();
+        assert_eq!(reload(window, &subject).await.notes, "Oat milk");
+
+        update_meal_estimate(subject.clone(), estimate(120))
+            .await
+            .unwrap();
+        update_meal_estimate(subject.clone(), estimate(130))
+            .await
+            .unwrap();
+
+        let meal = reload(window, &subject).await;
+        assert_eq!(
+            meal.notes, "Oat milk",
+            "what the eater wrote is the one thing an estimate must not touch"
+        );
+        assert_eq!(
+            meal.description, "A takeaway cup, roughly 250 ml",
+            "and the reasoning is replaced whole rather than piled up"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_meal_can_be_fetched_by_subject() {
+        let window = 1_870_000_000_000;
+        let subject = meal_at(window, 9, "Ramen", Some(700)).await;
+
+        let meal = get_meal(subject.clone()).await.unwrap().unwrap();
+
+        assert_eq!(meal.subject, subject);
+        assert_eq!(meal.name, "Ramen");
+        assert_eq!(meal.calories, Some(700));
     }
 
     #[tokio::test]
