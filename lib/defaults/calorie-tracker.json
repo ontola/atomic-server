@@ -139,6 +139,14 @@
     "https://atomicdata.dev/properties/shortname": "estimated-by-model"
   },
   {
+    "@id": "https://atomicdata.dev/properties/clarifyingQuestion",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The one thing an estimator could not tell from what it was given — \"was that milk or oat milk?\". Set alongside the `needs-info` status, and cleared when the answer arrives, so a Meal carries the question it is waiting on rather than only the fact that it is waiting.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "clarifying-question"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/proteinGrams",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
     "https://atomicdata.dev/properties/description": "Protein in this Meal, in grams.",
@@ -176,6 +184,7 @@
       "https://atomicdata.dev/properties/imagePath",
       "https://atomicdata.dev/properties/estimateConfidence",
       "https://atomicdata.dev/properties/estimatedByModel",
+      "https://atomicdata.dev/properties/clarifyingQuestion",
       "https://atomicdata.dev/properties/proteinGrams",
       "https://atomicdata.dev/properties/carbsGrams",
       "https://atomicdata.dev/properties/fatGrams"

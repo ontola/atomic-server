@@ -30,6 +30,17 @@ abstract class MealBackend {
 
   /// Meals in `[fromMs, toMs)`, newest first.
   Future<List<Meal>> list(int fromMs, int toMs);
+
+  /// Meals with no number on them yet, oldest first — the estimator's queue.
+  Future<List<Meal>> listPending();
+
+  /// Move a meal to another status. What the queue does on its way in
+  /// ([MealStatus.estimating]) and on its way out of a bad attempt
+  /// ([MealStatus.failed]).
+  Future<void> setStatus(String subject, MealStatus status);
+
+  /// Write an estimate. Leaves a [MealStatus.confirmed] meal alone.
+  Future<void> applyEstimate(String subject, MealEstimate estimate);
 }
 
 class FfiMealBackend implements MealBackend {
@@ -73,6 +84,20 @@ class FfiMealBackend implements MealBackend {
     final items = await AtomicClient.listMeals(fromMs, toMs);
     return items.map(Meal.fromItem).toList();
   }
+
+  @override
+  Future<List<Meal>> listPending() async {
+    final items = await AtomicClient.listPendingMeals();
+    return items.map(Meal.fromItem).toList();
+  }
+
+  @override
+  Future<void> setStatus(String subject, MealStatus status) =>
+      AtomicClient.setMealStatus(subject, status.wire);
+
+  @override
+  Future<void> applyEstimate(String subject, MealEstimate estimate) =>
+      AtomicClient.updateMealEstimate(subject, estimate.toItem());
 }
 
 /// The meals of one day, and what can be done to them.
@@ -189,6 +214,21 @@ class MealStore extends ChangeNotifier {
   Future<void> deleteMeal(String subject) async {
     await _guard(() => _backend.delete(subject));
   }
+
+  // ── The estimator's writes ───────────────────────────────────────────────
+  //
+  // Deliberately not behind `_guard`: it swallows the error into [error] and
+  // re-reads the day after every write, and the queue wants neither. It works
+  // through a list and needs to know which meal threw, and it reloads once a
+  // meal is finished with rather than three times on the way.
+
+  Future<List<Meal>> pendingMeals() => _backend.listPending();
+
+  Future<void> setStatus(String subject, MealStatus status) =>
+      _backend.setStatus(subject, status);
+
+  Future<void> saveEstimate(String subject, MealEstimate estimate) =>
+      _backend.applyEstimate(subject, estimate);
 
   /// Run a write, then re-read the day.
   ///

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../services/app_session.dart';
 import '../services/image_store.dart';
+import '../services/openrouter.dart';
+import 'openrouter_screen.dart';
 
 /// Who you are signed in as, the secret that is the only way back in, and what
 /// the photos are costing.
@@ -12,13 +14,22 @@ import '../services/image_store.dart';
 /// until there is one, because an account whose secret was never written down
 /// anywhere is one bad reinstall from gone.
 class AccountScreen extends StatelessWidget {
-  const AccountScreen({super.key, required this.session, this.images});
+  const AccountScreen({
+    super.key,
+    required this.session,
+    this.images,
+    this.account,
+  });
 
   final AppSession session;
 
   /// Where the photos are. Null before the documents directory is known, and in
   /// tests — then there is nothing to report and the section is not shown.
   final ImageStore? images;
+
+  /// Who pays for the estimates. Null in tests, and then the row that leads to
+  /// them is not shown.
+  final OpenRouterAccount? account;
 
   /// Subjects are DIDs and run off the screen; the tail identifies them.
   static String shorten(String? subject) {
@@ -109,6 +120,10 @@ class AccountScreen extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (account != null) ...[
+                    const SizedBox(height: 20),
+                    EstimatesSection(account: account!),
+                  ],
                   if (images != null) ...[
                     const SizedBox(height: 20),
                     PhotoStorageSection(images: images!),
@@ -128,6 +143,42 @@ class AccountScreen extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Where the calorie numbers come from, one tap away.
+///
+/// A row rather than the whole screen: connecting an account and choosing a
+/// model is a thing done once, and this screen's job is the account that cannot
+/// be recovered if it is lost.
+class EstimatesSection extends StatelessWidget {
+  const EstimatesSection({super.key, required this.account});
+
+  final OpenRouterAccount account;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      child: AnimatedBuilder(
+        animation: account,
+        builder: (context, _) => ListTile(
+          onTap: () => OpenRouterScreen.open(context, account: account),
+          title: const Text('Estimates'),
+          subtitle: Text(
+            account.isConnected
+                ? account.model
+                : 'Not connected — meals wait for their calories',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.outline),
+          ),
+          trailing: const Icon(Icons.chevron_right),
         ),
       ),
     );

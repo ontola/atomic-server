@@ -128,6 +128,7 @@ shortnames kebab-case, per repo convention):
 | `meal-status` (`mealStatus`) | atomicURL, `allows-only` | Tags: `pending` · `estimating` · `estimated` · `confirmed` · `needs-info` · `failed` |
 | `estimate-confidence` (`estimateConfidence`) | atomicURL, `allows-only` | Tags: `high` · `medium` · `low` (from the LLM) |
 | `estimated-by-model` (`estimatedByModel`) | string | OpenRouter model id used |
+| `clarifying-question` (`clarifyingQuestion`) | string | what the estimator could not tell; set with `needs-info`, cleared when a later estimate has nothing to ask (added in Phase 4) |
 | `protein-grams` / `carbs-grams` / `fat-grams` | float | optional macros, nice-to-have from the same LLM call |
 
 (`status` and `model` get prefixed subjects because bare `https://atomicdata.dev/properties/status`
@@ -195,12 +196,17 @@ midnight belongs to one day and not two; the caller works out where its local mi
 Deleting goes through the generic `delete_resource` in `simple.rs` — a `delete_meal` alias would
 add nothing.
 
-Phase 4 adds:
+Phase 4 added:
 
 ```rust
-pub async fn update_meal_estimate(subject: String, estimate_json: String) -> Result<(), String>; // sets name/calories/bounds/macros/confidence/model, status=estimated|needs-info
-pub async fn list_pending_meals() -> Result<Vec<MealItem>, String>;
+pub async fn update_meal_estimate(subject: String, estimate: MealEstimate) -> Result<(), String>; // sets name/calories/bounds/macros/confidence/model/question, status=estimated|needs-info
+pub async fn list_pending_meals() -> Result<Vec<MealItem>, String>; // pending + estimating, oldest first
 ```
+
+`estimate` is a typed struct rather than the JSON string this section originally sketched, for the
+same reason `MealItem` is one. `update_meal_estimate` leaves a `confirmed` meal untouched and
+returns `Ok`: a number a human typed beats an estimate that was in flight when they typed it, and
+that is two correct behaviours racing rather than anybody's mistake.
 
 ## 5. LLM integration (OpenRouter)
 
@@ -213,9 +219,17 @@ pub async fn list_pending_meals() -> Result<Vec<MealItem>, String>;
 3. Exchange: `POST https://openrouter.ai/api/v1/auth/keys` with `{code, code_verifier, code_challenge_method}` → `{key}`.
 4. Store the key with `flutter_secure_storage` (same pattern as the agent secret in `AtomicSession`).
 
+**Auth — a pasted key**, the second way in: a field on the Estimates screen for a key made by hand
+on openrouter.ai/keys, for anyone who would rather not hand this app an OAuth session, and the only
+way in where the browser round trip is awkward (a simulator, a desktop build). It lands in the same
+keychain slot, so everything downstream is identical. `useKey` checks it with `GET /api/v1/key`
+before storing it: an unchecked typo is silent until the next meal, which then fails on a 401 the
+queue will not retry.
+
 **Model selection**: `GET /api/v1/models`, filter to models whose `architecture.input_modalities`
-includes `image`, show in Settings with a sane default (e.g. `google/gemini-2.5-flash` — cheap,
-fast, good vision; verify current catalog at build time).
+includes `image`, show in Settings with a sane default. Phase 4 settled on `openai/gpt-5.6-luna`
+— cheap, fast, good vision, `structured_outputs` — measured at ~$0.0002 a meal against the live
+API. The catalogue is public, so the picker works before anyone has signed in.
 
 **Estimation call**: `POST /api/v1/chat/completions` with the photo as a base64 data-URL
 `image_url` part — read straight off disk, no resize step here: the stored file is *already* the
@@ -435,12 +449,42 @@ Two notes on how it landed:
   opened. It is deliberately *not* started on a launch that goes to onboarding: that would put the
   OS permission dialog on top of the sign-up screen, and §7 asks for the opposite.
 
-### Phase 4 — OpenRouter + estimation pipeline
+### Phase 4 — OpenRouter + estimation pipeline ✅ done
 
 OAuth PKCE, key storage, model picker, `OpenRouterClient`, `EstimationQueue`, wire text entries
 through the LLM too. **Accept:** photo of food → estimated meal with bounds within ~30s;
 pending meals from a previous session get estimated on next launch; queue unit tests with a mocked
 HTTP client (success, malformed JSON, 429 retry, low confidence).
+
+How it landed, and where it left the plan:
+
+- **The default model is `openai/gpt-5.6-luna`**, not the `google/gemini-2.5-flash` sketched in §5:
+  cheap, sees images, follows a strict schema, and ~$0.0002 a meal measured against the real API.
+  The picker offers every vision model in the catalogue, cheapest first, and flags the ones that do
+  not advertise `structured_outputs` rather than hiding them.
+- **`update_meal_estimate` takes a typed struct, not `estimate_json: String`** — the same argument
+  §4 makes for `MealItem`. FRB generates the Dart class either way, and Dart parses the model's
+  JSON regardless, because it is what decides whether there is a follow-up question.
+- **The ontology grew one property: `clarifying-question`.** §5 wants a `needs-info` meal to
+  produce a notification asking something, and there was nowhere to keep the something. Folding it
+  into `description` would have conflated the model's reasoning with the question, and a
+  "needs an answer" chip with nothing behind it is a dead end.
+- **The question, not the confidence, is what makes a meal `needs-info`.** §5 said `confidence:
+  low` → `needs-info`, but low confidence on its own is a wide range, which the bounds already
+  report. Only a question is answerable.
+- **`list_pending_meals` returns `estimating` as well as `pending`.** The only thing that sets that
+  status is a call in this process, so one found at launch is what a killed app left behind;
+  leaving it out would strand the meal forever. The queue skips the subjects it is holding itself.
+- **Retries are split by cause, not counted uniformly.** A 429, a 5xx or a dead socket gets three
+  goes with a doubling backoff. A rejected key, a refused request or an answer that breaks the
+  schema gets one — the same request fails the same way and every attempt is billed.
+- **The typed-entry sheet's calorie field became optional**, which is how text entries reach the
+  LLM: a number is a confirmation, a blank is a question. Nothing else about that flow changed.
+- **`MealStore` moved up to `main.dart`.** There are two writers now, and the day behind the
+  viewfinder, the day in the list and the day the estimator is filling in have to be one answer.
+- **A drain that starts before the documents directory is known skips photographed meals** rather
+  than failing them, and `main.dart` fires another when the directory lands. §7 has those two
+  things racing on purpose; failing the meal would delete the estimate's only input.
 
 ### Phase 5 — Uncertainty loop + history + polish
 

@@ -142,10 +142,23 @@ class AtomicClient {
   static Future<void> setMealStatus(String subject, String status) =>
       meals_ffi.setMealStatus(subject: subject, status: status);
 
+  /// Write an estimate onto a meal, moving it to `estimated` or — when the
+  /// estimator asked something — `needs-info`. A `confirmed` meal is left
+  /// alone: a human typed that number and an estimate racing it must not win.
+  static Future<void> updateMealEstimate(
+    String subject,
+    meals_ffi.MealEstimate estimate,
+  ) =>
+      meals_ffi.updateMealEstimate(subject: subject, estimate: estimate);
+
   /// Meals eaten in `[fromMs, toMs)`, newest first. Both are UTC milliseconds;
   /// working out where a local day's midnights fall is the caller's job.
   static Future<List<meals_ffi.MealItem>> listMeals(int fromMs, int toMs) =>
       meals_ffi.listMeals(fromMs: fromMs, toMs: toMs);
+
+  /// The estimator's work queue: meals with no number yet, oldest first.
+  static Future<List<meals_ffi.MealItem>> listPendingMeals() =>
+      meals_ffi.listPendingMeals();
 
   // ── 5. History ───────────────────────────────────────────────────────────
 

@@ -54,4 +54,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"$FLUTTER" run -d "$DEVICE" < "$FIFO" 2>&1 | tee -a "$LOG_FILE"
+# A key in the environment is baked into the build, so a fresh simulator can
+# estimate meals without signing in through the browser first. It is only ever
+# the fallback — a key someone connected on the device wins (see
+# OpenRouterAccount in lib/services/openrouter.dart).
+DEFINES=()
+if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+  DEFINES+=(--dart-define=OPENROUTER_API_KEY="$OPENROUTER_API_KEY")
+  echo "  OpenRouter: using OPENROUTER_API_KEY from the environment"
+  echo ""
+fi
+
+"$FLUTTER" run -d "$DEVICE" "${DEFINES[@]}" < "$FIFO" 2>&1 | tee -a "$LOG_FILE"

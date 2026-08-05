@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/meal.dart';
 import '../services/app_session.dart';
+import '../services/estimation_queue.dart';
 import '../services/image_store.dart';
 import '../services/meal_store.dart';
+import '../services/openrouter.dart';
 import '../widgets/meal_photo.dart';
 import 'account_screen.dart';
 import 'meal_entry_sheet.dart';
+import 'openrouter_screen.dart';
 
 /// The day so far: what it adds up to, and what went into it.
 ///
@@ -18,6 +23,8 @@ class TodayScreen extends StatefulWidget {
     required this.session,
     this.store,
     this.images,
+    this.account,
+    this.queue,
   });
 
   final AppSession session;
@@ -29,6 +36,12 @@ class TodayScreen extends StatefulWidget {
 
   /// Where the photos are, or null when they are not to be shown.
   final ImageStore? images;
+
+  /// Who pays for the estimates. Null in tests that are not about them.
+  final OpenRouterAccount? account;
+
+  /// What fills the numbers in. Null in tests that are not about estimation.
+  final EstimationQueue? queue;
 
   @override
   State<TodayScreen> createState() => _TodayScreenState();
@@ -60,12 +73,26 @@ class _TodayScreenState extends State<TodayScreen> {
     if (entry is SaveMeal) {
       await _store.logMeal(name: entry.name, calories: entry.calories);
       _reportFailure();
+      // No number typed means the user is asking the model for one.
+      if (entry.calories == null && _store.error == null) {
+        unawaited(widget.queue?.drain());
+      }
     }
   }
 
   Future<void> _editMeal(Meal meal) async {
-    final entry =
-        await MealEntrySheet.show(context, meal: meal, images: widget.images);
+    // Asked before the sheet is built, because whether the photo is still on
+    // disk is a question for the filesystem and the sheet is not going to wait
+    // on one.
+    final canReEstimate = await _canReEstimate(meal);
+    if (!mounted) return;
+
+    final entry = await MealEntrySheet.show(
+      context,
+      meal: meal,
+      images: widget.images,
+      onRetry: canReEstimate ? () => _retry(meal) : null,
+    );
     switch (entry) {
       case SaveMeal(:final name, :final calories):
         await _store.editMeal(meal.subject, name: name, calories: calories);
@@ -77,6 +104,21 @@ class _TodayScreenState extends State<TodayScreen> {
     _reportFailure();
   }
 
+  /// Whether there is anything left to ask a model with.
+  ///
+  /// A photographed meal whose picture the sweep evicted has nothing to send —
+  /// the 256px thumbnail is not a substitute — so re-estimating it is not
+  /// offered rather than offered and failed.
+  Future<bool> _canReEstimate(Meal meal) async {
+    if (widget.queue == null) return false;
+    if (meal.imagePath.isEmpty) {
+      return meal.name.isNotEmpty || meal.description.isNotEmpty;
+    }
+    return await widget.images?.stateOf(meal.imagePath) == PhotoState.stored;
+  }
+
+  void _retry(Meal meal) => unawaited(widget.queue!.retry(meal));
+
   /// A write that failed leaves the list as it was, which on its own looks like
   /// nothing happened. Say what did.
   void _reportFailure() {
@@ -87,17 +129,23 @@ class _TodayScreenState extends State<TodayScreen> {
 
   void _openAccount() {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) =>
-          AccountScreen(session: widget.session, images: widget.images),
+      builder: (_) => AccountScreen(
+        session: widget.session,
+        images: widget.images,
+        account: widget.account,
+      ),
     ));
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _store,
+      // The estimator changes this day underneath the list, and the banner is
+      // about its state rather than the store's.
+      animation: Listenable.merge([_store, widget.queue]),
       builder: (context, _) {
         final meals = _store.meals;
+        final account = widget.account;
 
         return Scaffold(
           appBar: AppBar(
@@ -123,6 +171,14 @@ class _TodayScreenState extends State<TodayScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
               children: [
                 _Total(summary: _store.summary),
+                if (account != null && widget.queue?.needsKey == true) ...[
+                  const SizedBox(height: 16),
+                  _ConnectBanner(
+                    waiting: widget.queue!.waiting,
+                    onConnect: () =>
+                        OpenRouterScreen.open(context, account: account),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 if (_store.loading && meals.isEmpty)
                   const Padding(
@@ -137,6 +193,10 @@ class _TodayScreenState extends State<TodayScreen> {
                       meal: meal,
                       images: widget.images,
                       onTap: () => _editMeal(meal),
+                      onRetry: meal.status == MealStatus.failed &&
+                              widget.queue != null
+                          ? () => _retry(meal)
+                          : null,
                     ),
               ],
             ),
@@ -197,16 +257,70 @@ class _Total extends StatelessWidget {
   }
 }
 
+/// Meals waiting on a key they do not have.
+///
+/// Only shown when there are some: connecting a payment account is a thing to
+/// ask for when it has become worth something, not on an empty day.
+class _ConnectBanner extends StatelessWidget {
+  const _ConnectBanner({required this.waiting, required this.onConnect});
+
+  final int waiting;
+  final VoidCallback onConnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              waiting == 1
+                  ? 'One meal is waiting to be estimated'
+                  : '$waiting meals are waiting to be estimated',
+              style: theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Connect an OpenRouter account and they get their calories. '
+              'They are logged and kept either way.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: onConnect,
+                child: const Text('Connect OpenRouter'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MealRow extends StatelessWidget {
   const _MealRow({
     required this.meal,
     required this.images,
     required this.onTap,
+    this.onRetry,
   });
 
   final Meal meal;
   final ImageStore? images;
   final VoidCallback onTap;
+
+  /// Offered on a meal that gave up. Three tries in a row is where the queue
+  /// stops on its own; a fourth is the user's call, and usually made because
+  /// something has changed — the network, the model, the key.
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -226,6 +340,19 @@ class _MealRow extends StatelessWidget {
             if (!meal.status.isSettled) ...[
               const SizedBox(width: 8),
               _StatusChip(status: meal.status),
+            ],
+            if (onRetry != null) ...[
+              const SizedBox(width: 4),
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('Try again'),
+              ),
             ],
           ],
         ),

@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1454694805;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1566861583;
 
 // Section: executor
 
@@ -872,6 +872,41 @@ fn wire__crate__api__meals__list_meals_impl(
                     (move || async move {
                         let output_ok =
                             crate::api::meals::list_meals(api_from_ms, api_to_ms).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__meals__list_pending_meals_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "list_pending_meals",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::meals::list_pending_meals().await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -1815,6 +1850,45 @@ fn wire__crate__api__meals__update_meal_impl(
         },
     )
 }
+fn wire__crate__api__meals__update_meal_estimate_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "update_meal_estimate",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_subject = <String>::sse_decode(&mut deserializer);
+            let api_estimate = <crate::api::meals::MealEstimate>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::meals::update_meal_estimate(api_subject, api_estimate)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__simple__wait_for_peer_count_change_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2133,6 +2207,36 @@ impl SseDecode for Vec<crate::api::simple::types::VersionMetadata> {
     }
 }
 
+impl SseDecode for crate::api::meals::MealEstimate {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_description = <String>::sse_decode(deserializer);
+        let mut var_calories = <i64>::sse_decode(deserializer);
+        let mut var_caloriesMin = <Option<i64>>::sse_decode(deserializer);
+        let mut var_caloriesMax = <Option<i64>>::sse_decode(deserializer);
+        let mut var_confidence = <String>::sse_decode(deserializer);
+        let mut var_model = <String>::sse_decode(deserializer);
+        let mut var_clarifyingQuestion = <String>::sse_decode(deserializer);
+        let mut var_proteinGrams = <Option<f64>>::sse_decode(deserializer);
+        let mut var_carbsGrams = <Option<f64>>::sse_decode(deserializer);
+        let mut var_fatGrams = <Option<f64>>::sse_decode(deserializer);
+        return crate::api::meals::MealEstimate {
+            name: var_name,
+            description: var_description,
+            calories: var_calories,
+            calories_min: var_caloriesMin,
+            calories_max: var_caloriesMax,
+            confidence: var_confidence,
+            model: var_model,
+            clarifying_question: var_clarifyingQuestion,
+            protein_grams: var_proteinGrams,
+            carbs_grams: var_carbsGrams,
+            fat_grams: var_fatGrams,
+        };
+    }
+}
+
 impl SseDecode for crate::api::meals::MealItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2147,6 +2251,7 @@ impl SseDecode for crate::api::meals::MealItem {
         let mut var_imagePath = <String>::sse_decode(deserializer);
         let mut var_confidence = <String>::sse_decode(deserializer);
         let mut var_estimatedByModel = <String>::sse_decode(deserializer);
+        let mut var_clarifyingQuestion = <String>::sse_decode(deserializer);
         let mut var_proteinGrams = <Option<f64>>::sse_decode(deserializer);
         let mut var_carbsGrams = <Option<f64>>::sse_decode(deserializer);
         let mut var_fatGrams = <Option<f64>>::sse_decode(deserializer);
@@ -2162,6 +2267,7 @@ impl SseDecode for crate::api::meals::MealItem {
             image_path: var_imagePath,
             confidence: var_confidence,
             estimated_by_model: var_estimatedByModel,
+            clarifying_question: var_clarifyingQuestion,
             protein_grams: var_proteinGrams,
             carbs_grams: var_carbsGrams,
             fat_grams: var_fatGrams,
@@ -2320,62 +2426,64 @@ fn pde_ffi_dispatcher_primary_impl(
             wire__crate__api__simple__list_drives_with_names_impl(port, ptr, rust_vec_len, data_len)
         }
         24 => wire__crate__api__meals__list_meals_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__simple__load_agent_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__simple__open_db_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__simple__open_ws_sync_impl(port, ptr, rust_vec_len, data_len),
-        30 => {
+        25 => wire__crate__api__meals__list_pending_meals_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__simple__load_agent_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__simple__open_db_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__simple__open_ws_sync_impl(port, ptr, rust_vec_len, data_len),
+        31 => {
             wire__crate__api__simple__ws_sync__open_ws_sync_impl(port, ptr, rust_vec_len, data_len)
         }
-        31 => wire__crate__api__simple__peer_announce_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__simple__peer_discover_sync_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__simple__peer_sync_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__simple__poll_db_event_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__simple__poll_sync_events_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__simple__ws_sync__post_commit_over_ws_impl(
+        32 => wire__crate__api__simple__peer_announce_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__simple__peer_discover_sync_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__simple__peer_sync_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__simple__poll_db_event_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__simple__poll_sync_events_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__simple__ws_sync__post_commit_over_ws_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__simple__rename_resource_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__simple__resume_app_session_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__simple__ws_sync__server_origin_to_ws_url_impl(
+        39 => wire__crate__api__simple__rename_resource_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__simple__resume_app_session_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__simple__ws_sync__server_origin_to_ws_url_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__api__simple__set_active_drive_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__meals__set_meal_status_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__simple__set_property_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__simple__setup_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__simple__start_peer_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__simple__ws_sync__subscribe_resource_impl(
+        42 => wire__crate__api__simple__set_active_drive_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__meals__set_meal_status_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__simple__set_property_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__simple__setup_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__simple__start_peer_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__simple__ws_sync__subscribe_resource_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => {
+        49 => {
             wire__crate__api__simple__sync_connectivity_now_impl(port, ptr, rust_vec_len, data_len)
         }
-        49 => {
+        50 => {
             wire__crate__api__simple__sync_drive_to_server_impl(port, ptr, rust_vec_len, data_len)
         }
-        50 => wire__crate__api__meals__update_meal_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__simple__wait_for_peer_count_change_impl(
+        51 => wire__crate__api__meals__update_meal_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__meals__update_meal_estimate_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__simple__wait_for_peer_count_change_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        52 => wire__crate__api__simple__wait_for_sync_event_impl(port, ptr, rust_vec_len, data_len),
-        53 => {
+        54 => wire__crate__api__simple__wait_for_sync_event_impl(port, ptr, rust_vec_len, data_len),
+        55 => {
             wire__crate__api__simple__warm_resource_history_impl(port, ptr, rust_vec_len, data_len)
         }
-        54 => wire__crate__api__simple__watch_children_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__simple__watch_resource_impl(port, ptr, rust_vec_len, data_len),
-        56 => {
+        56 => wire__crate__api__simple__watch_children_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__simple__watch_resource_impl(port, ptr, rust_vec_len, data_len),
+        58 => {
             wire__crate__api__simple__ws_subscribe_resource_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -2398,10 +2506,10 @@ fn pde_ffi_dispatcher_sync_impl(
         15 => wire__crate__api__simple__get_known_peers_impl(ptr, rust_vec_len, data_len),
         16 => wire__crate__api__simple__get_known_peers_json_impl(ptr, rust_vec_len, data_len),
         17 => wire__crate__api__simple__get_peer_id_impl(ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__simple__live_peer_count_impl(ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__simple__live_peer_ids_impl(ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__simple__remove_known_peer_impl(ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__simple__set_device_name_impl(ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__simple__live_peer_count_impl(ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__simple__live_peer_ids_impl(ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__simple__remove_known_peer_impl(ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__simple__set_device_name_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2432,6 +2540,36 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::simple::types::AgentInfo>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::meals::MealEstimate {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.name.into_into_dart().into_dart(),
+            self.description.into_into_dart().into_dart(),
+            self.calories.into_into_dart().into_dart(),
+            self.calories_min.into_into_dart().into_dart(),
+            self.calories_max.into_into_dart().into_dart(),
+            self.confidence.into_into_dart().into_dart(),
+            self.model.into_into_dart().into_dart(),
+            self.clarifying_question.into_into_dart().into_dart(),
+            self.protein_grams.into_into_dart().into_dart(),
+            self.carbs_grams.into_into_dart().into_dart(),
+            self.fat_grams.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::meals::MealEstimate
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::meals::MealEstimate>
+    for crate::api::meals::MealEstimate
+{
+    fn into_into_dart(self) -> crate::api::meals::MealEstimate {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::meals::MealItem {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -2446,6 +2584,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::meals::MealItem {
             self.image_path.into_into_dart().into_dart(),
             self.confidence.into_into_dart().into_dart(),
             self.estimated_by_model.into_into_dart().into_dart(),
+            self.clarifying_question.into_into_dart().into_dart(),
             self.protein_grams.into_into_dart().into_dart(),
             self.carbs_grams.into_into_dart().into_dart(),
             self.fat_grams.into_into_dart().into_dart(),
@@ -2587,6 +2726,23 @@ impl SseEncode for Vec<crate::api::simple::types::VersionMetadata> {
     }
 }
 
+impl SseEncode for crate::api::meals::MealEstimate {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.name, serializer);
+        <String>::sse_encode(self.description, serializer);
+        <i64>::sse_encode(self.calories, serializer);
+        <Option<i64>>::sse_encode(self.calories_min, serializer);
+        <Option<i64>>::sse_encode(self.calories_max, serializer);
+        <String>::sse_encode(self.confidence, serializer);
+        <String>::sse_encode(self.model, serializer);
+        <String>::sse_encode(self.clarifying_question, serializer);
+        <Option<f64>>::sse_encode(self.protein_grams, serializer);
+        <Option<f64>>::sse_encode(self.carbs_grams, serializer);
+        <Option<f64>>::sse_encode(self.fat_grams, serializer);
+    }
+}
+
 impl SseEncode for crate::api::meals::MealItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2601,6 +2757,7 @@ impl SseEncode for crate::api::meals::MealItem {
         <String>::sse_encode(self.image_path, serializer);
         <String>::sse_encode(self.confidence, serializer);
         <String>::sse_encode(self.estimated_by_model, serializer);
+        <String>::sse_encode(self.clarifying_question, serializer);
         <Option<f64>>::sse_encode(self.protein_grams, serializer);
         <Option<f64>>::sse_encode(self.carbs_grams, serializer);
         <Option<f64>>::sse_encode(self.fat_grams, serializer);

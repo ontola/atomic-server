@@ -31,6 +31,23 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Where OpenRouter's OAuth redirect lands. flutter_web_auth_2 owns
+             this activity; it hands the callback URL back to the `authenticate`
+             call that opened the browser and finishes. The scheme is
+             `_callbackScheme` in lib/services/openrouter.dart, and iOS needs no
+             equivalent — ASWebAuthenticationSession is told the scheme at call
+             time. -->
+        <activity
+            android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
+            android:exported="true"
+            android:taskAffinity="">
+            <intent-filter android:label="flutter_web_auth_2">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="caltracker"/>
+            </intent-filter>
+        </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -39,6 +39,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
+  MealEstimate dco_decode_box_autoadd_meal_estimate(dynamic raw);
+
+  @protected
   double dco_decode_f_64(dynamic raw);
 
   @protected
@@ -61,6 +64,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<VersionMetadata> dco_decode_list_version_metadata(dynamic raw);
+
+  @protected
+  MealEstimate dco_decode_meal_estimate(dynamic raw);
 
   @protected
   MealItem dco_decode_meal_item(dynamic raw);
@@ -111,6 +117,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
+  MealEstimate sse_decode_box_autoadd_meal_estimate(
+      SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
@@ -134,6 +144,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<VersionMetadata> sse_decode_list_version_metadata(
       SseDeserializer deserializer);
+
+  @protected
+  MealEstimate sse_decode_meal_estimate(SseDeserializer deserializer);
 
   @protected
   MealItem sse_decode_meal_item(SseDeserializer deserializer);
@@ -190,6 +203,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_meal_estimate(
+      MealEstimate self, SseSerializer serializer);
+
+  @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
@@ -214,6 +231,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_version_metadata(
       List<VersionMetadata> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_meal_estimate(MealEstimate self, SseSerializer serializer);
 
   @protected
   void sse_encode_meal_item(MealItem self, SseSerializer serializer);

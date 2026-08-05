@@ -23,8 +23,13 @@ ios:
 android:
 	./dev.sh android
 
+# A key in the environment is baked in, so a build can estimate meals without
+# signing in through the browser first. Empty when it is not set, which is the
+# unconnected app — see OpenRouterAccount in lib/services/openrouter.dart.
+DART_DEFINES = --dart-define=OPENROUTER_API_KEY=$(OPENROUTER_API_KEY)
+
 apk:
-	flutter build apk --debug --target-platform $(ABI)
+	flutter build apk --debug --target-platform $(ABI) $(DART_DEFINES)
 
 devices:
 	flutter devices

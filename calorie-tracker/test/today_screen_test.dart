@@ -133,10 +133,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Say what it was'), findsOneWidget);
-    expect(find.text('How many calories?'), findsOneWidget);
     expect(find.text('Log it'), findsOneWidget,
         reason: 'the sheet stays open on what it is asking for');
     expect(backend.meals, isEmpty);
+  });
+
+  /// The other half of that: the calorie field is optional now, and leaving it
+  /// blank is the ordinary way to log a typed meal — it is the user asking the
+  /// estimator for a number rather than giving it one.
+  testWidgets('a meal typed without a number is logged, and waits', (tester) async {
+    final backend = FakeMealBackend();
+    await pump(tester, backend);
+
+    await tester.tap(find.text('Log a meal'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Meal'), 'Two slices of margherita');
+    await tester.tap(find.text('Log it'));
+    await tester.pumpAndSettle();
+
+    final meal = backend.meals.single;
+    expect(meal.name, 'Two slices of margherita');
+    expect(meal.calories, isNull);
+    expect(meal.status, MealStatus.pending);
   });
 
   testWidgets('tapping a meal edits it', (tester) async {

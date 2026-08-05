@@ -1,0 +1,210 @@
+import 'package:flutter/foundation.dart';
+
+import '../models/meal.dart';
+import 'image_store.dart';
+import 'meal_store.dart';
+import 'openrouter.dart';
+
+/// Turns photographs into calories, one meal at a time, whenever the app
+/// happens to be running.
+///
+/// The shutter never waits for this (`planning/calorie-tracker-plan.md` §2):
+/// every capture writes a `pending` meal and is done, and this drains them —
+/// on launch, after each capture, and when the app comes back to the
+/// foreground. Kill the app mid-estimate and the meal is picked up next launch,
+/// which is why `pending` is a status on the meal rather than a list in memory.
+class EstimationQueue extends ChangeNotifier {
+  EstimationQueue({
+    required MealStore meals,
+    required OpenRouterAccount account,
+    required OpenRouterClient client,
+    Future<void> Function(Duration) wait = _realWait,
+  })  : _meals = meals,
+        _account = account,
+        _client = client,
+        _wait = wait;
+
+  final MealStore _meals;
+  final OpenRouterAccount _account;
+  final OpenRouterClient _client;
+
+  /// Injected so the retry tests do not actually sleep through the backoff.
+  final Future<void> Function(Duration) _wait;
+
+  /// Where the photos are. Arrives after construction — the documents directory
+  /// is found in parallel with everything else at launch (see `main.dart`) —
+  /// and a photographed meal cannot be estimated until it does.
+  ImageStore? images;
+
+  /// Three goes at a meal, then it is left `failed` for the user to retry.
+  /// A fourth automatic attempt has never been what fixes it, and every one is
+  /// billed.
+  static const maxAttempts = 3;
+
+  bool _running = false;
+  String? _error;
+  final Set<String> _inFlight = {};
+  int _waiting = 0;
+
+  /// Whether a drain is in progress. One call at a time, deliberately: they run
+  /// against a rate limit and a photo each, and nothing here is in a hurry.
+  bool get running => _running;
+
+  /// Meals still waiting on an estimate, the one in flight included.
+  ///
+  /// Survives the end of a drain rather than resetting: a drain that found four
+  /// meals and no API key to estimate them with has to leave that four behind
+  /// it, because it is the entire argument for [needsKey].
+  int get waiting => _waiting;
+
+  /// Why the last drain stopped early, if it did. Not the reason one meal
+  /// failed — that is on the meal, as [MealStatus.failed].
+  String? get error => _error;
+
+  /// There are meals to estimate and no key to estimate them with. What the
+  /// "Connect OpenRouter" banner is for.
+  bool get needsKey => !_account.isConnected && _waiting > 0;
+
+  /// Work through everything waiting. Safe to call whenever something may have
+  /// added to the queue; returns immediately if a drain is already running.
+  Future<void> drain() async {
+    if (_running) return;
+    _running = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final queue = await _meals.pendingMeals();
+      _waiting = queue.length;
+      notifyListeners();
+
+      // Checked *after* counting, so a user with no key still sees how many
+      // meals are waiting on one — which is the whole argument for connecting.
+      if (queue.isEmpty || !_account.isConnected) return;
+
+      for (final meal in queue) {
+        // A meal this drain has already started is one another drain is
+        // finishing; a meal the user confirmed by hand while we worked has left
+        // the queue behind our back.
+        if (_inFlight.contains(meal.subject)) continue;
+        // Left in the queue rather than failed: the documents directory is
+        // found in parallel with the store at launch (see `main.dart`), so a
+        // drain can start before there is anywhere to read a photo from. That
+        // is a race, not a meal without a photo — failing it would throw away
+        // the one thing the estimate needs.
+        if (meal.imagePath.isNotEmpty && images == null) continue;
+        await _estimate(meal);
+        _waiting--;
+        notifyListeners();
+      }
+    } catch (e) {
+      // Reading the queue failed, not estimating one meal. Nothing was written,
+      // so the next drain starts from exactly the same place.
+      _error = _messageFor(e);
+    } finally {
+      _running = false;
+      notifyListeners();
+      // Whatever landed is on the meals, and this is the app's one view of
+      // them.
+      await _meals.load();
+    }
+  }
+
+  /// Have another go at one meal — the tap on a `failed` row, and what the
+  /// clarify loop will call once there is an answer to re-estimate with.
+  Future<void> retry(Meal meal) async {
+    if (_inFlight.contains(meal.subject)) return;
+    _error = null;
+    _waiting++;
+    notifyListeners();
+    try {
+      await _estimate(meal);
+    } finally {
+      _waiting--;
+      notifyListeners();
+      await _meals.load();
+    }
+  }
+
+  /// One meal, from `pending` to `estimated`, `needs-info` or `failed`.
+  ///
+  /// It is marked `estimating` before the call and the day is re-read, so the
+  /// row says what is happening rather than sitting on "waiting" for the ten
+  /// seconds a vision model takes. That status is also what a killed app leaves
+  /// behind, and `list_pending_meals` counts it as queued for exactly that
+  /// reason.
+  Future<void> _estimate(Meal meal) async {
+    _inFlight.add(meal.subject);
+    try {
+      await _meals.setStatus(meal.subject, MealStatus.estimating);
+      await _meals.load();
+
+      final estimate = await _attempt(meal);
+      await _meals.saveEstimate(meal.subject, estimate.keeping(_words(meal)));
+    } catch (e) {
+      debugPrint('Could not estimate ${meal.subject}: $e');
+      try {
+        await _meals.setStatus(meal.subject, MealStatus.failed);
+      } catch (_) {
+        // The store is what just failed. Leaving the meal `estimating` is the
+        // recoverable outcome anyway: the next launch finds it in the queue.
+      }
+    } finally {
+      _inFlight.remove(meal.subject);
+    }
+  }
+
+  /// Call the model, giving a retryable failure another go or two.
+  ///
+  /// Backoff doubles from a second. It is short on purpose — the user may well
+  /// be looking at the screen, and a rate limit that needs longer than a few
+  /// seconds needs a lot longer, which is what the `failed` row is for.
+  Future<MealEstimate> _attempt(Meal meal) async {
+    final photo = await _photoOf(meal);
+    final words = _words(meal);
+    if (photo == null && words.isEmpty) {
+      throw const OpenRouterException(
+        'This meal has no photo left and nothing written down',
+      );
+    }
+
+    var attempt = 1;
+    while (true) {
+      try {
+        return await _client.estimate(
+          photo: photo,
+          photoPath: meal.imagePath,
+          words: words,
+        );
+      } on OpenRouterException catch (e) {
+        if (!e.retryable || attempt >= maxAttempts) rethrow;
+        await _wait(Duration(seconds: 1 << (attempt - 1)));
+        attempt++;
+      }
+    }
+  }
+
+  /// The stored image, or null when there is none — a typed meal, a photo the
+  /// sweep evicted, or a launch where the documents directory is not known yet.
+  Future<Uint8List?> _photoOf(Meal meal) async {
+    if (meal.imagePath.isEmpty) return null;
+    final file = await images?.load(meal.imagePath);
+    return file?.readAsBytes();
+  }
+
+  /// What the user told us about this meal. On a typed entry it is everything
+  /// the model has to go on; on a photographed one it is usually empty.
+  static String _words(Meal meal) {
+    final parts = [meal.name.trim(), meal.description.trim()]
+        .where((s) => s.isNotEmpty)
+        .toSet();
+    return parts.join('. ');
+  }
+
+  static Future<void> _realWait(Duration d) => Future.delayed(d);
+
+  static String _messageFor(Object e) {
+    final text = e.toString();
+    return text.startsWith('Exception: ') ? text.substring(11) : text;
+  }
+}

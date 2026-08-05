@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `find_meals_container`, `float_prop`, `int_prop`, `status_subject`, `string_prop`, `tag_shortname`
+// These functions are ignored because they are not marked as `pub`: `clear`, `collect_meals`, `confidence_subject`, `find_meals_container`, `float_prop`, `int_prop`, `read_meal`, `set`, `status_subject`, `string_prop`, `tag_shortname`, `tag_subject`
 
 /// Find the meals container under the active drive, creating it the first time.
 /// Idempotent — call it on every launch.
@@ -63,6 +63,17 @@ Future<void> setMealStatus({required String subject, required String status}) =>
     RustLib.instance.api
         .crateApiMealsSetMealStatus(subject: subject, status: status);
 
+/// Write an estimate onto a meal, moving it to `estimated` or `needs-info`.
+///
+/// **A `confirmed` meal is left alone.** Confirmed means a human typed the
+/// number, and the estimate racing it — the user correcting a meal while its
+/// call was in flight — must not win. Silently, and returning Ok: it is a race
+/// between two correct behaviours, not a mistake anybody made.
+Future<void> updateMealEstimate(
+        {required String subject, required MealEstimate estimate}) =>
+    RustLib.instance.api
+        .crateApiMealsUpdateMealEstimate(subject: subject, estimate: estimate);
+
 /// Meals eaten in `[from_ms, to_ms)`, newest first.
 ///
 /// Half-open on purpose: a day is `[midnight, next midnight)`, so a meal at
@@ -73,6 +84,102 @@ Future<void> setMealStatus({required String subject, required String status}) =>
 Future<List<MealItem>> listMeals(
         {required PlatformInt64 fromMs, required PlatformInt64 toMs}) =>
     RustLib.instance.api.crateApiMealsListMeals(fromMs: fromMs, toMs: toMs);
+
+/// The meals nobody has put a number on yet, oldest first.
+///
+/// The estimator's work queue. `estimating` is in it as well as `pending`,
+/// because the only thing that ever sets it is an estimate running in this
+/// process: a meal still marked `estimating` at launch is one an app that was
+/// killed mid-call left behind, and leaving it out would strand it there
+/// forever. A queue that is draining knows what it currently holds and skips
+/// those itself.
+///
+/// Oldest first, deliberately the opposite of [`list_meals`]: this is a queue,
+/// and the meal that has been waiting longest is the one to do next.
+Future<List<MealItem>> listPendingMeals() =>
+    RustLib.instance.api.crateApiMealsListPendingMeals();
+
+/// What an estimator worked out about a meal.
+///
+/// A struct rather than the JSON string the plan sketched, for the reason
+/// [`MealItem`] is one: FRB generates the Dart class either way, and a field
+/// this side and a key spelled slightly differently on the other is the whole
+/// category of bug that plumbing avoids. Dart parses the model's JSON already —
+/// it has to, to know whether to ask a follow-up question — so nothing is saved
+/// by handing the string on.
+class MealEstimate {
+  final String name;
+
+  /// How the estimator got there. Overwrites what was on the meal, which for
+  /// a photographed one is nothing and for a typed one was the user's words —
+  /// so this must arrive with those words in it (the caller sends them to the
+  /// model in the first place).
+  final String description;
+  final PlatformInt64 calories;
+  final PlatformInt64? caloriesMin;
+  final PlatformInt64? caloriesMax;
+
+  /// One of [`ESTIMATE_CONFIDENCES`].
+  final String confidence;
+
+  /// The OpenRouter model id, so a number can be traced to what made it.
+  final String model;
+
+  /// The one thing the estimator could not tell — "was that milk or oat
+  /// milk?". Empty when it was sure enough, and what decides the resulting
+  /// status: a question makes the meal `needs-info`, because a meal waiting
+  /// on an answer with no question to show is a dead end. Low confidence on
+  /// its own is just a wide range, which the bounds already say.
+  final String clarifyingQuestion;
+  final double? proteinGrams;
+  final double? carbsGrams;
+  final double? fatGrams;
+
+  const MealEstimate({
+    required this.name,
+    required this.description,
+    required this.calories,
+    this.caloriesMin,
+    this.caloriesMax,
+    required this.confidence,
+    required this.model,
+    required this.clarifyingQuestion,
+    this.proteinGrams,
+    this.carbsGrams,
+    this.fatGrams,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      description.hashCode ^
+      calories.hashCode ^
+      caloriesMin.hashCode ^
+      caloriesMax.hashCode ^
+      confidence.hashCode ^
+      model.hashCode ^
+      clarifyingQuestion.hashCode ^
+      proteinGrams.hashCode ^
+      carbsGrams.hashCode ^
+      fatGrams.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MealEstimate &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          description == other.description &&
+          calories == other.calories &&
+          caloriesMin == other.caloriesMin &&
+          caloriesMax == other.caloriesMax &&
+          confidence == other.confidence &&
+          model == other.model &&
+          clarifyingQuestion == other.clarifyingQuestion &&
+          proteinGrams == other.proteinGrams &&
+          carbsGrams == other.carbsGrams &&
+          fatGrams == other.fatGrams;
+}
 
 /// One meal, flattened for the Dart side.
 ///
@@ -101,6 +208,10 @@ class MealItem {
   /// `high` · `medium` · `low`, or empty when nothing has estimated it.
   final String confidence;
   final String estimatedByModel;
+
+  /// What the estimator could not tell — set with `needs-info`, empty
+  /// otherwise. See [`MealEstimate::clarifying_question`].
+  final String clarifyingQuestion;
   final double? proteinGrams;
   final double? carbsGrams;
   final double? fatGrams;
@@ -117,6 +228,7 @@ class MealItem {
     required this.imagePath,
     required this.confidence,
     required this.estimatedByModel,
+    required this.clarifyingQuestion,
     this.proteinGrams,
     this.carbsGrams,
     this.fatGrams,
@@ -135,6 +247,7 @@ class MealItem {
       imagePath.hashCode ^
       confidence.hashCode ^
       estimatedByModel.hashCode ^
+      clarifyingQuestion.hashCode ^
       proteinGrams.hashCode ^
       carbsGrams.hashCode ^
       fatGrams.hashCode;
@@ -155,6 +268,7 @@ class MealItem {
           imagePath == other.imagePath &&
           confidence == other.confidence &&
           estimatedByModel == other.estimatedByModel &&
+          clarifyingQuestion == other.clarifyingQuestion &&
           proteinGrams == other.proteinGrams &&
           carbsGrams == other.carbsGrams &&
           fatGrams == other.fatGrams;

@@ -425,6 +425,11 @@ mod tests {
                 "estimated-by-model",
                 DataType::String,
             ),
+            (
+                urls::CLARIFYING_QUESTION,
+                "clarifying-question",
+                DataType::String,
+            ),
             (urls::PROTEIN_GRAMS, "protein-grams", DataType::Float),
             (urls::CARBS_GRAMS, "carbs-grams", DataType::Float),
             (urls::FAT_GRAMS, "fat-grams", DataType::Float),

@@ -103,19 +103,34 @@ pub const MEAL_STATUSES: [&str; 6] = [
     "failed",
 ];
 
+/// How sure an estimator was, as the ontology allows it.
+pub const ESTIMATE_CONFIDENCES: [&str; 3] = ["high", "medium", "low"];
+
 /// The subject of a status tag, rejecting anything the ontology doesn't allow.
 ///
 /// Rejecting here rather than letting the write fail is what makes the error
 /// name the caller's mistake: an unknown tag subject is accepted by the store
 /// and only ever shows up later as a meal that matches no filter.
 fn status_subject(shortname: &str) -> Result<String, String> {
-    if !MEAL_STATUSES.contains(&shortname) {
+    tag_subject(shortname, atomic_lib::urls::MEAL_STATUS, &MEAL_STATUSES)
+}
+
+fn confidence_subject(shortname: &str) -> Result<String, String> {
+    tag_subject(
+        shortname,
+        atomic_lib::urls::ESTIMATE_CONFIDENCE,
+        &ESTIMATE_CONFIDENCES,
+    )
+}
+
+fn tag_subject(shortname: &str, property: &str, allowed: &[&str]) -> Result<String, String> {
+    if !allowed.contains(&shortname) {
         return Err(format!(
-            "Unknown meal status '{shortname}'. One of: {}",
-            MEAL_STATUSES.join(", ")
+            "Unknown value '{shortname}' for {property}. One of: {}",
+            allowed.join(", ")
         ));
     }
-    Ok(format!("{}/{shortname}", atomic_lib::urls::MEAL_STATUS))
+    Ok(format!("{property}/{shortname}"))
 }
 
 /// The shortname of a tag subject — `…/mealStatus/pending` → `pending`.
@@ -155,6 +170,9 @@ pub struct MealItem {
     /// `high` · `medium` · `low`, or empty when nothing has estimated it.
     pub confidence: String,
     pub estimated_by_model: String,
+    /// What the estimator could not tell — set with `needs-info`, empty
+    /// otherwise. See [`MealEstimate::clarifying_question`].
+    pub clarifying_question: String,
     pub protein_grams: Option<f64>,
     pub carbs_grams: Option<f64>,
     pub fat_grams: Option<f64>,
@@ -270,6 +288,148 @@ pub async fn set_meal_status(subject: String, status: String) -> Result<(), Stri
     save_and_push(&mut resource, store.as_ref()).await
 }
 
+/// What an estimator worked out about a meal.
+///
+/// A struct rather than the JSON string the plan sketched, for the reason
+/// [`MealItem`] is one: FRB generates the Dart class either way, and a field
+/// this side and a key spelled slightly differently on the other is the whole
+/// category of bug that plumbing avoids. Dart parses the model's JSON already —
+/// it has to, to know whether to ask a follow-up question — so nothing is saved
+/// by handing the string on.
+pub struct MealEstimate {
+    pub name: String,
+    /// How the estimator got there. Overwrites what was on the meal, which for
+    /// a photographed one is nothing and for a typed one was the user's words —
+    /// so this must arrive with those words in it (the caller sends them to the
+    /// model in the first place).
+    pub description: String,
+    pub calories: i64,
+    pub calories_min: Option<i64>,
+    pub calories_max: Option<i64>,
+    /// One of [`ESTIMATE_CONFIDENCES`].
+    pub confidence: String,
+    /// The OpenRouter model id, so a number can be traced to what made it.
+    pub model: String,
+    /// The one thing the estimator could not tell — "was that milk or oat
+    /// milk?". Empty when it was sure enough, and what decides the resulting
+    /// status: a question makes the meal `needs-info`, because a meal waiting
+    /// on an answer with no question to show is a dead end. Low confidence on
+    /// its own is just a wide range, which the bounds already say.
+    pub clarifying_question: String,
+    pub protein_grams: Option<f64>,
+    pub carbs_grams: Option<f64>,
+    pub fat_grams: Option<f64>,
+}
+
+/// Write an estimate onto a meal, moving it to `estimated` or `needs-info`.
+///
+/// **A `confirmed` meal is left alone.** Confirmed means a human typed the
+/// number, and the estimate racing it — the user correcting a meal while its
+/// call was in flight — must not win. Silently, and returning Ok: it is a race
+/// between two correct behaviours, not a mistake anybody made.
+pub async fn update_meal_estimate(subject: String, estimate: MealEstimate) -> Result<(), String> {
+    // Rejected before anything is written, so a bad tag cannot leave a meal
+    // half-updated.
+    let confidence = confidence_subject(&estimate.confidence)?;
+    let status = status_subject(if estimate.clarifying_question.is_empty() {
+        "estimated"
+    } else {
+        "needs-info"
+    })?;
+
+    let store = db()?;
+    let mut resource = store
+        .get_resource(&subject.as_str().into())
+        .await
+        .map_err(err)?;
+
+    if tag_shortname(&resource, atomic_lib::urls::MEAL_STATUS) == "confirmed" {
+        return Ok(());
+    }
+
+    set(&mut resource, atomic_lib::urls::NAME, Value::String(estimate.name))?;
+    set(
+        &mut resource,
+        atomic_lib::urls::DESCRIPTION,
+        Value::String(estimate.description),
+    )?;
+    set(
+        &mut resource,
+        atomic_lib::urls::CALORIES,
+        Value::Integer(estimate.calories),
+    )?;
+    set(
+        &mut resource,
+        atomic_lib::urls::ESTIMATE_CONFIDENCE,
+        Value::AtomicUrl(confidence.into()),
+    )?;
+    set(
+        &mut resource,
+        atomic_lib::urls::ESTIMATED_BY_MODEL,
+        Value::String(estimate.model),
+    )?;
+    set(
+        &mut resource,
+        atomic_lib::urls::MEAL_STATUS,
+        Value::AtomicUrl(status.into()),
+    )?;
+
+    // The optional half. `None` means the model did not give one, and the right
+    // answer for a re-estimate is to drop the old value rather than keep a
+    // number the new estimate does not stand behind.
+    for (property, value) in [
+        (atomic_lib::urls::CALORIES_MIN, estimate.calories_min),
+        (atomic_lib::urls::CALORIES_MAX, estimate.calories_max),
+    ] {
+        match value {
+            Some(kcal) => set(&mut resource, property, Value::Integer(kcal))?,
+            None => clear(&mut resource, property),
+        }
+    }
+    for (property, value) in [
+        (atomic_lib::urls::PROTEIN_GRAMS, estimate.protein_grams),
+        (atomic_lib::urls::CARBS_GRAMS, estimate.carbs_grams),
+        (atomic_lib::urls::FAT_GRAMS, estimate.fat_grams),
+    ] {
+        match value {
+            Some(grams) => set(&mut resource, property, Value::Float(grams))?,
+            None => clear(&mut resource, property),
+        }
+    }
+
+    // Cleared rather than blanked when there is nothing to ask, so a meal that
+    // was `needs-info` and has just been re-estimated stops carrying the
+    // question it no longer has.
+    if estimate.clarifying_question.is_empty() {
+        clear(&mut resource, atomic_lib::urls::CLARIFYING_QUESTION);
+    } else {
+        set(
+            &mut resource,
+            atomic_lib::urls::CLARIFYING_QUESTION,
+            Value::String(estimate.clarifying_question),
+        )?;
+    }
+
+    save_and_push(&mut resource, store.as_ref()).await
+}
+
+fn set(
+    resource: &mut atomic_lib::Resource,
+    property: &str,
+    value: Value,
+) -> Result<(), String> {
+    resource
+        .set_unsafe(property.into(), value)
+        .map(|_| ())
+        .map_err(err)
+}
+
+/// Drop a property. Not having it is the outcome either way, so a resource that
+/// never had it is not an error.
+fn clear(resource: &mut atomic_lib::Resource, property: &str) {
+    let _ = resource.remove_propval(property);
+}
+
 /// Meals eaten in `[from_ms, to_ms)`, newest first.
 ///
 /// Half-open on purpose: a day is `[midnight, next midnight)`, so a meal at
@@ -278,6 +438,29 @@ pub async fn set_meal_status(subject: String, status: String) -> Result<(), Stri
 /// fall, because the device knows its timezone and its DST and the store does
 /// not.
 pub async fn list_meals(from_ms: i64, to_ms: i64) -> Result<Vec<MealItem>, String> {
+    collect_meals(|meal| meal.consumed_at_ms >= from_ms && meal.consumed_at_ms < to_ms).await
+}
+
+/// The meals nobody has put a number on yet, oldest first.
+///
+/// The estimator's work queue. `estimating` is in it as well as `pending`,
+/// because the only thing that ever sets it is an estimate running in this
+/// process: a meal still marked `estimating` at launch is one an app that was
+/// killed mid-call left behind, and leaving it out would strand it there
+/// forever. A queue that is draining knows what it currently holds and skips
+/// those itself.
+///
+/// Oldest first, deliberately the opposite of [`list_meals`]: this is a queue,
+/// and the meal that has been waiting longest is the one to do next.
+pub async fn list_pending_meals() -> Result<Vec<MealItem>, String> {
+    let mut meals = collect_meals(|meal| meal.status == "pending" || meal.status == "estimating")
+        .await?;
+    meals.reverse();
+    Ok(meals)
+}
+
+/// Every meal in the container that [`keep`] wants, newest first.
+async fn collect_meals(keep: impl Fn(&MealItem) -> bool) -> Result<Vec<MealItem>, String> {
     let store = db()?;
     let container = ensure_meals_container().await?;
 
@@ -289,48 +472,53 @@ pub async fn list_meals(from_ms: i64, to_ms: i64) -> Result<Vec<MealItem>, Strin
         let Ok(resource) = store.get_resource(subject).await else {
             continue;
         };
-        let is_meal = resource
-            .get(atomic_lib::urls::IS_A)
-            .map(|v| v.to_string().contains(atomic_lib::urls::MEAL))
-            .unwrap_or(false);
-        if !is_meal {
-            continue;
-        }
-
-        // A meal without a readable instant belongs to no day, so it cannot be
-        // placed in this range — skipping beats defaulting it to the epoch and
-        // having it turn up in whatever the earliest query happens to be.
-        let Some(consumed_at_ms) = resource
-            .get(atomic_lib::urls::CONSUMED_AT)
-            .ok()
-            .and_then(|v| v.to_int().ok())
-        else {
+        let Some(meal) = read_meal(&resource) else {
             continue;
         };
-        if consumed_at_ms < from_ms || consumed_at_ms >= to_ms {
-            continue;
+        if keep(&meal) {
+            meals.push(meal);
         }
-
-        meals.push(MealItem {
-            subject: resource.get_subject().to_string(),
-            name: string_prop(&resource, atomic_lib::urls::NAME),
-            description: string_prop(&resource, atomic_lib::urls::DESCRIPTION),
-            consumed_at_ms,
-            status: tag_shortname(&resource, atomic_lib::urls::MEAL_STATUS),
-            calories: int_prop(&resource, atomic_lib::urls::CALORIES),
-            calories_min: int_prop(&resource, atomic_lib::urls::CALORIES_MIN),
-            calories_max: int_prop(&resource, atomic_lib::urls::CALORIES_MAX),
-            image_path: string_prop(&resource, atomic_lib::urls::IMAGE_PATH),
-            confidence: tag_shortname(&resource, atomic_lib::urls::ESTIMATE_CONFIDENCE),
-            estimated_by_model: string_prop(&resource, atomic_lib::urls::ESTIMATED_BY_MODEL),
-            protein_grams: float_prop(&resource, atomic_lib::urls::PROTEIN_GRAMS),
-            carbs_grams: float_prop(&resource, atomic_lib::urls::CARBS_GRAMS),
-            fat_grams: float_prop(&resource, atomic_lib::urls::FAT_GRAMS),
-        });
     }
 
     meals.sort_by_key(|m| std::cmp::Reverse(m.consumed_at_ms));
     Ok(meals)
+}
+
+/// A resource as a meal, or None when it is not one.
+fn read_meal(resource: &atomic_lib::Resource) -> Option<MealItem> {
+    let is_meal = resource
+        .get(atomic_lib::urls::IS_A)
+        .map(|v| v.to_string().contains(atomic_lib::urls::MEAL))
+        .unwrap_or(false);
+    if !is_meal {
+        return None;
+    }
+
+    // A meal without a readable instant belongs to no day, so it cannot be
+    // placed in any range — skipping beats defaulting it to the epoch and
+    // having it turn up in whatever the earliest query happens to be.
+    let consumed_at_ms = resource
+        .get(atomic_lib::urls::CONSUMED_AT)
+        .ok()
+        .and_then(|v| v.to_int().ok())?;
+
+    Some(MealItem {
+        subject: resource.get_subject().to_string(),
+        name: string_prop(resource, atomic_lib::urls::NAME),
+        description: string_prop(resource, atomic_lib::urls::DESCRIPTION),
+        consumed_at_ms,
+        status: tag_shortname(resource, atomic_lib::urls::MEAL_STATUS),
+        calories: int_prop(resource, atomic_lib::urls::CALORIES),
+        calories_min: int_prop(resource, atomic_lib::urls::CALORIES_MIN),
+        calories_max: int_prop(resource, atomic_lib::urls::CALORIES_MAX),
+        image_path: string_prop(resource, atomic_lib::urls::IMAGE_PATH),
+        confidence: tag_shortname(resource, atomic_lib::urls::ESTIMATE_CONFIDENCE),
+        estimated_by_model: string_prop(resource, atomic_lib::urls::ESTIMATED_BY_MODEL),
+        clarifying_question: string_prop(resource, atomic_lib::urls::CLARIFYING_QUESTION),
+        protein_grams: float_prop(resource, atomic_lib::urls::PROTEIN_GRAMS),
+        carbs_grams: float_prop(resource, atomic_lib::urls::CARBS_GRAMS),
+        fat_grams: float_prop(resource, atomic_lib::urls::FAT_GRAMS),
+    })
 }
 
 fn string_prop(resource: &atomic_lib::Resource, property: &str) -> String {
@@ -546,6 +734,198 @@ mod tests {
 
         let meals = list_meals(window, window + 24 * HOUR).await.unwrap();
         assert!(!meals.iter().any(|m| m.subject == subject));
+    }
+
+    // ── Estimates ──────────────────────────────────────────────────────────
+
+    fn estimate(calories: i64) -> MealEstimate {
+        MealEstimate {
+            name: "Cappuccino with oat milk".into(),
+            description: "A takeaway cup, roughly 250 ml".into(),
+            calories,
+            calories_min: Some(90),
+            calories_max: Some(160),
+            confidence: "medium".into(),
+            model: "openai/gpt-5.6-luna".into(),
+            clarifying_question: String::new(),
+            protein_grams: Some(4.5),
+            carbs_grams: Some(12.0),
+            fat_grams: Some(5.5),
+        }
+    }
+
+    async fn reload(window: i64, subject: &str) -> MealItem {
+        let meals = list_meals(window, window + 24 * HOUR).await.unwrap();
+        meals.into_iter().find(|m| m.subject == subject).unwrap()
+    }
+
+    #[tokio::test]
+    async fn an_estimate_fills_the_meal_in_and_settles_it() {
+        let window = 1_780_000_000_000;
+        let subject = meal_at(window, 9, "", None).await;
+
+        update_meal_estimate(subject.clone(), estimate(120))
+            .await
+            .unwrap();
+
+        let meal = reload(window, &subject).await;
+        assert_eq!(meal.name, "Cappuccino with oat milk");
+        assert_eq!(meal.calories, Some(120));
+        assert_eq!(meal.calories_min, Some(90));
+        assert_eq!(meal.calories_max, Some(160));
+        assert_eq!(meal.confidence, "medium");
+        assert_eq!(meal.estimated_by_model, "openai/gpt-5.6-luna");
+        assert_eq!(meal.protein_grams, Some(4.5));
+        assert_eq!(
+            meal.status, "estimated",
+            "numbers a model produced are not numbers a human agreed with"
+        );
+        assert_eq!(meal.clarifying_question, "");
+    }
+
+    /// The whole point of the uncertainty loop: a question makes the meal
+    /// something the user can answer, and the question has to be on it or there
+    /// is nothing to ask them.
+    #[tokio::test]
+    async fn a_question_makes_the_meal_need_an_answer() {
+        let window = 1_790_000_000_000;
+        let subject = meal_at(window, 9, "", None).await;
+
+        let mut estimate = estimate(140);
+        estimate.confidence = "low".into();
+        estimate.clarifying_question = "Was that milk or oat milk?".into();
+        update_meal_estimate(subject.clone(), estimate).await.unwrap();
+
+        let meal = reload(window, &subject).await;
+        assert_eq!(meal.status, "needs-info");
+        assert_eq!(meal.clarifying_question, "Was that milk or oat milk?");
+        assert_eq!(meal.calories, Some(140), "a guess is still worth having");
+    }
+
+    /// Re-estimating after the answer arrives has to leave nothing of the old
+    /// estimate behind — a meal that still shows a question it has been told
+    /// the answer to reads as the app not having listened.
+    #[tokio::test]
+    async fn a_second_estimate_drops_what_the_first_one_asked() {
+        let window = 1_800_000_000_000;
+        let subject = meal_at(window, 9, "", None).await;
+
+        let mut first = estimate(140);
+        first.clarifying_question = "Was that milk or oat milk?".into();
+        update_meal_estimate(subject.clone(), first).await.unwrap();
+
+        let mut second = estimate(120);
+        second.calories_min = None;
+        second.calories_max = None;
+        second.protein_grams = None;
+        update_meal_estimate(subject.clone(), second).await.unwrap();
+
+        let meal = reload(window, &subject).await;
+        assert_eq!(meal.status, "estimated");
+        assert_eq!(meal.clarifying_question, "");
+        assert_eq!(
+            meal.calories_min, None,
+            "a bound the new estimate does not stand behind must not survive it"
+        );
+        assert_eq!(meal.protein_grams, None);
+    }
+
+    /// The user correcting a meal while its estimate was in flight. Two correct
+    /// behaviours racing, and the human wins.
+    #[tokio::test]
+    async fn an_estimate_does_not_overwrite_a_confirmed_meal() {
+        let window = 1_810_000_000_000;
+        let subject = meal_at(window, 9, "Porridge", Some(300)).await;
+
+        update_meal_estimate(subject.clone(), estimate(120))
+            .await
+            .unwrap();
+
+        let meal = reload(window, &subject).await;
+        assert_eq!(meal.calories, Some(300));
+        assert_eq!(meal.name, "Porridge");
+        assert_eq!(meal.status, "confirmed");
+    }
+
+    #[tokio::test]
+    async fn a_confidence_the_ontology_does_not_allow_is_refused() {
+        let window = 1_820_000_000_000;
+        let subject = meal_at(window, 9, "", None).await;
+
+        let mut estimate = estimate(120);
+        estimate.confidence = "quite sure".into();
+        let error = update_meal_estimate(subject.clone(), estimate)
+            .await
+            .unwrap_err();
+
+        assert!(error.contains("quite sure"), "the error has to name the mistake");
+        let meal = reload(window, &subject).await;
+        assert_eq!(
+            meal.status, "pending",
+            "a refused estimate must leave the meal in the queue, not half-written"
+        );
+        assert_eq!(meal.calories, None);
+    }
+
+    // ── The queue ──────────────────────────────────────────────────────────
+
+    /// The queue is not a day, so this one runs against every meal there is —
+    /// which the other tests are constantly adding to. It asserts about its own
+    /// meals only, and about the *order* of those, which is the property that
+    /// makes a queue a queue.
+    #[tokio::test]
+    async fn the_queue_holds_what_has_no_number_yet_oldest_first() {
+        let window = 1_830_000_000_000;
+        let older = meal_at(window, 1, "", None).await;
+        let newer = meal_at(window, 5, "", None).await;
+        let typed = meal_at(window, 3, "Toast", Some(200)).await;
+        let done = meal_at(window, 4, "", None).await;
+        update_meal_estimate(done.clone(), estimate(120))
+            .await
+            .unwrap();
+
+        let queue = list_pending_meals().await.unwrap();
+        let subjects: Vec<String> = queue.iter().map(|m| m.subject.clone()).collect();
+
+        assert!(!subjects.contains(&typed), "a number somebody typed needs nothing");
+        assert!(!subjects.contains(&done), "an estimated meal is off the queue");
+        let older_at = subjects.iter().position(|s| s == &older).unwrap();
+        let newer_at = subjects.iter().position(|s| s == &newer).unwrap();
+        assert!(
+            older_at < newer_at,
+            "the meal that has been waiting longest is the one to do next"
+        );
+    }
+
+    /// An app killed mid-call leaves a meal marked `estimating` and no process
+    /// that is estimating it. Left off the queue it would sit there forever.
+    #[tokio::test]
+    async fn a_meal_abandoned_mid_estimate_is_still_in_the_queue() {
+        let window = 1_840_000_000_000;
+        let subject = meal_at(window, 9, "", None).await;
+        set_meal_status(subject.clone(), "estimating".into())
+            .await
+            .unwrap();
+
+        let queue = list_pending_meals().await.unwrap();
+
+        assert!(queue.iter().any(|m| m.subject == subject));
+    }
+
+    #[tokio::test]
+    async fn a_meal_that_gave_up_is_not_retried_on_its_own() {
+        let window = 1_850_000_000_000;
+        let subject = meal_at(window, 9, "", None).await;
+        set_meal_status(subject.clone(), "failed".into())
+            .await
+            .unwrap();
+
+        let queue = list_pending_meals().await.unwrap();
+
+        assert!(
+            !queue.iter().any(|m| m.subject == subject),
+            "three failures in a row are not fixed by a fourth; retrying is the user's call"
+        );
     }
 
     /// The container is the app's, but nothing stops something else from

@@ -6,8 +6,10 @@ import 'package:flutter/services.dart';
 import '../models/meal.dart';
 import '../services/app_session.dart';
 import '../services/camera_feed.dart';
+import '../services/estimation_queue.dart';
 import '../services/image_store.dart';
 import '../services/meal_store.dart';
+import '../services/openrouter.dart';
 import '../startup.dart';
 import '../widgets/meal_photo.dart';
 import 'account_screen.dart';
@@ -28,6 +30,8 @@ class CaptureScreen extends StatefulWidget {
     required this.camera,
     this.store,
     this.images,
+    this.account,
+    this.queue,
   });
 
   final AppSession session;
@@ -42,6 +46,14 @@ class CaptureScreen extends StatefulWidget {
   /// Injected by tests, which have no documents directory. Null until the
   /// directory is known, in which case photos simply are not shown.
   final ImageStore? images;
+
+  /// Who pays for the estimates. Null in tests that are not about them.
+  final OpenRouterAccount? account;
+
+  /// What turns the meals this screen logs into calories. Owned by the app;
+  /// null in tests that are not about estimation, in which case a capture is
+  /// simply logged and left `pending` — which is what it does anyway.
+  final EstimationQueue? queue;
 
   @override
   State<CaptureScreen> createState() => _CaptureScreenState();
@@ -103,9 +115,10 @@ class _CaptureScreenState extends State<CaptureScreen>
         widget.camera.stop();
       case AppLifecycleState.resumed:
         widget.camera.start();
-        // Another device may have synced meals in while we were away, and
-        // Phase 4's estimator will have been filling in the ones logged here.
+        // Another device may have synced meals in while we were away, and a
+        // drain that was cut short by the app going away has meals left in it.
         _store.load();
+        unawaited(widget.queue?.drain());
     }
   }
 
@@ -136,6 +149,10 @@ class _CaptureScreenState extends State<CaptureScreen>
         // the list of meals, and this one has to be in it or its own photo is
         // an orphan.
         unawaited(_sweep());
+        // Not awaited either, and nothing on this screen waits for it: the
+        // shutter's job ended when the meal was written, and what it was worth
+        // arrives whenever the model gets round to it.
+        unawaited(widget.queue?.drain());
       }
     } catch (e) {
       if (mounted) _say(_messageFor(e));
@@ -171,7 +188,12 @@ class _CaptureScreenState extends State<CaptureScreen>
     final entry = await MealEntrySheet.show(context);
     if (entry is SaveMeal) {
       await _store.logMeal(name: entry.name, calories: entry.calories);
-      if (_store.error != null) _say(_store.error!);
+      if (_store.error != null) {
+        _say(_store.error!);
+      } else if (entry.calories == null) {
+        // No number typed means the user is asking the model for one.
+        unawaited(widget.queue?.drain());
+      }
     }
   }
 
@@ -181,13 +203,19 @@ class _CaptureScreenState extends State<CaptureScreen>
         session: widget.session,
         store: _store,
         images: widget.images,
+        account: widget.account,
+        queue: widget.queue,
       ),
     ));
   }
 
   void _openAccount() {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => AccountScreen(session: widget.session, images: widget.images),
+      builder: (_) => AccountScreen(
+        session: widget.session,
+        images: widget.images,
+        account: widget.account,
+      ),
     ));
   }
 

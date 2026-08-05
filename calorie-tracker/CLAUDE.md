@@ -7,12 +7,14 @@ Plan: [`../planning/calorie-tracker-plan.md`](../planning/calorie-tracker-plan.m
 (architecture, data model, phases). Product brief:
 [`../planning/calorie-tracker-app.md`](../planning/calorie-tracker-app.md).
 
-**Status: Phase 3 (camera capture) complete.** The app onboards — one tap to a
-new account, or a pasted secret to restore one — persists the session, and lands
-on a viewfinder. The shutter writes a compressed photo and a `pending` meal and
-is done; the day's total is on top of the preview and the list is one tap
-behind it. Meals can still be typed in by hand. No LLM yet — that is Phase 4,
-and `pending` is already the queue it drains.
+**Status: Phase 4 (OpenRouter + estimation) complete.** The app onboards — one
+tap to a new account, or a pasted secret to restore one — persists the session,
+and lands on a viewfinder. The shutter writes a compressed photo and a `pending`
+meal and is done; the day's total is on top of the preview and the list is one
+tap behind it. A queue drains those pending meals through a vision model on
+OpenRouter, on launch, after each capture and on resume, and writes back a name,
+a number and a range. Meals can still be typed in by hand — with a number, which
+confirms them, or without one, which asks the model instead.
 
 ## When writing code
 
@@ -32,11 +34,14 @@ lib/
     meal_store.dart    one day's meals, and the writes to them
     camera_feed.dart   the camera, behind a seam; DeviceCamera is the real one
     image_store.dart   compress, store, count, evict — all of the plan's §6
+    openrouter.dart    the key, the model catalogue, and the estimate call
+    estimation_queue.dart  drains the pending meals through one of those models
   screens/
     capture_screen.dart    home: the viewfinder, the shutter, the day's total
     today_screen.dart      the day's total and its meals, one tap behind home
     meal_entry_sheet.dart  type a meal, or correct one
     account_screen.dart    the agent, the secret, the photo budget
+    openrouter_screen.dart connect or disconnect, and pick the model
     onboarding/        first launch, and the "my data is on the other phone" case
     pair_screen.dart   QR pairing, from the canvas app
   widgets/             error_snack.dart, meal_photo.dart
@@ -49,9 +54,14 @@ rust_builder/          cargokit build integration (vendored, locally patched)
 
 Everything goes through `AppSession` and `MealStore`. No screen calls `setup()`,
 opens the store, or touches `AtomicSession` or the bridge itself — the boot
-happens once, in one place, and screens render `session.phase`. Every service
-with a platform behind it has a seam — `AtomicBackend`, `MealBackend`,
-`CameraFeed`, `ImageCompressor` — and that is what makes the flows testable
+happens once, in one place, and screens render `session.phase`. `main.dart` owns
+all of it now: the session, the camera, the image store, **the meal store**, the
+OpenRouter account and the queue. The meal store moved up there in Phase 4 for a
+concrete reason — there is a second writer, and the day behind the viewfinder,
+the day in the list and the day the estimator is filling in have to be one
+answer. Every service with a platform behind it has a seam — `AtomicBackend`,
+`MealBackend`, `CameraFeed`, `ImageCompressor` — and that is what makes the
+flows testable
 without a Rust library, a camera or a codec: `test/fake_atomic_backend.dart`
 models the store and the process separately, which is exactly the difference a
 relaunch tests, `test/fake_meal_backend.dart` models the meals table, and
@@ -85,6 +95,58 @@ any meal the estimator still needs and never touching a thumbnail; and an orphan
 pass every time. The format and the two sizes are constants in one place, which
 is what would make the WebP question (plan §10) a one-line change.
 
+## Estimation, and the four things it must never do
+
+`EstimationQueue` reads `list_pending_meals()`, sends each meal's stored photo
+(or the words the user typed) to a vision model on OpenRouter, and writes the
+answer back with `update_meal_estimate`. One call in flight at a time; it runs
+on launch, after every capture, on resume, and on demand from a `failed` row.
+The whole pipeline is `openrouter.dart` (the wire) plus `estimation_queue.dart`
+(the policy), and `MealStore` is the only thing either of them writes through.
+
+- **It must not overwrite a `confirmed` meal.** A number a human typed beats an
+  estimate that was in flight when they typed it. `update_meal_estimate`
+  enforces that in Rust and returns `Ok` — it is two correct behaviours racing,
+  not a mistake to report. Do not "fix" it by making it an error.
+- **It must not fail a meal it simply cannot reach yet.** The documents
+  directory is found in parallel with the store, so a drain can start before
+  there is anywhere to read a photo from. Those meals are *skipped*, left
+  `pending`, and picked up by the drain `main.dart` fires when the directory
+  lands. Failing them would throw away the estimate's only input.
+- **It must not retry what will fail again.** A 429, a 5xx or a dead socket gets
+  three goes with a doubling backoff; a rejected key, a refused request or an
+  answer that is not the JSON the schema asked for gets one. Every attempt is
+  billed, and a model that just broke a strict schema will break it again. The
+  meal goes `failed`, keeps its photo, and offers the user a retry.
+- **It must not lose the user's words.** The estimate replaces every field it
+  touches, so `MealEstimate.keeping()` folds what the user typed in front of the
+  model's reasoning first. Their words are the more reliable half of the record
+  and the only part nobody can reconstruct.
+
+Two more things about the shape:
+
+- **`needs-info` is decided by the question, not by the confidence.** Low
+  confidence on its own is a wide range, which `calories-min`/`calories-max`
+  already say. A meal is only `needs-info` when the model asked something, and
+  that question is stored on the meal — a "needs an answer" chip with nothing
+  behind it is a dead end. Phase 5 owns answering it; Phase 4 shows it in the
+  edit sheet.
+- **`estimating` is a queued status, not an in-flight one.** The only thing that
+  sets it is a call in this process, so one found at launch is what a killed app
+  left behind. `list_pending_meals` returns it alongside `pending` for exactly
+  that reason, and the queue skips subjects it is currently holding itself.
+
+There are two ways to get a key in: OpenRouter's OAuth PKCE flow, and pasting one made by hand on
+openrouter.ai/keys. Both end in the same keychain slot, so nothing downstream knows the difference.
+A pasted key is checked with `GET /api/v1/key` before it is stored — unverified, a typo is silent
+until the next meal, which then fails on a 401 the queue will not retry.
+
+The key lives in the platform keychain next to the agent secret. For
+development, `--dart-define=OPENROUTER_API_KEY=…` bakes one in as a *fallback* —
+`make ios` / `make android` / `make apk` pass it through from the environment —
+and a key someone signed in with on the device always wins, so a dev build never
+quietly bills the wrong account.
+
 ## The meal vocabulary lives in `atomic_lib`, not here
 
 `Meal`, `consumed-at`, `calories`, `meal-status` and the rest are defined in
@@ -103,6 +165,9 @@ Two things about that model are worth knowing before extending it:
   each state is a Tag resource under its property
   (`…/properties/mealStatus/pending`). The bridge speaks the shortnames and
   converts at the boundary; nothing above `meals.rs` sees a tag URL.
+- **`clarifying-question` was added in Phase 4**, for the reason above: a meal
+  that is `needs-info` has to carry what it is waiting on. It is cleared, not
+  blanked, when a later estimate has nothing to ask.
 - **A meal requires only `consumed-at` and `meal-status`.** It is created the
   instant it is captured, before anyone knows what it was, so the name and the
   numbers cannot be required of it. `calories` is `Option` all the way up for
@@ -138,6 +203,11 @@ What diverged deliberately:
   this app has no use for — meals sort by `consumed-at`).
 - Web is dropped. Target platforms are iOS and Android only, so
   `atomic_client_web.dart` was not copied.
+- `update_meal_estimate` takes a **typed `MealEstimate` struct**, not the
+  `estimate_json: String` the plan sketched. Same argument the plan makes for
+  `MealItem`: FRB generates the Dart class either way, and Dart has to parse the
+  model's JSON regardless — it decides whether there is a question to ask — so
+  handing the string on buys nothing and costs a category of typo.
 - `state.rs` is `pub(crate)` and `simple.rs` declares `pub(crate) mod state`, so
   `api::meals` can reach the same store handle. `save_and_push` is `pub(crate)`
   for the same reason — meals save through it rather than growing a second,
@@ -219,18 +289,39 @@ These all cost an afternoon once. They are fixed in-tree; this is why.
   `--lib --tests` and the run dies compiling `examples/list_sled_trees.rs`,
   which wants the `db-sled` feature; CI uses nextest, which ignores examples.)
 
+- **The OAuth redirect scheme is `caltracker://`**, declared once in
+  `android/app/src/main/AndroidManifest.xml` on `flutter_web_auth_2`'s
+  `CallbackActivity`. iOS needs no equivalent — `ASWebAuthenticationSession` is
+  told the scheme at call time. If you change it, change both that manifest
+  entry and `_callbackScheme` in `lib/services/openrouter.dart`.
+- **iOS plugins go through Swift Package Manager here, not CocoaPods.**
+  `ios/Podfile.lock` has three pods in it and always will; everything else
+  (camera, mobile_scanner, flutter_web_auth_2) is a package reference in
+  `Runner.xcodeproj`, regenerated by `flutter run`/`flutter build`. So adding a
+  plugin needs no `pod install` — the podspec note above is only about
+  `rust_lib_calorie_tracker`, which *is* a pod.
 - **The iOS simulator has no camera**, and neither does a CI machine. That is a
   supported state, not a broken one: `DeviceCamera` reports it, the capture
   screen says so and offers the keyboard instead, and everything else works. Do
   not "fix" it by making the screen an error page — the simulator is where this
   app is developed.
 
-## Next: Phase 4
+## Next: Phase 5
 
-OpenRouter. OAuth PKCE and key storage, a model picker, `OpenRouterClient`, and
-the `EstimationQueue` that drains `list_pending_meals()` — which is what every
-capture has been writing into since Phase 3. Two Rust functions are still to
-come (`update_meal_estimate`, `list_pending_meals`, plan §4), so it starts with
-`make gen`. `ImageStore.stateOf` is what decides whether a meal can be
-re-estimated at all: without the full image there is nothing to send, and the
-256px thumbnail is not a substitute.
+The uncertainty loop, history and polish. `needs-info` meals already carry the
+question the model asked and show it in the edit sheet; what is missing is the
+notification that deep-links to it, the answer being appended and the meal
+re-estimated (`EstimationQueue.retry` is the call — it takes a `Meal` and does
+the whole thing, so the loop is a screen and a notification, not a new
+pipeline). Then `HistoryScreen` over past days, and the empty and error states.
+
+Two loose ends worth knowing about before then:
+
+- **Nothing re-estimates on a model change.** Change the model in Settings and
+  the meals already estimated keep the old one's numbers, which is right — but
+  there is no way to ask for a second opinion on a settled meal either. The edit
+  sheet's "Estimate it again" only appears where there is still something to
+  send.
+- **`waiting` is what the last drain found.** It is not a live count from the
+  database, so a meal synced in from another device does not show up in the
+  banner until the next drain. Every path that adds a meal here drains.

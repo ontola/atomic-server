@@ -8,7 +8,10 @@ import 'screens/onboarding/needs_sync_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'services/app_session.dart';
 import 'services/camera_feed.dart';
+import 'services/estimation_queue.dart';
 import 'services/image_store.dart';
+import 'services/meal_store.dart';
+import 'services/openrouter.dart';
 import 'theme.dart';
 
 /// The shape here is the one the real app keeps (see
@@ -23,7 +26,15 @@ void main() {
 }
 
 class CalorieTrackerApp extends StatefulWidget {
-  const CalorieTrackerApp({super.key, this.session, this.camera, this.images});
+  const CalorieTrackerApp({
+    super.key,
+    this.session,
+    this.camera,
+    this.images,
+    this.meals,
+    this.account,
+    this.queue,
+  });
 
   /// Injected by tests, which have no Rust library to talk to. The app builds
   /// its own.
@@ -36,6 +47,15 @@ class CalorieTrackerApp extends StatefulWidget {
   /// own, which is why this is late rather than final.
   final ImageStore? images;
 
+  /// Injected by tests, which have no Rust library to talk to.
+  final MealStore? meals;
+
+  /// Injected by tests, which have no keychain.
+  final OpenRouterAccount? account;
+
+  /// Injected by tests, which have no network.
+  final EstimationQueue? queue;
+
   @override
   State<CalorieTrackerApp> createState() => _CalorieTrackerAppState();
 }
@@ -44,28 +64,61 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
   late final AppSession _session = widget.session ?? AppSession();
   late final CameraFeed _camera = widget.camera ?? DeviceCamera();
 
+  /// One store for the whole app rather than one per screen, because there is
+  /// now a second writer: the day behind the viewfinder, the day in the list
+  /// and the day the estimator is filling in have to be the same answer.
+  late final MealStore _meals = widget.meals ?? MealStore();
+  late final OpenRouterAccount _account =
+      widget.account ?? OpenRouterAccount();
+  late final EstimationQueue _queue = widget.queue ??
+      EstimationQueue(
+        meals: _meals,
+        account: _account,
+        client: OpenRouterClient(account: _account),
+      );
+
   ImageStore? _images;
 
   @override
   void initState() {
     super.initState();
     _images = widget.images;
+    _queue.images = _images;
 
     // None of these is awaited: the first frame goes up against whatever state
     // they are in, and re-renders as they land.
     _session
       ..addListener(_warmCameraWhenResuming)
+      ..addListener(_drainWhenReady)
       ..start();
+    if (widget.account == null) unawaited(_account.load());
     if (widget.images == null) unawaited(_findPhotoDirectory());
   }
 
   @override
   void dispose() {
-    _session.removeListener(_warmCameraWhenResuming);
+    _session
+      ..removeListener(_warmCameraWhenResuming)
+      ..removeListener(_drainWhenReady);
     // Only ours to dispose when it was ours to make.
     if (widget.session == null) _session.dispose();
     if (widget.camera == null) _camera.dispose();
+    if (widget.meals == null) _meals.dispose();
+    if (widget.account == null) _account.dispose();
+    if (widget.queue == null) _queue.dispose();
     super.dispose();
+  }
+
+  /// Start estimating as soon as there is a store to read meals out of.
+  ///
+  /// Not before: `list_pending_meals` goes through the meals container, which
+  /// does not exist until the session says [SessionPhase.ready]. Photos can
+  /// still be arriving — a meal whose image is not readable yet simply fails
+  /// this pass and is picked up by the next one.
+  void _drainWhenReady() {
+    if (_session.phase != SessionPhase.ready) return;
+    _session.removeListener(_drainWhenReady);
+    unawaited(_queue.drain());
   }
 
   /// Open the camera as soon as we know this launch is not an onboarding —
@@ -86,7 +139,13 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
     try {
       final dir = await getApplicationDocumentsDirectory();
       if (!mounted) return;
-      setState(() => _images = ImageStore(root: dir));
+      final images = ImageStore(root: dir);
+      setState(() => _images = images);
+      // The queue leaves photographed meals alone until it can read them, so
+      // this is the moment a launch that raced the directory gets its
+      // estimates.
+      _queue.images = images;
+      unawaited(_queue.drain());
     } catch (e) {
       // Nowhere to keep photos is not nowhere to keep meals: capture falls back
       // to logging without one, which is worth far more than a dead app.
@@ -102,7 +161,14 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: ThemeMode.dark,
-      home: SessionGate(session: _session, camera: _camera, images: _images),
+      home: SessionGate(
+        session: _session,
+        camera: _camera,
+        images: _images,
+        meals: _meals,
+        account: _account,
+        queue: _queue,
+      ),
     );
   }
 }
@@ -113,11 +179,17 @@ class SessionGate extends StatelessWidget {
     super.key,
     required this.session,
     required this.camera,
+    required this.meals,
+    required this.account,
+    required this.queue,
     this.images,
   });
 
   final AppSession session;
   final CameraFeed camera;
+  final MealStore meals;
+  final OpenRouterAccount account;
+  final EstimationQueue queue;
   final ImageStore? images;
 
   @override
@@ -137,6 +209,9 @@ class SessionGate extends StatelessWidget {
               session: session,
               camera: camera,
               images: images,
+              store: meals,
+              account: account,
+              queue: queue,
             );
           case SessionPhase.failed:
             return _StoreFailed(session: session);

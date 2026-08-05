@@ -36,6 +36,35 @@ enum MealStatus {
 
   /// Whether this meal's numbers are still expected to change.
   bool get isSettled => this == confirmed || this == estimated;
+
+  /// Whether the estimator will pick this meal up on its own. Mirrors
+  /// `list_pending_meals` in `rust/src/api/meals.rs` — `estimating` is in it
+  /// because the only thing that sets it is a call in this process, so one
+  /// found at launch is one an app that was killed left behind.
+  bool get isQueued => this == pending || this == estimating;
+}
+
+/// How sure an estimator was. The tags of `estimate-confidence` in the
+/// ontology; null on a meal nothing has estimated.
+enum MealConfidence {
+  high('high'),
+  medium('medium'),
+  low('low');
+
+  const MealConfidence(this.wire);
+
+  final String wire;
+
+  /// Total, and pessimistic: a value this build has never heard of is not a
+  /// reason to drop an estimate, but it is no reason to trust it either.
+  static MealConfidence fromWire(String wire) => values.firstWhere(
+        (c) => c.wire == wire,
+        orElse: () => MealConfidence.low,
+      );
+
+  /// Null for the empty string, which is what an unestimated meal stores.
+  static MealConfidence? maybeFromWire(String wire) =>
+      wire.isEmpty ? null : fromWire(wire);
 }
 
 /// One meal, as the app thinks about it.
@@ -54,8 +83,9 @@ class Meal {
     this.caloriesMin,
     this.caloriesMax,
     this.imagePath = '',
-    this.confidence = '',
+    this.confidence,
     this.estimatedByModel = '',
+    this.clarifyingQuestion = '',
     this.proteinGrams,
     this.carbsGrams,
     this.fatGrams,
@@ -75,8 +105,15 @@ class Meal {
   final int? caloriesMin;
   final int? caloriesMax;
   final String imagePath;
-  final String confidence;
+
+  /// How sure the estimator was, or null when nothing has estimated this.
+  final MealConfidence? confidence;
   final String estimatedByModel;
+
+  /// The one thing the estimator could not tell — "was that milk or oat milk?".
+  /// Set with [MealStatus.needsInfo] and empty otherwise, so a meal waiting on
+  /// an answer carries the question to ask.
+  final String clarifyingQuestion;
   final double? proteinGrams;
   final double? carbsGrams;
   final double? fatGrams;
@@ -92,8 +129,9 @@ class Meal {
         caloriesMin: item.caloriesMin?.toInt(),
         caloriesMax: item.caloriesMax?.toInt(),
         imagePath: item.imagePath,
-        confidence: item.confidence,
+        confidence: MealConfidence.maybeFromWire(item.confidence),
         estimatedByModel: item.estimatedByModel,
+        clarifyingQuestion: item.clarifyingQuestion,
         proteinGrams: item.proteinGrams,
         carbsGrams: item.carbsGrams,
         fatGrams: item.fatGrams,
@@ -112,6 +150,87 @@ class Meal {
   int? get lowerBound => caloriesMin ?? calories;
 
   int? get upperBound => caloriesMax ?? calories;
+}
+
+/// What an estimator worked out about a meal, on its way to being written.
+///
+/// Distinct from the generated [ffi.MealEstimate] for the same reason [Meal] is
+/// distinct from [ffi.MealItem]: the queue, its tests and the OpenRouter client
+/// all handle these, and none of them should need the Rust library loaded to do
+/// it. [toItem] is the one place the two meet.
+class MealEstimate {
+  const MealEstimate({
+    required this.name,
+    required this.description,
+    required this.calories,
+    required this.confidence,
+    required this.model,
+    this.caloriesMin,
+    this.caloriesMax,
+    this.clarifyingQuestion = '',
+    this.proteinGrams,
+    this.carbsGrams,
+    this.fatGrams,
+  });
+
+  final String name;
+
+  /// How the estimator got there. Replaces whatever the meal had, so anything
+  /// worth keeping — the words the user typed — has to be folded in first; see
+  /// [keeping].
+  final String description;
+  final int calories;
+  final int? caloriesMin;
+  final int? caloriesMax;
+  final MealConfidence confidence;
+
+  /// The OpenRouter model id, so a number can be traced to what made it.
+  final String model;
+
+  /// Ask this and the meal becomes [MealStatus.needsInfo]; leave it empty and
+  /// the meal is [MealStatus.estimated]. Low confidence on its own does not
+  /// make a meal answerable — a question does.
+  final String clarifyingQuestion;
+  final double? proteinGrams;
+  final double? carbsGrams;
+  final double? fatGrams;
+
+  /// The same estimate with [words] kept in front of its reasoning.
+  ///
+  /// A typed meal is the user telling us what they ate, and the estimate
+  /// overwrites every field it touches. Their words are the more reliable half
+  /// of the record and the only part nobody can reconstruct, so they go first.
+  MealEstimate keeping(String words) {
+    final trimmed = words.trim();
+    if (trimmed.isEmpty || description.contains(trimmed)) return this;
+    return MealEstimate(
+      name: name,
+      description: '$trimmed\n\n$description',
+      calories: calories,
+      confidence: confidence,
+      model: model,
+      caloriesMin: caloriesMin,
+      caloriesMax: caloriesMax,
+      clarifyingQuestion: clarifyingQuestion,
+      proteinGrams: proteinGrams,
+      carbsGrams: carbsGrams,
+      fatGrams: fatGrams,
+    );
+  }
+
+  ffi.MealEstimate toItem() => ffi.MealEstimate(
+        name: name,
+        description: description,
+        calories: calories,
+        caloriesMin: caloriesMin,
+        caloriesMax: caloriesMax,
+        confidence: confidence.wire,
+        model: model,
+        clarifyingQuestion: clarifyingQuestion,
+        proteinGrams: proteinGrams,
+        carbsGrams: carbsGrams,
+        fatGrams: fatGrams,
+      );
 }
 
 /// The UTC millisecond bounds of the local day [day] falls in, as
