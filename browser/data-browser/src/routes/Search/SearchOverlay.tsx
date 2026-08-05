@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL } from '../../helpers/navigation';
 import ResourceCard from '../../views/Card/ResourceCard';
-import { dataBrowser, useServerSearch } from '@tomic/react';
+import { dataBrowser, useServerSearch, useStore } from '@tomic/react';
 import { ErrorLook } from '../../components/ErrorLook';
-import { FaMagnifyingGlass } from 'react-icons/fa6';
+import { FaMagnifyingGlass, FaLink } from 'react-icons/fa6';
 import { useQueryScopeHandler } from '../../hooks/useQueryScope';
 import { useSettings } from '../../helpers/AppSettings';
 import { Column, Row } from '../../components/Row';
@@ -14,6 +14,11 @@ import { InlineFormattedResourceList } from '../../components/InlineFormattedRes
 import { ErrorBoundary } from '../../views/ErrorPage';
 import { useOnValueChange } from '@helpers/useOnValueChange';
 import { useSearchOverlay } from '../../components/Searchbar/SearchOverlayContext';
+import {
+  looksLikeOpenableSubject,
+  parseDidOpenInput,
+  resolveDidForOpen,
+} from '../../helpers/didResolve';
 
 const OverlayBackdrop = styled.div`
   position: fixed;
@@ -204,12 +209,17 @@ function SearchOverlayContent({
   const { drive } = useSettings();
   const { scope } = useQueryScopeHandler();
   const navigate = useNavigateWithTransition();
+  const store = useStore();
 
   const filters = filtersBase64 ? base64StringToFilter(filtersBase64) : {};
   const filterIsEmpty = Object.keys(filters).length === 0;
   const tags = (filters[dataBrowser.properties.tags] as string[]) ?? [];
 
+  const didTarget = parseDidOpenInput(query);
+  const showDidOpen = didTarget !== null || looksLikeOpenableSubject(query);
+
   const [selectedIndex, setSelected] = useState(0);
+  const [resolvingDid, setResolvingDid] = useState(false);
   const { results, loading, error } = useServerSearch(query, {
     debounce: 0,
     parents: scope || drive,
@@ -217,6 +227,10 @@ function SearchOverlayContent({
     filters,
     allowEmptyQuery: !filterIsEmpty,
   });
+
+  // DID open row sits above search hits when the query is a subject.
+  const didRowOffset = showDidOpen ? 1 : 0;
+  const totalRows = results.length + didRowOffset;
 
   const resultsRef = useRef<HTMLDivElement | null>(null);
 
@@ -231,15 +245,56 @@ function SearchOverlayContent({
   // Reset selection when results change
   useOnValueChange(() => {
     setSelected(0);
-  }, [results]);
+  }, [results, showDidOpen]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
     setSelected(0);
   };
 
+  const openDidTarget = async () => {
+    const target = didTarget ?? parseDidOpenInput(query.trim());
+
+    if (!target) {
+      return;
+    }
+
+    setResolvingDid(true);
+
+    try {
+      await resolveDidForOpen(target.subject, {
+        drive,
+        agent: target.agent,
+        node: target.node,
+        // Auto-try known devices when the link has no node/agent hint.
+        tryPeers: !target.node && !target.agent,
+        isAvailable: async subject => {
+          try {
+            const resource = await store.getResource(subject);
+
+            return !resource.error;
+          } catch {
+            return false;
+          }
+        },
+      });
+    } finally {
+      setResolvingDid(false);
+    }
+
+    (document.activeElement as HTMLInputElement | null)?.blur();
+    navigate(constructOpenURL(target.subject));
+    closeSearch();
+  };
+
   const handleSelectResult = () => {
-    const selectedSubject = results[selectedIndex];
+    if (showDidOpen && selectedIndex === 0) {
+      void openDidTarget();
+
+      return;
+    }
+
+    const selectedSubject = results[selectedIndex - didRowOffset];
 
     if (selectedSubject) {
       (document.activeElement as HTMLInputElement | null)?.blur();
@@ -254,7 +309,7 @@ function SearchOverlayContent({
       case 'ArrowDown':
         e.preventDefault();
         setSelected(prev =>
-          prev === results.length - 1 ? results.length - 1 : prev + 1,
+          totalRows === 0 ? 0 : Math.min(prev + 1, totalRows - 1),
         );
         break;
       case 'ArrowUp':
@@ -287,8 +342,12 @@ function SearchOverlayContent({
     heading = undefined;
   }
 
-  if (loading) {
-    heading = 'Searching...';
+  if (showDidOpen) {
+    heading = undefined;
+  }
+
+  if (loading || resolvingDid) {
+    heading = resolvingDid ? 'Resolving DID…' : 'Searching...';
   }
 
   const showHelperMessage = !query && filterIsEmpty;
@@ -302,7 +361,7 @@ function SearchOverlayContent({
           value={query}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder='Search for resources...'
+          placeholder='Search or paste a did:ad:…'
           autoComplete='off'
           autoCorrect='off'
           autoCapitalize='off'
@@ -339,31 +398,58 @@ function SearchOverlayContent({
 
           {showHelperMessage && (
             <HelperMessage>
-              Search matches on the names and descriptions of resources.
-              Additionally you can filter by tag using <code>tag:[name]</code>
+              Search matches on the names and descriptions of resources. Paste a{' '}
+              <code>did:ad:</code> identifier to open it. Filter by tag with{' '}
+              <code>tag:[name]</code>
             </HelperMessage>
           )}
 
           <ResultsArea ref={resultsRef}>
             <Column gap='0.5rem'>
-              {results.map((subject, index) => (
-                <SelectableResult
-                  key={subject}
-                  subject={subject}
-                  initialInView={index < 5}
-                  selected={index === selectedIndex}
-                  index={index}
+              {showDidOpen && didTarget && (
+                <DidOpenRow
+                  data-index={0}
+                  selected={selectedIndex === 0}
                   onClick={() => {
-                    setSelected(index);
-                    // Small delay so the user sees the highlight before navigating
-                    setTimeout(() => {
-                      const openURL = constructOpenURL(subject);
-                      navigate(openURL);
-                      closeSearch();
-                    }, 80);
+                    setSelected(0);
+                    void openDidTarget();
                   }}
-                />
-              ))}
+                >
+                  <FaLink size={14} />
+                  <div>
+                    <DidOpenTitle>Open DID</DidOpenTitle>
+                    <DidOpenSubject title={didTarget.subject}>
+                      {didTarget.subject}
+                    </DidOpenSubject>
+                    {!didTarget.node && !didTarget.agent && (
+                      <DidOpenHint>
+                        No node hint — will try known devices if needed
+                      </DidOpenHint>
+                    )}
+                  </div>
+                </DidOpenRow>
+              )}
+              {results.map((subject, index) => {
+                const rowIndex = index + didRowOffset;
+
+                return (
+                  <SelectableResult
+                    key={subject}
+                    subject={subject}
+                    initialInView={index < 5}
+                    selected={rowIndex === selectedIndex}
+                    index={rowIndex}
+                    onClick={() => {
+                      setSelected(rowIndex);
+                      setTimeout(() => {
+                        const openURL = constructOpenURL(subject);
+                        navigate(openURL);
+                        closeSearch();
+                      }, 80);
+                    }}
+                  />
+                );
+              })}
             </Column>
           </ResultsArea>
 
@@ -428,3 +514,43 @@ const SelectableResult: React.FC<SelectableResultProps> = ({
     </div>
   );
 };
+
+const DidOpenRow = styled.button<{ selected: boolean }>`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  background: ${p =>
+    p.selected ? p.theme.colors.bg1 : p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
+  cursor: pointer;
+  font: inherit;
+
+  svg {
+    margin-top: 0.2rem;
+    flex-shrink: 0;
+    color: ${p => p.theme.colors.main};
+  }
+`;
+
+const DidOpenTitle = styled.div`
+  font-weight: 600;
+  font-size: 0.9rem;
+`;
+
+const DidOpenSubject = styled.div`
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.textLight};
+  word-break: break-all;
+  margin-top: 0.15rem;
+`;
+
+const DidOpenHint = styled.div`
+  font-size: 0.7rem;
+  color: ${p => p.theme.colors.textLight};
+  margin-top: 0.35rem;
+`;

@@ -147,9 +147,12 @@ Boundary and announce are decoupled. pkarr/mainline records are for finding
    roots under the new semantics.
 5. [x] Agent-keyed pkarr publish/resolve (`discovery::publish_agent_node_id`);
    server announces agent record at boot; legacy drive-keyed path retained.
-6. [ ] Sync engine: `collect_drive_subjects` → `collect_zone_subjects` (BFS stops
+6. [x] End-to-end DID open: search parses DIDs, `atomic://open` + bare
+   `did:ad:` deep links, `/resolve-agent` endpoint, known-peers fallback on
+   ErrorPage when the link has no node hint.
+7. [ ] Sync engine: `collect_drive_subjects` → `collect_zone_subjects` (BFS stops
    at nested zones).
-7. [ ] Share panel / invites UX for promote-demote.
+8. [ ] Share panel / invites UX for promote-demote.
 
 ## Acceptance test
 

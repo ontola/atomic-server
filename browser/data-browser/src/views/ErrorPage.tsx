@@ -14,6 +14,11 @@ import { paths } from '../routes/paths';
 import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceError';
 import { isDriveSignInError } from '../helpers/isDriveSignInError';
 import { RootWelcomeGate } from './RootWelcomeGate';
+import { readKnownPeers } from '../helpers/knownPeers';
+import {
+  parseDidOpenInput,
+  resolveDidForOpen,
+} from '../helpers/didResolve';
 
 import type { JSX } from 'react';
 
@@ -22,10 +27,13 @@ import type { JSX } from 'react';
  * for App wide errors.
  */
 function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
-  const { agent, baseURL } = useSettings();
+  const { agent, baseURL, drive } = useSettings();
   const store = useStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const knownPeers = readKnownPeers();
+  const [peerStatus, setPeerStatus] = React.useState<string | null>(null);
+  const [tryingPeers, setTryingPeers] = React.useState(false);
 
   const isHomeWelcome = isRootWelcomeResourceError(resource, agent, baseURL);
   // Not signed in + can't read this (non-home) resource → send to the welcome
@@ -54,6 +62,37 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
     isDriveSignIn,
     resource.subject,
   ]);
+
+  const tryKnownDevices = () => {
+    setTryingPeers(true);
+    setPeerStatus(null);
+    const hints = parseDidOpenInput(resource.subject);
+
+    void resolveDidForOpen(resource.subject, {
+      drive,
+      agent: hints?.agent,
+      node: hints?.node,
+      tryPeers: true,
+      isAvailable: async subject => {
+        try {
+          const next = await store.getResource(subject);
+
+          return !next.error;
+        } catch {
+          return false;
+        }
+      },
+    }).then(result => {
+      setTryingPeers(false);
+
+      if (result.ok) {
+        setPeerStatus(`Found via ${result.via}. Reloading…`);
+        store.fetchResourceFromServer(resource.subject, { setLoading: true });
+      } else {
+        setPeerStatus(result.message);
+      }
+    });
+  };
 
   if (isRootWelcomeResourceError(resource, agent, baseURL)) {
     // Redirect effect above will handle the URL; render something safe meanwhile.
@@ -94,6 +133,9 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
     );
   }
 
+  const showTryPeers =
+    resource.subject.startsWith('did:ad:') && knownPeers.length > 0;
+
   return (
     <ContainerWide>
       <Column>
@@ -105,6 +147,14 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
             <AtomicLink path={paths.onboarding}>create one here</AtomicLink>.
           </p>
         )}
+        {resource.subject.startsWith('did:ad:') && knownPeers.length === 0 && (
+          <p>
+            This DID is not on this device. Pair a device on the{' '}
+            <AtomicLink path={paths.sync}>Sync</AtomicLink> page, or open a
+            link that includes an <code>agent</code> or <code>node</code> hint.
+          </p>
+        )}
+        {peerStatus && <p>{peerStatus}</p>}
         <Row>
           <Button
             onClick={() =>
@@ -115,12 +165,17 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
           >
             Retry
           </Button>
-          {/* <Button
-            title='Clear all local data & refresh page'
-            onClick={clearAllLocalData}
-          >
-            Hard reset
-          </Button> */}
+          {showTryPeers && (
+            <Button
+              onClick={tryKnownDevices}
+              disabled={tryingPeers}
+              title='Dial every paired device and pull this resource’s zone/drive'
+            >
+              {tryingPeers
+                ? 'Trying known devices…'
+                : `Try ${knownPeers.length} known device${knownPeers.length === 1 ? '' : 's'}`}
+            </Button>
+          )}
           <Button
             onClick={() =>
               store.fetchResourceFromServer(resource.subject, {

@@ -37,13 +37,16 @@ class MainActivity: FlutterActivity() {
 
     private fun handleIntent(intent: Intent) {
         if (intent.action == Intent.ACTION_VIEW) {
-            val uri = intent.data?.toString()
-            if (uri != null && uri.startsWith("did:ad:node:")) {
-                if (channel != null) {
-                    channel?.invokeMethod("onNewLink", uri)
-                } else {
-                    initialLink = uri
-                }
+            val uri = intent.data?.toString() ?: return
+            // Pairing: did:ad:node:…  Open: other did:ad:… or atomic://open
+            val isOurs =
+                uri.startsWith("did:ad:") ||
+                    uri.startsWith("atomic://")
+            if (!isOurs) return
+            if (channel != null) {
+                channel?.invokeMethod("onNewLink", uri)
+            } else {
+                initialLink = uri
             }
         }
     }
