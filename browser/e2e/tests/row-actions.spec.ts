@@ -1,9 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
   before,
+  collectAggLog,
   createTableFromDialog,
   inDialog,
   reloadGrid,
+  withAggLog,
 } from './test-utils';
 
 /**
@@ -118,6 +120,7 @@ test.describe('row actions', () => {
   test('Inventory counts up and down without opening a cell', async ({
     page,
   }) => {
+    const aggLog = collectAggLog(page);
     await page.setViewportSize({ width: 1800, height: 900 });
     await createFromTemplate(page, /Inventory/, 'Stockroom');
 
@@ -138,9 +141,11 @@ test.describe('row actions', () => {
     await expect(bolts).toContainText('3', { timeout: 15_000 });
 
     // Value block: the totals footer sums the quantity the buttons changed.
-    await expect(page.getByTestId('table-totals')).toContainText('3', {
-      timeout: 15_000,
-    });
+    await withAggLog(aggLog, () =>
+      expect(page.getByTestId('table-totals')).toContainText('3', {
+        timeout: 15_000,
+      }),
+    );
   });
 
   test('a person can add an action, and it works and persists', async ({

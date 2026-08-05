@@ -1,10 +1,12 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
   before,
+  collectAggLog,
   createTableFromDialog,
   newResource,
   reloadGrid,
   waitForRowsMaterialized,
+  withAggLog,
 } from './test-utils';
 
 /**
@@ -209,6 +211,7 @@ test.describe('table templates', () => {
     page,
   }) => {
     test.slow();
+    const aggLog = collectAggLog(page);
     await page.setViewportSize({ width: 1800, height: 900 });
 
     await createFromTemplate(page, /Inventory/, 'Stockroom');
@@ -243,9 +246,11 @@ test.describe('table templates', () => {
     await expect(page.getByTestId('table-totals')).toContainText('Sum', {
       timeout: 15_000,
     });
-    await expect(page.getByTestId('table-totals')).toContainText('22', {
-      timeout: 15_000,
-    });
+    await withAggLog(aggLog, () =>
+      expect(page.getByTestId('table-totals')).toContainText('22', {
+        timeout: 15_000,
+      }),
+    );
 
     // The second view is the same table with a filter on it: two bolts are low
     // stock, twenty crates are not.
