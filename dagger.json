@@ -1,6 +1,6 @@
 {
   "name": "atomic-server",
-  "engineVersion": "v0.18.14",
+  "engineVersion": "v0.21.7",
   "sdk": {
     "source": "typescript"
   },
@@ -11,5 +11,6 @@
       "pin": "811fa8a47958c484441304cec08d6fe30a7550b3"
     }
   ],
-  "source": ".dagger"
+  "source": ".dagger",
+  "disableDefaultFunctionCaching": true
 }
