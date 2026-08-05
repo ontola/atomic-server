@@ -155,7 +155,7 @@ test.describe('table refresh', () => {
     // 0 once the commit has been ack'd — that's the actual saved-and-
     // visible-on-reload signal we want the row count to reflect.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );

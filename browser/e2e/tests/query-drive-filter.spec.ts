@@ -63,7 +63,7 @@ test.describe('query GETs after refresh', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
 
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === true,
+      () => window.store?.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 30000 },
     );
@@ -113,8 +113,8 @@ test.describe('query GETs after refresh', () => {
     // load), not the bug we're testing.
     await page.waitForFunction(
       () =>
-        window.store.getSyncStatus().pendingDirtyCount === 0 &&
-        window.store.getClientDb()?.isReady === true,
+        window.store?.getSyncStatus().pendingDirtyCount === 0 &&
+        window.store?.getClientDb()?.isReady === true,
       undefined,
       { timeout: 30000 },
     );
@@ -163,8 +163,8 @@ test.describe('query GETs after refresh', () => {
     // "skipping seed" when the fingerprint matches).
     await page.waitForFunction(
       () =>
-        window.store.getSyncStatus().serverConnected === true &&
-        window.store.getClientDb()?.isReady === true,
+        window.store?.getSyncStatus().serverConnected === true &&
+        window.store?.getClientDb()?.isReady === true,
       undefined,
       { timeout: 30000 },
     );

@@ -44,8 +44,8 @@ test.describe('offline create → online sync → disable localDB', () => {
     await page.waitForFunction(
       () => {
         return (
-          window.store.getClientDb()?.isReady === true &&
-          window.store.getSyncStatus().serverConnected === true
+          window.store?.getClientDb()?.isReady === true &&
+          window.store?.getSyncStatus().serverConnected === true
         );
       },
       undefined,
@@ -57,7 +57,7 @@ test.describe('offline create → online sync → disable localDB', () => {
       window.store.disconnect();
     });
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === false,
+      () => window.store?.getSyncStatus().serverConnected === false,
       undefined,
       { timeout: 15000 },
     );
@@ -89,7 +89,7 @@ test.describe('offline create → online sync → disable localDB', () => {
     });
     await page.waitForFunction(
       () => {
-        const s = window.store.getSyncStatus();
+        const s = window.store?.getSyncStatus();
 
         return s.serverConnected === true && s.pendingDirtyCount === 0;
       },

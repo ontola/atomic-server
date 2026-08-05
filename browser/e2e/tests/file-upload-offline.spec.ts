@@ -75,7 +75,7 @@ test.describe('file upload + offline survival', () => {
     // close is observed; under suite-wide load that can exceed the default
     // 5s waitForFunction timeout.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === false,
+      () => window.store?.getSyncStatus().serverConnected === false,
       undefined,
       { timeout: 15000 },
     );
@@ -107,7 +107,7 @@ test.describe('file upload + offline survival', () => {
     // close is observed; under suite-wide load that can exceed the default
     // 5s waitForFunction timeout.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === false,
+      () => window.store?.getSyncStatus().serverConnected === false,
       undefined,
       { timeout: 15000 },
     );
@@ -144,14 +144,14 @@ test.describe('file upload + offline survival', () => {
     // Reconnect and wait for the dirty queue to drain.
     await page.evaluate(() => window.store.reconnect());
     await page.waitForFunction(() => {
-      const st = window.store.getSyncStatus();
+      const st = window.store?.getSyncStatus();
 
       return st.serverConnected && st.pendingDirtyCount === 0;
     });
 
     // Now the server should return the bytes.
     const result = await page.evaluate(async (s: string) => {
-      const r = window.store.resources.get(s)!;
+      const r = window.store?.resources.get(s)!;
       const downloadUrl = r.get(
         'https://atomicdata.dev/properties/downloadURL',
       );

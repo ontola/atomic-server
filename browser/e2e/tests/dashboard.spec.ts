@@ -37,8 +37,8 @@ type Fixture = { table: string; amount: string; category: string };
 async function createSpendingTable(page: Page): Promise<Fixture> {
   await page.waitForFunction(
     () =>
-      window.store.getClientDb()?.isReady === true &&
-      window.store.getSyncStatus().serverConnected === true,
+      window.store?.getClientDb()?.isReady === true &&
+      window.store?.getSyncStatus().serverConnected === true,
     undefined,
     { timeout: 30_000 },
   );
@@ -131,7 +131,7 @@ async function createSpendingTable(page: Page): Promise<Fixture> {
   }, props);
 
   await page.waitForFunction(
-    () => window.store.getSyncStatus().pendingDirtyCount === 0,
+    () => window.store?.getSyncStatus().pendingDirtyCount === 0,
     undefined,
     { timeout: 30_000 },
   );
@@ -240,7 +240,7 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
   }, fixture);
 
   await page.waitForFunction(
-    () => window.store.getSyncStatus().pendingDirtyCount === 0,
+    () => window.store?.getSyncStatus().pendingDirtyCount === 0,
     undefined,
     { timeout: 30_000 },
   );
@@ -368,7 +368,7 @@ test.describe('dashboards', () => {
     // anything past it as a session draft, and a create block has no way to bump
     // another block's count. The numbers update live; a listed row does not.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 15_000 },
     );
@@ -405,7 +405,7 @@ test.describe('dashboards', () => {
     await expect.poll(spanOf, { timeout: 15_000 }).toBe('span 12');
 
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 15_000 },
     );
@@ -443,7 +443,7 @@ test.describe('dashboards', () => {
     });
 
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 30_000 },
     );

@@ -32,7 +32,7 @@ test.describe('perf budgets', () => {
   }, testInfo) => {
     // `before` already navigated us; capture what happened.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === true,
+      () => window.store?.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );
@@ -41,7 +41,7 @@ test.describe('perf budgets', () => {
 
   test('reconnect: close WS + drive sync', async ({ page }, testInfo) => {
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === true,
+      () => window.store?.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );
@@ -57,7 +57,7 @@ test.describe('perf budgets', () => {
       window.store.reconnect();
     });
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === true,
+      () => window.store?.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );
@@ -71,7 +71,7 @@ test.describe('perf budgets', () => {
     page,
   }, testInfo) => {
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === true,
+      () => window.store?.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );
@@ -87,7 +87,7 @@ test.describe('perf budgets', () => {
     for (let i = 0; i < N; i++) {
       await newResource('folder', page);
       await page.waitForFunction(
-        () => window.store.getSyncStatus().pendingDirtyCount === 0,
+        () => window.store?.getSyncStatus().pendingDirtyCount === 0,
         undefined,
         { timeout: 10000 },
       );

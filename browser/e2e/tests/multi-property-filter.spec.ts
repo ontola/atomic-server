@@ -34,8 +34,8 @@ test.describe('multi-property (AND) filtering', () => {
     // Wait until the local DB is ready so created resources land in OPFS.
     await page.waitForFunction(
       () =>
-        window.store.getClientDb()?.isReady === true &&
-        window.store.getSyncStatus().serverConnected === true,
+        window.store?.getClientDb()?.isReady === true &&
+        window.store?.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 30000 },
     );
@@ -68,7 +68,7 @@ test.describe('multi-property (AND) filtering', () => {
 
     // Wait for everything to sync (server index) and OPFS to settle.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 30000 },
     );
@@ -147,8 +147,8 @@ test.describe('multi-property (AND) filtering', () => {
   }) => {
     await page.waitForFunction(
       () =>
-        window.store.getClientDb()?.isReady === true &&
-        window.store.getSyncStatus().serverConnected === true,
+        window.store?.getClientDb()?.isReady === true &&
+        window.store?.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 30000 },
     );
@@ -180,7 +180,7 @@ test.describe('multi-property (AND) filtering', () => {
     );
 
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 30000 },
     );

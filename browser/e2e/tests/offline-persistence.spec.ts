@@ -16,16 +16,21 @@ test('cached drive survives reload while offline', async ({ page }) => {
   // Wait for ClientDb + the drive's OPFS write — a bare timeout races
   // WASM init under dagger (clientdb.init alone can exceed 2s). Mirror
   // `offline-reload.spec.ts`.
+  // `window.store` is assigned during boot, so this has to tolerate it being
+  // absent rather than throw: under a slow boot the unguarded form fails with
+  // "Cannot read properties of undefined", which reports a TypeError instead
+  // of whatever actually went wrong. Reproduced locally at
+  // ATOMIC_TEST_CPU_THROTTLE=8.
   await page.waitForFunction(
-    () => window.store.getClientDb()?.isReady === true,
+    () => window.store?.getClientDb()?.isReady === true,
     undefined,
     { timeout: 30000 },
   );
   await page.waitForFunction(
     async () => {
-      const drive = window.store.getDrive();
+      const drive = window.store?.getDrive();
       if (!drive) return false;
-      const jsonAd = await window.store.getClientDb()?.getResource?.(drive);
+      const jsonAd = await window.store?.getClientDb()?.getResource?.(drive);
 
       return !!jsonAd;
     },
@@ -57,7 +62,7 @@ test('cached drive survives reload while offline', async ({ page }) => {
   await page.reload();
 
   await page.waitForFunction(
-    () => window.store.getClientDb()?.isReady === true,
+    () => window.store?.getClientDb()?.isReady === true,
     undefined,
     { timeout: 30000 },
   );

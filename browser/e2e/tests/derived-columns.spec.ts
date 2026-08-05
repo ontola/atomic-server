@@ -196,7 +196,7 @@ test.describe('computed columns', () => {
     // Reload once, so the row under test is a saved row rather than the trailing
     // draft — a draft's cells are a separate story (see the gaps list).
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 15_000 },
     );
@@ -380,7 +380,7 @@ test.describe('computed columns', () => {
     // still 0 in the window before the commit is queued at all.
     await page.waitForFunction(
       () => {
-        for (const res of window.store.resources.values()) {
+        for (const res of window.store?.resources.values() ?? []) {
           const stored = res?.get?.(
             'https://atomicdata.dev/properties/view-filters',
           ) as { derived?: string }[] | undefined;
@@ -396,7 +396,7 @@ test.describe('computed columns', () => {
       { timeout: 30_000 },
     );
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 30_000 },
     );

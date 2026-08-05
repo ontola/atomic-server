@@ -134,7 +134,7 @@ test.describe('data-browser', async () => {
     // invitee opens its URL — otherwise the server returns 404. Wait for
     // the dirty queue to drain rather than guessing a fixed 200ms.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -420,7 +420,7 @@ test.describe('data-browser', async () => {
 
     // Wait for the doc's save to flush before navigating away.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -584,7 +584,7 @@ test.describe('data-browser', async () => {
     // page can tear down its in-memory store before the depth1 commit reaches
     // the server, and the sidebar query (post-reload below) misses depth1.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );

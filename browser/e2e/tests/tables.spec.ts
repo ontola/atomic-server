@@ -231,7 +231,7 @@ test.describe('tables', async () => {
     // connections (commit subscriptions, the open WS, etc.). The dirty
     // queue is the actual saved-to-server signal.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -446,7 +446,7 @@ test.describe('tables', async () => {
 
     await page.keyboard.press('Escape');
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -493,7 +493,7 @@ test.describe('tables', async () => {
 
     await page.keyboard.press('Escape');
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -524,7 +524,7 @@ test.describe('tables', async () => {
     await page.keyboard.press('Escape');
 
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -593,7 +593,7 @@ test.describe('tables', async () => {
     await page.keyboard.press('Escape');
 
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
