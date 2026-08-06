@@ -1339,14 +1339,63 @@ export class Store {
     if (!agent) return;
 
     // Offline-edit recovery: if this subject went dirty while offline, the
-    // outbox holds the last-synced version. On reload the doc rehydrates
-    // with the offline ops already applied and its save cursor resets to
-    // the current version — exporting from there yields an empty delta and
-    // the edit is lost. Rewind the cursor to the synced baseline so the
-    // export below emits the offline delta. No-op during normal online
-    // operation (`baseVersion` is only set on the offline path).
+    // outbox holds the last-synced version, and the ops past it live ONLY in
+    // the OPFS snapshot until the ClientDb hydration lands. That makes two
+    // rules absolute here:
+    //
+    //  1. Do not drain before the ClientDb is ready. A reconnect reload can
+    //     hydrate this resource from the SERVER first (the WS GET wins the
+    //     race against OPFS on a fast boot) — a doc with Loro state, so the
+    //     cold-drain guard above doesn't catch it, but WITHOUT the offline
+    //     ops. Exporting from it re-encodes ops the server already has; the
+    //     server acks the no-op, `caughtUp` clears the dirty bit, and the
+    //     offline edit is silently orphaned in OPFS — the CI-traced shape of
+    //     sync.spec's "offline edits sync to server" failure (a fresh device
+    //     kept reading the pre-offline title while every gate showed green).
+    //  2. Once ready, import the OPFS snapshot BEFORE the first export — not
+    //     only after an empty one. The poisoned export above is NOT empty,
+    //     so an empty-export fallback never runs for it.
+    //
+    // Then rewind the cursor to the synced baseline so the export emits the
+    // offline delta. No-op during normal online operation (`baseVersion` is
+    // only set on the offline path).
     if (entry.baseVersion) {
-      s266('restored save cursor to offline baseVersion');
+      if (this.clientDb && !this.clientDb.isReady) {
+        s266('exit: offline baseVersion waiting for clientDb');
+        this.emitSyncStatus();
+
+        return;
+      }
+
+      if (this.clientDb?.isReady) {
+        try {
+          const { jsonAd, snapshot } =
+            await this.clientDb.getResourceWithSnapshot(subject);
+
+          if (jsonAd) {
+            this.hydrateResourceFromJson(subject, JSON.parse(jsonAd));
+          }
+
+          const refreshed = this.resources.get(subject);
+
+          if (refreshed && snapshot && snapshot.length > 0) {
+            // OPFS stores a full snapshot — replace any server-hydrated doc
+            // that raced ahead of the offline local state.
+            refreshed.importLoroUpdate(snapshot, true);
+          }
+
+          if (refreshed) resource = refreshed;
+        } catch (e) {
+          console.warn(
+            `[Outbox] OPFS rehydrate before offline drain failed for ${subject}:`,
+            e,
+          );
+        }
+      }
+
+      s266(
+        `restored save cursor to offline baseVersion; title="${resource.title}"`,
+      );
       resource.restoreSaveCursor(entry.baseVersion);
     }
 
@@ -1364,55 +1413,8 @@ export class Store {
     // arrived during the await on `postCommit`.
     let exported = resource.exportLoroDeltaForDrain(isFirstCommit, commitToken);
     s266(
-      `export #1 → ${exported ? `${exported.bytes.length} bytes` : 'EMPTY'}`,
+      `export → ${exported ? `${exported.bytes.length} bytes` : 'EMPTY'} title="${resource.title}"`,
     );
-
-    // Offline-edit recovery (continued): an empty export WITH a durable
-    // `baseVersion` means the in-memory Loro doc is missing the offline
-    // ops — typically a cold reload that hydrated server state (or a
-    // skeleton) before OPFS landed the offline snapshot. Clearing dirty
-    // here permanently drops the edit: `waitForSynced` / local search
-    // look green while a fresh device still sees the pre-offline title
-    // (see sync.spec "offline edits sync to server…"). Prefer OPFS
-    // rehydrate + one retry; if that still yields nothing, leave the
-    // entry dirty for a later drain rather than silently discarding it.
-    if (!exported && entry.baseVersion && this.clientDb?.isReady) {
-      try {
-        const { jsonAd, snapshot } =
-          await this.clientDb.getResourceWithSnapshot(subject);
-
-        if (jsonAd) {
-          this.hydrateResourceFromJson(subject, JSON.parse(jsonAd));
-        }
-
-        const refreshed = this.resources.get(subject);
-
-        if (refreshed && snapshot && snapshot.length > 0) {
-          // OPFS stores a full snapshot — replace any server-hydrated
-          // doc that raced ahead of the offline local state.
-          refreshed.importLoroUpdate(snapshot, true);
-        }
-
-        if (refreshed) {
-          resource = refreshed;
-          resource.restoreSaveCursor(entry.baseVersion);
-          exported = resource.exportLoroDeltaForDrain(
-            isFirstCommit,
-            commitToken,
-          );
-          s266(
-            `export #2 after OPFS rehydrate → ${
-              exported ? `${exported.bytes.length} bytes` : 'EMPTY'
-            }`,
-          );
-        }
-      } catch (e) {
-        console.warn(
-          `[Outbox] OPFS rehydrate before offline drain failed for ${subject}:`,
-          e,
-        );
-      }
-    }
 
     if (!exported) {
       if (entry.baseVersion) {

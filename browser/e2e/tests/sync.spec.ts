@@ -498,6 +498,23 @@ test.describe('sync', () => {
       // TEMPORARY [sync266]: page2's view of the resource at failure time,
       // plus everything the drain said. Read-only — gathered before anything
       // mutates either store.
+      // The pre-page2 server check above can race drains that are still
+      // running (it did in the first traced run) — re-ask at failure time,
+      // when everything has long settled.
+      const serverTitleAtFailure = await page
+        .evaluate(
+          async ({ subject }) => {
+            const fresh = await window.store.fetchResourceFromServer(subject, {
+              setLoading: true,
+              noWebSocket: true,
+            });
+
+            return fresh?.title;
+          },
+          { subject: resourceSubject! },
+        )
+        .catch(() => 'p1 refetch failed');
+      syncLog.push(`SERVER TITLE at failure: "${serverTitleAtFailure}"`);
       const p2state = await page2
         .evaluate(
           ({ subject }) => {
