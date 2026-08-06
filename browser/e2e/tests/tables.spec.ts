@@ -272,9 +272,13 @@ test.describe('tables', async () => {
     // `activeCell` + `CursorMode.Visual`, the precondition for Enter → Edit).
     // fillRow owns all positioning — clicking an already-active cell enters
     // edit mode instead of just focusing it, so we must not pre-click here.
+    // 30s, not the 10s default: the first data row renders after the new
+    // columns' commits clear the ClientDb worker queue, which under a loaded
+    // runner sits behind seconds of index-rebuilding writes (same measured
+    // budget as the rest of the totals/tables family).
     await expect(
       page.locator('[aria-rowindex="2"] > [aria-colindex="2"]'),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
     await page.waitForTimeout(1000);
 
     for (const [index, row] of rows.entries()) {

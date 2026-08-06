@@ -231,21 +231,42 @@ test.describe('Plugins', () => {
     await page.getByTestId(sidebarDriveButtonId).click();
 
     // Drive page nests children under a 'Resources' collapsible section
-    // (commit 32db1349). It starts collapsed on the drive view, so expand
-    // it before asserting the rename-survives-uninstall behaviour below.
-    await page
-      .getByRole('main')
-      .getByText('Resources', { exact: true })
-      .click();
-
+    // (commit 32db1349). It usually starts collapsed on the drive view — but
+    // a bare click is a TOGGLE, and under load the section can have expanded
+    // itself (children landing after the first paint) so a blind click
+    // CLOSES it and the assertion below starves with everything looking
+    // idle. Same lesson as the menu helpers: drive the toggle by the
+    // outcome, retrying the click only while the folder is not visible.
+    //
     // The folder keeps its prefixed name after uninstall: with the
     // after_commit + host.commit model the rename was a real commit, so it
     // persists.
-    await expect(
-      page.getByRole('main').getByRole('button', { name: 'My Problem' }),
-    ).toBeVisible({ timeout: 15000 });
-    await page.getByRole('main').getByText('Plugins', { exact: true }).click();
-    await expect(page.getByText('No plugins installed')).toBeVisible();
+    const renamedFolder = page
+      .getByRole('main')
+      .getByRole('button', { name: 'My Problem' });
+    await expect(async () => {
+      if (!(await renamedFolder.isVisible().catch(() => false))) {
+        await page
+          .getByRole('main')
+          .getByText('Resources', { exact: true })
+          .click();
+      }
+
+      await expect(renamedFolder).toBeVisible({ timeout: 3000 });
+    }).toPass({ timeout: 30000 });
+
+    // Same toggle discipline for the Plugins section.
+    const noPlugins = page.getByText('No plugins installed');
+    await expect(async () => {
+      if (!(await noPlugins.isVisible().catch(() => false))) {
+        await page
+          .getByRole('main')
+          .getByText('Plugins', { exact: true })
+          .click();
+      }
+
+      await expect(noPlugins).toBeVisible({ timeout: 3000 });
+    }).toPass({ timeout: 20000 });
 
     // Check if the custom view is gone.
     await page
