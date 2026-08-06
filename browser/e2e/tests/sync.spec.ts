@@ -270,6 +270,24 @@ test.describe('sync', () => {
   }) => {
     test.slow();
 
+    // TEMPORARY [sync266] diagnostics. The two green gates this test passes
+    // before its red one both have blind spots: `waitForSynced` proves the
+    // dirty bit cleared (which the empty-export drain path can do without
+    // POSTing anything), and `waitForSearchable` merges page1's own LOCAL
+    // index (which indexed the offline title without server involvement).
+    // So collect the drain's own step-by-step log, and later ask the server
+    // directly — those two answer whether the edit ever left this machine.
+    const syncLog: string[] = [];
+    const collect = (p: import('@playwright/test').Page, tag: string) =>
+      p.on('console', message => {
+        const text = message.text();
+
+        if (/\[sync266\]|\[Outbox\]|COMMIT|\[ClientDb\].*fail/i.test(text)) {
+          syncLog.push(`${tag} ${message.type()}: ${text.slice(0, 240)}`);
+        }
+      });
+    collect(page, 'p1');
+
     // 1. Create a document while online.
     //
     // CRITICAL: wait for the URL to flip to the new doc's subject before
@@ -424,6 +442,24 @@ test.describe('sync', () => {
     // Wait for the search index to pick up the change
     await waitForSearchable(page, 'Synced From Offline');
 
+    // TEMPORARY [sync266]: the server's own copy, over HTTP, bypassing every
+    // local cache. This is the fork in the diagnosis: old title here means
+    // the reconnect drain never actually delivered the edit (and the two
+    // waits above lied); new title means the failure is on the second
+    // context's side.
+    const serverTitle = await page.evaluate(
+      async ({ subject }) => {
+        const fresh = await window.store.fetchResourceFromServer(subject, {
+          setLoading: true,
+          noWebSocket: true,
+        });
+
+        return fresh?.title;
+      },
+      { subject: resourceSubject! },
+    );
+    syncLog.push(`SERVER TITLE after drain+search: "${serverTitle}"`);
+
     // 5. Open a fresh browser context (simulates another device)
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
@@ -448,13 +484,57 @@ test.describe('sync', () => {
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(resourceSubject!)}`,
     );
 
+    collect(page2, 'p2');
+
     // Fresh context (no local cache) — title must come from the server,
     // proving the reconnect drain actually POSTed the offline delta.
     // (Previously an empty-export path cleared the outbox dirty bit
     // without POSTing; `waitForSearchable` hid that via the local index.)
-    await expect
-      .poll(async () => page2.title(), { timeout: 60000, intervals: [500] })
-      .toBe('Synced From Offline');
+    try {
+      await expect
+        .poll(async () => page2.title(), { timeout: 60000, intervals: [500] })
+        .toBe('Synced From Offline');
+    } catch (e) {
+      // TEMPORARY [sync266]: page2's view of the resource at failure time,
+      // plus everything the drain said. Read-only — gathered before anything
+      // mutates either store.
+      const p2state = await page2
+        .evaluate(
+          ({ subject }) => {
+            const r = (
+              window.store as unknown as {
+                resources: Map<
+                  string,
+                  {
+                    title?: string;
+                    loading?: boolean;
+                    error?: { message?: string };
+                    get?: (p: string) => unknown;
+                  }
+                >;
+              }
+            ).resources.get(subject);
+
+            return {
+              title: r?.title,
+              loading: r?.loading,
+              error: r?.error?.message,
+              lastCommit: String(
+                r?.get?.('https://atomicdata.dev/properties/lastCommit') ?? '',
+              ).slice(-8),
+              serverConnected: window.store.getSyncStatus?.()?.serverConnected,
+            };
+          },
+          { subject: resourceSubject! },
+        )
+        .catch(() => 'p2 evaluate failed');
+      throw new Error(
+        `${e}\n\npage2 resource state: ${JSON.stringify(p2state)}\n` +
+          `sync log (${syncLog.length} lines, last 60):\n${syncLog
+            .slice(-60)
+            .join('\n')}`,
+      );
+    }
 
     await context2.close();
   });
