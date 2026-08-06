@@ -34,12 +34,19 @@ interface AISettingsContextType {
   availableProviders: AIProvider[];
   openRouterAvailable: boolean;
   ollamaAvailable: boolean;
+  openAICompatibleAvailable: boolean;
   /** The OpenRouter API key for making requests to OpenRouter */
   openRouterApiKey: string | undefined;
   setOpenRouterApiKey: (key: string | undefined) => void;
   /** The URL of the Ollama server */
   ollamaUrl: string | undefined;
   setOllamaUrl: (url: string | undefined) => void;
+  /** API key for any OpenAI-compatible gateway (OrcaRouter, Groq, LiteLLM, …) */
+  openAICompatibleApiKey: string | undefined;
+  setOpenAICompatibleApiKey: (key: string | undefined) => void;
+  /** Base URL ending in `/v1` for an OpenAI-compatible chat/completions API */
+  openAICompatibleBaseUrl: string | undefined;
+  setOpenAICompatibleBaseUrl: (url: string | undefined) => void;
   shouldGenerateTitles: boolean;
   setShouldGenerateTitles: (b: boolean) => void;
   genFeaturesModel: AIModelIdentifier;
@@ -65,12 +72,17 @@ const initialState: AISettingsContextType = {
   availableProviders: [],
   openRouterAvailable: false,
   ollamaAvailable: false,
+  openAICompatibleAvailable: false,
   openRouterApiKey: undefined,
   setOpenRouterApiKey: () => undefined,
   // Unset until the user asks for local AI — see the note on the real default
   // in `AISettingsContextProvider` below.
   ollamaUrl: undefined,
   setOllamaUrl: () => undefined,
+  openAICompatibleApiKey: undefined,
+  setOpenAICompatibleApiKey: () => undefined,
+  openAICompatibleBaseUrl: undefined,
+  setOpenAICompatibleBaseUrl: () => undefined,
   shouldGenerateTitles: true,
   setShouldGenerateTitles: () => undefined,
   genFeaturesModel: {
@@ -125,6 +137,14 @@ export const AISettingsContextProvider = (
     string | undefined
   >('atomic.ai.openrouter-api-key', undefined);
 
+  const [openAICompatibleApiKey, setOpenAICompatibleApiKey] = useLocalStorage<
+    string | undefined
+  >('atomic.ai.openai-compatible-api-key', undefined);
+
+  const [openAICompatibleBaseUrl, setOpenAICompatibleBaseUrl] = useLocalStorage<
+    string | undefined
+  >('atomic.ai.openai-compatible-base-url', undefined);
+
   const [defaultChatModel, setDefaultChatModel] =
     useLocalStorage<AIModelIdentifier>(
       'atomic.ai.defaultChatModel',
@@ -150,9 +170,15 @@ export const AISettingsContextProvider = (
   const {
     openRouterAvailable,
     ollamaAvailable,
+    openAICompatibleAvailable,
     isProviderAvailable,
     availableProviders,
-  } = useProviderAvailability(openRouterApiKey, ollamaUrl);
+  } = useProviderAvailability(
+    openRouterApiKey,
+    ollamaUrl,
+    openAICompatibleApiKey,
+    openAICompatibleBaseUrl,
+  );
 
   const mcpServers = mergeDefaultMCPServers(storedMcpServers);
   const setMcpServers = (servers: MCPServer[]) =>
@@ -169,6 +195,10 @@ export const AISettingsContextProvider = (
     setShowTokenUsage,
     ollamaUrl,
     setOllamaUrl,
+    openAICompatibleApiKey,
+    setOpenAICompatibleApiKey,
+    openAICompatibleBaseUrl,
+    setOpenAICompatibleBaseUrl,
     showFollowUpPrompts,
     setShowFollowUpPrompts,
     defaultChatModel,
@@ -177,6 +207,7 @@ export const AISettingsContextProvider = (
     availableProviders,
     openRouterAvailable,
     ollamaAvailable,
+    openAICompatibleAvailable,
     shouldGenerateTitles,
     setShouldGenerateTitles,
     genFeaturesModel,

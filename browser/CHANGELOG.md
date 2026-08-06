@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- **OpenAI-compatible AI provider.** Instead of adding a named integration for every gateway, there is one configurable provider: paste a base URL (usually ending in `/v1`) and an API key. Presets fill the URL for OrcaRouter, OpenAI and Groq; LiteLLM, LM Studio and custom proxies work the same way. OpenRouter and Ollama stay first-class because their listing and streaming extras differ. Model construction is shared between chat streaming and generative features so the next gateway does not fan out across the transport layer.
 - Local Thought connections install a folder after one access check and import in the browser without a preview dialog. Opening the folder or a table refreshes automatically, with five-minute refreshes while open, visible sync status, and local-edit preservation.
 - Fork bar: "Review changes" opens the per-property diff (the original's current value against the fork's) and names the properties the original also changed since the fork, so a reviewer sees what a merge writes over instead of a count.
 - A dashboard is reachable from its table: "Add view" offers **Dashboard**, which creates an empty Dashboard as a child of the table and shows it as a tab (`view-kind: dashboard`, `view-dashboard`). Switching an existing tab to Dashboard does the same. The Dashboard stays a resource of its own, so a Drive page or a document can still embed it.

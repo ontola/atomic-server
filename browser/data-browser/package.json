@@ -5,6 +5,7 @@
     "name": "Joep Meindertsma"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.63",
     "@ai-sdk/react": "^3.0.193",
     "@bugsnag/core": "^8.9.0",
     "@bugsnag/js": "^8.9.0",

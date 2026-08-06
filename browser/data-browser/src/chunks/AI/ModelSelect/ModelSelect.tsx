@@ -2,6 +2,7 @@ import styled from 'styled-components';
 import { AIProvider } from '@components/AI/aiContstants';
 import { type AIModelIdentifier } from '../types';
 import { OpenRouterModelSelector } from './OpenRouterModelSelector';
+import { OpenAICompatibleModelSelector } from './OpenAICompatibleModelSelector';
 import { TAB_PANEL_HAS_ERROR_CLASS, TabPanel, Tabs } from '@components/Tabs';
 import { OllamaModelSelector } from './OllamaModelSelector';
 import { transition } from '@helpers/transition';
@@ -20,6 +21,10 @@ const PROVIDER_TABS = [
     value: AIProvider.OpenRouter,
   },
   {
+    label: 'OpenAI-compatible',
+    value: AIProvider.OpenAICompatible,
+  },
+  {
     label: 'Ollama',
     value: AIProvider.Ollama,
   },
@@ -30,7 +35,16 @@ export const ModelSelect = ({
   defaultModel,
   enforceToolSupport = false,
 }: ModelSelectProps) => {
-  const { openRouterApiKey, ollamaUrl } = useAISettings();
+  const {
+    openRouterApiKey,
+    ollamaUrl,
+    openAICompatibleApiKey,
+    openAICompatibleBaseUrl,
+  } = useAISettings();
+
+  const openAICompatibleConfigured = Boolean(
+    openAICompatibleApiKey && openAICompatibleBaseUrl,
+  );
 
   return (
     <Wrapper>
@@ -53,6 +67,23 @@ export const ModelSelect = ({
             <NotConfiguredMessage>
               <span>
                 OpenRouter API key is not configured. Go to{' '}
+                <Link to='/app/settings'>Settings</Link>.
+              </span>
+            </NotConfiguredMessage>
+          )}
+        </StyledTabPanel>
+        <StyledTabPanel value={AIProvider.OpenAICompatible}>
+          {openAICompatibleConfigured ? (
+            <OpenAICompatibleModelSelector
+              onSelect={model => {
+                onSelect?.(model);
+              }}
+              defaultModel={defaultModel.id}
+            />
+          ) : (
+            <NotConfiguredMessage>
+              <span>
+                OpenAI-compatible base URL and API key are not configured. Go to{' '}
                 <Link to='/app/settings'>Settings</Link>.
               </span>
             </NotConfiguredMessage>
