@@ -32,6 +32,20 @@
 	     capture screen ever needed it. -->
 	<key>NSCameraUsageDescription</key>
 	<string>Photograph your meals to log them, and scan a QR code to move your account to another device.</string>
+	<!-- Estimating the meals still in the queue after the app is gone. iOS only
+	     runs a BGProcessingTask if it wants to — see
+	     lib/services/background_estimation.dart — so this is on top of the
+	     next-launch drain, never instead of it. The identifier is
+	     `estimationTaskName` there, and it has to appear in all three places:
+	     here, in AppDelegate.swift, and in the registerProcessingTask call. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>dev.atomicdata.calorieTracker.estimate</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

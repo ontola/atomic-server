@@ -10,6 +10,11 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Required by flutter_local_notifications (Phase 5), which uses
+        // java.time to schedule. Without it `assembleDebug` fails outright at
+        // `checkDebugAarMetadata` — the plugin's AAR declares the requirement,
+        // so this is not optional and not about our own code.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -32,6 +37,12 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+}
+
+dependencies {
+    // The version flutter_local_notifications 22 asks for; older ones fail the
+    // same AAR metadata check.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 kotlin {

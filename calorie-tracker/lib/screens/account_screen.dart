@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import '../services/app_session.dart';
 import '../services/image_store.dart';
 import '../services/openrouter.dart';
+import '../services/sync_service.dart';
 import 'openrouter_screen.dart';
+import 'sync_screen.dart';
 
 /// Who you are signed in as, the secret that is the only way back in, and what
 /// the photos are costing.
@@ -19,6 +21,7 @@ class AccountScreen extends StatelessWidget {
     required this.session,
     this.images,
     this.account,
+    this.sync,
   });
 
   final AppSession session;
@@ -30,6 +33,10 @@ class AccountScreen extends StatelessWidget {
   /// Who pays for the estimates. Null in tests, and then the row that leads to
   /// them is not shown.
   final OpenRouterAccount? account;
+
+  /// The other devices this account has. Null in tests, and then the row that
+  /// leads to them is not shown.
+  final SyncService? sync;
 
   /// Subjects are DIDs and run off the screen; the tail identifies them.
   static String shorten(String? subject) {
@@ -124,6 +131,10 @@ class AccountScreen extends StatelessWidget {
                     const SizedBox(height: 20),
                     EstimatesSection(account: account!),
                   ],
+                  if (sync != null) ...[
+                    const SizedBox(height: 20),
+                    DevicesSection(sync: sync!),
+                  ],
                   if (images != null) ...[
                     const SizedBox(height: 20),
                     PhotoStorageSection(images: images!),
@@ -173,6 +184,41 @@ class EstimatesSection extends StatelessWidget {
             account.isConnected
                 ? account.model
                 : 'Not connected — meals wait for their calories',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.outline),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+        ),
+      ),
+    );
+  }
+}
+
+/// The account's other devices, one tap away.
+///
+/// A row for the same reason [EstimatesSection] is one: pairing a phone is done
+/// once, and what it is worth saying here is whether it has been done at all.
+class DevicesSection extends StatelessWidget {
+  const DevicesSection({super.key, required this.sync});
+
+  final SyncService sync;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      child: AnimatedBuilder(
+        animation: sync,
+        builder: (context, _) => ListTile(
+          onTap: () => SyncScreen.open(context, sync: sync),
+          title: const Text('Devices'),
+          subtitle: Text(
+            sync.hasDevices
+                ? '${sync.devices} paired — your meals travel between them'
+                : 'Nothing paired — your meals stay on this phone',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall

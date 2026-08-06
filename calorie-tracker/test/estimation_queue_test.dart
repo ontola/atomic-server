@@ -424,7 +424,7 @@ void main() {
     expect(mealAt(subject).status, MealStatus.estimated);
   });
 
-  /// A photo the sweep evicted cannot be estimated — the 256px thumbnail is not
+  /// A photo the user deleted cannot be estimated — the 256px thumbnail is not
   /// a substitute — and there is nothing to be gained by asking three times.
   test('a meal whose photo is gone fails without a call', () async {
     final subject = await photographedMeal();
@@ -435,6 +435,41 @@ void main() {
 
     expect(requests, isEmpty);
     expect(mealAt(subject).status, MealStatus.failed);
+  });
+
+  /// Meals sync between devices and photos do not (plan §10), so a paired phone
+  /// sees meals whose picture was never on it. Failing one would be worse than
+  /// doing nothing: `failed` syncs back to the phone that *does* hold the photo,
+  /// and the queue does not pick failures back up — so this device would have
+  /// talked that one out of ever estimating it.
+  test('a meal photographed on another device is left for that device',
+      () async {
+    final subject = await photographedMeal();
+    await images.deleteAll();
+    final queue = await queueThat((_) async => _answers(_estimateJson()));
+    queue.paired = true;
+
+    await queue.drain();
+
+    expect(requests, isEmpty);
+    expect(mealAt(subject).status, MealStatus.pending);
+    expect(queue.waiting, 0,
+        reason: 'it is not this phone that is waiting to do it');
+  });
+
+  test('a typed meal from another device is estimated here — no photo needed',
+      () async {
+    final subject = await backend.create(
+      consumedAt: _noon,
+      notes: 'two slices of margherita',
+    );
+    final queue = await queueThat((_) async => _answers(_estimateJson()));
+    queue.paired = true;
+
+    await queue.drain();
+
+    expect(requests.length, 1);
+    expect(mealAt(subject).status, MealStatus.estimated);
   });
 
   test('the user confirming a meal mid-flight wins', () async {

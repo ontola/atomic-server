@@ -6,6 +6,7 @@ import '../services/estimation_queue.dart';
 import '../services/image_store.dart';
 import '../services/meal_store.dart';
 import '../services/openrouter.dart';
+import '../services/sync_service.dart';
 import '../widgets/meal_photo.dart';
 import 'account_screen.dart';
 import 'history_screen.dart';
@@ -24,6 +25,7 @@ class TodayScreen extends StatefulWidget {
     this.images,
     this.account,
     this.queue,
+    this.sync,
   });
 
   final AppSession session;
@@ -41,6 +43,9 @@ class TodayScreen extends StatefulWidget {
 
   /// What fills the numbers in. Null in tests that are not about estimation.
   final EstimationQueue? queue;
+
+  /// The account's other devices. Null in tests that are not about them.
+  final SyncService? sync;
 
   @override
   State<TodayScreen> createState() => _TodayScreenState();
@@ -86,6 +91,7 @@ class _TodayScreenState extends State<TodayScreen> {
         images: widget.images,
         account: widget.account,
         queue: widget.queue,
+        sync: widget.sync,
       ),
     ));
   }
@@ -96,6 +102,7 @@ class _TodayScreenState extends State<TodayScreen> {
         session: widget.session,
         images: widget.images,
         account: widget.account,
+        sync: widget.sync,
       ),
     ));
   }

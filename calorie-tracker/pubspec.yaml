@@ -32,6 +32,10 @@ dependencies:
   # A `needs-info` meal is the estimator asking something, and the person who
   # could answer has put their phone away — see services/notifications.dart.
   flutter_local_notifications: ^22.2.0
+  # The queue, continued after the app is gone: WorkManager on Android, which
+  # means it, and BGProcessingTask on iOS, which does not — see
+  # services/background_estimation.dart.
+  workmanager: ^0.10.7
 
 dev_dependencies:
   flutter_test:

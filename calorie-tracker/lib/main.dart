@@ -8,12 +8,14 @@ import 'screens/meal_actions.dart';
 import 'screens/onboarding/needs_sync_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'services/app_session.dart';
+import 'services/background_estimation.dart';
 import 'services/camera_feed.dart';
 import 'services/estimation_queue.dart';
 import 'services/image_store.dart';
 import 'services/meal_store.dart';
 import 'services/notifications.dart';
 import 'services/openrouter.dart';
+import 'services/sync_service.dart';
 import 'theme.dart';
 
 /// The shape here is the one the real app keeps (see
@@ -37,6 +39,8 @@ class CalorieTrackerApp extends StatefulWidget {
     this.account,
     this.queue,
     this.notifier,
+    this.sync,
+    this.background,
   });
 
   /// Injected by tests, which have no Rust library to talk to. The app builds
@@ -62,11 +66,18 @@ class CalorieTrackerApp extends StatefulWidget {
   /// Injected by tests, which have no notification centre.
   final Notifier? notifier;
 
+  /// Injected by tests, which have no other devices to sync with.
+  final SyncService? sync;
+
+  /// Injected by tests, which have no OS scheduler.
+  final BackgroundEstimation? background;
+
   @override
   State<CalorieTrackerApp> createState() => _CalorieTrackerAppState();
 }
 
-class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
+class _CalorieTrackerAppState extends State<CalorieTrackerApp>
+    with WidgetsBindingObserver {
   late final AppSession _session = widget.session ?? AppSession();
   late final CameraFeed _camera = widget.camera ?? DeviceCamera();
 
@@ -77,6 +88,16 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
   late final OpenRouterAccount _account =
       widget.account ?? OpenRouterAccount();
   late final Notifier _notifier = widget.notifier ?? LocalNotifications();
+
+  /// The account's other devices, if it has any. Owned here because what a
+  /// sync brings in is meals, and the meal store lives here too.
+  late final SyncService _sync =
+      widget.sync ?? SyncService(onImported: _readEverythingAgain);
+
+  /// The queue, continued after the app is gone. Owned here because what it
+  /// needs to know — how many meals are waiting — is what the queue here says.
+  late final BackgroundEstimation _background =
+      widget.background ?? BackgroundEstimation();
   late final EstimationQueue _queue = widget.queue ??
       EstimationQueue(
         meals: _meals,
@@ -102,6 +123,8 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
     _images = widget.images;
     _queue.images = _images;
 
+    WidgetsBinding.instance.addObserver(this);
+
     // None of these is awaited: the first frame goes up against whatever state
     // they are in, and re-renders as they land.
     _session
@@ -111,24 +134,70 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
       ..start();
     _notifier.opened.addListener(_openTappedMeal);
     unawaited(_notifier.start());
+    // The queue treats a photo it cannot find differently once this account has
+    // a second device — see [EstimationQueue.paired].
+    _sync.addListener(_tellTheQueueAboutTheOtherDevices);
+    // Registers the entrypoint the OS will call; schedules nothing. There is
+    // nothing to schedule until the app is on its way out with meals still in
+    // the queue.
+    unawaited(_background.start());
     if (widget.account == null) unawaited(_account.load());
     if (widget.images == null) unawaited(_findPhotoDirectory());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _session
       ..removeListener(_warmCameraWhenResuming)
       ..removeListener(_drainWhenReady)
       ..removeListener(_openTappedMeal);
     _notifier.opened.removeListener(_openTappedMeal);
+    _sync.removeListener(_tellTheQueueAboutTheOtherDevices);
     // Only ours to dispose when it was ours to make.
     if (widget.session == null) _session.dispose();
     if (widget.camera == null) _camera.dispose();
     if (widget.meals == null) _meals.dispose();
     if (widget.account == null) _account.dispose();
     if (widget.queue == null) _queue.dispose();
+    if (widget.sync == null) _sync.dispose();
     super.dispose();
+  }
+
+  /// Leaving and coming back.
+  ///
+  /// The capture screen watches this too, for the camera — Android hands it to
+  /// whatever is in the foreground. This one is about the two things that
+  /// outlive the screen: the meals another device may have logged while we were
+  /// away, and the meals this device still owes the estimator.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // Withdraw first: whatever is waiting, the drain the capture screen is
+        // about to fire beats any scheduler, and paying for an estimate twice
+        // is the one outcome worth going out of the way to avoid.
+        unawaited(_background.whenForegrounded());
+        unawaited(_sync.autoSync());
+      case AppLifecycleState.paused:
+        unawaited(_background.whenBackgrounded(waiting: _queue.waiting));
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        // `inactive` is a notification shade, an incoming call, the app
+        // switcher — none of which is leaving. `paused` is.
+        break;
+    }
+  }
+
+  void _tellTheQueueAboutTheOtherDevices() =>
+      _queue.paired = _sync.hasDevices;
+
+  /// A sync brought meals in. The day on screen and the estimator's queue are
+  /// both now out of date, and neither has any way of knowing.
+  Future<void> _readEverythingAgain() async {
+    await _meals.load();
+    unawaited(_queue.drain());
   }
 
   /// Show the meal a notification was tapped about.
@@ -175,6 +244,10 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
     if (_session.phase != SessionPhase.ready) return;
     _session.removeListener(_drainWhenReady);
     unawaited(_queue.drain());
+    // And ask the other devices what they have been up to — but only if there
+    // are any. An account that has never been paired reaches for no network
+    // here; see [SyncService.autoSync].
+    unawaited(_sync.autoSync());
   }
 
   /// Open the camera as soon as we know this launch is not an onboarding —
@@ -225,6 +298,7 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp> {
         meals: _meals,
         account: _account,
         queue: _queue,
+        sync: _sync,
       ),
     );
   }
@@ -239,6 +313,7 @@ class SessionGate extends StatelessWidget {
     required this.meals,
     required this.account,
     required this.queue,
+    required this.sync,
     this.images,
   });
 
@@ -247,6 +322,7 @@ class SessionGate extends StatelessWidget {
   final MealStore meals;
   final OpenRouterAccount account;
   final EstimationQueue queue;
+  final SyncService sync;
   final ImageStore? images;
 
   @override
@@ -269,6 +345,7 @@ class SessionGate extends StatelessWidget {
               store: meals,
               account: account,
               queue: queue,
+              sync: sync,
             );
           case SessionPhase.failed:
             return _StoreFailed(session: session);

@@ -10,6 +10,7 @@ import '../services/estimation_queue.dart';
 import '../services/image_store.dart';
 import '../services/meal_store.dart';
 import '../services/openrouter.dart';
+import '../services/sync_service.dart';
 import '../startup.dart';
 import '../widgets/meal_photo.dart';
 import 'account_screen.dart';
@@ -32,6 +33,7 @@ class CaptureScreen extends StatefulWidget {
     this.images,
     this.account,
     this.queue,
+    this.sync,
   });
 
   final AppSession session;
@@ -54,6 +56,10 @@ class CaptureScreen extends StatefulWidget {
   /// null in tests that are not about estimation, in which case a capture is
   /// simply logged and left `pending` — which is what it does anyway.
   final EstimationQueue? queue;
+
+  /// The account's other devices. Owned by the app; null in tests, and then
+  /// the row that leads to them is not shown.
+  final SyncService? sync;
 
   @override
   State<CaptureScreen> createState() => _CaptureScreenState();
@@ -195,6 +201,7 @@ class _CaptureScreenState extends State<CaptureScreen>
         images: widget.images,
         account: widget.account,
         queue: widget.queue,
+        sync: widget.sync,
       ),
     ));
   }
@@ -205,6 +212,7 @@ class _CaptureScreenState extends State<CaptureScreen>
         session: widget.session,
         images: widget.images,
         account: widget.account,
+        sync: widget.sync,
       ),
     ));
   }

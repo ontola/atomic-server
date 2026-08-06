@@ -6,6 +6,7 @@ import '../services/estimation_queue.dart';
 import '../services/image_store.dart';
 import '../services/meal_store.dart';
 import '../services/openrouter.dart';
+import '../services/sync_service.dart';
 import 'today_screen.dart';
 
 /// The days behind today, and what each of them came to.
@@ -23,6 +24,7 @@ class HistoryScreen extends StatefulWidget {
     this.images,
     this.account,
     this.queue,
+    this.sync,
   });
 
   final AppSession session;
@@ -34,6 +36,7 @@ class HistoryScreen extends StatefulWidget {
   final ImageStore? images;
   final OpenRouterAccount? account;
   final EstimationQueue? queue;
+  final SyncService? sync;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -105,6 +108,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         images: widget.images,
         account: widget.account,
         queue: widget.queue,
+        sync: widget.sync,
       ),
     ));
     // A day can be edited from in there, and the total on this screen is the

@@ -12,7 +12,9 @@ import 'package:calorie_tracker/atomic/atomic_client.dart';
 import 'package:calorie_tracker/atomic/session.dart';
 import 'package:calorie_tracker/main.dart';
 import 'package:calorie_tracker/models/meal.dart';
+import 'package:calorie_tracker/rust_init.dart';
 import 'package:calorie_tracker/services/image_store.dart';
+import 'package:calorie_tracker/services/sync_service.dart';
 
 /// The acceptance criteria of Phases 1–3, on a real device or simulator:
 /// onboard, log a meal, kill the app, relaunch, and still be the same account
@@ -185,6 +187,38 @@ void main() {
     final exif = _exifSegment(bytes);
     expect(exif == null || !_hasGps(exif), isTrue,
         reason: 'the stored photo must not say where the meal was eaten');
+  });
+
+  /// Phase 6's half of what only a device can answer.
+  ///
+  /// `test/sync_service_test.dart` covers *when* a sync runs, against a fake.
+  /// What it cannot cover is the bridge underneath: that `get_known_peers_json`
+  /// answers with something this app can read, and that a phone with nothing
+  /// paired says so rather than throwing — which is what keeps `autoSync` from
+  /// reaching for the network on a fresh install.
+  ///
+  /// Deliberately not a real pairing: that needs two devices and somebody to
+  /// hold them.
+  testWidgets('a phone with nothing paired knows it has nothing paired',
+      (tester) async {
+    // Both idempotent, so this does not care whether a test above already
+    // booted the app — and does not depend on one having done so.
+    await initRustBridge();
+    final documents = await getApplicationDocumentsDirectory();
+    await AtomicClient.openDb(documents.path);
+
+    const backend = FfiSyncBackend();
+
+    expect(await backend.deviceCount(), 0);
+    expect(await backend.activeServer(), anyOf(isNull, ''),
+        reason: 'device-to-device only is the default');
+
+    final sync = SyncService(backend: backend);
+    await sync.autoSync();
+
+    expect(sync.hasDevices, isFalse);
+    expect(sync.lastSyncedAt, isNull,
+        reason: 'nothing paired means nothing to reach for');
   });
 }
 

@@ -535,8 +535,12 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
     if (result != null && mounted) await _load();
   }
 
+  /// A [Wrap] rather than a [Row]: side by side these two are wider than a
+  /// phone, and this section is a settings *screen* on the calorie tracker
+  /// rather than the wide dialog it was written for.
   Widget _addButton() {
-    return Row(
+    return Wrap(
+      spacing: 8,
       children: [
         TextButton.icon(
           onPressed: _pairWithQr,
@@ -544,7 +548,6 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
           label: const Text('Pair with QR code', style: TextStyle(fontSize: 12)),
           style: TextButton.styleFrom(padding: EdgeInsets.zero),
         ),
-        const SizedBox(width: 8),
         TextButton.icon(
           onPressed: () => setState(() => _showAdd = true),
           icon: const Icon(Icons.add, size: 16),

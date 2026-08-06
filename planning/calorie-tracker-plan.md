@@ -545,10 +545,8 @@ How it landed, and where it left the plan:
 - **`meal_actions.dart` holds what a saved sheet means**, because four things open it now — the
   viewfinder, today's list, a history day, and a notification tap with no screen behind it at all.
 
-### Phase 6 — Integrations (each independently shippable)
+### Phase 6 — Integrations (each independently shippable) ✅ done
 
-- **Health**: `health` package → write `DIETARY_ENERGY_CONSUMED` (HealthKit / Health Connect) on
-  estimate/confirm; settings toggle.
 - **Sync**: surface the existing Rust sync (atomic-server ws sync and/or Iroh peer pairing) in
   Settings, reusing the canvas pairing UI.
 - **Background estimation** (open question from the app doc): investigate
@@ -556,6 +554,61 @@ How it landed, and where it left the plan:
   only — likely outcome: Android gets true background estimation, iOS drains the queue on next
   launch plus a background task *when granted*). Timebox the investigation; next-launch
   processing is the guaranteed fallback and already works from Phase 4.
+
+How it landed, and where it left the plan:
+
+- **Pairing was already written; what was missing was everything around it.** `PairScreen` and
+  `ServerSettingsSection` came over with the SDK in Phase 0 and only the "my data is on the other
+  phone" onboarding screen ever opened one. Phase 6 is the `SyncService` above them —
+  `services/sync_service.dart`, `screens/sync_screen.dart`, and a Devices row on the account
+  screen — plus the two things that make a paired phone stay paired: a sync on launch and on every
+  return to the foreground.
+- **Auto-sync is gated on having paired something, and that is what keeps §2's "explicit" true.**
+  `syncConnectivityNow` starts an Iroh node and asks the network where this account's other devices
+  are; doing that on a phone nobody has paired spends battery looking for something that does not
+  exist. So the opt-in is the pairing, once, and after that nobody has to remember to press
+  anything — a sync you have to remember is a sync that doesn't happen.
+- **A meal syncs and its photo does not, which the estimator had to be told about.** A `pending`
+  meal from the other phone arrives here with a path to a file that was never written on this
+  device, and the queue would have read that as "photo evicted" and marked it `failed` — which
+  syncs *back*, and the queue does not pick failures back up. This device would have talked the
+  device that actually holds the photo out of ever estimating it. So `EstimationQueue.paired` (kept
+  in step with `SyncService` by `main.dart`) decides what a missing photo means: unpaired it can
+  only be "delete all photos now" and the meal fails as before; paired it is skipped, and the
+  answer arrives by the same sync that brought the meal.
+- **`waiting` now counts what *this* phone can do**, since it is the number the drain filters down
+  to. A meal whose photo is on the other device is not one this one is waiting to do, and the
+  "Connect OpenRouter" banner should not count it.
+- **Background estimation ships on both platforms, and is only honest on one.** Android's
+  WorkManager persists the request across process death and reboots and runs it on a network
+  constraint; iOS's `BGProcessingTask` is scheduled, not promised — iOS decides from usage
+  patterns and idle time, and a rarely-opened app may go days without a window. Both are on top of
+  the next-launch drain, never instead of it, which is why `drainInBackground` returns `true` for
+  "nothing to do" and only `false` where a retry could help.
+- **The background drain boots the same objects the foreground does** — `AppSession`, `MealStore`,
+  `EstimationQueue` — rather than a second, simpler estimator. The queue has four things it must
+  never do (see the app's CLAUDE.md); a parallel implementation would be a place for each of them
+  to be got wrong once per platform.
+- **The task is registered only on the way out with meals waiting, and withdrawn on the way back
+  in.** Every estimate is billed, and the one outcome worth going out of the way to avoid is the
+  scheduler and the foreground estimating the same meal.
+- **What could not be verified here:** background execution needs a physical device. The policy,
+  the wiring and both platforms' build integration are tested and green; that a headless isolate
+  really can reach the keychain, the documents directory and the Rust bridge is a claim about
+  iOS and Android that only a device can settle.
+
+### Phase 6.1 — Background estimation, on a device
+
+Left over from Phase 6 deliberately, and small: run the app on a real phone, log a meal, background
+it, and confirm the drain happens without the app being reopened (`adb shell dumpsys jobscheduler`
+on Android; on iOS, the `_simulateLaunchForTaskWithIdentifier` debugger call). If the headless
+isolate cannot reach one of the three things it needs, the fallback is unchanged — meals estimate
+on next launch — so this is a confirmation, not a dependency.
+
+### Phase 7 — Health
+
+`health` package → write `DIETARY_ENERGY_CONSUMED` (HealthKit / Health Connect) on
+estimate/confirm; settings toggle.
 
 ## 9. Starting point — first concrete steps for the agent
 
@@ -582,7 +635,10 @@ workspace root.
 
 ## 10. Open questions (tracked, not blocking)
 
-- Background estimation on iOS (§8 Phase 6) — guaranteed fallback exists.
+- Background estimation on iOS (§8 Phase 6) — implemented as a `BGProcessingTask`, which iOS runs
+  when it feels like it; the guaranteed fallback is the next-launch drain and is unchanged. Still
+  open: whether the headless isolate reaches the keychain, the documents directory and the Rust
+  bridge on a real device (§8 Phase 6.1).
 - WebP instead of JPEG for stored photos (§6.1) — ~25–30% disk saving, zero token saving, blocked
   on measuring iOS encode time and on how exotic the model picker's models get. Revisit after
   Phase 4; the format constant makes it a one-line change and old JPEGs stay readable.

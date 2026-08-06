@@ -7,7 +7,7 @@ Plan: [`../planning/calorie-tracker-plan.md`](../planning/calorie-tracker-plan.m
 (architecture, data model, phases). Product brief:
 [`../planning/calorie-tracker-app.md`](../planning/calorie-tracker-app.md).
 
-**Status: Phase 5 (uncertainty loop + history) complete.** The app onboards — one
+**Status: Phase 6 (sync + background estimation) complete.** The app onboards — one
 tap to a new account, or a pasted secret to restore one — persists the session,
 and lands on a viewfinder. The shutter writes a compressed photo and a `pending`
 meal and is done; the day's total is on top of the preview and the list is one
@@ -17,7 +17,11 @@ a number and a range. Meals can still be typed in by hand — with a number, whi
 confirms them, or without one, which asks the model instead. When the model
 cannot finish without knowing something, it asks: the question goes on the meal
 *and* on the lock screen, tapping it opens that meal, and the answer re-estimates
-it. Past days are behind the calendar icon, one row each with what they came to.
+it. Past days are behind the calendar icon, one row each with what they came to. Two
+phones can now hold the same meals: pair them with a QR code and each syncs with
+the other on launch and on every return to the foreground. And the queue no
+longer needs the app to be open — on the way out it hands what is left to the
+OS, which finishes it on Android and, when it feels like it, on iOS.
 
 ## When writing code
 
@@ -40,6 +44,8 @@ lib/
     openrouter.dart    the key, the model catalogue, and the estimate call
     estimation_queue.dart  drains the pending meals through one of those models
     notifications.dart the question on the lock screen, and the tap back in
+    sync_service.dart  the other devices: how many, and what they had
+    background_estimation.dart  the queue, continued after the app is gone
   screens/
     capture_screen.dart    home: the viewfinder, the shutter, the day's total
     today_screen.dart      the day's total and its meals, one tap behind home
@@ -48,6 +54,7 @@ lib/
     meal_actions.dart      what opening that sheet means, wherever it opened from
     account_screen.dart    the agent, the secret, the photo budget
     openrouter_screen.dart connect or disconnect, and pick the model
+    sync_screen.dart       the other devices, and a sync on demand
     onboarding/        first launch, and the "my data is on the other phone" case
     pair_screen.dart   QR pairing, from the canvas app
   widgets/             error_snack.dart, meal_photo.dart
@@ -114,11 +121,14 @@ The whole pipeline is `openrouter.dart` (the wire) plus `estimation_queue.dart`
   estimate that was in flight when they typed it. `update_meal_estimate`
   enforces that in Rust and returns `Ok` — it is two correct behaviours racing,
   not a mistake to report. Do not "fix" it by making it an error.
-- **It must not fail a meal it simply cannot reach yet.** The documents
-  directory is found in parallel with the store, so a drain can start before
-  there is anywhere to read a photo from. Those meals are *skipped*, left
-  `pending`, and picked up by the drain `main.dart` fires when the directory
-  lands. Failing them would throw away the estimate's only input.
+- **It must not fail a meal it simply cannot reach yet.** Two ways that
+  happens. The documents directory is found in parallel with the store, so a
+  drain can start before there is anywhere to read a photo from — those meals
+  are *skipped*, left `pending`, and picked up by the drain `main.dart` fires
+  when the directory lands. And since Phase 6, a paired device sees meals whose
+  photo is on the *other* phone, which are skipped for a sharper reason: see
+  `EstimationQueue.paired` under Sync. Failing either would throw away the
+  estimate's only input.
 - **It must not retry what will fail again.** A 429, a 5xx or a dead socket gets
   three goes with a doubling backoff; a rejected key, a refused request or an
   answer that is not the JSON the schema asked for gets one. Every attempt is
@@ -191,6 +201,75 @@ was, and either half still passes on its own.
 things open that sheet now: the viewfinder, today's list, a history day, and a
 notification tap with no screen behind it at all.
 
+## Sync, and the one thing it changes about estimating
+
+Two phones, one account, the same meals. The Rust side has done this since Phase
+0 — Iroh peer pairing and an atomic-server websocket session — and Phase 6 is
+everything above it: `SyncService` decides when, `SyncScreen` is where a device
+is paired, and `main.dart` re-reads the day when something arrives.
+
+- **Pairing is the opt-in; after that nobody presses anything.** `autoSync` runs
+  on launch and on every return to the foreground, but only when this account
+  actually has another device — `syncConnectivityNow` starts an Iroh node and
+  asks the network where that device is, and doing that on a phone nobody has
+  paired spends battery looking for something that does not exist. That is how
+  the plan's "sync is optional and explicit" (§2) survives an automatic sync.
+- **Meals travel and photos do not** (plan §10). A meal from the other phone
+  arrives with a path to a file that was never written here. The sync screen says
+  so, and `MealPhoto` already tolerates a missing file.
+- **Which is why `EstimationQueue.paired` exists.** Unpaired, a queued meal whose
+  photo is missing can only be "delete all photos now" — nothing will ever
+  estimate it, so it fails and says so. Paired, it is almost certainly the other
+  phone's meal, and failing it would be actively harmful: `failed` syncs *back*,
+  and the queue does not pick failures back up, so this device would have talked
+  the device holding the photo out of ever estimating it. So it is skipped, and
+  the answer arrives by the same sync that brought the meal. `main.dart` keeps
+  the flag in step with `SyncService`.
+- **`waiting` is what this phone can do.** The drain filters the queue before it
+  counts it, so a meal whose photo is elsewhere is not in the "Connect
+  OpenRouter" banner's number. It is also why a drain that starts before the
+  documents directory is known reports zero and then corrects itself — see the
+  race note under Estimation.
+- **Two paired phones can both estimate the same *typed* meal.** Nothing locks a
+  meal to a device, so a text entry with no photo may be estimated twice, at
+  ~$0.0002 each. Photographed meals cannot: only the phone holding the picture
+  can do anything with them. Worth a lock only if it ever costs more than that.
+- **`ServerSettingsSection` and `PairScreen` are the canvas app's**, unchanged
+  except for one layout fix (the pair/connect buttons wrap now — side by side
+  they are wider than a phone). That fix is ported to `../flutter`; see "Shared
+  SDK" below.
+
+## Background estimation, and what each platform actually promises
+
+`background_estimation.dart` hands the queue to the OS on the way out. The
+next-launch drain has worked since Phase 4 and remains the guarantee — every path
+through this file is allowed to do nothing.
+
+- **Android means it.** WorkManager persists the request across process death and
+  reboots and runs it once the network constraint is met.
+- **iOS does not.** `BGProcessingTask` is scheduled, not promised: iOS decides
+  from usage patterns, charge state and idle time, and a rarely-opened app may go
+  days without a window. This is the API's contract, not a bug to fix.
+- **Scheduled on `paused` with meals waiting, cancelled on `resumed`.** Not on
+  `inactive` — that is a notification shade or the app switcher, not leaving. The
+  cancel is the important half: every estimate is billed, and the foreground
+  drain is faster than any scheduler.
+- **The background drain boots the same objects the foreground does** —
+  `AppSession`, `MealStore`, `EstimationQueue`. A second, simpler estimator would
+  be a place for each of the four things the queue must never do to be got wrong
+  once per platform.
+- **`false` means "worth another go".** No account, no key and nothing pending
+  all return `true`: retrying changes none of them, and on Android a `false` is a
+  retry with backoff.
+- **Three places have to agree on the iOS task identifier**:
+  `estimationTaskName` here, `BGTaskSchedulerPermittedIdentifiers` in
+  `ios/Runner/Info.plist`, and the `registerBGProcessingTask` call in
+  `AppDelegate.swift`. Disagree and nothing fails — the task simply never runs.
+- **Not verified on a device.** The policy and both platforms' builds are green,
+  but whether a headless isolate really reaches the keychain, the documents
+  directory and the Rust bridge is a claim only a phone can settle (plan §8,
+  Phase 6.1). If it turns out it cannot, meals still estimate on next launch.
+
 ## The meal vocabulary lives in `atomic_lib`, not here
 
 `Meal`, `consumed-at`, `calories`, `meal-status` and the rest are defined in
@@ -238,6 +317,13 @@ phone is a handful of user actions a day. Note that nothing in `test/` or in
 where the store is still open and nothing has been rolled back.
 `lib/tests/write_durability.rs` in `atomic_lib` is the test that does — it writes
 in a child process and `abort()`s it.
+
+Also fixed in both copies (found here, ported to `../flutter`):
+`ServerSettingsSection`'s "Pair with QR code" / "Connect by address" buttons are
+a `Wrap` rather than a `Row`. Side by side they are wider than a phone, and this
+app puts that section on a settings screen rather than in the wide dialog it was
+written for — so it overflowed, which a widget test turns into a failure and a
+device turns into a yellow-and-black stripe.
 
 Also fixed in both copies: `open_db` and
 `initRustBridge` are now idempotent. Both used to throw on a second call, and
@@ -367,6 +453,25 @@ These all cost an afternoon once. They are fixed in-tree; this is why.
   — without it a tap never reaches Dart and the deep link silently does nothing —
   and `POST_NOTIFICATIONS` in the Android manifest for API 33+. Neither shows up
   as a build failure; both show up as a notification that does nothing.
+- **Android needs core library desugaring**, in `android/app/build.gradle.kts`:
+  `isCoreLibraryDesugaringEnabled = true` plus a `coreLibraryDesugaring(...)`
+  dependency on `desugar_jdk_libs`. `flutter_local_notifications` 22 declares the
+  requirement in its AAR metadata, so without it `assembleDebug` fails at
+  `checkDebugAarMetadata` — before compiling a line of this app's code. It is a
+  Phase 5 dependency that only shows up when somebody actually builds an APK;
+  `make check` never does.
+- **The iOS background task identifier lives in three files** and they have to
+  match exactly: `estimationTaskName` in
+  `lib/services/background_estimation.dart`,
+  `BGTaskSchedulerPermittedIdentifiers` in `ios/Runner/Info.plist`, and
+  `WorkmanagerPlugin.registerBGProcessingTask(withIdentifier:)` in
+  `ios/Runner/AppDelegate.swift`. A mismatch is not a build error and not a
+  runtime error — the task is simply never run, which is indistinguishable from
+  iOS deciding not to.
+- **`AppDelegate.swift` imports `workmanager_apple`.** That is the SPM module
+  name, so it needs no `pod install` (see the note about plugins above), but it
+  does mean the file will not compile until `flutter build`/`flutter run` has
+  regenerated the package references at least once.
 - **`dart run flutter_launcher_icons` corrupts `project.pbxproj`.** It rewrites
   `ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES` to
   `= AppIcon` — it is matching the wrong key; the one it means,
@@ -374,13 +479,12 @@ These all cost an afternoon once. They are fixed in-tree; this is why.
   ios/Runner.xcodeproj/project.pbxproj` after running it, and keep the icon
   changes.
 
-## Next: Phase 6
+## Next: Phase 7 — Health
 
-Integrations, each independently shippable (`calorie-tracker-plan.md` §8):
-Health (`DIETARY_ENERGY_CONSUMED` on estimate/confirm), surfacing the sync that
-already exists in Rust, and background estimation. Next-launch draining is the
-guaranteed fallback and has worked since Phase 4, so none of it is on the
-critical path.
+`health` package → write `DIETARY_ENERGY_CONSUMED` (HealthKit / Health Connect)
+on estimate/confirm, with a settings toggle (`calorie-tracker-plan.md` §8).
+Before or alongside it, Phase 6.1: confirm the background drain on a real device
+— it is a confirmation, not a dependency.
 
 Loose ends worth knowing about before then:
 
@@ -390,7 +494,11 @@ Loose ends worth knowing about before then:
   — but only where there is still something to send it.
 - **`waiting` is what the last drain found.** It is not a live count from the
   database, so a meal synced in from another device does not show up in the
-  banner until the next drain. Every path that adds a meal here drains.
+  banner until the next drain. Every path that adds a meal here drains, including
+  a sync that imported something.
+- **A sync is a whole-store sync, not a meals sync.** `syncConnectivityNow` pulls
+  whatever the other device has under the drive. Fine while a meal is the only
+  thing this app writes; worth knowing if it ever writes anything else.
 - **The history reads 90 days and doubles on demand.** One range query, grouped
   in Dart. That is fine for a phone's worth of meals and would not be for a
   decade of them; the day it stops being fine, the grouping is what moves into
