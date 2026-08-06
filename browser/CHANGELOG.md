@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- **OrcaRouter is now a provider.** A third AI provider alongside OpenRouter and Ollama, wired through the same `AIProvider` registry as the other two. Add an OrcaRouter API key (it starts with `sk-orca-`) on the settings page or in the setup panel, and OrcaRouter models appear in the model picker with their context lengths; the assistant streams through the gateway's OpenAI-compatible endpoint. It is a named integration — an `orcarouter:` model prefix, its own provider tab and settings section — rather than a generic "any OpenAI-compatible endpoint", so the choice is explicit.
+
 ## [v0.41.0-beta.2] - 2026-08-01
 
 ### Atomic Browser

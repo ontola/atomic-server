@@ -13,6 +13,7 @@ import {
   type AtomicUIMessage,
 } from './types';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { useRef } from 'react';
 import { useStore } from '@tomic/react';
 import { createOllama } from 'ollama-ai-provider-v2';
@@ -21,11 +22,13 @@ import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 import { useSettings } from '@helpers/AppSettings';
 import { shortenSubject } from '@helpers/subjectRefs';
 import { getClassesOnDrive } from './atomicSchemaHelpers';
+import { ORCAROUTER_BASE_URL } from './useModel';
 
 export type Modalities = 'text' | 'image';
 
 export interface ClientOnlyTransportOptions {
   openRouterAPIKey?: string;
+  orcarouterAPIKey?: string;
   ollamaURL?: string;
   selectedAgent: AIAgent;
   model: AIModelIdentifier;
@@ -122,6 +125,19 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       return openRouter(model.id);
     }
 
+    if (
+      model.provider === AIProvider.OrcaRouter &&
+      this.options.orcarouterAPIKey
+    ) {
+      const orcaRouter = createOpenAICompatible({
+        name: 'orcarouter',
+        baseURL: ORCAROUTER_BASE_URL,
+        apiKey: this.options.orcarouterAPIKey,
+      });
+
+      return orcaRouter(model.id);
+    }
+
     if (model.provider === AIProvider.Ollama && this.options.ollamaURL) {
       const ollama = createOllama({
         baseURL: `${this.options.ollamaURL}/api`,
@@ -136,6 +152,14 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
   private getParameters(agent: AIAgent, model: AIModelIdentifier) {
     if (model.provider === AIProvider.Ollama) {
       // We can't check if Ollama supports specific parameters, so we just return all of them.
+      return {
+        temperature: agent.temperature,
+      };
+    }
+
+    if (model.provider === AIProvider.OrcaRouter) {
+      // OrcaRouter exposes an OpenAI-compatible API; upstream models accept a temperature
+      // parameter, so we pass it through directly.
       return {
         temperature: agent.temperature,
       };

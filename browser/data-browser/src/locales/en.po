@@ -736,8 +736,10 @@ msgstr "Check your Ollama URL and that the server is running"
 
 #. 0: models.length
 #. 0: modelList.length
+#. 0: models.length
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+#: src/chunks/AI/ModelSelect/OrcaRouterModelSelector.tsx
 msgid "{0} Models"
 msgstr "{0} Models"
 
@@ -759,6 +761,7 @@ msgstr "Parameter Size:"
 
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+#: src/chunks/AI/ModelSelect/OrcaRouterModelSelector.tsx
 msgid "Select a model"
 msgstr "Select a model"
 
@@ -4312,9 +4315,8 @@ msgstr "IMPORTANT! Below is your agent secret, you use this to login. Save it so
 msgid "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."
 msgstr "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."
 
-#: src/chunks/AI/AISetupPanel.tsx
-msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
-msgstr "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+#~ msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+#~ msgstr "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
 
 #. 0: agentToDuplicate.name
 #: src/chunks/AI/AgentConfig.tsx
@@ -6629,3 +6631,58 @@ msgstr "{0} types into \"{1}\", which is not a column"
 #: src/chunks/TablePage/tableTemplates.test.ts
 msgid "{0} presets \"{1}\", which is not a column"
 msgstr "{0} presets \"{1}\", which is not a column"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "OrcaRouter API key"
+msgstr "OrcaRouter API key"
+
+#: src/chunks/AI/AISetupPanel.tsx
+#: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
+#: src/components/AI/AISettings.tsx
+msgid "OrcaRouter"
+msgstr "OrcaRouter"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Use OpenRouter, OrcaRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+msgstr "Use OpenRouter, OrcaRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+
+#. 0: model.id.toLowerCase()
+#: src/chunks/AI/RealAIChat.tsx
+msgid "{0} orcarouter"
+msgstr "{0} orcarouter"
+
+#. 0: model.context_length.toLocaleString()
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Context: {0}"
+msgstr "Context: {0}"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "No OrcaRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime."
+msgstr "No OrcaRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime."
+
+
+#: src/components/AI/AISettings.tsx
+msgid "OrcaRouter API Key"
+msgstr "OrcaRouter API Key"
+
+#. 0: ' '
+#: src/chunks/AI/ModelSelect/ModelSelect.tsx
+msgid "OrcaRouter API key is not configured. Go to{0} <0>Settings</0>."
+msgstr "OrcaRouter API key is not configured. Go to{0} <0>Settings</0>."
+
+#: src/chunks/AI/ModelSelect/OrcaRouterModelSelector.tsx
+msgid "Add an OrcaRouter API key in settings"
+msgstr "Add an OrcaRouter API key in settings"
+
+#: src/chunks/AI/ModelSelect/OrcaRouterModelSelector.tsx
+msgid "OrcaRouter is an OpenAI-compatible gateway that routes to models from multiple providers through a single API key."
+msgstr "OrcaRouter is an OpenAI-compatible gateway that routes to models from multiple providers through a single API key."
+
+#: src/components/AI/AISettings.tsx
+msgid "OrcaRouter is an OpenAI-compatible gateway that gives you access to a wide range of AI models through a single API key, and runs gateway-level, zero-trust security for AI agents on the same endpoint. Learn more at"
+msgstr "OrcaRouter is an OpenAI-compatible gateway that gives you access to a wide range of AI models through a single API key, and runs gateway-level, zero-trust security for AI agents on the same endpoint. Learn more at"
+
+#: src/components/AI/AISettings.tsx
+msgid "www.orcarouter.ai"
+msgstr "www.orcarouter.ai"

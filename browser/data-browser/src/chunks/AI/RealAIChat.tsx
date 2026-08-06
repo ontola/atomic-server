@@ -44,6 +44,7 @@ type OllamaModel = {
 import { useProcessMessages } from './useProcessMessages';
 import { AISetupPanel } from './AISetupPanel';
 import { useOpenRouterModels } from './useOpenRouterModels';
+import { useOrcaRouterModels } from './useOrcaRouterModels';
 import {
   getAutoCompactTokenThreshold,
   useModelContextLength,
@@ -131,6 +132,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const store = useStore();
   const {
     openRouterApiKey,
+    orcarouterApiKey,
     showTokenUsage,
     showFollowUpPrompts,
     ollamaUrl,
@@ -157,6 +159,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     getOutputModalities,
     models: openRouterModels,
   } = useOpenRouterModels();
+  const {
+    checkORModelSupportsImageInput: checkOrcaRouterModelSupportsImageInput,
+    models: orcaRouterModels,
+  } = useOrcaRouterModels();
 
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
 
@@ -241,7 +247,22 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       };
     });
 
-    const all = [...openRouterOptions, ...ollamaOptions];
+    const orcaRouterOptions = orcaRouterModels.map(model => ({
+      label: model.id,
+      // Include the provider so searching "orcarouter" surfaces all of them.
+      searchLabel: `${model.id.toLowerCase()} orcarouter`,
+      description: [
+        'OrcaRouter',
+        model.context_length
+          ? `Context: ${model.context_length.toLocaleString()}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' • '),
+      value: `orcarouter:${model.id}`,
+    }));
+
+    const all = [...openRouterOptions, ...orcaRouterOptions, ...ollamaOptions];
 
     // Surface recently used models at the top. With an empty query the ComboBox
     // shows the options in this order; once the user types, QuickScore re-ranks.
@@ -255,7 +276,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     const rest = all.filter(option => !recentRank.has(option.value));
 
     return [...recent, ...rest];
-  }, [openRouterModels, ollamaModels, currencyFormatter, recentModelValues]);
+  }, [
+    openRouterModels,
+    orcaRouterModels,
+    ollamaModels,
+    currencyFormatter,
+    recentModelValues,
+  ]);
 
   const modelSelectContainerRef = useRef<HTMLDivElement>(null);
 
@@ -311,7 +338,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       ? `Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}`
       : activeModel.provider === AIProvider.OpenRouter
         ? 'OpenRouter'
-        : 'the model provider';
+        : activeModel.provider === AIProvider.OrcaRouter
+          ? 'OrcaRouter'
+          : 'the model provider';
 
   const providerNotice = canUseInput
     ? null
@@ -319,7 +348,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       ? `Can't reach Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime.`
       : activeModel.provider === AIProvider.OpenRouter
         ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
-        : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
+        : activeModel.provider === AIProvider.OrcaRouter
+          ? 'No OrcaRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
+          : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
@@ -340,6 +371,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   const transport = useClientOnlyTransport({
     openRouterAPIKey: openRouterApiKey,
+    orcarouterAPIKey: orcarouterApiKey,
     ollamaURL: ollamaUrl,
     selectedAgent,
     model: activeModel,
@@ -498,6 +530,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const checkModelSupportsImageInput = (model: AIModelIdentifier) => {
     if (model.provider === AIProvider.OpenRouter) {
       return checkORModelSupportsImageInput(model.id);
+    }
+
+    if (model.provider === AIProvider.OrcaRouter) {
+      return checkOrcaRouterModelSupportsImageInput(model.id);
     }
 
     // We can't know if an ollama is multimodal so we'll just assume it is and have the model handle the failure case.
@@ -865,7 +901,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                           const provider =
                             providerStr === 'openrouter'
                               ? AIProvider.OpenRouter
-                              : AIProvider.Ollama;
+                              : providerStr === 'orcarouter'
+                                ? AIProvider.OrcaRouter
+                                : AIProvider.Ollama;
                           const newModel = { id, provider };
                           setActiveModel(newModel);
 

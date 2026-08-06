@@ -736,8 +736,10 @@ msgstr "Comprueba tu URL de Ollama y que el servidor esté en funcionamiento"
 
 #. 0: models.length
 #. 0: modelList.length
+#. 0: models.length
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+#: src/chunks/AI/ModelSelect/OrcaRouterModelSelector.tsx
 msgid "{0} Models"
 msgstr "{0} Modelos"
 
@@ -759,6 +761,7 @@ msgstr "Tamaño del Parámetro:"
 
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
+#: src/chunks/AI/ModelSelect/OrcaRouterModelSelector.tsx
 msgid "Select a model"
 msgstr "Selecciona un modelo"
 
@@ -4309,9 +4312,8 @@ msgstr "¡IMPORTANTE! Abajo está tu secreto de agente, lo usas para iniciar ses
 msgid "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."
 msgstr "Esto preselecciona un modelo para agentes integrados y nuevos agentes personalizados. Podrás cambiar el modelo de cada agente individualmente más tarde."
 
-#: src/chunks/AI/AISetupPanel.tsx
-msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
-msgstr "Usa OpenRouter (modelos en la nube) u Ollama (modelos locales). Al menos un proveedor debe estar conectado antes de poder continuar."
+#~ msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+#~ msgstr "Usa OpenRouter (modelos en la nube) u Ollama (modelos locales). Al menos un proveedor debe estar conectado antes de poder continuar."
 
 #. 0: agentToDuplicate.name
 #: src/chunks/AI/AgentConfig.tsx
@@ -6594,4 +6596,59 @@ msgstr ""
 #. 0: quickAdd.label; 1: preset.column
 #: src/chunks/TablePage/tableTemplates.test.ts
 msgid "{0} presets \"{1}\", which is not a column"
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "OrcaRouter API key"
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+#: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
+#: src/components/AI/AISettings.tsx
+msgid "OrcaRouter"
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Use OpenRouter, OrcaRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+msgstr ""
+
+#. 0: model.id.toLowerCase()
+#: src/chunks/AI/RealAIChat.tsx
+msgid "{0} orcarouter"
+msgstr ""
+
+#. 0: model.context_length.toLocaleString()
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Context: {0}"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "No OrcaRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime."
+msgstr ""
+
+
+#: src/components/AI/AISettings.tsx
+msgid "OrcaRouter API Key"
+msgstr ""
+
+#. 0: ' '
+#: src/chunks/AI/ModelSelect/ModelSelect.tsx
+msgid "OrcaRouter API key is not configured. Go to{0} <0>Settings</0>."
+msgstr ""
+
+#: src/chunks/AI/ModelSelect/OrcaRouterModelSelector.tsx
+msgid "Add an OrcaRouter API key in settings"
+msgstr ""
+
+#: src/chunks/AI/ModelSelect/OrcaRouterModelSelector.tsx
+msgid "OrcaRouter is an OpenAI-compatible gateway that routes to models from multiple providers through a single API key."
+msgstr ""
+
+#: src/components/AI/AISettings.tsx
+msgid "OrcaRouter is an OpenAI-compatible gateway that gives you access to a wide range of AI models through a single API key, and runs gateway-level, zero-trust security for AI agents on the same endpoint. Learn more at"
+msgstr ""
+
+#: src/components/AI/AISettings.tsx
+msgid "www.orcarouter.ai"
 msgstr ""
