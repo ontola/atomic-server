@@ -1210,19 +1210,6 @@ export class Store {
     let entry = this.outbox.getEntry(subject);
     if (!entry) return;
 
-    // TEMPORARY [sync266] diagnostics: which of this drain's many exits ran,
-    // for the "offline edit never reaches a fresh device" CI failure. Every
-    // line is one drain step for one subject — remove once the cause is known.
-    const s266 = (msg: string) =>
-      console.info(
-        `[sync266] ${Math.round(performance.now())} ${subject.slice(-8)} ${msg}`,
-      );
-    s266(
-      `drain genesis=${!!entry.signedGenesis} baseVersion=${
-        entry.baseVersion ? JSON.stringify(entry.baseVersion).length : 'none'
-      } clientDbReady=${this.clientDb?.isReady ?? 'no-db'}`,
-    );
-
     // A `_new:` subject has no derived DID yet — it must be sign-genesis'd
     // (which renames it to `did:ad:<sig>`) before it can be POSTed.
     // Reaching the drain with one is a bug in the save path: the server
@@ -1252,7 +1239,6 @@ export class Store {
       const genesis = entry.signedGenesis;
       const created = await this.postCommit(genesis, endpoint);
       const commitId = commitIdOf(created);
-      s266(`genesis posted commitId=${String(commitId).slice(-8)}`);
       const resource = this.resources.get(subject);
 
       if (resource && commitId) {
@@ -1300,7 +1286,6 @@ export class Store {
       // dirty bit, silently dropping them. Until it's ready, leave the
       // entry dirty — the next drain pass retries.
       if (this.clientDb && !this.clientDb.isReady) {
-        s266('exit: cold drain waiting for clientDb');
         this.emitSyncStatus();
 
         return;
@@ -1308,7 +1293,6 @@ export class Store {
 
       // OPFS-first, then server. Throws on hard failure (offline DID,
       // network error) — the outbox failure/backoff machinery takes over.
-      s266('cold drain: loading resource');
       resource = await this.getResource(subject);
 
       if (resource.error) {
@@ -1329,7 +1313,6 @@ export class Store {
       resource.hasLoroDoc() && !!resource.getLoroDoc()?.oplogVersion();
 
     if (resource.loading && !hasLoroState) {
-      s266('exit: placeholder without Loro state');
       this.emitSyncStatus();
 
       return;
@@ -1361,7 +1344,6 @@ export class Store {
     // only set on the offline path).
     if (entry.baseVersion) {
       if (this.clientDb && !this.clientDb.isReady) {
-        s266('exit: offline baseVersion waiting for clientDb');
         this.emitSyncStatus();
 
         return;
@@ -1393,9 +1375,6 @@ export class Store {
         }
       }
 
-      s266(
-        `restored save cursor to offline baseVersion; title="${resource.title}"`,
-      );
       resource.restoreSaveCursor(entry.baseVersion);
     }
 
@@ -1412,9 +1391,6 @@ export class Store {
     // the version that's in this commit — not to a later one that
     // arrived during the await on `postCommit`.
     let exported = resource.exportLoroDeltaForDrain(isFirstCommit, commitToken);
-    s266(
-      `export → ${exported ? `${exported.bytes.length} bytes` : 'EMPTY'} title="${resource.title}"`,
-    );
 
     if (!exported) {
       if (entry.baseVersion) {
@@ -1426,7 +1402,6 @@ export class Store {
         return;
       }
 
-      s266('exit: EMPTY export without baseVersion → clearDirty, NO POST');
       this.outbox.clearBaseVersion(subject);
       this.outbox.clearDirty(subject);
       this.emitSyncStatus();
@@ -1442,9 +1417,6 @@ export class Store {
 
     const created = await this.postCommit(commit, endpoint);
     const commitId = commitIdOf(created);
-    s266(
-      `posted delta ${delta.length} bytes commitId=${String(commitId).slice(-8)}`,
-    );
 
     if (commit.signature) {
       resource.appliedCommitSignatures.add(commit.signature);
@@ -1485,7 +1457,6 @@ export class Store {
     // typed more characters mid-round-trip, the Loro subscriber already
     // called `markDirty` (synchronously) and our `clearDirty` would
     // erase that entry — so leave it dirty and nudge another drain.
-    s266(`acked; caughtUp=${caughtUp}`);
 
     if (caughtUp) {
       this.outbox.clearDirty(subject);
