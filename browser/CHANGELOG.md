@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- **OpenAI-compatible AI provider.** Instead of adding a named integration for every gateway, there is one configurable provider: paste a base URL (usually ending in `/v1`) and an API key. Presets fill the URL for OrcaRouter, OpenAI and Groq; LiteLLM, LM Studio and custom proxies work the same way. OpenRouter and Ollama stay first-class because their listing and streaming extras differ. Model construction is shared between chat streaming and generative features so the next gateway does not fan out across the transport layer.
+
 ## [v0.41.0-beta.2] - 2026-08-01
 
 ### Atomic Browser

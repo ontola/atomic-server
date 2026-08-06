@@ -44,6 +44,13 @@ type OllamaModel = {
 import { useProcessMessages } from './useProcessMessages';
 import { AISetupPanel } from './AISetupPanel';
 import { useOpenRouterModels } from './useOpenRouterModels';
+import { useOpenAICompatibleModels } from './useOpenAICompatibleModels';
+import {
+  getProviderLabel,
+  getProviderUnavailableNotice,
+  parseModelValue,
+  serializeModelValue,
+} from './providers';
 import {
   getAutoCompactTokenThreshold,
   useModelContextLength,
@@ -134,8 +141,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     showTokenUsage,
     showFollowUpPrompts,
     ollamaUrl,
+    openAICompatibleApiKey,
+    openAICompatibleBaseUrl,
     isProviderAvailable,
   } = useAISettings();
+
+  const providerCredentials = {
+    openRouterApiKey,
+    ollamaUrl,
+    openAICompatibleApiKey,
+    openAICompatibleBaseUrl,
+  };
 
   // useChat does not update it's options so we need to use a ref to make it use the latest value.
   const showFollowUpPromptsRef = useRef(showFollowUpPrompts);
@@ -157,6 +173,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     getOutputModalities,
     models: openRouterModels,
   } = useOpenRouterModels();
+  const {
+    models: openAICompatibleModels,
+    checkSupportsImageInput: checkOpenAICompatibleSupportsImageInput,
+  } = useOpenAICompatibleModels();
 
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
 
@@ -217,9 +237,29 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         searchLabel: `${model.name.toLowerCase()} openrouter`,
         // Show the provider in the subtitle alongside the cost.
         description: ['OpenRouter', pricingStr].filter(Boolean).join(' • '),
-        value: `openrouter:${model.id}`,
+        value: serializeModelValue({
+          id: model.id,
+          provider: AIProvider.OpenRouter,
+        }),
       };
     });
+
+    const openAICompatibleOptions = openAICompatibleModels.map(model => ({
+      label: model.name ?? model.id,
+      searchLabel: `${(model.name ?? model.id).toLowerCase()} openai-compatible openai compatible`,
+      description: [
+        'OpenAI-compatible',
+        model.context_length
+          ? `Context: ${model.context_length.toLocaleString()}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' • '),
+      value: serializeModelValue({
+        id: model.id,
+        provider: AIProvider.OpenAICompatible,
+      }),
+    }));
 
     const ollamaOptions = ollamaModels.map(model => {
       const details = [
@@ -237,11 +277,18 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         // Include the provider so searching "ollama" surfaces all of them.
         searchLabel: `${model.name.toLowerCase()} ollama`,
         description: details,
-        value: `ollama:${model.model}`,
+        value: serializeModelValue({
+          id: model.model,
+          provider: AIProvider.Ollama,
+        }),
       };
     });
 
-    const all = [...openRouterOptions, ...ollamaOptions];
+    const all = [
+      ...openRouterOptions,
+      ...openAICompatibleOptions,
+      ...ollamaOptions,
+    ];
 
     // Surface recently used models at the top. With an empty query the ComboBox
     // shows the options in this order; once the user types, QuickScore re-ranks.
@@ -255,7 +302,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     const rest = all.filter(option => !recentRank.has(option.value));
 
     return [...recent, ...rest];
-  }, [openRouterModels, ollamaModels, currencyFormatter, recentModelValues]);
+  }, [
+    openRouterModels,
+    openAICompatibleModels,
+    ollamaModels,
+    currencyFormatter,
+    recentModelValues,
+  ]);
 
   const modelSelectContainerRef = useRef<HTMLDivElement>(null);
 
@@ -306,20 +359,14 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   );
 
   /** Names the thing that didn't answer, since "no answer" alone helps nobody. */
-  const providerLabel =
-    activeModel.provider === AIProvider.Ollama
-      ? `Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}`
-      : activeModel.provider === AIProvider.OpenRouter
-        ? 'OpenRouter'
-        : 'the model provider';
+  const providerLabel = getProviderLabel(
+    activeModel.provider,
+    providerCredentials,
+  );
 
   const providerNotice = canUseInput
     ? null
-    : activeModel.provider === AIProvider.Ollama
-      ? `Can't reach Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime.`
-      : activeModel.provider === AIProvider.OpenRouter
-        ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
-        : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
+    : getProviderUnavailableNotice(activeModel.provider, providerCredentials);
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
@@ -339,8 +386,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   });
 
   const transport = useClientOnlyTransport({
-    openRouterAPIKey: openRouterApiKey,
-    ollamaURL: ollamaUrl,
+    credentials: providerCredentials,
     selectedAgent,
     model: activeModel,
     additionalSystemPrompt: selectedAgent.skillsEnabled
@@ -498,6 +544,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const checkModelSupportsImageInput = (model: AIModelIdentifier) => {
     if (model.provider === AIProvider.OpenRouter) {
       return checkORModelSupportsImageInput(model.id);
+    }
+
+    if (model.provider === AIProvider.OpenAICompatible) {
+      return checkOpenAICompatibleSupportsImageInput(model.id);
     }
 
     // We can't know if an ollama is multimodal so we'll just assume it is and have the model handle the failure case.
@@ -856,17 +906,16 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     <ModelSelectWrapper ref={modelSelectContainerRef}>
                       <ComboBox
                         subtle
-                        selectedItem={`${activeModel.provider}:${activeModel.id}`}
+                        selectedItem={serializeModelValue(activeModel)}
                         options={combinedModelOptions}
                         onSelect={value => {
                           if (!value) return;
-                          const [providerStr, ...idParts] = value.split(':');
-                          const id = idParts.join(':');
-                          const provider =
-                            providerStr === 'openrouter'
-                              ? AIProvider.OpenRouter
-                              : AIProvider.Ollama;
-                          const newModel = { id, provider };
+                          const newModel = parseModelValue(value);
+
+                          if (!newModel) {
+                            return;
+                          }
+
                           setActiveModel(newModel);
 
                           // Persist the choice to whichever source the chat reads

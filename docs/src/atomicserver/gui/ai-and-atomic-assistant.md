@@ -6,9 +6,10 @@ And if you want nothing to do with AI, you can disable it completely in the sett
 
 ![AI Sidebar](../../assets/ui-guide/ai_sidebar_example.avif)
 
-AtomicServer integrates with large language models (LLMs) via two main providers:
+AtomicServer integrates with large language models (LLMs) via three providers:
 
 - **OpenRouter**: A cloud-based API that gives access to a wide range of commercial and open-source models (e.g., GPT-4, Claude, Mixtral, etc.).
+- **OpenAI-compatible**: Any gateway that speaks the OpenAI chat completions API — [OrcaRouter](https://www.orcarouter.ai), Groq, LiteLLM, LM Studio, a self-hosted proxy, and similar. Configure a base URL (usually ending in `/v1`) and an API key; presets fill the URL for common gateways.
 - **Ollama**: A self-hosted, local LLM server that runs models on your own hardware for privacy and offline use.
 
 ## Configuring AI
@@ -18,6 +19,10 @@ Before you start using the AI features you will need to configure an AI provider
 ### OpenRouter
 
 If you want to use OpenRouter, you will need an OpenRouter account with some credits. You can link it to AtomicServer by clicking the "Login with OpenRouter" button or pasting your API key in the text field.
+
+### OpenAI-compatible
+
+In settings (or the AI setup panel), open **OpenAI-compatible**, pick a preset or paste your own base URL, and add the API key from that gateway. Models are listed from `{baseUrl}/models`. Prefer this path for new gateways instead of asking for a named provider integration.
 
 ### Ollama
 

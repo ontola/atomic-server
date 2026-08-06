@@ -14,6 +14,7 @@ import { DEFAULT_CHAT_MODEL } from '@components/AI/AISettingsContext';
 import type { AIModelIdentifier } from './types';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { useAIAgentConfig } from './AgentConfig';
+import { OPENAI_COMPATIBLE_PRESETS } from './providers';
 
 const ModelSelect = React.lazy(
   () => import('@chunks/AI/ModelSelect/ModelSelect'),
@@ -67,12 +68,17 @@ export const AISetupPanel: React.FC = () => {
     setOpenRouterApiKey,
     ollamaUrl,
     setOllamaUrl,
+    openAICompatibleApiKey,
+    setOpenAICompatibleApiKey,
+    openAICompatibleBaseUrl,
+    setOpenAICompatibleBaseUrl,
     defaultChatModel,
     setDefaultChatModel,
     isProviderAvailable,
     availableProviders,
     openRouterAvailable,
     ollamaAvailable,
+    openAICompatibleAvailable,
     setGenFeaturesModel,
   } = useAISettings();
   const { agents, saveAgents } = useAIAgentConfig();
@@ -209,8 +215,8 @@ export const AISetupPanel: React.FC = () => {
       <Panel>
         <Title>Connect a model to use Atomic Assistant</Title>
         <Subtle>
-          Use OpenRouter (cloud models) or Ollama (local models). At least one
-          provider must be connected before you can continue.
+          Use OpenRouter, any OpenAI-compatible gateway, or Ollama (local). At
+          least one provider must be connected before you can continue.
         </Subtle>
         <ProvidersGrid>
           <OutlinedSection title='OpenRouter'>
@@ -238,6 +244,54 @@ export const AISetupPanel: React.FC = () => {
                   />
                 </ApiKeyField>
               </CredentialsRow>
+            </ProviderSection>
+          </OutlinedSection>
+          <OutlinedSection title='OpenAI-compatible'>
+            <ProviderSection>
+              <ProviderStatus
+                connected={openAICompatibleAvailable}
+                configured={Boolean(
+                  openAICompatibleApiKey && openAICompatibleBaseUrl,
+                )}
+              />
+              <PresetRow>
+                {OPENAI_COMPATIBLE_PRESETS.map(preset => (
+                  <PresetChip
+                    key={preset.id}
+                    type='button'
+                    $active={openAICompatibleBaseUrl === preset.baseUrl}
+                    onClick={() => setOpenAICompatibleBaseUrl(preset.baseUrl)}
+                  >
+                    {preset.label}
+                  </PresetChip>
+                ))}
+              </PresetRow>
+              <FullWidthField>
+                <InputStyled
+                  type='url'
+                  value={openAICompatibleBaseUrl || ''}
+                  onChange={e =>
+                    setOpenAICompatibleBaseUrl(e.target.value || undefined)
+                  }
+                  placeholder='https://api.orcarouter.ai/v1'
+                  aria-label='OpenAI-compatible base URL'
+                />
+              </FullWidthField>
+              <FullWidthField>
+                <InputStyled
+                  type='password'
+                  value={openAICompatibleApiKey || ''}
+                  onChange={e =>
+                    setOpenAICompatibleApiKey(e.target.value || undefined)
+                  }
+                  placeholder={
+                    OPENAI_COMPATIBLE_PRESETS.find(
+                      p => p.baseUrl === openAICompatibleBaseUrl,
+                    )?.apiKeyPlaceholder ?? 'API key'
+                  }
+                  aria-label='OpenAI-compatible API key'
+                />
+              </FullWidthField>
             </ProviderSection>
           </OutlinedSection>
           <OutlinedSection title='Ollama'>
@@ -348,6 +402,24 @@ const FullWidthField = styled(InputWrapper)`
     width: 100%;
     min-width: 0;
   }
+`;
+
+const PresetRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+`;
+
+const PresetChip = styled.button<{ $active: boolean }>`
+  appearance: none;
+  border: 1px solid
+    ${p => (p.$active ? p.theme.colors.main : p.theme.colors.bg2)};
+  background: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.bg)};
+  color: ${p => (p.$active ? p.theme.colors.bg : p.theme.colors.text)};
+  border-radius: ${p => p.theme.radius};
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
 `;
 
 const Title = styled.h3`

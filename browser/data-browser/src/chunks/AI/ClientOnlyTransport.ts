@@ -12,21 +12,23 @@ import {
   type AIModelIdentifier,
   type AtomicUIMessage,
 } from './types';
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { useRef } from 'react';
 import { useStore } from '@tomic/react';
-import { createOllama } from 'ollama-ai-provider-v2';
 import { addFieldsIf } from '@helpers/addIf';
 import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 import { useSettings } from '@helpers/AppSettings';
 import { shortenSubject } from '@helpers/subjectRefs';
 import { getClassesOnDrive } from './atomicSchemaHelpers';
+import {
+  createLanguageModel,
+  type Modalities,
+  type ProviderCredentials,
+} from './providers';
 
-export type Modalities = 'text' | 'image';
+export type { Modalities };
 
 export interface ClientOnlyTransportOptions {
-  openRouterAPIKey?: string;
-  ollamaURL?: string;
+  credentials: ProviderCredentials;
   selectedAgent: AIAgent;
   model: AIModelIdentifier;
   tools: ToolSet;
@@ -104,38 +106,32 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
   }
 
   private getModel(model: AIModelIdentifier) {
-    if (
-      model.provider === AIProvider.OpenRouter &&
-      this.options.openRouterAPIKey
-    ) {
-      const modalities = this.options.resolveOutputModalities(model.id);
+    const languageModel = createLanguageModel({
+      model,
+      credentials: this.options.credentials,
+      openRouter:
+        model.provider === AIProvider.OpenRouter
+          ? {
+              modalities: this.options.resolveOutputModalities(model.id),
+              useContextCompression: true,
+            }
+          : undefined,
+    });
 
-      const openRouter = createOpenRouter({
-        apiKey: this.options.openRouterAPIKey,
-        compatibility: 'strict',
-        extraBody: {
-          modalities,
-          plugins: [{ id: 'context-compression' }],
-        },
-      });
-
-      return openRouter(model.id);
+    if (!languageModel) {
+      throw new Error('Invalid model provider');
     }
 
-    if (model.provider === AIProvider.Ollama && this.options.ollamaURL) {
-      const ollama = createOllama({
-        baseURL: `${this.options.ollamaURL}/api`,
-      });
-
-      return ollama(model.id);
-    }
-
-    throw new Error('Invalid model provider');
+    return languageModel;
   }
 
   private getParameters(agent: AIAgent, model: AIModelIdentifier) {
-    if (model.provider === AIProvider.Ollama) {
-      // We can't check if Ollama supports specific parameters, so we just return all of them.
+    if (
+      model.provider === AIProvider.Ollama ||
+      model.provider === AIProvider.OpenAICompatible
+    ) {
+      // Gateways / local servers rarely advertise parameter support; pass
+      // temperature through and let the upstream reject unsupported fields.
       return {
         temperature: agent.temperature,
       };

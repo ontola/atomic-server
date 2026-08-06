@@ -21,6 +21,7 @@ import {
 } from '@components/Settings';
 import { WarningBlock } from '@components/WarningBlock';
 import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
+import { OPENAI_COMPATIBLE_PRESETS } from '@chunks/AI/providers';
 
 const ModelSelect = React.lazy(
   () => import('@chunks/AI/ModelSelect/ModelSelect'),
@@ -45,7 +46,7 @@ const CREDITS_ENDPOINT = 'https://openrouter.ai/api/v1/credits';
 const AI_OWN_KEYWORDS = 'ai token usage';
 // Keywords from child sections — makes this section visible, but children still filter
 const AI_CHILD_KEYWORDS =
-  'openrouter ollama mcp server generative model chat provider api key local';
+  'openrouter ollama openai compatible orcarouter groq litellm mcp server generative model chat provider api key local gateway';
 
 const AISettings: React.FC = () => {
   const theme = useTheme();
@@ -59,6 +60,10 @@ const AISettings: React.FC = () => {
     setShowTokenUsage,
     ollamaUrl,
     setOllamaUrl,
+    openAICompatibleApiKey,
+    setOpenAICompatibleApiKey,
+    openAICompatibleBaseUrl,
+    setOpenAICompatibleBaseUrl,
     showFollowUpPrompts,
     setShowFollowUpPrompts,
     isProviderAvailable,
@@ -248,6 +253,74 @@ const AISettings: React.FC = () => {
                   </SubSection>
 
                   <SubSection>
+                    <SubSectionTitle>OpenAI-compatible</SubSectionTitle>
+                    <Column gap='0.5rem'>
+                      <Subtle>
+                        Any gateway that speaks the OpenAI chat completions API
+                        — OrcaRouter, Groq, LiteLLM, LM Studio, a self-hosted
+                        proxy, etc. Pick a preset or paste your own base URL
+                        (usually ending in <code>/v1</code>).
+                      </Subtle>
+                      <PresetRow>
+                        {OPENAI_COMPATIBLE_PRESETS.map(preset => (
+                          <PresetButton
+                            key={preset.id}
+                            type='button'
+                            $active={openAICompatibleBaseUrl === preset.baseUrl}
+                            onClick={() =>
+                              setOpenAICompatibleBaseUrl(preset.baseUrl)
+                            }
+                          >
+                            {preset.label}
+                          </PresetButton>
+                        ))}
+                      </PresetRow>
+                      <ConditionalSettings
+                        fullWidth
+                        gap='0.5rem'
+                        enabled={true}
+                      >
+                        <label htmlFor='openai-compatible-base-url'>
+                          Base URL
+                        </label>
+                        <InputWrapper>
+                          <InputStyled
+                            id='openai-compatible-base-url'
+                            type='url'
+                            value={openAICompatibleBaseUrl || ''}
+                            onChange={e =>
+                              setOpenAICompatibleBaseUrl(
+                                e.target.value || undefined,
+                              )
+                            }
+                            placeholder='https://api.orcarouter.ai/v1'
+                          />
+                        </InputWrapper>
+                        <label htmlFor='openai-compatible-api-key'>
+                          API Key
+                        </label>
+                        <InputWrapper>
+                          <InputStyled
+                            id='openai-compatible-api-key'
+                            type='password'
+                            value={openAICompatibleApiKey || ''}
+                            onChange={e =>
+                              setOpenAICompatibleApiKey(
+                                e.target.value || undefined,
+                              )
+                            }
+                            placeholder={
+                              OPENAI_COMPATIBLE_PRESETS.find(
+                                p => p.baseUrl === openAICompatibleBaseUrl,
+                              )?.apiKeyPlaceholder ?? 'sk-...'
+                            }
+                          />
+                        </InputWrapper>
+                      </ConditionalSettings>
+                    </Column>
+                  </SubSection>
+
+                  <SubSection>
                     <SubSectionTitle>Generative features</SubSectionTitle>
                     {genFeaturesUnavailable && (
                       <WarningBlock>
@@ -345,6 +418,29 @@ const Subtle = styled.p`
   font-size: 0.8rem;
   margin: 0;
   color: ${p => p.theme.colors.textLight};
+`;
+
+const PresetRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+`;
+
+const PresetButton = styled.button<{ $active: boolean }>`
+  appearance: none;
+  border: 1px solid
+    ${p => (p.$active ? p.theme.colors.main : p.theme.colors.bg2)};
+  background: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.bg)};
+  color: ${p => (p.$active ? p.theme.colors.bg : p.theme.colors.text)};
+  border-radius: ${p => p.theme.radius};
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  ${transition('background-color', 'border-color', 'color')}
+
+  &:hover {
+    border-color: ${p => p.theme.colors.main};
+  }
 `;
 
 export default AISettings;
