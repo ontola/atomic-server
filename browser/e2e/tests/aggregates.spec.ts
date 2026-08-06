@@ -38,6 +38,12 @@ async function setCell(
   await page.waitForTimeout(300);
 }
 
+// Totals assertions use 30s budgets, not the 10s default: an aggregate value
+// needs its read to get through the ClientDb worker, and after saves/reloads
+// that queue sits behind a write storm for 15s+ on a loaded runner (measured
+// ~18.5s in the instrumented CI runs; same budget as row-actions and
+// table-templates). Tracked as the OPFS write-amplification issue — when
+// write count drops, these budgets can too.
 test.describe('table totals', () => {
   test.beforeEach(before);
 
@@ -106,16 +112,16 @@ test.describe('table totals', () => {
     await pickTotal(page, footer.locator(`[aria-colindex="${hours}"]`), 'sum');
 
     // The store computed it over every matching row.
-    await expect(footer).toContainText('5', { timeout: 15_000 });
+    await expect(footer).toContainText('5', { timeout: 30_000 });
 
     // It follows an edit, without a reload: 2 + 4 = 6.
     await setCell(page, 3, hours, '4', { replace: true });
-    await expect(footer).toContainText('6', { timeout: 15_000 });
+    await expect(footer).toContainText('6', { timeout: 30_000 });
 
     // The menu must come back on the same cell, again and again: a cell whose
     // menu opens once and then goes dead is the failure this covers.
     await pickTotal(page, footer.locator(`[aria-colindex="${hours}"]`), 'avg');
-    await expect(footer).toContainText('Average', { timeout: 15_000 });
+    await expect(footer).toContainText('Average', { timeout: 30_000 });
 
     // ...including after visiting another column's cell in between.
     // Opening a menu is not idempotent — the cell TOGGLES its menu, so a click
@@ -127,10 +133,10 @@ test.describe('table totals', () => {
       await expect(
         page.getByTestId('menu-item-count').filter({ visible: true }).first(),
       ).toBeVisible({ timeout: 2_000 });
-    }).toPass({ timeout: 15_000 });
+    }).toPass({ timeout: 30_000 });
     await page.keyboard.press('Escape');
     await pickTotal(page, footer.locator(`[aria-colindex="${hours}"]`), 'sum');
-    await expect(footer).toContainText('Sum', { timeout: 15_000 });
+    await expect(footer).toContainText('Sum', { timeout: 30_000 });
 
     // A second totals row: the same column can show a sum and an average.
     await pickTotal(page, footer.locator('[aria-colindex="1"]'), 'add-row');
@@ -143,8 +149,8 @@ test.describe('table totals', () => {
     );
 
     // 2 and 4 → sum 6, average 3, each in its own row under Hours.
-    await expect(footer).toContainText('6', { timeout: 15_000 });
-    await expect(secondRow).toContainText('3', { timeout: 15_000 });
+    await expect(footer).toContainText('6', { timeout: 30_000 });
+    await expect(secondRow).toContainText('3', { timeout: 30_000 });
 
     // Break the totals down per day, from the row-count cell's menu. (Its menu
     // was used a moment ago, so let that one finish closing first.)
@@ -159,7 +165,7 @@ test.describe('table totals', () => {
 
     // Both entries started today, so one bucket of 2 rows.
     const breakdown = page.getByTestId('table-breakdown');
-    await expect(breakdown).toBeVisible({ timeout: 15_000 });
+    await expect(breakdown).toBeVisible({ timeout: 30_000 });
     await expect(breakdown).toContainText('2 rows');
 
     // A filter narrows the rows AND the total with them — the totals describe
@@ -171,18 +177,18 @@ test.describe('table totals', () => {
 
     await expect(row(page, 'Alpha')).toHaveCount(0);
     // Only Beta's 4 hours are left, so the total says 4 over 1 row.
-    await expect(footer).toContainText('4', { timeout: 15_000 });
+    await expect(footer).toContainText('4', { timeout: 30_000 });
     await expect(footer.locator('[aria-colindex="1"]')).toHaveText('1');
 
     // The configuration lives on the View, so it survives a reload.
     await page.reload();
     await expect(page.getByRole('grid')).toBeVisible();
     await expect(page.getByTestId('table-totals')).toContainText('Sum', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
     // Both totals rows are configuration on the View, so both come back.
     await expect(page.getByTestId('table-totals-1')).toContainText('Average', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
   });
 });
