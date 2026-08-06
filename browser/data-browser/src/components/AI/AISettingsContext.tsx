@@ -33,10 +33,14 @@ interface AISettingsContextType {
   isProviderAvailable: (provider: AIProvider) => boolean;
   availableProviders: AIProvider[];
   openRouterAvailable: boolean;
+  orcarouterAvailable: boolean;
   ollamaAvailable: boolean;
   /** The OpenRouter API key for making requests to OpenRouter */
   openRouterApiKey: string | undefined;
   setOpenRouterApiKey: (key: string | undefined) => void;
+  /** The OrcaRouter API key for making requests to OrcaRouter */
+  orcarouterApiKey: string | undefined;
+  setOrcarouterApiKey: (key: string | undefined) => void;
   /** The URL of the Ollama server */
   ollamaUrl: string | undefined;
   setOllamaUrl: (url: string | undefined) => void;
@@ -64,9 +68,12 @@ const initialState: AISettingsContextType = {
   isProviderAvailable: () => false,
   availableProviders: [],
   openRouterAvailable: false,
+  orcarouterAvailable: false,
   ollamaAvailable: false,
   openRouterApiKey: undefined,
   setOpenRouterApiKey: () => undefined,
+  orcarouterApiKey: undefined,
+  setOrcarouterApiKey: () => undefined,
   // Unset until the user asks for local AI — see the note on the real default
   // in `AISettingsContextProvider` below.
   ollamaUrl: undefined,
@@ -125,6 +132,10 @@ export const AISettingsContextProvider = (
     string | undefined
   >('atomic.ai.openrouter-api-key', undefined);
 
+  const [orcarouterApiKey, setOrcarouterApiKey] = useLocalStorage<
+    string | undefined
+  >('atomic.ai.orcarouter-api-key', undefined);
+
   const [defaultChatModel, setDefaultChatModel] =
     useLocalStorage<AIModelIdentifier>(
       'atomic.ai.defaultChatModel',
@@ -149,10 +160,11 @@ export const AISettingsContextProvider = (
 
   const {
     openRouterAvailable,
+    orcarouterAvailable,
     ollamaAvailable,
     isProviderAvailable,
     availableProviders,
-  } = useProviderAvailability(openRouterApiKey, ollamaUrl);
+  } = useProviderAvailability(openRouterApiKey, orcarouterApiKey, ollamaUrl);
 
   const mcpServers = mergeDefaultMCPServers(storedMcpServers);
   const setMcpServers = (servers: MCPServer[]) =>
@@ -161,6 +173,8 @@ export const AISettingsContextProvider = (
   const context = {
     openRouterApiKey,
     setOpenRouterApiKey,
+    orcarouterApiKey,
+    setOrcarouterApiKey,
     mcpServers,
     setMcpServers,
     enableAI,
@@ -176,6 +190,7 @@ export const AISettingsContextProvider = (
     isProviderAvailable,
     availableProviders,
     openRouterAvailable,
+    orcarouterAvailable,
     ollamaAvailable,
     shouldGenerateTitles,
     setShouldGenerateTitles,

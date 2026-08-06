@@ -2,6 +2,7 @@ import styled from 'styled-components';
 import { AIProvider } from '@components/AI/aiContstants';
 import { type AIModelIdentifier } from '../types';
 import { OpenRouterModelSelector } from './OpenRouterModelSelector';
+import { OrcaRouterModelSelector } from './OrcaRouterModelSelector';
 import { TAB_PANEL_HAS_ERROR_CLASS, TabPanel, Tabs } from '@components/Tabs';
 import { OllamaModelSelector } from './OllamaModelSelector';
 import { transition } from '@helpers/transition';
@@ -20,6 +21,10 @@ const PROVIDER_TABS = [
     value: AIProvider.OpenRouter,
   },
   {
+    label: 'OrcaRouter',
+    value: AIProvider.OrcaRouter,
+  },
+  {
     label: 'Ollama',
     value: AIProvider.Ollama,
   },
@@ -30,7 +35,7 @@ export const ModelSelect = ({
   defaultModel,
   enforceToolSupport = false,
 }: ModelSelectProps) => {
-  const { openRouterApiKey, ollamaUrl } = useAISettings();
+  const { openRouterApiKey, orcarouterApiKey, ollamaUrl } = useAISettings();
 
   return (
     <Wrapper>
@@ -53,6 +58,23 @@ export const ModelSelect = ({
             <NotConfiguredMessage>
               <span>
                 OpenRouter API key is not configured. Go to{' '}
+                <Link to='/app/settings'>Settings</Link>.
+              </span>
+            </NotConfiguredMessage>
+          )}
+        </StyledTabPanel>
+        <StyledTabPanel value={AIProvider.OrcaRouter}>
+          {orcarouterApiKey ? (
+            <OrcaRouterModelSelector
+              onSelect={model => {
+                onSelect?.(model);
+              }}
+              defaultModel={defaultModel.id}
+            />
+          ) : (
+            <NotConfiguredMessage>
+              <span>
+                OrcaRouter API key is not configured. Go to{' '}
                 <Link to='/app/settings'>Settings</Link>.
               </span>
             </NotConfiguredMessage>

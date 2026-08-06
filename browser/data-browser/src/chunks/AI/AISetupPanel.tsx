@@ -65,6 +65,8 @@ export const AISetupPanel: React.FC = () => {
   const {
     openRouterApiKey,
     setOpenRouterApiKey,
+    orcarouterApiKey,
+    setOrcarouterApiKey,
     ollamaUrl,
     setOllamaUrl,
     defaultChatModel,
@@ -72,6 +74,7 @@ export const AISetupPanel: React.FC = () => {
     isProviderAvailable,
     availableProviders,
     openRouterAvailable,
+    orcarouterAvailable,
     ollamaAvailable,
     setGenFeaturesModel,
   } = useAISettings();
@@ -209,8 +212,8 @@ export const AISetupPanel: React.FC = () => {
       <Panel>
         <Title>Connect a model to use Atomic Assistant</Title>
         <Subtle>
-          Use OpenRouter (cloud models) or Ollama (local models). At least one
-          provider must be connected before you can continue.
+          Use OpenRouter, OrcaRouter (cloud models) or Ollama (local models). At
+          least one provider must be connected before you can continue.
         </Subtle>
         <ProvidersGrid>
           <OutlinedSection title='OpenRouter'>
@@ -235,6 +238,27 @@ export const AISetupPanel: React.FC = () => {
                     }
                     placeholder='Paste API key'
                     aria-label='OpenRouter API key'
+                  />
+                </ApiKeyField>
+              </CredentialsRow>
+            </ProviderSection>
+          </OutlinedSection>
+          <OutlinedSection title='OrcaRouter'>
+            <ProviderSection>
+              <ProviderStatus
+                connected={orcarouterAvailable}
+                configured={Boolean(orcarouterApiKey)}
+              />
+              <CredentialsRow>
+                <ApiKeyField>
+                  <InputStyled
+                    type='password'
+                    value={orcarouterApiKey || ''}
+                    onChange={e =>
+                      setOrcarouterApiKey(e.target.value || undefined)
+                    }
+                    placeholder='sk-orca-...'
+                    aria-label='OrcaRouter API key'
                   />
                 </ApiKeyField>
               </CredentialsRow>

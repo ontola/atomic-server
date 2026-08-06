@@ -1,6 +1,7 @@
 import { AIProvider } from '@components/AI/aiContstants';
 import type { AIModelIdentifier } from './types';
 import { useOpenRouterModels } from './useOpenRouterModels';
+import { useOrcaRouterModels } from './useOrcaRouterModels';
 import { useOllamaModelContextLength } from './useOllamaModelContext';
 
 export const FALLBACK_CONTEXT_LENGTH = 100_000;
@@ -22,6 +23,8 @@ export function useModelContextLength(
   model: AIModelIdentifier | undefined,
 ): number | undefined {
   const { getORModelContextLength } = useOpenRouterModels();
+  const { getORModelContextLength: getOrcaRouterContextLength } =
+    useOrcaRouterModels();
   const ollamaLength = useOllamaModelContextLength(
     model?.provider === AIProvider.Ollama ? model.id : undefined,
   );
@@ -32,6 +35,10 @@ export function useModelContextLength(
 
   if (model.provider === AIProvider.OpenRouter) {
     return getORModelContextLength(model.id);
+  }
+
+  if (model.provider === AIProvider.OrcaRouter) {
+    return getOrcaRouterContextLength(model.id);
   }
 
   if (model.provider === AIProvider.Ollama) {

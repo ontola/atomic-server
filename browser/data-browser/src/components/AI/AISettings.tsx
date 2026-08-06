@@ -45,7 +45,7 @@ const CREDITS_ENDPOINT = 'https://openrouter.ai/api/v1/credits';
 const AI_OWN_KEYWORDS = 'ai token usage';
 // Keywords from child sections — makes this section visible, but children still filter
 const AI_CHILD_KEYWORDS =
-  'openrouter ollama mcp server generative model chat provider api key local';
+  'openrouter orcarouter ollama mcp server generative model chat provider api key local';
 
 const AISettings: React.FC = () => {
   const theme = useTheme();
@@ -55,6 +55,8 @@ const AISettings: React.FC = () => {
     setEnableAI,
     openRouterApiKey,
     setOpenRouterApiKey,
+    orcarouterApiKey,
+    setOrcarouterApiKey,
     showTokenUsage,
     setShowTokenUsage,
     ollamaUrl,
@@ -76,6 +78,10 @@ const AISettings: React.FC = () => {
     }
 
     setOpenRouterApiKey(key);
+  };
+
+  const handleSetOrcarouterKey = (key: string | undefined) => {
+    setOrcarouterApiKey(key);
   };
 
   const genFeaturesUnavailable = !isProviderAvailable(
@@ -194,6 +200,50 @@ const AISettings: React.FC = () => {
                             access to hundreds of AI models from all major
                             vendors, while automatically handling fallbacks and
                             selecting the most cost-effective options.
+                          </Subtle>
+                        )}
+                      </ConditionalSettings>
+                    </Column>
+                  </SubSection>
+
+                  <SubSection>
+                    <SubSectionTitle>OrcaRouter</SubSectionTitle>
+                    <Column gap='0.5rem'>
+                      <ConditionalSettings
+                        fullWidth
+                        gap='0.5rem'
+                        enabled={true}
+                      >
+                        <label htmlFor='orcarouter-api-key'>
+                          OrcaRouter API Key
+                        </label>
+                        <InputWrapper>
+                          <InputStyled
+                            id='orcarouter-api-key'
+                            type='password'
+                            value={orcarouterApiKey || ''}
+                            onChange={e =>
+                              handleSetOrcarouterKey(
+                                e.target.value || undefined,
+                              )
+                            }
+                            placeholder='sk-orca-...'
+                          />
+                        </InputWrapper>
+                        {!orcarouterApiKey && (
+                          <Subtle>
+                            OrcaRouter is an OpenAI-compatible gateway that
+                            gives you access to a wide range of AI models
+                            through a single API key, and runs gateway-level,
+                            zero-trust security for AI agents on the same
+                            endpoint. Learn more at{' '}
+                            <a
+                              href='https://www.orcarouter.ai'
+                              target='_blank'
+                              rel='noreferrer'
+                            >
+                              www.orcarouter.ai
+                            </a>
                           </Subtle>
                         )}
                       </ConditionalSettings>
