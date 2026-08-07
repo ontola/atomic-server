@@ -12,7 +12,7 @@ There's a couple of levels at which you can start working with Atomic Data (from
 ## Play with the demo
 
 - Open [the Invite](https://atomicdata.dev/invites/1) on `atomicdata.dev`
-- Press `Accept`. The front-end app will generate a cryptographic key pair. Your public key determines your Agent identity (`did:ad:{publicKey}`), and the server grants you rights to the shared resource.
+- Press `Accept`. The front-end app will generate a cryptographic key pair. Your public key determines your Agent identity (`did:ad:agent:{publicKey}`), and the server grants you rights to the shared resource.
 - You're now signed in! You can edit the document on your screen.
 - Edit your Agent by going to [user settings](https://atomicdata.dev/app/agent)
 - Copy your `secret`, and save it somewhere safe. You can use this to sign in on a different machine.
@@ -32,9 +32,9 @@ There's a couple of levels at which you can start working with Atomic Data (from
 
 
 
-- Browser app [atomic-data-browser](https://github.com/atomicdata-dev/atomic-data-browser) ([demo on atomicdata.dev](https://atomicdata.dev))
-- Build a react app using [typescript & react libraries](https://github.com/atomicdata-dev/atomic-data-browser). Start with the [react template on codesandbox](https://codesandbox.io/s/atomic-data-react-template-4y9qu?file=/src/MyResource.tsx)
-- Host your own [atomic-server](https://github.com/atomicdata-dev/atomic-data-browser) (powers [atomicdata.dev](https://atomicdata.dev), run with `docker run -p 80:80 -v atomic-storage:/atomic-storage joepmeneer/atomic-server`)
+- Web app in the [`atomic-server` monorepo](https://github.com/atomicdata-dev/atomic-server/tree/master/browser) ([demo on atomicdata.dev](https://atomicdata.dev))
+- Build a react app using [`@tomic/lib` and `@tomic/react`](https://github.com/atomicdata-dev/atomic-server/tree/master/browser). Start with the [react template on codesandbox](https://codesandbox.io/s/atomic-data-react-template-4y9qu?file=/src/MyResource.tsx)
+- Host your own [atomic-server](https://github.com/atomicdata-dev/atomic-server) (powers [atomicdata.dev](https://atomicdata.dev), run with `docker run -p 80:80 -v atomic-storage:/atomic-storage joepmeneer/atomic-server`)
 - Discover the command line tool: [atomic-cli](https://github.com/atomicdata-dev/atomic-server) (`cargo install atomic-cli`)
 - Use the Rust library: [atomic-lib](https://github.com/atomicdata-dev/atomic-server)
 

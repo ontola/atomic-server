@@ -76,6 +76,14 @@ Clients resolve a preferred language `L` with the same chain everywhere:
 
 In `@tomic/lib` this is the `localizeText(value, preferred, defaultLanguage?)` helper; in Rust it is `Value::to_localized_string`.
 
+## What the GUI supports today
+
+- **LocalizedText columns** in [Tables](../atomicserver/gui/tables.md): per-language input, language switcher, and optional split-by-language columns.
+- **Website templates** can declare `defaultLanguage` / `languages` and ship multi-locale starter content.
+- **Document-level** `language` + `translationOf` are in the data model; a dedicated "Translate this page" / translations bar UX is still landing. Until then you create sibling resources and set the properties manually (or via the assistant).
+
+UI chrome strings in the data-browser (menus, buttons) are localized separately via the app's own i18n tooling (Wuchale) and are unrelated to content `LocalizedText`.
+
 ## History
 
 An earlier concept on this page (`TranslationBox`, a property per language under `https://atomicdata.dev/languages/{tag}`) was never implemented and is superseded by the model above.

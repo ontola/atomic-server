@@ -8,7 +8,7 @@ AtomicServer is a real-time headless CMS, graph database server for storing and 
 It's free, open source (MIT license), and has a ton of features:
 
 <!-- Copied from root README -->
-- 🏠  **Local-first**: create and edit data with no server at all. Resources are addressed by [`did:ad` identifiers](https://docs.atomicdata.dev/did) and resolve peer-to-peer over the Mainline DHT, so an identity is a keypair you hold rather than an account on someone else's machine. Edits are signed CRDT commits that merge when you reconnect.
+- 🏠  **Local-first**: create and edit data with no server at all. Resources are addressed by [`did:ad` identifiers](https://docs.atomicdata.dev/did) — an identity is a keypair you hold rather than an account on someone else's machine. Peer discovery uses pkarr; devices sync over [WebSocket and Iroh](https://docs.atomicdata.dev/websockets). Edits are signed CRDT commits that merge when you reconnect. See [Local-first](atomicserver/local-first.md).
 - 🔒  **Encrypted at rest, per agent**: each agent's in-browser database is encrypted with XChaCha20-Poly1305, under a key wrapped by that agent's own private key. Signing out leaves the cache in place but unreadable to the next session — no wipe required.
 - 🔑  **Passkey-backed recovery**: a WebAuthn passkey wraps the backup of your agent secret (Argon2id + AES-GCM), so onboarding hands you nothing to write down, and a lost device doesn't have to mean a lost account.
 - 🚀  **Fast** (less than 1ms median response time on my laptop), powered by [actix-web](https://github.com/actix/actix-web) and [redb](https://github.com/cberner/redb)
@@ -18,12 +18,14 @@ It's free, open source (MIT license), and has a ton of features:
 - ⚙️  **Restful API**, with [JSON-AD](https://docs.atomicdata.dev/core/json-ad.html) responses.
 - 🔎  **Full-text search** with fuzzy search and various operators, often <3ms responses. Powered by [tantivy](https://github.com/quickwit-inc/tantivy).
 - ✨  **AI** with [MCP](https://modelcontextprotocol.io/) support, use any model via OpenRouter or host your own with Ollama.
-- 🗄️  **Tables**, with strict schema validation, keyboard support, copy / paste support. Similar to Airtable.
+- 🗄️  **Tables**, with strict schema validation, kanban / calendar / timer views, filters, templates, computed columns, aggregates, keyboard and copy/paste support. Similar to Airtable. See [Tables](atomicserver/gui/tables.md).
 - 📄  **Documents**, collaborative, rich text, similar to Google Docs / Notion.
 - 💬  **Group chat**, performant and flexible message channels with attachments, search and replies.
+- 👁️  **Presence**: see who is viewing a resource, follow someone through the app, live cursors while co-editing. See [Presence](atomicserver/gui/presence.md).
+- 📰  **Headless CMS**: drafts by folder location, forks for proposed edits, website templates, and [i18n](schema/translations.md). See [CMS](atomicserver/cms.md).
 - 📂  **File management**: Upload, download and preview attachments.
 - 💾  **Event-sourced versioning** / history powered by [Atomic Commits](https://docs.atomicdata.dev/commits/intro.html)
-- 🔄  **Real-time synchronization**: instantly communicates state changes with a client. Build dynamic, collaborative apps using [websockets](https://docs.atomicdata.dev/websockets) (using a [single one-liner in react](https://docs.atomicdata.dev/usecases/react) or [svelte](https://docs.atomicdata.dev/svelte)).
+- 🔄  **Real-time synchronization**: instantly communicates state changes with a client. Build dynamic, collaborative apps using [websockets](https://docs.atomicdata.dev/websockets) (using a [single one-liner in react](https://docs.atomicdata.dev/usecases/react) or [svelte](https://docs.atomicdata.dev/svelte)). Pair devices with a QR code — see [Sync & pairing](atomicserver/gui/sync-and-pairing.md).
 - 🧰  **Many serialization options**: to JSON, [JSON-AD](https://docs.atomicdata.dev/core/json-ad.html), and various Linked Data / RDF formats (RDF/XML, N-Triples / Turtle / JSON-LD).
 - 📖  **Pagination, sorting and filtering** queries using [Atomic Collections](https://docs.atomicdata.dev/schema/collections.html).
 - 🔐  **Authorization** (read / write permissions) and Hierarchical structures powered by [Atomic Hierarchy](https://docs.atomicdata.dev/hierarchy.html)

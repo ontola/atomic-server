@@ -1,16 +1,16 @@
 {{#title Decentralized Identifiers (DIDs) in Atomic Data }}
 # Decentralized Identifiers
 
-_status: work in progress_
+_Identity forms below are stable and used in production. Discovery transports keep evolving — see [Resolution](#resolution)._
 
-Atomic Data is moving from HTTP URLs to Decentralized Identifiers (DIDs) as the primary way to address resources.
-This makes resources portable, self-authenticating, and resolvable over both the internet and local mesh networks.
+Atomic Data uses Decentralized Identifiers (DIDs) as the primary way to address resources.
+This makes resources portable, self-authenticating, and resolvable without tying identity to a hostname.
 
 ## Design goals
 
 - **Self-sovereign**: Identifiers don't depend on any server or domain name. You generate a keypair, and you have an identity.
 - **Portable**: Resources can move between servers without changing their identifier.
-- **Multi-transport**: The same identifier can be resolved over the internet (Mainline DHT) or local mesh networks (Reticulum).
+- **Multi-transport**: The same identifier can be discovered and synced over WebSocket, Iroh (QUIC), and (planned) mesh stacks such as Reticulum.
 - **Verifiable**: Trust comes from [Commit](commits/intro.md) signatures, not from who hosts the data.
 - **Replicatable**: Any node can replicate and serve a Drive without holding the Drive's private key.
 
@@ -70,7 +70,7 @@ For most operations, agents don't need to be "resolved" at all:
 - **Displaying profile info** (name, avatar): Drives cache agent metadata when agents interact with them (e.g. accepting an [Invite](invitations.md), making a [Commit](commits/intro.md)). The drive you're connected to typically already has it.
 
 If a client encounters an unknown agent, it can show the truncated public key as a fallback.
-More sophisticated resolution (e.g. using [Mainline DHT](#3-mainline-dht-internet) or [Reticulum](#2-reticulum-mesh-resolution) announces) can be layered on later without changing the DID format.
+Peer discovery for the drives an agent touches uses [pkarr](#3-pkarr--iroh-internet) (and can grow additional transports later) without changing the DID format.
 
 ### Commit identifiers
 
@@ -119,7 +119,7 @@ Like resources and commits, blob DIDs accept a routing hint pointing at a Drive 
 did:ad:blob:{blake3}?drive=did:ad:{drive_genesis}
 ```
 
-A client looks up peers for the Drive via Mainline DHT or Reticulum, then asks any of them for the blob. Over the v2 sync protocol, blobs travel as raw 32-byte hashes inside `BLOB_REQUEST`/`BLOB_RESPONSE` frames — the DID is for *identity*, the bytes on the wire are the underlying hash. (This parallels commits: the DID is `did:ad:commit:{sig}`, but the wire never re-prepends the prefix.)
+A client looks up peers for the Drive (pkarr / known peers / configured server), then asks any of them for the blob. Over the v2 sync protocol, blobs travel as raw 32-byte hashes inside `BLOB_REQUEST`/`BLOB_RESPONSE` frames — the DID is for *identity*, the bytes on the wire are the underlying hash. (This parallels commits: the DID is `did:ad:commit:{sig}`, but the wire never re-prepends the prefix.)
 
 The HTTP form `<origin>/download/files/{blake3}` is a deployment-specific alias for `did:ad:blob:{blake3}` and remains supported for browsers and existing tooling.
 
@@ -171,21 +171,13 @@ did:ad:4f7ba2...910?drive=did:ad:7e6a9d...038
 
 A Drive is a first-class resource identified by its own `did:ad` identifier.
 
-When a Drive is used as a routing hint (the `?drive=` parameter), network nodes derive an **internal discovery hash** for lookups on decentralized networks (Mainline DHT or Reticulum). This hash is never stored as an explicit property; it is derived on-the-fly when needed for discovery.
+When a Drive is used as a routing hint (the `?drive=` parameter), nodes may derive an **internal discovery key** from the Drive's DID string for announce/lookup on a given transport. That key is not stored as a resource property; it is computed when publishing or resolving peers.
 
-The formula for the discovery hash is:
-```text
-discovery_hash = HASH(drive_did_string)
-```
+What matters for applications:
 
-The specific hash algorithm depends on the transport protocol:
-- **Mainline DHT**: Uses `SHA1(drive_did_string)` to produce a 20-byte ID.
-- **Reticulum**: Uses `truncated_SHA256(drive_did_string)` to produce a 16-byte destination.
-
-This ensures:
 - **Consistency**: Everything is a `did:ad` identifier.
 - **Portability**: The identifier depends only on the Drive's genesis state, not its location.
-- **Protocol Independence**: The same DID can be mapped to different binary formats required by different networks.
+- **Protocol independence**: The same DID can be mapped to different discovery backends (pkarr today; additional mesh or DHT backends later).
 
 ### Drive replication
 
@@ -194,47 +186,36 @@ Trust comes from [Commit signatures](commits/intro.md), not from who serves the 
 
 1. The Drive owner creates resources and signs [Commits](commits/intro.md) with their Agent key.
 2. A replica node syncs the data and verifies every Commit signature.
-3. The replica announces itself as a peer for this Drive (on Mainline DHT, Reticulum, or both) using the discovery hash derived from the Drive's DID string.
-4. Clients fetching data derive the same hash from the `?drive=` hint and look up peers.
+3. The replica announces itself as a peer for this Drive (pkarr today; additional transports later).
+4. Clients discover peers from that announce, a pairing code, or a configured server address.
 5. Clients fetch data and verify Commit signatures themselves — they don't need to trust the serving node.
 
 ## Resolution
 
 Resolving a `did:ad` URL means finding a network node that holds the requested Drive and resource.
-Multiple resolution strategies can be tried in order:
+Strategies are tried from local to remote:
 
 ### 1. Local cache
 
-If the resource has been fetched before, serve it from the local store.
+If the resource is already in the local store (browser OPFS, device redb, etc.), serve it from there. This is the [local-first](atomicserver/local-first.md) path.
 
-### 2. Reticulum mesh resolution
+### 2. Direct connection / known peers
 
-[Reticulum](https://reticulum.network/) is a mesh networking stack that works over any medium — radio, LoRa, serial, TCP, UDP, and more.
-Its addressing model is a natural fit for `did:ad`:
+If the node's address is already known — Sync settings, a previous session, or a [pairing code](atomicserver/gui/sync-and-pairing.md) — connect over WebSocket or Iroh and fetch or sync the resource.
 
-- Reticulum destinations are 16-byte hashes.
-- To reach a Drive on a Reticulum mesh, a client sends a **path request** for the 16-byte destination derived from the Drive's DID string. Any Transport Node that has seen an announce for that destination can route the request.
-- The Drive node (or any replica) announces its destination on the mesh, making it reachable within minutes even on slow, multi-hop networks.
+### 3. pkarr + Iroh (internet)
 
-This means two Atomic Server nodes on a Reticulum mesh (e.g. over LoRa radio) can exchange and resolve resources **without any internet access**, using the exact same `did:ad` identifiers they would use online.
+Production discovery uses **[pkarr](https://pkarr.org/)** to publish and resolve which [Node](#node-identifiers) holds a Drive, then **[Iroh](https://iroh.computer)** (QUIC, with relay fallback) to sync. The flow:
 
-### 3. Mainline DHT (internet)
+1. A node hosting a Drive publishes its NodeID via pkarr (keyed from the Drive identity).
+2. Another device resolves that NodeID, connects over Iroh, and runs the [sync protocol](websockets.md).
+3. Commit signatures are verified client-side.
 
-[Mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT) is the BitTorrent distributed hash table — a decentralized network with millions of active nodes.
-It provides a way for any node to announce that it hosts a given Drive, and for clients to discover those nodes:
+pkarr is a pure _discovery_ mechanism — authenticity still comes only from Commit signatures. Any replica that holds the data can announce itself.
 
-1. A node hosting a Drive calls `announce_peer(SHA1(drive_did_string))` on the Mainline DHT.
-2. A client resolving a Drive calls `get_peers(SHA1(drive_did_string))` and receives a list of IP:port pairs.
-3. The client connects to any discovered peer and requests the resource using the original DID.
-4. Commit signatures are verified client-side.
+### 4. Reticulum mesh (planned)
 
-No special signing keys (BEP44) are needed at the DHT layer.
-The DHT is a pure _discovery_ mechanism — all trust and authenticity comes from the Commit signatures in the data itself.
-Any node — the original or a replica — can announce itself as a peer.
-
-### 4. Direct connection
-
-If the node's IP or domain is already known (e.g. from configuration or a previous session), connect directly.
+[Reticulum](https://reticulum.network/) is a mesh networking stack (radio, LoRa, serial, TCP, and more). Carrying the same sync protocol over Reticulum is a design goal so two nodes could exchange `did:ad` resources without internet access. It is **not** required for current deployments; see the internal `planning/reticulum-sync.md` notes.
 
 ## HTTP Discovery
 
@@ -257,7 +238,7 @@ The three variants map to different resolution strategies:
 | `Subject` variant | Format | Use case |
 |---|---|---|
 | `Internal` | `internal:/path` | Local resources on this server. Resolved to an absolute URL using the server's origin for serialization. |
-| `Did` | `did:ad:...` | Agents (by public key), Commits (by signature), Blobs (by BLAKE3 hash), Nodes (as routing identities), and Resources in Drives (by genesis commit signature). Routing hints (`?drive=did:ad:...`) are used for peer discovery via Reticulum or Mainline DHT. |
+| `Did` | `did:ad:...` | Agents (by public key), Commits (by signature), Blobs (by BLAKE3 hash), Nodes (as routing identities), and Resources in Drives (by genesis commit signature). Routing hints (`?drive=did:ad:...`) help peer discovery (pkarr / known peers). |
 | `External` | `https://...` | Resources on other servers. Resolved via HTTP. Used for backward compatibility and external linked data. |
 
 When serializing to [JSON-AD](core/json-ad.md), `Internal` subjects are resolved to absolute URLs using the server's configured origin.
@@ -268,7 +249,8 @@ When serializing to [JSON-AD](core/json-ad.md), `Internal` subjects are resolved
 | | `did:ad` | `did:web` | `did:dht` | `did:key` |
 |---|---|---|---|---|
 | **Decentralized** | ✅ No server dependency | ❌  Depends on DNS | ✅ Mainline DHT | ✅ Self-contained |
-| **Mesh-capable** | ✅ Native Reticulum | ❌ | ❌ | ✅ But no routing |
+| **Discovery today** | ✅ pkarr + Iroh / WS | DNS | Mainline DHT | N/A |
+| **Mesh-capable** | 🚧 Reticulum planned | ❌ | ❌ | ✅ But no routing |
 | **Updatable** | ✅ Drive can move | ✅ Update DNS | ✅ Mutable records | ❌ Static |
 | **Replicatable** | ✅ Any node can serve | ❌ Single server | ❌ Key holder only | N/A |
 | **Trust model** | Commit signatures | TLS + DNS | BEP44 signatures | Key-based |

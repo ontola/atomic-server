@@ -20,12 +20,12 @@ At the start these will be:
 ## Creating an agent
 To create data in AtomicServer you'll need an agent.
 An agent is like a user account, it signs the changes (commits) you make to data so that others can verify that you made them.
-Agents are identified by a DID derived from their public key (`did:ad:{publicKey}`), so they can be used on any AtomicServer without needing to be registered first.
+Agents are identified by a DID derived from their public key (`did:ad:agent:{publicKey}`), so they can be used on any AtomicServer without needing to be registered first.
 
 To get started, you can use the [demo invite](https://atomicdata.dev/invites/1) on atomicdata.dev, or the `/setup` invite on your own server.
 
 Click the "Accept as new user" button. The app will generate a key pair and your Agent will be created.
-Navigate to the User Settings page to find your agent secret. This secret is what you use to login, so keep it somewhere safe, like in a password manager. If you lose it you won't be able to recover your account.
+Navigate to the User Settings page to find your agent secret. You can also set up **passkey-backed recovery** so a lost device does not mean a lost account. Keep a backup of the secret or passkey enrollment somewhere safe.
 
 ### Setting up the root Agent
 Next, we'll set up the root Agent that has write access to the Drive.
@@ -49,3 +49,12 @@ Now that everything is up and running you can start creating some resources.
 To create a new resource, click the + button in the sidebar.
 You will be presented with a list of resource types to choose from like Tables, Folders, Documents etc.
 You can also create your own types by using ontologies.
+
+## Next in the GUI
+
+- [Tables](gui/tables.md) — views, filters, templates, aggregates
+- [Sync & pairing](gui/sync-and-pairing.md) — connect devices and always-on peers
+- [Presence & collaboration](gui/presence.md) — who is here, follow-me, meetings
+- [Headless CMS, drafts & forks](cms.md) — publishing and proposed edits
+- [Local-first](local-first.md) — how offline storage works
+- [AI and Atomic Assistant](gui/ai-and-atomic-assistant.md)
