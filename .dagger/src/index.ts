@@ -1818,9 +1818,18 @@ VOLUME /atomic-storage
       .filter(target => target !== firstImageArchitecture)
       .map(target => this.createDockerImage(target));
 
-    // Publish the multi-platform image with all variants
+    // Publish the multi-platform image with all variants.
+    //
+    // `docker/metadata-action` (the CI caller) outputs FULL references —
+    // `joepmeneer/atomic-server:develop` — and prefixing those again produced
+    // `joepmeneer/atomic-server:joepmeneer/atomic-server:develop`, which the
+    // registry rejects as "invalid reference format". Every develop publish
+    // since the tags became a list failed on it. Bare tag names (manual
+    // `dagger call create-docker-images --tags latest`) keep working via the
+    // prefix.
     for (const tag of tags) {
-      await firstImage.publish(`joepmeneer/atomic-server:${tag}`, {
+      const ref = tag.includes('/') ? tag : `joepmeneer/atomic-server:${tag}`;
+      await firstImage.publish(ref, {
         platformVariants: otherVariants,
       });
     }
