@@ -20,3 +20,9 @@ pub mod keys;
 pub mod dek;
 #[cfg(feature = "db-redb")]
 pub mod envelope;
+#[cfg(feature = "db-redb")]
+pub mod pack;
+#[cfg(feature = "db-redb")]
+pub mod store;
+#[cfg(feature = "db-redb")]
+pub mod sync;
