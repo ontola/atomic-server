@@ -11,3 +11,12 @@
 //! server only ever stores the opaque output.
 
 pub mod keys;
+
+// Phase 0/1 of the Cloud Vault build: the drive key hierarchy and the object
+// envelope. Gated on `db-redb` because that is the feature carrying
+// `chacha20poly1305`, and every host that can run a vault client already
+// enables it (see the host table in CLOUD_VAULT_ARCHITECTURE.md).
+#[cfg(feature = "db-redb")]
+pub mod dek;
+#[cfg(feature = "db-redb")]
+pub mod envelope;
