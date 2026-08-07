@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/meal.dart';
+import 'square_crop.dart';
 
 /// Photos on disk — compressed once at capture, capped in total, and evicted
 /// oldest-first when the cap is reached.
@@ -53,11 +54,63 @@ class ImageStore {
   static const thumbEdge = 256;
   static const thumbQuality = 70;
 
-  /// Full images and thumbnails are separated by directory, not by filename, so
-  /// a thumbnail's path is derivable from the meal's `image-path` and the meal
-  /// only has to store the one.
+  /// The embedding source: the copy kept so the history can be *re-encoded*
+  /// when the encoder changes (`calorie-tracker-embeddings.md` §9).
+  ///
+  /// This is the one genuinely irreversible hazard in the suggestions design. An
+  /// embedding is only comparable to embeddings from the same encoder, so
+  /// swapping models invalidates every vector at once — and by then the photos
+  /// they were computed from have been evicted against the byte budget. Keeping
+  /// a small copy outside that budget turns a permanent hole in the history into
+  /// a background job.
+  ///
+  /// **256px, not the 64px the plan sketched.** Small image encoders take
+  /// 224–256px square inputs (DINOv2-S is 224), so a 64px source would have to
+  /// be upscaled 4× before it could be encoded at all — building in exactly the
+  /// preprocessing mismatch §6 says silently breaks every threshold. 256 is the
+  /// floor that feeds the encoder without inventing pixels. The cost is ~25 KB a
+  /// meal against a photo budget measured in hundreds of megabytes.
+  ///
+  /// **A square edge, not a long-edge cap — and that distinction is the whole
+  /// point of this constant.** 7.1 wrote this through [ImageCompressor.compress]
+  /// like the other two artifacts, which caps the *longest* edge: a 4:3 frame
+  /// was stored 256×192, and since the encoder needs a square it got 192px
+  /// upscaled to 224. Measured against the full-resolution original on a
+  /// 23-photo fixture set (`planning/calorie-tracker-embeddings.md` §10),
+  /// embedding that copy agreed at cosine 0.917 mean but **0.653 at worst**,
+  /// against 0.987 mean / 0.948 worst for a true 256×256. A meal whose stored
+  /// source embeds 0.65 away from its own photo is unrecognisable to its own
+  /// re-encoding — and this file exists for precisely the day everything has to
+  /// be re-encoded from it. The fix costs ~6 KB a meal.
+  ///
+  /// So this is written with [ImageCompressor.compressSquare], and the geometry
+  /// — centre square of the short edge, resized to 256 — is the one the live
+  /// preview pipeline must use on camera frames too. Two paths, one geometry, or
+  /// the thresholds are calibrated against an artifact of cropping.
+  ///
+  /// **Quality 90, higher than anything else here**, for the same reason there
+  /// is a separate file at all: this copy exists to be re-encoded, and lossy
+  /// artifacts compound across passes. It is also the only stored artifact whose
+  /// consumer is a model rather than an eye.
+  static const sourceEdge = 256;
+  static const sourceQuality = 90;
+
+  /// Full images, thumbnails and embedding sources are separated by directory,
+  /// not by filename, so both derived paths follow from the meal's `image-path`
+  /// and the meal only has to store the one.
   static const fullDir = 'photos';
   static const thumbDir = 'thumbs';
+  static const sourceDir = 'sources';
+
+  /// The directories the byte budget governs.
+  ///
+  /// [sourceDir] is deliberately not among them. Its files cannot be evicted, so
+  /// counting them would permanently consume headroom the sweep has no way to
+  /// reclaim — and would make "over budget with nothing left to evict" the
+  /// steady state rather than the bug report it is meant to be. They are a fixed
+  /// overhead, reported by [sourceBytes], not a cache.
+  static const _budgetDirs = [fullDir, thumbDir];
+  static const _allDirs = [fullDir, thumbDir, sourceDir];
 
   static const _totalKey = 'photo_bytes_total';
   static const _budgetKey = 'photo_budget_bytes';
@@ -93,22 +146,34 @@ class ImageStore {
       maxEdge: thumbEdge,
       quality: thumbQuality,
     );
+    // Square, unlike the other two: what reads this is an encoder, and it needs
+    // the same geometry off a stored file as off a live camera frame.
+    final source = await _compressor.compressSquare(
+      cameraBytes,
+      edge: sourceEdge,
+      quality: sourceQuality,
+    );
 
     final imagePath = p.join(fullDir, name);
     final thumbnailPath = p.join(thumbDir, name);
+    final sourcePath = p.join(sourceDir, name);
 
     // Flushed, because the point of writing the file before the meal is that
     // the app can be killed the instant the shutter returns.
     await _file(imagePath).writeAsBytes(full, flush: true);
     await _file(thumbnailPath).writeAsBytes(thumb, flush: true);
+    await _file(sourcePath).writeAsBytes(source, flush: true);
 
+    // The embedding source is outside the budget — see [_budgetDirs].
     final bytes = full.length + thumb.length;
     await _addToTotal(bytes);
 
     return StoredImage(
       imagePath: imagePath,
       thumbnailPath: thumbnailPath,
+      sourcePath: sourcePath,
       bytes: bytes,
+      sourceBytes: source.length,
     );
   }
 
@@ -127,6 +192,14 @@ class ImageStore {
   /// whether either file exists.
   static String thumbnailPathFor(String imagePath) =>
       imagePath.isEmpty ? '' : p.join(thumbDir, p.basename(imagePath));
+
+  /// The embedding source of [imagePath]. Outlives both the photo and a "delete
+  /// all photos" — what an encoder change is recovered from.
+  Future<File?> loadSource(String imagePath) =>
+      _existing(sourcePathFor(imagePath));
+
+  static String sourcePathFor(String imagePath) =>
+      imagePath.isEmpty ? '' : p.join(sourceDir, p.basename(imagePath));
 
   /// What is left of the photo at [imagePath]. The detail sheet reads it, and
   /// so will Phase 4's re-estimate, which is only offered for
@@ -258,25 +331,36 @@ class ImageStore {
   /// writing the resource leaves behind. Removed on every sweep, over budget or
   /// not: they are bytes nobody will ever miss, and deciding costs one
   /// directory listing we are doing anyway.
+  /// Returns the bytes freed *from the budgeted directories* — an embedding
+  /// source is not in the total, so collecting one frees disk without changing
+  /// the number the budget is measured against.
   Future<int> _removeOrphans(List<Meal> meals) async {
     final referenced = <String>{};
     for (final meal in meals) {
       if (meal.imagePath.isEmpty) continue;
       referenced
         ..add(_normalise(meal.imagePath))
-        ..add(_normalise(thumbnailPathFor(meal.imagePath)));
+        ..add(_normalise(thumbnailPathFor(meal.imagePath)))
+        // An embedding source is exempt from *eviction*, not from belonging to
+        // a meal. An undone suggestion tap and a crash between the two writes
+        // both leave one behind, and nothing else would ever collect it.
+        ..add(_normalise(sourcePathFor(meal.imagePath)));
     }
 
     final cutoff = DateTime.now().subtract(orphanGrace);
     var freed = 0;
-    for (final file in await _allFiles()) {
+    for (final file in await _allFiles(dirs: _allDirs)) {
       final relative = _normalise(p.relative(file.path, from: root.path));
       if (referenced.contains(relative)) continue;
       if ((await file.stat()).modified.isAfter(cutoff)) continue;
-      freed += await _delete(file);
+      final bytes = await _delete(file);
+      if (!_isSource(relative)) freed += bytes;
     }
     return freed;
   }
+
+  static bool _isSource(String relative) =>
+      p.split(relative).first == sourceDir;
 
   /// Whether the estimator still needs this meal's photo. Evicting one of these
   /// would delete the input of a job that is going to run.
@@ -287,6 +371,16 @@ class ImageStore {
 
   /// Throw away every photo and thumbnail, keeping the meals. What the "delete
   /// all photos now" button in Settings does.
+  ///
+  /// **The embedding sources survive this**, which is the one place that reads
+  /// as inconsistent and is not. Everything else here is recoverable in the only
+  /// sense that matters — the meal, its calories and its notes are the data, and
+  /// they are untouched. A deleted embedding source is different in kind: it is
+  /// the sole remaining input to re-encoding that meal, so deleting it silently
+  /// removes the history from every future suggestion, permanently, and the user
+  /// asked to reclaim storage rather than to forget what they eat. The whole
+  /// directory is on the order of a single photo's worth of the thing they were
+  /// trying to delete.
   Future<int> deleteAll() async {
     var freed = 0;
     for (final file in await _allFiles()) {
@@ -294,6 +388,16 @@ class ImageStore {
     }
     await _setTotal(0);
     return freed;
+  }
+
+  /// Bytes held by the embedding sources — outside the budget, and reported
+  /// separately so "current usage" is not quietly missing a directory.
+  Future<int> sourceBytes() async {
+    var total = 0;
+    for (final file in await _allFiles(dirs: const [sourceDir])) {
+      total += await file.length();
+    }
+    return total;
   }
 
   // ── Plumbing ─────────────────────────────────────────────────────────────
@@ -322,9 +426,11 @@ class ImageStore {
     }
   }
 
-  Future<List<File>> _allFiles() async {
+  /// Defaults to the budgeted directories, because that is what the counter,
+  /// the recount and "delete all photos" are all about.
+  Future<List<File>> _allFiles({List<String> dirs = _budgetDirs}) async {
     final files = <File>[];
-    for (final name in const [fullDir, thumbDir]) {
+    for (final name in dirs) {
       final dir = Directory(p.join(root.path, name));
       if (!await dir.exists()) continue;
       await for (final entity in dir.list()) {
@@ -335,7 +441,7 @@ class ImageStore {
   }
 
   Future<void> _ensureDirs() async {
-    for (final name in const [fullDir, thumbDir]) {
+    for (final name in _allDirs) {
       await Directory(p.join(root.path, name)).create(recursive: true);
     }
   }
@@ -376,15 +482,20 @@ class StoredImage {
   const StoredImage({
     required this.imagePath,
     required this.thumbnailPath,
+    required this.sourcePath,
     required this.bytes,
+    required this.sourceBytes,
   });
 
-  /// What goes on the meal's `image-path`.
+  /// What goes on the meal's `image-path`. The other two follow from it.
   final String imagePath;
   final String thumbnailPath;
+  final String sourcePath;
 
-  /// Both files together.
+  /// The photo and its thumbnail — what the byte budget governs. The embedding
+  /// source is counted apart, in [sourceBytes], because nothing can evict it.
   final int bytes;
+  final int sourceBytes;
 }
 
 /// How much of a meal's photo is left on this device.
@@ -409,6 +520,18 @@ abstract class ImageCompressor {
   Future<Uint8List> compress(
     Uint8List source, {
     required int maxEdge,
+    required int quality,
+  });
+
+  /// Center-crop to a square and encode at exactly [edge]×[edge].
+  ///
+  /// Separate from [compress] because the geometry is the point, not a side
+  /// effect of the size: this is what the encoder eats, and the encoder needs
+  /// the *same* geometry from a stored file and from a live camera frame. A
+  /// long-edge cap cannot give it that — see [ImageStore.sourceEdge].
+  Future<Uint8List> compressSquare(
+    Uint8List source, {
+    required int edge,
     required int quality,
   });
 }
@@ -444,13 +567,35 @@ class NativeImageCompressor implements ImageCompressor {
     );
   }
 
-  /// Pixel dimensions from the encoded header, without decoding the image.
-  static Future<(int, int)> _sizeOf(Uint8List bytes) async {
-    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-    final descriptor = await ui.ImageDescriptor.encoded(buffer);
-    final size = (descriptor.width, descriptor.height);
-    descriptor.dispose();
-    buffer.dispose();
-    return size;
+  @override
+  Future<Uint8List> compressSquare(
+    Uint8List source, {
+    required int edge,
+    required int quality,
+  }) async {
+    // The shared geometry, not a second implementation of it — an encoder has
+    // to see the same crop off this file as off a live camera frame, and one
+    // function is the only way that stays true. `upscale: false` because this
+    // artifact is kept to be re-encoded, and inventing pixels into it would put
+    // them in every future embedding of the meal.
+    final square = await squareImage(source, edge: edge, upscale: false);
+    try {
+      // PNG in the middle, so the crop costs no image quality: the JPEG below
+      // is still the one and only lossy pass, which is the whole reason this
+      // artifact is written at quality 90 in the first place.
+      final png = await square.toByteData(format: ui.ImageByteFormat.png);
+      return FlutterImageCompress.compressWithList(
+        png!.buffer.asUint8List(),
+        minWidth: square.width,
+        minHeight: square.height,
+        quality: quality,
+        format: CompressFormat.jpeg,
+        keepExif: false,
+      );
+    } finally {
+      square.dispose();
+    }
   }
+
+  static Future<(int, int)> _sizeOf(Uint8List bytes) => imageSizeOf(bytes);
 }

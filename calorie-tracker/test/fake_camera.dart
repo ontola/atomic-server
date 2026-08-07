@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:calorie_tracker/services/camera_feed.dart';
+import 'package:calorie_tracker/services/camera_frame.dart';
 import 'package:flutter/material.dart';
 
 /// A camera that is whatever the test needs it to be.
@@ -56,6 +58,44 @@ class FakeCamera extends CameraFeed {
     if (captureError != null) throw captureError!;
     if (!ready) throw StateError('The camera is not ready');
     return frame;
+  }
+
+  /// Every preview stream this camera has handed out that is still open — so a
+  /// test can [emit] into them and can assert that stopping actually stopped
+  /// something.
+  final List<StreamController<CameraFrame>> streams = [];
+
+  /// How many times a stream was asked for and how many were cancelled. The
+  /// difference is the whole of "the stream stops on `paused` and on navigating
+  /// away".
+  int frameStreams = 0;
+  int frameStreamsCancelled = 0;
+
+  /// The interval the last caller asked for, so the throttle's owner can be
+  /// checked without waiting for one.
+  Duration? lastInterval;
+
+  @override
+  Stream<CameraFrame> frames({required Duration minInterval}) {
+    lastInterval = minInterval;
+    frameStreams++;
+    late final StreamController<CameraFrame> controller;
+    controller = StreamController<CameraFrame>(onCancel: () {
+      frameStreamsCancelled++;
+      streams.remove(controller);
+    });
+    streams.add(controller);
+    return controller.stream;
+  }
+
+  /// Hand a frame to whoever is listening. Returns false when nobody is, which
+  /// is a state worth failing a test on rather than sleeping through.
+  bool emit(CameraFrame frame) {
+    if (streams.isEmpty) return false;
+    for (final controller in [...streams]) {
+      controller.add(frame);
+    }
+    return true;
   }
 
   /// Move it into a state and tell whoever is listening, the way the real one

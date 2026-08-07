@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../atomic/atomic_client.dart';
 import '../models/meal.dart';
+import 'meal_encoder.dart';
 
 /// Everything the app does to meals.
 ///
@@ -26,6 +27,14 @@ abstract class MealBackend {
     int? calories,
   });
 
+  /// Log a meal by recognising [sourceSubject], taking its numbers. Returns the
+  /// new meal's subject.
+  Future<String> copyFrom(
+    String sourceSubject, {
+    required DateTime consumedAt,
+    String imagePath,
+  });
+
   Future<void> delete(String subject);
 
   /// Meals in `[fromMs, toMs)`, newest first.
@@ -44,6 +53,11 @@ abstract class MealBackend {
 
   /// Write an estimate. Leaves a [MealStatus.confirmed] meal alone.
   Future<void> applyEstimate(String subject, MealEstimate estimate);
+
+  /// Attach an image embedding, with the encoder that produced it. The two are
+  /// written together and cleared together — a vector whose encoder is unknown
+  /// cannot be compared to anything, so it is meaningless rather than partial.
+  Future<void> setEmbedding(String subject, MealEmbedding embedding);
 }
 
 class FfiMealBackend implements MealBackend {
@@ -80,6 +94,18 @@ class FfiMealBackend implements MealBackend {
       );
 
   @override
+  Future<String> copyFrom(
+    String sourceSubject, {
+    required DateTime consumedAt,
+    String imagePath = '',
+  }) =>
+      AtomicClient.copyMeal(
+        sourceSubject: sourceSubject,
+        consumedAtMs: consumedAt.millisecondsSinceEpoch,
+        imagePath: imagePath,
+      );
+
+  @override
   Future<void> delete(String subject) => AtomicClient.deleteResource(subject);
 
   @override
@@ -107,6 +133,14 @@ class FfiMealBackend implements MealBackend {
   @override
   Future<void> applyEstimate(String subject, MealEstimate estimate) =>
       AtomicClient.updateMealEstimate(subject, estimate.toItem());
+
+  @override
+  Future<void> setEmbedding(String subject, MealEmbedding embedding) =>
+      AtomicClient.setMealEmbedding(
+        subject,
+        embedding: embedding.base64,
+        model: embedding.modelId,
+      );
 }
 
 /// The meals of one day, and what can be done to them.
@@ -230,6 +264,35 @@ class MealStore extends ChangeNotifier {
         ));
   }
 
+  /// Log a meal by recognising an earlier one, taking its numbers wholesale.
+  /// Returns the new meal's subject, or null when the write failed — in which
+  /// case [error] says why.
+  ///
+  /// The subject comes back because the tap that produced it offers an undo, and
+  /// undoing means deleting *this* meal. Nothing else this store writes needs to
+  /// be identified after the fact, which is why [logMeal] does not do the same.
+  Future<String?> logLike(
+    String sourceSubject, {
+    String imagePath = '',
+    DateTime? consumedAt,
+  }) async {
+    _error = null;
+    String subject;
+    try {
+      subject = await _backend.copyFrom(
+        sourceSubject,
+        consumedAt: consumedAt ?? DateTime.now(),
+        imagePath: imagePath,
+      );
+    } catch (e) {
+      _error = _messageFor(e);
+      notifyListeners();
+      return null;
+    }
+    await load();
+    return subject;
+  }
+
   Future<void> editMeal(
     String subject, {
     String? name,
@@ -262,6 +325,13 @@ class MealStore extends ChangeNotifier {
 
   Future<void> saveEstimate(String subject, MealEstimate estimate) =>
       _backend.applyEstimate(subject, estimate);
+
+  /// Deliberately does not re-read the day, unlike every other write here: an
+  /// embedding changes nothing anybody is looking at, and a backfill over a
+  /// year of history would otherwise re-query and rebuild the visible list once
+  /// per meal while the user is trying to use the app.
+  Future<void> saveEmbedding(String subject, MealEmbedding embedding) =>
+      _backend.setEmbedding(subject, embedding);
 
   /// Run a write, then re-read the day.
   ///

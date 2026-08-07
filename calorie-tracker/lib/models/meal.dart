@@ -90,6 +90,9 @@ class Meal {
     this.proteinGrams,
     this.carbsGrams,
     this.fatGrams,
+    this.embedding = '',
+    this.embeddedByModel = '',
+    this.copiedFromMeal = '',
   });
 
   final String subject;
@@ -128,6 +131,23 @@ class Meal {
   final double? carbsGrams;
   final double? fatGrams;
 
+  /// A base64 image embedding, or empty when nothing has encoded this meal.
+  /// Only ever compared to embeddings carrying the same [embeddedByModel] —
+  /// two encoders' vectors are numbers in different spaces, and comparing them
+  /// produces scores that look ordinary and mean nothing.
+  final String embedding;
+  final String embeddedByModel;
+
+  /// The meal this one took its numbers from, or empty when it was estimated
+  /// rather than recognised. Always an original: the bridge resolves a copy of
+  /// a copy through to the meal at the end of the chain.
+  final String copiedFromMeal;
+
+  /// Which meal this one's numbers ultimately came from — itself, unless it is
+  /// a copy. What suggestions group by, so forty of the same breakfast are one
+  /// candidate rather than four identical chips.
+  String get lineage => copiedFromMeal.isEmpty ? subject : copiedFromMeal;
+
   factory Meal.fromItem(ffi.MealItem item) => Meal(
         subject: item.subject,
         name: item.name,
@@ -146,6 +166,9 @@ class Meal {
         proteinGrams: item.proteinGrams,
         carbsGrams: item.carbsGrams,
         fatGrams: item.fatGrams,
+        embedding: item.mealEmbedding,
+        embeddedByModel: item.embeddedByModel,
+        copiedFromMeal: item.copiedFromMeal,
       );
 
   /// What to call this meal in a list. A photo logged and not yet estimated has

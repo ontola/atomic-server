@@ -55,3 +55,16 @@ rust/target/
 
 # dev.sh per-target run logs
 /logs/
+
+# The image encoder (Phase 7.2). 24 MB of ONNX weights fetched by
+# `make model`, not committed — see tool/fetch_model.sh for why, and
+# "The encoder" in CLAUDE.md for what it is. The build needs it present;
+# it is bundled into the app, which never downloads anything itself.
+assets/models/
+
+# Encoder bench working files — fixtures fetched from Wikimedia Commons, model
+# variants from HuggingFace, and the venv. See tool/encoder-bench/README.md.
+tool/encoder-bench/fixtures/
+tool/encoder-bench/models/
+tool/encoder-bench/.venv/
+tool/encoder-bench/bench_results.json

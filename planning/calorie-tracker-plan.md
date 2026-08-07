@@ -605,7 +605,53 @@ on Android; on iOS, the `_simulateLaunchForTaskWithIdentifier` debugger call). I
 isolate cannot reach one of the three things it needs, the fallback is unchanged — meals estimate
 on next launch — so this is a confirmation, not a dependency.
 
-### Phase 7 — Health
+### Phase 7 — Meal suggestions from on-device image embeddings
+
+Full plan: [calorie-tracker-embeddings.md](./calorie-tracker-embeddings.md). Point the camera at
+food and up to four past meals appear as chips *before* the shutter; tap one and the meal is logged
+with that meal's number, with no model call and no waiting. A small image encoder
+(MobileCLIP-class) runs on the preview stream through a Dart plugin; the embedding is stored on the
+meal as a base64 string and matched by brute-force cosine — 1,500 vectors is a loop, not a vector
+database. (MobileCLIP itself turns out to be research-licensed and cannot ship; DINOv2-small,
+Apache 2.0, is the swap. Companion doc §5.)
+
+It goes before Health because it is the last change to how a meal is *logged*, and Health only
+writes out what a meal already is. Doing it second would mean writing the same numbers to HealthKit
+twice over.
+
+- **7.1** ✅ — ontology (`meal-embedding`, `embedded-by-model`, `copied-from-meal`), the
+  never-evicted source thumbnail (256px, not the 64px sketched — every candidate encoder wants
+  224–256px in, and upscaling manufactures the domain gap the design warns about), and suggestions
+  from meal *frequency* alone. No model yet. See the companion doc for the rest of how it landed.
+- **7.2** — the encoder, embedding on capture, backfill. The model choice is settled and measured
+  (companion doc §5): DINOv2-small **int8**, 23 MB, CLS-pooled to 384-d — it retrieves identically
+  to fp32 at half fp16's size and 1.6× its speed. Weights are fetched by `make model` into a
+  gitignored `assets/models/`, not committed. The same harness caught a 7.1 bug: the embedding
+  source was capped on its *long* edge, so the encoder was fed a 192px upscale whose worst-case
+  agreement with its own photo was 0.65. It is a true 256×256 square now.
+- **7.3** ✅ — the live preview stream: throttle, smoothing, hysteresis, blur gate, and the decoded
+  matrix behind them. Two things it settled that the sketch had not: the query and the index now go
+  through *one function* rather than one convention, with a test that compares both sides of it on
+  every commit; and hysteresis by nudging an incumbent's score turns out not to work — once two
+  chips are both incumbents the nudge cancels out — so the rule is stated directly instead. See the
+  companion doc for the rest.
+- **7.4** ✅ — the medium band: a near-match's `meal-notes` fed into the estimation prompt as prior
+  context, so the estimator stops re-asking a question the user already answered weeks ago. The
+  retrieval happens when the meal is *estimated* rather than when it is captured, because most
+  estimates — a next-launch drain, a backfill, a background task, a synced meal — have no viewfinder
+  behind them, and those are the ones that have been waiting longest.
+
+**Accept:** per sub-phase in the companion doc. The two that guard everything else: embedding a
+camera frame and embedding the JPEG written from that same frame must agree closely (or the
+thresholds are calibrated against a domain gap and mean nothing), and `description`/`name` must
+never be fed forward as prior context — only `meal-notes`, for the reason Phase 5 exists.
+
+The value is not the ~$0.0002 an estimate costs. It is that a routine meal stops being re-derived
+from nothing every time, along with the clarifying question that comes with it. Note that the
+thresholds can only be calibrated on a real device over real days, which is also what Phase 6.1
+owes — fold them.
+
+### Phase 8 — Health
 
 `health` package → write `DIETARY_ENERGY_CONSUMED` (HealthKit / Health Connect) on
 estimate/confirm; settings toggle.

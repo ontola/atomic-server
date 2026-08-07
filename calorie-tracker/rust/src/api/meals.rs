@@ -181,6 +181,14 @@ pub struct MealItem {
     pub protein_grams: Option<f64>,
     pub carbs_grams: Option<f64>,
     pub fat_grams: Option<f64>,
+    /// A base64 image embedding, or empty when nothing has encoded this meal.
+    /// Only comparable to embeddings carrying the same
+    /// [`MealItem::embedded_by_model`].
+    pub meal_embedding: String,
+    pub embedded_by_model: String,
+    /// The meal this one took its numbers from, or empty when it was estimated
+    /// rather than recognised. Always an original — see [`copy_meal`].
+    pub copied_from_meal: String,
 }
 
 /// Log a meal under the meals container. Returns its subject.
@@ -488,6 +496,157 @@ pub async fn get_meal(subject: String) -> Result<Option<MealItem>, String> {
     Ok(read_meal(&resource))
 }
 
+// ── Copies ─────────────────────────────────────────────────────────────────
+
+/// Log a meal by recognising an earlier one, taking its numbers wholesale.
+///
+/// What a tapped suggestion on the viewfinder does. The new meal is `confirmed`
+/// — a human looked at the food and at the suggestion and said they were the
+/// same thing, which is a stronger claim than any estimate — so no estimator
+/// will ever revisit it.
+///
+/// **It copies the numbers and the eater's words, and nothing the model wrote.**
+/// `description`, `estimate-confidence`, `estimated-by-model` and
+/// `clarifying-question` are all an account of a *different photograph*, and
+/// carrying them here would make this meal claim to have been estimated when
+/// nothing has looked at it. `meal-notes` is the exception because it is the
+/// eater's own words about this food, which is exactly what makes the copy worth
+/// having — the answer they gave weeks ago comes with it.
+///
+/// `copied_from_meal` on the new meal names the *original*, never the copy that
+/// happened to be recognised: lineage stays one hop deep, so correcting an
+/// original is a question about a flat set of copies rather than a walk down a
+/// chain that gets longer every time somebody eats the same lunch.
+pub async fn copy_meal(
+    source_subject: String,
+    consumed_at_ms: i64,
+    image_path: String,
+) -> Result<String, String> {
+    let store = db()?;
+    let container = ensure_meals_container().await?;
+
+    let original = resolve_original(store.as_ref(), &source_subject).await?;
+    let resource = store
+        .get_resource(&original.as_str().into())
+        .await
+        .map_err(err)?;
+    let Some(source) = read_meal(&resource) else {
+        return Err(format!("{original} is not a meal"));
+    };
+
+    // Refused rather than copied as "unknown": a suggestion exists to save the
+    // estimate, and one with no number saves nothing while quietly logging a
+    // meal that no longer looks like it is waiting for anything.
+    let Some(calories) = source.calories else {
+        return Err(format!(
+            "{original} has no calorie count, so there is nothing to copy from it"
+        ));
+    };
+
+    let mut props: Vec<(&str, Value)> = vec![
+        (
+            atomic_lib::urls::CONSUMED_AT,
+            Value::Timestamp(consumed_at_ms),
+        ),
+        (
+            atomic_lib::urls::MEAL_STATUS,
+            Value::AtomicUrl(status_subject("confirmed")?.into()),
+        ),
+        (
+            atomic_lib::urls::COPIED_FROM_MEAL,
+            Value::AtomicUrl(original.clone().into()),
+        ),
+        (atomic_lib::urls::CALORIES, Value::Integer(calories)),
+    ];
+    if !image_path.is_empty() {
+        props.push((atomic_lib::urls::IMAGE_PATH, Value::String(image_path)));
+    }
+    if !source.notes.is_empty() {
+        props.push((atomic_lib::urls::MEAL_NOTES, Value::String(source.notes)));
+    }
+    for (property, value) in [
+        (atomic_lib::urls::CALORIES_MIN, source.calories_min),
+        (atomic_lib::urls::CALORIES_MAX, source.calories_max),
+    ] {
+        if let Some(kcal) = value {
+            props.push((property, Value::Integer(kcal)));
+        }
+    }
+    for (property, value) in [
+        (atomic_lib::urls::PROTEIN_GRAMS, source.protein_grams),
+        (atomic_lib::urls::CARBS_GRAMS, source.carbs_grams),
+        (atomic_lib::urls::FAT_GRAMS, source.fat_grams),
+    ] {
+        if let Some(grams) = value {
+            props.push((property, Value::Float(grams)));
+        }
+    }
+
+    store
+        .create_resource(atomic_lib::urls::MEAL, &container, &source.name, Some(props))
+        .await
+        .map_err(err)
+}
+
+/// Walk `copied-from-meal` back to the meal that was actually estimated.
+///
+/// Bounded rather than trusted: a cycle can only arrive here from a corrupted
+/// store or a sync that met one, and neither is worth hanging the shutter over.
+/// A link that does not resolve ends the walk where it is — the last meal that
+/// does exist is a better answer than an error, because the numbers are on it.
+async fn resolve_original(store: &atomic_lib::Db, subject: &str) -> Result<String, String> {
+    const MAX_HOPS: usize = 8;
+
+    let mut current = subject.to_string();
+    for _ in 0..MAX_HOPS {
+        let Ok(resource) = store.get_resource(&current.as_str().into()).await else {
+            return Ok(current);
+        };
+        let parent = string_prop(&resource, atomic_lib::urls::COPIED_FROM_MEAL);
+        if parent.is_empty() || parent == current {
+            return Ok(current);
+        }
+        current = parent;
+    }
+    Ok(current)
+}
+
+/// Attach an image embedding to a meal, with the encoder that produced it.
+///
+/// The two are written together and never apart: a vector whose encoder is
+/// unknown cannot be compared to anything, so it is not a half-written meal but
+/// a meaningless one. An empty `embedding` clears both, which is what a meal
+/// whose encoder has been retired looks like until it is re-encoded.
+pub async fn set_meal_embedding(
+    subject: String,
+    embedding: String,
+    model: String,
+) -> Result<(), String> {
+    let store = db()?;
+    let mut resource = store
+        .get_resource(&subject.as_str().into())
+        .await
+        .map_err(err)?;
+
+    if embedding.is_empty() {
+        clear(&mut resource, atomic_lib::urls::MEAL_EMBEDDING);
+        clear(&mut resource, atomic_lib::urls::EMBEDDED_BY_MODEL);
+    } else {
+        set(
+            &mut resource,
+            atomic_lib::urls::MEAL_EMBEDDING,
+            Value::String(embedding),
+        )?;
+        set(
+            &mut resource,
+            atomic_lib::urls::EMBEDDED_BY_MODEL,
+            Value::String(model),
+        )?;
+    }
+
+    save_and_push(&mut resource, store.as_ref()).await
+}
+
 /// Every meal in the container that [`keep`] wants, newest first.
 async fn collect_meals(keep: impl Fn(&MealItem) -> bool) -> Result<Vec<MealItem>, String> {
     let store = db()?;
@@ -548,6 +707,9 @@ fn read_meal(resource: &atomic_lib::Resource) -> Option<MealItem> {
         protein_grams: float_prop(resource, atomic_lib::urls::PROTEIN_GRAMS),
         carbs_grams: float_prop(resource, atomic_lib::urls::CARBS_GRAMS),
         fat_grams: float_prop(resource, atomic_lib::urls::FAT_GRAMS),
+        meal_embedding: string_prop(resource, atomic_lib::urls::MEAL_EMBEDDING),
+        embedded_by_model: string_prop(resource, atomic_lib::urls::EMBEDDED_BY_MODEL),
+        copied_from_meal: string_prop(resource, atomic_lib::urls::COPIED_FROM_MEAL),
     })
 }
 
@@ -948,6 +1110,127 @@ mod tests {
             "a refused estimate must leave the meal in the queue, not half-written"
         );
         assert_eq!(meal.calories, None);
+    }
+
+    // ── Copies ─────────────────────────────────────────────────────────────
+
+    /// The whole point of a suggestion: the numbers and the eater's own words
+    /// come across, so the meal is finished the moment it is logged.
+    #[tokio::test]
+    async fn a_copy_carries_the_numbers_and_the_words() {
+        let window = 1_880_000_000_000;
+        let source = meal_at(window, 8, "", None).await;
+        update_meal_estimate(source.clone(), estimate(420)).await.unwrap();
+        update_meal(source.clone(), None, Some("Rye bread, two slices".into()), None)
+            .await
+            .unwrap();
+
+        let copy = copy_meal(source.clone(), window + 30 * HOUR, "photos/9.jpg".into())
+            .await
+            .unwrap();
+
+        let meal = reload(window + 24 * HOUR, &copy).await;
+        assert_eq!(meal.name, "Cappuccino with oat milk");
+        assert_eq!(meal.calories, Some(420));
+        assert_eq!(meal.calories_min, Some(90));
+        assert_eq!(meal.calories_max, Some(160));
+        assert_eq!(meal.protein_grams, Some(4.5));
+        assert_eq!(meal.notes, "Rye bread, two slices");
+        assert_eq!(meal.image_path, "photos/9.jpg");
+        assert_eq!(meal.copied_from_meal, source);
+        assert_eq!(
+            meal.status, "confirmed",
+            "somebody looked at the food and said it was this — no estimator may revisit it"
+        );
+    }
+
+    /// A copy was not estimated, and must not claim to have been. Everything the
+    /// model wrote is an account of a different photograph.
+    #[tokio::test]
+    async fn a_copy_claims_nothing_a_model_said() {
+        let window = 1_890_000_000_000;
+        let source = meal_at(window, 8, "", None).await;
+        let mut asked = estimate(300);
+        asked.clarifying_question = "Was that milk or oat milk?".into();
+        update_meal_estimate(source.clone(), asked).await.unwrap();
+
+        let copy = copy_meal(source, window + 30 * HOUR, String::new())
+            .await
+            .unwrap();
+
+        let meal = reload(window + 24 * HOUR, &copy).await;
+        assert_eq!(meal.description, "", "the reasoning was about another photo");
+        assert_eq!(meal.estimated_by_model, "");
+        assert_eq!(meal.confidence, "");
+        assert_eq!(
+            meal.clarifying_question, "",
+            "a confirmed meal carrying a question would be a dead end nobody can answer"
+        );
+    }
+
+    /// Copies of copies are what a routine meal produces, and a chain that grows
+    /// a link a day is a chain something eventually has to walk. Resolving at
+    /// write time keeps every copy one hop from the meal that was estimated.
+    #[tokio::test]
+    async fn a_copy_of_a_copy_points_at_the_original() {
+        let window = 1_900_000_000_000;
+        let original = meal_at(window, 8, "", None).await;
+        update_meal_estimate(original.clone(), estimate(500)).await.unwrap();
+
+        let first = copy_meal(original.clone(), window + 30 * HOUR, String::new())
+            .await
+            .unwrap();
+        let second = copy_meal(first.clone(), window + 54 * HOUR, String::new())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            reload(window + 48 * HOUR, &second).await.copied_from_meal,
+            original,
+            "not {first}, which is itself a copy"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_meal_with_no_number_is_nothing_to_copy() {
+        let window = 1_910_000_000_000;
+        let source = meal_at(window, 8, "Mystery", None).await;
+
+        let error = copy_meal(source, window + 30 * HOUR, String::new())
+            .await
+            .unwrap_err();
+
+        assert!(error.contains("no calorie count"));
+    }
+
+    // ── Embeddings ─────────────────────────────────────────────────────────
+
+    /// The vector and the encoder that made it travel together, because a vector
+    /// whose encoder is unknown is not comparable to anything.
+    #[tokio::test]
+    async fn an_embedding_round_trips_with_its_encoder() {
+        let window = 1_920_000_000_000;
+        let subject = meal_at(window, 8, "Porridge", Some(350)).await;
+
+        set_meal_embedding(subject.clone(), "AQIDBA==".into(), "mobileclip-s0".into())
+            .await
+            .unwrap();
+
+        let meal = reload(window, &subject).await;
+        assert_eq!(meal.meal_embedding, "AQIDBA==");
+        assert_eq!(meal.embedded_by_model, "mobileclip-s0");
+
+        set_meal_embedding(subject.clone(), String::new(), String::new())
+            .await
+            .unwrap();
+
+        let meal = reload(window, &subject).await;
+        assert_eq!(meal.meal_embedding, "");
+        assert_eq!(
+            meal.embedded_by_model, "",
+            "an encoder with no vector to name is worse than nothing — it would \
+             put the meal in an index it has no entry in"
+        );
     }
 
     // ── The queue ──────────────────────────────────────────────────────────

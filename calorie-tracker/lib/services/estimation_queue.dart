@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/meal.dart';
 import 'image_store.dart';
+import 'meal_priors.dart';
 import 'meal_store.dart';
 import 'notifications.dart';
 import 'openrouter.dart';
@@ -20,16 +21,23 @@ class EstimationQueue extends ChangeNotifier {
     required OpenRouterAccount account,
     required OpenRouterClient client,
     Notifier? notifier,
+    MealPriors? priors,
     Future<void> Function(Duration) wait = _realWait,
   })  : _meals = meals,
         _account = account,
         _client = client,
         _notifier = notifier,
+        _priors = priors,
         _wait = wait;
 
   final MealStore _meals;
   final OpenRouterAccount _account;
   final OpenRouterClient _client;
+
+  /// What this person has said about meals like this one — Phase 7.4's medium
+  /// band. Null in tests that are not about it, and on a phone with no encoder,
+  /// in which case every estimate is made from nothing exactly as it was.
+  final MealPriors? _priors;
 
   /// Where a question goes when the app is not being looked at. Null in tests
   /// that are not about the uncertainty loop, and on a platform with no
@@ -209,6 +217,11 @@ class EstimationQueue extends ChangeNotifier {
       );
     }
 
+    // Worked out once, outside the retry loop: it is a local similarity search
+    // and a retry is about the network, so re-running it would spend battery to
+    // arrive at the same sentence.
+    final prior = await _priorFor(meal);
+
     var attempt = 1;
     while (true) {
       try {
@@ -216,6 +229,7 @@ class EstimationQueue extends ChangeNotifier {
           photo: photo,
           photoPath: meal.imagePath,
           words: words,
+          prior: prior,
         );
       } on OpenRouterException catch (e) {
         if (!e.retryable || attempt >= maxAttempts) rethrow;
@@ -258,6 +272,24 @@ class EstimationQueue extends ChangeNotifier {
     if (meal.imagePath.isEmpty) return null;
     final file = await images?.load(meal.imagePath);
     return file?.readAsBytes();
+  }
+
+  /// What the user wrote about the nearest meal they have logged before, or
+  /// empty — Phase 7.4's medium band (`calorie-tracker-embeddings.md` §3).
+  ///
+  /// A prior makes an estimate better; the absence of one makes it exactly what
+  /// it was before Phase 7.4. So nothing here is allowed to fail a meal: an
+  /// estimate lost because a *hint* could not be worked out would be an absurd
+  /// trade.
+  Future<String> _priorFor(Meal meal) async {
+    final priors = _priors;
+    if (priors == null) return '';
+    try {
+      return await priors.notesFor(meal);
+    } catch (e) {
+      debugPrint('No prior for ${meal.subject}: $e');
+      return '';
+    }
   }
 
   /// What the user told us about this meal. On a typed entry it is everything

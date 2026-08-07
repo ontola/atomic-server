@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -14,6 +15,7 @@ import 'package:calorie_tracker/main.dart';
 import 'package:calorie_tracker/models/meal.dart';
 import 'package:calorie_tracker/rust_init.dart';
 import 'package:calorie_tracker/services/image_store.dart';
+import 'package:calorie_tracker/services/meal_encoder.dart';
 import 'package:calorie_tracker/services/sync_service.dart';
 
 /// The acceptance criteria of Phases 1–3, on a real device or simulator:
@@ -150,6 +152,26 @@ void main() {
     expect(thumbSize.$1 > thumbSize.$2 ? thumbSize.$1 : thumbSize.$2,
         ImageStore.thumbEdge);
 
+    // The embedding source, and the one thing about it that is load-bearing:
+    // it is *square*. An encoder reads this file and must see the same geometry
+    // it sees off a live camera frame; a long-edge cap gave a 4:3 frame a 192px
+    // crop upscaled to 224, which measured 0.65 cosine away from the meal's own
+    // photo at worst — unrecognisable to the very re-encoding this file exists
+    // for (`planning/calorie-tracker-embeddings.md` §9). Only the real codec can
+    // prove the pixels, which is why this lives here and not in `test/`.
+    final source = await store.loadSource(stored.imagePath);
+    expect(source, isNotNull);
+    final sourceBytes = await source!.readAsBytes();
+    final sourceSize = await _sizeOf(sourceBytes);
+    expect(
+      sourceSize,
+      (ImageStore.sourceEdge, ImageStore.sourceEdge),
+      reason: 'the embedding source is a square of exactly sourceEdge — not a '
+          'long-edge cap, which leaves the short edge below what any encoder '
+          'takes as input',
+    );
+    expect(sourceBytes.sublist(0, 2), [0xFF, 0xD8]);
+
     // The counter agrees with the directory, which is what eviction acts on.
     expect(await store.totalBytes(), await store.recount());
   });
@@ -220,6 +242,188 @@ void main() {
     expect(sync.lastSyncedAt, isNull,
         reason: 'nothing paired means nothing to reach for');
   });
+
+  _encoderTests();
+}
+
+/// Phase 7.2's acceptance criteria, against the real model and the real codecs.
+///
+/// `test/meal_encoder_test.dart` covers the storage format and
+/// `test/embedding_queue_test.dart` the policy, both against a fake. Neither can
+/// touch the thing that decides whether any of it works: an 88 MB ONNX file
+/// reached through a platform channel, and whether what comes back out of it
+/// means anything.
+void _encoderTests() {
+  /// The check the companion doc calls the one that silently breaks everything
+  /// else (§6, §10).
+  ///
+  /// The index is built from stored JPEGs; the live query in 7.3 will be a
+  /// camera frame that has been through no JPEG at all. If those two embed
+  /// differently, every threshold calibrated afterwards is measuring the gap
+  /// between two preprocessors rather than between two meals — and it fails
+  /// silently, because the numbers still look like similarities.
+  testWidgets('a frame and the file written from it embed to the same thing',
+      (tester) async {
+    final documents = await getApplicationDocumentsDirectory();
+    final root = Directory(p.join(documents.path, 'embed'));
+    final store = ImageStore(root: root);
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+
+    final encoder = DinoV2Encoder();
+    addTearDown(encoder.dispose);
+
+    final frame = await _photoLikeBytes(2400, 1800);
+    final stored = await store.save(frame, at: DateTime(2026, 8, 5, 12, 30));
+
+    final fromFrame = await encoder.encode(frame);
+    final source = await store.loadSource(stored.imagePath);
+    final fromFile = await encoder.encode(await source!.readAsBytes());
+
+    expect(fromFrame, isNotNull,
+        reason: 'no encoder here means `make model` was not run before the '
+            'build — the asset is missing, not the device incapable');
+    expect(fromFile, isNotNull);
+    expect(fromFrame!.modelId, fromFile!.modelId);
+
+    final a = DinoV2Encoder.decodeVector(fromFrame.base64)!;
+    final b = DinoV2Encoder.decodeVector(fromFile.base64)!;
+    expect(
+      _cosine(a, b),
+      greaterThan(0.95),
+      reason: 'the camera frame and the 256px source it was compressed into '
+          'must land in the same place, or the index and the live query are '
+          'not in the same space at all',
+    );
+  });
+
+  /// The same check for the path Phase 7.3 added, which is the one the live
+  /// query actually takes: **raw camera pixels, through no JPEG at all**.
+  ///
+  /// `test/square_crop_test.dart` proves the two go through the same crop and
+  /// the same resample. This proves the model agrees, which is the claim every
+  /// threshold in `LiveSuggestions` rests on — the index is built from stored
+  /// squares and the query is a `CameraFrame`, and if those two land in
+  /// different places the scores are measuring the preprocessing.
+  testWidgets('a preview frame and the file written from it embed alike',
+      (tester) async {
+    final documents = await getApplicationDocumentsDirectory();
+    final root = Directory(p.join(documents.path, 'embed-live'));
+    final store = ImageStore(root: root);
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+
+    final encoder = DinoV2Encoder();
+    addTearDown(encoder.dispose);
+
+    // One image, taken two ways: as the bytes a shutter hands over, and as the
+    // pixels a preview stream hands over.
+    final image = await _photoLikeImage(1280, 960);
+    addTearDown(image.dispose);
+    final encoded =
+        (await image.toByteData(format: ui.ImageByteFormat.png))!
+            .buffer
+            .asUint8List();
+    final pixels =
+        (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!
+            .buffer
+            .asUint8List();
+
+    final stored = await store.save(encoded, at: DateTime(2026, 8, 5, 12, 45));
+    final source = await store.loadSource(stored.imagePath);
+    final fromFile = await encoder.encode(await source!.readAsBytes());
+    final fromFrame = await encoder.encodePixels(
+      pixels,
+      width: image.width,
+      height: image.height,
+    );
+
+    expect(fromFile, isNotNull,
+        reason: 'no encoder here means `make model` was not run before the '
+            'build');
+    expect(fromFrame, isNotNull);
+    expect(fromFrame!.modelId, fromFile!.modelId);
+
+    expect(
+      _cosine(
+        DinoV2Encoder.decodeVector(fromFrame.base64)!,
+        DinoV2Encoder.decodeVector(fromFile.base64)!,
+      ),
+      greaterThan(0.95),
+      reason: 'the viewfinder matches live pixels against stored JPEGs; if '
+          'those embed differently, every threshold in Phase 7.3 is calibrated '
+          'against an artifact of preprocessing rather than against food',
+    );
+  });
+
+  /// The other half of the acceptance criteria: that the vectors carry meaning
+  /// rather than merely being stable. Asserted as a *ranking*, never against an
+  /// absolute number — cosine has no units, which is the whole reason §11 says
+  /// the thresholds can only come from a real phone over real days.
+  testWidgets('two pictures of one thing beat two pictures of two things',
+      (tester) async {
+    final encoder = DinoV2Encoder();
+    addTearDown(encoder.dispose);
+
+    // The same synthetic "dish" at two sizes, against a visibly different one.
+    final dish = await _photoLikeBytes(1600, 1200);
+    final sameDishAgain = await _photoLikeBytes(1200, 900);
+    final otherDish = await _flatishBytes(1600, 1200);
+
+    final a = DinoV2Encoder.decodeVector((await encoder.encode(dish))!.base64)!;
+    final b = DinoV2Encoder.decodeVector(
+        (await encoder.encode(sameDishAgain))!.base64)!;
+    final c =
+        DinoV2Encoder.decodeVector((await encoder.encode(otherDish))!.base64)!;
+
+    expect(_cosine(a, b), greaterThan(_cosine(a, c)),
+        reason: 'if this does not hold the model is not being fed what it '
+            'thinks it is — check the channel order and the normalization '
+            'before believing any similarity this app reports');
+  });
+
+  /// What the whole storage format exists to preserve.
+  testWidgets('the stored embedding is 384 int8 bytes and survives the trip',
+      (tester) async {
+    final encoder = DinoV2Encoder();
+    addTearDown(encoder.dispose);
+
+    final embedding = await encoder.encode(await _photoLikeBytes(800, 800));
+
+    expect(embedding, isNotNull);
+    expect(embedding!.modelId, DinoV2Encoder.modelIdValue);
+    expect(DinoV2Encoder.decodeVector(embedding.base64),
+        hasLength(DinoV2Encoder.dimensions));
+  });
+}
+
+double _cosine(Float32List a, Float32List b) {
+  var dot = 0.0, na = 0.0, nb = 0.0;
+  for (var i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  return dot / (math.sqrt(na) * math.sqrt(nb));
+}
+
+/// A second synthetic image that is plainly not the first: broad flat bands
+/// rather than blobs on a gradient.
+Future<Uint8List> _flatishBytes(int width, int height) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  for (var i = 0; i < 8; i++) {
+    canvas.drawRect(
+      Rect.fromLTWH(0, height / 8 * i, width.toDouble(), height / 8),
+      Paint()..color = i.isEven ? const Color(0xFFEFEFEF) : const Color(0xFF203040),
+    );
+  }
+  final image = await recorder.endRecording().toImage(width, height);
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  return data!.buffer.asUint8List();
 }
 
 /// A PNG shaped like the thing this app photographs: a few large soft-edged
@@ -230,6 +434,15 @@ void main() {
 /// pass a size assertion that means nothing; a field of hard-edged noise is
 /// worse than any real photo and would fail one that should hold.
 Future<Uint8List> _photoLikeBytes(int width, int height) async {
+  final image = await _photoLikeImage(width, height);
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  return data!.buffer.asUint8List();
+}
+
+/// The same thing undecoded, for the tests that need the *pixels* — a preview
+/// frame never goes through a file.
+Future<ui.Image> _photoLikeImage(int width, int height) async {
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
 
@@ -253,10 +466,7 @@ Future<Uint8List> _photoLikeBytes(int width, int height) async {
     );
   }
 
-  final image = await recorder.endRecording().toImage(width, height);
-  final data = await image.toByteData(format: ui.ImageByteFormat.png);
-  image.dispose();
-  return data!.buffer.asUint8List();
+  return recorder.endRecording().toImage(width, height);
 }
 
 Future<(int, int)> _sizeOf(Uint8List bytes) async {

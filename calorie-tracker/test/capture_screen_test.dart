@@ -1,9 +1,14 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:calorie_tracker/models/meal.dart';
 import 'package:calorie_tracker/screens/capture_screen.dart';
 import 'package:calorie_tracker/services/app_session.dart';
+import 'package:calorie_tracker/services/camera_frame.dart';
 import 'package:calorie_tracker/services/image_store.dart';
+import 'package:calorie_tracker/services/live_suggestions.dart';
+import 'package:calorie_tracker/services/meal_encoder.dart';
+import 'package:calorie_tracker/services/meal_index.dart';
 import 'package:calorie_tracker/services/meal_store.dart';
 import 'package:calorie_tracker/theme.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +20,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'fake_atomic_backend.dart';
 import 'fake_camera.dart';
 import 'fake_compressor.dart';
+import 'fake_encoder.dart';
 import 'fake_meal_backend.dart';
 
 /// Two things about this file are not obvious, and both are the test framework
@@ -56,7 +62,12 @@ void main() {
     return session;
   }
 
-  Future<void> pump(WidgetTester tester, {bool withImages = true}) async {
+  Future<void> pump(
+    WidgetTester tester, {
+    bool withImages = true,
+    MealIndex? index,
+    LiveSuggestions? live,
+  }) async {
     final session = await readySession();
     await tester.pumpWidget(MaterialApp(
       theme: buildTheme(Brightness.dark),
@@ -65,6 +76,8 @@ void main() {
         camera: camera,
         store: store,
         images: withImages ? images : null,
+        index: index,
+        live: live,
       ),
     ));
     await tester.pump();
@@ -349,6 +362,289 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
       expect(camera.startCount, greaterThan(opened));
+    });
+  });
+
+  group('suggestions', () {
+    /// [count] logs of the same settled meal, spread over recent days — enough
+    /// history for it to count as something the user does rather than something
+    /// that happened once.
+    void seedHabit(String name, {int count = 3, int calories = 420}) {
+      for (var i = 0; i < count; i++) {
+        meals.seed(Meal(
+          subject: 'did:ad:seed:$name:$i',
+          name: name,
+          description: 'A model wrote this about a different photo',
+          notes: 'Rye bread, two slices',
+          consumedAt: DateTime.now().subtract(Duration(days: i + 1)),
+          status: MealStatus.confirmed,
+          calories: calories,
+          caloriesMin: calories - 40,
+          caloriesMax: calories + 40,
+        ));
+      }
+    }
+
+    /// The shutter is also labelled "Log …", so chips are found by the half of
+    /// their label that only a chip has. Unanchored, because the chip's own
+    /// label is merged with its child `Text`s rather than replacing them.
+    Finder anyChip() => find.bySemanticsLabel(RegExp(r'\d+ kilocalories'));
+
+    Finder chip(String name) =>
+        find.bySemanticsLabel(RegExp('^Log ${RegExp.escape(name)}, '));
+
+    /// Tapping a chip runs the same capture path the shutter does, so it needs
+    /// the same alternation of real async and pumps.
+    Future<void> tapChip(WidgetTester tester, String name) async {
+      await tester.runAsync(() async => tester.tap(chip(name)));
+      final deadline = DateTime.now().add(const Duration(seconds: 20));
+      do {
+        await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 5)));
+        await tester.pump();
+      } while (captureInFlight() && DateTime.now().isBefore(deadline));
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    /// §8: "Cold start is silence." Not an empty row, not a "no matches" state —
+    /// the feature simply is not there until it works.
+    testWidgets('a fresh install is offered nothing at all', (tester) async {
+      await pump(tester);
+
+      expect(anyChip(), findsNothing);
+      expect(find.textContaining('kcal ·'), findsNothing);
+    });
+
+    testWidgets('a meal eaten repeatedly appears as a chip', (tester) async {
+      seedHabit('Cheese sandwich');
+
+      await pump(tester);
+
+      expect(chip('Cheese sandwich'), findsOneWidget);
+      expect(find.textContaining('420 kcal'), findsOneWidget);
+    });
+
+    /// The whole point: a tap is a finished meal. No estimate, no waiting, and
+    /// nothing left for the queue to pick up.
+    testWidgets('a tap logs a confirmed meal with the source numbers',
+        (tester) async {
+      seedHabit('Cheese sandwich');
+      await pump(tester);
+
+      await tapChip(tester, 'Cheese sandwich');
+
+      final logged = meals.meals.last;
+      expect(logged.status, MealStatus.confirmed);
+      expect(logged.calories, 420);
+      expect(logged.caloriesMin, 380);
+      expect(logged.caloriesMax, 460);
+      expect(logged.notes, 'Rye bread, two slices');
+      expect(logged.copiedFromMeal, 'did:ad:seed:Cheese sandwich:0',
+          reason: 'the newest of the group is the one whose numbers it took');
+      expect(logged.status.isQueued, isFalse);
+    });
+
+    /// A copy was not estimated and must not claim to have been — the source's
+    /// description is an account of a different photograph.
+    testWidgets('a tap copies no words a model wrote', (tester) async {
+      seedHabit('Cheese sandwich');
+      await pump(tester);
+
+      await tapChip(tester, 'Cheese sandwich');
+
+      expect(meals.meals.last.description, isEmpty);
+    });
+
+    /// §8: "A tap also captures the frame." Skipping it would leave the day's
+    /// list with one row that has no picture for no reason the user can see.
+    testWidgets('a tap takes the picture too', (tester) async {
+      seedHabit('Cheese sandwich');
+      await pump(tester);
+
+      await tapChip(tester, 'Cheese sandwich');
+
+      expect(camera.captureCount, 1);
+      expect(meals.meals.last.imagePath, isNotEmpty);
+      expect(find.text('Logged'), findsOneWidget);
+    });
+
+    /// The simulator has no camera, and that is a supported state everywhere
+    /// else in this app. The numbers are the point; the photo is a cache.
+    testWidgets('no camera is no reason to refuse the meal', (tester) async {
+      seedHabit('Cheese sandwich');
+      camera.fail('No camera on this device');
+      await pump(tester);
+
+      await tapChip(tester, 'Cheese sandwich');
+
+      expect(meals.meals.last.status, MealStatus.confirmed);
+      expect(meals.meals.last.imagePath, isEmpty);
+    });
+
+    testWidgets('a mis-tap can be undone', (tester) async {
+      seedHabit('Cheese sandwich');
+      await pump(tester);
+      await tapChip(tester, 'Cheese sandwich');
+      final logged = meals.meals.last.subject;
+
+      await tester.runAsync(() async => tester.tap(find.text('Undo')));
+      await tester
+          .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+
+      expect(meals.meals.any((m) => m.subject == logged), isFalse);
+    });
+
+    /// §7: four suggestions should be four different meals, and no more than
+    /// four — the row sits above the shutter and cannot crowd it.
+    testWidgets('at most four chips, and never the same meal twice',
+        (tester) async {
+      for (final name in ['Porridge', 'Ramen', 'Apple', 'Yoghurt', 'Toast']) {
+        seedHabit(name);
+      }
+
+      await pump(tester);
+
+      expect(anyChip(), findsNWidgets(4));
+    });
+
+    /// Phase 7.3: the same row, ranked by what the camera can see rather than
+    /// by how often something was logged. The chips, the tap, the copy and the
+    /// undo are all 7.1's and unchanged — what is new is which four meals.
+    group('from the viewfinder', () {
+      const encoderId = 'fake-encoder-v1';
+
+      /// One log of a meal, with a vector: too few to be a habit, which is what
+      /// makes these tests about recognition rather than frequency.
+      void seedRecognisable(String name, int which, {int calories = 500}) {
+        final vector = Float32List(8);
+        vector[which] = 1;
+        meals.seed(Meal(
+          subject: 'did:ad:seen:$name',
+          name: name,
+          description: '',
+          consumedAt: DateTime.now().subtract(const Duration(days: 2)),
+          status: MealStatus.confirmed,
+          calories: calories,
+          embedding: DinoV2Encoder.encodeVector(vector),
+          embeddedByModel: encoderId,
+        ));
+      }
+
+      Float32List axis(int which) {
+        final vector = Float32List(8);
+        vector[which] = 1;
+        return vector;
+      }
+
+      /// A frame with enough detail in it to get past the blur gate.
+      CameraFrame detailedFrame() {
+        const edge = 64;
+        final rgba = Uint8List(edge * edge * 4);
+        for (var y = 0; y < edge; y++) {
+          for (var x = 0; x < edge; x++) {
+            final p = (y * edge + x) * 4;
+            rgba[p] = rgba[p + 1] = rgba[p + 2] = (x + y).isEven ? 255 : 0;
+            rgba[p + 3] = 255;
+          }
+        }
+        return CameraFrame(edge: edge, rgba: rgba);
+      }
+
+      late FakeEncoder encoder;
+      late MealIndex index;
+      late LiveSuggestions live;
+
+      setUp(() {
+        encoder = FakeEncoder(modelId: encoderId);
+        index = MealIndex(meals: store, modelId: encoderId);
+        live = LiveSuggestions(camera: camera, encoder: encoder, index: index);
+      });
+
+      tearDown(() => live.dispose());
+
+      /// Show the camera something, and let the screen react.
+      Future<void> aimAt(WidgetTester tester, Float32List vector) async {
+        encoder.frameVector = vector;
+        expect(camera.emit(detailedFrame()), isTrue);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      testWidgets('a recognised meal is what the row offers', (tester) async {
+        seedHabit('Porridge');
+        seedRecognisable('Ramen', 3);
+
+        await pump(tester, index: index, live: live);
+        await aimAt(tester, axis(3));
+
+        expect(chip('Ramen'), findsOneWidget);
+        expect(
+          chip('Porridge'),
+          findsNothing,
+          reason: 'one row or the other, never a mixture — "this looks like '
+              'your ramen" and "you often have porridge" are not the same kind '
+              'of claim, and only one of them is about what is in frame',
+        );
+      });
+
+      testWidgets('nothing recognised falls back to what is eaten most',
+          (tester) async {
+        seedHabit('Porridge');
+        seedRecognisable('Ramen', 3);
+
+        await pump(tester, index: index, live: live);
+        // A long way from anything in the history: a tablecloth.
+        await aimAt(tester, axis(7));
+
+        expect(chip('Porridge'), findsOneWidget);
+        expect(chip('Ramen'), findsNothing);
+      });
+
+      testWidgets('a recognised meal can be logged with one tap',
+          (tester) async {
+        seedRecognisable('Ramen', 3, calories: 640);
+
+        await pump(tester, index: index, live: live);
+        await aimAt(tester, axis(3));
+        await tapChip(tester, 'Ramen');
+
+        final logged = meals.meals.last;
+        expect(logged.calories, 640);
+        expect(logged.status, MealStatus.confirmed);
+        expect(logged.copiedFromMeal, 'did:ad:seen:Ramen');
+      });
+
+      /// §6: "battery is bounded by the viewfinder being up" is a claim about
+      /// the stream actually stopping, not about the camera.
+      testWidgets('the stream stops when the app goes away and starts again',
+          (tester) async {
+        await pump(tester, index: index, live: live);
+        expect(live.running, isTrue);
+
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        await tester.pump();
+        expect(live.running, isFalse);
+        expect(camera.streams, isEmpty);
+
+        tester.binding
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pump();
+        expect(live.running, isTrue);
+      });
+
+      testWidgets('and when something else is put in front of it',
+          (tester) async {
+        await pump(tester, index: index, live: live);
+
+        await tester.tap(find.byTooltip('Type a meal'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(live.running, isFalse,
+            reason: 'a keyboard over the preview is not somebody aiming at a '
+                'plate');
+      });
     });
   });
 

@@ -1,9 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:calorie_tracker/models/meal.dart';
+import 'package:calorie_tracker/services/embedding_queue.dart';
 import 'package:calorie_tracker/services/estimation_queue.dart';
 import 'package:calorie_tracker/services/image_store.dart';
+import 'package:calorie_tracker/services/meal_encoder.dart';
+import 'package:calorie_tracker/services/meal_index.dart';
+import 'package:calorie_tracker/services/meal_priors.dart';
 import 'package:calorie_tracker/services/meal_store.dart';
 import 'package:calorie_tracker/services/openrouter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -13,6 +18,7 @@ import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'fake_encoder.dart';
 import 'fake_meal_backend.dart';
 import 'fake_notifier.dart';
 
@@ -57,6 +63,7 @@ void main() {
   Future<EstimationQueue> queueThat(
     Future<http.Response> Function(http.Request) respond, {
     bool connected = true,
+    MealPriors? priors,
   }) async {
     if (connected) {
       FlutterSecureStorage.setMockInitialValues(
@@ -78,6 +85,7 @@ void main() {
       account: account,
       client: client,
       notifier: notifier,
+      priors: priors,
       wait: (_) async {},
     )..images = images;
   }
@@ -97,6 +105,13 @@ void main() {
 
   Meal mealAt(String subject) =>
       backend.meals.firstWhere((m) => m.subject == subject);
+
+  /// The text the model was actually shown, out of the last request.
+  String promptSent() {
+    final parts = ((jsonDecode(requests.last.body)['messages'] as List).last
+        as Map)['content'] as List;
+    return parts.firstWhere((part) => part['type'] == 'text')['text'] as String;
+  }
 
   // ── The happy path ───────────────────────────────────────────────────────
 
@@ -497,6 +512,149 @@ void main() {
     expect(queue.error, contains('database is closed'));
     expect(queue.running, isFalse);
   });
+
+  // ── What it knows about meals like this one ──────────────────────────────
+  //
+  // Phase 7.4's medium band, from this end: `meal_priors_test.dart` covers
+  // which meal is retrieved and `openrouter_test.dart` covers how it is
+  // labelled. What is left — and what the phase's acceptance criteria name — is
+  // that the two are actually wired to each other, and that what crosses that
+  // wire is the eater's words and nothing a model wrote.
+
+  group('a prior', () {
+    const encoderId = 'fake-encoder-v1';
+
+    /// A vector, and one 15° from it: the same dish photographed twice.
+    Float32List axis(int which, {int length = 8}) {
+      final vector = Float32List(length);
+      vector[which % length] = 1;
+      return vector;
+    }
+
+    late MealPriors priors;
+
+    setUp(() {
+      final encoder = FakeEncoder(modelId: encoderId);
+      priors = MealPriors(
+        index: MealIndex(meals: store, modelId: encoderId),
+        embeddings:
+            EmbeddingQueue(encoder: encoder, meals: store, images: images),
+        modelId: encoderId,
+      );
+    });
+
+    /// The cheese sandwich of §1: settled, with a number, and with the answer
+    /// the eater gave weeks ago still on it.
+    void rememberASandwich() => backend.seed(Meal(
+          subject: 'did:ad:sandwich',
+          name: 'Cheese sandwich',
+          description: 'Two slices of white bread with cheddar, about 200g.',
+          notes: 'sourdough, and butter under the cheese',
+          consumedAt: _noon.subtract(const Duration(days: 9)),
+          status: MealStatus.estimated,
+          calories: 420,
+          imagePath: 'photos/old.jpg',
+          embedding: DinoV2Encoder.encodeVector(axis(0)),
+          embeddedByModel: encoderId,
+        ));
+
+    /// A meal photographed just now that looks like it.
+    Future<String> anotherOne() async {
+      final subject = await photographedMeal();
+      await backend.setEmbedding(
+        subject,
+        MealEmbedding(
+          base64: DinoV2Encoder.encodeVector(axis(0)),
+          modelId: encoderId,
+        ),
+      );
+      return subject;
+    }
+
+    test('goes with the request when there is one', () async {
+      rememberASandwich();
+      await anotherOne();
+      final queue = await queueThat(
+        (_) async => _answers(_estimateJson()),
+        priors: priors,
+      );
+
+      await queue.drain();
+
+      expect(promptSent(), contains('sourdough, and butter under the cheese'));
+    });
+
+    /// The invariant Phase 5 exists to protect, asserted directly because it is
+    /// the easiest thing in this phase to break by accident. Feed a description
+    /// forward and the fifth cheese sandwich is estimated from a chain of four
+    /// of the model's own guesses, each labelled as something a human said.
+    test('is the eater\'s words, never the model\'s', () async {
+      rememberASandwich();
+      await anotherOne();
+      final queue = await queueThat(
+        (_) async => _answers(_estimateJson()),
+        priors: priors,
+      );
+
+      await queue.drain();
+
+      final prompt = promptSent();
+      expect(prompt, isNot(contains('white bread with cheddar')));
+      expect(prompt, isNot(contains('Cheese sandwich')));
+    });
+
+    test('is absent when nothing in the history is close enough', () async {
+      backend.seed(Meal(
+        subject: 'did:ad:ramen',
+        name: 'Ramen',
+        description: '',
+        notes: 'extra egg',
+        consumedAt: _noon.subtract(const Duration(days: 3)),
+        status: MealStatus.estimated,
+        calories: 600,
+        imagePath: 'photos/ramen.jpg',
+        embedding: DinoV2Encoder.encodeVector(axis(4)),
+        embeddedByModel: encoderId,
+      ));
+      await anotherOne();
+      final queue = await queueThat(
+        (_) async => _answers(_estimateJson()),
+        priors: priors,
+      );
+
+      await queue.drain();
+
+      expect(promptSent(), isNot(contains('extra egg')));
+    });
+
+    /// A prior makes an estimate better; not having one makes it exactly what
+    /// it was before this phase. Losing a meal because a *hint* could not be
+    /// worked out would be an absurd trade.
+    test('that cannot be worked out does not cost the estimate', () async {
+      backend.readError = null;
+      rememberASandwich();
+      final subject = await anotherOne();
+      final queue = await queueThat(
+        (_) async => _answers(_estimateJson()),
+        priors: _BrokenPriors(),
+      );
+
+      await queue.drain();
+
+      expect(mealAt(subject).status, MealStatus.estimated);
+      expect(mealAt(subject).calories, 120);
+    });
+  });
+}
+
+/// Priors that throw, for the one thing the queue must never let them do.
+class _BrokenPriors implements MealPriors {
+  @override
+  Future<String> notesFor(Meal meal) async =>
+      throw StateError('the index is on fire');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 final _noon = DateTime(2026, 8, 5, 12);

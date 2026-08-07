@@ -1,4 +1,5 @@
 import 'package:calorie_tracker/models/meal.dart';
+import 'package:calorie_tracker/services/meal_encoder.dart';
 import 'package:calorie_tracker/services/meal_store.dart';
 
 /// The meals table, as `rust/src/api/meals.rs` keeps it.
@@ -63,6 +64,64 @@ class FakeMealBackend implements MealBackend {
     );
   }
 
+  /// The rules `copy_meal` applies, all of which the tap path leans on: the
+  /// numbers and the eater's words come across, the model's account of the
+  /// *other* photo does not, the result is `confirmed`, and the link points at
+  /// the original however many copies deep the thing that was tapped was.
+  @override
+  Future<String> copyFrom(
+    String sourceSubject, {
+    required DateTime consumedAt,
+    String imagePath = '',
+  }) async {
+    if (writeError != null) throw writeError!;
+
+    final source = _original(sourceSubject);
+    if (source == null) throw Exception('No such meal');
+    final calories = source.calories;
+    if (calories == null) {
+      throw Exception('${source.subject} has no calorie count, so there is '
+          'nothing to copy from it');
+    }
+
+    final subject = 'did:ad:meal:${nextId++}';
+    meals.add(Meal(
+      subject: subject,
+      name: source.name,
+      // Deliberately not copied: they are an account of a different photograph,
+      // and a confirmed meal carrying a question is one nobody can answer.
+      description: '',
+      notes: source.notes,
+      consumedAt: consumedAt,
+      status: MealStatus.confirmed,
+      calories: calories,
+      caloriesMin: source.caloriesMin,
+      caloriesMax: source.caloriesMax,
+      imagePath: imagePath,
+      proteinGrams: source.proteinGrams,
+      carbsGrams: source.carbsGrams,
+      fatGrams: source.fatGrams,
+      copiedFromMeal: source.subject,
+    ));
+    return subject;
+  }
+
+  /// Walk `copied-from-meal` back to the meal that was actually estimated,
+  /// bounded the way the bridge bounds it.
+  Meal? _original(String subject) {
+    var current = subject;
+    for (var hop = 0; hop < 8; hop++) {
+      final index = meals.indexWhere((m) => m.subject == current);
+      if (index < 0) return null;
+      final meal = meals[index];
+      if (meal.copiedFromMeal.isEmpty || meal.copiedFromMeal == current) {
+        return meal;
+      }
+      current = meal.copiedFromMeal;
+    }
+    return null;
+  }
+
   @override
   Future<Meal?> bySubject(String subject) async {
     if (readError != null) throw readError!;
@@ -121,6 +180,22 @@ class FakeMealBackend implements MealBackend {
     });
   }
 
+  /// The rule `set_meal_embedding` enforces: the vector and its encoder are
+  /// written together, because one without the other cannot be compared to
+  /// anything.
+  @override
+  Future<void> setEmbedding(String subject, MealEmbedding embedding) async {
+    if (writeError != null) throw writeError!;
+    _replace(
+      subject,
+      (old) => _copy(
+        old,
+        embedding: embedding.base64,
+        embeddedByModel: embedding.modelId,
+      ),
+    );
+  }
+
   void _replace(String subject, Meal Function(Meal) change) {
     final index = meals.indexWhere((m) => m.subject == subject);
     if (index < 0) throw Exception('No such meal');
@@ -144,6 +219,8 @@ class FakeMealBackend implements MealBackend {
     MealConfidence? confidence,
     String? estimatedByModel,
     String? clarifyingQuestion,
+    String? embedding,
+    String? embeddedByModel,
   }) =>
       Meal(
         subject: old.subject,
@@ -165,6 +242,9 @@ class FakeMealBackend implements MealBackend {
         proteinGrams: old.proteinGrams,
         carbsGrams: old.carbsGrams,
         fatGrams: old.fatGrams,
+        embedding: embedding ?? old.embedding,
+        embeddedByModel: embeddedByModel ?? old.embeddedByModel,
+        copiedFromMeal: old.copiedFromMeal,
       );
 
   @override

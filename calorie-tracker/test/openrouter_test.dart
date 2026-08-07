@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:calorie_tracker/services/openrouter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -238,6 +239,105 @@ void main() {
       // per-million price by mistake and this is off by a factor of a million,
       // which is the difference between "a few cents a month" and a bill.
       expect(chosen.dollarsPerMeal, lessThan(0.01));
+    });
+  });
+
+  /// What actually goes in the prompt — Phase 7.4's medium band
+  /// (`calorie-tracker-embeddings.md` §3), and the invariant it must not break.
+  group('the prompt', () {
+    /// The text part of the user message, which is the whole of what this
+    /// client composes.
+    Future<String> promptFor({
+      String words = '',
+      String prior = '',
+    }) async {
+      FlutterSecureStorage.setMockInitialValues(
+        {'openrouter_api_key': 'sk-or-test'},
+      );
+      final account = OpenRouterAccount();
+      await account.load();
+
+      late String sent;
+      final client = OpenRouterClient(
+        account: account,
+        httpClient: MockClient((request) async {
+          sent = request.body;
+          return http.Response(
+            jsonEncode({
+              'choices': [
+                {
+                  'message': {
+                    'content': jsonEncode({
+                      'name': 'A sandwich',
+                      'description': 'Bread and cheese.',
+                      'calories': 400,
+                      'calories_min': 350,
+                      'calories_max': 450,
+                      'confidence': 'medium',
+                      'clarifying_question': null,
+                    }),
+                  },
+                },
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+
+      // A prior is background, never input: a meal with no photo and nothing
+      // written down still has nothing to estimate, whatever this person once
+      // said about a different one.
+      await client.estimate(
+        photo: Uint8List.fromList(const [1, 2, 3]),
+        photoPath: 'photos/a.jpg',
+        words: words,
+        prior: prior,
+      );
+
+      final body = jsonDecode(sent) as Map<String, dynamic>;
+      final user = (body['messages'] as List).last as Map<String, dynamic>;
+      final parts = user['content'] as List;
+      return (parts.first as Map)['text'] as String;
+    }
+
+    test('a prior is sent, and is labelled as being about a different meal',
+        () async {
+      final prompt = await promptFor(prior: 'butter under the cheese');
+
+      expect(prompt, contains('butter under the cheese'));
+      expect(
+        prompt,
+        contains('similar meal'),
+        reason: 'unlabelled it says somebody wrote this about *this* plate, '
+            'which is the one thing that is not true about it',
+      );
+    });
+
+    test('the eater\'s own words and a prior stay apart', () async {
+      final prompt = await promptFor(
+        words: 'this one had no butter',
+        prior: 'butter under the cheese',
+      );
+
+      final mine = prompt.indexOf('this one had no butter');
+      final theirs = prompt.indexOf('butter under the cheese');
+
+      expect(mine, isNonNegative);
+      expect(theirs, isNonNegative);
+      expect(
+        prompt.substring(mine, theirs),
+        contains('similar meal'),
+        reason: 'two claims about two different plates, and only one of them '
+            'is about the one in the photograph',
+      );
+    });
+
+    test('no prior leaves the prompt exactly as it was', () async {
+      final prompt = await promptFor(words: 'two slices of toast');
+
+      expect(prompt, contains('two slices of toast'));
+      expect(prompt, isNot(contains('similar meal')));
     });
   });
 }

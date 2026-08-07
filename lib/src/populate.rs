@@ -431,6 +431,17 @@ mod tests {
                 DataType::String,
             ),
             (urls::MEAL_NOTES, "meal-notes", DataType::String),
+            (urls::MEAL_EMBEDDING, "meal-embedding", DataType::String),
+            (
+                urls::EMBEDDED_BY_MODEL,
+                "embedded-by-model",
+                DataType::String,
+            ),
+            (
+                urls::COPIED_FROM_MEAL,
+                "copied-from-meal",
+                DataType::AtomicUrl,
+            ),
             (urls::PROTEIN_GRAMS, "protein-grams", DataType::Float),
             (urls::CARBS_GRAMS, "carbs-grams", DataType::Float),
             (urls::FAT_GRAMS, "fat-grams", DataType::Float),
@@ -442,6 +453,19 @@ mod tests {
             assert_eq!(prop.shortname, shortname);
             assert_eq!(prop.data_type, datatype, "datatype of {subject}");
         }
+
+        // A copy points at the Meal it copied, and nothing else. Without the
+        // classtype the property is an untyped link, and the lineage the
+        // suggestion path resolves through would be free to point anywhere.
+        assert_eq!(
+            store
+                .get_property(urls::COPIED_FROM_MEAL)
+                .await
+                .unwrap()
+                .class_type
+                .as_deref(),
+            Some(urls::MEAL)
+        );
 
         // The two enums are Tags, so every state a Meal can be in is a
         // resolvable resource rather than a string the app happens to agree

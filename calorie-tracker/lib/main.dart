@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'screens/capture_screen.dart';
@@ -10,8 +12,13 @@ import 'screens/onboarding/onboarding_screen.dart';
 import 'services/app_session.dart';
 import 'services/background_estimation.dart';
 import 'services/camera_feed.dart';
+import 'services/embedding_queue.dart';
 import 'services/estimation_queue.dart';
 import 'services/image_store.dart';
+import 'services/live_suggestions.dart';
+import 'services/meal_encoder.dart';
+import 'services/meal_index.dart';
+import 'services/meal_priors.dart';
 import 'services/meal_store.dart';
 import 'services/notifications.dart';
 import 'services/openrouter.dart';
@@ -26,7 +33,36 @@ import 'theme.dart';
 /// the documents directory.
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  registerBundledLicenses();
   runApp(const CalorieTrackerApp());
+}
+
+/// Tell Flutter's licence page about the things this app ships that `pub` does
+/// not know about.
+///
+/// Every Dart package's licence is collected automatically; the 89 MB of model
+/// weights in `assets/models/` is not a package, so nothing collects it. It is
+/// Apache 2.0 (`facebook/dinov2-small`), and section 4 of that licence attaches
+/// conditions to *distributing* the work — a copy of the licence, the
+/// attribution notices, and a statement of what was changed. Bundling the
+/// weights in an app is distributing them, so those conditions are this app's,
+/// and they were being ignored for as long as the encoder has existed.
+///
+/// `LicenseRegistry` is lazy: the callback runs only when somebody opens the
+/// licence page, so this costs nothing at startup, which is the one budget
+/// `main` has.
+void registerBundledLicenses() {
+  LicenseRegistry.addLicense(() async* {
+    final notice = await rootBundle.loadString('assets/licenses/dinov2-NOTICE.txt');
+    final license = await rootBundle.loadString('assets/licenses/dinov2-LICENSE.txt');
+    // One entry, notice first: the changes this app made are the part a reader
+    // is owed and the part they cannot get anywhere else. The licence text
+    // underneath it is the same 200 lines everybody has seen.
+    yield LicenseEntryWithLineBreaks(
+      const ['DINOv2 (facebook/dinov2-small)'],
+      '$notice\n$license',
+    );
+  });
 }
 
 class CalorieTrackerApp extends StatefulWidget {
@@ -41,6 +77,7 @@ class CalorieTrackerApp extends StatefulWidget {
     this.notifier,
     this.sync,
     this.background,
+    this.encoder,
   });
 
   /// Injected by tests, which have no Rust library to talk to. The app builds
@@ -65,6 +102,10 @@ class CalorieTrackerApp extends StatefulWidget {
 
   /// Injected by tests, which have no notification centre.
   final Notifier? notifier;
+
+  /// Injected by tests, which have no 88 MB model file and no platform channel
+  /// to reach one through.
+  final MealEncoder? encoder;
 
   /// Injected by tests, which have no other devices to sync with.
   final SyncService? sync;
@@ -104,7 +145,35 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp>
         account: _account,
         client: OpenRouterClient(account: _account),
         notifier: _notifier,
+        priors: _priors,
       );
+
+  /// What turns photographed meals into vectors the suggestion row can match
+  /// against. Owned here for the same reason the estimator is: it writes
+  /// through [_meals], and there is only one of those.
+  late final MealEncoder _encoder = widget.encoder ?? DinoV2Encoder();
+  late final EmbeddingQueue _embeddings =
+      EmbeddingQueue(encoder: _encoder, meals: _meals, images: _images)
+        ..onEmbedded = _index.refresh;
+
+  /// The decoded vectors, in memory, scanned by brute force. One of them, here,
+  /// because two things read it — the viewfinder several times a second and the
+  /// estimator once a meal — and a table scan each is a table scan too many.
+  late final MealIndex _index =
+      MealIndex(meals: _meals, modelId: _encoder.modelId);
+
+  /// The high band: what the camera can see, matched against that index.
+  late final LiveSuggestions _live =
+      LiveSuggestions(camera: _camera, encoder: _encoder, index: _index);
+
+  /// The medium band: what this person wrote about the nearest meal they have
+  /// logged before, handed to the estimator so it stops re-asking a question
+  /// they answered weeks ago.
+  late final MealPriors _priors = MealPriors(
+    index: _index,
+    embeddings: _embeddings,
+    modelId: _encoder.modelId,
+  );
 
   /// The navigator the deep link needs. A notification tap arrives with no
   /// screen behind it — on a cold launch, before there is one at all — so the
@@ -161,6 +230,10 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp>
     if (widget.account == null) _account.dispose();
     if (widget.queue == null) _queue.dispose();
     if (widget.sync == null) _sync.dispose();
+    _live.dispose();
+    // The session holds the weights — tens of megabytes that outlive the
+    // widget tree unless something lets go of them.
+    if (widget.encoder == null) unawaited(_encoder.dispose());
     super.dispose();
   }
 
@@ -198,6 +271,14 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp>
   Future<void> _readEverythingAgain() async {
     await _meals.load();
     unawaited(_queue.drain());
+    // A synced meal usually arrives with its embedding — they travel together,
+    // which is what lets the phone that never took the picture match against it
+    // (§4). This is for the ones that do not: a meal logged on a phone whose
+    // encoder had not run yet.
+    unawaited(_embeddings.drain());
+    // And the ones that did arrive with one are new history to match against,
+    // which nothing else here would notice.
+    unawaited(_index.refresh());
   }
 
   /// Show the meal a notification was tapped about.
@@ -243,7 +324,16 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp>
   void _drainWhenReady() {
     if (_session.phase != SessionPhase.ready) return;
     _session.removeListener(_drainWhenReady);
+    // Read before either queue runs: the estimator now asks it what this person
+    // said about meals like the one it is about to estimate (Phase 7.4), and an
+    // index nobody has loaded has nothing to say.
+    unawaited(_index.refresh());
     unawaited(_queue.drain());
+    // The backfill, and the newest meal's own embedding. Still behind the
+    // estimate: the queue embeds the one meal it needs a prior for itself, so
+    // running the whole backfill in front of it would delay every estimate on a
+    // phone with a year of history to get through.
+    unawaited(_embeddings.drain());
     // And ask the other devices what they have been up to — but only if there
     // are any. An account that has never been paired reaches for no network
     // here; see [SyncService.autoSync].
@@ -275,6 +365,10 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp>
       // estimates.
       _queue.images = images;
       unawaited(_queue.drain());
+      // Same race, same fix: the encoder reads embedding sources off this
+      // directory, so a launch that got here first has meals waiting on it.
+      _embeddings.images = images;
+      unawaited(_embeddings.drain());
     } catch (e) {
       // Nowhere to keep photos is not nowhere to keep meals: capture falls back
       // to logging without one, which is worth far more than a dead app.
@@ -299,6 +393,9 @@ class _CalorieTrackerAppState extends State<CalorieTrackerApp>
         account: _account,
         queue: _queue,
         sync: _sync,
+        embeddings: _embeddings,
+        index: _index,
+        live: _live,
       ),
     );
   }
@@ -314,6 +411,9 @@ class SessionGate extends StatelessWidget {
     required this.account,
     required this.queue,
     required this.sync,
+    required this.embeddings,
+    required this.index,
+    required this.live,
     this.images,
   });
 
@@ -323,6 +423,17 @@ class SessionGate extends StatelessWidget {
   final OpenRouterAccount account;
   final EstimationQueue queue;
   final SyncService sync;
+
+  /// Drained after every capture, so the meal just photographed can be matched
+  /// against on the next one.
+  final EmbeddingQueue embeddings;
+
+  /// Re-read at the same four moments the chip row is.
+  final MealIndex index;
+
+  /// Started and stopped by the capture screen, because that is the screen the
+  /// viewfinder is on.
+  final LiveSuggestions live;
   final ImageStore? images;
 
   @override
@@ -346,6 +457,9 @@ class SessionGate extends StatelessWidget {
               account: account,
               queue: queue,
               sync: sync,
+              embeddings: embeddings,
+              index: index,
+              live: live,
             );
           case SessionPhase.failed:
             return _StoreFailed(session: session);

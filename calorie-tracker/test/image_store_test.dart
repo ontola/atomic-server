@@ -55,6 +55,7 @@ void main() {
     final old = DateTime.now().subtract(const Duration(hours: 1));
     await fileIn(stored.imagePath).setLastModified(old);
     await fileIn(stored.thumbnailPath).setLastModified(old);
+    await fileIn(stored.sourcePath).setLastModified(old);
   }
 
   group('save', () {
@@ -74,10 +75,55 @@ void main() {
       expect(
         compressor.calls,
         [
-          (maxEdge: ImageStore.fullEdge, quality: ImageStore.fullQuality),
-          (maxEdge: ImageStore.thumbEdge, quality: ImageStore.thumbQuality),
+          (
+            maxEdge: ImageStore.fullEdge,
+            quality: ImageStore.fullQuality,
+            square: false
+          ),
+          (
+            maxEdge: ImageStore.thumbEdge,
+            quality: ImageStore.thumbQuality,
+            square: false
+          ),
+          // Square, and the only one that is. An encoder reads this file, and
+          // it has to see the same geometry here as it will see off a live
+          // camera frame — a long-edge cap gave it a 192px crop upscaled to
+          // 224, which measured 0.65 cosine from the meal's own photo at worst.
+          (
+            maxEdge: ImageStore.sourceEdge,
+            quality: ImageStore.sourceQuality,
+            square: true
+          ),
         ],
-        reason: 'both encodes come off the camera frame, not one off the other',
+        reason: 'every encode comes off the camera frame, not one off another',
+      );
+    });
+
+    test('writes an embedding source, derivable and outside the budget',
+        () async {
+      final stored = await store.save(frame, at: DateTime(2026, 8, 5));
+
+      expect(await fileIn(stored.sourcePath).exists(), isTrue);
+      expect(stored.sourcePath, ImageStore.sourcePathFor(stored.imagePath));
+      expect(await store.loadSource(stored.imagePath), isNotNull);
+      expect(await store.sourceBytes(), stored.sourceBytes);
+      expect(
+        await store.totalBytes(),
+        stored.bytes,
+        reason: 'nothing can evict a source, so counting it against the budget '
+            'would consume headroom the sweep has no way to reclaim',
+      );
+    });
+
+    /// Not the 64px the plan sketched: small image encoders take 224–256px
+    /// inputs, and a source that has to be upscaled before it can be encoded
+    /// builds in the preprocessing mismatch the whole design warns about.
+    test('the embedding source is big enough to encode without upscaling', () {
+      expect(ImageStore.sourceEdge, greaterThanOrEqualTo(256));
+      expect(
+        ImageStore.sourceQuality,
+        greaterThan(ImageStore.thumbQuality),
+        reason: 'this copy exists to be re-encoded, and artifacts compound',
       );
     });
 
@@ -140,7 +186,11 @@ void main() {
       expect(await fileIn(orphan.imagePath).exists(), isFalse);
       expect(await fileIn(orphan.thumbnailPath).exists(), isFalse,
           reason: 'an orphan thumbnail is just as unreferenced');
+      expect(await fileIn(orphan.sourcePath).exists(), isFalse,
+          reason: 'a source is exempt from eviction, not from having a meal — '
+              'an undone tap would otherwise leak one forever');
       expect(await fileIn(kept.imagePath).exists(), isTrue);
+      expect(await store.loadSource(kept.imagePath), isNotNull);
       expect(await store.totalBytes(), await store.recount());
     });
 
@@ -247,6 +297,19 @@ void main() {
       expect(await store.loadThumbnail(meal.imagePath), isNotNull);
     });
 
+    /// The recovery path for an encoder change, and the only one there is: the
+    /// photo it was computed from is exactly what the budget evicts first.
+    test('an embedding source survives an eviction that takes everything else',
+        () async {
+      final meal = await photographedMeal(at: DateTime(2026, 8, 1));
+      await store.setBudgetBytes(1);
+
+      await store.sweep(meals: [meal]);
+
+      expect(await store.load(meal.imagePath), isNull);
+      expect(await store.loadSource(meal.imagePath), isNotNull);
+    });
+
     test('no budget means no eviction', () async {
       final meal = await photographedMeal(at: DateTime(2026, 8, 1));
       await store.setBudgetBytes(ImageStore.unlimitedBudget);
@@ -266,6 +329,20 @@ void main() {
       expect(await store.load(meal.imagePath), isNull);
       expect(await store.loadThumbnail(meal.imagePath), isNull);
       expect(await store.totalBytes(), 0);
+    });
+
+    /// The one exemption, and it is not an inconsistency. Everything else here
+    /// is a picture; this is the sole remaining input to re-encoding the meal,
+    /// and the user asked to reclaim storage rather than to forget what they
+    /// eat. The whole directory weighs about one photo's worth of what they were
+    /// deleting.
+    test('leaves the embedding sources, which are not what was asked for',
+        () async {
+      final meal = await photographedMeal(at: DateTime(2026, 8, 1));
+
+      await store.deleteAll();
+
+      expect(await store.loadSource(meal.imagePath), isNotNull);
     });
   });
 

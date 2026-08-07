@@ -155,6 +155,31 @@
     "https://atomicdata.dev/properties/shortname": "meal-notes"
   },
   {
+    "@id": "https://atomicdata.dev/properties/mealEmbedding",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A base64-encoded image embedding of this Meal, used to recognise it when a similar one is photographed later. There is no bytes datatype, so the int8-quantized vector travels as base64 — 512 dimensions is about 700 characters. It lives on the Meal rather than in a cache beside the photo for two reasons: photos are evicted against a byte budget and this must outlive them, and meals sync between devices while photos do not, so the phone that never took the picture still recognises the food.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "meal-embedding"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/embeddedByModel",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Identifier of the encoder that produced `meal-embedding`. An embedding is only comparable to embeddings from the same encoder, so this is what makes a model change detectable rather than silently wrong: matching happens within one identifier, and a change makes recognition go quiet until the history has been re-embedded. Named to mirror `estimated-by-model`.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "embedded-by-model"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/copiedFromMeal",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Meal",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The Meal this one took its numbers from, set when it was logged by recognising a previous meal rather than by estimating this one. A copy is epistemically different from an estimate — nothing looked at this food — and the difference matters when the original is later corrected. Always points at an original: a copy of a copy resolves through to the meal at the end of the chain, so lineage stays one hop deep and copies cannot drift.",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "copied-from-meal"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/proteinGrams",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
     "https://atomicdata.dev/properties/description": "Protein in this Meal, in grams.",
@@ -194,6 +219,9 @@
       "https://atomicdata.dev/properties/estimatedByModel",
       "https://atomicdata.dev/properties/clarifyingQuestion",
       "https://atomicdata.dev/properties/mealNotes",
+      "https://atomicdata.dev/properties/mealEmbedding",
+      "https://atomicdata.dev/properties/embeddedByModel",
+      "https://atomicdata.dev/properties/copiedFromMeal",
       "https://atomicdata.dev/properties/proteinGrams",
       "https://atomicdata.dev/properties/carbsGrams",
       "https://atomicdata.dev/properties/fatGrams"

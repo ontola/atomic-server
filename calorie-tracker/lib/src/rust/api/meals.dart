@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear`, `collect_meals`, `confidence_subject`, `find_meals_container`, `float_prop`, `int_prop`, `read_meal`, `set`, `status_subject`, `string_prop`, `tag_shortname`, `tag_subject`
+// These functions are ignored because they are not marked as `pub`: `clear`, `collect_meals`, `confidence_subject`, `find_meals_container`, `float_prop`, `int_prop`, `read_meal`, `resolve_original`, `set`, `status_subject`, `string_prop`, `tag_shortname`, `tag_subject`
 
 /// Find the meals container under the active drive, creating it the first time.
 /// Idempotent — call it on every launch.
@@ -118,6 +118,47 @@ Future<List<MealItem>> listPendingMeals() =>
 /// ordinary answer here rather than an error to show anybody.
 Future<MealItem?> getMeal({required String subject}) =>
     RustLib.instance.api.crateApiMealsGetMeal(subject: subject);
+
+/// Log a meal by recognising an earlier one, taking its numbers wholesale.
+///
+/// What a tapped suggestion on the viewfinder does. The new meal is `confirmed`
+/// — a human looked at the food and at the suggestion and said they were the
+/// same thing, which is a stronger claim than any estimate — so no estimator
+/// will ever revisit it.
+///
+/// **It copies the numbers and the eater's words, and nothing the model wrote.**
+/// `description`, `estimate-confidence`, `estimated-by-model` and
+/// `clarifying-question` are all an account of a *different photograph*, and
+/// carrying them here would make this meal claim to have been estimated when
+/// nothing has looked at it. `meal-notes` is the exception because it is the
+/// eater's own words about this food, which is exactly what makes the copy worth
+/// having — the answer they gave weeks ago comes with it.
+///
+/// `copied_from_meal` on the new meal names the *original*, never the copy that
+/// happened to be recognised: lineage stays one hop deep, so correcting an
+/// original is a question about a flat set of copies rather than a walk down a
+/// chain that gets longer every time somebody eats the same lunch.
+Future<String> copyMeal(
+        {required String sourceSubject,
+        required PlatformInt64 consumedAtMs,
+        required String imagePath}) =>
+    RustLib.instance.api.crateApiMealsCopyMeal(
+        sourceSubject: sourceSubject,
+        consumedAtMs: consumedAtMs,
+        imagePath: imagePath);
+
+/// Attach an image embedding to a meal, with the encoder that produced it.
+///
+/// The two are written together and never apart: a vector whose encoder is
+/// unknown cannot be compared to anything, so it is not a half-written meal but
+/// a meaningless one. An empty `embedding` clears both, which is what a meal
+/// whose encoder has been retired looks like until it is re-encoded.
+Future<void> setMealEmbedding(
+        {required String subject,
+        required String embedding,
+        required String model}) =>
+    RustLib.instance.api.crateApiMealsSetMealEmbedding(
+        subject: subject, embedding: embedding, model: model);
 
 /// What an estimator worked out about a meal.
 ///
@@ -242,6 +283,16 @@ class MealItem {
   final double? carbsGrams;
   final double? fatGrams;
 
+  /// A base64 image embedding, or empty when nothing has encoded this meal.
+  /// Only comparable to embeddings carrying the same
+  /// [`MealItem::embedded_by_model`].
+  final String mealEmbedding;
+  final String embeddedByModel;
+
+  /// The meal this one took its numbers from, or empty when it was estimated
+  /// rather than recognised. Always an original — see [`copy_meal`].
+  final String copiedFromMeal;
+
   const MealItem({
     required this.subject,
     required this.name,
@@ -259,6 +310,9 @@ class MealItem {
     this.proteinGrams,
     this.carbsGrams,
     this.fatGrams,
+    required this.mealEmbedding,
+    required this.embeddedByModel,
+    required this.copiedFromMeal,
   });
 
   @override
@@ -278,7 +332,10 @@ class MealItem {
       clarifyingQuestion.hashCode ^
       proteinGrams.hashCode ^
       carbsGrams.hashCode ^
-      fatGrams.hashCode;
+      fatGrams.hashCode ^
+      mealEmbedding.hashCode ^
+      embeddedByModel.hashCode ^
+      copiedFromMeal.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -300,5 +357,8 @@ class MealItem {
           clarifyingQuestion == other.clarifyingQuestion &&
           proteinGrams == other.proteinGrams &&
           carbsGrams == other.carbsGrams &&
-          fatGrams == other.fatGrams;
+          fatGrams == other.fatGrams &&
+          mealEmbedding == other.mealEmbedding &&
+          embeddedByModel == other.embeddedByModel &&
+          copiedFromMeal == other.copiedFromMeal;
 }

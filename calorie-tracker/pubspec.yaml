@@ -6,7 +6,8 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.4.0 <4.0.0"
+  # 3.7 is flutter_onnxruntime's floor, not ours.
+  sdk: ">=3.7.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -36,6 +37,11 @@ dependencies:
   # means it, and BGProcessingTask on iOS, which does not — see
   # services/background_estimation.dart.
   workmanager: ^0.10.7
+  # The image encoder behind meal suggestions (Phase 7.2). Reaches Core ML on
+  # iOS and NNAPI on Android, which is the argument for a plugin over running
+  # the model through `candle` in the Rust crate — see services/meal_encoder.dart.
+  # ≥1.5.1 is the floor for Play's 16 KB page-size rule.
+  flutter_onnxruntime: ^1.8.3
 
 dev_dependencies:
   flutter_test:
@@ -47,6 +53,19 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    # The image encoder. Written by `make model` into a gitignored directory —
+    # 89 MB of weights only this app wants have no business in every clone of
+    # this repo — and bundled from there, so the app itself never downloads
+    # anything and works offline. A clone that has not run `make model` fails
+    # here, at build time, which is the right place to find out.
+    - assets/models/
+    # The encoder's licence and the changes made to it. These are *committed*,
+    # unlike the weights: the Apache 2.0 conditions attach to distributing the
+    # model, and the app distributes it, so the terms cannot live in a directory
+    # a fresh clone has to generate. `main.dart` feeds them to the licence page.
+    - assets/licenses/
 
 # The launcher icon. `assets/icon/*.svg` is the source; the PNGs beside them are
 # rendered from it (`rsvg-convert -w 1024 -h 1024`) and are what this reads.

@@ -148,6 +148,38 @@ class AtomicClient {
   static Future<void> setMealStatus(String subject, String status) =>
       meals_ffi.setMealStatus(subject: subject, status: status);
 
+  /// Log a meal by recognising an earlier one, taking its numbers wholesale.
+  /// Returns the new meal's subject.
+  ///
+  /// The result is `confirmed` and carries the source's calories, bounds, macros
+  /// and the eater's own notes — but nothing an estimator wrote about the source,
+  /// which was an account of a different photograph. `copied-from-meal` names the
+  /// original even when what was recognised was itself a copy.
+  static Future<String> copyMeal({
+    required String sourceSubject,
+    required int consumedAtMs,
+    String imagePath = '',
+  }) =>
+      meals_ffi.copyMeal(
+        sourceSubject: sourceSubject,
+        consumedAtMs: consumedAtMs,
+        imagePath: imagePath,
+      );
+
+  /// Attach an image embedding and the encoder that produced it. An empty
+  /// [embedding] clears both — a vector with no encoder names nothing it can be
+  /// compared to.
+  static Future<void> setMealEmbedding(
+    String subject, {
+    required String embedding,
+    required String model,
+  }) =>
+      meals_ffi.setMealEmbedding(
+        subject: subject,
+        embedding: embedding,
+        model: model,
+      );
+
   /// Write an estimate onto a meal, moving it to `estimated` or — when the
   /// estimator asked something — `needs-info`. A `confirmed` meal is left
   /// alone: a human typed that number and an estimate racing it must not win.

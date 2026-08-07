@@ -378,10 +378,19 @@ class OpenRouterClient {
   /// 1024px version (plan §6), which is what makes this call cost a fraction of
   /// a cent. [words] is what the user typed, and is the whole input for a meal
   /// that was never photographed.
+  ///
+  /// [prior] is what the eater wrote about a *different, similar* meal —
+  /// Phase 7.4's medium band (`calorie-tracker-embeddings.md` §3). It is
+  /// `meal-notes` and only ever `meal-notes`: a `description` or a `name` fed
+  /// forward would be the model's own words handed back to it as a human's,
+  /// which is the failure Phase 5 exists to prevent. `MealPriors` is where that
+  /// is enforced; this end only has to keep the two apart in the prompt, because
+  /// they are different claims — one is about this meal and one is not.
   Future<MealEstimate> estimate({
     Uint8List? photo,
     String photoPath = '',
     String words = '',
+    String prior = '',
     String? model,
   }) async {
     if (photo == null && words.trim().isEmpty) {
@@ -397,7 +406,7 @@ class OpenRouterClient {
     final modelId = model ?? _account.model;
 
     final content = <Map<String, dynamic>>[
-      {'type': 'text', 'text': _userPrompt(words)},
+      {'type': 'text', 'text': _userPrompt(words, prior)},
       if (photo != null)
         {
           'type': 'image_url',
@@ -545,15 +554,35 @@ ingredients genuinely open.
 Ask a `clarifying_question` only when one answer would move the estimate a lot
 and you cannot tell from what you were given — a glass of white liquid is milk
 or oat milk or a protein shake, and those are 100 kcal apart. Otherwise leave it
-null. Do not ask for something the user has already told you.
+null. Do not ask for something the user has already told you, here or about a
+similar meal they have logged before.
+
+You may be shown what this person wrote about an earlier meal that looked like
+this one. It is background about how they usually eat, not a description of what
+is in front of you: use it where it fits what you can see, and ignore it where it
+does not.
 
 Answer only with the JSON object you were given a schema for.''';
 
-  static String _userPrompt(String words) {
-    final trimmed = words.trim();
-    if (trimmed.isEmpty) return 'What is in this, and how many calories?';
-    return 'What is in this, and how many calories?\n\n'
-        'The person who logged it wrote: "$trimmed"';
+  /// The question, then what is known about this meal, then what is known about
+  /// meals like it — each labelled as what it is.
+  ///
+  /// The labels are the whole design. Merging the prior into the same sentence
+  /// as [words] would tell the model that somebody said this about *this* plate,
+  /// which is the one thing that is not true about it.
+  static String _userPrompt(String words, String prior) {
+    final parts = ['What is in this, and how many calories?'];
+
+    final wrote = words.trim();
+    if (wrote.isNotEmpty) parts.add('The person who logged it wrote: "$wrote"');
+
+    final earlier = prior.trim();
+    if (earlier.isNotEmpty) {
+      parts.add('About a similar meal they logged before, the same person '
+          'wrote: "$earlier"');
+    }
+
+    return parts.join('\n\n');
   }
 
   /// `strict: true` needs every property listed in `required`, so the optional

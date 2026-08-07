@@ -1,6 +1,6 @@
 .PHONY: ios android apk reload-ios restart-ios reload-android restart-android \
         analyze test cargo-test integration-ios integration-android check gen \
-        devices clean-build
+        devices clean-build model model-deps
 
 # Which Android ABI to build the Rust library for. Overridable:
 #   make apk ABI=android-arm64   (physical devices, Apple Silicon emulators)
@@ -80,3 +80,20 @@ check: analyze test cargo-test
 
 gen:
 	flutter_rust_bridge_codegen generate
+
+# ── Model ─────────────────────────────────────────────────────────────────
+# The image encoder Phase 7.2 embeds meals with. Not in git (89 MB of weights
+# in a repo that is mostly Rust); written into the gitignored assets/models/
+# and bundled from there into the app. A fresh clone needs this once, before
+# the first build — `flutter build` fails on a missing asset otherwise.
+#
+# It is *exported* rather than downloaded, which is why this needs Python and a
+# few hundred MB of torch: the ready-made ONNX re-exports declare no licence,
+# and this app redistributes the weights inside a binary. tool/export_model.py
+# has the whole argument. `make model-deps` installs what it needs.
+
+model:
+	python3 tool/export_model.py
+
+model-deps:
+	python3 -m pip install --upgrade 'torch' 'transformers' 'onnx' 'onnxruntime' 'numpy'
