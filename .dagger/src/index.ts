@@ -1784,9 +1784,12 @@ VOLUME /atomic-storage
     );
 
     return (
-      dag
-        .container({ platform })
-        .build(dir)
+      dir
+        // `Container.build` was removed in the SDK that came with the v0.21
+        // engine bump — the Dockerfile build now hangs off the Directory.
+        // Branch CI never runs this function (publish is develop-only), so
+        // the bump's break only surfaced on the first develop run after it.
+        .dockerBuild({ platform })
         // .from(innerImage)
         .withFile('/usr/local/bin/atomic-server', binary)
         .withExec(['chmod', '+x', '/usr/local/bin/atomic-server'])
