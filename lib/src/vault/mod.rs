@@ -23,6 +23,8 @@ pub mod envelope;
 #[cfg(feature = "db-redb")]
 pub mod pack;
 #[cfg(feature = "db-redb")]
+pub mod secret_envelope;
+#[cfg(feature = "db-redb")]
 pub mod store;
 #[cfg(feature = "db-redb")]
 pub mod sync;
