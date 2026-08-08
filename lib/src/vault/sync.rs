@@ -211,6 +211,39 @@ mod tests {
         );
     }
 
+    /// Golden vectors for the S3 key layout, shared with the control plane.
+    ///
+    /// The layout is implemented **twice**: here, and in atomic-saas's
+    /// `build_object_key`, which decides the key a presigned URL points at.
+    /// `planning/encrypted-vault-format.md` is the source of truth for both. A
+    /// matching test lives in that repo
+    /// (`object_keys_match_the_published_format_spec`) asserting these exact
+    /// strings.
+    ///
+    /// Nothing at compile time couples the two — that repo is closed and this
+    /// one is MIT, so no shared fixture crate is possible. If either side
+    /// drifts, a client uploads to keys the control plane never issued and
+    /// nothing notices until a restore comes up short. Changing a string here
+    /// means changing it there and in the spec, in the same change.
+    #[test]
+    fn segment_key_matches_the_published_format() {
+        let device = "0303030303030303030303030303030303030303030303030303030303030303";
+        let key = segment_key("testpseudonym", device, 1);
+        assert_eq!(
+            key,
+            "vault/testpseudonym/lanes/0303030303030303030303030303030303030303030303030303030303030303/seg-000001.pack",
+            "atomic-saas build_object_key must produce this byte-for-byte"
+        );
+
+        // Six-digit zero padding is load-bearing: both S3 listing and the
+        // filesystem store sort lexically, and seg-10 ordering before seg-2
+        // would replay a lane's history backwards.
+        assert!(
+            key < segment_key("testpseudonym", device, 10),
+            "lexical order must match segment order"
+        );
+    }
+
     #[test]
     fn segment_keys_live_under_the_device_lane() {
         let k = segment_key(PSEUDONYM, DEVICE, 1);
