@@ -49,12 +49,10 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
 
   const theme = useTheme();
   const { defaultAgentId, setDefaultAgentId } = useAIAgentConfig();
-  const { isProviderAvailable, defaultChatModel } = useAISettings();
+  const { isAIAvailable } = useAISettings();
 
   const isDefault = defaultAgentId === agent.id;
-  const providerDisabled = agent.model
-    ? !isProviderAvailable(agent.model.provider)
-    : !isProviderAvailable(defaultChatModel.provider);
+  const providerDisabled = !isAIAvailable;
 
   const contextItems: DropdownItem[] = [
     {
@@ -121,7 +119,7 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
               </AgentName>
               {providerDisabled && (
                 <FaTriangleExclamation
-                  title='Provider not enabled'
+                  title='Model endpoint not configured'
                   color={theme.colors.warning}
                 />
               )}

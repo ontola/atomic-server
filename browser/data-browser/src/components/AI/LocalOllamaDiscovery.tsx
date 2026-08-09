@@ -3,11 +3,14 @@ import { Button } from '../Button';
 import { Column } from '../Row';
 import { useAISettings } from './AISettingsContext';
 
-const LOCAL_OLLAMA_URL = 'http://localhost:11434';
+const LOCAL_OLLAMA_HOST = 'http://localhost:11434';
+// Ollama exposes an OpenAI-compatible surface under `/v1`, which is what the
+// single model-endpoint setting expects as a base URL.
+const LOCAL_OLLAMA_BASE_URL = `${LOCAL_OLLAMA_HOST}/v1`;
 
 /** Only mount inside an open provider setup, never in the app-wide provider. */
 export function LocalOllamaDiscovery() {
-  const { setOllamaUrl } = useAISettings();
+  const { setAiBaseUrl } = useAISettings();
   const [status, setStatus] = useState<'checking' | 'found' | 'unavailable'>(
     'checking',
   );
@@ -17,7 +20,7 @@ export function LocalOllamaDiscovery() {
     let active = true;
     const timeout = setTimeout(() => controller.abort(), 3000);
 
-    void fetch(`${LOCAL_OLLAMA_URL}/api/tags`, { signal: controller.signal })
+    void fetch(`${LOCAL_OLLAMA_HOST}/api/tags`, { signal: controller.signal })
       .then(async response => {
         if (!response.ok) throw new Error('Ollama discovery failed');
         const data = await response.json();
@@ -47,7 +50,7 @@ export function LocalOllamaDiscovery() {
             ? 'Looking for local Ollama…'
             : 'Local Ollama could not be reached. Start Ollama and connect.'}
       </span>
-      <Button subtle onClick={() => setOllamaUrl(LOCAL_OLLAMA_URL)}>
+      <Button subtle onClick={() => setAiBaseUrl(LOCAL_OLLAMA_BASE_URL)}>
         {status === 'found' ? 'Use local Ollama' : 'Connect local Ollama'}
       </Button>
     </Column>

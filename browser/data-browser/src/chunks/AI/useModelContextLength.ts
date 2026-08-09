@@ -1,8 +1,5 @@
-import { AIProvider } from '@components/AI/aiContstants';
 import type { AIModelIdentifier } from './types';
-import { useOpenRouterModels } from './useOpenRouterModels';
-import { useOpenAICompatibleModels } from './useOpenAICompatibleModels';
-import { useOllamaModelContextLength } from './useOllamaModelContext';
+import { useAIModels } from './useAIModels';
 
 export const FALLBACK_CONTEXT_LENGTH = 100_000;
 
@@ -22,28 +19,11 @@ export function getAutoCompactTokenThreshold(
 export function useModelContextLength(
   model: AIModelIdentifier | undefined,
 ): number | undefined {
-  const { getORModelContextLength } = useOpenRouterModels();
-  const { getContextLength: getOpenAICompatibleContextLength } =
-    useOpenAICompatibleModels();
-  const ollamaLength = useOllamaModelContextLength(
-    model?.provider === AIProvider.Ollama ? model.id : undefined,
-  );
+  const { getContextLength } = useAIModels();
 
   if (!model) {
     return undefined;
   }
 
-  if (model.provider === AIProvider.OpenRouter) {
-    return getORModelContextLength(model.id);
-  }
-
-  if (model.provider === AIProvider.OpenAICompatible) {
-    return getOpenAICompatibleContextLength(model.id);
-  }
-
-  if (model.provider === AIProvider.Ollama) {
-    return ollamaLength;
-  }
-
-  return undefined;
+  return getContextLength(model.id);
 }

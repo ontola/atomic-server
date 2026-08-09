@@ -5,6 +5,7 @@ import { useEffect, useEffectEvent, useState } from 'react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import styled from 'styled-components';
 import { useAISettings } from '@components/AI/AISettingsContext';
+import { OPENROUTER_BASE_URL } from '@chunks/AI/aiEndpoint';
 import { Main } from '@components/Main';
 
 export type LinkOpenRouterSearch = {
@@ -32,12 +33,13 @@ export const LinkOpenRouter = createRoute({
 
 function LinkOpenRouterPage() {
   const [error, setError] = useState<string>();
-  const { setOpenRouterApiKey } = useAISettings();
+  const { setAiApiKey, setAiBaseUrl } = useAISettings();
   const { code } = LinkOpenRouter.useSearch();
   const navigate = useNavigateWithTransition();
 
   const setCodeAndNavigate = useEffectEvent((key: string) => {
-    setOpenRouterApiKey(key);
+    setAiBaseUrl(OPENROUTER_BASE_URL);
+    setAiApiKey(key);
     localStorage.removeItem(VERIFIER_KEY);
     sessionStorage.setItem('atomic.ai.openSetup', 'true');
 
