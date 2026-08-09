@@ -2,157 +2,91 @@ import React, { Suspense, useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { Column, Row } from '@components/Row';
 import { useAISettings } from '@components/AI/AISettingsContext';
-import { AIProvider } from '@components/AI/aiContstants';
 import { OpenRouterLoginButton } from '@components/AI/OpenRouterLoginButton';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { OutlinedSection } from '@components/OutlinedSection';
-import { useIsOllamaUrlValid } from '@components/AI/useIsOllamaUrlValid';
 import { ProviderStatus } from '@components/AI/ProviderStatus';
 import { Button } from '@components/Button';
-import { effectFetch } from '@helpers/effectFetch';
-import { DEFAULT_CHAT_MODEL } from '@components/AI/AISettingsContext';
 import type { AIModelIdentifier } from './types';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { useAIAgentConfig } from './AgentConfig';
-import { OPENAI_COMPATIBLE_PRESETS } from './providers';
+import {
+  AI_ENDPOINT_PRESETS,
+  matchPreset,
+  OPENROUTER_BASE_URL,
+} from './aiEndpoint';
+import { useAIModels } from './useAIModels';
 
 const ModelSelect = React.lazy(
   () => import('@chunks/AI/ModelSelect/ModelSelect'),
 );
 
-type SetupStep = 'providers' | 'model';
+type SetupStep = 'endpoint' | 'model';
 
-type OllamaTag = { name: string; model: string };
-
-const pickSuggestedOllamaModel = (models: OllamaTag[]): string | undefined => {
-  if (models.length === 0) {
-    return undefined;
-  }
-
-  const preferred = models.find(
-    m =>
-      /llama|qwen|mistral|gemma/i.test(m.model) &&
-      !/embed|vision/i.test(m.model),
-  );
-
-  return (preferred ?? models[0]).model;
-};
-
-const getInitialPendingModel = (
-  defaultChatModel: AIModelIdentifier,
-  openRouterAvailable: boolean,
-  isProviderAvailable: (provider: AIProvider) => boolean,
-): AIModelIdentifier => {
-  if (isProviderAvailable(defaultChatModel.provider)) {
-    return defaultChatModel;
-  }
-
-  if (openRouterAvailable) {
-    return DEFAULT_CHAT_MODEL;
-  }
-
-  return defaultChatModel;
-};
-
-const getInitialStep = (hasProvider: boolean): SetupStep => {
-  if (sessionStorage.getItem('atomic.ai.openSetup') === 'true' && hasProvider) {
+const getInitialStep = (configured: boolean): SetupStep => {
+  if (sessionStorage.getItem('atomic.ai.openSetup') === 'true' && configured) {
     return 'model';
   }
 
-  return 'providers';
+  return 'endpoint';
 };
 
 export const AISetupPanel: React.FC = () => {
   const {
-    openRouterApiKey,
-    setOpenRouterApiKey,
-    ollamaUrl,
-    setOllamaUrl,
-    openAICompatibleApiKey,
-    setOpenAICompatibleApiKey,
-    openAICompatibleBaseUrl,
-    setOpenAICompatibleBaseUrl,
+    aiBaseUrl,
+    setAiBaseUrl,
+    aiApiKey,
+    setAiApiKey,
     defaultChatModel,
     setDefaultChatModel,
-    isProviderAvailable,
-    availableProviders,
-    openRouterAvailable,
-    ollamaAvailable,
-    openAICompatibleAvailable,
+    isAIAvailable,
     setGenFeaturesModel,
   } = useAISettings();
   const { agents, saveAgents } = useAIAgentConfig();
+  const { models, configured, reachable, checking } = useAIModels();
 
   const [setupComplete, setSetupComplete] = useLocalStorage(
     'atomic.ai.setupComplete',
     false,
   );
 
-  const { checking: ollamaChecking } = useIsOllamaUrlValid(ollamaUrl);
-  const hasProvider = availableProviders.length > 0;
   const [step, setStep] = useState<SetupStep>(() =>
-    getInitialStep(hasProvider),
+    getInitialStep(isAIAvailable),
   );
-  const [pendingModel, setPendingModel] = useState<AIModelIdentifier>(() =>
-    getInitialPendingModel(
-      defaultChatModel,
-      openRouterAvailable,
-      isProviderAvailable,
-    ),
-  );
+  const [pendingModel, setPendingModel] =
+    useState<AIModelIdentifier>(defaultChatModel);
   const [syncGenFeatures, setSyncGenFeatures] = useState(false);
 
+  const preset = matchPreset(aiBaseUrl);
+  const isOpenRouter =
+    preset?.id === 'openrouter' ||
+    aiBaseUrl?.replace(/\/+$/, '') === OPENROUTER_BASE_URL;
+
   useEffect(() => {
-    if (step !== 'model' || openRouterAvailable) {
+    if (step !== 'model' || models.length === 0) {
       return;
     }
 
-    if (!ollamaAvailable || !ollamaUrl) {
-      return;
-    }
-
-    return effectFetch(`${ollamaUrl}/api/tags`)(data => {
-      const models = (data.models ?? []) as OllamaTag[];
-      const suggestedId = pickSuggestedOllamaModel(models);
-
-      if (!suggestedId) {
-        return;
+    setPendingModel(prev => {
+      if (models.some(m => m.id === prev.id)) {
+        return prev;
       }
 
-      setPendingModel(prev => {
-        if (isProviderAvailable(prev.provider)) {
-          return prev;
-        }
-
-        return { id: suggestedId, provider: AIProvider.Ollama };
-      });
+      return { id: models[0].id };
     });
-  }, [
-    step,
-    ollamaAvailable,
-    ollamaUrl,
-    openRouterAvailable,
-    isProviderAvailable,
-  ]);
+  }, [step, models]);
 
   if (setupComplete) {
     return null;
   }
 
   const handleContinue = () => {
-    setPendingModel(
-      getInitialPendingModel(
-        defaultChatModel,
-        openRouterAvailable,
-        isProviderAvailable,
-      ),
-    );
     setStep('model');
     sessionStorage.removeItem('atomic.ai.openSetup');
   };
 
   const handleBack = () => {
-    setStep('providers');
+    setStep('endpoint');
   };
 
   const handleStartChatting = () => {
@@ -180,7 +114,6 @@ export const AISetupPanel: React.FC = () => {
             <ModelSelect
               defaultModel={pendingModel}
               onSelect={setPendingModel}
-              enforceToolSupport
             />
           </Suspense>
           <CheckboxRow>
@@ -198,10 +131,7 @@ export const AISetupPanel: React.FC = () => {
             <Button subtle onClick={handleBack}>
               Back
             </Button>
-            <Button
-              onClick={handleStartChatting}
-              disabled={!isProviderAvailable(pendingModel.provider)}
-            >
+            <Button onClick={handleStartChatting} disabled={!isAIAvailable}>
               Start chatting
             </Button>
           </ActionsRow>
@@ -215,105 +145,60 @@ export const AISetupPanel: React.FC = () => {
       <Panel>
         <Title>Connect a model to use Atomic Assistant</Title>
         <Subtle>
-          Use OpenRouter, any OpenAI-compatible gateway, or Ollama (local). At
-          least one provider must be connected before you can continue.
+          Point at any OpenAI-compatible endpoint (OpenRouter, Ollama, Groq,
+          OrcaRouter, …). You need a base URL before you can continue.
         </Subtle>
-        <ProvidersGrid>
-          <OutlinedSection title='OpenRouter'>
-            <ProviderSection>
-              <ProviderStatus
-                connected={openRouterAvailable}
-                configured={Boolean(openRouterApiKey)}
+        <OutlinedSection title='Model endpoint'>
+          <ProviderSection>
+            <ProviderStatus
+              connected={reachable}
+              configured={configured}
+              checking={checking}
+            />
+            <PresetRow>
+              {AI_ENDPOINT_PRESETS.map(p => (
+                <PresetChip
+                  key={p.id}
+                  type='button'
+                  $active={preset?.id === p.id}
+                  onClick={() => setAiBaseUrl(p.baseUrl)}
+                >
+                  {p.label}
+                </PresetChip>
+              ))}
+            </PresetRow>
+            <FullWidthField>
+              <InputStyled
+                type='url'
+                value={aiBaseUrl || ''}
+                onChange={e => setAiBaseUrl(e.target.value || undefined)}
+                placeholder='https://openrouter.ai/api/v1'
+                aria-label='Model endpoint base URL'
               />
-              <CredentialsRow>
-                {!openRouterApiKey && (
-                  <OpenRouterLoginGroup>
-                    <OpenRouterLoginButton />
-                    <OrText>or</OrText>
-                  </OpenRouterLoginGroup>
-                )}
-                <ApiKeyField>
-                  <InputStyled
-                    type='password'
-                    value={openRouterApiKey || ''}
-                    onChange={e =>
-                      setOpenRouterApiKey(e.target.value || undefined)
-                    }
-                    placeholder='Paste API key'
-                    aria-label='OpenRouter API key'
-                  />
-                </ApiKeyField>
-              </CredentialsRow>
-            </ProviderSection>
-          </OutlinedSection>
-          <OutlinedSection title='OpenAI-compatible'>
-            <ProviderSection>
-              <ProviderStatus
-                connected={openAICompatibleAvailable}
-                configured={Boolean(
-                  openAICompatibleApiKey && openAICompatibleBaseUrl,
-                )}
-              />
-              <PresetRow>
-                {OPENAI_COMPATIBLE_PRESETS.map(preset => (
-                  <PresetChip
-                    key={preset.id}
-                    type='button'
-                    $active={openAICompatibleBaseUrl === preset.baseUrl}
-                    onClick={() => setOpenAICompatibleBaseUrl(preset.baseUrl)}
-                  >
-                    {preset.label}
-                  </PresetChip>
-                ))}
-              </PresetRow>
-              <FullWidthField>
-                <InputStyled
-                  type='url'
-                  value={openAICompatibleBaseUrl || ''}
-                  onChange={e =>
-                    setOpenAICompatibleBaseUrl(e.target.value || undefined)
-                  }
-                  placeholder='https://api.orcarouter.ai/v1'
-                  aria-label='OpenAI-compatible base URL'
-                />
-              </FullWidthField>
-              <FullWidthField>
+            </FullWidthField>
+            <CredentialsRow>
+              {isOpenRouter && !aiApiKey && (
+                <OpenRouterLoginGroup>
+                  <OpenRouterLoginButton />
+                  <OrText>or</OrText>
+                </OpenRouterLoginGroup>
+              )}
+              <ApiKeyField>
                 <InputStyled
                   type='password'
-                  value={openAICompatibleApiKey || ''}
-                  onChange={e =>
-                    setOpenAICompatibleApiKey(e.target.value || undefined)
-                  }
+                  value={aiApiKey || ''}
+                  onChange={e => setAiApiKey(e.target.value || undefined)}
                   placeholder={
-                    OPENAI_COMPATIBLE_PRESETS.find(
-                      p => p.baseUrl === openAICompatibleBaseUrl,
-                    )?.apiKeyPlaceholder ?? 'API key'
+                    preset?.apiKeyPlaceholder ??
+                    (preset && !preset.requiresApiKey ? 'Optional' : 'API key')
                   }
-                  aria-label='OpenAI-compatible API key'
+                  aria-label='Model endpoint API key'
                 />
-              </FullWidthField>
-            </ProviderSection>
-          </OutlinedSection>
-          <OutlinedSection title='Ollama'>
-            <ProviderSection>
-              <ProviderStatus
-                connected={ollamaAvailable}
-                configured={Boolean(ollamaUrl)}
-                checking={ollamaChecking}
-              />
-              <FullWidthField>
-                <InputStyled
-                  type='url'
-                  value={ollamaUrl || ''}
-                  onChange={e => setOllamaUrl(e.target.value || undefined)}
-                  placeholder='http://localhost:11434'
-                  aria-label='Ollama URL'
-                />
-              </FullWidthField>
-            </ProviderSection>
-          </OutlinedSection>
-        </ProvidersGrid>
-        <Button onClick={handleContinue} disabled={!hasProvider}>
+              </ApiKeyField>
+            </CredentialsRow>
+          </ProviderSection>
+        </OutlinedSection>
+        <Button onClick={handleContinue} disabled={!isAIAvailable}>
           Continue
         </Button>
       </Panel>
@@ -352,11 +237,6 @@ const ActionsRow = styled(Row)`
   flex-wrap: wrap;
 `;
 
-const ProvidersGrid = styled(Column)`
-  gap: 1rem;
-`;
-
-/** Full-width block inside OutlinedSection (its body is a horizontal flex row). */
 const ProviderSection = styled(Column)`
   gap: 0.5rem;
   flex: 1 1 100%;

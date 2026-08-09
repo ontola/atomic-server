@@ -159,9 +159,6 @@ importers:
       '@oddbird/css-anchor-positioning':
         specifier: ^0.9.0
         version: 0.9.0
-      '@openrouter/ai-sdk-provider':
-        specifier: ^2.9.0
-        version: 2.9.0(ai@6.0.191(zod@4.4.3))(zod@4.4.3)
       '@radix-ui/react-popover':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -291,9 +288,6 @@ importers:
       loro-crdt:
         specifier: ^1.12.1
         version: 1.12.1
-      ollama-ai-provider-v2:
-        specifier: ^3.5.1
-        version: 3.5.1(ai@6.0.191(zod@4.4.3))(zod@4.4.3)
       polished:
         specifier: ^4.3.1
         version: 4.3.1
@@ -2410,13 +2404,6 @@ packages:
 
   '@oddbird/css-anchor-positioning@0.9.0':
     resolution: {integrity: sha512-G5nfb4sU0auxJH7VHafPwVJjr1GhH5uPSkmytGqhNftCpT3QEh8pFtMd4YHt1dRwb4o9qVZxlGSKUIc4TIrysQ==}
-
-  '@openrouter/ai-sdk-provider@2.9.0':
-    resolution: {integrity: sha512-Seva+NCa0WUQnJIUE5GzHsUv1WTIeyqwz0ELl2VtS6NP+eF+77yCXGFVOMbvoCM7QMjlnhv7931e89R+8pJdcQ==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      ai: ^6.0.0
-      zod: ^3.25.0 || ^4.0.0
 
   '@opentelemetry/api-logs@0.217.0':
     resolution: {integrity: sha512-Cdq0jW2lknrNfrAm92MyEAvpe2cRsKjdnQLHUL6xRA4IVUnsWx6P65E7NcUO0Y+L4w1Aee5iV8FvjSwd+lrs9A==}
@@ -7748,13 +7735,6 @@ packages:
   ofetch@1.5.1:
     resolution: {integrity: sha512-2W4oUZlVaqAPAil6FUg/difl6YhqhUR7x2eZY4bQCko22UXg3hptq9KLQdqFClV+Wu85UX7hNtdGTngi/1BxcA==}
 
-  ollama-ai-provider-v2@3.5.1:
-    resolution: {integrity: sha512-C6JqhEVAQvptakeV62XnwvI2eAYQaCDHSu1F1xYw2gy82SF08JrZfRVq6GoyZdTiZoZ2aYmjHKhyGiQV2vfyog==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      ai: ^5.0.0 || ^6.0.0
-      zod: ^4.0.16
-
   omit.js@2.0.2:
     resolution: {integrity: sha512-hJmu9D+bNB40YpL9jYebQl4lsTW6yEHRTroJzNLqQJYHm7c+NQnJGfZmIWh8S3q3KoaxV1aLhV6B3+0N0/kyJg==}
 
@@ -12413,11 +12393,6 @@ snapshots:
       '@types/css-tree': 2.3.11
       css-tree: 3.2.1
       nanoid: 5.1.11
-
-  '@openrouter/ai-sdk-provider@2.9.0(ai@6.0.191(zod@4.4.3))(zod@4.4.3)':
-    dependencies:
-      ai: 6.0.191(zod@4.4.3)
-      zod: 4.4.3
 
   '@opentelemetry/api-logs@0.217.0':
     dependencies:
@@ -18086,13 +18061,6 @@ snapshots:
       destr: 2.0.5
       node-fetch-native: 1.6.7
       ufo: 1.6.4
-
-  ollama-ai-provider-v2@3.5.1(ai@6.0.191(zod@4.4.3))(zod@4.4.3):
-    dependencies:
-      '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
-      ai: 6.0.191(zod@4.4.3)
-      zod: 4.4.3
 
   omit.js@2.0.2: {}
 

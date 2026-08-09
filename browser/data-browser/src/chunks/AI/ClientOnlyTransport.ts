@@ -6,7 +6,6 @@ import {
   type ToolSet,
   type UIMessageChunk,
 } from 'ai';
-import { AIProvider } from '@components/AI/aiContstants';
 import {
   type AIAgent,
   type AIModelIdentifier,
@@ -14,29 +13,20 @@ import {
 } from './types';
 import { useRef } from 'react';
 import { useStore } from '@tomic/react';
-import { addFieldsIf } from '@helpers/addIf';
 import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 import { useSettings } from '@helpers/AppSettings';
 import { shortenSubject } from '@helpers/subjectRefs';
 import { getClassesOnDrive } from './atomicSchemaHelpers';
-import {
-  createLanguageModel,
-  type Modalities,
-  type ProviderCredentials,
-} from './providers';
-
-export type { Modalities };
+import { createEndpointModel, type AIEndpoint } from './aiEndpoint';
 
 export interface ClientOnlyTransportOptions {
-  credentials: ProviderCredentials;
+  endpoint: AIEndpoint;
   selectedAgent: AIAgent;
   model: AIModelIdentifier;
   tools: ToolSet;
   addContextToMessages: (
     messages: AtomicUIMessage[],
   ) => Promise<AtomicUIMessage[]>;
-  resolveOutputModalities: (modelId: string) => Modalities[];
-  resolveParameterSupport: (modelId: string, parameter: string) => boolean;
   /** Appended after template substitution (e.g. skills instructions). */
   additionalSystemPrompt?: string;
 }
@@ -75,12 +65,12 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
 
     const result = streamText({
       messages: await convertToModelMessages(transformedMessages),
-      model: this.getModel(this.options.model),
+      model: createEndpointModel(this.options.model.id, this.options.endpoint),
       system: await this._prepareSystemPrompt(agent.systemPrompt),
       tools: this.options.tools,
       abortSignal,
       stopWhen: stepCountIs(1000),
-      ...this.getParameters(agent, this.options.model),
+      temperature: agent.temperature,
     });
 
     const originalStream = result.toUIMessageStream({
@@ -103,61 +93,6 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
 
   public async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
     return null;
-  }
-
-  private getModel(model: AIModelIdentifier) {
-    const languageModel = createLanguageModel({
-      model,
-      credentials: this.options.credentials,
-      openRouter:
-        model.provider === AIProvider.OpenRouter
-          ? {
-              modalities: this.options.resolveOutputModalities(model.id),
-              useContextCompression: true,
-            }
-          : undefined,
-    });
-
-    if (!languageModel) {
-      throw new Error('Invalid model provider');
-    }
-
-    return languageModel;
-  }
-
-  private getParameters(agent: AIAgent, model: AIModelIdentifier) {
-    if (
-      model.provider === AIProvider.Ollama ||
-      model.provider === AIProvider.OpenAICompatible
-    ) {
-      // Gateways / local servers rarely advertise parameter support; pass
-      // temperature through and let the upstream reject unsupported fields.
-      return {
-        temperature: agent.temperature,
-      };
-    }
-
-    if (model.provider === AIProvider.OpenRouter) {
-      return {
-        ...addFieldsIf(
-          this.options.resolveParameterSupport(model.id, 'temperature'),
-          {
-            temperature: agent.temperature,
-          },
-        ),
-        ...addFieldsIf(
-          this.options.resolveParameterSupport(model.id, 'reasoning'),
-          {
-            reasoning: {
-              effort: 'low',
-              summary: 'auto',
-            },
-          },
-        ),
-      };
-    }
-
-    throw new Error('Invalid model provider');
   }
 }
 

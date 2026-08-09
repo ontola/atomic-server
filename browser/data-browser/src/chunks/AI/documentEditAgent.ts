@@ -243,7 +243,7 @@ async function runDocumentEdit(
   const model = getModel(editModel);
 
   if (!model) {
-    return 'Error: The selected chat model is not available. Check that its provider is enabled and configured in AI settings.';
+    return 'Error: The selected chat model is not available. Check that a model endpoint is configured in AI settings.';
   }
 
   const loroDoc = resource.getLoroDoc();

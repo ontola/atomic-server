@@ -1,17 +1,94 @@
 import { createContext, ReactNode, useContext, type JSX } from 'react';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { AIProvider } from './aiContstants';
 import type { AIModelIdentifier, MCPServer } from '@chunks/AI/types';
 import {
   defaultMCPServers,
   mergeDefaultMCPServers,
 } from '@chunks/AI/defaultMCPServers';
-import { useProviderAvailability } from './useProviderAvailability';
+import {
+  isEndpointConfigured,
+  normalizeModelIdentifier,
+  OPENROUTER_BASE_URL,
+} from '@chunks/AI/aiEndpoint';
 
 export const DEFAULT_CHAT_MODEL: AIModelIdentifier = {
-  id: '~google/gemini-flash-latest',
-  provider: AIProvider.OpenRouter,
+  id: 'google/gemini-flash-latest',
 };
+
+function readJson<T>(key: string): T | undefined {
+  try {
+    const item = localStorage.getItem(key);
+
+    if (!item || item === 'undefined') {
+      return undefined;
+    }
+
+    return JSON.parse(item) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+/** One-time migration from the old multi-provider localStorage keys. */
+function migrateEndpointDefaults(): {
+  baseUrl: string | undefined;
+  apiKey: string | undefined;
+} {
+  const existingBase = readJson<string | undefined>(
+    'atomic.ai.endpoint.base-url',
+  );
+  const existingKey = readJson<string | undefined>(
+    'atomic.ai.endpoint.api-key',
+  );
+
+  if (existingBase || existingKey) {
+    return { baseUrl: existingBase, apiKey: existingKey };
+  }
+
+  const openRouterKey = readJson<string | undefined>(
+    'atomic.ai.openrouter-api-key',
+  );
+  const openAICompatibleBase = readJson<string | undefined>(
+    'atomic.ai.openai-compatible-base-url',
+  );
+  const openAICompatibleKey = readJson<string | undefined>(
+    'atomic.ai.openai-compatible-api-key',
+  );
+  const ollamaUrl = readJson<string | undefined>('atomic.ai.ollama-url');
+
+  if (openRouterKey) {
+    return { baseUrl: OPENROUTER_BASE_URL, apiKey: openRouterKey };
+  }
+
+  if (openAICompatibleBase) {
+    return {
+      baseUrl: openAICompatibleBase,
+      apiKey: openAICompatibleKey,
+    };
+  }
+
+  if (ollamaUrl) {
+    const trimmed = ollamaUrl.replace(/\/+$/, '');
+    const baseUrl = trimmed.endsWith('/v1')
+      ? trimmed
+      : trimmed.endsWith('/api')
+        ? `${trimmed.slice(0, -4)}/v1`
+        : `${trimmed}/v1`;
+
+    return { baseUrl, apiKey: undefined };
+  }
+
+  return { baseUrl: undefined, apiKey: undefined };
+}
+
+const migratedEndpoint = migrateEndpointDefaults();
+
+function readStoredModel(
+  key: string,
+  fallback: AIModelIdentifier,
+): AIModelIdentifier {
+  return normalizeModelIdentifier(readJson(key)) ?? fallback;
+}
 
 interface AISettingsContextType {
   /** Enable all AI features in the app */
@@ -30,23 +107,14 @@ interface AISettingsContextType {
   /** Default model for built-in agents and new custom agents */
   defaultChatModel: AIModelIdentifier;
   setDefaultChatModel: (model: AIModelIdentifier) => void;
-  isProviderAvailable: (provider: AIProvider) => boolean;
-  availableProviders: AIProvider[];
-  openRouterAvailable: boolean;
-  ollamaAvailable: boolean;
-  openAICompatibleAvailable: boolean;
-  /** The OpenRouter API key for making requests to OpenRouter */
-  openRouterApiKey: string | undefined;
-  setOpenRouterApiKey: (key: string | undefined) => void;
-  /** The URL of the Ollama server */
-  ollamaUrl: string | undefined;
-  setOllamaUrl: (url: string | undefined) => void;
-  /** API key for any OpenAI-compatible gateway (OrcaRouter, Groq, LiteLLM, …) */
-  openAICompatibleApiKey: string | undefined;
-  setOpenAICompatibleApiKey: (key: string | undefined) => void;
-  /** Base URL ending in `/v1` for an OpenAI-compatible chat/completions API */
-  openAICompatibleBaseUrl: string | undefined;
-  setOpenAICompatibleBaseUrl: (url: string | undefined) => void;
+  /** True when base URL (+ API key if required) are set. */
+  isAIAvailable: boolean;
+  /** OpenAI-compatible base URL (usually ends in `/v1`) */
+  aiBaseUrl: string | undefined;
+  setAiBaseUrl: (url: string | undefined) => void;
+  /** API key for the endpoint (optional for local servers like Ollama) */
+  aiApiKey: string | undefined;
+  setAiApiKey: (key: string | undefined) => void;
   shouldGenerateTitles: boolean;
   setShouldGenerateTitles: (b: boolean) => void;
   genFeaturesModel: AIModelIdentifier;
@@ -68,27 +136,14 @@ const initialState: AISettingsContextType = {
   setShowFollowUpPrompts: () => undefined,
   defaultChatModel: DEFAULT_CHAT_MODEL,
   setDefaultChatModel: () => undefined,
-  isProviderAvailable: () => false,
-  availableProviders: [],
-  openRouterAvailable: false,
-  ollamaAvailable: false,
-  openAICompatibleAvailable: false,
-  openRouterApiKey: undefined,
-  setOpenRouterApiKey: () => undefined,
-  // Unset until the user asks for local AI — see the note on the real default
-  // in `AISettingsContextProvider` below.
-  ollamaUrl: undefined,
-  setOllamaUrl: () => undefined,
-  openAICompatibleApiKey: undefined,
-  setOpenAICompatibleApiKey: () => undefined,
-  openAICompatibleBaseUrl: undefined,
-  setOpenAICompatibleBaseUrl: () => undefined,
+  isAIAvailable: false,
+  aiBaseUrl: undefined,
+  setAiBaseUrl: () => undefined,
+  aiApiKey: undefined,
+  setAiApiKey: () => undefined,
   shouldGenerateTitles: true,
   setShouldGenerateTitles: () => undefined,
-  genFeaturesModel: {
-    id: 'google/gemma-3-4b-it',
-    provider: AIProvider.OpenRouter,
-  },
+  genFeaturesModel: { id: 'google/gemma-3-4b-it' },
   setGenFeaturesModel: () => undefined,
 };
 
@@ -108,54 +163,44 @@ export const AISettingsContextProvider = (
     'atomic.ai.mcpServers',
     defaultMCPServers,
   );
-  // Deliberately unset by default, even though `http://localhost:11434` is the
-  // address almost every Ollama install uses — it stays as the input's
-  // placeholder in AISettings / AISetupPanel instead.
-  //
-  // A default here is not inert: this provider is mounted app-wide and runs a
-  // reachability probe against the URL (`useProviderAvailability` below), so a
-  // default meant every visitor's browser fetched `localhost:11434` on page
-  // load. Browsers now gate requests from a public origin into the loopback
-  // address space, so opening any page raised "<site> wants to access other
-  // apps and services on this device" — before the visitor had asked for
-  // anything AI-related. Beyond being alarming for someone who just opened a
-  // document, a reflexive "Block" is remembered per-site and then silently
-  // breaks Ollama for the people who actually want it.
-  //
-  // Unset means no probe (`useIsOllamaUrlValid` returns early on a falsy URL),
-  // so the permission prompt only ever appears in response to someone
-  // deliberately configuring local AI.
-  const [ollamaUrl, setOllamaUrl] = useLocalStorage<string | undefined>(
-    'atomic.ai.ollama-url',
-    undefined,
+
+  // Unset by default: a default localhost URL would probe loopback on every
+  // page load and trigger the browser's local-network permission prompt.
+  const [aiBaseUrl, setAiBaseUrl] = useLocalStorage<string | undefined>(
+    'atomic.ai.endpoint.base-url',
+    migratedEndpoint.baseUrl,
   );
+  const [aiApiKey, setAiApiKey] = useLocalStorage<string | undefined>(
+    'atomic.ai.endpoint.api-key',
+    migratedEndpoint.apiKey,
+  );
+
   const [showTokenUsage, setShowTokenUsage] = useLocalStorage(
     'atomic.ai.showTokenUsage',
     true,
   );
-  const [openRouterApiKey, setOpenRouterApiKey] = useLocalStorage<
-    string | undefined
-  >('atomic.ai.openrouter-api-key', undefined);
 
-  const [openAICompatibleApiKey, setOpenAICompatibleApiKey] = useLocalStorage<
-    string | undefined
-  >('atomic.ai.openai-compatible-api-key', undefined);
-
-  const [openAICompatibleBaseUrl, setOpenAICompatibleBaseUrl] = useLocalStorage<
-    string | undefined
-  >('atomic.ai.openai-compatible-base-url', undefined);
-
-  const [defaultChatModel, setDefaultChatModel] =
+  const [defaultChatModel, setDefaultChatModelRaw] =
     useLocalStorage<AIModelIdentifier>(
       'atomic.ai.defaultChatModel',
-      DEFAULT_CHAT_MODEL,
+      readStoredModel('atomic.ai.defaultChatModel', DEFAULT_CHAT_MODEL),
     );
 
-  const [genFeaturesModel, setGenFeaturesModel] =
-    useLocalStorage<AIModelIdentifier>('atomic.ai.genFeaturesModel', {
-      id: 'google/gemma-3-4b-it',
-      provider: AIProvider.OpenRouter,
-    });
+  const [genFeaturesModel, setGenFeaturesModelRaw] =
+    useLocalStorage<AIModelIdentifier>(
+      'atomic.ai.genFeaturesModel',
+      readStoredModel('atomic.ai.genFeaturesModel', {
+        id: 'google/gemma-3-4b-it',
+      }),
+    );
+
+  const setDefaultChatModel = (model: AIModelIdentifier) => {
+    setDefaultChatModelRaw({ id: model.id });
+  };
+
+  const setGenFeaturesModel = (model: AIModelIdentifier) => {
+    setGenFeaturesModelRaw({ id: model.id });
+  };
 
   const [showFollowUpPrompts, setShowFollowUpPrompts] = useLocalStorage(
     'atomic.ai.showFollowUpPrompts',
@@ -167,50 +212,34 @@ export const AISettingsContextProvider = (
     true,
   );
 
-  const {
-    openRouterAvailable,
-    ollamaAvailable,
-    openAICompatibleAvailable,
-    isProviderAvailable,
-    availableProviders,
-  } = useProviderAvailability(
-    openRouterApiKey,
-    ollamaUrl,
-    openAICompatibleApiKey,
-    openAICompatibleBaseUrl,
-  );
+  const isAIAvailable = isEndpointConfigured(aiBaseUrl, aiApiKey);
 
   const mcpServers = mergeDefaultMCPServers(storedMcpServers);
   const setMcpServers = (servers: MCPServer[]) =>
     setStoredMcpServers(mergeDefaultMCPServers(servers));
 
   const context = {
-    openRouterApiKey,
-    setOpenRouterApiKey,
     mcpServers,
     setMcpServers,
     enableAI,
     setEnableAI,
     showTokenUsage,
     setShowTokenUsage,
-    ollamaUrl,
-    setOllamaUrl,
-    openAICompatibleApiKey,
-    setOpenAICompatibleApiKey,
-    openAICompatibleBaseUrl,
-    setOpenAICompatibleBaseUrl,
+    aiBaseUrl,
+    setAiBaseUrl,
+    aiApiKey,
+    setAiApiKey,
     showFollowUpPrompts,
     setShowFollowUpPrompts,
-    defaultChatModel,
+    defaultChatModel:
+      normalizeModelIdentifier(defaultChatModel) ?? DEFAULT_CHAT_MODEL,
     setDefaultChatModel,
-    isProviderAvailable,
-    availableProviders,
-    openRouterAvailable,
-    ollamaAvailable,
-    openAICompatibleAvailable,
+    isAIAvailable,
     shouldGenerateTitles,
     setShouldGenerateTitles,
-    genFeaturesModel,
+    genFeaturesModel: normalizeModelIdentifier(genFeaturesModel) ?? {
+      id: 'google/gemma-3-4b-it',
+    },
     setGenFeaturesModel,
   };
 
