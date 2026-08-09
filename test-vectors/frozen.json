@@ -1,0 +1,67 @@
+{
+  "vectors": [
+    {
+      "name": "property",
+      "body": {
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "title",
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
+      },
+      "id": "did:ad:frozen:9c227a3e5d127dfdeeecf7fc93ae8bf8c97f31083e44e2440cf70a2d30c4b702"
+    },
+    {
+      "name": "class-with-ref",
+      "body": {
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Class"
+        ],
+        "https://atomicdata.dev/properties/shortname": "todo",
+        "https://atomicdata.dev/properties/requires": [
+          "did:ad:frozen:0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "https://atomicdata.dev/properties/recommends": []
+      },
+      "id": "did:ad:frozen:625c076abddc8a830468a5c8ad352150a9d4e81e839de1b84b7b1dc843b14d5a"
+    },
+    {
+      "name": "unicode-and-number",
+      "body": {
+        "é": 1,
+        "a": 1.5,
+        "z": [
+          3,
+          1,
+          2
+        ],
+        "b": true
+      },
+      "id": "did:ad:frozen:9d588cb60acc4ab171d45789223f9d86a15ea5acfe19552bbf7b974fd71f8d11"
+    },
+    {
+      "name": "cycle-unit",
+      "body": {
+        "urn:atomic-freeze:unit": [
+          {
+            "https://atomicdata.dev/properties/isA": [
+              "https://atomicdata.dev/classes/Property"
+            ],
+            "https://atomicdata.dev/properties/shortname": "friend",
+            "https://atomicdata.dev/properties/classtype": "did:ad:frozen:self:1"
+          },
+          {
+            "https://atomicdata.dev/properties/isA": [
+              "https://atomicdata.dev/classes/Class"
+            ],
+            "https://atomicdata.dev/properties/shortname": "person",
+            "https://atomicdata.dev/properties/requires": [
+              "did:ad:frozen:self:0"
+            ]
+          }
+        ]
+      },
+      "id": "did:ad:frozen:edc1f1b79e78ef17556e05c564d9a69c21ba0eb19aa13d628eafb1e8689d30b8"
+    }
+  ]
+}

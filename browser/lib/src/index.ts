@@ -48,6 +48,8 @@ export * from './error.js';
 export * from './datatypes.js';
 export * from './parse.js';
 export * from './search.js';
+export * from './schema.js';
+export * from './schema-lock.js';
 export * from './resource.js';
 export * from './forks.js';
 export * from './store.js';

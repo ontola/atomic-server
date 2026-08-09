@@ -1,0 +1,68 @@
+{
+  "cases": [
+    {
+      "name": "acyclic",
+      "input": [
+        {
+          "localId": "p:title",
+          "content": {
+            "https://atomicdata.dev/properties/shortname": "title",
+            "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
+          }
+        },
+        {
+          "localId": "c:todo",
+          "content": {
+            "https://atomicdata.dev/properties/shortname": "todo",
+            "https://atomicdata.dev/properties/requires": [
+              "p:title"
+            ],
+            "https://atomicdata.dev/properties/recommends": []
+          }
+        },
+        {
+          "localId": "o:app",
+          "content": {
+            "https://atomicdata.dev/properties/shortname": "todoApp",
+            "https://atomicdata.dev/properties/classes": [
+              "c:todo"
+            ],
+            "https://atomicdata.dev/properties/properties": [
+              "p:title"
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "p:title": "did:ad:frozen:d8499b11374d5d211421ebe66b4c7f1eb84c39dc7b10ac41df89d56e37e98cc0",
+        "c:todo": "did:ad:frozen:90b6416aa4e40216c4484d993be0c5556fc611c373f96afbfa1cf0409dbc0f7d",
+        "o:app": "did:ad:frozen:4b87a1fd6c43770d8a6b7b08fda884f95e6901baf5d5f0d2c5e13d747704e043"
+      }
+    },
+    {
+      "name": "cyclic",
+      "input": [
+        {
+          "localId": "p:friend",
+          "content": {
+            "https://atomicdata.dev/properties/shortname": "friend",
+            "https://atomicdata.dev/properties/classtype": "c:person"
+          }
+        },
+        {
+          "localId": "c:person",
+          "content": {
+            "https://atomicdata.dev/properties/shortname": "person",
+            "https://atomicdata.dev/properties/requires": [
+              "p:friend"
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "p:friend": "did:ad:frozen:651b32175d89aa5d234215056c37d88effc9b1636c15300e2b0df67586d38ba0",
+        "c:person": "did:ad:frozen:651b32175d89aa5d234215056c37d88effc9b1636c15300e2b0df67586d38ba0"
+      }
+    }
+  ]
+}

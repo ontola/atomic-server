@@ -1,6 +1,8 @@
 import { Agent, Store, type OptionalClass, type Resource } from '@tomic/lib';
 import { atomicConfig } from './config.js';
 
+const DEFAULT_SERVER_URL = 'http://localhost:9883';
+
 const getCommandIndex = (): number | undefined => {
   const agentIndex = process.argv.indexOf('--agent');
   if (agentIndex !== -1) return agentIndex;
@@ -11,7 +13,7 @@ const getCommandIndex = (): number | undefined => {
   return undefined;
 };
 
-const getAgent = async (): Promise<Agent | undefined> => {
+export const getAgent = async (): Promise<Agent | undefined> => {
   let secret;
   const agentCommandIndex = getCommandIndex();
 
@@ -26,7 +28,9 @@ const getAgent = async (): Promise<Agent | undefined> => {
   return Agent.fromSecret(secret, 'js');
 };
 
-export const store = new Store({ serverUrl: atomicConfig.serverUrl });
+export const store = new Store({
+  serverUrl: atomicConfig.serverUrl ?? DEFAULT_SERVER_URL,
+});
 
 // CLI reads are ordinary HTTP requests. Do not make them wait for the
 // background WebSocket handshake or Store will classify the first ontology
@@ -49,3 +53,16 @@ getAgent().then(agent => {
     store.setAgent(agent);
   }
 });
+
+export const createConfiguredStore = async (): Promise<Store> => {
+  const configuredStore = new Store({
+    serverUrl: atomicConfig.serverUrl ?? DEFAULT_SERVER_URL,
+  });
+  const agent = await getAgent();
+
+  if (agent) {
+    configuredStore.setAgent(agent);
+  }
+
+  return configuredStore;
+};

@@ -15,6 +15,7 @@ import {
   FaPlus,
   FaRegStar,
   FaShare,
+  FaSnowflake,
   FaStar,
   FaTrash,
   FaTurnUp,
@@ -235,6 +236,19 @@ export const resourceActions: ActionDefinition[] = [
     icon: () => <FaCode />,
     available: ctx => !!ctx.showCodeUsageDialog,
     run: ctx => ctx.showCodeUsageDialog?.(),
+  },
+  {
+    id: 'freeze',
+    scope: 'resource',
+    section: 'action',
+    label: () => 'Freeze',
+    helper: () =>
+      'Create an immutable, content-addressed (did:ad:frozen) copy of this resource and the structure it references.',
+    keywords: ['frozen', 'immutable', 'snapshot', 'hash', 'content-addressed'],
+    icon: () => <FaSnowflake />,
+    available: ctx =>
+      !!ctx.showFreezeDialog && !ctx.subject.startsWith('did:ad:frozen:'),
+    run: ctx => ctx.showFreezeDialog?.(),
   },
   {
     id: 'addToChat',

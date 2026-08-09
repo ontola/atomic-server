@@ -18,6 +18,12 @@ commands.set('init', () =>
   import('./commands/init.js').then(m => m.initCommand(process.argv.slice(3))),
 );
 
+commands.set('schema', () =>
+  import('./commands/schema.js').then(m =>
+    m.schemaCommand(process.argv.slice(3)),
+  ),
+);
+
 if (commands.has(command)) {
   await commands.get(command)!();
   process.exit(process.exitCode ?? 0);

@@ -30,6 +30,7 @@ import {
   FaComments,
   FaMagnifyingGlass,
   FaShare,
+  FaSnowflake,
   FaTags,
 } from 'react-icons/fa6';
 import * as RadixPopover from '@radix-ui/react-popover';
@@ -367,6 +368,15 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         {parent && <DirectParent subject={parent} />}
         <EditableBreadcrumb resource={resource} fallback={title} />
       </CrumbGroup>
+      {resource.subject.startsWith('did:ad:frozen:') && (
+        <FrozenBadge
+          data-testid='frozen-badge'
+          title='Content-addressed and immutable — verified by hash'
+        >
+          <FaSnowflake />
+          <span>Frozen</span>
+        </FrozenBadge>
+      )}
       <Spacer />
       <ButtonArea $iconOnly={iconOnly}>
         <FollowStatus />
@@ -436,6 +446,21 @@ function CommentsButton({ subject }: { subject: string }): JSX.Element {
     </CommentsLabelButton>
   );
 }
+
+const FrozenBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  padding: 0.1rem 0.5rem;
+  margin-left: 0.5rem;
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg1};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.8rem;
+  white-space: nowrap;
+`;
 
 const NavBarWrapper = styled.nav`
   height: 100%;
