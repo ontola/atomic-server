@@ -11,6 +11,13 @@ pub const DID_AD_COMMIT_PREFIX: &str = "did:ad:commit:";
 /// 32-byte BLAKE3 hash of the bytes, hex-encoded (64 chars).
 pub const DID_AD_BLOB_PREFIX: &str = "did:ad:blob:";
 
+/// The prefix for Frozen DIDs: `did:ad:frozen:`. The remainder is the
+/// 32-byte BLAKE3 hash, hex-encoded (64 chars), of the RFC 8785 (JCS)
+/// canonicalization of an immutable JSON-AD body. Unlike a blob, a frozen
+/// subject resolves to structured JSON-AD that materializes into a read-only
+/// Resource. See `crate::frozen`.
+pub const DID_AD_FROZEN_PREFIX: &str = "did:ad:frozen:";
+
 /// The prefix for Node DIDs: `did:ad:node:`.
 pub const DID_AD_NODE_PREFIX: &str = "did:ad:node:";
 
@@ -29,6 +36,7 @@ pub enum DidKind {
     Agent,
     Commit,
     Blob,
+    Frozen,
     Node,
     Other,
 }
@@ -39,10 +47,11 @@ pub enum DidKind {
 /// They are differentiated by their scheme:
 /// - `internal:` for resources hosted on this server.
 /// - `http:` or `https:` for resources on other servers.
-/// - `did:` for Decentralized Identifiers. Five `did:ad:` forms exist:
+/// - `did:` for Decentralized Identifiers. Six `did:ad:` forms exist:
 ///   `did:ad:agent:{publicKey}`, `did:ad:commit:{signature}`,
-///   `did:ad:blob:{blake3-hex}`, `did:ad:node:{nodeId}`, and the default
-///   `did:ad:{genesis}` for Resources. See `docs/src/did.md`.
+///   `did:ad:blob:{blake3-hex}`, `did:ad:frozen:{blake3-hex}`,
+///   `did:ad:node:{nodeId}`, and the default `did:ad:{genesis}` for
+///   Resources. See `docs/src/did.md`.
 #[derive(Clone, Debug)]
 pub enum Subject {
     /// Internal representation for local data.
@@ -55,7 +64,8 @@ pub enum Subject {
     /// External resource identifier (usually over HTTP).
     External(Url),
     /// Decentralized Identifier (including `did:ad` resources, agents,
-    /// commits, blobs, and nodes). Contains an optional drive routing hint.
+    /// commits, blobs, frozen resources, and nodes). Contains an optional
+    /// drive routing hint.
     Did {
         url: Url,
         drive_hint: Option<String>,
@@ -247,6 +257,11 @@ impl Subject {
         {
             Some(DidKind::Blob)
         } else if identifier
+            .strip_prefix(DID_AD_FROZEN_PREFIX)
+            .is_some_and(|value| !value.is_empty())
+        {
+            Some(DidKind::Frozen)
+        } else if identifier
             .strip_prefix(DID_AD_NODE_PREFIX)
             .is_some_and(|value| !value.is_empty())
         {
@@ -320,6 +335,42 @@ impl Subject {
         // Url::parse on a `did:ad:blob:<hex>` always succeeds (hex is RFC-3986 safe).
         Subject::Did {
             url: Url::parse(&hex).expect("valid did:ad:blob: URL"),
+            drive_hint: None,
+        }
+    }
+
+    /// Returns true if this is a DID Frozen subject (did:ad:frozen:).
+    pub fn is_frozen_did(&self) -> bool {
+        self.did_kind() == Some(DidKind::Frozen)
+    }
+
+    /// If this is a `did:ad:frozen:` subject, returns the hex-encoded BLAKE3
+    /// hash (the part after the prefix, with any `?drive=` hint stripped).
+    /// Returns `None` for any other variant.
+    pub fn frozen_hash_hex(&self) -> Option<&str> {
+        match self {
+            Subject::Did { url, .. } => {
+                let rest = url.as_str().strip_prefix(DID_AD_FROZEN_PREFIX)?;
+                // Drop query (`?drive=...`) / fragment if present.
+                let end = rest.find(['?', '#']).unwrap_or(rest.len());
+                Some(&rest[..end])
+            }
+            _ => None,
+        }
+    }
+
+    /// Construct a `did:ad:frozen:` subject from a 32-byte BLAKE3 hash.
+    pub fn from_frozen_hash(hash: &[u8; 32]) -> Self {
+        let mut hex = String::with_capacity(DID_AD_FROZEN_PREFIX.len() + 64);
+        hex.push_str(DID_AD_FROZEN_PREFIX);
+        for byte in hash {
+            // Inline lowercase-hex; avoids pulling in the `hex` crate just for this.
+            hex.push(char::from_digit((byte >> 4) as u32, 16).unwrap());
+            hex.push(char::from_digit((byte & 0xf) as u32, 16).unwrap());
+        }
+        // Url::parse on a `did:ad:frozen:<hex>` always succeeds (hex is RFC-3986 safe).
+        Subject::Did {
+            url: Url::parse(&hex).expect("valid did:ad:frozen: URL"),
             drive_hint: None,
         }
     }
@@ -879,6 +930,7 @@ mod tests {
             ("did:ad:agent:key", DidKind::Agent),
             ("did:ad:commit:signature", DidKind::Commit),
             ("did:ad:blob:hash", DidKind::Blob),
+            ("did:ad:frozen:hash", DidKind::Frozen),
             ("did:ad:node:node-id", DidKind::Node),
             ("did:ad:future:value", DidKind::Other),
         ];
@@ -958,6 +1010,44 @@ mod tests {
         assert_eq!(routed.drive_hint(), Some("did:ad:abc"));
         assert_eq!(
             routed.blob_hash_hex(),
+            Some("af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262")
+        );
+    }
+
+    #[test]
+    fn test_frozen_did_parsing() {
+        let frozen_did =
+            "did:ad:frozen:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262";
+        let subject = Subject::from_raw(frozen_did, None);
+
+        assert!(matches!(subject, Subject::Did { .. }));
+        assert!(subject.is_frozen_did());
+        assert!(!subject.is_blob_did());
+        assert!(!subject.is_commit_did());
+        assert_eq!(
+            subject.frozen_hash_hex(),
+            Some("af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262")
+        );
+
+        // Roundtrip via raw bytes.
+        let mut bytes = [0u8; 32];
+        for (i, byte) in bytes.iter_mut().enumerate() {
+            *byte = i as u8;
+        }
+        let from_bytes = Subject::from_frozen_hash(&bytes);
+        assert!(from_bytes.is_frozen_did());
+        assert_eq!(
+            from_bytes.frozen_hash_hex(),
+            Some("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+        );
+
+        // Drive hint is preserved, hash extraction strips it.
+        let with_drive = format!("{}?drive=did:ad:abc", frozen_did);
+        let routed = Subject::from_raw(&with_drive, None);
+        assert!(routed.is_frozen_did());
+        assert_eq!(routed.drive_hint(), Some("did:ad:abc"));
+        assert_eq!(
+            routed.frozen_hash_hex(),
             Some("af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262")
         );
     }

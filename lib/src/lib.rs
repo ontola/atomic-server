@@ -82,6 +82,7 @@ pub mod discovery;
 pub mod endpoints;
 pub mod errors;
 pub mod expression;
+pub mod frozen;
 pub mod genesis;
 pub mod hierarchy;
 pub mod history;

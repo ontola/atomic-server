@@ -1,6 +1,6 @@
 import { generateBaseObject } from './generateBaseObject.js';
 import { generateClasses } from './generateClasses.js';
-import { fetchResource } from './store.js';
+import { store } from './store.js';
 import { camelCaseify, dedupe } from './utils.js';
 import { generatePropTypeMapping } from './generatePropTypeMapping.js';
 import { generateSubjectToNameMapping } from './generateSubjectToNameMapping.js';
@@ -8,7 +8,7 @@ import { generateClassExports } from './generateClassExports.js';
 
 import { atomicConfig } from './config.js';
 import { PropertyRecord } from './PropertyRecord.js';
-import { Core } from '@tomic/lib';
+import { Core, type Store } from '@tomic/lib';
 
 enum Inserts {
   MODULE_ALIAS = '{{1}}',
@@ -44,11 +44,15 @@ declare module '${Inserts.MODULE_ALIAS}' {
 export const generateOntology = async (
   subject: string,
   propertyRecord: PropertyRecord,
+  activeStore: Store = store,
 ): Promise<{
   filename: string;
   content: string;
 }> => {
-  const ontology = await fetchResource<Core.Ontology>(subject);
+  const ontology = await activeStore.fetchResourceFromServer<Core.Ontology>(
+    subject,
+    { noWebSocket: true },
+  );
 
   const properties = dedupe(ontology.props.properties ?? []);
 
@@ -56,14 +60,27 @@ export const generateOntology = async (
     propertyRecord.reportPropertyDefined(prop);
   }
 
-  const [baseObjStr, reverseMapping] = await generateBaseObject(ontology);
-  const classesStr = generateClasses(ontology, reverseMapping, propertyRecord);
+  const [baseObjStr, reverseMapping] = await generateBaseObject(
+    ontology,
+    activeStore,
+  );
+  const classesStr = generateClasses(
+    ontology,
+    reverseMapping,
+    propertyRecord,
+    activeStore,
+  );
   const [propertiesStr, propertiesImports] = generatePropTypeMapping(
     ontology,
     reverseMapping,
+    activeStore,
   );
   const subToNameStr = generateSubjectToNameMapping(ontology, reverseMapping);
-  const classExportsStr = generateClassExports(ontology, reverseMapping);
+  const classExportsStr = generateClassExports(
+    ontology,
+    reverseMapping,
+    activeStore,
+  );
 
   const content = TEMPLATE.replaceAll(
     Inserts.MODULE_ALIAS,

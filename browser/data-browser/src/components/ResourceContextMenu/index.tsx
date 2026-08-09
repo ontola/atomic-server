@@ -10,6 +10,7 @@ import {
   ConfirmationDialogTheme,
 } from '../ConfirmationDialog';
 import { ResourceCodeUsageDialog } from '../../views/CodeUsage/ResourceCodeUsageDialog';
+import { FreezeDialog } from './FreezeDialog';
 import { addIf } from '../../helpers/addIf';
 import { resourceActions } from '../../actions/resourceActions';
 import { useActionContext } from '../../actions/useActionContext';
@@ -50,6 +51,7 @@ export const ContextMenuOptions = {
   OpenOriginal: 'openOriginal',
   SetEmoji: 'setEmoji',
   SetCover: 'setCover',
+  Freeze: 'freeze',
 } as const;
 
 export type ContextMenuOptionsUnion =
@@ -95,12 +97,14 @@ export function ResourceContextMenu({
 }: ResourceContextMenuProps) {
   const [confirmingAction, setConfirmingAction] = useState<ActionDefinition>();
   const [showCodeUsageDialog, setShowCodeUsageDialog] = useState(false);
+  const [showFreezeDialog, setShowFreezeDialog] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
   const openCodeUsageDialog = useCallback(
     () => setShowCodeUsageDialog(true),
     [],
   );
+  const openFreezeDialog = useCallback(() => setShowFreezeDialog(true), []);
   // undefined = never opened (dialog not mounted), boolean = mounted.
   const [emojiPickerOpen, setEmojiPickerOpen] = useState<boolean>();
   const [coverPickerOpen, setCoverPickerOpen] = useState<boolean>();
@@ -110,6 +114,7 @@ export function ResourceContextMenu({
     external,
     onAfterDelete,
     showCodeUsageDialog: openCodeUsageDialog,
+    showFreezeDialog: openFreezeDialog,
     openEmojiPicker,
     openCoverPicker,
   });
@@ -267,6 +272,11 @@ export function ResourceContextMenu({
           onShowChange={setCoverPickerOpen}
         />
       )}
+      <FreezeDialog
+        subject={subject}
+        show={showFreezeDialog}
+        bindShow={setShowFreezeDialog}
+      />
     </>
   );
 }

@@ -15,6 +15,7 @@ import type { ActionContext } from './types';
 export interface ActionContextOverrides {
   external?: boolean;
   showCodeUsageDialog?: () => void;
+  showFreezeDialog?: () => void;
   openEmojiPicker?: () => void;
   openCoverPicker?: () => void;
   onAfterDelete?: () => void;
@@ -31,7 +32,10 @@ export function useActionContext(
   const store = useStore();
   const navigate = useNavigateWithTransition();
   const resource = useResource(subject);
-  const canWrite = useCanWrite(resource);
+  const writeRight = useCanWrite(resource);
+  // Frozen resources are content-addressed and immutable — never editable,
+  // regardless of rights.
+  const canWrite = writeRight && !subject.startsWith('did:ad:frozen:');
   const [currentSubject] = useCurrentSubject();
   const { enableScope } = useQueryScopeHandler(subject);
   const addChild = useNewRoute(subject);

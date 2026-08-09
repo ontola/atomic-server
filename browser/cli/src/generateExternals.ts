@@ -1,7 +1,7 @@
-import { Core, Datatype, Resource } from '@tomic/lib';
+import { Core, Datatype, Resource, type Store } from '@tomic/lib';
 import { atomicConfig } from './config.js';
 import { DatatypeToTSTypeMap } from './DatatypeToTSTypeMap.js';
-import { fetchResource } from './store.js';
+import { store } from './store.js';
 import { camelCaseify } from './utils.js';
 
 enum Inserts {
@@ -65,9 +65,16 @@ const generateBaseObjectProperties = (
   return lines.join('\n');
 };
 
-export const generateExternals = async (props: string[]) => {
+export const generateExternals = async (
+  props: string[],
+  activeStore: Store = store,
+) => {
   const properties: Resource<Core.Property>[] = await Promise.all(
-    props.map(p => fetchResource<Core.Property>(p)),
+    props.map(p =>
+      activeStore.fetchResourceFromServer<Core.Property>(p, {
+        noWebSocket: true,
+      }),
+    ),
   );
 
   const baseOjbectProperties = generateBaseObjectProperties(properties);

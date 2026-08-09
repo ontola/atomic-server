@@ -41,6 +41,8 @@ export interface ActionContext {
   /** The subject lives on another server (e.g. shown via an AtomicLink). */
   external?: boolean;
   showCodeUsageDialog?: () => void;
+  /** Opens the freeze dialog for creating a content-addressed immutable copy. */
+  showFreezeDialog?: () => void;
   /** Opens the emoji picker dialog for this resource's icon. */
   openEmojiPicker?: () => void;
   /** Opens the pick-or-upload dialog for this resource's cover image. */
