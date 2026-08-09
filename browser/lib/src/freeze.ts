@@ -176,16 +176,20 @@ function canonicalOrder(
   edges: Map<string, Set<string>>,
   frozenIdByLocal: Map<string, FrozenId>,
 ): string[] {
-  let color = new Map<string, string>(
+  // Precompute blanked content once — color refinement only changes how
+  // intra-cycle refs are labeled, so the surrounding JSON structure is fixed.
+  const blanked = new Map<string, JsonValue>(
     scc.map(localId => [
       localId,
-      hashCanonical(
-        substitute(
-          byId.get(localId)!.content,
-          cycleRefMap(edges.get(localId), sccSet, undefined, frozenIdByLocal),
-        ),
+      substitute(
+        byId.get(localId)!.content,
+        cycleRefMap(edges.get(localId), sccSet, undefined, frozenIdByLocal),
       ),
     ]),
+  );
+
+  let color = new Map<string, string>(
+    scc.map(localId => [localId, hashCanonical(blanked.get(localId)!)]),
   );
 
   for (let round = 0; round < scc.length; round++) {
@@ -398,6 +402,11 @@ export function getRegisteredFrozenBody(
   frozenId: string,
 ): JsonValue | undefined {
   return frozenBodyRegistry.get(frozenId as FrozenId);
+}
+
+/** Clears the process-wide frozen body registry (test helper). */
+export function clearFrozenBodyRegistry(): void {
+  frozenBodyRegistry.clear();
 }
 
 function stronglyConnectedComponents(

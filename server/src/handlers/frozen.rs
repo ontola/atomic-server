@@ -65,7 +65,14 @@ pub async fn get_frozen(
         .kv
         .get(atomic_lib::db::trees::Tree::Frozen, hash_hex.as_bytes())?
     {
-        Some(bytes) => Ok(HttpResponse::Ok().content_type(AD_JSON).body(bytes)),
+        Some(bytes) => Ok(HttpResponse::Ok()
+            .content_type(AD_JSON)
+            // Content-addressed + immutable: browsers and CDNs may cache forever.
+            .insert_header((
+                actix_web::http::header::CACHE_CONTROL,
+                "public, immutable, max-age=31536000",
+            ))
+            .body(bytes)),
         None => Ok(HttpResponse::NotFound().finish()),
     }
 }

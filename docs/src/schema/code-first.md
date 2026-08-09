@@ -58,11 +58,15 @@ your server automatically:
 
 ```ts
 import { Agent, Store } from '@tomic/lib';
+import { defineSchema } from '@tomic/lib/schema';
 import { todoSchema } from './schema';
 
 const agent = await Agent.fromSecret(process.env.AGENT_SECRET);
 const store = new Store({ serverUrl: 'http://localhost:9883', agent });
 store.setServerConnected(true);
+
+// Optional: materialize locally up front (e.g. before forms call getProperty).
+// await store.useSchema(todoSchema);
 
 const todo = await store.newResource({
   isA: todoSchema.classes.todo, // typed; autocompletes 'todo'
@@ -78,6 +82,11 @@ await todo.save(); // ← publishes the todo Class + its Properties if the serve
 That's the whole loop: **define, use, save.** No `ad-generate`, no generated
 files to commit, no separate publish step. Publishing is idempotent (hash-keyed),
 so an unchanged schema re-saves with no extra work.
+
+Prefer importing authoring helpers from `@tomic/lib/schema`
+(`defineSchema`, `buildSchemaLock`, `verifySchemaLock`). Use
+`store.useSchema(schema | lock, { publish? })` when you want the Store to
+materialize (and optionally publish) without waiting for the first save.
 
 The handles give you autocomplete and typo-safety on class and property keys.
 (Per-field inference of `resource.props.title` still requires the generated

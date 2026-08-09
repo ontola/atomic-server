@@ -26,6 +26,19 @@ export interface SchemaLock {
   readonly presentation: SchemaLockPresentation;
 }
 
+/** Type guard for a committed {@link SchemaLock} (vs a live schema package). */
+export function isSchemaLock(value: unknown): value is SchemaLock {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'frozen' in value &&
+    'ontology' in value &&
+    '@index' in value &&
+    typeof (value as SchemaLock).ontology === 'string' &&
+    (value as SchemaLock).ontology.startsWith('did:ad:frozen:')
+  );
+}
+
 export interface SchemaLockPresentationEntry {
   readonly id: FrozenId;
   readonly description: string;

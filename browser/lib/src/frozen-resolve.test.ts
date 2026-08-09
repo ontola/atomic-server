@@ -3,10 +3,11 @@ import { afterEach, describe, it, vi } from 'vitest';
 import { Agent } from './agent.js';
 import { JSCryptoProvider } from './CryptoProvider.js';
 import { Datatype } from './datatypes.js';
-import { frozenIdFor } from './freeze.js';
+import { clearFrozenBodyRegistry, frozenIdFor } from './freeze.js';
 import { core } from './ontologies/core.js';
 import { JSONADParser } from './parse.js';
 import { buildSchemaLock } from './schema-lock.js';
+import { defineSchema } from './schema.js';
 import { Store } from './store.js';
 
 const body = {
@@ -33,6 +34,7 @@ function connectedStore(): Store {
 describe('Store frozen resolution', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    clearFrozenBodyRegistry();
   });
 
   it('fetches, verifies, and materializes a frozen resource', async ({
@@ -87,6 +89,7 @@ const todoPackage = {
 describe('Store.registerFrozenSchema', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    clearFrozenBodyRegistry();
   });
 
   it('materializes frozen resources locally so a property resolves offline', async ({
@@ -143,9 +146,94 @@ describe('Store.registerFrozenSchema', () => {
   });
 });
 
+describe('Store.useSchema', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearFrozenBodyRegistry();
+  });
+
+  it('accepts a DefinedSchema and returns FrozenSchema handles offline', async ({
+    expect,
+  }) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('should not hit the network');
+      }),
+    );
+
+    const store = new Store({ serverUrl: 'https://example.com' });
+    const frozen = (await store.useSchema(defineSchema(todoPackage))) as Awaited<
+      ReturnType<Store['registerFrozenSchema']>
+    >;
+
+    expect(frozen.classes.todo).toMatch(/^did:ad:frozen:/);
+    expect(await store.getProperty(frozen.properties['todo.title'])).toMatchObject(
+      {
+        shortname: 'title',
+        datatype: Datatype.STRING,
+      },
+    );
+  });
+
+  it('accepts a SchemaLock and optionally publishes', async ({ expect }) => {
+    const lock = buildSchemaLock(todoPackage);
+    const puts: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: { method?: string }) => {
+        if (init?.method === 'PUT') {
+          puts.push(url);
+        }
+
+        return { ok: true, status: 204, text: async () => '' };
+      }),
+    );
+
+    const store = new Store({ serverUrl: 'https://example.com' });
+    const loaded = await store.useSchema(lock, { publish: true });
+
+    expect(loaded).toBe(lock);
+    expect(puts).toHaveLength(Object.keys(lock.frozen).length);
+    expect(
+      await store.getProperty(lock.presentation.properties['todo.title'].id),
+    ).toMatchObject({ shortname: 'title' });
+  });
+});
+
+describe('defineSchema local resolve', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearFrozenBodyRegistry();
+  });
+
+  it('resolves handles from the body registry without a network hop', async ({
+    expect,
+  }) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('should not hit the network');
+      }),
+    );
+
+    const schema = defineSchema(todoPackage);
+    const store = new Store({ serverUrl: 'https://example.com' });
+
+    // Touching .properties registers frozen bodies process-wide; the Store
+    // must materialize from that registry instead of fetching.
+    const titleId = schema.properties.title;
+    const prop = await store.getProperty(titleId);
+
+    expect(prop.shortname).toBe('title');
+    expect(prop.datatype).toBe(Datatype.STRING);
+  });
+});
+
 describe('Store.loadSchemaLock', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    clearFrozenBodyRegistry();
   });
 
   it('makes a bundled lockfile resolve offline with no server', async ({

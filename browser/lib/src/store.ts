@@ -49,7 +49,7 @@ import {
   type JsonValue as FrozenJsonValue,
 } from './freeze.js';
 import { jcsCanonicalize } from './jcs.js';
-import { verifySchemaLock, type SchemaLock } from './schema-lock.js';
+import { verifySchemaLock, isSchemaLock, type SchemaLock } from './schema-lock.js';
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
@@ -125,8 +125,17 @@ export interface RegisteredSchema {
 }
 
 export interface RegisterSchemaOptions {
-  /** Save generated resources through the normal Commit/outbox path. */
+  /**
+   * For signed-DID {@link Store.registerSchema}: save through the Commit/outbox
+   * path. For frozen {@link Store.useSchema} / {@link Store.registerFrozenSchema}:
+   * publish canonical bytes to `/frozen/{hash}` (alias of `publish`).
+   */
   save?: boolean;
+}
+
+export interface UseSchemaOptions {
+  /** Publish frozen bodies to `/frozen/{hash}` so peers can resolve them. */
+  publish?: boolean;
 }
 
 export interface FreezeStructureOptions {
@@ -2371,13 +2380,47 @@ export class Store {
   }
 
   /**
-   * Content-addressed schema registration: freezes the schema into immutable
-   * `did:ad:frozen` resources, materializes them into the local store so
-   * `getResource`/`getProperty` resolve them immediately (offline), and — with
-   * `{ save: true }` — publishes the canonical bytes to `/frozen/{hash}` so other
-   * stores can resolve them. Returns the {@link FrozenSchema} (frozen ids per
-   * developer key, plus the mutable `presentation` layer). Unlike
-   * {@link registerSchema}, identity is the content hash, not a signed DID.
+   * Primary Store API for content-addressed schemas.
+   *
+   * - Pass a {@link DefinedSchema} / package → freeze, materialize locally, return
+   *   {@link FrozenSchema} handles (same as {@link registerFrozenSchema}).
+   * - Pass a {@link SchemaLock} → verify + materialize offline (same as
+   *   {@link loadSchemaLock}), optionally publish.
+   *
+   * Prefer this over the dual register/load helpers. Identity is always the
+   * content hash (`did:ad:frozen:`), never a signed genesis DID — use
+   * {@link registerSchema} only when you need a mutable signed Ontology
+   * (imports during development, etc.).
+   */
+  public async useSchema(
+    input: AtomicSchemaPackage | DefinedSchema | SchemaLock,
+    opts: UseSchemaOptions = {},
+  ): Promise<FrozenSchema | SchemaLock> {
+    if (isSchemaLock(input)) {
+      const lock = this.loadSchemaLock(input);
+
+      if (opts.publish) {
+        await Promise.all(
+          Object.entries(lock.frozen).map(([frozenId, content]) =>
+            this.publishFrozenResource(
+              frozenId as FrozenId,
+              content as FrozenJsonValue,
+            ),
+          ),
+        );
+      }
+
+      return lock;
+    }
+
+    return this.registerFrozenSchema(input, {
+      save: opts.publish,
+    });
+  }
+
+  /**
+   * Freezes a schema into `did:ad:frozen` resources and materializes them
+   * locally. Prefer {@link useSchema}. `{ save: true }` publishes to `/frozen`.
    */
   public async registerFrozenSchema(
     schema: AtomicSchemaPackage | DefinedSchema,
@@ -2385,13 +2428,7 @@ export class Store {
   ): Promise<FrozenSchema> {
     const frozen = freezeSchema(schema);
 
-    registerFrozenBodies(frozen.resources);
-
-    for (const { frozenId, content } of frozen.resources) {
-      const [resource] = new JSONADParser().parse(content, frozenId);
-      resource.loading = false;
-      this.addResource(resource, { skipCommitCompare: true });
-    }
+    this.materializeFrozenBodies(frozen.resources);
 
     if (opts.save) {
       await Promise.all(
@@ -2583,12 +2620,7 @@ export class Store {
   }
 
   /**
-   * Registers an app-bundled `*.schema.lock.json` into the store: verifies every
-   * frozen object by re-hash, then materializes each as a read-only Resource so
-   * the schema resolves offline with no server. This is "available without a
-   * host" — the lockfile travels with the code, and a frozen id is reproducible
-   * from it. Returns the lock so callers can read its id maps. Cycle "unit"
-   * objects are skipped (not yet individually materializable).
+   * Verify + materialize a committed lockfile offline. Prefer {@link useSchema}.
    */
   public loadSchemaLock(lock: SchemaLock): SchemaLock {
     const verification = verifySchemaLock(lock);
@@ -2599,25 +2631,50 @@ export class Store {
       );
     }
 
-    for (const [frozenId, content] of Object.entries(lock.frozen)) {
+    const bodies = Object.entries(lock.frozen)
+      .filter(
+        ([, content]) =>
+          !(
+            content &&
+            typeof content === 'object' &&
+            !Array.isArray(content) &&
+            UNIT_MEMBERS_KEY in content
+          ),
+      )
+      .map(([frozenId, content]) => ({
+        frozenId: frozenId as FrozenId,
+        content: content as FrozenJsonValue,
+      }));
+
+    this.materializeFrozenBodies(bodies);
+
+    return lock;
+  }
+
+  /** Register frozen bodies and add them to the in-memory store (no network). */
+  private materializeFrozenBodies(
+    resources: ReadonlyArray<{ frozenId: FrozenId; content: FrozenJsonValue }>,
+  ): void {
+    registerFrozenBodies(resources);
+
+    for (const { frozenId, content } of resources) {
       if (
         content &&
         typeof content === 'object' &&
+        !Array.isArray(content) &&
         UNIT_MEMBERS_KEY in content
       ) {
         continue;
       }
 
-      registerFrozenBodies([
-        { frozenId: frozenId as FrozenId, content: content as FrozenJsonValue },
-      ]);
+      if (this.resources.has(frozenId)) {
+        continue;
+      }
 
       const [resource] = new JSONADParser().parse(content, frozenId);
       resource.loading = false;
       this.addResource(resource, { skipCommitCompare: true });
     }
-
-    return lock;
   }
 
   private async publishFrozenResource(
@@ -3623,15 +3680,28 @@ export class Store {
   }
 
   /**
-   * Resolves a `did:ad:frozen:` subject: fetches the JSON-AD bytes from
-   * `/frozen/{hash}`, verifies they hash to the id (trustless — the server is
-   * just a cache), and materializes a read-only Resource. Cycle "unit" objects
-   * are not yet materializable individually.
+   * Resolves a `did:ad:frozen:` subject locally first (in-memory resource or
+   * process-wide body registry from `defineSchema` / `useSchema`), then falls
+   * back to `GET /frozen/{hash}` with verify-by-rehash. Cycle "unit" objects are
+   * not yet materializable individually.
    */
   private async fetchFrozenResource<C extends OptionalClass = UnknownClass>(
     subject: string,
   ): Promise<Resource<C>> {
     const pureId = subject.split('?')[0].split('#')[0];
+
+    const existing = this.resources.get(pureId);
+
+    if (existing?.isReady() && !existing.error) {
+      return existing as Resource<C>;
+    }
+
+    const registered = getRegisteredFrozenBody(pureId);
+
+    if (registered !== undefined) {
+      return this.materializeFrozenBody<C>(pureId, registered);
+    }
+
     const hash = pureId.replace('did:ad:frozen:', '');
     const base = this.getServerUrl().replace(/\/$/, '');
     const response = await fetch(`${base}/frozen/${hash}`, {
@@ -3651,13 +3721,28 @@ export class Store {
       throw new Error(`Frozen resource ${pureId} failed hash verification`);
     }
 
+    return this.materializeFrozenBody<C>(pureId, body);
+  }
+
+  private materializeFrozenBody<C extends OptionalClass = UnknownClass>(
+    frozenId: string,
+    body: FrozenJsonValue,
+  ): Resource<C> {
     if (body && typeof body === 'object' && UNIT_MEMBERS_KEY in body) {
       throw new Error(
-        `Frozen resource ${pureId} is a reference-cycle unit; individual materialization is not yet supported.`,
+        `Frozen resource ${frozenId} is a reference-cycle unit; individual materialization is not yet supported.`,
       );
     }
 
-    const [resource] = new JSONADParser().parse(body, pureId);
+    const existing = this.resources.get(frozenId);
+
+    if (existing?.isReady() && !existing.error) {
+      return existing as Resource<C>;
+    }
+
+    registerFrozenBodies([{ frozenId: frozenId as FrozenId, content: body }]);
+
+    const [resource] = new JSONADParser().parse(body, frozenId);
     resource.loading = false;
     this.addResource(resource as Resource<C>, { skipCommitCompare: true });
 
@@ -3977,6 +4062,16 @@ export class Store {
 
       if (local) {
         return local;
+      }
+
+      // Content-addressed schemas registered via defineSchema / useSchema live
+      // in the process-wide body registry — materialize without a server.
+      if (resolved.startsWith('did:ad:frozen:')) {
+        const registered = getRegisteredFrozenBody(resolved);
+
+        if (registered !== undefined) {
+          return this.materializeFrozenBody<C>(resolved, registered);
+        }
       }
 
       // Try the WASM DB — the resource may have been persisted to OPFS.

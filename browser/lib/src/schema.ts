@@ -32,6 +32,17 @@ export {
   type FreezeResult,
 } from './freeze.js';
 
+// Lockfile helpers live beside defineSchema so `@tomic/lib/schema` is one import.
+export {
+  buildSchemaLock,
+  verifySchemaLock,
+  isSchemaLock,
+  type SchemaLock,
+  type SchemaLockPresentation,
+  type SchemaLockPresentationEntry,
+  type SchemaLockVerification,
+} from './schema-lock.js';
+
 export type SchemaHash = `blake3:${string}`;
 
 export const SCHEMA_HASH_PROPERTY =
@@ -357,9 +368,11 @@ const propLocalId = (key: string): string => `${FREEZE_NS}prop:${key}`;
 /**
  * Converts a schema package into content-addressed `did:ad:frozen` resources:
  * one materialized Ontology, Class, and Property JSON-AD body each, with every
- * cross-reference resolved to the referent's frozen hash. The whole body is
- * hashed (descriptions included), so the same definition always yields the same
- * id and any edit yields a new one.
+ * cross-reference resolved to the referent's frozen hash.
+ *
+ * Frozen bodies hold **identity only** (shortname, datatype, requires, …).
+ * Descriptions and other presentation live on {@link FrozenSchema.presentation}
+ * so cosmetic edits never churn an id.
  *
  * Self-contained schemas only: an imported property (`$ref:
  * "alias.properties.x"`) cannot be resolved to a frozen id without the

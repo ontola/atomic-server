@@ -274,3 +274,49 @@ describe('freezeResources — validation', () => {
     ).toThrow('unique');
   });
 });
+
+describe('freezeResources — speed', () => {
+  it('freezes a medium acyclic schema graph quickly', ({ expect }) => {
+    const input: FreezableResource[] = [];
+
+    for (let i = 0; i < 200; i++) {
+      input.push({
+        localId: `p:${i}`,
+        content: {
+          [CORE_SHORTNAME]: `prop${i}`,
+          [CORE_DATATYPE]: 'string',
+        },
+      });
+    }
+
+    for (let i = 0; i < 50; i++) {
+      const requires = [`p:${i * 4}`, `p:${i * 4 + 1}`];
+      input.push({
+        localId: `c:${i}`,
+        content: {
+          [CORE_SHORTNAME]: `class${i}`,
+          [CORE_REQUIRES]: requires,
+        },
+      });
+    }
+
+    input.push({
+      localId: 'o:app',
+      content: {
+        [CORE_SHORTNAME]: 'app',
+        [CORE_CLASSES]: Array.from({ length: 50 }, (_, i) => `c:${i}`),
+        [CORE_PROPERTIES]: Array.from({ length: 200 }, (_, i) => `p:${i}`),
+      },
+    });
+
+    const started = performance.now();
+    const { resources, byLocalId } = freezeResources(input);
+    const elapsed = performance.now() - started;
+
+    expect(byLocalId.size).toBe(251);
+    expect(resources.length).toBeGreaterThan(50);
+    // Warm CI boxes finish this in a few ms; keep a generous ceiling so the
+    // assertion catches accidental quadratic regressions without flaking.
+    expect(elapsed).toBeLessThan(200);
+  });
+});

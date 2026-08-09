@@ -944,12 +944,21 @@ async fn frozen_endpoint_roundtrip() {
     let resp = test::call_service(&app, put).await;
     assert!(resp.status().is_success(), "PUT status: {}", resp.status());
 
-    // GET returns the same canonical bytes.
+    // GET returns the same canonical bytes with a long-lived immutable cache.
     let get = TestRequest::get()
         .uri(&format!("/frozen/{}", hash))
         .to_request();
     let resp = test::call_service(&app, get).await;
     assert!(resp.status().is_success());
+    let cache = resp
+        .headers()
+        .get(actix_web::http::header::CACHE_CONTROL)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(
+        cache.contains("immutable") && cache.contains("max-age=31536000"),
+        "Cache-Control should mark frozen bodies immutable, got: {cache:?}"
+    );
     let returned = test::read_body(resp).await;
     assert_eq!(returned, canonical.as_bytes());
 
