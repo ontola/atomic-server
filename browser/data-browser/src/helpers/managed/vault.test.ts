@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { backupDrive, restoreDrive, type VaultCapableDb } from './vault';
+import {
+  backupDrive,
+  restoreDrive,
+  setUpVaultForDrive,
+  recoverDriveKey,
+  type VaultCapableDb,
+  type VaultKeyOps,
+} from './vault';
 
 /**
  * These cover the orchestration, which is deliberately the half that lives in
@@ -470,5 +477,152 @@ describe('restoreDrive', () => {
         driveKey: KEY,
       }),
     ).rejects.toThrow(/No download URL/i);
+  });
+});
+
+describe('key management', () => {
+  /** A stand-in for the WASM key ops: wrapping is reversible and keyed. */
+  function fakeKeys(): VaultKeyOps {
+    let counter = 0;
+
+    return {
+      vaultGenerateKey: () => new Uint8Array(32).fill(++counter),
+      vaultWrapKey: (key, secret) =>
+        JSON.stringify({ key: Array.from(key), secret: Array.from(secret) }),
+      vaultUnwrapKey: (envelope, secret) => {
+        const parsed = JSON.parse(envelope);
+
+        if (parsed.secret.join() !== Array.from(secret).join()) {
+          throw new Error('wrong agent secret');
+        }
+
+        return new Uint8Array(parsed.key);
+      },
+    };
+  }
+
+  const AGENT_SECRET = new Uint8Array([1, 2, 3]);
+
+  /**
+   * The failure this guards against is unrecoverable: a second key would leave
+   * every object written under the first permanently unreadable.
+   */
+  it('reuses an existing key rather than minting a second one', async () => {
+    const keys = fakeKeys();
+    const stored = keys.vaultWrapKey(new Uint8Array(32).fill(99), AGENT_SECRET);
+    const puts: string[] = [];
+
+    mockFetch((url, init) => {
+      if (url.endsWith('/enroll')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            enrollment: { drive_pseudonym: PSEUDONYM, id: 'e1' },
+          }),
+        };
+      }
+
+      if (url.endsWith('/key') && init?.method === 'PUT') {
+        puts.push(String(init.body));
+
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+
+      if (url.endsWith('/key')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ envelope: stored }),
+        };
+      }
+
+      return undefined;
+    });
+
+    const { driveKey } = await setUpVaultForDrive({
+      keys,
+      driveSubject: 'did:ad:drive',
+      agentSubject: 'did:ad:agent:x',
+      agentSecret: AGENT_SECRET,
+    });
+
+    expect(Array.from(driveKey)).toEqual(Array.from(new Uint8Array(32).fill(99)));
+    expect(puts).toHaveLength(0);
+  });
+
+  it('stores the wrapped key before anything is backed up', async () => {
+    const keys = fakeKeys();
+    const puts: string[] = [];
+
+    mockFetch((url, init) => {
+      if (url.endsWith('/enroll')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            enrollment: { drive_pseudonym: PSEUDONYM, id: 'e1' },
+          }),
+        };
+      }
+
+      if (url.endsWith('/key') && init?.method === 'PUT') {
+        puts.push(String(init.body));
+
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+
+      // No key stored yet.
+      if (url.endsWith('/key')) return { ok: true, status: 204 };
+
+      return undefined;
+    });
+
+    const { driveKey } = await setUpVaultForDrive({
+      keys,
+      driveSubject: 'did:ad:drive',
+      agentSubject: 'did:ad:agent:x',
+      agentSecret: AGENT_SECRET,
+    });
+
+    expect(puts).toHaveLength(1);
+    // The wrapped form must actually contain this key, or restore gets a
+    // different one back.
+    expect(keys.vaultUnwrapKey(JSON.parse(puts[0]).envelope, AGENT_SECRET)).toEqual(
+      driveKey,
+    );
+  });
+
+  /** The wiped-device path, end to end through the client. */
+  it('recovers a key from the control plane with only the agent secret', async () => {
+    const keys = fakeKeys();
+    const original = new Uint8Array(32).fill(7);
+    const envelope = keys.vaultWrapKey(original, AGENT_SECRET);
+
+    mockFetch(url =>
+      url.endsWith('/key')
+        ? { ok: true, status: 200, json: async () => ({ envelope }) }
+        : undefined,
+    );
+
+    const recovered = await recoverDriveKey({
+      keys,
+      drivePseudonym: PSEUDONYM,
+      agentSecret: AGENT_SECRET,
+    });
+
+    expect(Array.from(recovered)).toEqual(Array.from(original));
+  });
+
+  it('says so plainly when a drive has no stored key', async () => {
+    mockFetch(url => (url.endsWith('/key') ? { ok: true, status: 204 } : undefined));
+
+    await expect(
+      recoverDriveKey({
+        keys: fakeKeys(),
+        drivePseudonym: PSEUDONYM,
+        agentSecret: AGENT_SECRET,
+      }),
+    ).rejects.toThrow(/no stored vault key/i);
   });
 });

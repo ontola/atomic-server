@@ -144,6 +144,51 @@ export async function disableVault(drivePseudonym: string): Promise<void> {
   });
 }
 
+/**
+ * Store this drive's wrapped vault key.
+ *
+ * The envelope is sealed under the account's agent secret, which never leaves
+ * the browser — the control plane holds ciphertext it cannot open, the same
+ * boundary as the recovery-secret blob. Storing it is what makes a wiped device
+ * recoverable, and it is why enabling backup asks the user to remember nothing.
+ */
+export async function putVaultKeyEnvelope(
+  drivePseudonym: string,
+  envelope: string,
+): Promise<void> {
+  await api(`/cloud-vault/${drivePseudonym}/key`, {
+    method: 'PUT',
+    body: JSON.stringify({ envelope }),
+  });
+}
+
+/**
+ * Fetch this drive's wrapped vault key, or null if none was ever stored.
+ *
+ * `204` rather than `404` when absent, so a caller can tell "no key yet" from
+ * "no such drive" — the first is a drive that has never been backed up, the
+ * second is a mistake.
+ */
+export async function getVaultKeyEnvelope(
+  drivePseudonym: string,
+): Promise<string | null> {
+  const response = await fetch(
+    `${getManagedApiBase()}/cloud-vault/${drivePseudonym}/key`,
+    { credentials: 'include' },
+  );
+
+  if (response.status === 204) return null;
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error ?? `Could not fetch the vault key (${response.status})`);
+  }
+
+  const record = (await response.json()) as { envelope: string };
+
+  return record.envelope;
+}
+
 export async function listVaultObjects(
   drivePseudonym: string,
 ): Promise<VaultObject[]> {
@@ -323,4 +368,87 @@ export async function restoreDrive({
     devicePubkey,
     fetched,
   );
+}
+
+/**
+ * The key-management half of the client.
+ *
+ * Kept separate from the transport above because it is where the "no second
+ * secret" promise is actually kept: a drive key is generated once, wrapped
+ * under the agent secret, and handed to the control plane as ciphertext. From
+ * then on any device that can sign in as this account can get it back.
+ */
+export type VaultKeyOps = {
+  vaultGenerateKey(): Uint8Array;
+  vaultWrapKey(driveKey: Uint8Array, agentSecret: Uint8Array): string;
+  vaultUnwrapKey(envelope: string, agentSecret: Uint8Array): Uint8Array;
+};
+
+/**
+ * Turn Cloud Vault on for a drive and make sure its key is recoverable.
+ *
+ * Enrolls, then generates and stores a wrapped key — but only if the drive does
+ * not already have one. Re-running on a drive that is already set up returns
+ * the existing key rather than minting a new one: a second key would leave
+ * every object written under the first permanently unreadable, which is the
+ * worst thing this module could do.
+ */
+export async function setUpVaultForDrive({
+  keys,
+  driveSubject,
+  agentSubject,
+  agentSecret,
+}: {
+  keys: VaultKeyOps;
+  driveSubject: string;
+  agentSubject: string;
+  agentSecret: Uint8Array;
+}): Promise<{ enrollment: VaultEnrollment; driveKey: Uint8Array }> {
+  const enrollment = await enrollVault(driveSubject, agentSubject);
+  const existing = await getVaultKeyEnvelope(enrollment.drive_pseudonym);
+
+  if (existing) {
+    return {
+      enrollment,
+      driveKey: keys.vaultUnwrapKey(existing, agentSecret),
+    };
+  }
+
+  const driveKey = keys.vaultGenerateKey();
+  // Stored before anything is backed up. A key that exists only in memory when
+  // the first upload happens would leave objects nobody can open if the tab
+  // closed in between.
+  await putVaultKeyEnvelope(
+    enrollment.drive_pseudonym,
+    keys.vaultWrapKey(driveKey, agentSecret),
+  );
+
+  return { enrollment, driveKey };
+}
+
+/**
+ * Recover a drive's key on a device that has none.
+ *
+ * This is the step that makes "clear site data, sign in, restore" work: the
+ * envelope comes from the control plane, the agent secret comes from signing
+ * in, and neither alone is enough.
+ */
+export async function recoverDriveKey({
+  keys,
+  drivePseudonym,
+  agentSecret,
+}: {
+  keys: VaultKeyOps;
+  drivePseudonym: string;
+  agentSecret: Uint8Array;
+}): Promise<Uint8Array> {
+  const envelope = await getVaultKeyEnvelope(drivePseudonym);
+
+  if (!envelope) {
+    throw new Error(
+      'This drive has no stored vault key, so its backups cannot be decrypted.',
+    );
+  }
+
+  return keys.vaultUnwrapKey(envelope, agentSecret);
 }
