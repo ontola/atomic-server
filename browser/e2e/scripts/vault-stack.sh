@@ -100,6 +100,7 @@ rm -f "$SAAS_DB"
 #
 # Must happen before `cargo run`, since the assets are compiled in.
 if [[ ! -f "$SAAS_DIR/portal/dist/index.html" ]] || \
+   [[ ! -f "$SAAS_DIR/portal/.env.production.local" ]] || \
    grep -rqs "app.atomicserver.eu" "$SAAS_DIR/portal/dist/assets"; then
   # The portal links to @tomic/lib and @tomic/edit-mode by `file:` path into
   # the sibling atomic-server checkout, so those have to be built first. A
@@ -129,7 +130,14 @@ if [[ ! -f "$SAAS_DIR/portal/dist/index.html" ]] || \
   (
     cd "$SAAS_DIR/portal"
     [[ -d node_modules ]] || npm ci --silent
-    env -u VITE_ATOMIC_APP_URL npm run build --silent
+    # `npm run build` runs vite in production mode, which loads
+    # `portal/.env.production` from disk — and that file hardcodes
+    # VITE_ATOMIC_APP_URL=https://app.atomicserver.eu. Unsetting the process
+    # variable does nothing about a file. `.env.production.local` takes
+    # precedence over it and is gitignored, so the committed default stays
+    # correct for real deploys while a local build points at the local app.
+    printf 'VITE_ATOMIC_APP_URL=http://localhost:6747\n' > .env.production.local
+    npm run build --silent
   ) || { echo "portal build failed" >&2; exit 1; }
 fi
 
