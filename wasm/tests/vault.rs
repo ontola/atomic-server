@@ -139,3 +139,52 @@ fn an_envelope_holding_something_else_is_refused() {
 
     assert!(atomic_wasm::vault_unwrap_key(&not_a_key, &agent_secret).is_err());
 }
+
+/// A non-empty export must hand JS a `Uint8Array`, not an array of numbers.
+///
+/// This is the test that was missing, and its absence let a corrupt vault ship
+/// past every other layer. `serde_wasm_bindgen` renders a `Vec<u8>` as a JS
+/// array of numbers; `fetch` has no binary meaning for an array, so it
+/// stringifies it, and every object reached the bucket as the ASCII text
+/// "1,1,0,0,..." instead of the envelope. The count went up, quota accrued,
+/// the UI reported success, and every restore failed with "unsupported vault
+/// envelope version 49" — 49 being the character '1'.
+///
+/// The two export/import tests above both cover the *empty* case, so the byte
+/// representation of a real export was never observed on the JS side at all.
+#[wasm_bindgen_test]
+async fn a_real_export_hands_js_binary_not_a_number_array() {
+    use wasm_bindgen::JsCast;
+
+    let db = ClientDb::new_in_memory(None).await.expect("in-memory db");
+    let drive = "did:ad:vaultexporttest";
+
+    db.put_resource(&format!(
+        r#"{{"@id":"{drive}","https://atomicdata.dev/properties/name":"Export test"}}"#
+    ))
+    .await
+    .expect("seed a resource to back up");
+
+    let key = vault_generate_key();
+    let out = db
+        .vault_export(drive, &key, 1, PSEUDONYM, DEVICE, 1)
+        .await
+        .expect("export should succeed");
+
+    assert!(!out.is_null(), "a drive with a resource has something to back up");
+
+    let sealed = js_sys::Reflect::get(&out, &wasm_bindgen::JsValue::from_str("sealed"))
+        .expect("the export result carries the sealed bytes");
+
+    assert!(
+        sealed.is_instance_of::<js_sys::Uint8Array>(),
+        "sealed must be a Uint8Array; an Array uploads as text and is unrestorable",
+    );
+
+    let bytes = sealed.unchecked_into::<js_sys::Uint8Array>().to_vec();
+    assert!(!bytes.is_empty(), "a sealed pack is not empty");
+    // The envelope's own header, which is what a restore reads first. Asserting
+    // it here means a future change to the boundary fails on the byte that
+    // actually matters rather than on a type name.
+    assert_eq!(bytes[0], 1, "first byte is the envelope version, not '1' (49)");
+}
