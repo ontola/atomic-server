@@ -14,7 +14,7 @@ use atomic_lib::{
     vault::keys::{argon2id_derive_key, Argon2Params},
     vault::secret_envelope::{NewWrapper, SecretEnvelope, Unlock},
     vault::store::{MemoryVaultStore, VaultObjectStore},
-    vault::sync::{export_vault_delta, import_vault_batch, lane_prefix},
+    vault::sync::{commit_lane_state, drive_prefix, export_vault_delta, import_vault_batch},
     Commit, Db, Resource, Subject, Value,
 };
 use wasm_bindgen::prelude::*;
@@ -775,9 +775,7 @@ pub fn vault_wrap_key(drive_key: &[u8], agent_secret: &[u8]) -> Result<String, J
         return Err(JsError::new("drive vault key must be exactly 32 bytes"));
     }
 
-    if agent_secret.is_empty() {
-        return Err(JsError::new("agent secret must not be empty"));
-    }
+    check_agent_secret(agent_secret)?;
 
     SecretEnvelope::create(drive_key, &[NewWrapper::AgentSecret { agent_secret }])
         .map_err(to_js_err)?
@@ -792,10 +790,24 @@ pub fn vault_wrap_key(drive_key: &[u8], agent_secret: &[u8]) -> Result<String, J
 /// undecryptable objects, which is far harder to diagnose than a refusal here.
 #[wasm_bindgen(js_name = "vaultUnwrapKey")]
 pub fn vault_unwrap_key(envelope_json: &str, agent_secret: &[u8]) -> Result<Vec<u8>, JsError> {
-    SecretEnvelope::from_json(envelope_json)
+    check_agent_secret(agent_secret)?;
+
+    let secret = SecretEnvelope::from_json(envelope_json)
         .map_err(to_js_err)?
         .unwrap_secret(&Unlock::AgentSecret(agent_secret))
-        .map_err(to_js_err)
+        .map_err(to_js_err)?;
+
+    // An envelope that opened but does not hold a drive key means the wrong
+    // envelope was fetched. Refusing here names the problem; letting it through
+    // surfaces later as objects that will not decrypt, which reads like data
+    // corruption.
+    if secret.len() != 32 {
+        return Err(JsError::new(
+            "this envelope does not contain a drive vault key",
+        ));
+    }
+
+    Ok(secret)
 }
 
 /// A fresh random drive vault key, as raw bytes.
@@ -806,6 +818,24 @@ pub fn vault_unwrap_key(envelope_json: &str, agent_secret: &[u8]) -> Result<Vec<
 #[wasm_bindgen(js_name = "vaultGenerateKey")]
 pub fn vault_generate_key() -> Vec<u8> {
     DriveVaultKey::generate(1).expose_secret().to_vec()
+}
+
+/// The agent secret must be the raw 32-byte Ed25519 seed.
+///
+/// Enforced rather than accepting any bytes because the secret has several
+/// representations in this codebase — a base64 JSON blob, the `privateKey`
+/// string inside it, the decoded seed. Wrapping under one and unwrapping with
+/// another both "work" at the API level, but the envelope is then permanently
+/// unopenable with the real seed. Refusing anything else makes that impossible
+/// instead of latent.
+fn check_agent_secret(agent_secret: &[u8]) -> Result<(), JsError> {
+    if agent_secret.len() != 32 {
+        return Err(JsError::new(
+            "agent secret must be the raw 32-byte key seed — decode it before wrapping",
+        ));
+    }
+
+    Ok(())
 }
 
 fn drive_key(key_bytes: &[u8], epoch: u32) -> Result<DriveVaultKey, JsError> {
@@ -864,6 +894,23 @@ impl ClientDb {
         .map_err(to_js_err)
     }
 
+    /// Record that a sealed segment is durably in the vault.
+    ///
+    /// Sealing and storing are separate steps here: `vaultExport` produces
+    /// bytes and JS uploads them afterwards. Until this is called the lane's
+    /// progress is provisional, so an upload that failed is retried against the
+    /// same view of what has been backed up rather than one that assumed
+    /// success. Call it after the control plane confirms the object.
+    #[wasm_bindgen(js_name = "vaultCommitSegment")]
+    pub fn vault_commit_segment(
+        &self,
+        drive_pseudonym: &str,
+        device_pubkey: &str,
+        segment: u32,
+    ) -> Result<(), JsError> {
+        commit_lane_state(&self.db, drive_pseudonym, device_pubkey, segment).map_err(to_js_err)
+    }
+
     /// Merge downloaded vault objects into this store.
     ///
     /// Safe against a populated store as well as an empty one: Loro merges
@@ -873,13 +920,16 @@ impl ClientDb {
     /// Objects are applied in the order given, so JS must pass them sorted by
     /// key — a later segment's deletion has to win over an earlier segment's
     /// copy of the same resource.
+    ///
+    /// Spans every device lane, not just this device's. Each device appends
+    /// only to its own lane, so restoring one lane would silently drop every
+    /// other device's history while reporting success.
     #[wasm_bindgen(js_name = "vaultImport")]
     pub async fn vault_import(
         &self,
         key_bytes: &[u8],
         key_epoch: u32,
         drive_pseudonym: &str,
-        device_pubkey: &str,
         objects: JsValue,
     ) -> Result<JsValue, JsError> {
         let key = drive_key(key_bytes, key_epoch)?;
@@ -893,14 +943,9 @@ impl ClientDb {
                 .map_err(to_js_err)?;
         }
 
-        let summary = import_vault_batch(
-            &self.db,
-            &key,
-            &staging,
-            &lane_prefix(drive_pseudonym, device_pubkey),
-        )
-        .await
-        .map_err(to_js_err)?;
+        let summary = import_vault_batch(&self.db, &key, &staging, &drive_prefix(drive_pseudonym))
+            .await
+            .map_err(to_js_err)?;
 
         serde_wasm_bindgen::to_value(&VaultImportResult {
             packs_read: summary.packs_read,

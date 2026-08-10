@@ -90,8 +90,14 @@ export type WorkerRequest =
       key: Uint8Array;
       keyEpoch: number;
       drivePseudonym: string;
-      devicePubkey: string;
       objects: { objectKey: string; sealed: Uint8Array }[];
+    }
+  | {
+      id: number;
+      type: 'vaultCommitSegment';
+      drivePseudonym: string;
+      devicePubkey: string;
+      segment: number;
     };
 
 /** Message types sent from worker back to main thread */
@@ -322,7 +328,6 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.key,
         msg.keyEpoch,
         msg.drivePseudonym,
-        msg.devicePubkey,
         msg.objects,
       );
       // A restore writes a whole drive; without marking dirty those writes sit
@@ -332,6 +337,17 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       dirty = true;
 
       return summary;
+    }
+
+    case 'vaultCommitSegment': {
+      await ensureInit();
+      db!.vaultCommitSegment(msg.drivePseudonym, msg.devicePubkey, msg.segment);
+      // Lane bookkeeping is a normal write behind `Durability::None`; without
+      // this the next tick's flush is what persists it, and a reload in between
+      // would re-report an already-committed segment as pending.
+      dirty = true;
+
+      return undefined;
     }
 
     case 'getVersionVectorsForDrive': {

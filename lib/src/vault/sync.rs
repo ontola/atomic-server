@@ -36,6 +36,18 @@ fn lane_state_key(drive_pseudonym: &str, device_pubkey: &str) -> Vec<u8> {
     format!("vault-lane:{drive_pseudonym}:{device_pubkey}").into_bytes()
 }
 
+/// Where a not-yet-uploaded export parks its subject list.
+///
+/// Sealing and *storing* are two steps for a hosted vault: the client seals
+/// locally and something else pushes the bytes at object storage afterwards.
+/// Recording the lane as backed up at seal time would mean a failed upload
+/// still advanced the bookkeeping, and the next pass would compute deletions
+/// against a segment that does not exist in the vault. So the export writes
+/// here, and [`commit_lane_state`] promotes it once the upload is confirmed.
+fn pending_lane_state_key(drive_pseudonym: &str, device_pubkey: &str, segment: u32) -> Vec<u8> {
+    format!("vault-lane-pending:{drive_pseudonym}:{device_pubkey}:{segment}").into_bytes()
+}
+
 fn read_lane_state(store: &Db, drive_pseudonym: &str, device_pubkey: &str) -> Vec<String> {
     store
         .kv
@@ -57,6 +69,47 @@ fn write_lane_state(store: &Db, drive_pseudonym: &str, device_pubkey: &str, subj
             &bytes,
         );
     }
+}
+
+/// Promote a parked export to this lane's committed state.
+///
+/// Call once the segment is durably in the vault. Until then the previous
+/// state stands, so a failed upload is retried against the same view of what
+/// has been backed up rather than one that assumed success.
+///
+/// A no-op when nothing was parked for that segment, so a caller that
+/// double-confirms does no harm.
+pub fn commit_lane_state(
+    store: &Db,
+    drive_pseudonym: &str,
+    device_pubkey: &str,
+    segment: u32,
+) -> AtomicResult<()> {
+    let pending_key = pending_lane_state_key(drive_pseudonym, device_pubkey, segment);
+    let Some(bytes) = store
+        .kv
+        .get(crate::db::trees::Tree::PluginMeta, &pending_key)
+        .ok()
+        .flatten()
+    else {
+        return Ok(());
+    };
+
+    let subjects: Vec<String> =
+        serde_json::from_slice(&bytes).map_err(|e| format!("malformed pending lane state: {e}"))?;
+    write_lane_state(store, drive_pseudonym, device_pubkey, &subjects);
+    let _ = store
+        .kv
+        .remove(crate::db::trees::Tree::PluginMeta, &pending_key);
+    Ok(())
+}
+
+/// Every object for a drive, across every device lane.
+///
+/// Restore must span lanes: each device appends only to its own, so importing
+/// one lane's prefix would silently drop every other device's history.
+pub fn drive_prefix(drive_pseudonym: &str) -> String {
+    format!("vault/{drive_pseudonym}/")
 }
 
 /// Where a device's lane objects live for a drive.
@@ -174,11 +227,17 @@ pub async fn export_vault_delta(
     let object_key = segment_key(drive_pseudonym, device_pubkey, segment);
     vault.put(&object_key, &sealed)?;
 
-    // Recorded only after the pack is safely stored. Recording first would let
-    // a failed upload convince the next run that these subjects were already
-    // backed up, and a later deletion would then be reported against a segment
-    // that does not exist.
-    write_lane_state(store, drive_pseudonym, device_pubkey, &exported);
+    // Parked, not committed. `vault.put` above may be a staging buffer whose
+    // real upload happens elsewhere and can still fail; only
+    // `commit_lane_state` — called once the object is durably stored — makes
+    // this lane's progress official.
+    if let Ok(bytes) = serde_json::to_vec(&exported) {
+        let _ = store.kv.insert(
+            crate::db::trees::Tree::PluginMeta,
+            &pending_lane_state_key(drive_pseudonym, device_pubkey, segment),
+            &bytes,
+        );
+    }
 
     Ok(Some(BackupSummary {
         object_key,
@@ -449,6 +508,7 @@ mod tests {
             .await
             .unwrap()
             .expect("first pack");
+        commit_lane_state(&source, PSEUDONYM, DEVICE, 1).unwrap();
 
         // The user deletes one, then a later backup runs.
         let doomed_subject = Subject::from_raw(&doomed, source.get_base_domain().as_deref());
@@ -516,6 +576,96 @@ mod tests {
         );
     }
 
+    /// A seal whose upload never happened must not advance the lane. Otherwise
+    /// the next pass computes deletions against a segment that is not in the
+    /// vault, and the delete is reported against nothing.
+    #[tokio::test]
+    async fn an_uncommitted_export_does_not_advance_the_lane() {
+        let source = Db::init_temp("vault_uncommitted_export").await.unwrap();
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        let doomed = source
+            .create_resource(FOLDER, &drive, "doomed", None)
+            .await
+            .unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+
+        // Sealed but never confirmed — the upload failed.
+        export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 1)
+            .await
+            .unwrap()
+            .unwrap();
+
+        source
+            .remove_resource(&Subject::from_raw(
+                &doomed,
+                source.get_base_domain().as_deref(),
+            ))
+            .await
+            .unwrap();
+
+        let second =
+            export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 2)
+                .await
+                .unwrap()
+                .expect("still exports the surviving resources");
+        assert_eq!(
+            second.tombstones, 0,
+            "nothing was ever backed up, so nothing can be reported deleted"
+        );
+    }
+
+    /// Each device appends only to its own lane, so a restore that used one
+    /// lane's prefix would silently drop every other device's history.
+    #[tokio::test]
+    async fn restore_spans_every_device_lane() {
+        let source = Db::init_temp("vault_multi_lane_source").await.unwrap();
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        source
+            .create_resource(FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+
+        // The same drive backed up from two different devices.
+        let other_device = "ff".repeat(32);
+        export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 1)
+            .await
+            .unwrap()
+            .unwrap();
+        export_vault_delta(
+            &source,
+            &drive_subject,
+            &key,
+            &vault,
+            PSEUDONYM,
+            &other_device,
+            1,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        let restored = Db::init_temp("vault_multi_lane_restored").await.unwrap();
+        let summary = import_vault_batch(&restored, &key, &vault, &drive_prefix(PSEUDONYM))
+            .await
+            .unwrap();
+        assert_eq!(
+            summary.packs_read, 2,
+            "the drive prefix must reach both lanes"
+        );
+
+        // A lane prefix reaches only one, which is the bug this guards.
+        let one_lane = Db::init_temp("vault_multi_lane_one").await.unwrap();
+        let partial = import_vault_batch(&one_lane, &key, &vault, &lane_prefix(PSEUDONYM, DEVICE))
+            .await
+            .unwrap();
+        assert_eq!(partial.packs_read, 1);
+    }
+
     /// A subject that disappears without a tombstone is not claimed as deleted.
     /// Inventing a tombstone would delete real data on restore — a far worse
     /// failure than carrying a stale resource for another cycle.
@@ -534,6 +684,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
+        commit_lane_state(&source, PSEUDONYM, DEVICE, 1).unwrap();
 
         // Same drive, nothing deleted: a second pass must claim no deletions.
         let second =

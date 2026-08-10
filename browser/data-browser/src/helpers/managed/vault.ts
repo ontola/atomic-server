@@ -86,9 +86,14 @@ export type VaultCapableDb = {
     key: Uint8Array,
     keyEpoch: number,
     drivePseudonym: string,
-    devicePubkey: string,
     objects: { objectKey: string; sealed: Uint8Array }[],
   ): Promise<RestoreOutcome>;
+  /** Marks a sealed segment as durably stored. See `backupDrive`. */
+  vaultCommitSegment(
+    drivePseudonym: string,
+    devicePubkey: string,
+    segment: number,
+  ): Promise<void> | void;
 };
 
 async function api<T>(
@@ -155,10 +160,11 @@ export async function disableVault(drivePseudonym: string): Promise<void> {
 export async function putVaultKeyEnvelope(
   drivePseudonym: string,
   envelope: string,
+  { replace = false }: { replace?: boolean } = {},
 ): Promise<void> {
   await api(`/cloud-vault/${drivePseudonym}/key`, {
     method: 'PUT',
-    body: JSON.stringify({ envelope }),
+    body: JSON.stringify({ envelope, replace }),
   });
 }
 
@@ -184,7 +190,14 @@ export async function getVaultKeyEnvelope(
     throw new Error(body?.error ?? `Could not fetch the vault key (${response.status})`);
   }
 
-  const record = (await response.json()) as { envelope: string };
+  const record = (await response.json()) as { envelope?: unknown };
+
+  // A present-but-unusable envelope must not read as "no key yet": the caller
+  // would mint a second key and overwrite the real one, making every existing
+  // backup permanently undecryptable.
+  if (typeof record.envelope !== 'string' || record.envelope.length === 0) {
+    throw new Error('The stored vault key is malformed.');
+  }
 
   return record.envelope;
 }
@@ -281,7 +294,13 @@ export async function backupDrive({
     },
   );
 
-  const upload = uploads[0];
+  const upload = uploads?.[0];
+
+  if (!upload) {
+    throw new Error(
+      'The control plane issued no upload URL for this object.',
+    );
+  }
 
   // The server decides where an object lives; the client never picks its own
   // location. A mismatch means the two sides disagree about the key layout,
@@ -315,6 +334,11 @@ export async function backupDrive({
     }),
   });
 
+  // Only now is the lane's progress official. Sealing parked it; if the upload
+  // above had failed, the next pass would retry against the same view of what
+  // has been backed up rather than one that assumed success.
+  await db.vaultCommitSegment(drivePseudonym, devicePubkey, segment);
+
   return {
     status: 'backed-up',
     resources: sealedPack.resources,
@@ -337,14 +361,12 @@ export async function backupDrive({
 export async function restoreDrive({
   db,
   drivePseudonym,
-  devicePubkey,
   driveKey,
   keyEpoch = 1,
   onProgress,
 }: {
   db: VaultCapableDb;
   drivePseudonym: string;
-  devicePubkey: string;
   driveKey: Uint8Array;
   keyEpoch?: number;
   onProgress?: (downloaded: number, total: number) => void;
@@ -390,13 +412,9 @@ export async function restoreDrive({
     onProgress?.(index + 1, objects.length);
   }
 
-  return db.vaultImport(
-    driveKey,
-    keyEpoch,
-    drivePseudonym,
-    devicePubkey,
-    fetched,
-  );
+  // Every lane, not just this device's: each device appends only to its own,
+  // so importing one would silently drop the rest of the drive's history.
+  return db.vaultImport(driveKey, keyEpoch, drivePseudonym, fetched);
 }
 
 /**
@@ -444,13 +462,26 @@ export async function setUpVaultForDrive({
   }
 
   const driveKey = keys.vaultGenerateKey();
-  // Stored before anything is backed up. A key that exists only in memory when
-  // the first upload happens would leave objects nobody can open if the tab
-  // closed in between.
-  await putVaultKeyEnvelope(
-    enrollment.drive_pseudonym,
-    keys.vaultWrapKey(driveKey, agentSecret),
-  );
+
+  try {
+    // Stored before anything is backed up. A key that exists only in memory
+    // when the first upload happens would leave objects nobody can open if the
+    // tab closed in between.
+    await putVaultKeyEnvelope(
+      enrollment.drive_pseudonym,
+      keys.vaultWrapKey(driveKey, agentSecret),
+    );
+  } catch {
+    // Create-only, so this means another client won the race and stored its
+    // own key between our read and our write. Theirs is authoritative: adopting
+    // it is the only outcome where both clients can read each other's backups.
+    // Ours has sealed nothing yet, so discarding it costs nothing.
+    const winner = await getVaultKeyEnvelope(enrollment.drive_pseudonym);
+
+    if (!winner) throw new Error('Could not store or recover a vault key.');
+
+    return { enrollment, driveKey: keys.vaultUnwrapKey(winner, agentSecret) };
+  }
 
   return { enrollment, driveKey };
 }

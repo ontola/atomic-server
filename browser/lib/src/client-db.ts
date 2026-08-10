@@ -794,7 +794,6 @@ export class ClientDbWorker {
     key: Uint8Array,
     keyEpoch: number,
     drivePseudonym: string,
-    devicePubkey: string,
     objects: { objectKey: string; sealed: Uint8Array }[],
   ): Promise<{
     packsRead: number;
@@ -806,7 +805,6 @@ export class ClientDbWorker {
       key,
       keyEpoch,
       drivePseudonym,
-      devicePubkey,
       objects,
     });
 
@@ -815,6 +813,27 @@ export class ClientDbWorker {
       resourcesRestored: number;
       tombstonesApplied: number;
     };
+  }
+
+  /**
+   * Record that a sealed segment is durably in the vault.
+   *
+   * Sealing and storing are separate steps: `vaultExport` produces bytes and
+   * the caller uploads them afterwards. Until this is called the lane's
+   * progress stays provisional, so a failed upload is retried against the same
+   * view of what has been backed up.
+   */
+  async vaultCommitSegment(
+    drivePseudonym: string,
+    devicePubkey: string,
+    segment: number,
+  ): Promise<void> {
+    await this.send({
+      type: 'vaultCommitSegment',
+      drivePseudonym,
+      devicePubkey,
+      segment,
+    });
   }
 
   get isReady(): boolean {

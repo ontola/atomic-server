@@ -69,6 +69,7 @@ describe('backupDrive', () => {
     const db: VaultCapableDb = {
       vaultExport: vi.fn(async () => null),
       vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
     };
     const calls = mockFetch(() => undefined);
 
@@ -94,6 +95,7 @@ describe('backupDrive', () => {
     const db: VaultCapableDb = {
       vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
       vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
     };
     const calls = mockFetch(url => {
       if (url.endsWith('/upload-urls')) {
@@ -138,6 +140,7 @@ describe('backupDrive', () => {
     const db: VaultCapableDb = {
       vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
       vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
     };
     const calls = mockFetch(url => {
       if (url.endsWith('/upload-urls')) {
@@ -189,6 +192,7 @@ describe('backupDrive', () => {
     const db: VaultCapableDb = {
       vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
       vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
     };
     mockFetch(url => {
       if (url.endsWith('/upload-urls')) {
@@ -230,6 +234,7 @@ describe('backupDrive', () => {
     const db: VaultCapableDb = {
       vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
       vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
     };
     let putHeaders: Record<string, string> | undefined;
     vi.stubGlobal(
@@ -282,6 +287,7 @@ describe('backupDrive', () => {
     const db: VaultCapableDb = {
       vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
       vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
     };
     mockFetch(url =>
       url.endsWith('/upload-urls')
@@ -308,7 +314,11 @@ describe('backupDrive', () => {
 
 describe('restoreDrive', () => {
   it('reports nothing when the vault is empty', async () => {
-    const db: VaultCapableDb = { vaultExport: vi.fn(), vaultImport: vi.fn() };
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
     mockFetch(url =>
       url.endsWith('/objects')
         ? { ok: true, status: 200, json: async () => [] }
@@ -318,7 +328,6 @@ describe('restoreDrive', () => {
     const outcome = await restoreDrive({
       db,
       drivePseudonym: PSEUDONYM,
-      devicePubkey: DEVICE,
       driveKey: KEY,
     });
 
@@ -344,7 +353,6 @@ describe('restoreDrive', () => {
           _k: Uint8Array,
           _e: number,
           _p: string,
-          _d: string,
           objects: { objectKey: string; sealed: Uint8Array }[],
         ) => {
           imported.push(...objects.map(o => o.objectKey));
@@ -352,6 +360,7 @@ describe('restoreDrive', () => {
           return { packsRead: 2, resourcesRestored: 5, tombstonesApplied: 1 };
         },
       ),
+      vaultCommitSegment: vi.fn(),
     };
 
     mockFetch(url => {
@@ -390,7 +399,6 @@ describe('restoreDrive', () => {
     const outcome = await restoreDrive({
       db,
       drivePseudonym: PSEUDONYM,
-      devicePubkey: DEVICE,
       driveKey: KEY,
     });
 
@@ -406,6 +414,7 @@ describe('restoreDrive', () => {
         resourcesRestored: 1,
         tombstonesApplied: 0,
       })),
+      vaultCommitSegment: vi.fn(),
     };
     mockFetch(url => {
       if (url.endsWith('/objects')) {
@@ -443,7 +452,6 @@ describe('restoreDrive', () => {
     await restoreDrive({
       db,
       drivePseudonym: PSEUDONYM,
-      devicePubkey: DEVICE,
       driveKey: KEY,
       onProgress: (done, total) => seen.push([done, total]),
     });
@@ -455,7 +463,11 @@ describe('restoreDrive', () => {
   });
 
   it('fails loudly when the server issues no URL for a listed object', async () => {
-    const db: VaultCapableDb = { vaultExport: vi.fn(), vaultImport: vi.fn() };
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
     mockFetch(url => {
       if (url.endsWith('/objects')) {
         return {
@@ -476,7 +488,6 @@ describe('restoreDrive', () => {
       restoreDrive({
         db,
         drivePseudonym: PSEUDONYM,
-        devicePubkey: DEVICE,
         driveKey: KEY,
       }),
     ).rejects.toThrow(/No download URL/i);
@@ -617,6 +628,81 @@ describe('key management', () => {
     expect(Array.from(recovered)).toEqual(Array.from(original));
   });
 
+  /**
+   * Two clients enrolling the same drive at once would each mint a key and race
+   * to store it. The server is create-only, so the loser must adopt the
+   * winner's key — anything else leaves one client's backups undecryptable by
+   * the other.
+   */
+  it('adopts the winner\'s key when another client stored one first', async () => {
+    const keys = fakeKeys();
+    const winnersKey = new Uint8Array(32).fill(42);
+    const stored = keys.vaultWrapKey(winnersKey, AGENT_SECRET);
+    let sawPut = false;
+
+    mockFetch((url, init) => {
+      if (url.endsWith('/enroll')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            enrollment: { drive_pseudonym: PSEUDONYM, id: 'e1' },
+          }),
+        };
+      }
+
+      if (url.endsWith('/key') && init?.method === 'PUT') {
+        sawPut = true;
+
+        // Create-only: the other client got there first.
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({ error: 'a key envelope already exists' }),
+        };
+      }
+
+      if (url.endsWith('/key')) {
+        // First read: nothing yet. Second read (after the conflict): the winner.
+        return sawPut
+          ? { ok: true, status: 200, json: async () => ({ envelope: stored }) }
+          : { ok: true, status: 204 };
+      }
+
+      return undefined;
+    });
+
+    const { driveKey } = await setUpVaultForDrive({
+      keys,
+      driveSubject: 'did:ad:drive',
+      agentSubject: 'did:ad:agent:x',
+      agentSecret: AGENT_SECRET,
+    });
+
+    expect(Array.from(driveKey)).toEqual(Array.from(winnersKey));
+  });
+
+  /**
+   * A present-but-unusable envelope must not read as "no key yet" — the caller
+   * would mint a second key and overwrite the real one, making every existing
+   * backup undecryptable.
+   */
+  it('refuses a malformed stored envelope rather than treating it as absent', async () => {
+    mockFetch(url =>
+      url.endsWith('/key')
+        ? { ok: true, status: 200, json: async () => ({ envelope: '' }) }
+        : undefined,
+    );
+
+    await expect(
+      recoverDriveKey({
+        keys: fakeKeys(),
+        drivePseudonym: PSEUDONYM,
+        agentSecret: AGENT_SECRET,
+      }),
+    ).rejects.toThrow(/malformed/i);
+  });
+
   it('says so plainly when a drive has no stored key', async () => {
     mockFetch(url => (url.endsWith('/key') ? { ok: true, status: 204 } : undefined));
 
@@ -627,6 +713,133 @@ describe('key management', () => {
         agentSecret: AGENT_SECRET,
       }),
     ).rejects.toThrow(/no stored vault key/i);
+  });
+});
+
+describe('lane bookkeeping', () => {
+  /**
+   * Sealing parks the lane's progress; only a confirmed upload makes it
+   * official. Committing earlier would let a failed upload convince the next
+   * pass that a segment exists in the vault when it does not.
+   */
+  it('commits the segment only after the upload is confirmed', async () => {
+    const order: string[] = [];
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(() => {
+        order.push('commit');
+      }),
+    };
+    mockFetch(url => {
+      if (url.endsWith('/upload-urls')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            uploads: [
+              {
+                object_id: 'obj-1',
+                object_key: PACK_KEY,
+                url: 'https://s3.test/put',
+                method: 'PUT',
+                headers: [],
+                size_bytes: 4,
+              },
+            ],
+          }),
+        };
+      }
+
+      if (url.endsWith('/confirm-upload')) order.push('confirm');
+
+      if (url === 'https://s3.test/put') order.push('put');
+
+      return undefined;
+    });
+
+    await backupDrive({
+      db,
+      driveSubject: 'did:ad:drive',
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+      segment: 3,
+    });
+
+    expect(order).toEqual(['put', 'confirm', 'commit']);
+    expect(db.vaultCommitSegment).toHaveBeenCalledWith(PSEUDONYM, DEVICE, 3);
+  });
+
+  it('does not commit a segment whose upload failed', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
+    mockFetch(url => {
+      if (url.endsWith('/upload-urls')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            uploads: [
+              {
+                object_id: 'obj-1',
+                object_key: PACK_KEY,
+                url: 'https://s3.test/put',
+                method: 'PUT',
+                headers: [],
+                size_bytes: 4,
+              },
+            ],
+          }),
+        };
+      }
+
+      if (url === 'https://s3.test/put') {
+        return { ok: false, status: 500, json: async () => ({}) };
+      }
+
+      return undefined;
+    });
+
+    await expect(
+      backupDrive({
+        db,
+        driveSubject: 'did:ad:drive',
+        drivePseudonym: PSEUDONYM,
+        devicePubkey: DEVICE,
+        driveKey: KEY,
+        segment: 3,
+      }),
+    ).rejects.toThrow();
+
+    expect(db.vaultCommitSegment).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing upload URL rather than crashing on undefined', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
+    mockFetch(url =>
+      url.endsWith('/upload-urls')
+        ? { ok: true, status: 200, json: async () => ({ uploads: [] }) }
+        : undefined,
+    );
+
+    await expect(
+      backupDrive({
+        db,
+        driveSubject: 'did:ad:drive',
+        drivePseudonym: PSEUDONYM,
+        devicePubkey: DEVICE,
+        driveKey: KEY,
+        segment: 1,
+      }),
+    ).rejects.toThrow(/no upload URL/i);
   });
 });
 
@@ -680,6 +893,7 @@ describe('scheduling', () => {
         return null;
       }),
       vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
     };
     mockFetch(url =>
       url.endsWith('/state')
@@ -712,6 +926,7 @@ describe('scheduling', () => {
         return null;
       }),
       vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
     };
     mockFetch(url =>
       url.endsWith('/state')
@@ -734,7 +949,11 @@ describe('scheduling', () => {
 
   /** A suspended vault refuses uploads; asking every tick just buries the log. */
   it('does not attempt a backup while the vault is suspended', async () => {
-    const db: VaultCapableDb = { vaultExport: vi.fn(), vaultImport: vi.fn() };
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
     mockFetch(url =>
       url.endsWith('/state')
         ? { ok: true, status: 200, json: async () => state({}, 'suspended') }
