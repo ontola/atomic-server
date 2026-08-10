@@ -51,8 +51,11 @@ stop
 # ── MinIO ──────────────────────────────────────────────────────────────────
 # The bucket is just a directory: MinIO's filesystem backend exposes each
 # top-level directory under its data path as one, so no mc/aws CLI is needed.
-rm -rf "$MINIO_DATA"
+# Clear the bucket's contents, not the mount root. Deleting and recreating the
+# directory Docker is bind-mounting leaves the daemon looking at the old inode,
+# and MinIO fails with "Unable to use the drive /data: drive not found".
 mkdir -p "$MINIO_DATA/$BUCKET"
+rm -rf "${MINIO_DATA:?}/$BUCKET"/*
 
 docker run -d --name atomic-vault-e2e-minio \
   -p "$MINIO_PORT:9000" \
@@ -85,6 +88,50 @@ if [[ ! -d "$SAAS_DIR" ]]; then
 fi
 
 rm -f "$SAAS_DB"
+
+# Build the portal here rather than borrowing one from another checkout.
+#
+# The control plane embeds `portal/dist` at compile time, so a missing dist
+# fails the build and it is tempting to copy one across. Do not: a production
+# build has `VITE_ATOMIC_APP_URL` baked in, which overrides the portal's own
+# runtime "am I on localhost" check and sends a local sign-in to
+# app.atomicserver.eu. Built here with that variable unset, the fallback
+# applies and sign-in lands on the local app.
+#
+# Must happen before `cargo run`, since the assets are compiled in.
+if [[ ! -f "$SAAS_DIR/portal/dist/index.html" ]] || \
+   grep -rqs "app.atomicserver.eu" "$SAAS_DIR/portal/dist/assets"; then
+  # The portal links to @tomic/lib and @tomic/edit-mode by `file:` path into
+  # the sibling atomic-server checkout, so those have to be built first. A
+  # fresh worktree has no build outputs and the failure surfaces as
+  # "Cannot find module '@tomic/lib'", which names the symptom rather than
+  # the cause.
+  # Resolved from the portal's own `file:` paths, which point at whatever
+  # atomic-server sits beside *the control plane checkout* — not necessarily
+  # this one. Getting that wrong reports a directory that is already built
+  # while the build keeps failing.
+  portal_sibling="$(cd "$SAAS_DIR/../atomic-server" 2>/dev/null && pwd || true)"
+
+  if [[ -z "$portal_sibling" ]]; then
+    echo "No atomic-server beside $SAAS_DIR — the portal links to it by file: path." >&2
+    exit 1
+  fi
+
+  for pkg in lib edit-mode; do
+    if [[ ! -f "$portal_sibling/browser/$pkg/dist/index.js" ]]; then
+      echo "The portal needs @tomic/$pkg built in the checkout it links to:" >&2
+      echo "  cd $portal_sibling/browser && pnpm install && pnpm --filter @tomic/$pkg build" >&2
+      exit 1
+    fi
+  done
+
+  echo "building the portal for local use..."
+  (
+    cd "$SAAS_DIR/portal"
+    [[ -d node_modules ]] || npm ci --silent
+    env -u VITE_ATOMIC_APP_URL npm run build --silent
+  ) || { echo "portal build failed" >&2; exit 1; }
+fi
 
 # Virtual-hosted addressing puts the bucket in the host name. macOS resolves
 # *.localhost natively; Linux does not, so name it once.
