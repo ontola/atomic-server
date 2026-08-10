@@ -38,7 +38,7 @@ class _SyncScreenState extends State<SyncScreen> {
 
   /// And once more on the way out, because pairing happens *inside* the shared
   /// section below and there is no callback for it — so this is what stops the
-  /// account screen still saying "nothing paired" after a device was just
+  /// settings screen still saying "nothing paired" after a device was just
   /// paired.
   @override
   void dispose() {
@@ -51,7 +51,10 @@ class _SyncScreenState extends State<SyncScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Devices')),
+      // 'Sync' rather than 'Devices': the shared section below has a list under
+      // that heading, and a screen whose title repeats one of its own headings
+      // reads as the whole screen being that list.
+      appBar: AppBar(title: const Text('Sync')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

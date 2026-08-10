@@ -17,9 +17,9 @@ use super::simple::state::{db, err};
 
 /// The container every meal is created under.
 ///
-/// Meals live in one folder rather than directly on the drive so a day query is
-/// "children of this subject" instead of a scan of everything the drive holds —
-/// and so the drive stays free for whatever else this account keeps there.
+/// Meals live in one container rather than directly on the drive so a day query
+/// is "children of this subject" instead of a scan of everything the drive holds
+/// — and so the drive stays free for whatever else this account keeps there.
 pub const MEALS_CONTAINER_NAME: &str = "Meals";
 
 /// Find the meals container under the active drive, creating it the first time.
@@ -34,6 +34,11 @@ pub const MEALS_CONTAINER_NAME: &str = "Meals";
 /// If two devices each made one before they ever met, the sort makes both sides
 /// pick the same survivor instead of disagreeing forever. Meals already written
 /// to the other one are not moved — Phase 2 owns that, once there are meals.
+///
+/// It is a [`Table`](atomic_lib::urls::TABLE) rather than a plain Folder: the
+/// container holds one class and nothing else, which is exactly what a Table's
+/// `classtype` says, and it is what makes the browser open a drive's meals as
+/// rows with columns rather than as a list of opaque children.
 pub async fn ensure_meals_container() -> Result<String, String> {
     // Find-or-create is only idempotent if nothing can slip between the two.
     // Boot calls this, and so does the first meal logged before boot finished —
@@ -45,16 +50,32 @@ pub async fn ensure_meals_container() -> Result<String, String> {
     let drive = store.get_active_drive().ok_or("No active drive")?;
 
     if let Some(existing) = find_meals_container(store.as_ref(), &drive).await? {
+        // A container made before this app used Tables is upgraded where it
+        // stands. Making a fresh Table instead would leave every meal already
+        // logged parented to the old one and therefore out of every query —
+        // the meals are still there, but the app has lost them.
+        upgrade_to_table(store.as_ref(), &existing).await?;
         return Ok(existing);
     }
 
     store
-        .create_resource(atomic_lib::urls::FOLDER, &drive, MEALS_CONTAINER_NAME, None)
+        .create_resource(
+            atomic_lib::urls::TABLE,
+            &drive,
+            MEALS_CONTAINER_NAME,
+            Some(vec![(
+                atomic_lib::urls::CLASSTYPE_PROP,
+                Value::AtomicUrl(atomic_lib::urls::MEAL.into()),
+            )]),
+        )
         .await
         .map_err(err)
 }
 
 /// The meals container under `drive`, or None when there isn't one yet.
+///
+/// A Folder counts, because that is what this app made until it made Tables —
+/// see [`upgrade_to_table`]. Anything else named `Meals` is somebody else's.
 async fn find_meals_container(
     store: &atomic_lib::Db,
     drive: &str,
@@ -67,16 +88,20 @@ async fn find_meals_container(
         let Ok(resource) = store.get_resource(subject).await else {
             continue;
         };
-        let is_folder = resource
+        let is_container = resource
             .get(atomic_lib::urls::IS_A)
-            .map(|v| v.to_string().contains(atomic_lib::urls::FOLDER))
+            .map(|v| {
+                let classes = v.to_string();
+                classes.contains(atomic_lib::urls::TABLE)
+                    || classes.contains(atomic_lib::urls::FOLDER)
+            })
             .unwrap_or(false);
         let is_named_meals = resource
             .get(atomic_lib::urls::NAME)
             .map(|v| v.to_string() == MEALS_CONTAINER_NAME)
             .unwrap_or(false);
 
-        if is_folder && is_named_meals {
+        if is_container && is_named_meals {
             found.push(resource.get_subject().to_string());
         }
     }
@@ -84,6 +109,43 @@ async fn find_meals_container(
     found.sort();
 
     Ok(found.into_iter().next())
+}
+
+/// Make an existing container a Table of Meals, if it isn't one already.
+///
+/// Runs on every launch and writes nothing when there is nothing to change: a
+/// commit per launch would be history nobody made and a sync per launch on two
+/// phones that agree. The subject is untouched, so every meal under it stays
+/// where it is — this changes what the container *says it is*, not where the
+/// meals live.
+async fn upgrade_to_table(store: &atomic_lib::Db, subject: &str) -> Result<(), String> {
+    let mut resource = store.get_resource(&subject.into()).await.map_err(err)?;
+
+    let classes = resource
+        .get(atomic_lib::urls::IS_A)
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+    let classtype = resource
+        .get(atomic_lib::urls::CLASSTYPE_PROP)
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+
+    if classes.contains(atomic_lib::urls::TABLE) && classtype == atomic_lib::urls::MEAL {
+        return Ok(());
+    }
+
+    set(
+        &mut resource,
+        atomic_lib::urls::IS_A,
+        Value::ResourceArray(vec![atomic_lib::urls::TABLE.into()]),
+    )?;
+    set(
+        &mut resource,
+        atomic_lib::urls::CLASSTYPE_PROP,
+        Value::AtomicUrl(atomic_lib::urls::MEAL.into()),
+    )?;
+
+    save_and_push(&mut resource, store).await
 }
 
 // ── Status tags ────────────────────────────────────────────────────────────
@@ -760,11 +822,76 @@ mod tests {
             MEALS_CONTAINER_NAME
         );
         assert_eq!(
-            get_property(first, atomic_lib::urls::PARENT.to_string())
+            get_property(first.clone(), atomic_lib::urls::PARENT.to_string())
                 .await
                 .unwrap(),
             drive,
             "meals belong to the drive, so their container has to"
+        );
+        assert!(
+            get_property(first.clone(), atomic_lib::urls::IS_A.to_string())
+                .await
+                .unwrap()
+                .contains(atomic_lib::urls::TABLE),
+            "the container is a Table"
+        );
+        assert_eq!(
+            get_property(first, atomic_lib::urls::CLASSTYPE_PROP.to_string())
+                .await
+                .unwrap(),
+            atomic_lib::urls::MEAL,
+            "a Table without its classtype is a table of nothing"
+        );
+    }
+
+    /// The container this app made before it made Tables, brought forward.
+    ///
+    /// Tested on a Folder of its own rather than through `ensure_meals_container`
+    /// — a second resource named `Meals` under the shared drive would be a rival
+    /// container the other tests might get handed instead, which is the flake the
+    /// note above exists to avoid. What matters is the same either way: the
+    /// subject does not change, so the meals under it stay listed.
+    #[tokio::test]
+    async fn a_folder_container_becomes_a_table_where_it_stands() {
+        shared_drive().await;
+        let container = ensure_meals_container().await.unwrap();
+        let store = db().unwrap();
+        let old = store
+            .create_resource(atomic_lib::urls::FOLDER, &container, "Old meals", None)
+            .await
+            .unwrap();
+
+        upgrade_to_table(store.as_ref(), &old).await.unwrap();
+
+        assert!(
+            get_property(old.clone(), atomic_lib::urls::IS_A.to_string())
+                .await
+                .unwrap()
+                .contains(atomic_lib::urls::TABLE),
+            "an upgraded container is a Table"
+        );
+        assert_eq!(
+            get_property(old.clone(), atomic_lib::urls::CLASSTYPE_PROP.to_string())
+                .await
+                .unwrap(),
+            atomic_lib::urls::MEAL
+        );
+        assert_eq!(
+            get_property(old.clone(), atomic_lib::urls::NAME.to_string())
+                .await
+                .unwrap(),
+            "Old meals",
+            "the upgrade changes what the container is, not what it holds"
+        );
+
+        // Idempotent: a launch that has nothing to change writes no commit.
+        let before = store.get_resource(&old.as_str().into()).await.unwrap();
+        upgrade_to_table(store.as_ref(), &old).await.unwrap();
+        let after = store.get_resource(&old.as_str().into()).await.unwrap();
+        assert_eq!(
+            before.get(atomic_lib::urls::LAST_COMMIT).ok().map(|v| v.to_string()),
+            after.get(atomic_lib::urls::LAST_COMMIT).ok().map(|v| v.to_string()),
+            "a second launch must not commit an upgrade it already did"
         );
     }
 

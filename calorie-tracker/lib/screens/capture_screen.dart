@@ -17,17 +17,17 @@ import '../services/openrouter.dart';
 import '../services/sync_service.dart';
 import '../startup.dart';
 import '../widgets/meal_photo.dart';
-import 'account_screen.dart';
+import 'settings/settings_screen.dart';
 import 'meal_actions.dart';
 import 'today_screen.dart';
 
 /// Home: a live camera preview and one big button.
 ///
-/// The shutter is the whole product. It writes a compressed photo and a meal
-/// with no name and no number — `pending`, which is exactly the queue Phase 4's
-/// estimator drains — and then it is done. Nothing on this path waits on a
-/// model, a network, or a decision from the user: the app is safe to kill the
-/// instant the chip says "Logged".
+/// The shutter is the whole product. It takes the frame, asks for a note, and
+/// on the second press writes a compressed photo and a meal with no name and no
+/// number — `pending`, which is exactly the queue Phase 4's estimator drains —
+/// and then it is done. Nothing after that press waits on a model or a network:
+/// the app is safe to kill the instant the chip says "Logged".
 class CaptureScreen extends StatefulWidget {
   const CaptureScreen({
     super.key,
@@ -93,6 +93,25 @@ class _CaptureScreenState extends State<CaptureScreen>
   late final MealStore _store = widget.store ?? MealStore();
 
   bool _capturing = false;
+  bool _saving = false;
+
+  /// The frame that has been taken and not yet written, if any. While this is
+  /// set the screen is *reviewing*: the note drawer is up and the big button
+  /// saves instead of shooting.
+  _PendingShot? _pending;
+
+  /// What the user is typing about [_pending]. Lives here rather than in the
+  /// drawer so that a save from anywhere — the button, the keyboard's done key,
+  /// the app being backgrounded — reads the same text.
+  final TextEditingController _note = TextEditingController();
+
+  /// A second press that landed while the frame was still being taken: the
+  /// double press that means "no note". Honoured the moment there is a shot.
+  bool _saveOnArrival = false;
+
+  /// Whether anything is in flight. The one-tap chips are not offered during
+  /// either half.
+  bool get _busy => _capturing || _saving;
 
   /// The photo the "Logged" chip is showing, or null when there is no chip.
   /// Empty means a meal was logged without a photo being stored, which still
@@ -148,6 +167,7 @@ class _CaptureScreenState extends State<CaptureScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _chipTimer?.cancel();
+    _note.dispose();
     // The stream outlives this screen otherwise, and a camera nobody is looking
     // at is the one cost §6 says this feature is not allowed to have.
     unawaited(widget.live?.stop());
@@ -165,6 +185,16 @@ class _CaptureScreenState extends State<CaptureScreen>
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
+        // A frame that has been taken and not yet written lives only in this
+        // object, so leaving the app is the one moment it can be lost — and a
+        // lost photo is not recoverable, while a meal logged without the note
+        // somebody was still typing is one row in a list they can edit. So the
+        // review drawer gives way here and the shot is written as it stands.
+        // `paused` and not `inactive`: the notification shade and the app
+        // switcher are not leaving.
+        if (state == AppLifecycleState.paused && _pending != null) {
+          unawaited(_saveShot());
+        }
         // Before the camera, so the stream is cancelled rather than dying with
         // the controller underneath it.
         unawaited(widget.live?.stop());
@@ -191,49 +221,134 @@ class _CaptureScreenState extends State<CaptureScreen>
 
   // ── The shutter ──────────────────────────────────────────────────────────
 
+  /// Take the frame and ask what else the estimate should know.
+  ///
+  /// The photo is held in memory and nothing is written yet: what the user is
+  /// about to type goes to the model *with* the picture, and writing the meal
+  /// first would mean a second write of the note against a meal the queue may
+  /// already have picked up.
   Future<void> _capture() async {
-    // The second tap of a double tap is not a second meal.
-    if (_capturing) return;
+    // The second half of a double press — the user saying they have nothing to
+    // add — reaches the same place whichever side of the frame arriving it
+    // lands on, and is never a second meal. After the shot, the button under
+    // their thumb is the save button and this is only reached by a press that
+    // beat the rebuild; during it, there is nothing to save yet, so the intent
+    // is remembered and honoured the moment there is.
+    if (_pending != null) return _saveShot();
+    if (_capturing) {
+      _saveOnArrival = true;
+      return;
+    }
     setState(() => _capturing = true);
     unawaited(HapticFeedback.mediumImpact());
 
     try {
       final at = DateTime.now();
       final bytes = await widget.camera.capture();
-
-      final images = widget.images;
-      final stored = images == null ? null : await images.save(bytes, at: at);
-
-      await _store.logMeal(imagePath: stored?.imagePath ?? '', consumedAt: at);
-
-      final error = _store.error;
       if (!mounted) return;
-      if (error != null) {
-        _say(error);
-      } else {
-        _showLoggedChip(stored?.imagePath ?? '');
-        // After the meal, never before: the sweep decides what to evict from
-        // the list of meals, and this one has to be in it or its own photo is
-        // an orphan.
-        unawaited(_sweep());
-        // Not awaited either, and nothing on this screen waits for it: the
-        // shutter's job ended when the meal was written, and what it was worth
-        // arrives whenever the model gets round to it.
-        unawaited(widget.queue?.drain());
-        // And the vector, on the same terms — nothing here waits for it either.
-        // Behind the estimate on purpose: a meal with no name and no number is
-        // nothing to suggest anybody *as* yet, so the estimate is the useful
-        // half to spend the phone on first.
-        unawaited(widget.embeddings?.drain());
-        // This meal is `pending` and so is not one of these yet, but an earlier
-        // one that the queue finished during this session is.
-        unawaited(_loadSuggestions());
-      }
+      _note.clear();
+      setState(() => _pending = _PendingShot(bytes: bytes, at: at));
+      // The drawer is over the preview and the keyboard may be over that.
+      // Nobody is aiming at a plate, and §6's "battery is bounded by the
+      // viewfinder being up" is a claim about moments like this one.
+      unawaited(widget.live?.stop());
     } catch (e) {
       if (mounted) _say(_messageFor(e));
     } finally {
       if (mounted) setState(() => _capturing = false);
     }
+
+    if (_saveOnArrival) {
+      _saveOnArrival = false;
+      if (mounted && _pending != null) await _saveShot();
+    }
+  }
+
+  /// Write the shot and whatever was typed about it, and be done.
+  ///
+  /// This is the path that must not wait on anything: by the time it returns
+  /// the photo is on disk and the meal is written, and the estimate, the vector
+  /// and the sweep are all somebody else's problem.
+  Future<void> _saveShot() async {
+    final shot = _pending;
+    if (shot == null || _saving) return;
+    setState(() => _saving = true);
+    unawaited(HapticFeedback.mediumImpact());
+
+    try {
+      final images = widget.images;
+      final stored =
+          images == null ? null : await images.save(shot.bytes, at: shot.at);
+
+      await _store.logMeal(
+        imagePath: stored?.imagePath ?? '',
+        consumedAt: shot.at,
+        // Straight into `meal-notes`, which is the eater's words and the only
+        // thing the estimator sends as such — see the clarify loop. An estimate
+        // never overwrites it, so a note written here survives every round.
+        notes: _note.text.trim(),
+      );
+
+      final error = _store.error;
+      if (!mounted) return;
+      if (error != null) {
+        // The shot stays in hand: the bytes are the only copy there is, and a
+        // drive that was not there a second ago may be there on the next press.
+        _say(error);
+        return;
+      }
+
+      _closeDrawer();
+      _showLoggedChip(stored?.imagePath ?? '');
+      // After the meal, never before: the sweep decides what to evict from
+      // the list of meals, and this one has to be in it or its own photo is
+      // an orphan.
+      unawaited(_sweep());
+      // Not awaited either, and nothing on this screen waits for it: the
+      // shutter's job ended when the meal was written, and what it was worth
+      // arrives whenever the model gets round to it.
+      unawaited(widget.queue?.drain());
+      // And the vector, on the same terms — nothing here waits for it either.
+      // Behind the estimate on purpose: a meal with no name and no number is
+      // nothing to suggest anybody *as* yet, so the estimate is the useful
+      // half to spend the phone on first.
+      unawaited(widget.embeddings?.drain());
+      // This meal is `pending` and so is not one of these yet, but an earlier
+      // one that the queue finished during this session is.
+      unawaited(_loadSuggestions());
+    } catch (e) {
+      if (mounted) _say(_messageFor(e));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// Throw the frame away. Nothing was written, so there is nothing to undo —
+  /// which is also why this is a plain tap and not a confirmation.
+  void _discardShot() {
+    if (_saving) return;
+    _closeDrawer();
+  }
+
+  void _closeDrawer() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _pending = null;
+      _note.clear();
+    });
+    _resumeLive();
+  }
+
+  /// Point the matcher at the preview again — but only when the preview is
+  /// something somebody could be looking at. Every caller can be reached from a
+  /// screen that is going away or an app that already has.
+  void _resumeLive() {
+    if (!mounted || _pending != null) return;
+    // Null is "no lifecycle event yet", which is the app starting up in front
+    // of somebody — the one state here that is not a reason to hold off.
+    final state = WidgetsBinding.instance.lifecycleState;
+    if (state != null && state != AppLifecycleState.resumed) return;
+    widget.live?.start();
   }
 
   // ── The one-tap path ─────────────────────────────────────────────────────
@@ -250,7 +365,7 @@ class _CaptureScreenState extends State<CaptureScreen>
   /// permission — is no reason to refuse the meal: the numbers are the point and
   /// the photo is a cache.
   Future<void> _logSuggestion(MealSuggestion suggestion) async {
-    if (_capturing) return;
+    if (_busy || _pending != null) return;
     setState(() => _capturing = true);
     unawaited(HapticFeedback.mediumImpact());
 
@@ -397,7 +512,9 @@ class _CaptureScreenState extends State<CaptureScreen>
     try {
       await body();
     } finally {
-      if (mounted) widget.live?.start();
+      // Not unconditionally: a shot may be waiting in the drawer behind this
+      // route, and coming back to it is not coming back to a viewfinder.
+      _resumeLive();
     }
   }
 
@@ -418,9 +535,9 @@ class _CaptureScreenState extends State<CaptureScreen>
         ));
       });
 
-  Future<void> _openAccount() => _away(() async {
+  Future<void> _openSettings() => _away(() async {
         await Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => AccountScreen(
+          builder: (_) => SettingsScreen(
             session: widget.session,
             images: widget.images,
             account: widget.account,
@@ -453,6 +570,11 @@ class _CaptureScreenState extends State<CaptureScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      // The keyboard is handled by the column below rather than by resizing the
+      // body: the viewfinder is the body, and a preview that jumps and re-fits
+      // every time the note field is tapped is a worse answer than one that
+      // stays where it was pointed.
+      resizeToAvoidBottomInset: false,
       body: AnimatedBuilder(
         // Three things move underneath this screen and none is the others'
         // business: the camera coming up, the day's total changing, and the
@@ -460,50 +582,74 @@ class _CaptureScreenState extends State<CaptureScreen>
         animation: Listenable.merge([widget.camera, _store, widget.live]),
         builder: (context, _) {
           final chips = _chips;
+          final pending = _pending;
           return Stack(
             fit: StackFit.expand,
             children: [
               _Viewfinder(camera: widget.camera, onType: _typeAMeal),
               const _Scrims(),
-              SafeArea(
-                child: Column(
-                  children: [
-                    _TopBar(
-                      summary: _store.summary,
-                      onTapTotal: _openToday,
-                      onTapAccount: _openAccount,
-                    ),
-                    const Spacer(),
-                    // Absent entirely when there is nothing worth offering. An
-                    // empty row, a spinner or a "no matches" state would all be
-                    // worse than nothing, because this is not something the user
-                    // asked for.
-                    if (chips.isNotEmpty) ...[
-                      _SuggestionRow(
-                        suggestions: chips,
-                        images: widget.images,
-                        enabled: !_capturing,
-                        onTap: _logSuggestion,
+              // The whole column rides above the keyboard, which is what keeps
+              // the save button reachable while the note is being typed. The
+              // shutter's own place is measured from the bottom of this column,
+              // so with no keyboard up it has not moved at all.
+              Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      _TopBar(
+                        summary: _store.summary,
+                        onTapTotal: _openToday,
+                        onTapSettings: _openSettings,
+                      ),
+                      const Spacer(),
+                      if (pending != null)
+                        // What the user can still say about the shot before it
+                        // goes. Everything else down here is about the *next*
+                        // meal and would be noise in front of this one.
+                        _NoteDrawer(
+                          bytes: pending.bytes,
+                          note: _note,
+                          onSubmitted: _saveShot,
+                        )
+                      else ...[
+                        // Absent entirely when there is nothing worth offering.
+                        // An empty row, a spinner or a "no matches" state would
+                        // all be worse than nothing, because this is not
+                        // something the user asked for.
+                        if (chips.isNotEmpty) ...[
+                          _SuggestionRow(
+                            suggestions: chips,
+                            images: widget.images,
+                            enabled: !_busy,
+                            onTap: _logSuggestion,
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (_justLoggedPath != null)
+                          _LoggedChip(
+                            images: widget.images,
+                            imagePath: _justLoggedPath!,
+                          )
+                        else
+                          const SizedBox(height: 64),
+                      ],
+                      const SizedBox(height: 16),
+                      _Controls(
+                        busy: _busy,
+                        canShoot: widget.camera.isReady,
+                        reviewing: pending != null,
+                        onShutter: _capture,
+                        onSave: _saveShot,
+                        onDiscard: _discardShot,
+                        onType: _typeAMeal,
+                        onToday: _openToday,
                       ),
                       const SizedBox(height: 12),
                     ],
-                    if (_justLoggedPath != null)
-                      _LoggedChip(
-                        images: widget.images,
-                        imagePath: _justLoggedPath!,
-                      )
-                    else
-                      const SizedBox(height: 64),
-                    const SizedBox(height: 16),
-                    _Controls(
-                      busy: _capturing,
-                      canShoot: widget.camera.isReady,
-                      onShutter: _capture,
-                      onType: _typeAMeal,
-                      onToday: _openToday,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -619,17 +765,17 @@ class _Scrims extends StatelessWidget {
       );
 }
 
-/// Today's running total, and the way out to the account.
+/// Today's running total, and the way out to settings.
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.summary,
     required this.onTapTotal,
-    required this.onTapAccount,
+    required this.onTapSettings,
   });
 
   final DaySummary summary;
   final VoidCallback onTapTotal;
-  final VoidCallback onTapAccount;
+  final VoidCallback onTapSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -675,9 +821,9 @@ class _TopBar extends StatelessWidget {
           ),
         ),
         IconButton(
-          onPressed: onTapAccount,
-          icon: const Icon(Icons.person_outline, color: Colors.white),
-          tooltip: 'Account',
+          onPressed: onTapSettings,
+          icon: const Icon(Icons.settings_outlined, color: Colors.white),
+          tooltip: 'Settings',
         ),
         const SizedBox(width: 4),
       ],
@@ -685,19 +831,33 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-/// Shutter in the middle, the two other ways to reach a meal on either side.
+/// Shutter in the middle, the two other ways to reach a meal on either side —
+/// and, while a shot is being reviewed, save in the middle instead.
+///
+/// The middle is the point. The save button is the same size in the same place
+/// as the shutter that produced the shot, so somebody with nothing to add just
+/// presses twice and never reads a word of the drawer.
 class _Controls extends StatelessWidget {
   const _Controls({
     required this.busy,
     required this.canShoot,
+    required this.reviewing,
     required this.onShutter,
+    required this.onSave,
+    required this.onDiscard,
     required this.onType,
     required this.onToday,
   });
 
   final bool busy;
   final bool canShoot;
+
+  /// Whether there is a shot waiting to be written.
+  final bool reviewing;
+
   final VoidCallback onShutter;
+  final VoidCallback onSave;
+  final VoidCallback onDiscard;
   final VoidCallback onType;
   final VoidCallback onToday;
 
@@ -706,21 +866,38 @@ class _Controls extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        _RoundButton(
-          icon: Icons.keyboard_alt_outlined,
-          tooltip: 'Type a meal',
-          onPressed: onType,
-        ),
+        if (reviewing)
+          _RoundButton(
+            icon: Icons.close,
+            tooltip: 'Discard photo',
+            onPressed: onDiscard,
+          )
+        else
+          _RoundButton(
+            icon: Icons.keyboard_alt_outlined,
+            tooltip: 'Type a meal',
+            onPressed: onType,
+          ),
         _ShutterButton(
           busy: busy,
-          enabled: canShoot && !busy,
-          onPressed: onShutter,
+          // Deliberately still tappable while busy: a press that lands during
+          // the capture is the second half of a double press, and swallowing it
+          // would make the fast way through this screen the unreliable one.
+          enabled: reviewing || canShoot,
+          saves: reviewing,
+          onPressed: reviewing ? onSave : onShutter,
         ),
-        _RoundButton(
-          icon: Icons.list_alt_outlined,
-          tooltip: 'Today',
-          onPressed: onToday,
-        ),
+        if (reviewing)
+          // Nothing goes here while a shot is in hand — the two ways out of
+          // this screen would both abandon it — but the space does, or the
+          // button in the middle is not in the middle any more.
+          const SizedBox.square(dimension: 52)
+        else
+          _RoundButton(
+            icon: Icons.list_alt_outlined,
+            tooltip: 'Today',
+            onPressed: onToday,
+          ),
       ],
     );
   }
@@ -730,18 +907,23 @@ class _ShutterButton extends StatelessWidget {
   const _ShutterButton({
     required this.busy,
     required this.enabled,
+    required this.saves,
     required this.onPressed,
   });
 
   final bool busy;
   final bool enabled;
+
+  /// Whether this press writes the shot rather than taking one.
+  final bool saves;
+
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Log a photo of this meal',
+      label: saves ? 'Save this meal' : 'Log a photo of this meal',
       child: GestureDetector(
         onTap: enabled ? onPressed : null,
         child: AnimatedContainer(
@@ -770,7 +952,147 @@ class _ShutterButton extends StatelessWidget {
                       shape: BoxShape.circle,
                       color: enabled ? Colors.white : Colors.white24,
                     ),
+                    // A tick rather than a different shape or colour: the
+                    // button has to read as the same button, in the same place,
+                    // doing the obvious next thing to the photo just taken.
+                    child: saves
+                        ? const Icon(Icons.check, size: 34, color: Colors.black)
+                        : null,
                   ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A frame that has been taken and not yet written.
+class _PendingShot {
+  const _PendingShot({required this.bytes, required this.at});
+
+  /// The only copy of this photo there is until it is saved.
+  final Uint8List bytes;
+
+  /// When the shutter went, not when the drawer was closed — the meal was eaten
+  /// at the former and the note took however long it took.
+  final DateTime at;
+}
+
+/// The drawer that comes up with the shot: one field, and what it is for.
+///
+/// Two things it deliberately does not do. It does **not** take focus: the
+/// keyboard would move the save button out from under the thumb that is on its
+/// way to press it a second time, which is the whole gesture this feature is
+/// built around. And it offers no buttons of its own — saving and discarding
+/// are in the control row below, where the shutter's muscle memory already is.
+class _NoteDrawer extends StatefulWidget {
+  const _NoteDrawer({
+    required this.bytes,
+    required this.note,
+    required this.onSubmitted,
+  });
+
+  final Uint8List bytes;
+  final TextEditingController note;
+  final VoidCallback onSubmitted;
+
+  @override
+  State<_NoteDrawer> createState() => _NoteDrawerState();
+}
+
+class _NoteDrawerState extends State<_NoteDrawer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _entrance = AnimationController(
+    duration: const Duration(milliseconds: 220),
+    vsync: this,
+  )..forward();
+
+  @override
+  void dispose() {
+    _entrance.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final curve = CurvedAnimation(parent: _entrance, curve: Curves.easeOutCubic);
+
+    return SlideTransition(
+      position: Tween(begin: const Offset(0, 0.6), end: Offset.zero)
+          .animate(curve),
+      child: FadeTransition(
+        opacity: curve,
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.memory(
+                      widget.bytes,
+                      width: 44,
+                      height: 44,
+                      fit: BoxFit.cover,
+                      // A full-resolution frame decoded to fill 44 logical
+                      // pixels is tens of megabytes of nothing.
+                      cacheWidth: 132,
+                      // The photo is a cache everywhere else in this app and it
+                      // is one here too: a frame this widget cannot draw is no
+                      // reason to be unable to log the meal.
+                      errorBuilder: (_, __, ___) => const SizedBox.square(
+                        dimension: 44,
+                        child: Icon(Icons.photo_outlined,
+                            size: 20, color: Colors.white54),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Anything the estimate should know?',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: widget.note,
+                style: const TextStyle(color: Colors.white),
+                cursorColor: Colors.white,
+                textCapitalization: TextCapitalization.sentences,
+                // One line's worth of hint, two lines' worth of room. A note
+                // that needs paragraphs is not what the model is short of.
+                minLines: 1,
+                maxLines: 2,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => widget.onSubmitted(),
+                decoration: InputDecoration(
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.white12,
+                  hintText: 'Half portion, oat milk, fried in butter…',
+                  hintStyle: const TextStyle(color: Colors.white54),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

@@ -1,4 +1,4 @@
-import 'package:calorie_tracker/screens/account_screen.dart';
+import 'package:calorie_tracker/screens/settings/settings_screen.dart';
 import 'package:calorie_tracker/screens/sync_screen.dart';
 import 'package:calorie_tracker/services/sync_service.dart';
 import 'package:flutter/material.dart';
@@ -29,7 +29,7 @@ void main() {
     final sync = SyncService(backend: backend);
 
     await tester.pumpWidget(wrap(
-      Scaffold(body: ListView(children: [DevicesSection(sync: sync)])),
+      Scaffold(body: ListView(children: [SyncTile(sync: sync)])),
     ));
     await tester.pumpAndSettle();
 
@@ -42,7 +42,7 @@ void main() {
     await sync.refresh();
 
     await tester.pumpWidget(wrap(
-      Scaffold(body: ListView(children: [DevicesSection(sync: sync)])),
+      Scaffold(body: ListView(children: [SyncTile(sync: sync)])),
     ));
     await tester.pumpAndSettle();
 
@@ -55,6 +55,9 @@ void main() {
     await tester.pumpWidget(wrap(SyncScreen(sync: sync)));
     await tester.pumpAndSettle();
 
+    expect(find.widgetWithText(AppBar, 'Sync'), findsOneWidget);
+    // The paired-device list, which is the canvas app's section rather than
+    // this screen's.
     expect(find.text('Devices'), findsWidgets);
     expect(find.text('Sync now'), findsOneWidget);
     expect(find.textContaining('Photos stay on the phone that took them'),

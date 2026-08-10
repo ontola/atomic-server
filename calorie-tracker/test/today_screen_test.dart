@@ -12,7 +12,7 @@ import 'fake_atomic_backend.dart';
 import 'fake_meal_backend.dart';
 
 /// A session already past onboarding, so the screen under test has an account
-/// to show behind its person icon.
+/// to show behind its settings icon.
 ///
 /// The session persists as it really does — [AtomicSession] writes through
 /// `SharedPreferences` and `FlutterSecureStorage`, and without their mocks
@@ -212,14 +212,21 @@ void main() {
     expect(find.text('No active drive'), findsOneWidget);
   });
 
-  testWidgets('the account, and the secret, are one tap away', (tester) async {
+  testWidgets('settings is one tap away, and the secret two', (tester) async {
     await pump(tester, FakeMealBackend());
 
-    await tester.tap(find.byIcon(Icons.person_outline));
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AppBar, 'Settings'), findsOneWidget);
+    expect(find.text('Today'), findsNothing);
+
+    // The secret moved a tap further away, which is the point of the hub —
+    // but it is still reachable without knowing where it went.
+    await tester.tap(find.text('Account'));
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(AppBar, 'Account'), findsOneWidget);
     expect(find.text('Copy my secret'), findsOneWidget);
-    expect(find.text('Today'), findsNothing);
   });
 }

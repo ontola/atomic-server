@@ -8,7 +8,7 @@ import '../services/meal_store.dart';
 import '../services/openrouter.dart';
 import '../services/sync_service.dart';
 import '../widgets/meal_photo.dart';
-import 'account_screen.dart';
+import 'settings/settings_screen.dart';
 import 'history_screen.dart';
 import 'meal_actions.dart';
 import 'openrouter_screen.dart';
@@ -96,9 +96,9 @@ class _TodayScreenState extends State<TodayScreen> {
     ));
   }
 
-  void _openAccount() {
+  void _openSettings() {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => AccountScreen(
+      builder: (_) => SettingsScreen(
         session: widget.session,
         images: widget.images,
         account: widget.account,
@@ -131,9 +131,9 @@ class _TodayScreenState extends State<TodayScreen> {
                   tooltip: 'History',
                 ),
               IconButton(
-                onPressed: _openAccount,
-                icon: const Icon(Icons.person_outline),
-                tooltip: 'Account',
+                onPressed: _openSettings,
+                icon: const Icon(Icons.settings_outlined),
+                tooltip: 'Settings',
               ),
             ],
           ),

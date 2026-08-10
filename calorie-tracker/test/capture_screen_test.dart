@@ -86,38 +86,72 @@ void main() {
 
   Finder shutter() => find.bySemanticsLabel('Log a photo of this meal');
 
-  /// Whether the shutter is still showing its own spinner — the capture is in
-  /// flight exactly while it is.
-  bool captureInFlight() => find
-      .descendant(of: shutter(), matching: find.byType(CircularProgressIndicator))
+  /// The same button, one press later: the shot is taken and this writes it.
+  Finder saveButton() => find.bySemanticsLabel('Save this meal');
+
+  Finder noteField() => find.byType(TextField);
+
+  /// Whether the big button is still showing its own spinner — the capture or
+  /// the write is in flight exactly while it is.
+  bool inFlight() => find
+      .descendant(
+        of: find.byWidgetPredicate((w) =>
+            w is Semantics &&
+            (w.properties.label == 'Log a photo of this meal' ||
+                w.properties.label == 'Save this meal')),
+        matching: find.byType(CircularProgressIndicator),
+      )
       .evaluate()
       .isNotEmpty;
 
-  /// Press the shutter and wait for the capture to finish.
+  /// Wait for whatever the last press started.
   ///
   /// The wait alternates `runAsync` — so the filesystem gets a turn — with
   /// `pump`, so the screen can react to what it answered, and it stops on the
   /// screen's own signal rather than after a guessed number of milliseconds.
   /// Test files run in parallel, and a fixed sleep is fine until the machine is
   /// busy, which is the one time it matters.
-  Future<void> tapShutter(WidgetTester tester, {int taps = 1}) async {
-    await tester.runAsync(() async {
-      for (var i = 0; i < taps; i++) {
-        await tester.tap(shutter());
-      }
-    });
-
+  Future<void> settle(WidgetTester tester) async {
     final deadline = DateTime.now().add(const Duration(seconds: 20));
     do {
       await tester
           .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
       await tester.pump();
-    } while (captureInFlight() && DateTime.now().isBefore(deadline));
+    } while (inFlight() && DateTime.now().isBefore(deadline));
 
     await tester
         .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
+  }
+
+  /// Take a shot and let it go, which is two presses of the same spot — what
+  /// somebody with nothing to add does without reading the drawer.
+  ///
+  /// [taps] presses the shutter that many times before waiting, which is the
+  /// double press arriving while the frame is still being taken. [note] types
+  /// into the drawer in between, which is the other half of the feature.
+  Future<void> tapShutter(
+    WidgetTester tester, {
+    int taps = 1,
+    String? note,
+  }) async {
+    await tester.runAsync(() async {
+      for (var i = 0; i < taps; i++) {
+        await tester.tap(shutter());
+      }
+    });
+    await settle(tester);
+
+    if (note != null && noteField().evaluate().isNotEmpty) {
+      await tester.enterText(noteField(), note);
+      await tester.pump();
+    }
+
+    // Absent when the capture failed, and when a double press already saved it.
+    if (saveButton().evaluate().isEmpty) return;
+    await tester.runAsync(() async => tester.tap(saveButton()));
+    await settle(tester);
   }
 
   /// Run a question about the filesystem where the filesystem can answer it.
@@ -164,15 +198,20 @@ void main() {
       );
     });
 
-    testWidgets('a double tap is one meal, not two', (tester) async {
+    /// A press that lands while the frame is still being taken is the second
+    /// half of the double press, not a second meal — and swallowing it would
+    /// make the fast way through this screen the unreliable one, since a real
+    /// shutter takes long enough for a real double press to arrive during it.
+    testWidgets('a double tap is one meal, saved with no note', (tester) async {
       await pump(tester);
 
-      // Both taps land before the first capture has finished, which is what
-      // makes this the real case rather than two separate shots.
       await tapShutter(tester, taps: 2);
 
       expect(meals.meals, hasLength(1));
+      expect(meals.meals.single.notes, isEmpty);
       expect(camera.captureCount, 1);
+      expect(saveButton(), findsNothing, reason: 'it was saved by that press');
+      expect(find.text('Logged'), findsOneWidget);
     });
 
     testWidgets('a shutter that fails says why, and logs nothing',
@@ -216,6 +255,125 @@ void main() {
         isNotNull,
         reason: 'the meal it belongs to is pending, so the sweep must skip it',
       );
+    });
+  });
+
+  group('the note drawer', () {
+    /// Take the shot and stop there, which is what one press now does.
+    Future<void> pressShutter(WidgetTester tester) async {
+      await tester.runAsync(() async => tester.tap(shutter()));
+      await settle(tester);
+    }
+
+    testWidgets('a press takes the frame and asks before writing anything',
+        (tester) async {
+      await pump(tester);
+
+      await pressShutter(tester);
+
+      expect(camera.captureCount, 1);
+      expect(
+        meals.meals,
+        isEmpty,
+        reason: 'the note is meant to go to the model with the picture, so '
+            'nothing is written until the user has had their say',
+      );
+      expect(find.text('Anything the estimate should know?'), findsOneWidget);
+      expect(saveButton(), findsOneWidget);
+      expect(shutter(), findsNothing);
+    });
+
+    /// The gesture the whole thing is built around: press, press, done. So the
+    /// button that saves has to be the button that shot, in the same place.
+    testWidgets('save is exactly where the shutter was', (tester) async {
+      await pump(tester);
+      final shutterWas = tester.getRect(shutter());
+
+      await pressShutter(tester);
+
+      expect(tester.getRect(saveButton()), shutterWas);
+    });
+
+    testWidgets("what is typed is written as the eater's own words",
+        (tester) async {
+      await pump(tester);
+
+      await tapShutter(tester, note: 'Half portion, oat milk');
+
+      final meal = meals.meals.single;
+      expect(meal.notes, 'Half portion, oat milk');
+      expect(
+        meal.name,
+        isEmpty,
+        reason: 'a note is not a name — the estimate still names the meal',
+      );
+      expect(meal.status, MealStatus.pending);
+      expect(meal.imagePath, isNotEmpty);
+      expect(find.text('Logged'), findsOneWidget);
+    });
+
+    testWidgets('saying nothing leaves the meal exactly as it was before',
+        (tester) async {
+      await pump(tester);
+
+      await tapShutter(tester);
+
+      expect(meals.meals.single.notes, isEmpty);
+      expect(meals.meals.single.status, MealStatus.pending);
+    });
+
+    testWidgets('discarding the shot writes nothing', (tester) async {
+      await pump(tester);
+      await pressShutter(tester);
+
+      await tester.tap(find.byTooltip('Discard photo'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(meals.meals, isEmpty);
+      expect(shutter(), findsOneWidget);
+      expect(find.text('Anything the estimate should know?'), findsNothing);
+    });
+
+    /// The frame lives in this screen's state and nowhere else, so leaving is
+    /// the one moment it can be lost. A photo cannot be got back; a meal logged
+    /// a moment before its note was finished is one row somebody can edit.
+    testWidgets('leaving the app writes the shot as it stands', (tester) async {
+      await pump(tester);
+      await pressShutter(tester);
+      await tester.enterText(noteField(), 'Big bowl');
+      await tester.pump();
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await settle(tester);
+
+      expect(meals.meals.single.notes, 'Big bowl');
+      expect(meals.meals.single.imagePath, isNotEmpty);
+    });
+
+    /// The write is the only thing on this path that must not be lost. A drive
+    /// that was not there a second ago may be there on the next press, and the
+    /// bytes are the only copy of the photo there is.
+    testWidgets('a failed write keeps the shot in hand', (tester) async {
+      meals.writeError = Exception('No active drive');
+      await pump(tester);
+
+      await tapShutter(tester);
+
+      expect(find.text('No active drive'), findsOneWidget);
+      expect(saveButton(), findsOneWidget);
+
+      // The snackbar that says so is over the button that retries, so this is
+      // as long as the user has to wait to press it again: its four seconds,
+      // and then the frames it takes to slide away.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 1));
+      meals.writeError = null;
+      await tester.runAsync(() async => tester.tap(saveButton()));
+      await settle(tester);
+
+      expect(meals.meals.single.status, MealStatus.pending);
+      expect(find.text('Logged'), findsOneWidget);
     });
   });
 
@@ -324,19 +482,30 @@ void main() {
       expect(meals.meals.single.imagePath, isEmpty);
     });
 
-    testWidgets('the account, the secret and the photo budget are one tap away',
+    testWidgets('settings is one tap away, and the photo budget two',
         (tester) async {
       await pump(tester);
 
-      await tester.runAsync(() async {
-        await tester.tap(find.byIcon(Icons.person_outline));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      Future<void> tapAndSettle(Finder target) async {
+        await tester.runAsync(() async {
+          await tester.tap(target);
+          // The screens behind these rows read the photo directory, and a
+          // `dart:io` future only completes on the real event loop.
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        });
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+      }
 
-      expect(find.widgetWithText(AppBar, 'Account'), findsOneWidget);
-      expect(find.text('Copy my secret'), findsOneWidget);
+      await tapAndSettle(find.byIcon(Icons.settings_outlined));
+
+      expect(find.widgetWithText(AppBar, 'Settings'), findsOneWidget);
+      expect(find.text('Account'), findsOneWidget);
+      expect(find.text('Storage'), findsOneWidget);
+
+      await tapAndSettle(find.text('Storage'));
+
+      expect(find.widgetWithText(AppBar, 'Storage'), findsOneWidget);
       expect(find.text('Photos'), findsOneWidget);
       expect(find.text('No limit'), findsOneWidget);
     });
@@ -402,7 +571,7 @@ void main() {
         await tester.runAsync(
             () => Future<void>.delayed(const Duration(milliseconds: 5)));
         await tester.pump();
-      } while (captureInFlight() && DateTime.now().isBefore(deadline));
+      } while (inFlight() && DateTime.now().isBefore(deadline));
       await tester.pump(const Duration(milliseconds: 300));
     }
 
@@ -644,6 +813,20 @@ void main() {
         expect(live.running, isFalse,
             reason: 'a keyboard over the preview is not somebody aiming at a '
                 'plate');
+      });
+
+      /// The drawer is over the preview and the keyboard may be over that.
+      /// Nobody is aiming at a plate between the shot and the save.
+      testWidgets('and while the drawer over a shot is up', (tester) async {
+        await pump(tester, index: index, live: live);
+
+        await tester.runAsync(() async => tester.tap(shutter()));
+        await settle(tester);
+        expect(live.running, isFalse);
+
+        await tester.runAsync(() async => tester.tap(saveButton()));
+        await settle(tester);
+        expect(live.running, isTrue, reason: 'the viewfinder is back');
       });
     });
   });

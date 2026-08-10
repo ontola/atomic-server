@@ -87,7 +87,7 @@ class MealIndex {
   int _lastOtherModel = 0;
 
   /// One line naming which link is missing, rather than four numbers to hold in
-  /// your head. Read by the account screen and by the log below.
+  /// your head. Read by the AI settings screen and by the log below.
   String describeLastLoad() {
     if (_lastMeals == 0) return 'no meals yet';
     if (_lastCopyable == 0) {

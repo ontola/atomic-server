@@ -5,10 +5,9 @@ import '../services/openrouter.dart';
 /// Where the calorie estimates come from: the account that pays for them, and
 /// which model does the looking.
 ///
-/// Reached from Account, which is standing in for Settings until Phase 5 builds
-/// one. The connect step is deliberately not part of onboarding (plan §7) — it
-/// is offered here and from the banner on a day with meals waiting, by which
-/// point the user has seen what it is for.
+/// Reached from Settings › AI. The connect step is deliberately not part of
+/// onboarding (plan §7) — it is offered here and from the banner on a day with
+/// meals waiting, by which point the user has seen what it is for.
 class OpenRouterScreen extends StatefulWidget {
   const OpenRouterScreen({super.key, required this.account, this.client});
 

@@ -9,9 +9,10 @@ Plan: [`../planning/calorie-tracker-plan.md`](../planning/calorie-tracker-plan.m
 
 **Status: Phase 7.4 complete, and Phases 6.1/7.3/7.4 unverified on a device.** The app onboards — one
 tap to a new account, or a pasted secret to restore one — persists the session,
-and lands on a viewfinder. The shutter writes a compressed photo and a `pending`
-meal and is done; the day's total is on top of the preview and the list is one
-tap behind it. A queue drains those pending meals through a vision model on
+and lands on a viewfinder. The shutter takes the frame and offers a drawer for a
+note; the second press writes a compressed photo and a `pending` meal and is
+done; the day's total is on top of the preview and the list is one tap behind
+it. A queue drains those pending meals through a vision model on
 OpenRouter, on launch, after each capture and on resume, and writes back a name,
 a number and a range. Meals can still be typed in by hand — with a number, which
 confirms them, or without one, which asks the model instead. When the model
@@ -69,9 +70,14 @@ lib/
     history_screen.dart    the days behind today, one row each
     meal_entry_sheet.dart  type a meal, correct one, or answer its question
     meal_actions.dart      what opening that sheet means, wherever it opened from
-    account_screen.dart    the agent, the secret, the photo budget
+    settings/          the hub, and one screen per group of settings
+      settings_screen.dart  the rows, and what each says without being opened
+      account_screen.dart   the agent, the secret, and signing out
+      storage_screen.dart   what the photos weigh, and the budget that evicts
+      ai_screen.dart        the estimator, and the recognition diagnostics
+      widgets.dart          the tile and the two label/value rows they share
     openrouter_screen.dart connect or disconnect, and pick the model
-    sync_screen.dart       the other devices, and a sync on demand
+    sync_screen.dart       Sync: the other devices, and a sync on demand
     onboarding/        first launch, and the "my data is on the other phone" case
     pair_screen.dart   QR pairing, from the canvas app
   widgets/             error_snack.dart, meal_photo.dart
@@ -99,10 +105,11 @@ relaunch tests, `test/fake_meal_backend.dart` models the meals table, and
 
 ## Capture, and why nothing on that path waits
 
-The shutter compresses the frame, writes two files, and creates a meal with no
-name and no number. That is the whole path, and it is finished by the time the
-"Logged" chip appears — kill the app there and nothing is lost. What the meal is
-worth is Phase 4's problem, and `pending` is exactly the queue it will drain.
+The shutter takes the frame; the press after it compresses that frame, writes two
+files, and creates a meal with no name and no number. That is the whole path, and
+it is finished by the time the "Logged" chip appears — kill the app there and
+nothing is lost. What the meal is worth is Phase 4's problem, and `pending` is
+exactly the queue it will drain.
 
 Three things follow from that and are easy to undo by accident:
 
@@ -116,6 +123,38 @@ Three things follow from that and are easy to undo by accident:
   empty, and `ImageStore.load` returns null rather than throwing. Eviction is
   silent by design — the meal, its calories and its thumbnail all survive, so
   there is nothing to interrupt anyone about.
+
+### The note drawer, and the press that has to land in the same place
+
+Between the two halves is `_NoteDrawer`: the shot in hand, and one field for
+whatever the estimate should know that the photograph does not say — half a
+portion, oat milk, fried in butter. It goes to `meal-notes` and reaches the model
+as the eater's own words, which is the one string the estimator sends as such and
+never overwrites (see the clarify loop).
+
+- **Save is the shutter, in the shutter's place.** Same 76px circle, same slot in
+  the control row, so somebody with nothing to add presses twice and never reads
+  the drawer. Everything else follows from that: the field does **not** take
+  focus (a keyboard would move the button out from under the thumb on its way to
+  it), the drawer carries no buttons of its own, and the right-hand control is
+  replaced by an empty 52px box rather than removed, or the button in the middle
+  stops being in the middle. `test/capture_screen_test.dart` asserts the two
+  rects are equal, because nothing else would notice this drifting.
+- **A press that lands during the capture is that second press, not a shot.**
+  A real shutter takes long enough for a real double press to arrive mid-frame,
+  so the button stays tappable while it is busy and the intent is remembered
+  (`_saveOnArrival`) and honoured the moment there is something to save.
+- **Leaving the app writes the shot as it stands.** The bytes live in the
+  screen's state and nowhere else, which is the one window in this app where a
+  photo can be lost — and it cannot be got back, while a meal logged before its
+  note was finished is one row in a list that can be edited. On `paused`, not
+  `inactive`: the notification shade is not leaving.
+- **A failed write keeps the shot in hand.** The bytes are still the only copy,
+  and the drive that was not there a second ago may be there on the next press.
+- **The live matcher stops while the drawer is up**, for the reason `_away`
+  exists: between the shot and the save nobody is aiming at a plate. `_resumeLive`
+  is the only way it starts again, and it refuses while a shot is pending or the
+  app is not in front of somebody.
 
 `ImageStore` holds all of the plan's §6: one JPEG at 1024px/q80 plus a 256px
 thumbnail, both encoded straight off the camera frame (one lossy pass each, not
@@ -133,7 +172,7 @@ Three things about it, all of which are easy to undo by accident:
   can evict it, so counting it would consume headroom the sweep has no way to
   reclaim and make "over budget with nothing left to evict" the steady state
   rather than the bug report it is. `sourceBytes()` reports it apart, and the
-  account screen gives it its own row.
+  storage screen gives it its own row.
 - **It survives `deleteAll()` — "delete all photos now" — as well as the
   sweep.** The one thing here that reads as inconsistent and is not: everything
   else that button deletes is a picture, and the meal, its calories and its
@@ -557,6 +596,16 @@ instead of a failed write on a phone.
 
 Two things about that model are worth knowing before extending it:
 
+- **The meals container is a `Table` of `Meal`, not a Folder.** A Table requires
+  a `classtype`, which is exactly what this container is — one class and nothing
+  else — and it is what makes a drive opened in the browser show meals as rows
+  with columns rather than as a list of opaque children. `ensure_meals_container`
+  therefore upgrades a Folder it finds **in place** rather than making a fresh
+  Table: every meal already logged is parented to that subject, so a new one
+  would leave them all out of every query — still in the store, and lost to the
+  app. `find_meals_container` accepts either class for the same reason, and the
+  upgrade writes nothing when there is nothing to change, or two phones would
+  commit and sync an upgrade at every launch.
 - **`meal-status` and `estimate-confidence` are Tags, not strings.** `allowsOnly`
   only accepts subjects — a plain `"pending"` in that list fails the import — so
   each state is a Tag resource under its property
@@ -931,7 +980,7 @@ The decisions 7.2 rests on, kept here because they are still the reasons:
   of the licence, the attribution, and a statement of what was changed. Those
   live in `assets/licenses/` — committed, unlike the weights, because a fresh
   clone must not have to generate the terms. `registerBundledLicenses` in
-  `main.dart` feeds them to `showLicensePage`, reached from the account screen.
+  `main.dart` feeds them to `showLicensePage`, reached from Settings.
   Registering a licence and never linking to the page that shows it satisfies
   nothing, so `test/licenses_test.dart` covers the whole chain — it is four
   strings, none of which fails loudly.

@@ -76,7 +76,9 @@ class AtomicClient {
 
   // ── 4. Resource ──────────────────────────────────────────────────────────
 
-  /// A plain container resource — what a `meals` folder under the drive is.
+  /// A plain container resource — the default for a child of a drive that is
+  /// only there to hold other things. (The meals container is not one: it is a
+  /// Table of Meals, made in `meals.rs`, not through here.)
   static const folderClass = 'https://atomicdata.dev/classes/Folder';
 
   /// Create a named child of [parent]. [isA] is validated on write, so it has
