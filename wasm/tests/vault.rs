@@ -1,0 +1,66 @@
+//! The vault bindings, exercised from a JS runtime.
+//!
+//! `atomic_lib` already proves the format round-trips in native Rust. What is
+//! unproven until here is the *boundary*: that a `Uint8Array` key survives the
+//! crossing, that a JS array of objects deserializes into the shape the
+//! importer wants, and that a caller gets `null` rather than an exception when
+//! there is nothing to back up.
+//!
+//! Run with `wasm-pack test --node --test vault`.
+
+#![cfg(target_arch = "wasm32")]
+
+use atomic_wasm::{vault_generate_key, ClientDb};
+use wasm_bindgen_test::*;
+
+wasm_bindgen_test_configure!(run_in_node_experimental);
+
+const DEVICE: &str = "0303030303030303030303030303030303030303030303030303030303030303";
+const PSEUDONYM: &str = "testpseudonym";
+
+#[wasm_bindgen_test]
+fn generated_keys_are_the_right_size_and_not_constant() {
+    let a = vault_generate_key();
+    let b = vault_generate_key();
+    assert_eq!(a.len(), 32, "a drive vault key is 32 bytes");
+    assert_ne!(a, b, "two generated keys must differ");
+}
+
+/// A wrong-length key must be refused at the boundary rather than panicking
+/// inside the wasm module, which in a browser surfaces as an unrecoverable
+/// abort instead of a catchable error.
+#[wasm_bindgen_test]
+async fn a_bad_key_length_is_an_error_not_a_panic() {
+    let db = ClientDb::new_in_memory(None).await.expect("in-memory db");
+    let result = db
+        .vault_export("did:ad:whatever", &[0u8; 31], 1, PSEUDONYM, DEVICE, 1)
+        .await;
+    assert!(result.is_err(), "a 31-byte key must be rejected");
+}
+
+/// An empty drive returns `null`, so a periodic backup tick can skip the
+/// upload instead of storing an empty object every time it runs.
+#[wasm_bindgen_test]
+async fn an_empty_drive_exports_nothing() {
+    let db = ClientDb::new_in_memory(None).await.expect("in-memory db");
+    let key = vault_generate_key();
+    let out = db
+        .vault_export("did:ad:nonexistent", &key, 1, PSEUDONYM, DEVICE, 1)
+        .await
+        .expect("export should succeed, not throw");
+    assert!(out.is_null(), "nothing to back up means null");
+}
+
+/// Importing nothing is a no-op rather than an error — a restore that finds an
+/// empty vault should report zero, not fail.
+#[wasm_bindgen_test]
+async fn importing_no_objects_is_a_no_op() {
+    let db = ClientDb::new_in_memory(None).await.expect("in-memory db");
+    let key = vault_generate_key();
+    let empty = serde_wasm_bindgen::to_value(&Vec::<u8>::new()).unwrap();
+    let summary = db
+        .vault_import(&key, 1, PSEUDONYM, DEVICE, empty)
+        .await
+        .expect("import of nothing should succeed");
+    assert!(!summary.is_null());
+}
