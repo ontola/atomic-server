@@ -1,0 +1,474 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { backupDrive, restoreDrive, type VaultCapableDb } from './vault';
+
+/**
+ * These cover the orchestration, which is deliberately the half that lives in
+ * TypeScript: WASM does crypto and format, this does the network. The Rust
+ * tests cannot reach any of it — ordering of upload vs confirm, what happens
+ * when storage rejects a PUT, whether restore replays segments in the right
+ * order. Each of those is a data-integrity property, not a plumbing detail.
+ */
+
+const DEVICE = '03'.repeat(32);
+const PSEUDONYM = 'testpseudonym';
+const KEY = new Uint8Array(32).fill(7);
+
+beforeEach(() => {
+  vi.stubEnv('VITE_MANAGED_PORTAL_URL', 'https://control.test');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+
+/** A sealed pack, as the WASM binding would hand it over. */
+function sealedPack(objectKey: string, bytes = 4) {
+  return {
+    objectKey,
+    sealed: new Uint8Array(bytes).fill(1),
+    resources: 3,
+    tombstones: 0,
+  };
+}
+
+const PACK_KEY = `vault/${PSEUDONYM}/lanes/${DEVICE}/seg-000001.pack`;
+
+/** Records every request so a test can assert on order, not just on calls. */
+function mockFetch(handler: (url: string, init?: RequestInit) => unknown) {
+  const calls: { url: string; method: string }[] = [];
+  const spy = vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, method: init?.method ?? 'GET' });
+    const result = handler(url, init);
+
+    return (
+      result ?? {
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      }
+    );
+  });
+  vi.stubGlobal('fetch', spy);
+
+  return calls;
+}
+
+describe('backupDrive', () => {
+  it('uploads nothing when the drive has not changed', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => null),
+      vaultImport: vi.fn(),
+    };
+    const calls = mockFetch(() => undefined);
+
+    const outcome = await backupDrive({
+      db,
+      driveSubject: 'did:ad:drive',
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+      segment: 1,
+    });
+
+    expect(outcome).toEqual({ status: 'nothing-to-do' });
+    expect(calls).toHaveLength(0);
+  });
+
+  /**
+   * The object is confirmed only after storage accepted it. Confirming first
+   * would make quota drift upward on every dropped connection — usage the user
+   * never consumed and cannot clear.
+   */
+  it('confirms only after storage accepts the bytes', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
+      vaultImport: vi.fn(),
+    };
+    const calls = mockFetch(url => {
+      if (url.endsWith('/upload-urls')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            uploads: [
+              {
+                object_id: 'obj-1',
+                object_key: PACK_KEY,
+                url: 'https://s3.test/put',
+                method: 'PUT',
+                headers: [['content-length', '4']],
+                size_bytes: 4,
+              },
+            ],
+          }),
+        };
+      }
+
+      return undefined;
+    });
+
+    const outcome = await backupDrive({
+      db,
+      driveSubject: 'did:ad:drive',
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+      segment: 1,
+    });
+
+    expect(outcome).toMatchObject({ status: 'backed-up', resources: 3 });
+    const order = calls.map(c => c.url);
+    expect(order[0]).toContain('/upload-urls');
+    expect(order[1]).toBe('https://s3.test/put');
+    expect(order[2]).toContain('/confirm-upload');
+  });
+
+  it('does not confirm an upload storage rejected', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
+      vaultImport: vi.fn(),
+    };
+    const calls = mockFetch(url => {
+      if (url.endsWith('/upload-urls')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            uploads: [
+              {
+                object_id: 'obj-1',
+                object_key: PACK_KEY,
+                url: 'https://s3.test/put',
+                method: 'PUT',
+                headers: [],
+                size_bytes: 4,
+              },
+            ],
+          }),
+        };
+      }
+
+      if (url === 'https://s3.test/put') {
+        return { ok: false, status: 403, json: async () => ({}) };
+      }
+
+      return undefined;
+    });
+
+    await expect(
+      backupDrive({
+        db,
+        driveSubject: 'did:ad:drive',
+        drivePseudonym: PSEUDONYM,
+        devicePubkey: DEVICE,
+        driveKey: KEY,
+        segment: 1,
+      }),
+    ).rejects.toThrow(/upload failed/i);
+
+    expect(calls.some(c => c.url.includes('/confirm-upload'))).toBe(false);
+  });
+
+  /**
+   * The layout is implemented in two repos. If they disagree, the upload lands
+   * where restore never looks, and nothing notices until a restore comes up
+   * short — so it has to be caught at the moment of disagreement.
+   */
+  it('refuses to upload when the server names a different object key', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
+      vaultImport: vi.fn(),
+    };
+    mockFetch(url => {
+      if (url.endsWith('/upload-urls')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            uploads: [
+              {
+                object_id: 'obj-1',
+                object_key: `vault/${PSEUDONYM}/lanes/${DEVICE}/seg-000009.pack`,
+                url: 'https://s3.test/put',
+                method: 'PUT',
+                headers: [],
+                size_bytes: 4,
+              },
+            ],
+          }),
+        };
+      }
+
+      return undefined;
+    });
+
+    await expect(
+      backupDrive({
+        db,
+        driveSubject: 'did:ad:drive',
+        drivePseudonym: PSEUDONYM,
+        devicePubkey: DEVICE,
+        driveKey: KEY,
+        segment: 1,
+      }),
+    ).rejects.toThrow(/key mismatch/i);
+  });
+
+  /** Assigning Content-Length throws in the browser before the request goes out. */
+  it('strips content-length from the headers it forwards', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
+      vaultImport: vi.fn(),
+    };
+    let putHeaders: Record<string, string> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith('/upload-urls')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              uploads: [
+                {
+                  object_id: 'obj-1',
+                  object_key: PACK_KEY,
+                  url: 'https://s3.test/put',
+                  method: 'PUT',
+                  headers: [
+                    ['content-length', '4'],
+                    ['x-custom', 'kept'],
+                  ],
+                  size_bytes: 4,
+                },
+              ],
+            }),
+          };
+        }
+
+        if (url === 'https://s3.test/put') {
+          putHeaders = init?.headers as Record<string, string>;
+        }
+
+        return { ok: true, status: 200, json: async () => ({}) };
+      }),
+    );
+
+    await backupDrive({
+      db,
+      driveSubject: 'did:ad:drive',
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+      segment: 1,
+    });
+
+    expect(putHeaders).toEqual({ 'x-custom': 'kept' });
+  });
+
+  /** A billing rejection should read as one, not as a generic failure. */
+  it("surfaces the control plane's own message", async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
+      vaultImport: vi.fn(),
+    };
+    mockFetch(url =>
+      url.endsWith('/upload-urls')
+        ? {
+            ok: false,
+            status: 402,
+            json: async () => ({ error: 'Cloud Vault quota exceeded' }),
+          }
+        : undefined,
+    );
+
+    await expect(
+      backupDrive({
+        db,
+        driveSubject: 'did:ad:drive',
+        drivePseudonym: PSEUDONYM,
+        devicePubkey: DEVICE,
+        driveKey: KEY,
+        segment: 1,
+      }),
+    ).rejects.toThrow('Cloud Vault quota exceeded');
+  });
+});
+
+describe('restoreDrive', () => {
+  it('reports nothing when the vault is empty', async () => {
+    const db: VaultCapableDb = { vaultExport: vi.fn(), vaultImport: vi.fn() };
+    mockFetch(url =>
+      url.endsWith('/objects')
+        ? { ok: true, status: 200, json: async () => [] }
+        : undefined,
+    );
+
+    const outcome = await restoreDrive({
+      db,
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+    });
+
+    expect(outcome.resourcesRestored).toBe(0);
+    expect(db.vaultImport).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The listing is ordered for replay; `download-urls` answers per request and
+   * is not required to echo that order. Applying out of order would let a later
+   * segment's deletion land before the pack that re-creates the resource — the
+   * delete would silently be undone.
+   */
+  it('applies objects in listing order, not download order', async () => {
+    const first = `vault/${PSEUDONYM}/lanes/${DEVICE}/seg-000001.pack`;
+    const second = `vault/${PSEUDONYM}/lanes/${DEVICE}/seg-000002.pack`;
+    const imported: string[] = [];
+
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(),
+      vaultImport: vi.fn(
+        async (
+          _k: Uint8Array,
+          _e: number,
+          _p: string,
+          _d: string,
+          objects: { objectKey: string; sealed: Uint8Array }[],
+        ) => {
+          imported.push(...objects.map(o => o.objectKey));
+
+          return { packsRead: 2, resourcesRestored: 5, tombstonesApplied: 1 };
+        },
+      ),
+    };
+
+    mockFetch(url => {
+      if (url.endsWith('/objects')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [
+            { object_id: 'a', object_key: first },
+            { object_id: 'b', object_key: second },
+          ],
+        };
+      }
+
+      if (url.endsWith('/download-urls')) {
+        // Deliberately reversed.
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            downloads: [
+              { object_id: 'b', object_key: second, url: 'https://s3.test/2' },
+              { object_id: 'a', object_key: first, url: 'https://s3.test/1' },
+            ],
+          }),
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => new Uint8Array([1, 2]).buffer,
+      };
+    });
+
+    const outcome = await restoreDrive({
+      db,
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+    });
+
+    expect(imported).toEqual([first, second]);
+    expect(outcome.resourcesRestored).toBe(5);
+  });
+
+  it('reports progress as objects arrive', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(),
+      vaultImport: vi.fn(async () => ({
+        packsRead: 2,
+        resourcesRestored: 1,
+        tombstonesApplied: 0,
+      })),
+    };
+    mockFetch(url => {
+      if (url.endsWith('/objects')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [
+            { object_id: 'a', object_key: 'k1' },
+            { object_id: 'b', object_key: 'k2' },
+          ],
+        };
+      }
+
+      if (url.endsWith('/download-urls')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            downloads: [
+              { object_id: 'a', object_key: 'k1', url: 'https://s3.test/1' },
+              { object_id: 'b', object_key: 'k2', url: 'https://s3.test/2' },
+            ],
+          }),
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => new Uint8Array([9]).buffer,
+      };
+    });
+
+    const seen: [number, number][] = [];
+    await restoreDrive({
+      db,
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+      onProgress: (done, total) => seen.push([done, total]),
+    });
+
+    expect(seen).toEqual([
+      [1, 2],
+      [2, 2],
+    ]);
+  });
+
+  it('fails loudly when the server issues no URL for a listed object', async () => {
+    const db: VaultCapableDb = { vaultExport: vi.fn(), vaultImport: vi.fn() };
+    mockFetch(url => {
+      if (url.endsWith('/objects')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{ object_id: 'a', object_key: 'k1' }],
+        };
+      }
+
+      if (url.endsWith('/download-urls')) {
+        return { ok: true, status: 200, json: async () => ({ downloads: [] }) };
+      }
+
+      return undefined;
+    });
+
+    await expect(
+      restoreDrive({
+        db,
+        drivePseudonym: PSEUDONYM,
+        devicePubkey: DEVICE,
+        driveKey: KEY,
+      }),
+    ).rejects.toThrow(/No download URL/i);
+  });
+});
