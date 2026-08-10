@@ -741,6 +741,82 @@ export class ClientDbWorker {
     return (r as Record<string, Record<string, number>>) ?? {};
   }
 
+  /**
+   * Seal this drive's history into one Cloud Vault object.
+   *
+   * Resolves to `null` when the drive has not changed since the last segment,
+   * so a periodic backup skips the upload rather than storing an empty object
+   * every tick.
+   *
+   * The bytes come back already encrypted — the caller uploads ciphertext and
+   * never sees drive contents. See `helpers/managed/vault.ts` for the
+   * control-plane half.
+   */
+  async vaultExport(
+    driveSubject: string,
+    key: Uint8Array,
+    keyEpoch: number,
+    drivePseudonym: string,
+    devicePubkey: string,
+    segment: number,
+  ): Promise<{
+    objectKey: string;
+    sealed: Uint8Array;
+    resources: number;
+    tombstones: number;
+  } | null> {
+    const r = await this.send({
+      type: 'vaultExport',
+      driveSubject,
+      key,
+      keyEpoch,
+      drivePseudonym,
+      devicePubkey,
+      segment,
+    });
+
+    return (r ?? null) as {
+      objectKey: string;
+      sealed: Uint8Array;
+      resources: number;
+      tombstones: number;
+    } | null;
+  }
+
+  /**
+   * Merge downloaded Cloud Vault objects into this store.
+   *
+   * Objects must be ordered by key: a later segment's deletion has to be
+   * applied after the earlier pack that created the resource, or the delete is
+   * undone. `restoreDrive` in `helpers/managed/vault.ts` preserves that order.
+   */
+  async vaultImport(
+    key: Uint8Array,
+    keyEpoch: number,
+    drivePseudonym: string,
+    devicePubkey: string,
+    objects: { objectKey: string; sealed: Uint8Array }[],
+  ): Promise<{
+    packsRead: number;
+    resourcesRestored: number;
+    tombstonesApplied: number;
+  }> {
+    const r = await this.send({
+      type: 'vaultImport',
+      key,
+      keyEpoch,
+      drivePseudonym,
+      devicePubkey,
+      objects,
+    });
+
+    return r as {
+      packsRead: number;
+      resourcesRestored: number;
+      tombstonesApplied: number;
+    };
+  }
+
   get isReady(): boolean {
     return this.ready && this.seeded;
   }

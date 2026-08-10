@@ -70,7 +70,29 @@ export type WorkerRequest =
   | { id: number; type: 'getBlob'; hash: Uint8Array }
   | { id: number; type: 'blake3Hash'; data: Uint8Array }
   | { id: number; type: 'getAllVersionVectors' }
-  | { id: number; type: 'getVersionVectorsForDrive'; drive: string };
+  | { id: number; type: 'getVersionVectorsForDrive'; drive: string }
+  // Cloud Vault. These live in the worker because it holds the only Db handle;
+  // the network half stays on the main thread, where the control-plane session
+  // and CORS setup already work. What crosses this boundary is ciphertext.
+  | {
+      id: number;
+      type: 'vaultExport';
+      driveSubject: string;
+      key: Uint8Array;
+      keyEpoch: number;
+      drivePseudonym: string;
+      devicePubkey: string;
+      segment: number;
+    }
+  | {
+      id: number;
+      type: 'vaultImport';
+      key: Uint8Array;
+      keyEpoch: number;
+      drivePseudonym: string;
+      devicePubkey: string;
+      objects: { objectKey: string; sealed: Uint8Array }[];
+    };
 
 /** Message types sent from worker back to main thread */
 export type WorkerResponse =
@@ -279,6 +301,37 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return db!.getAllVersionVectors();
+    }
+
+    case 'vaultExport': {
+      await ensureInit();
+
+      return db!.vaultExport(
+        msg.driveSubject,
+        msg.key,
+        msg.keyEpoch,
+        msg.drivePseudonym,
+        msg.devicePubkey,
+        msg.segment,
+      );
+    }
+
+    case 'vaultImport': {
+      await ensureInit();
+      const summary = await db!.vaultImport(
+        msg.key,
+        msg.keyEpoch,
+        msg.drivePseudonym,
+        msg.devicePubkey,
+        msg.objects,
+      );
+      // A restore writes a whole drive; without marking dirty those writes sit
+      // behind `Durability::None` until some later write happens to trigger the
+      // flush tick. A reload in between would read them back as absent — a
+      // restore that silently did nothing.
+      dirty = true;
+
+      return summary;
     }
 
     case 'getVersionVectorsForDrive': {

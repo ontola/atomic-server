@@ -189,6 +189,35 @@ export async function getVaultKeyEnvelope(
   return record.envelope;
 }
 
+/** What `GET /api/cloud-vault/{drive}/state` reports. */
+export type VaultDriveState = {
+  enrollment: VaultEnrollment;
+  /** Device pubkey → last segment number written to that lane. */
+  lanes: Record<string, number>;
+  pending_uploads: number;
+  confirmed_objects: number;
+};
+
+export async function getVaultState(
+  drivePseudonym: string,
+): Promise<VaultDriveState> {
+  return api<VaultDriveState>(`/cloud-vault/${drivePseudonym}/state`);
+}
+
+/**
+ * The segment number this device should write next.
+ *
+ * Taken from the server's lane state rather than anything local: a device that
+ * cleared its storage has no memory of what it wrote, and reusing a segment
+ * number would overwrite a pack that is still the only copy of some history.
+ */
+export function nextSegmentFor(
+  state: VaultDriveState,
+  devicePubkey: string,
+): number {
+  return (state.lanes[devicePubkey] ?? 0) + 1;
+}
+
 export async function listVaultObjects(
   drivePseudonym: string,
 ): Promise<VaultObject[]> {
@@ -451,4 +480,58 @@ export async function recoverDriveKey({
   }
 
   return keys.vaultUnwrapKey(envelope, agentSecret);
+}
+
+/**
+ * Run one backup pass for a drive.
+ *
+ * Picks the segment from the server's lane state, so a device that lost its
+ * local storage does not overwrite a pack that is still the only copy of some
+ * history.
+ *
+ * **Single-flight per drive.** Two passes running at once would both read the
+ * same "next" segment and race to write it, and the loser's history would be
+ * silently overwritten. Concurrent callers share the in-flight promise instead
+ * of starting a second pass.
+ *
+ * That guard is per JavaScript context, which is enough only because exactly
+ * one context is meant to run this. The ClientDb worker is that context — a
+ * SharedWorker fans every tab into one inner worker, so the store has a single
+ * writer. Driving backups from individual tabs instead would reintroduce the
+ * race across tabs, where an in-process lock cannot see it.
+ */
+const inFlight = new Map<string, Promise<BackupOutcome>>();
+
+export function runVaultBackup(args: {
+  db: VaultCapableDb;
+  driveSubject: string;
+  drivePseudonym: string;
+  devicePubkey: string;
+  driveKey: Uint8Array;
+  keyEpoch?: number;
+}): Promise<BackupOutcome> {
+  const existing = inFlight.get(args.drivePseudonym);
+
+  if (existing) return existing;
+
+  const pass = (async () => {
+    const state = await getVaultState(args.drivePseudonym);
+
+    // A suspended vault refuses uploads; asking anyway would just produce an
+    // error per tick and bury anything else in the log.
+    if (state.enrollment.status !== 'active') {
+      return { status: 'nothing-to-do' } as BackupOutcome;
+    }
+
+    return backupDrive({
+      ...args,
+      segment: nextSegmentFor(state, args.devicePubkey),
+    });
+  })().finally(() => {
+    inFlight.delete(args.drivePseudonym);
+  });
+
+  inFlight.set(args.drivePseudonym, pass);
+
+  return pass;
 }

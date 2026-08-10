@@ -4,8 +4,11 @@ import {
   restoreDrive,
   setUpVaultForDrive,
   recoverDriveKey,
+  nextSegmentFor,
+  runVaultBackup,
   type VaultCapableDb,
   type VaultKeyOps,
+  type VaultDriveState,
 } from './vault';
 
 /**
@@ -624,5 +627,129 @@ describe('key management', () => {
         agentSecret: AGENT_SECRET,
       }),
     ).rejects.toThrow(/no stored vault key/i);
+  });
+});
+
+describe('scheduling', () => {
+  function state(lanes: Record<string, number>, status = 'active'): VaultDriveState {
+    return {
+      enrollment: {
+        id: 'e1',
+        drive_subject: 'did:ad:drive',
+        drive_pseudonym: PSEUDONYM,
+        status,
+        used_bytes: 0,
+        quota_bytes: 100,
+        last_backup_at: null,
+      },
+      lanes,
+      pending_uploads: 0,
+      confirmed_objects: 0,
+    };
+  }
+
+  it('starts at segment 1 on a lane that has never been written', () => {
+    expect(nextSegmentFor(state({}), DEVICE)).toBe(1);
+  });
+
+  /**
+   * Taken from the server, not from memory: a device that cleared its storage
+   * would otherwise restart at 1 and overwrite a pack that is still the only
+   * copy of some history.
+   */
+  it('continues after the last segment the server saw', () => {
+    expect(nextSegmentFor(state({ [DEVICE]: 7 }), DEVICE)).toBe(8);
+  });
+
+  it('numbers each device lane independently', () => {
+    const other = 'ff'.repeat(32);
+    expect(nextSegmentFor(state({ [other]: 9 }), DEVICE)).toBe(1);
+  });
+
+  /**
+   * Two passes at once would both read the same "next" segment and race to
+   * write it; the loser's history would be silently overwritten.
+   */
+  it('runs one pass at a time per drive', async () => {
+    let exports = 0;
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => {
+        exports += 1;
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        return null;
+      }),
+      vaultImport: vi.fn(),
+    };
+    mockFetch(url =>
+      url.endsWith('/state')
+        ? { ok: true, status: 200, json: async () => state({}) }
+        : undefined,
+    );
+
+    const args = {
+      db,
+      driveSubject: 'did:ad:drive',
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+    };
+    const [a, b] = await Promise.all([
+      runVaultBackup(args),
+      runVaultBackup(args),
+    ]);
+
+    expect(exports).toBe(1);
+    expect(a).toBe(b);
+  });
+
+  it('allows a fresh pass once the previous one finished', async () => {
+    let exports = 0;
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => {
+        exports += 1;
+
+        return null;
+      }),
+      vaultImport: vi.fn(),
+    };
+    mockFetch(url =>
+      url.endsWith('/state')
+        ? { ok: true, status: 200, json: async () => state({}) }
+        : undefined,
+    );
+
+    const args = {
+      db,
+      driveSubject: 'did:ad:drive',
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+    };
+    await runVaultBackup(args);
+    await runVaultBackup(args);
+
+    expect(exports).toBe(2);
+  });
+
+  /** A suspended vault refuses uploads; asking every tick just buries the log. */
+  it('does not attempt a backup while the vault is suspended', async () => {
+    const db: VaultCapableDb = { vaultExport: vi.fn(), vaultImport: vi.fn() };
+    mockFetch(url =>
+      url.endsWith('/state')
+        ? { ok: true, status: 200, json: async () => state({}, 'suspended') }
+        : undefined,
+    );
+
+    const outcome = await runVaultBackup({
+      db,
+      driveSubject: 'did:ad:drive',
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+    });
+
+    expect(outcome).toEqual({ status: 'nothing-to-do' });
+    expect(db.vaultExport).not.toHaveBeenCalled();
   });
 });
