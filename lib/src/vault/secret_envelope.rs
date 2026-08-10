@@ -58,7 +58,7 @@ pub enum WrapperKind {
     /// User-chosen password over Argon2id. Supported so product can offer it,
     /// deliberately never the only wrapper.
     Password,
-    /// A KEK derived from the account's Ed25519 agent secret.
+    /// A KEK derived from the agent's signature over a fixed message.
     ///
     /// The wrapper that means a user manages **no new secret**. Whatever
     /// already restores their identity — a passkey, the recovery code on the
@@ -216,16 +216,32 @@ pub fn normalize_recovery_code(code: &str) -> String {
         .collect()
 }
 
-/// Domain separator for the agent-secret KEK.
-///
-/// The wrapping key is derived, never the signing key itself: the same bytes
-/// must not both sign commits and decrypt backups, or a flaw in one use
-/// becomes a flaw in the other.
+/// Domain separator for the agent-derived KEK.
 const AGENT_SECRET_CONTEXT: &str = "atomic-vault 2026 agent secret wrapper";
 
-/// The KEK an agent secret unwraps with.
-pub fn agent_secret_kek(agent_secret: &[u8]) -> [u8; KEK_LEN] {
-    blake3::derive_key(AGENT_SECRET_CONTEXT, agent_secret)
+/// The message an agent signs to prove it can open its own vault keys.
+///
+/// Fixed, so the resulting signature is reproducible on any device that holds
+/// the agent — Ed25519 signatures are deterministic (RFC 8032), which is what
+/// makes a signature usable as key material at all.
+pub const AGENT_VAULT_PROOF_MESSAGE: &[u8] = b"atomic-vault-key-derivation-v1";
+
+/// The KEK derived from an agent's proof.
+///
+/// `proof` is the agent's signature over [`AGENT_VAULT_PROOF_MESSAGE`], not the
+/// private key. Two reasons that matters:
+///
+/// The private key is deliberately not extractable in the browser — the
+/// `CryptoProvider` exposes signing, not key bytes — and a scheme that needed
+/// the raw key would rule out hardware-backed and non-extractable keys
+/// permanently.
+///
+/// It also removes an ambiguity that caused a real bug: the "agent secret" has
+/// several representations (a base64 JSON blob, the `privateKey` inside it, the
+/// decoded seed), and wrapping under one while unwrapping with another produced
+/// an envelope nothing could open. A signature has exactly one representation.
+pub fn agent_secret_kek(proof: &[u8]) -> [u8; KEK_LEN] {
+    blake3::derive_key(AGENT_SECRET_CONTEXT, proof)
 }
 
 const BASE32_ALPHABET: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";

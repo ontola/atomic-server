@@ -70,7 +70,7 @@ async fn importing_no_objects_is_a_no_op() {
 /// "clear site data, sign in, restore" possible without a second secret.
 #[wasm_bindgen_test]
 fn a_wrapped_key_survives_a_wiped_device() {
-    let agent_secret = &[9u8; 32];
+    let agent_secret = &[9u8; 64];
     let key = vault_generate_key();
 
     let envelope = atomic_wasm::vault_wrap_key(&key, agent_secret).expect("wrap");
@@ -86,8 +86,8 @@ fn a_wrapped_key_survives_a_wiped_device() {
 #[wasm_bindgen_test]
 fn the_wrong_agent_secret_is_refused() {
     let key = vault_generate_key();
-    let envelope = atomic_wasm::vault_wrap_key(&key, &[1u8; 32]).expect("wrap");
-    assert!(atomic_wasm::vault_unwrap_key(&envelope, &[2u8; 32]).is_err());
+    let envelope = atomic_wasm::vault_wrap_key(&key, &[1u8; 64]).expect("wrap");
+    assert!(atomic_wasm::vault_unwrap_key(&envelope, &[2u8; 64]).is_err());
 }
 
 /// The wrapped form is what gets handed to the control plane, so it must not
@@ -95,7 +95,7 @@ fn the_wrong_agent_secret_is_refused() {
 #[wasm_bindgen_test]
 fn the_wrapped_form_does_not_contain_the_key() {
     let key = vault_generate_key();
-    let envelope = atomic_wasm::vault_wrap_key(&key, &[3u8; 32]).expect("wrap");
+    let envelope = atomic_wasm::vault_wrap_key(&key, &[3u8; 64]).expect("wrap");
     let hex: String = key.iter().map(|b| format!("{b:02x}")).collect();
     assert!(!envelope.contains(&hex), "raw key leaked into the envelope");
 }
@@ -106,14 +106,17 @@ fn the_wrapped_form_does_not_contain_the_key() {
 /// permanently unopenable with the real seed, so anything but the raw seed is
 /// refused.
 #[wasm_bindgen_test]
-fn only_a_raw_32_byte_agent_secret_is_accepted() {
+fn only_a_64_byte_agent_signature_is_accepted() {
     let key = vault_generate_key();
     assert!(
         atomic_wasm::vault_wrap_key(&key, b"a base64 secret string").is_err(),
-        "a non-seed representation must be refused, not silently wrapped"
+        "anything but the signature must be refused, not silently wrapped"
     );
-    assert!(atomic_wasm::vault_wrap_key(&key, &[0u8; 31]).is_err());
-    assert!(atomic_wasm::vault_wrap_key(&key, &[0u8; 32]).is_ok());
+    assert!(
+        atomic_wasm::vault_wrap_key(&key, &[0u8; 32]).is_err(),
+        "the private key is not the proof"
+    );
+    assert!(atomic_wasm::vault_wrap_key(&key, &[0u8; 64]).is_ok());
 }
 
 /// An envelope that opens but holds something other than a drive key means the
@@ -123,7 +126,7 @@ fn only_a_raw_32_byte_agent_secret_is_accepted() {
 fn an_envelope_holding_something_else_is_refused() {
     use atomic_lib::vault::secret_envelope::{NewWrapper, SecretEnvelope};
 
-    let agent_secret = [5u8; 32];
+    let agent_secret = [5u8; 64];
     let not_a_key = SecretEnvelope::create(
         b"this is an agent secret, not a drive key",
         &[NewWrapper::AgentSecret {

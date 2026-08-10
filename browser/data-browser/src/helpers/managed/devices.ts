@@ -33,8 +33,14 @@ export type DeviceRecord = {
   last_seen: number;
 };
 
-/** Stable per-install identifier; the key of our own directory record. */
-function getOrCreateDeviceId(): string | null {
+/**
+ * Stable per-install identifier; the key of our own directory record.
+ *
+ * Exported because Cloud Vault derives its lane id from the same value — one
+ * install should be one lane, and minting a second identifier would give the
+ * same device two lanes that each start at segment 1.
+ */
+export function getOrCreateDeviceId(): string | null {
   if (typeof localStorage === 'undefined') return null;
 
   try {

@@ -16,25 +16,40 @@ import { getManagedApiBase } from './api';
  * `atomic_lib::vault`; this is plumbing.
  */
 
-/**
- * The agent's signing seed, as the vault key wrapper requires it.
- *
- * The secret has several forms in this codebase — the base64 JSON blob a user
- * pastes, the `privateKey` string inside it, and the decoded seed. Wrapping
- * under one and unwrapping with another both appear to work while leaving the
- * envelope permanently unopenable, so the conversion happens here, once, rather
- * than at each call site.
- */
-export function agentSecretBytes(privateKeyB64: string): Uint8Array {
-  const bytes = new Uint8Array(decodeB64(privateKeyB64));
+/** Signs the fixed derivation message. Satisfied by `@tomic/lib`'s `Agent`. */
+export type VaultProofSigner = {
+  signBytes(data: Uint8Array): Promise<string>;
+};
 
-  if (bytes.length !== 32) {
+/**
+ * The agent's proof, from which its vault key-encryption key is derived.
+ *
+ * A signature over a fixed message, not the private key. The browser's
+ * `CryptoProvider` exposes signing rather than key bytes — deliberately, so
+ * hardware-backed and non-extractable keys stay possible — and Ed25519
+ * signatures are deterministic, so any device holding the agent reproduces the
+ * same proof and therefore the same key.
+ *
+ * It also has exactly one representation, unlike "the agent secret", which in
+ * this codebase means the base64 blob, the `privateKey` inside it, or the
+ * decoded seed depending on who is asking. Wrapping under one of those and
+ * unwrapping with another produced an envelope nothing could open.
+ */
+export async function agentVaultProof(
+  signer: VaultProofSigner,
+  proofMessage: Uint8Array,
+): Promise<Uint8Array> {
+  const signature = new Uint8Array(
+    decodeB64(await signer.signBytes(proofMessage)),
+  );
+
+  if (signature.length !== 64) {
     throw new Error(
-      `Expected a 32-byte agent key seed, got ${bytes.length} bytes — pass agent.privateKey, not the full secret blob.`,
+      `Expected a 64-byte agent signature, got ${signature.length} bytes.`,
     );
   }
 
-  return bytes;
+  return signature;
 }
 
 /**
@@ -101,7 +116,12 @@ export type VaultEnrollment = {
 
 export type BackupOutcome =
   | { status: 'nothing-to-do' }
-  | { status: 'backed-up'; resources: number; bytes: number; objectKey: string };
+  | {
+      status: 'backed-up';
+      resources: number;
+      bytes: number;
+      objectKey: string;
+    };
 
 export type RestoreOutcome = {
   packsRead: number;
@@ -162,7 +182,9 @@ async function api<T>(
     // generic failure, which is what a user would otherwise see for a billing
     // problem.
     const body = await response.json().catch(() => null);
-    throw new Error(body?.error ?? `Cloud Vault request failed (${response.status})`);
+    throw new Error(
+      body?.error ?? `Cloud Vault request failed (${response.status})`,
+    );
   }
 
   return (await response.json()) as T;
@@ -235,7 +257,9 @@ export async function getVaultKeyEnvelope(
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.error ?? `Could not fetch the vault key (${response.status})`);
+    throw new Error(
+      body?.error ?? `Could not fetch the vault key (${response.status})`,
+    );
   }
 
   const record = (await response.json()) as { envelope?: unknown };
@@ -345,9 +369,7 @@ export async function backupDrive({
   const upload = uploads?.[0];
 
   if (!upload) {
-    throw new Error(
-      'The control plane issued no upload URL for this object.',
-    );
+    throw new Error('The control plane issued no upload URL for this object.');
   }
 
   // The server decides where an object lives; the client never picks its own
@@ -365,7 +387,9 @@ export async function backupDrive({
     headers: Object.fromEntries(
       // Content-Length is set by the browser and cannot be assigned; passing it
       // through would throw before the request is made.
-      upload.headers.filter(([name]) => name.toLowerCase() !== 'content-length'),
+      upload.headers.filter(
+        ([name]) => name.toLowerCase() !== 'content-length',
+      ),
     ),
   });
 

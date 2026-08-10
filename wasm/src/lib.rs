@@ -755,6 +755,16 @@ struct VaultImportResult {
     tombstones_applied: usize,
 }
 
+/// The message an agent signs to derive its vault key-encryption key.
+///
+/// Callers sign these exact bytes and pass the signature to `vaultWrapKey` /
+/// `vaultUnwrapKey`. Fixed and versioned: changing it would orphan every
+/// envelope already stored.
+#[wasm_bindgen(js_name = "vaultProofMessage")]
+pub fn vault_proof_message() -> Vec<u8> {
+    atomic_lib::vault::secret_envelope::AGENT_VAULT_PROOF_MESSAGE.to_vec()
+}
+
 /// Wrap a drive vault key so it survives this device.
 ///
 /// This is what makes "clear site data, sign in again, restore" work. The key
@@ -775,7 +785,7 @@ pub fn vault_wrap_key(drive_key: &[u8], agent_secret: &[u8]) -> Result<String, J
         return Err(JsError::new("drive vault key must be exactly 32 bytes"));
     }
 
-    check_agent_secret(agent_secret)?;
+    check_agent_proof(agent_secret)?;
 
     SecretEnvelope::create(drive_key, &[NewWrapper::AgentSecret { agent_secret }])
         .map_err(to_js_err)?
@@ -790,7 +800,7 @@ pub fn vault_wrap_key(drive_key: &[u8], agent_secret: &[u8]) -> Result<String, J
 /// undecryptable objects, which is far harder to diagnose than a refusal here.
 #[wasm_bindgen(js_name = "vaultUnwrapKey")]
 pub fn vault_unwrap_key(envelope_json: &str, agent_secret: &[u8]) -> Result<Vec<u8>, JsError> {
-    check_agent_secret(agent_secret)?;
+    check_agent_proof(agent_secret)?;
 
     let secret = SecretEnvelope::from_json(envelope_json)
         .map_err(to_js_err)?
@@ -820,18 +830,21 @@ pub fn vault_generate_key() -> Vec<u8> {
     DriveVaultKey::generate(1).expose_secret().to_vec()
 }
 
-/// The agent secret must be the raw 32-byte Ed25519 seed.
+/// The proof must be a 64-byte Ed25519 signature.
 ///
-/// Enforced rather than accepting any bytes because the secret has several
-/// representations in this codebase — a base64 JSON blob, the `privateKey`
-/// string inside it, the decoded seed. Wrapping under one and unwrapping with
-/// another both "work" at the API level, but the envelope is then permanently
-/// unopenable with the real seed. Refusing anything else makes that impossible
-/// instead of latent.
-fn check_agent_secret(agent_secret: &[u8]) -> Result<(), JsError> {
-    if agent_secret.len() != 32 {
+/// Not the private key: the browser's `CryptoProvider` exposes signing rather
+/// than key bytes, deliberately, so that hardware-backed and non-extractable
+/// keys remain possible. Requiring the key would have closed that door
+/// permanently.
+///
+/// Enforcing the length also removes an ambiguity that already caused a bug:
+/// the "agent secret" has several representations in this codebase, and
+/// wrapping under one while unwrapping with another produced an envelope
+/// nothing could open. A signature has exactly one representation.
+fn check_agent_proof(proof: &[u8]) -> Result<(), JsError> {
+    if proof.len() != 64 {
         return Err(JsError::new(
-            "agent secret must be the raw 32-byte key seed — decode it before wrapping",
+            "agent proof must be the 64-byte signature over the vault derivation message",
         ));
     }
 

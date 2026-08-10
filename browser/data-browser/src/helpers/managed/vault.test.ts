@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  agentSecretBytes,
+  agentVaultProof,
   vaultLaneId,
   backupDrive,
   restoreDrive,
@@ -563,7 +563,9 @@ describe('key management', () => {
       agentSecret: AGENT_SECRET,
     });
 
-    expect(Array.from(driveKey)).toEqual(Array.from(new Uint8Array(32).fill(99)));
+    expect(Array.from(driveKey)).toEqual(
+      Array.from(new Uint8Array(32).fill(99)),
+    );
     expect(puts).toHaveLength(0);
   });
 
@@ -604,9 +606,9 @@ describe('key management', () => {
     expect(puts).toHaveLength(1);
     // The wrapped form must actually contain this key, or restore gets a
     // different one back.
-    expect(keys.vaultUnwrapKey(JSON.parse(puts[0]).envelope, AGENT_SECRET)).toEqual(
-      driveKey,
-    );
+    expect(
+      keys.vaultUnwrapKey(JSON.parse(puts[0]).envelope, AGENT_SECRET),
+    ).toEqual(driveKey);
   });
 
   /** The wiped-device path, end to end through the client. */
@@ -636,7 +638,7 @@ describe('key management', () => {
    * winner's key — anything else leaves one client's backups undecryptable by
    * the other.
    */
-  it('adopts the winner\'s key when another client stored one first', async () => {
+  it("adopts the winner's key when another client stored one first", async () => {
     const keys = fakeKeys();
     const winnersKey = new Uint8Array(32).fill(42);
     const stored = keys.vaultWrapKey(winnersKey, AGENT_SECRET);
@@ -706,7 +708,9 @@ describe('key management', () => {
   });
 
   it('says so plainly when a drive has no stored key', async () => {
-    mockFetch(url => (url.endsWith('/key') ? { ok: true, status: 204 } : undefined));
+    mockFetch(url =>
+      url.endsWith('/key') ? { ok: true, status: 204 } : undefined,
+    );
 
     await expect(
       recoverDriveKey({
@@ -846,7 +850,10 @@ describe('lane bookkeeping', () => {
 });
 
 describe('scheduling', () => {
-  function state(lanes: Record<string, number>, status = 'active'): VaultDriveState {
+  function state(
+    lanes: Record<string, number>,
+    status = 'active',
+  ): VaultDriveState {
     return {
       enrollment: {
         id: 'e1',
@@ -975,22 +982,39 @@ describe('scheduling', () => {
   });
 });
 
-describe('agentSecretBytes', () => {
-  /**
-   * The exact confusion this exists to prevent: the full secret blob is a
-   * base64 JSON object, not a key. Wrapping under it succeeds and then the
-   * envelope can never be opened with the real seed.
-   */
-  it('rejects the full secret blob', () => {
-    const blob = btoa(
-      JSON.stringify({ privateKey: 'x'.repeat(43), subject: 'did:ad:agent:a' }),
+describe('agentVaultProof', () => {
+  const MESSAGE = new TextEncoder().encode('atomic-vault-key-derivation-v1');
+
+  function signerReturning(bytes: Uint8Array) {
+    return {
+      signBytes: async () => btoa(String.fromCharCode(...bytes)),
+    };
+  }
+
+  it('returns the 64-byte signature', async () => {
+    const proof = await agentVaultProof(
+      signerReturning(new Uint8Array(64).fill(5)),
+      MESSAGE,
     );
-    expect(() => agentSecretBytes(blob)).toThrow(/32-byte agent key seed/);
+    expect(proof).toHaveLength(64);
   });
 
-  it('accepts a real 32-byte key', () => {
-    const seed = btoa(String.fromCharCode(...new Uint8Array(32).fill(3)));
-    expect(agentSecretBytes(seed)).toHaveLength(32);
+  /**
+   * A signer that handed back a key or a truncated value would produce an
+   * envelope nothing could reopen, so the shape is checked at the boundary.
+   */
+  it('refuses anything that is not a signature', async () => {
+    await expect(
+      agentVaultProof(signerReturning(new Uint8Array(32).fill(1)), MESSAGE),
+    ).rejects.toThrow(/64-byte agent signature/);
+  });
+
+  /** Deterministic signatures are what make this usable as key material. */
+  it('reproduces the same proof for the same agent', async () => {
+    const signer = signerReturning(new Uint8Array(64).fill(9));
+    expect(await agentVaultProof(signer, MESSAGE)).toEqual(
+      await agentVaultProof(signer, MESSAGE),
+    );
   });
 });
 
@@ -1003,6 +1027,8 @@ describe('vaultLaneId', () => {
 
   it('is stable for one install and distinct between installs', async () => {
     expect(await vaultLaneId('device-a')).toBe(await vaultLaneId('device-a'));
-    expect(await vaultLaneId('device-a')).not.toBe(await vaultLaneId('device-b'));
+    expect(await vaultLaneId('device-a')).not.toBe(
+      await vaultLaneId('device-b'),
+    );
   });
 });

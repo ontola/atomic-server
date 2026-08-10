@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  agentSecretBytes,
+  agentVaultProof,
   disableVault,
   getVaultState,
   listVaultDrives,
@@ -13,6 +13,7 @@ import {
   type VaultDriveState,
   type VaultEnrollment,
   type VaultKeyOps,
+  type VaultProofSigner,
 } from './vault';
 
 /**
@@ -46,15 +47,17 @@ export function useVaultBackup({
   keys,
   driveSubject,
   agentSubject,
-  agentPrivateKey,
+  signer,
+  proofMessage,
   devicePubkey,
 }: {
   db: VaultCapableDb | null;
   keys: VaultKeyOps | null;
   driveSubject: string | null;
   agentSubject: string | null;
-  /** The agent's base64 `privateKey`, not the full secret blob. */
-  agentPrivateKey: string | null;
+  /** Signs the derivation message. The private key is never handled here. */
+  signer: VaultProofSigner | null;
+  proofMessage: Uint8Array | null;
   devicePubkey: string | null;
 }): UseVaultBackup {
   const [status, setStatus] = useState<VaultStatus>({ state: 'loading' });
@@ -67,7 +70,13 @@ export function useVaultBackup({
   const driveKey = useRef<Uint8Array | null>(null);
 
   const ready = Boolean(
-    db && keys && driveSubject && agentSubject && agentPrivateKey && devicePubkey,
+    db &&
+    keys &&
+    driveSubject &&
+    agentSubject &&
+    signer &&
+    proofMessage &&
+    devicePubkey,
   );
 
   const refresh = useCallback(async () => {
@@ -114,18 +123,18 @@ export function useVaultBackup({
       const recovered = await recoverDriveKey({
         keys: keys!,
         drivePseudonym,
-        agentSecret: agentSecretBytes(agentPrivateKey!),
+        agentSecret: await agentVaultProof(signer!, proofMessage!),
       });
       driveKey.current = recovered;
 
       return recovered;
     },
-    [keys, agentPrivateKey],
+    [keys, signer, proofMessage],
   );
 
   /** Run an action with a single busy flag and a readable error. */
   const run = useCallback(
-    async <T,>(action: () => Promise<T>): Promise<T | null> => {
+    async <T>(action: () => Promise<T>): Promise<T | null> => {
       setBusy(true);
       setError(null);
 
@@ -148,7 +157,7 @@ export function useVaultBackup({
         keys: keys!,
         driveSubject: driveSubject!,
         agentSubject: agentSubject!,
-        agentSecret: agentSecretBytes(agentPrivateKey!),
+        agentSecret: await agentVaultProof(signer!, proofMessage!),
       });
       driveKey.current = key;
       // First backup immediately, so enabling produces something restorable
@@ -162,7 +171,17 @@ export function useVaultBackup({
       });
       await refresh();
     });
-  }, [run, keys, driveSubject, agentSubject, agentPrivateKey, db, devicePubkey, refresh]);
+  }, [
+    run,
+    keys,
+    driveSubject,
+    agentSubject,
+    signer,
+    proofMessage,
+    db,
+    devicePubkey,
+    refresh,
+  ]);
 
   const disable = useCallback(async () => {
     if (status.state !== 'on') return;
