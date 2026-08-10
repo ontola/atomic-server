@@ -330,11 +330,25 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.drivePseudonym,
         msg.objects,
       );
-      // A restore writes a whole drive; without marking dirty those writes sit
-      // behind `Durability::None` until some later write happens to trigger the
-      // flush tick. A reload in between would read them back as absent — a
-      // restore that silently did nothing.
-      dirty = true;
+      // A restore writes a whole drive behind `Durability::None`, so without
+      // persisting it here those writes wait for the next flush tick.
+      //
+      // Marking dirty is not enough: the tick is 1s away and the caller
+      // reloads the page the moment this resolves (`onRestored` in
+      // `VaultPanel`), so the reload regularly wins that race and the drive
+      // comes back empty — a restore that reported success and silently did
+      // nothing, which is the precise failure this is meant to prevent.
+      //
+      // A restore is one bulk write, so the amortisation the tick exists for
+      // does not apply. Flush now; we are already inside the work queue, so
+      // this cannot race an in-flight mutation.
+      try {
+        db!.flush();
+      } catch (e) {
+        // Fall back to the tick rather than failing a restore that did land.
+        dirty = true;
+        console.error('[ClientDb] flush after vault import failed:', e);
+      }
 
       return summary;
     }
