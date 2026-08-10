@@ -381,6 +381,18 @@ export async function backupDrive({
     );
   }
 
+  // Guard the type rather than assert it. `fetch` accepts any value as `body`
+  // and stringifies whatever it does not recognise, so a plain number array —
+  // which is what `serde_wasm_bindgen` produces for a `Vec<u8>` unless the
+  // boundary is explicit — uploads as the text "1,1,0,0,..." instead of
+  // ciphertext. That stores fine, counts fine, and is unrestorable: exactly
+  // the kind of success this vault must never report.
+  if (!(sealedPack.sealed instanceof Uint8Array)) {
+    throw new Error(
+      'Vault export returned non-binary data; refusing to upload a corrupt object.',
+    );
+  }
+
   const put = await fetch(upload.url, {
     method: 'PUT',
     body: sealedPack.sealed as BodyInit,

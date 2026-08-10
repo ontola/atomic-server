@@ -727,6 +727,16 @@ pub async fn migrate_legacy_client_db(
 use serde::{Deserialize, Serialize};
 
 /// One sealed object, ready for JS to upload.
+///
+/// `sealed` is deliberately NOT a field here. `serde_wasm_bindgen` renders a
+/// `Vec<u8>` as a JS *array of numbers*, not a `Uint8Array` — and `fetch` has
+/// no binary meaning for an array, so it stringifies it. Every object uploaded
+/// that way lands in the bucket as the ASCII text `"1,1,0,0,..."`, which reads
+/// as a successful backup and can never be restored (the first byte decodes as
+/// 49, the character '1', instead of the envelope version).
+///
+/// So the bytes are attached separately, as a real `Uint8Array`. See
+/// `attach_sealed` below.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct VaultExportResult {
@@ -734,9 +744,20 @@ struct VaultExportResult {
     /// the server returns from `upload-urls`; this one is computed from the
     /// same rules and exists so a mismatch is visible rather than silent.
     object_key: String,
-    sealed: Vec<u8>,
     resources: usize,
     tombstones: usize,
+}
+
+/// Add `sealed` to a serialised {@link VaultExportResult} as a `Uint8Array`.
+fn attach_sealed(value: JsValue, sealed: &[u8]) -> Result<JsValue, JsError> {
+    js_sys::Reflect::set(
+        &value,
+        &JsValue::from_str("sealed"),
+        &js_sys::Uint8Array::from(sealed).into(),
+    )
+    .map_err(|_| JsError::new("could not attach sealed bytes to the export result"))?;
+
+    Ok(value)
 }
 
 /// An object JS downloaded, on its way back into the store.
@@ -898,13 +919,14 @@ impl ClientDb {
         };
 
         let sealed = staging.get(&summary.object_key).map_err(to_js_err)?;
-        serde_wasm_bindgen::to_value(&VaultExportResult {
+        let result = serde_wasm_bindgen::to_value(&VaultExportResult {
             object_key: summary.object_key,
-            sealed,
             resources: summary.resources,
             tombstones: summary.tombstones,
         })
-        .map_err(to_js_err)
+        .map_err(to_js_err)?;
+
+        attach_sealed(result, &sealed)
     }
 
     /// Record that a sealed segment is durably in the vault.
