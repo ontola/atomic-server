@@ -37,6 +37,32 @@ export function agentSecretBytes(privateKeyB64: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * This install's lane identifier, as 64 hex characters.
+ *
+ * Each device appends only to its own lane, so the id only has to be stable and
+ * distinct — the control plane validates the shape, not that it is a real
+ * public key. Per-device *keys* are deliberately out of v1 scope
+ * (`CLOUD_VAULT_ARCHITECTURE.md`, decision 7): they add ceremony without a v1
+ * win, and the lane exists to avoid write contention rather than to prove
+ * authorship.
+ *
+ * Derived from the existing per-install device id, so it survives reloads. If
+ * local storage is cleared the device gets a new id and therefore a new lane —
+ * harmless, because a fresh lane simply starts at segment 1 and restore spans
+ * every lane in the drive.
+ */
+export async function vaultLaneId(deviceId: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`atomic-vault-lane:${deviceId}`),
+  );
+
+  return Array.from(new Uint8Array(digest))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 /** One confirmed object, from `GET /api/cloud-vault/{drive}/objects`. */
 export type VaultObject = {
   object_id: string;

@@ -1,0 +1,190 @@
+import { styled } from 'styled-components';
+import { FaLock, FaRotateLeft, FaCloudArrowUp } from 'react-icons/fa6';
+import { Button } from '../Button';
+import { PRODUCT_NAME } from '../../helpers/managed/product';
+import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
+
+/**
+ * Cloud Vault controls for one drive.
+ *
+ * Presentational: every decision lives in `useVaultBackup`, so this can be
+ * dropped anywhere a drive is in view without dragging state with it.
+ *
+ * The copy is deliberate about which tier this is. Cloud Vault is *blind* —
+ * encrypted backup we cannot read — while Cloud Sync stores queryable state we
+ * can. `OSS_STRATEGY.md` calls out that headlining "we can't read your data"
+ * and then selling a tier that can is how a trust pitch gets lost, so the two
+ * must never be described in the same words.
+ */
+export function VaultPanel({
+  vault,
+  onRestored,
+}: {
+  vault: UseVaultBackup;
+  /** Called after a successful restore, so the host can refresh its view. */
+  onRestored?: () => void;
+}) {
+  const { status, busy, error, restoreProgress } = vault;
+
+  // "Cannot say" is not "off": offering an enable button when we could not even
+  // ask would turn a missing session into a confusing failure on click.
+  if (status.state === 'loading' || status.state === 'unavailable') {
+    return null;
+  }
+
+  async function handleRestore() {
+    const outcome = await vault.restore();
+
+    if (outcome) onRestored?.();
+  }
+
+  if (status.state === 'off') {
+    return (
+      <Panel>
+        <Icon>
+          <FaLock />
+        </Icon>
+        <Body>
+          <Title>Encrypted backup</Title>
+          <Sub>
+            Keep an encrypted copy of this workspace in {PRODUCT_NAME}. It is
+            sealed on this device, so we store it without being able to read it.
+          </Sub>
+          {error && <ErrorText>{error}</ErrorText>}
+          <Actions>
+            <Button onClick={vault.enable} disabled={busy}>
+              {busy ? 'Setting up…' : 'Turn on encrypted backup'}
+            </Button>
+          </Actions>
+        </Body>
+      </Panel>
+    );
+  }
+
+  const { enrollment, details } = status;
+  const suspended = enrollment.status !== 'active';
+
+  return (
+    <Panel>
+      <Icon>
+        <FaLock />
+      </Icon>
+      <Body>
+        <Title>Encrypted backup is on</Title>
+        <Sub>
+          {details.confirmed_objects === 0
+            ? 'Nothing has been backed up yet.'
+            : `${details.confirmed_objects} encrypted object${
+                details.confirmed_objects === 1 ? '' : 's'
+              } · ${formatBytes(enrollment.used_bytes)} stored.`}
+          {enrollment.last_backup_at
+            ? ` Last backup ${formatWhen(enrollment.last_backup_at)}.`
+            : ''}
+        </Sub>
+
+        {suspended && (
+          <ErrorText>
+            Backups are paused. You can still restore what is already stored.
+          </ErrorText>
+        )}
+
+        {error && <ErrorText>{error}</ErrorText>}
+
+        {restoreProgress !== null && (
+          <Sub>Restoring… {Math.round(restoreProgress * 100)}%</Sub>
+        )}
+
+        <Actions>
+          <Button onClick={vault.backupNow} disabled={busy || suspended}>
+            <FaCloudArrowUp /> {busy ? 'Working…' : 'Back up now'}
+          </Button>
+          <Button subtle onClick={handleRestore} disabled={busy}>
+            <FaRotateLeft /> Restore
+          </Button>
+          <Button subtle onClick={vault.disable} disabled={busy}>
+            Turn off
+          </Button>
+        </Actions>
+      </Body>
+    </Panel>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let unit = 0;
+
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
+}
+
+/** Unix seconds → a phrase, because an ISO timestamp answers a question nobody asked. */
+function formatWhen(unixSeconds: number): string {
+  const minutes = Math.floor((Date.now() / 1000 - unixSeconds) / 60);
+
+  if (minutes < 1) return 'just now';
+
+  if (minutes < 60) return `${minutes} min ago`;
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) return `${hours}h ago`;
+
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+const Panel = styled.div`
+  display: flex;
+  gap: ${p => p.theme.size(2)};
+  padding: ${p => p.theme.size(2)};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg1};
+`;
+
+const Icon = styled.div`
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: ${p => p.theme.colors.bg2};
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const Body = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${p => p.theme.size(1)};
+  min-width: 0;
+`;
+
+const Title = styled.h3`
+  margin: 0;
+  font-size: 1rem;
+`;
+
+const Sub = styled.p`
+  margin: 0;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const ErrorText = styled.p`
+  margin: 0;
+  color: ${p => p.theme.colors.alert};
+`;
+
+const Actions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${p => p.theme.size(1)};
+  margin-top: ${p => p.theme.size(1)};
+`;

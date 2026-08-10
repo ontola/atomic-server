@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   agentSecretBytes,
+  vaultLaneId,
   backupDrive,
   restoreDrive,
   setUpVaultForDrive,
@@ -990,5 +991,18 @@ describe('agentSecretBytes', () => {
   it('accepts a real 32-byte key', () => {
     const seed = btoa(String.fromCharCode(...new Uint8Array(32).fill(3)));
     expect(agentSecretBytes(seed)).toHaveLength(32);
+  });
+});
+
+describe('vaultLaneId', () => {
+  /** The control plane validates the shape: 64 lowercase hex characters. */
+  it('produces the shape the control plane accepts', async () => {
+    const id = await vaultLaneId('device-a');
+    expect(id).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('is stable for one install and distinct between installs', async () => {
+    expect(await vaultLaneId('device-a')).toBe(await vaultLaneId('device-a'));
+    expect(await vaultLaneId('device-a')).not.toBe(await vaultLaneId('device-b'));
   });
 });
