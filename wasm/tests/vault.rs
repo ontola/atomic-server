@@ -64,3 +64,38 @@ async fn importing_no_objects_is_a_no_op() {
         .expect("import of nothing should succeed");
     assert!(!summary.is_null());
 }
+
+/// The property the whole demo rests on: a key wrapped on one device is
+/// recoverable on another that holds only the agent secret. This is what makes
+/// "clear site data, sign in, restore" possible without a second secret.
+#[wasm_bindgen_test]
+fn a_wrapped_key_survives_a_wiped_device() {
+    let agent_secret = b"the account's ed25519 secret";
+    let key = vault_generate_key();
+
+    let envelope = atomic_wasm::vault_wrap_key(&key, agent_secret).expect("wrap");
+
+    // The wiped device has nothing but the envelope and the agent secret.
+    let recovered = atomic_wasm::vault_unwrap_key(&envelope, agent_secret).expect("unwrap");
+    assert_eq!(recovered, key, "the same key must come back");
+}
+
+/// A wrong agent secret must fail loudly. Proceeding with a bad key would fill
+/// the drive with objects nobody can open — much harder to diagnose than a
+/// refusal at unwrap time.
+#[wasm_bindgen_test]
+fn the_wrong_agent_secret_is_refused() {
+    let key = vault_generate_key();
+    let envelope = atomic_wasm::vault_wrap_key(&key, b"mine").expect("wrap");
+    assert!(atomic_wasm::vault_unwrap_key(&envelope, b"theirs").is_err());
+}
+
+/// The wrapped form is what gets handed to the control plane, so it must not
+/// contain the key.
+#[wasm_bindgen_test]
+fn the_wrapped_form_does_not_contain_the_key() {
+    let key = vault_generate_key();
+    let envelope = atomic_wasm::vault_wrap_key(&key, b"agent").expect("wrap");
+    let hex: String = key.iter().map(|b| format!("{b:02x}")).collect();
+    assert!(!envelope.contains(&hex), "raw key leaked into the envelope");
+}

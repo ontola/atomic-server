@@ -58,6 +58,20 @@ pub enum WrapperKind {
     /// User-chosen password over Argon2id. Supported so product can offer it,
     /// deliberately never the only wrapper.
     Password,
+    /// A KEK derived from the account's Ed25519 agent secret.
+    ///
+    /// The wrapper that means a user manages **no new secret**. Whatever
+    /// already restores their identity — a passkey, the recovery code on the
+    /// identity envelope — also restores every drive key, because holding the
+    /// agent secret is sufficient to unwrap them.
+    ///
+    /// This wraps a random drive key; it does not derive one. Deriving would
+    /// weld data encryption to identity permanently: no re-keying a drive
+    /// without a new identity, no sharing a drive without sharing the agent
+    /// secret. Wrapping keeps the drive key independent while costing the user
+    /// nothing — `CLOUD_VAULT_ARCHITECTURE.md`'s key diagram says *wraps* for
+    /// exactly this reason.
+    AgentSecret,
 }
 
 /// Argon2id parameters as stored, so a blob written today stays openable after
@@ -128,6 +142,8 @@ pub enum Unlock<'a> {
     Secret(&'a str),
     /// A KEK the caller already derived, for PRF.
     Kek([u8; KEK_LEN]),
+    /// The account's agent secret, as raw bytes.
+    AgentSecret(&'a [u8]),
 }
 
 /// What to add when creating an envelope or registering a credential.
@@ -142,6 +158,12 @@ pub enum NewWrapper<'a> {
         credential_id: String,
         kek: [u8; KEK_LEN],
     },
+    /// Wrap under the account's agent secret. Raw secret bytes, not a KEK —
+    /// the derivation is this module's business so every caller gets the same
+    /// domain separation.
+    AgentSecret {
+        agent_secret: &'a [u8],
+    },
 }
 
 impl NewWrapper<'_> {
@@ -150,6 +172,7 @@ impl NewWrapper<'_> {
             NewWrapper::RecoveryCode { .. } => WrapperKind::RecoveryCode,
             NewWrapper::Password { .. } => WrapperKind::Password,
             NewWrapper::WebauthnPrf { .. } => WrapperKind::WebauthnPrf,
+            NewWrapper::AgentSecret { .. } => WrapperKind::AgentSecret,
         }
     }
 
@@ -158,6 +181,7 @@ impl NewWrapper<'_> {
             NewWrapper::RecoveryCode { .. } => "recovery-code".to_string(),
             NewWrapper::Password { .. } => "password".to_string(),
             NewWrapper::WebauthnPrf { credential_id, .. } => credential_id.clone(),
+            NewWrapper::AgentSecret { .. } => "agent-secret".to_string(),
         }
     }
 }
@@ -190,6 +214,18 @@ pub fn normalize_recovery_code(code: &str) -> String {
             other => other,
         })
         .collect()
+}
+
+/// Domain separator for the agent-secret KEK.
+///
+/// The wrapping key is derived, never the signing key itself: the same bytes
+/// must not both sign commits and decrypt backups, or a flaw in one use
+/// becomes a flaw in the other.
+const AGENT_SECRET_CONTEXT: &str = "atomic-vault 2026 agent secret wrapper";
+
+/// The KEK an agent secret unwraps with.
+pub fn agent_secret_kek(agent_secret: &[u8]) -> [u8; KEK_LEN] {
+    blake3::derive_key(AGENT_SECRET_CONTEXT, agent_secret)
 }
 
 const BASE32_ALPHABET: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -258,6 +294,9 @@ fn wrap_dek(dek: &[u8; DEK_LEN], spec: &NewWrapper) -> AtomicResult<Wrapper> {
             (Some(params.into()), Some(b64(&salt_bytes)), kek)
         }
         NewWrapper::WebauthnPrf { kek, .. } => (None, None, *kek),
+        // No KDF: the agent secret is already a full-strength random key, so
+        // stretching it would cost time and add nothing.
+        NewWrapper::AgentSecret { agent_secret } => (None, None, agent_secret_kek(agent_secret)),
     };
 
     let (nonce, wrapped_dek) = seal(&kek, dek)?;
@@ -335,6 +374,7 @@ impl SecretEnvelope {
                     }
                 }
                 (Unlock::Kek(kek), WrapperKind::WebauthnPrf) => *kek,
+                (Unlock::AgentSecret(secret), WrapperKind::AgentSecret) => agent_secret_kek(secret),
                 _ => continue,
             };
 
@@ -623,6 +663,97 @@ mod tests {
             SecretEnvelope::create(drive_key.expose_secret(), &[prf("passkey-a", 1)]).unwrap();
         let recovered = envelope.unwrap_secret(&Unlock::Kek([1; KEK_LEN])).unwrap();
         assert_eq!(recovered, drive_key.expose_secret());
+    }
+
+    /// The whole point of the wrapper: a user who can restore their identity can
+    /// restore their drive keys, with nothing extra to remember.
+    #[test]
+    fn an_agent_secret_opens_the_envelope() {
+        let agent_secret = b"an ed25519 private key's bytes";
+        let drive_key = super::super::dek::DriveVaultKey::generate(1);
+        let envelope = SecretEnvelope::create(
+            drive_key.expose_secret(),
+            &[NewWrapper::AgentSecret { agent_secret }],
+        )
+        .unwrap();
+
+        let recovered = envelope
+            .unwrap_secret(&Unlock::AgentSecret(agent_secret))
+            .unwrap();
+        assert_eq!(recovered, drive_key.expose_secret());
+    }
+
+    #[test]
+    fn a_different_agent_secret_does_not() {
+        let envelope = SecretEnvelope::create(
+            SECRET,
+            &[NewWrapper::AgentSecret {
+                agent_secret: b"mine",
+            }],
+        )
+        .unwrap();
+        assert!(envelope
+            .unwrap_secret(&Unlock::AgentSecret(b"someone else's"))
+            .is_err());
+    }
+
+    /// The wrapping key must not be the signing key. If the same bytes both
+    /// signed commits and decrypted backups, a flaw in either use would become
+    /// a flaw in both.
+    #[test]
+    fn the_wrapping_key_is_derived_not_the_agent_secret_itself() {
+        let agent_secret = [42u8; 32];
+        let kek = agent_secret_kek(&agent_secret);
+        assert_ne!(kek, agent_secret, "the KEK must not be the secret itself");
+
+        // Deterministic, or a restore on another device could not reproduce it.
+        assert_eq!(kek, agent_secret_kek(&agent_secret));
+    }
+
+    /// A drive key wrapped under the agent secret can gain a recovery-code
+    /// wrapper later without re-encrypting anything — the point of wrapping a
+    /// DEK rather than the secret.
+    #[test]
+    fn a_recovery_code_can_be_added_to_an_agent_wrapped_envelope() {
+        let agent_secret = b"agent bytes";
+        let mut envelope =
+            SecretEnvelope::create(SECRET, &[NewWrapper::AgentSecret { agent_secret }]).unwrap();
+
+        let code = generate_recovery_code();
+        envelope
+            .add_wrapper(
+                &Unlock::AgentSecret(agent_secret),
+                &NewWrapper::RecoveryCode { code: &code },
+            )
+            .unwrap();
+
+        // Both routes now open the same secret.
+        assert_eq!(
+            envelope.unwrap_secret(&Unlock::Secret(&code)).unwrap(),
+            SECRET
+        );
+        assert_eq!(
+            envelope
+                .unwrap_secret(&Unlock::AgentSecret(agent_secret))
+                .unwrap(),
+            SECRET
+        );
+    }
+
+    /// Losing the agent secret must not be survivable *through this wrapper* —
+    /// that is what the second wrapper is for. Pins that the agent wrapper
+    /// alone genuinely gates on the secret.
+    #[test]
+    fn without_the_agent_secret_there_is_no_way_in() {
+        let envelope = SecretEnvelope::create(
+            SECRET,
+            &[NewWrapper::AgentSecret {
+                agent_secret: b"lost forever",
+            }],
+        )
+        .unwrap();
+        assert!(envelope.unwrap_secret(&Unlock::Kek([0; KEK_LEN])).is_err());
+        assert!(envelope.unwrap_secret(&Unlock::Secret("guess")).is_err());
     }
 
     #[test]

@@ -48,7 +48,16 @@ Notes that matter for anyone reimplementing this:
 
 - **The agent key never encrypts bulk data.** Key rotation, drive sharing and
   multi-agent drives all depend on the wrapping key being separable from the
-  data key.
+  data key. It *wraps* the `DriveVaultKey` — the KEK is
+  `blake3::derive_key("atomic-vault 2026 agent secret wrapper", agent_secret)`,
+  derived rather than used directly so the same bytes never both sign commits
+  and decrypt backups.
+
+  This is what lets a device be wiped and recovered with no extra secret:
+  whatever restores the identity restores every drive key. Additional wrappers
+  (a passkey PRF assertion, a generated recovery code) can be added to the same
+  envelope later without re-encrypting anything, because what is wrapped is a
+  32-byte DEK rather than the data.
 - **Blob ids are keyed hashes**, `blake3::keyed_hash(blob_id_subkey, plaintext)`.
   Keyed rather than plain so two drives holding identical bytes produce
   different ids — a plain content hash would let the storage operator detect

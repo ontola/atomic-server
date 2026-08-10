@@ -12,6 +12,7 @@ use atomic_lib::{
     storelike::{Query, QueryResult, Storelike},
     vault::dek::DriveVaultKey,
     vault::keys::{argon2id_derive_key, Argon2Params},
+    vault::secret_envelope::{NewWrapper, SecretEnvelope, Unlock},
     vault::store::{MemoryVaultStore, VaultObjectStore},
     vault::sync::{export_vault_delta, import_vault_batch, lane_prefix},
     Commit, Db, Resource, Subject, Value,
@@ -752,6 +753,49 @@ struct VaultImportResult {
     packs_read: usize,
     resources_restored: usize,
     tombstones_applied: usize,
+}
+
+/// Wrap a drive vault key so it survives this device.
+///
+/// This is what makes "clear site data, sign in again, restore" work. The key
+/// is sealed under the account's agent secret — the credential the user already
+/// has — so enabling backup adds nothing for them to remember. Whatever
+/// restores their identity restores their drive keys.
+///
+/// The returned JSON is opaque and safe for the control plane to store: it
+/// holds the key only in ciphertext, and the server never sees an agent secret.
+///
+/// Wrapping, not deriving. A derived key would weld data encryption to identity
+/// forever — no re-keying a drive without a new identity, no sharing one
+/// without sharing the agent secret. Wrapping keeps the drive key independent
+/// and costs the user nothing.
+#[wasm_bindgen(js_name = "vaultWrapKey")]
+pub fn vault_wrap_key(drive_key: &[u8], agent_secret: &[u8]) -> Result<String, JsError> {
+    if drive_key.len() != 32 {
+        return Err(JsError::new("drive vault key must be exactly 32 bytes"));
+    }
+
+    if agent_secret.is_empty() {
+        return Err(JsError::new("agent secret must not be empty"));
+    }
+
+    SecretEnvelope::create(drive_key, &[NewWrapper::AgentSecret { agent_secret }])
+        .map_err(to_js_err)?
+        .to_json()
+        .map_err(to_js_err)
+}
+
+/// Recover a drive vault key from its wrapped form.
+///
+/// Fails rather than returning nonsense when the agent secret is wrong: a
+/// restore that proceeded with a bad key would produce a drive full of
+/// undecryptable objects, which is far harder to diagnose than a refusal here.
+#[wasm_bindgen(js_name = "vaultUnwrapKey")]
+pub fn vault_unwrap_key(envelope_json: &str, agent_secret: &[u8]) -> Result<Vec<u8>, JsError> {
+    SecretEnvelope::from_json(envelope_json)
+        .map_err(to_js_err)?
+        .unwrap_secret(&Unlock::AgentSecret(agent_secret))
+        .map_err(to_js_err)
 }
 
 /// A fresh random drive vault key, as raw bytes.
