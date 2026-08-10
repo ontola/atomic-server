@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+  agentSecretBytes,
   backupDrive,
   restoreDrive,
   setUpVaultForDrive,
@@ -970,5 +971,24 @@ describe('scheduling', () => {
 
     expect(outcome).toEqual({ status: 'nothing-to-do' });
     expect(db.vaultExport).not.toHaveBeenCalled();
+  });
+});
+
+describe('agentSecretBytes', () => {
+  /**
+   * The exact confusion this exists to prevent: the full secret blob is a
+   * base64 JSON object, not a key. Wrapping under it succeeds and then the
+   * envelope can never be opened with the real seed.
+   */
+  it('rejects the full secret blob', () => {
+    const blob = btoa(
+      JSON.stringify({ privateKey: 'x'.repeat(43), subject: 'did:ad:agent:a' }),
+    );
+    expect(() => agentSecretBytes(blob)).toThrow(/32-byte agent key seed/);
+  });
+
+  it('accepts a real 32-byte key', () => {
+    const seed = btoa(String.fromCharCode(...new Uint8Array(32).fill(3)));
+    expect(agentSecretBytes(seed)).toHaveLength(32);
   });
 });

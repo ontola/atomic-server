@@ -1,3 +1,4 @@
+import { decodeB64 } from '@tomic/lib';
 import { getManagedApiBase } from './api';
 
 /**
@@ -14,6 +15,27 @@ import { getManagedApiBase } from './api';
  * because nothing here can read them. The security-critical code is in
  * `atomic_lib::vault`; this is plumbing.
  */
+
+/**
+ * The agent's signing seed, as the vault key wrapper requires it.
+ *
+ * The secret has several forms in this codebase — the base64 JSON blob a user
+ * pastes, the `privateKey` string inside it, and the decoded seed. Wrapping
+ * under one and unwrapping with another both appear to work while leaving the
+ * envelope permanently unopenable, so the conversion happens here, once, rather
+ * than at each call site.
+ */
+export function agentSecretBytes(privateKeyB64: string): Uint8Array {
+  const bytes = new Uint8Array(decodeB64(privateKeyB64));
+
+  if (bytes.length !== 32) {
+    throw new Error(
+      `Expected a 32-byte agent key seed, got ${bytes.length} bytes — pass agent.privateKey, not the full secret blob.`,
+    );
+  }
+
+  return bytes;
+}
 
 /** One confirmed object, from `GET /api/cloud-vault/{drive}/objects`. */
 export type VaultObject = {
