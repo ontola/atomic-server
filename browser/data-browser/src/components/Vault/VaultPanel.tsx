@@ -40,7 +40,7 @@ export function VaultPanel({
 
   if (status.state === 'off') {
     return (
-      <Panel>
+      <Panel data-testid='vault-panel' data-vault-state='off'>
         <Icon>
           <FaLock />
         </Icon>
@@ -50,9 +50,13 @@ export function VaultPanel({
             Keep an encrypted copy of this workspace in {PRODUCT_NAME}. It is
             sealed on this device, so we store it without being able to read it.
           </Sub>
-          {error && <ErrorText>{error}</ErrorText>}
+          {error && <ErrorText data-testid='vault-error'>{error}</ErrorText>}
           <Actions>
-            <Button onClick={vault.enable} disabled={busy}>
+            <Button
+              data-testid='vault-enable'
+              onClick={vault.enable}
+              disabled={busy}
+            >
               {busy ? 'Setting up…' : 'Turn on encrypted backup'}
             </Button>
           </Actions>
@@ -65,13 +69,23 @@ export function VaultPanel({
   const suspended = enrollment.status !== 'active';
 
   return (
-    <Panel>
+    <Panel
+      data-testid='vault-panel'
+      data-vault-state={suspended ? 'suspended' : 'on'}
+    >
       <Icon>
         <FaLock />
       </Icon>
       <Body>
         <Title>Encrypted backup is on</Title>
-        <Sub>
+        {/* The object count is an attribute as well as prose: a test asserting
+            that a second backup actually stored something should read the
+            number, not parse a sentence that is free to be reworded. */}
+        <Sub
+          data-testid='vault-summary'
+          data-vault-objects={details.confirmed_objects}
+          data-vault-bytes={enrollment.used_bytes}
+        >
           {details.confirmed_objects === 0
             ? 'Nothing has been backed up yet.'
             : `${details.confirmed_objects} encrypted object${
@@ -83,25 +97,41 @@ export function VaultPanel({
         </Sub>
 
         {suspended && (
-          <ErrorText>
+          <ErrorText data-testid='vault-suspended'>
             Backups are paused. You can still restore what is already stored.
           </ErrorText>
         )}
 
-        {error && <ErrorText>{error}</ErrorText>}
+        {error && <ErrorText data-testid='vault-error'>{error}</ErrorText>}
 
         {restoreProgress !== null && (
-          <Sub>Restoring… {Math.round(restoreProgress * 100)}%</Sub>
+          <Sub data-testid='vault-restore-progress'>
+            Restoring… {Math.round(restoreProgress * 100)}%
+          </Sub>
         )}
 
         <Actions>
-          <Button onClick={vault.backupNow} disabled={busy || suspended}>
+          <Button
+            data-testid='vault-backup-now'
+            onClick={vault.backupNow}
+            disabled={busy || suspended}
+          >
             <FaCloudArrowUp /> {busy ? 'Working…' : 'Back up now'}
           </Button>
-          <Button subtle onClick={handleRestore} disabled={busy}>
+          <Button
+            data-testid='vault-restore'
+            subtle
+            onClick={handleRestore}
+            disabled={busy}
+          >
             <FaRotateLeft /> Restore
           </Button>
-          <Button subtle onClick={vault.disable} disabled={busy}>
+          <Button
+            data-testid='vault-disable'
+            subtle
+            onClick={vault.disable}
+            disabled={busy}
+          >
             Turn off
           </Button>
         </Actions>

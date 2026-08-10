@@ -30,6 +30,35 @@ SAAS_DB="${ATOMIC_SAAS_E2E_DB:-/tmp/atomic-vault-e2e-saas.redb}"
 SAAS_LOG="${ATOMIC_SAAS_E2E_LOG:-/tmp/atomic-vault-e2e-saas.log}"
 PID_FILE=/tmp/atomic-vault-e2e-saas.pid
 
+# The node the control plane hands every enrolled drive to. It MUST be the
+# server the SPA itself talks to (`data-browser/.env.development`, 9885 when
+# the control plane is in play) — the app reconciles a drive's server URL to
+# its enrollment's `http_origin`, so a mismatch silently repoints the drive at
+# a port nothing is listening on. That surfaces as endless
+# `ws://localhost:9883 connection refused` and commits that never land, which
+# reads like a sync bug rather than a fixture one.
+#
+# atomic-saas defaults this to 9883 (`config.rs`), which is the standalone-
+# server port, so it has to be set explicitly here.
+# Same precedence vite applies: `.env.development.local` wins over the
+# committed default. Read one file at a time — grep over several prefixes each
+# line with its filename, which silently produces a garbage origin.
+read_spa_server_url() {
+  local url='' file found
+  for file in \
+    "$REPO_ROOT/browser/data-browser/.env.development" \
+    "$REPO_ROOT/browser/data-browser/.env.development.local"; do
+    [[ -f "$file" ]] || continue
+    found=$(grep -E '^\s*VITE_ATOMIC_SERVER_URL=' "$file" | tail -1 |
+      cut -d= -f2- | tr -d '"' | tr -d "'" | xargs || true)
+    [[ -n "$found" ]] && url="$found"
+  done
+  echo "${url#*://}"
+}
+
+DEV_NODE_ORIGIN="${ATOMIC_VAULT_E2E_NODE_ORIGIN:-$(read_spa_server_url)}"
+DEV_NODE_ORIGIN="${DEV_NODE_ORIGIN:-localhost:9885}"
+
 stop() {
   docker rm -f atomic-vault-e2e-minio >/dev/null 2>&1 || true
 
@@ -170,6 +199,7 @@ fi
     POSTMARK_FROM=e2e@localhost \
     ATOMIC_SAAS_SKIP_NODE_HEALTH_CHECKS=true \
     ATOMIC_SAAS_NODE_PROVIDER=local-process \
+    ATOMIC_SAAS_DEV_NODE_ORIGIN="$DEV_NODE_ORIGIN" \
     DB_PATH="$SAAS_DB" \
     SAAS_URL="http://localhost:$SAAS_PORT" \
     ATOMIC_VAULT_S3_BUCKET="$BUCKET" \
@@ -225,6 +255,22 @@ if grep -q "in-memory stub" "$SAAS_LOG"; then
 fi
 
 echo "control plane up on $SAAS_PORT (log: $SAAS_LOG)"
+
+# The control plane is only half the stack. Every enrolled drive is assigned to
+# the node above, and the SPA follows that assignment — so if nothing answers
+# there, drives are created but commits never land and the failure surfaces
+# somewhere far away ("waiting for response" in a title helper). Say so here
+# instead, where it is one line to fix.
+if ! curl -sf -o /dev/null -m 3 "http://$DEV_NODE_ORIGIN/" 2>/dev/null; then
+  echo
+  echo "WARNING: nothing is listening on $DEV_NODE_ORIGIN, the node this" >&2
+  echo "control plane assigns every drive to. Drives will be created but" >&2
+  echo "their commits will never land. Start it with:" >&2
+  echo "  cd browser/e2e && ./scripts/e2e-server.sh" >&2
+else
+  echo "node up on $DEV_NODE_ORIGIN (drives are assigned here)"
+fi
+
 echo
-echo "Point the SPA at it with:"
-echo "  VITE_MANAGED_PORTAL_URL=http://localhost:$SAAS_PORT"
+echo "The SPA reaches the control plane at http://localhost:$SAAS_PORT"
+echo "(hardcoded for localhost origins in helpers/managed/api.ts — no vite env needed)."
