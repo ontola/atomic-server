@@ -21,6 +21,44 @@ use crate::resources::Resource;
 use crate::storelike::Storelike;
 use crate::Subject;
 
+/// Local record of what a lane's last pack contained.
+///
+/// Not uploaded and not part of the format — purely this device's memory of
+/// what it has already backed up. It exists so a deletion can be *detected*:
+/// a subject that was in the last pack and is gone from this walk was removed,
+/// and a backup that cannot express that would restore data its owner deleted.
+///
+/// This is also the seed of the Phase 2 incremental cursor. When per-resource
+/// version vectors land they live in the same place, for the same reason —
+/// `CLOUD_VAULT_ARCHITECTURE.md` decision 2: incremental cursors live in each
+/// device's local Db, never in shared metadata.
+fn lane_state_key(drive_pseudonym: &str, device_pubkey: &str) -> Vec<u8> {
+    format!("vault-lane:{drive_pseudonym}:{device_pubkey}").into_bytes()
+}
+
+fn read_lane_state(store: &Db, drive_pseudonym: &str, device_pubkey: &str) -> Vec<String> {
+    store
+        .kv
+        .get(
+            crate::db::trees::Tree::PluginMeta,
+            &lane_state_key(drive_pseudonym, device_pubkey),
+        )
+        .ok()
+        .flatten()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+
+fn write_lane_state(store: &Db, drive_pseudonym: &str, device_pubkey: &str, subjects: &[String]) {
+    if let Ok(bytes) = serde_json::to_vec(subjects) {
+        let _ = store.kv.insert(
+            crate::db::trees::Tree::PluginMeta,
+            &lane_state_key(drive_pseudonym, device_pubkey),
+            &bytes,
+        );
+    }
+}
+
 /// Where a device's lane objects live for a drive.
 pub fn lane_prefix(drive_pseudonym: &str, device_pubkey: &str) -> String {
     format!("vault/{drive_pseudonym}/lanes/{device_pubkey}/")
@@ -105,7 +143,27 @@ pub async fn export_vault_delta(
     // content-addressed layer possible later.
     entries.sort_by(|a, b| a.subject.cmp(&b.subject));
 
-    let pack = Pack::new(entries, Vec::new());
+    // Anything this lane backed up before and cannot see now was deleted.
+    // Without this the deletion is simply absent from the vault: the resource
+    // still lives in an earlier segment's pack, and a restore brings it back.
+    // Restoring data its owner deleted is the one failure a backup must not
+    // have.
+    //
+    // Only subjects with a local tombstone are claimed. A subject that merely
+    // vanished from the walk could be a transient read failure or an
+    // authorization change, and a tombstone we invent would *delete real data*
+    // on restore — far worse than carrying a stale resource for another cycle.
+    let present: std::collections::HashSet<&String> = entries.iter().map(|e| &e.subject).collect();
+    let tombstones: Vec<String> = read_lane_state(store, drive_pseudonym, device_pubkey)
+        .into_iter()
+        .filter(|subject| {
+            !present.contains(subject) && crate::sync::tombstones::is_tombstoned(store, subject)
+        })
+        .collect();
+
+    let exported: Vec<String> = entries.iter().map(|e| e.subject.clone()).collect();
+
+    let pack = Pack::new(entries, tombstones);
     if pack.is_empty() {
         return Ok(None);
     }
@@ -115,6 +173,12 @@ pub async fn export_vault_delta(
     let sealed = envelope::seal(key, ObjectKind::Pack, &pack.encode()?)?;
     let object_key = segment_key(drive_pseudonym, device_pubkey, segment);
     vault.put(&object_key, &sealed)?;
+
+    // Recorded only after the pack is safely stored. Recording first would let
+    // a failed upload convince the next run that these subjects were already
+    // backed up, and a later deletion would then be reported against a segment
+    // that does not exist.
+    write_lane_state(store, drive_pseudonym, device_pubkey, &exported);
 
     Ok(Some(BackupSummary {
         object_key,
@@ -168,11 +232,32 @@ pub async fn import_vault_batch(
             store
                 .add_resource_opts(&resource, false, true, true)
                 .await?;
+
+            // A subject this device had destroyed is being re-created by the
+            // backup. Leaving the tombstone in place would keep `is_tombstoned`
+            // suppressing it from every future bulk sync, so the restored
+            // resource would exist locally and never reach another replica —
+            // the same stale-invariant bug `clear_tombstone` exists for (F11).
+            // Segments replay in order, so a later tombstone still wins.
+            crate::sync::tombstones::clear_tombstone(store, &entry.subject);
             summary.resources_restored += 1;
         }
 
         for subject_str in pack.tombstones {
-            crate::sync::tombstones::record_tombstone(store, &subject_str);
+            // `remove_resource` rather than a bare `record_tombstone`: the
+            // marker alone leaves the resource's data and index entries in
+            // place, so an earlier segment's oplog would restore a deleted
+            // resource and the tombstone would only stop it propagating. A
+            // delete must actually delete. `remove_resource` recurses into
+            // children and records tombstones for everything it removes.
+            let subject = Subject::from_raw(&subject_str, None);
+            match store.remove_resource(&subject).await {
+                Ok(()) => {}
+                // Already absent is the normal case when restoring into an
+                // empty store: the tombstone still has to be recorded so a
+                // later bulk sync does not pull the resource back from a peer.
+                Err(_) => crate::sync::tombstones::record_tombstone(store, &subject_str),
+            }
             summary.tombstones_applied += 1;
         }
     }
@@ -335,6 +420,128 @@ mod tests {
 
         let after = drive_contents(&restored, &drive_subject).await;
         assert_eq!(after, before, "restored drive must match the original");
+    }
+
+    /// The bug a backup must not have: a resource deleted after an earlier
+    /// segment was written must stay deleted through a wipe-and-restore.
+    ///
+    /// Before deletions were exported, segment 1 still held the resource's full
+    /// oplog and a restore brought it back — the vault silently undoing its
+    /// owner's delete.
+    #[tokio::test]
+    async fn a_deleted_resource_does_not_come_back_after_restore() {
+        let source = Db::init_temp("vault_delete_source").await.unwrap();
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        let keep = source
+            .create_resource(FOLDER, &drive, "keep", None)
+            .await
+            .unwrap();
+        let doomed = source
+            .create_resource(FOLDER, &drive, "doomed", None)
+            .await
+            .unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+
+        // Segment 1: both resources are backed up.
+        export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 1)
+            .await
+            .unwrap()
+            .expect("first pack");
+
+        // The user deletes one, then a later backup runs.
+        let doomed_subject = Subject::from_raw(&doomed, source.get_base_domain().as_deref());
+        source.remove_resource(&doomed_subject).await.unwrap();
+        let second =
+            export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 2)
+                .await
+                .unwrap()
+                .expect("second pack carries the deletion");
+        assert_eq!(
+            second.tombstones, 1,
+            "the deletion must reach the vault, not just the local store"
+        );
+
+        // Restore everything into a fresh store.
+        let restored = Db::init_temp("vault_delete_restored").await.unwrap();
+        import_vault_batch(&restored, &key, &vault, &lane_prefix(PSEUDONYM, DEVICE))
+            .await
+            .unwrap();
+
+        let subjects = crate::sync::engine::collect_drive_subjects(&restored, &drive_subject).await;
+        assert!(
+            subjects.contains(&Subject::from_raw(&keep, None).pure_id()),
+            "the kept resource must survive: {subjects:?}"
+        );
+        assert!(
+            !subjects.contains(&doomed_subject.pure_id()),
+            "the deleted resource must not be resurrected: {subjects:?}"
+        );
+    }
+
+    /// A restore that re-creates a locally-destroyed subject must lift its
+    /// tombstone, or `is_tombstoned` keeps suppressing it from every future
+    /// bulk sync and the resource never reaches another replica (F11).
+    #[tokio::test]
+    async fn restoring_a_locally_destroyed_subject_clears_its_tombstone() {
+        let source = Db::init_temp("vault_clear_tombstone_source").await.unwrap();
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        let note = source
+            .create_resource(FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 1)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // A second device destroyed the same subject locally.
+        let restored = Db::init_temp("vault_clear_tombstone_restored")
+            .await
+            .unwrap();
+        crate::sync::tombstones::record_tombstone(&restored, &note);
+        assert!(crate::sync::tombstones::is_tombstoned(&restored, &note));
+
+        import_vault_batch(&restored, &key, &vault, &lane_prefix(PSEUDONYM, DEVICE))
+            .await
+            .unwrap();
+
+        assert!(
+            !crate::sync::tombstones::is_tombstoned(&restored, &note),
+            "a subject the backup re-created must not stay tombstoned"
+        );
+    }
+
+    /// A subject that disappears without a tombstone is not claimed as deleted.
+    /// Inventing a tombstone would delete real data on restore — a far worse
+    /// failure than carrying a stale resource for another cycle.
+    #[tokio::test]
+    async fn a_vanished_but_untombstoned_subject_is_not_reported_deleted() {
+        let source = Db::init_temp("vault_no_false_tombstone").await.unwrap();
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        source
+            .create_resource(FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 1)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Same drive, nothing deleted: a second pass must claim no deletions.
+        let second =
+            export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 2)
+                .await
+                .unwrap()
+                .expect("unchanged drive still exports its oplog in Phase 1");
+        assert_eq!(second.tombstones, 0);
     }
 
     /// Restores get retried, and lanes from several devices overlap by design.

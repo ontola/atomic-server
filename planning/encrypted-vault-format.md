@@ -111,6 +111,15 @@ Two invariants carry the design:
    updates without them would resurrect deleted resources — a delete is data,
    not an absence of it.
 
+   A deletion is detected by comparing the drive walk against what this lane
+   backed up last time, held in each device's local `Db` and never uploaded
+   (decision 2: incremental cursors are local, never shared metadata). Only
+   subjects carrying a local tombstone are claimed: a subject that merely
+   vanished could be a transient read failure, and an invented tombstone would
+   *delete real data* on restore. A restorer applying a tombstone must remove
+   the resource and its children, not merely record a marker — the marker alone
+   leaves an earlier segment's oplog free to bring it back.
+
 MessagePack rather than JSON because these are byte payloads, and base64ing
 every CRDT update into JSON would inflate the one thing the format exists to
 keep small.
