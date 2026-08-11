@@ -341,33 +341,35 @@ test.describe('Cloud Vault backup and restore', () => {
       await fresh.getByLabel('Recovery code').fill(recoveryCode);
       await fresh.getByRole('button', { name: 'Restore & sign in' }).click();
 
-      // Argon2id, so this is seconds rather than milliseconds. The screen it
-      // lands on offers device pairing only — there is no vault entry point
-      // here yet (see planning/CLOUD_VAULT_ARCHITECTURE.md), so the way to the
-      // vault is to skip past it.
-      await fresh
-        .getByRole('button', { name: 'Skip for now' })
-        .click({ timeout: 120_000 });
-
-      // The heart of the test: the workspace is genuinely not here yet.
-      // Without this the final assertion cannot distinguish a restore from a
-      // page that already had the data.
-      await expect(
-        fresh.getByRole('button', { name: canary }),
-      ).toBeHidden();
-
-      await openSync(fresh);
-      // Enrolment belongs to the account, not the device, so a restored agent
-      // must find backup already on rather than be offered a fresh enrolment.
-      await expect(vaultPanel(fresh)).toHaveAttribute('data-vault-state', 'on', {
-        timeout: 60_000,
+      // Argon2id, so the wait here is seconds rather than milliseconds.
+      //
+      // The account is restored at this point and the app knows the workspace
+      // is not on this device. Because the account has a vault with something
+      // in it, that screen must offer to restore from it — the whole point of
+      // having a backup is not being sent to find a second device. Enrolment
+      // belongs to the account rather than the device, so a freshly restored
+      // agent has to see the offer without any local state to go on.
+      await expect(fresh.getByTestId('vault-restore-offer')).toBeVisible({
+        timeout: 120_000,
       });
 
-      await fresh.getByTestId('vault-restore').click();
+      // The heart of the test: the workspace is genuinely not here yet.
+      // Without this the assertion below cannot distinguish a restore from a
+      // page that already had the data.
+      await expect(fresh.getByRole('button', { name: canary })).toBeHidden();
+
+      await fresh.getByTestId('vault-restore-now').click();
 
       await expect(
         fresh.getByRole('button', { name: canary }).first(),
       ).toBeVisible({ timeout: 90_000 });
+
+      // And the vault agrees it is on for this drive, from a device that had
+      // to learn that from the control plane rather than from local state.
+      await openSync(fresh);
+      await expect(vaultPanel(fresh)).toHaveAttribute('data-vault-state', 'on', {
+        timeout: 60_000,
+      });
       await expect(fresh.getByTestId('vault-error')).toBeHidden();
     } finally {
       await wiped.close();

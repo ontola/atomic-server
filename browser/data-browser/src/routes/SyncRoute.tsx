@@ -25,11 +25,7 @@ import {
 } from 'react-icons/fa6';
 import { Button } from '../components/Button';
 import { VaultPanel } from '../components/Vault/VaultPanel';
-import { useVaultBackup } from '../helpers/managed/useVaultBackup';
-import { loadVaultKeyOps } from '../helpers/managed/vaultKeyOps';
-import { vaultLaneId } from '../helpers/managed/vault';
-import { getOrCreateDeviceId } from '../helpers/managed/devices';
-import type { VaultKeyOps } from '../helpers/managed/vault';
+import { useDriveVault } from '../helpers/managed/useDriveVault';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
 import { Card } from '../components/Card';
@@ -245,53 +241,11 @@ function SyncPage() {
   // lives behind the link, on the operator's portal.
   const [managedInfo, setManagedInfo] = useState<ManagedInfo>(EMPTY_NODE_INFO);
 
-  // Cloud Vault. The key ops come from the wasm bundle on the main thread and
-  // the lane id is derived once per install; both are async, so they resolve
-  // into state rather than being computed during render.
-  const [vaultKeys, setVaultKeys] = useState<VaultKeyOps | null>(null);
-  const [vaultProofMessage, setVaultProofMessage] = useState<Uint8Array | null>(
-    null,
-  );
-  const [laneId, setLaneId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const [keys, deviceId] = [
-          await loadVaultKeyOps(),
-          getOrCreateDeviceId(),
-        ];
-
-        if (cancelled || !deviceId) return;
-
-        setVaultKeys(keys);
-        setVaultProofMessage(keys.proofMessage);
-        setLaneId(await vaultLaneId(deviceId));
-      } catch {
-        // No wasm bundle (a server that doesn't serve one, an old build). The
-        // panel stays hidden rather than offering a button that cannot work.
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const vaultAgent = store.getAgent();
-  const vault = useVaultBackup({
-    db: store.getClientDb() ?? null,
-    keys: vaultKeys,
-    driveSubject: status.drive ?? null,
-    agentSubject: vaultAgent?.subject ?? null,
-    // The agent signs; its key is never read here. That is what keeps
-    // hardware-backed and non-extractable keys possible.
-    signer: vaultAgent ?? null,
-    proofMessage: vaultProofMessage,
-    devicePubkey: laneId,
-  });
+  // Cloud Vault. Assembling its prerequisites (wasm key ops, this install's
+  // lane id, the signing agent) lives in the hook, which the wiped-device
+  // onboarding screen uses too — both have to agree about whether a vault
+  // exists for this drive.
+  const vault = useDriveVault(status.drive ?? null);
 
   useEffect(() => {
     const serverUrl = status.serverUrl;
