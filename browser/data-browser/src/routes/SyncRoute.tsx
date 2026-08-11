@@ -808,7 +808,12 @@ function SyncPage() {
             backup we cannot read. It hides itself entirely when we cannot
             determine its status, so a missing session never renders a dead
             button. */}
-        <VaultPanel vault={vault} onRestored={() => window.location.reload()} />
+        <VaultSlot>
+          <VaultPanel
+            vault={vault}
+            onRestored={() => window.location.reload()}
+          />
+        </VaultSlot>
 
         {/* Cloud Server, the hosted tier, offered below the vault rather than
             above it.
@@ -1662,6 +1667,20 @@ const LocalDriveNotice = styled.div`
   align-items: center;
   border-color: ${p => p.theme.colors.main}55;
   background: ${p => p.theme.colors.main}0d;
+  margin-bottom: 1.5rem;
+`;
+
+/**
+ * Vertical rhythm for the vault panel.
+ *
+ * This page spaces blocks with their own `margin-bottom` rather than a
+ * container `gap`, and `VaultPanel` is a standalone component that sets no
+ * outer margin — deliberately, so it can be dropped elsewhere without bringing
+ * one page's spacing with it. Without this wrapper it sits flush against
+ * whatever follows, which put the "Devices" heading directly on the card's
+ * bottom border. The host owns the rhythm; the component stays layout-agnostic.
+ */
+const VaultSlot = styled.div`
   margin-bottom: 1.5rem;
 `;
 
