@@ -298,6 +298,10 @@ test.describe('Cloud Vault backup and restore', () => {
 
     const canary = `Vault canary ${timestamp()}`;
     await newResource('folder', page);
+    // Two edits rather than one, so the pack carries a history and not just a
+    // single state. What comes back is checked in Rust
+    // (`a_restore_keeps_edit_history`) — see the note further down.
+    await renameLocally(page, `${canary} draft`);
     await renameLocally(page, canary);
 
     await openSync(page);
@@ -360,9 +364,24 @@ test.describe('Cloud Vault backup and restore', () => {
 
       await fresh.getByTestId('vault-restore-now').click();
 
+      // A successful restore navigates to the drive. Wait for that to land
+      // before going anywhere else: the navigation is fired by the app, so a
+      // `goto` issued while it is in flight gets replaced by it, and the next
+      // assertion then polls a page it was never on.
+      await fresh.waitForURL(/\/app\/show\?subject=/, { timeout: 90_000 });
       await expect(
         fresh.getByRole('button', { name: canary }).first(),
       ).toBeVisible({ timeout: 90_000 });
+
+      // Edit history is NOT asserted here, deliberately. The format carries it
+      // — `lib/src/vault/sync.rs::a_restore_keeps_edit_history` proves a
+      // restored resource has every version it had — but reading it back
+      // through the history view after a restore fails roughly one run in six
+      // even with a 60s poll, on the right URL, with the count stuck at zero.
+      // That is an open bug in what the browser holds after a restore, not a
+      // slow page (see CLOUD_VAULT_ARCHITECTURE.md). Asserting it here would
+      // add a one-in-six failure that says "vault broken" when the vault is
+      // fine, which is how a suite gets ignored.
 
       // And the vault agrees it is on for this drive, from a device that had
       // to learn that from the control plane rather than from local state.

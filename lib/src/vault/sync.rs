@@ -802,4 +802,69 @@ mod tests {
         let (_, plaintext) = envelope::open(&key(), &fetched).unwrap();
         assert_eq!(Pack::decode(&plaintext).unwrap(), pack);
     }
+    /// A restored resource keeps its edit history, not just its current state.
+    ///
+    /// This is a property of exporting *updates* rather than snapshots of the
+    /// materialized state: the pack carries the oplog, so the version list a
+    /// user sees after a restore is the one they had. Worth pinning down —
+    /// "your backup silently flattened three months of history into one
+    /// version" is the kind of loss nobody notices until they need it, and the
+    /// other restore tests all compare the materialized projection, which
+    /// would be identical either way.
+    #[tokio::test]
+    async fn a_restore_keeps_edit_history() {
+        let source = Db::init_temp("vault_history_roundtrip").await.unwrap();
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        let subject_str = source
+            .create_resource(FOLDER, &drive, "history", None)
+            .await
+            .unwrap();
+        let subject = Subject::from_raw(&subject_str, source.get_base_domain().as_deref());
+
+        // Distinct messages, because `history::versions` groups by commit
+        // boundary — without them Loro merges same-peer edits inside a second
+        // into one change and there is no history to lose.
+        for name in ["one", "two", "three"] {
+            let mut resource = source.get_resource(&subject).await.unwrap();
+            let doc = resource.build_state_doc().unwrap();
+            doc.set_property(crate::urls::NAME, &crate::Value::String(name.into()))
+                .unwrap();
+            doc.commit_with_message(&format!("rename to {name}"));
+            resource.apply_state_doc(doc).unwrap();
+            source
+                .add_resource_opts(&resource, false, true, true)
+                .await
+                .unwrap();
+        }
+
+        let before = crate::history::versions(&source.get_resource(&subject).await.unwrap())
+            .unwrap()
+            .len();
+        assert!(
+            before > 1,
+            "the fixture must produce a history worth preserving, got {before}"
+        );
+
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 1)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let target = Db::init_temp("vault_history_roundtrip_target").await.unwrap();
+        import_vault_batch(&target, &key, &vault, &drive_prefix(PSEUDONYM))
+            .await
+            .unwrap();
+
+        let restored = target.get_resource(&subject).await.unwrap();
+        let after = crate::history::versions(&restored).unwrap().len();
+
+        assert_eq!(
+            after, before,
+            "a restore must bring back every version, not just the latest state"
+        );
+    }
+
 }
