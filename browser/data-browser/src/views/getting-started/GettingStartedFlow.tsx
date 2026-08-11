@@ -21,6 +21,7 @@ import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
 import { getManagedAccount } from '../../helpers/managed/session';
+import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
 import {
   fetchManagedInfo,
   accountCreationTarget,
@@ -110,11 +111,27 @@ export function GettingStartedFlow({
   const [createTarget, setCreateTarget] = useState<AccountCreationTarget>({
     kind: 'local',
   });
+  /**
+   * Any control plane this build knows of, which is a weaker question than
+   * `createTarget` answers.
+   *
+   * Creating an account locally is a perfectly good outcome, so that decision
+   * stays strict: only a node that says it is managed sends people to a portal.
+   * Restoring one is different — the portal is the *only* route, so a screen
+   * that cannot name one has nothing to offer at all. Resolved through
+   * `getManagedPortalUrl`, so a build-time override counts even before any
+   * server has answered, which is the state a wiped browser is in. Null on a
+   * self-hosted install, where the button stays hidden rather than dead.
+   */
+  const [knownPortalUrl, setKnownPortalUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void fetchManagedInfo(baseURL).then(info => {
-      if (!cancelled) setCreateTarget(accountCreationTarget(info));
+      if (cancelled) return;
+
+      setCreateTarget(accountCreationTarget(info));
+      setKnownPortalUrl(getManagedPortalUrl(info));
     });
 
     return () => {
@@ -894,18 +911,21 @@ export function GettingStartedFlow({
                     <p key='copy'>
                       {`To restore your account, sign in to your ${PRODUCT_NAME} account first, then come back here.`}
                     </p>
-                    <Button
-                      key='signin'
-                      type='button'
-                      disabled={createTarget.kind !== 'portal'}
-                      onClick={() => {
-                        if (createTarget.kind === 'portal') {
-                          window.location.assign(createTarget.url);
-                        }
-                      }}
-                    >
-                      {`Sign in to your ${PRODUCT_NAME} account`}
-                    </Button>
+                    {knownPortalUrl && (
+                      <Button
+                        key='signin'
+                        type='button'
+                        onClick={() => {
+                          // `/signin` rather than the root, which is the sales
+                          // page — someone mid-recovery should land on the form.
+                          window.location.assign(
+                            new URL('/signin', knownPortalUrl).toString(),
+                          );
+                        }}
+                      >
+                        {`Sign in to your ${PRODUCT_NAME} account`}
+                      </Button>
+                    )}
                   </Column>
                 ) : restore.phase === 'no-backup' ? (
                   <p key='no-backup'>
