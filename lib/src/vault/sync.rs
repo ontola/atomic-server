@@ -867,4 +867,102 @@ mod tests {
         );
     }
 
+    /// The newest segment alone restores the drive, with its history.
+    ///
+    /// Phase 1 exports every resource's whole oplog each pass, so a segment is
+    /// self-sufficient: it carries the current state *and* every version, and
+    /// needs none of its predecessors. Two consequences worth pinning down,
+    /// because both drive product decisions:
+    ///
+    ///  - Retention cannot be sold as "restore points". Every restore already
+    ///    brings the full history back; older segments add nothing on that
+    ///    front. What they uniquely hold is resources *deleted* since — an
+    ///    undelete window, not a history window.
+    ///  - Pruning is therefore safe today: keep the newest segment and enough
+    ///    older ones to cover that window.
+    ///
+    /// **Phase 2 incremental export deliberately breaks this.** Once a segment
+    /// is a delta against a cursor, it needs its chain, and pruning needs
+    /// periodic checkpoints instead. If this test starts failing because of
+    /// that work, the retention model has to be revisited with it — that is
+    /// what this test is here to force.
+    #[tokio::test]
+    async fn the_newest_segment_alone_restores_the_drive() {
+        let source = Db::init_temp("vault_latest_segment").await.unwrap();
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        let kept_str = source
+            .create_resource(FOLDER, &drive, "kept", None)
+            .await
+            .unwrap();
+        let kept = Subject::from_raw(&kept_str, source.get_base_domain().as_deref());
+
+        for name in ["one", "two", "three"] {
+            let mut resource = source.get_resource(&kept).await.unwrap();
+            let doc = resource.build_state_doc().unwrap();
+            doc.set_property(crate::urls::NAME, &crate::Value::String(name.into()))
+                .unwrap();
+            doc.commit_with_message(&format!("rename to {name}"));
+            resource.apply_state_doc(doc).unwrap();
+            source
+                .add_resource_opts(&resource, false, true, true)
+                .await
+                .unwrap();
+        }
+
+        // Present in segment 1, deleted before segment 2 — the one thing an
+        // older segment holds that the newest does not.
+        let doomed_str = source
+            .create_resource(FOLDER, &drive, "doomed", None)
+            .await
+            .unwrap();
+        let doomed = Subject::from_raw(&doomed_str, source.get_base_domain().as_deref());
+
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+
+        export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 1)
+            .await
+            .unwrap()
+            .unwrap();
+        commit_lane_state(&source, PSEUDONYM, DEVICE, 1).unwrap();
+
+        source.remove_resource(&doomed).await.unwrap();
+
+        export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 2)
+            .await
+            .unwrap()
+            .unwrap();
+        commit_lane_state(&source, PSEUDONYM, DEVICE, 2).unwrap();
+
+        // A vault holding ONLY the newest segment, as an aggressive retention
+        // policy would leave it.
+        let keys = vault.list(&drive_prefix(PSEUDONYM)).unwrap();
+        assert_eq!(keys.len(), 2, "the fixture needs two segments");
+        let newest = keys.iter().max().unwrap().clone();
+        let latest_only = MemoryVaultStore::new();
+        latest_only.put(&newest, &vault.get(&newest).unwrap()).unwrap();
+
+        let target = Db::init_temp("vault_latest_segment_target").await.unwrap();
+        import_vault_batch(&target, &key, &latest_only, &drive_prefix(PSEUDONYM))
+            .await
+            .unwrap();
+
+        let restored = target.get_resource(&kept).await.unwrap();
+        assert_eq!(
+            crate::history::versions(&restored).unwrap().len(),
+            5,
+            "the newest segment must carry the whole version history on its own"
+        );
+        assert_eq!(
+            restored.get(crate::urls::NAME).unwrap().to_string(),
+            "three",
+            "and the current state"
+        );
+        assert!(
+            target.get_resource(&doomed).await.is_err(),
+            "a resource deleted before this segment must stay deleted — recovering it is what an OLDER segment would be kept for"
+        );
+    }
+
 }
