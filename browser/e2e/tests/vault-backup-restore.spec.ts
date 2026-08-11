@@ -174,14 +174,15 @@ async function renameLocally(page: Page, title: string) {
   await expect(sidebarEntry).toBeVisible({ timeout: 15_000 });
 
   // Then reload and check again. The sidebar alone only proves the in-memory
-  // store has the rename; the vault exports the *ClientDb*, and the write to it
-  // is debounced. Backing up in that window stores a pack without the edit —
-  // a backup that reports success and quietly lacks what was just typed.
-  // Surviving a reload means it is durable, since the store is rebuilt from the
-  // ClientDb.
+  // store has the rename, and what the vault exports is the ClientDb — so
+  // surviving a reload is what establishes the precondition this test needs:
+  // the edit is in the data the backup will actually pack.
   //
-  // This is a real ordering hazard in the product, not just in the test: see
-  // "flush before backup" in planning/CLOUD_VAULT_ARCHITECTURE.md.
+  // Not a workaround for a known product bug. An earlier version of this
+  // comment claimed backups could race a debounced write; that could not be
+  // reproduced (see "backups and pending writes" in
+  // planning/CLOUD_VAULT_ARCHITECTURE.md) and the failure it was written for
+  // turned out to be the restore-flush race, fixed in the worker.
   await page.reload();
   await expect(sidebarEntry).toBeVisible({ timeout: 30_000 });
 }
