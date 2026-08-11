@@ -240,15 +240,19 @@ test.describe('Cloud Vault backup and restore', () => {
     await completeOnboarding(page);
 
     await openSync(page);
-    await expect(vaultPanel(page)).toHaveAttribute('data-vault-state', 'off');
-    await page.getByTestId('vault-enable').click();
 
-    // Enabling backs up immediately on purpose, so that turning it on leaves
-    // something restorable rather than an empty vault waiting on an invisible
-    // tick. If that first upload silently did nothing, this is where it shows.
+    // Already on, without anybody asking for it: onboarding enrols a
+    // portal-created drive in encrypted backup, and sync is the premium option
+    // it no longer turns on. Asserted rather than assumed, because a silent
+    // best-effort step that quietly stopped running is invisible otherwise.
     await expect(vaultPanel(page)).toHaveAttribute('data-vault-state', 'on', {
       timeout: 60_000,
     });
+
+    // Enrolment backs up immediately on purpose, so a new account has
+    // something restorable rather than an empty vault waiting on a tick it
+    // cannot see. If that first upload silently did nothing, this is where it
+    // shows.
     await expect
       .poll(() => confirmedObjects(page), { timeout: 60_000 })
       .toBeGreaterThan(0);
@@ -306,10 +310,12 @@ test.describe('Cloud Vault backup and restore', () => {
     await renameLocally(page, canary);
 
     await openSync(page);
-    await page.getByTestId('vault-enable').click();
     await expect(vaultPanel(page)).toHaveAttribute('data-vault-state', 'on', {
       timeout: 90_000,
     });
+    // The canary was made after onboarding's first backup, so back up again to
+    // get it into the vault.
+    await page.getByTestId('vault-backup-now').click();
     await expect
       .poll(() => confirmedObjects(page), { timeout: 90_000 })
       .toBeGreaterThan(0);

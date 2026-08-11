@@ -26,7 +26,14 @@ import {
   accountCreationTarget,
   type AccountCreationTarget,
 } from '../../helpers/managedServer';
-import { createManagedSyncEnrollment } from '../../helpers/managed/enrollment';
+import { loadVaultKeyOps } from '../../helpers/managed/vaultKeyOps';
+import {
+  agentVaultProof,
+  runVaultBackup,
+  setUpVaultForDrive,
+  vaultLaneId,
+} from '../../helpers/managed/vault';
+import { getOrCreateDeviceId } from '../../helpers/managed/devices';
 import {
   buildEnvelopeV2,
   buildEnvelopeWithPasskey,
@@ -117,7 +124,8 @@ export function GettingStartedFlow({
   // A user who just verified their email via the managed portal lands at
   // /app/welcome?from_portal=true. Skip the generic Create/Sign-in choice and go
   // straight into identity creation, with the username prefilled from their
-  // account email and the new drive auto-enrolled in managed sync after create.
+  // account email and the new drive given encrypted backup after create. Sync is
+  // the premium option and is not enabled here; see `enableEncryptedBackup`.
   const fromManaged =
     new URLSearchParams(window.location.search).get('from_portal') === 'true';
   // The portal hands the account email in the URL (`?from_portal=true&email=…`)
@@ -180,21 +188,65 @@ export function GettingStartedFlow({
     };
   }, [fromManaged, emailParam]);
 
-  // Best-effort: enroll the freshly-created drive in managed sync. The identity
-  // and drive already exist by the time this runs, so a failure here never
-  // blocks onboarding — the user can retry from Managed Sync settings.
   // The new drive's subject, captured during onAfterCreate so the recovery
   // backup step can reference it.
   const newDriveSubject = useRef<string | undefined>(undefined);
 
-  async function enrollManagedSync(driveSubject: string) {
+  /**
+   * Set the freshly-created drive up with encrypted backup.
+   *
+   * **Only runs for accounts arriving from the portal** — the call site is
+   * `onAfterCreate={fromManaged ? … : undefined}`, so a self-hosted or FOSS
+   * install never reaches it and its onboarding is untouched. Nothing about
+   * this is baked into the drive: a vault-enrolled drive is an ordinary
+   * local-first drive whose owner happens to have a backup.
+   *
+   * This used to enroll the drive in managed sync instead. Sync is the premium
+   * option, so onboarding no longer pushes it: a new account gets blind
+   * encrypted backup, and an always-on peer is something they choose from the
+   * Sync page. That also puts the honest version of the pitch first — the tier
+   * we cannot read comes as standard, and the tier we can read is opt-in.
+   *
+   * Best-effort, exactly as the sync enrollment was: the identity and drive
+   * both exist by the time this runs, so a failure here leaves a working
+   * workspace with backup switched off rather than blocking onboarding. The
+   * Sync page will offer it again.
+   */
+  async function enableEncryptedBackup(driveSubject: string) {
     newDriveSubject.current = driveSubject;
     const agentSubject = store.getAgent()?.subject;
+    const agent = store.getAgent();
 
-    if (!agentSubject) return;
+    if (!agentSubject || !agent) return;
 
     try {
-      await createManagedSyncEnrollment({ driveSubject, agentSubject });
+      const keys = await loadVaultKeyOps();
+      const { enrollment, driveKey } = await setUpVaultForDrive({
+        keys,
+        driveSubject,
+        agentSubject,
+        // The agent signs a fixed message; its key is never read. That is what
+        // keeps non-extractable and hardware-backed keys usable here.
+        agentSecret: await agentVaultProof(agent, keys.proofMessage),
+      });
+
+      const db = store.getClientDb();
+      const deviceId = getOrCreateDeviceId();
+
+      if (!db || !deviceId) return;
+
+      // Back up straight away, exactly as turning it on by hand does. Enrolling
+      // alone would leave the account with backup "on" and nothing in it —
+      // reporting a protection it does not yet have, which is the failure this
+      // whole feature keeps producing. It is also the moment it costs least: a
+      // brand-new drive is a few KB.
+      await runVaultBackup({
+        db,
+        driveSubject,
+        drivePseudonym: enrollment.drive_pseudonym,
+        devicePubkey: await vaultLaneId(deviceId),
+        driveKey,
+      });
     } catch {
       // swallow — see above.
     }
@@ -1036,7 +1088,9 @@ export function GettingStartedFlow({
                       fromManaged ? backupWithPasskey : undefined
                     }
                     onBackupWithCode={fromManaged ? backupWithCode : undefined}
-                    onAfterCreate={fromManaged ? enrollManagedSync : undefined}
+                    onAfterCreate={
+                      fromManaged ? enableEncryptedBackup : undefined
+                    }
                     onDone={() => {
                       // After verify, NewIdentitySection navigates to personalDrive / home
                     }}
