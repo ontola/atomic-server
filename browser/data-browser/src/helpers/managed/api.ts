@@ -92,3 +92,65 @@ export function getManagedApiBase(): string {
   // Same-origin deployment fallback.
   return '/api';
 }
+
+const DEVICE_TOKEN_STORAGE_KEY = 'atomic-managed-device-token';
+
+/**
+ * The session a linked device holds, if this install has one.
+ *
+ * Browsers on our own origin never have this — they use the cookie, and the
+ * control plane prefers it. This is for the clients that cannot: a self-hoster
+ * on their own origin, and the desktop and Android apps on `tauri://localhost`.
+ * See `planning/FOSS_LINK_TO_HOSTED.md` in atomic-saas.
+ */
+export function getManagedDeviceToken(): string | null {
+  try {
+    return localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY);
+  } catch {
+    // Storage disabled (private mode). Nothing is linked, which is the honest
+    // answer — a token we cannot persist would vanish on reload anyway.
+    return null;
+  }
+}
+
+export function setManagedDeviceToken(token: string | null): void {
+  try {
+    if (token) {
+      localStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(DEVICE_TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // Same as above: unlinkable rather than broken.
+  }
+}
+
+/**
+ * Call the control plane.
+ *
+ * Every managed request goes through here so the linked-device token is
+ * attached in exactly one place. Adding it at each call site instead would
+ * work until someone adds an eleventh call site and forgets — and the symptom
+ * would be one endpoint failing only on desktop and Android, which is close to
+ * the worst bug to be handed.
+ *
+ * `credentials: 'include'` stays for the browser-on-our-origin case; the two
+ * mechanisms coexist and the server prefers the cookie when both arrive.
+ */
+export async function managedFetch(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const token = getManagedDeviceToken();
+  const headers = new Headers(init.headers);
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  return fetch(`${getManagedApiBase()}${path}`, {
+    ...init,
+    credentials: 'include',
+    headers,
+  });
+}

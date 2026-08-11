@@ -1,5 +1,5 @@
 import { PRODUCT_NAME } from './product';
-import { getManagedApiBase } from './api';
+import { getManagedApiBase, managedFetch } from './api';
 import { writeManagedAccountBinding } from './binding';
 import { getManagedAccount } from './session';
 
@@ -27,10 +27,9 @@ export async function createManagedSyncEnrollment({
   // by the time we enroll, the active agent is the account's agent. Enrolling
   // also (re)binds it below, so the account adopts the agent in use here — we
   // never block enrollment with a mismatch error.
-  const response = await fetch(`${getManagedApiBase()}/sync-enrollments`, {
+  const response = await managedFetch(`/sync-enrollments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify({
       drive_subject: driveSubject,
       agent_subject: agentSubject,

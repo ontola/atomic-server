@@ -25,6 +25,8 @@ import {
 } from 'react-icons/fa6';
 import { Button } from '../components/Button';
 import { VaultPanel } from '../components/Vault/VaultPanel';
+import { LinkProviderPanel } from '../components/Vault/LinkProviderPanel';
+import { isDeviceLinked } from '../helpers/managed/deviceLink';
 import { useDriveVault } from '../helpers/managed/useDriveVault';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
@@ -67,6 +69,7 @@ import {
   ensureManagedSession,
   driveHasCloudEnrollment,
   isCloudSyncAvailable,
+  getManagedPortalUrl,
 } from '../helpers/managed/cloudSync';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
@@ -808,6 +811,18 @@ function SyncPage() {
             backup we cannot read. It hides itself entirely when we cannot
             determine its status, so a missing session never renders a dead
             button. */}
+        {/* A client that cannot hold the provider's cookie — a self-hosted
+            origin, or the desktop and Android apps on tauri://localhost — has
+            to link before any of the vault works. Shown only while the vault
+            reports itself unavailable AND nothing is linked yet, so a browser
+            on the provider's own site never sees it. */}
+        {vault.status.state === 'unavailable' && !isDeviceLinked() && (
+          <LinkProviderPanel
+            portalUrl={getManagedPortalUrl(managedInfo)}
+            onLinked={() => window.location.reload()}
+          />
+        )}
+
         <VaultSlot>
           <VaultPanel
             vault={vault}

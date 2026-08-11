@@ -1,5 +1,5 @@
 import { decodeB64 } from '@tomic/lib';
-import { getManagedApiBase } from './api';
+import { getManagedApiBase, managedFetch } from './api';
 
 /**
  * Cloud Vault client: encrypted, blind backup of a drive.
@@ -168,8 +168,7 @@ async function api<T>(
   path: string,
   init?: RequestInit & { body?: string },
 ): Promise<T> {
-  const response = await fetch(`${getManagedApiBase()}${path}`, {
-    credentials: 'include',
+  const response = await managedFetch(`${path}`, {
     ...init,
     headers: init?.body
       ? { 'Content-Type': 'application/json', ...(init?.headers ?? {}) }
@@ -248,10 +247,9 @@ export async function putVaultKeyEnvelope(
 export async function getVaultKeyEnvelope(
   drivePseudonym: string,
 ): Promise<string | null> {
-  const response = await fetch(
-    `${getManagedApiBase()}/cloud-vault/${drivePseudonym}/key`,
-    { credentials: 'include' },
-  );
+  const response = await managedFetch(`/cloud-vault/${drivePseudonym}/key`, {
+    credentials: 'include',
+  });
 
   if (response.status === 204) return null;
 

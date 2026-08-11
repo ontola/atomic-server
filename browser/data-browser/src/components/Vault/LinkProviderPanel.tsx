@@ -1,0 +1,200 @@
+import { useEffect, useRef, useState } from 'react';
+import { styled } from 'styled-components';
+import { FaCloudArrowUp } from 'react-icons/fa6';
+import { Button } from '../Button';
+import {
+  approvalUrl,
+  awaitDeviceLink,
+  requestDeviceLink,
+  type LinkRequest,
+} from '../../helpers/managed/deviceLink';
+
+/**
+ * Connect this install to a hosted provider.
+ *
+ * Shown only when a provider is known — a build with none configured renders
+ * nothing at all, so a self-hosted install never sees a prompt for a product it
+ * has not asked about. The URL is a prop rather than a constant here for the
+ * same reason: this component knows how to link, not who to.
+ *
+ * The user reads a short code off this screen and approves it in a browser
+ * where they are already signed in. Deliberately not a redirect: returning from
+ * an external browser into an app is the step that fails most often on Android,
+ * and it cannot work at all when someone finishes on a different device. The
+ * link below is an accelerator for the common case, not the mechanism.
+ */
+export function LinkProviderPanel({
+  portalUrl,
+  onLinked,
+}: {
+  /** Absent on a build with no provider — the panel then renders nothing. */
+  portalUrl: string | null;
+  onLinked: () => void;
+}) {
+  const [request, setRequest] = useState<LinkRequest | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const abort = useRef<AbortController | null>(null);
+
+  // Stop polling when this unmounts. A code the user walked away from should
+  // not leave a request running for its full ten minutes.
+  useEffect(() => () => abort.current?.abort(), []);
+
+  if (!portalUrl) return null;
+
+  async function start() {
+    if (!portalUrl) return;
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      const issued = await requestDeviceLink(portalUrl);
+      setRequest(issued);
+
+      abort.current?.abort();
+      abort.current = new AbortController();
+
+      const outcome = await awaitDeviceLink(portalUrl, issued, {
+        signal: abort.current.signal,
+      });
+
+      if (outcome === 'linked') {
+        setRequest(null);
+        onLinked();
+      } else {
+        setRequest(null);
+        setError('That code expired. Start again when you are ready.');
+      }
+    } catch (e) {
+      setRequest(null);
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel data-testid='link-provider-panel'>
+      <Icon>
+        <FaCloudArrowUp />
+      </Icon>
+      <Body>
+        <Title>Back up to {hostOf(portalUrl)}</Title>
+
+        {request ? (
+          <>
+            <Sub>
+              Open{' '}
+              <Link
+                href={approvalUrl(portalUrl, request.user_code)}
+                target='_blank'
+                rel='noreferrer'
+              >
+                {hostOf(portalUrl)}/link
+              </Link>{' '}
+              on a device where you are signed in, and enter this code.
+            </Sub>
+            <Code data-testid='link-user-code'>{request.user_code}</Code>
+            <Sub>Waiting for you to approve it…</Sub>
+          </>
+        ) : (
+          <>
+            <Sub>
+              Keep an encrypted copy of your workspaces on {hostOf(portalUrl)}.
+              Sealed on this device, so they store it without being able to read
+              it.
+            </Sub>
+            {error && <ErrorText data-testid='link-error'>{error}</ErrorText>}
+            <Actions>
+              <Button
+                data-testid='link-provider-start'
+                onClick={start}
+                disabled={busy}
+              >
+                {busy ? 'Getting a code…' : 'Connect this device'}
+              </Button>
+            </Actions>
+          </>
+        )}
+      </Body>
+    </Panel>
+  );
+}
+
+/** `https://atomicserver.eu/` → `atomicserver.eu`, for prose. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  }
+}
+
+const Panel = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  background: ${p => p.theme.colors.bg};
+  margin-bottom: 1.5rem;
+`;
+
+const Icon = styled.div`
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.4rem;
+  font-size: 1.1rem;
+  border-radius: 50%;
+  background-color: ${p => p.theme.colors.main};
+  color: white;
+`;
+
+const Body = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+`;
+
+const Title = styled.h3`
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+`;
+
+const Sub = styled.p`
+  margin: 0;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.82rem;
+`;
+
+const ErrorText = styled.p`
+  margin: 0;
+  color: ${p => p.theme.colors.alert};
+  font-size: 0.82rem;
+`;
+
+const Link = styled.a`
+  color: ${p => p.theme.colors.main};
+`;
+
+/** Big and spaced: this is read off one screen and typed into another. */
+const Code = styled.output`
+  font-family: monospace;
+  font-size: 1.5rem;
+  letter-spacing: 0.15em;
+  margin: 0.4rem 0;
+  color: ${p => p.theme.colors.text};
+`;
+
+const Actions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+`;

@@ -1,6 +1,6 @@
 import { isRunningInTauri } from '../tauri';
 import { PRODUCT_NAME } from './product';
-import { getManagedApiBase } from './api';
+import { getManagedApiBase, managedFetch } from './api';
 import { writeManagedAccountBinding } from './binding';
 
 export type RecoveryWrapperInput = {
@@ -1052,10 +1052,9 @@ export async function upgradeToEnvelopeV2({
 // --- Portal API ---
 
 export async function saveRecoverySecret(input: RecoverySecretInput) {
-  const response = await fetch(`${getManagedApiBase()}/recovery-secret`, {
+  const response = await managedFetch(`/recovery-secret`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(input),
   });
 
@@ -1078,9 +1077,7 @@ export async function getRecoverySecret(): Promise<RecoverySecret | null> {
   // [RECOVERY-RECONSTRUCTED] body — only this function's signature survived in
   // the transcripts. Reconstructed as the GET counterpart of saveRecoverySecret
   // (PUT) above; 204/401/404 all mean "no recovery secret stored".
-  const response = await fetch(`${getManagedApiBase()}/recovery-secret`, {
-    credentials: 'include',
-  });
+  const response = await managedFetch(`/recovery-secret`, {});
 
   if (
     response.status === 204 ||
