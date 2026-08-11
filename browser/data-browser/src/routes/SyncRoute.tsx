@@ -212,7 +212,7 @@ function SyncPage() {
   const [peerSyncing, setPeerSyncing] = useState(false);
   const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
-  // Cloud Sync (SaaS) backup state for the active drive. `null` = not yet
+  // Cloud Server (SaaS) hosting state for the active drive. `null` = not yet
   // known / not applicable; `false` = eligible but not enrolled (show the CTA);
   // `true` = already enrolled (hide it).
   const [cloudEnrolled, setCloudEnrolled] = useState<boolean | null>(null);
@@ -382,8 +382,8 @@ function SyncPage() {
       .catch(() => {});
   }, []);
 
-  // Does the active drive already have a Cloud Sync enrollment? Drives the
-  // "Back up to Cloud Sync" CTA below. Skips entirely when no control plane is
+  // Does the active drive already have a Cloud Server enrollment? Drives the
+  // Cloud Server CTA below. Skips entirely when no control plane is
   // reachable (pure self-hosted), so the CTA never shows there.
   useEffect(() => {
     const drive = status.drive;
@@ -488,7 +488,7 @@ function SyncPage() {
     }
   });
 
-  // Offer a Cloud Sync backup only for a drive that lives on this device (a
+  // Offer Cloud Server only for a drive that lives on this device (a
   // local-only drive, or the embedded node with no remote server) and isn't
   // already enrolled. A drive already homed on a remote server is a migration,
   // not a backup — out of scope for this action.
@@ -803,34 +803,43 @@ function SyncPage() {
           </LocalDriveNotice>
         )}
 
-        {/* This drive only exists on this device and there's a control plane to
-            back it up to. Leads over the generic "Sync this workspace" below:
-            it both enrolls the drive AND points the app at the assigned node. */}
+        {/* Cloud Vault first: it is what a managed account gets by default, and
+            it is the promise we can make unconditionally — blind encrypted
+            backup we cannot read. It hides itself entirely when we cannot
+            determine its status, so a missing session never renders a dead
+            button. */}
+        <VaultPanel vault={vault} onRestored={() => window.location.reload()} />
+
+        {/* Cloud Server, the hosted tier, offered below the vault rather than
+            above it.
+
+            Deliberately not called "back up" any more. Backup is Cloud Vault's
+            job, and having two things on one page both offering to "back up
+            your workspace" made the only distinction that matters — whether we
+            can read it — the one thing the screen did not say. The copy leads
+            with what hosting buys and states plainly that this side is
+            readable, matching the tier described on the sales page. */}
         {showCloudBackup && (
           <LocalDriveNotice>
             <ConnIcon $tone='cloud'>
               <FaCloud />
             </ConnIcon>
             <ConnBody>
-              <ConnTitle>Back up to {PRODUCT_NAME}</ConnTitle>
+              <ConnTitle>Cloud Server</ConnTitle>
               <ConnSub>
-                This workspace lives only on this device. Turn on {PRODUCT_NAME}{' '}
-                to back it up and reach it from your other devices and the web.
+                A hosted workspace on {PRODUCT_NAME}: shareable links, search
+                across everything, API access, and no waiting on another device
+                to be awake. Unlike encrypted backup, our servers process what
+                you put here.
               </ConnSub>
               <ConnActions>
                 <Button onClick={backupToCloud} disabled={cloudBusy}>
-                  {cloudBusy ? 'Setting up…' : `Back up to ${PRODUCT_NAME}`}
+                  {cloudBusy ? 'Setting up…' : 'Set up Cloud Server'}
                 </Button>
               </ConnActions>
             </ConnBody>
           </LocalDriveNotice>
         )}
-
-        {/* Cloud Vault sits beside Cloud Sync but is a different promise:
-            blind encrypted backup we cannot read, rather than a queryable node
-            we can. It hides itself entirely when we cannot determine its
-            status, so a missing session never renders a dead button. */}
-        <VaultPanel vault={vault} onRestored={() => window.location.reload()} />
 
         {/* A local-only drive (demo, or any drive made offline) isn't synced.
             Offer to promote it to a normal synced drive on the connected
@@ -901,7 +910,7 @@ function SyncPage() {
                 <ConnBody>
                   <ConnTopRow>
                     <ConnTitle>
-                      {isCloud ? 'Cloud Sync' : serverLabel(server)}
+                      {isCloud ? 'Cloud Server' : serverLabel(server)}
                     </ConnTitle>
                     <ConnTopRight>
                       {isActive ? (

@@ -32,7 +32,7 @@ export const NewDriveRoute = createRoute({
 
 // Reached from the managed portal's dashboard ("+ New drive"): creates a
 // drive on whichever node this device is connected to, then immediately
-// enrolls it in Cloud Sync — the portal only ever holds a session cookie,
+// enrolls it in Cloud Server — the portal only ever holds a session cookie,
 // never the agent's private key, so the drive has to be created here, not
 // there. Mirrors what GettingStartedFlow does for a brand new account's
 // first drive, but for an Nth drive on an already-signed-in device. See

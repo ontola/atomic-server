@@ -11,7 +11,7 @@ import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
  * dropped anywhere a drive is in view without dragging state with it.
  *
  * The copy is deliberate about which tier this is. Cloud Vault is *blind* —
- * encrypted backup we cannot read — while Cloud Sync stores queryable state we
+ * encrypted backup we cannot read — while Cloud Server stores queryable state we
  * can. `OSS_STRATEGY.md` calls out that headlining "we can't read your data"
  * and then selling a tier that can is how a trust pitch gets lost, so the two
  * must never be described in the same words.

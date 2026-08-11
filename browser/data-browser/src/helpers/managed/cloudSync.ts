@@ -1,5 +1,5 @@
 // Turning on hosted sync for a drive the user already has locally — the
-// "Back up to Cloud Sync" action on the /sync page. This is the bridge between
+// the Cloud Server action on the /sync page. This is the bridge between
 // the open-core connection layer (connect a server, promote a local drive) and
 // the SaaS control plane (account + per-drive enrollment that assigns a node).
 //
@@ -43,7 +43,7 @@ export function getManagedPortalUrl(info?: ManagedInfo | null): string | null {
 }
 
 /**
- * Is a Cloud Sync backup even offered here? True when there's a portal to sign
+ * Is Cloud Server even offered here? True when there's a portal to sign
  * up at (or the app was built pointing at one). Keeps the CTA out of a pure
  * self-hosted node's UI, where there is no control plane to enroll against.
  */
@@ -84,7 +84,7 @@ function waitForServerConnected(
     };
 
     const timer = setTimeout(
-      () => finish(new Error('Timed out connecting to the Cloud Sync node.')),
+      () => finish(new Error('Timed out connecting to the Cloud Server node.')),
       timeoutMs,
     );
 
@@ -186,7 +186,7 @@ export type EnableCloudSyncResult =
   | { ok: false; reason: 'no-account'; portalUrl: string | null };
 
 /**
- * Enroll `drive` in Cloud Sync and start syncing it to the assigned node. See
+ * Enroll `drive` in Cloud Server and start syncing it to the assigned node. See
  * the file header for the ordering. Returns `{ ok: false, reason:'no-account' }`
  * (never throws) when there's no session, so the caller can route the user to
  * the portal; throws on a real enrollment/connection failure.
