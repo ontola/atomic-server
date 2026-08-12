@@ -114,8 +114,11 @@ Boundary and announce are decoupled. pkarr/mainline records are for finding
   records total.
 - Zones resolve *through the connection*: dial a node, SYNC the zone DID,
   admission decides.
-- Share links carry their own routing: zone DID + agent DID / node hint.
+- Share links carry their own routing: zone URI + agent / node hint.
   The link is the discovery record; nothing per-share touches the DHT.
+  Canonical spelling is moving to opaque `atomic:` URIs (see
+  [`atomic-uris.md`](./atomic-uris.md)); `did:ad:` remains a read alias during
+  migration.
 - Per-zone announces remain only for owner-independent discovery (community
   zones with many hosts) as an explicit action, never a default.
 

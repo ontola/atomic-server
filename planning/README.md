@@ -33,6 +33,7 @@ Remaining work, not "this file exists."
 | [`genesis-self-verifying.md`](./genesis-self-verifying.md) | **Partial.** Server and browser mint and verify inline genesis certs. Remaining: DataRoute verify UI, `genesis` propval immutability. |
 | [`drive-reconciliation.md`](./drive-reconciliation.md) | **Partial.** Algorithm core in `lib/src/sync/rbsr.rs`. Not on the WS/Iroh wire yet; fingerprint tree still O(range). |
 | [`zones.md`](./zones.md) | **In progress.** Zone derivation, zone-based `check_rights`, implicit creator write, agent-keyed pkarr landed. Remaining: persisted index, sync BFS cutover, browser Share UI, drop authored drive stamp. |
+| [`atomic-uris.md`](./atomic-uris.md) | **Proposal.** Drop `did:ad:` framing (not a real DID Core impl); canonical opaque `atomic:` URIs (no `//`); dual-read alias; one Copy-link shape. |
 | [`partial-sync.md`](./partial-sync.md) | **Proposal.** Replicate part of a drive per device. |
 | [`drafts-and-suggestions.md`](./drafts-and-suggestions.md) | **Mechanism shipped** (`Fork` class, `diffFork`/`mergeFork`, document body CRDT merge). Review/diff UI, suggest-for-non-writers, Canvas fork still open. |
 | [`device-pairing.md`](./device-pairing.md) | **Proposal.** One-scan pairing; QR is routing only (no secret). C0 and M6 closed. Remaining: extra-workspace inventory, M4. |
