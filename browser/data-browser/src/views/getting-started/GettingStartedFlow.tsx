@@ -656,8 +656,8 @@ export function GettingStartedFlow({
                 key='create'
                 type='button'
                 onClick={() => {
-                  // Managed node → create the account on the portal
-                  // (email verification). FOSS node → local identity.
+                  // Hosted build or managed node → create the account on the
+                  // portal (email verification). FOSS node → local identity.
                   if (createTarget.kind === 'portal') {
                     window.location.assign(createTarget.url);
                   } else {
@@ -667,6 +667,22 @@ export function GettingStartedFlow({
               >
                 Create account
               </CtaButton>
+              {/* The local path stays reachable in a hosted build, one tap
+                  down rather than gone. Someone who already has an identity,
+                  or who wants nothing to do with our account system, must not
+                  be walled out of their own software — and on a FOSS build
+                  "Create account" already is this, so offering it twice would
+                  just be noise. */}
+              {createTarget.kind === 'portal' && (
+                <CtaButton
+                  key='local'
+                  type='button'
+                  subtle
+                  onClick={() => setStep('create')}
+                >
+                  Use my own secret
+                </CtaButton>
+              )}
               <CtaButton
                 key='signin'
                 type='button'

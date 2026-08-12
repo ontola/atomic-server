@@ -27,6 +27,7 @@ import { Button } from '../components/Button';
 import { VaultPanel } from '../components/Vault/VaultPanel';
 import { LinkProviderPanel } from '../components/Vault/LinkProviderPanel';
 import { isDeviceLinked } from '../helpers/managed/deviceLink';
+import { getManagedAccount } from '../helpers/managed/session';
 import { useDriveVault } from '../helpers/managed/useDriveVault';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
@@ -249,6 +250,47 @@ function SyncPage() {
   // onboarding screen uses too — both have to agree about whether a vault
   // exists for this drive.
   const vault = useDriveVault(status.drive ?? null);
+
+  /**
+   * Does this client need to link before it can reach the provider at all?
+   *
+   * True only when nothing is linked yet and `/api/me` says there is no
+   * session — the state a self-hosted, desktop or Android client starts in,
+   * and never the state of a browser served from the provider's own site.
+   *
+   * Deliberately not gated on the vault's own status: the vault reports
+   * `unavailable` only once it has an agent, a drive and its wasm keys to ask
+   * with. A fresh install has none of those and sits at `loading`, so gating
+   * on it hid the one control that could have fixed the situation.
+   */
+  const [needsProviderLink, setNeedsProviderLink] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      if (isDeviceLinked()) {
+        if (!cancelled) setNeedsProviderLink(false);
+
+        return;
+      }
+
+      try {
+        const account = await getManagedAccount();
+
+        if (!cancelled) setNeedsProviderLink(account === null);
+      } catch {
+        // Unreachable control plane. Offering to link is the useful answer —
+        // the alternative is a Sync page that silently omits backup with no
+        // way to ask for it.
+        if (!cancelled) setNeedsProviderLink(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const serverUrl = status.serverUrl;
@@ -743,39 +785,6 @@ function SyncPage() {
         <h1>Sync</h1>
         <Lead>{summaryLine()}</Lead>
 
-        {/* This device — always the source of truth for local-first data. */}
-        <DeviceCard>
-          <ConnIcon $tone='device'>
-            <FaLaptop />
-          </ConnIcon>
-          <ConnBody>
-            <ConnTitle>This device</ConnTitle>
-            <ConnSub>
-              {isNode
-                ? status.lastDriveSync
-                  ? `${status.lastDriveSync.count.toLocaleString()} resources · stored locally`
-                  : 'Embedded server · stored locally'
-                : clientDbOn
-                  ? 'Cached locally · works offline'
-                  : 'Server-only · no local cache'}
-            </ConnSub>
-            {isNode && localNodeId && (
-              <NodeIdRow>
-                <NodeIdLabel>Node ID</NodeIdLabel>
-                <NodeIdValue
-                  title='Copy Node ID'
-                  onClick={() => {
-                    navigator.clipboard.writeText(localNodeId);
-                    toast.success('Node ID copied');
-                  }}
-                >
-                  {localNodeId}
-                </NodeIdValue>
-              </NodeIdRow>
-            )}
-          </ConnBody>
-        </DeviceCard>
-
         {/* Signed in, but this device holds none of the account's data — it's
             still on whatever device created it. Pairing is the way across, so
             lead with it. Takes precedence over the local-only notice below:
@@ -811,55 +820,6 @@ function SyncPage() {
             backup we cannot read. It hides itself entirely when we cannot
             determine its status, so a missing session never renders a dead
             button. */}
-        {/* A client that cannot hold the provider's cookie — a self-hosted
-            origin, or the desktop and Android apps on tauri://localhost — has
-            to link before any of the vault works. Shown only while the vault
-            reports itself unavailable AND nothing is linked yet, so a browser
-            on the provider's own site never sees it. */}
-        {vault.status.state === 'unavailable' && !isDeviceLinked() && (
-          <LinkProviderPanel
-            portalUrl={getManagedPortalUrl(managedInfo)}
-            onLinked={() => window.location.reload()}
-          />
-        )}
-
-        <VaultSlot>
-          <VaultPanel
-            vault={vault}
-            onRestored={() => window.location.reload()}
-          />
-        </VaultSlot>
-
-        {/* Cloud Server, the hosted tier, offered below the vault rather than
-            above it.
-
-            Deliberately not called "back up" any more. Backup is Cloud Vault's
-            job, and having two things on one page both offering to "back up
-            your workspace" made the only distinction that matters — whether we
-            can read it — the one thing the screen did not say. The copy leads
-            with what hosting buys and states plainly that this side is
-            readable, matching the tier described on the sales page. */}
-        {showCloudBackup && (
-          <LocalDriveNotice>
-            <ConnIcon $tone='cloud'>
-              <FaCloud />
-            </ConnIcon>
-            <ConnBody>
-              <ConnTitle>Cloud Server</ConnTitle>
-              <ConnSub>
-                A hosted workspace on {PRODUCT_NAME}: shareable links, search
-                across everything, API access, and no waiting on another device
-                to be awake. Unlike encrypted backup, our servers process what
-                you put here.
-              </ConnSub>
-              <ConnActions>
-                <Button onClick={backupToCloud} disabled={cloudBusy}>
-                  {cloudBusy ? 'Setting up…' : 'Set up Cloud Server'}
-                </Button>
-              </ConnActions>
-            </ConnBody>
-          </LocalDriveNotice>
-        )}
 
         {/* A local-only drive (demo, or any drive made offline) isn't synced.
             Offer to promote it to a normal synced drive on the connected
@@ -892,20 +852,111 @@ function SyncPage() {
 
         <Section>
           <SectionTitle>Devices</SectionTitle>
+
+          {/* One list, because a person does not think of these as
+              different kinds of thing. This device, the encrypted
+              backup and the hosted workspace are all places the same
+              data lives; splitting them into a stack of cards above an
+              empty "Devices" heading made the page read as a pile of
+              offers rather than an inventory. */}
+          {/* This device — always the source of truth for local-first data. */}
+          <DeviceCard>
+            <ConnIcon $tone='device'>
+              <FaLaptop />
+            </ConnIcon>
+            <ConnBody>
+              <ConnTitle>This device</ConnTitle>
+              <ConnSub>
+                {isNode
+                  ? status.lastDriveSync
+                    ? `${status.lastDriveSync.count.toLocaleString()} resources · stored locally`
+                    : 'Embedded server · stored locally'
+                  : clientDbOn
+                    ? 'Cached locally · works offline'
+                    : 'Server-only · no local cache'}
+              </ConnSub>
+              {isNode && localNodeId && (
+                <NodeIdRow>
+                  <NodeIdLabel>Node ID</NodeIdLabel>
+                  <NodeIdValue
+                    title='Copy Node ID'
+                    onClick={() => {
+                      navigator.clipboard.writeText(localNodeId);
+                      toast.success('Node ID copied');
+                    }}
+                  >
+                    {localNodeId}
+                  </NodeIdValue>
+                </NodeIdRow>
+              )}
+            </ConnBody>
+          </DeviceCard>
+
+          {/* A client that cannot hold the provider's cookie — a self-hosted
+              origin, or the desktop and Android apps on tauri://localhost — has
+              to link before any of the vault works.
+
+              Gated on whether this client has a session, not on what the vault
+              says. The vault reports `unavailable` only once it has an agent, a
+              drive and its wasm keys to ask with; a fresh install has none of
+              those and sits at `loading` forever, so gating on the vault hid the
+              one control that could have fixed it. */}
+          {needsProviderLink && (
+            <LinkProviderPanel
+              portalUrl={getManagedPortalUrl(managedInfo)}
+              onLinked={() => window.location.reload()}
+            />
+          )}
+
+          <VaultSlot>
+            <VaultPanel
+              vault={vault}
+              onRestored={() => window.location.reload()}
+            />
+          </VaultSlot>
+
+          {/* Cloud Server, the hosted tier, offered below the vault rather than
+              above it.
+
+              Deliberately not called "back up" any more. Backup is Cloud Vault's
+              job, and having two things on one page both offering to "back up
+              your workspace" made the only distinction that matters — whether we
+              can read it — the one thing the screen did not say. The copy leads
+              with what hosting buys and states plainly that this side is
+              readable, matching the tier described on the sales page. */}
+          {showCloudBackup && (
+            <LocalDriveNotice>
+              <ConnIcon $tone='cloud'>
+                <FaCloud />
+              </ConnIcon>
+              <ConnBody>
+                <ConnTitle>Cloud Server</ConnTitle>
+                <ConnSub>
+                  A hosted workspace on {PRODUCT_NAME}: shareable links, search
+                  across everything, API access, and no waiting on another
+                  device to be awake. Unlike encrypted backup, our servers
+                  process what you put here.
+                </ConnSub>
+                <ConnActions>
+                  <Button onClick={backupToCloud} disabled={cloudBusy}>
+                    {cloudBusy ? 'Setting up…' : 'Set up Cloud Server'}
+                  </Button>
+                </ConnActions>
+              </ConnBody>
+            </LocalDriveNotice>
+          )}
           {localOnlyDrive && connectionCount > 0 && (
             <ConnNote>
               These sync your other drives — not this workspace.
             </ConnNote>
           )}
 
-          {/* Only when there's genuinely nothing here — a known-but-unselected
-              server still renders a card, and "not syncing anywhere" above a
-              list of them would contradict itself. */}
+          {/* About *other* devices specifically. This device and any cloud
+              services are listed above, so the old "not syncing anywhere"
+              wording now sat under entries proving otherwise. */}
           {connectionCount === 0 && connectionServers.length === 0 && (
             <EmptyConnections>
-              <p>
-                Not syncing anywhere yet — your data is safe on this device.
-              </p>
+              <p>No other devices yet — your data is safe on this one.</p>
               <p>
                 {isNode
                   ? 'Pair another device to sync directly, or connect an always-on one to reach your data from anywhere.'

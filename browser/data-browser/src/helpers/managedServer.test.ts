@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   accountCreationTarget,
   forgetServerPeer,
@@ -163,5 +163,46 @@ describe('forgetServerPeer', () => {
     ).resolves.toBe(false);
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('accountCreationTarget in a hosted distribution', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  /**
+   * The case that could not previously exist. A shipped app embeds a plain
+   * atomic-server which reports `managed: false`, so inferring hosted-ness
+   * from the connected node meant an app we publish could never present the
+   * hosted flow it is published to present.
+   */
+  it('sends people to the portal even though the embedded node is not managed', () => {
+    vi.stubEnv('VITE_ATOMIC_HOSTED_DISTRIBUTION', '1');
+    vi.stubEnv('VITE_MANAGED_PORTAL_URL', 'https://portal.example');
+
+    expect(accountCreationTarget({ managed: false, portalUrl: null })).toEqual({
+      kind: 'portal',
+      url: 'https://portal.example/signin',
+    });
+  });
+
+  /** A hosted build with no portal compiled in has nowhere to send anyone. */
+  it('falls back to a local identity with no portal configured', () => {
+    vi.stubEnv('VITE_ATOMIC_HOSTED_DISTRIBUTION', '1');
+
+    expect(accountCreationTarget({ managed: false, portalUrl: null })).toEqual({
+      kind: 'local',
+    });
+  });
+
+  /**
+   * The guardrail. A source build sets neither flag and must behave exactly as
+   * before — no portal, no hosted prompt, local identity.
+   */
+  it('leaves a FOSS build alone', () => {
+    vi.stubEnv('VITE_MANAGED_PORTAL_URL', 'https://portal.example');
+
+    expect(accountCreationTarget({ managed: false, portalUrl: null })).toEqual({
+      kind: 'local',
+    });
   });
 });

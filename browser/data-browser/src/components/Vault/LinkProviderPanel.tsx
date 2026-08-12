@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { styled } from 'styled-components';
 import { FaCloudArrowUp } from 'react-icons/fa6';
 import { Button } from '../Button';
+import { PRODUCT_NAME } from '../../helpers/managed/product';
 import {
   approvalUrl,
   awaitDeviceLink,
@@ -80,7 +81,7 @@ export function LinkProviderPanel({
         <FaCloudArrowUp />
       </Icon>
       <Body>
-        <Title>Back up to {hostOf(portalUrl)}</Title>
+        <Title>Connect your {providerName(portalUrl)} account</Title>
 
         {request ? (
           <>
@@ -101,9 +102,10 @@ export function LinkProviderPanel({
         ) : (
           <>
             <Sub>
-              Keep an encrypted copy of your workspaces on {hostOf(portalUrl)}.
-              Sealed on this device, so they store it without being able to read
-              it.
+              This app cannot sign in on its own, so approve it from somewhere
+              you already are. Then it can keep an encrypted copy of your
+              workspaces — sealed here, so {providerName(portalUrl)} stores it
+              without being able to read it.
             </Sub>
             {error && <ErrorText data-testid='link-error'>{error}</ErrorText>}
             <Actions>
@@ -120,6 +122,22 @@ export function LinkProviderPanel({
       </Body>
     </Panel>
   );
+}
+
+/**
+ * What to call the provider in prose.
+ *
+ * The product name when this is the product's own control plane, and the bare
+ * host otherwise — a self-hoster pointing at their own deployment should not
+ * be told they are connecting to ours. In development that also means the
+ * shipped wording is what you see, rather than `localhost:3030`.
+ */
+function providerName(url: string): string {
+  const host = hostOf(url);
+
+  return host.toLowerCase() === PRODUCT_NAME.toLowerCase()
+    ? PRODUCT_NAME
+    : host;
 }
 
 /** `https://atomicserver.eu/` → `atomicserver.eu`, for prose. */
