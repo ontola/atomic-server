@@ -114,14 +114,22 @@ export const ButtonClean = styled.button<ButtonPropsStyled>`
 
 /** Base button style. You're likely to want to use ButtonMargin in most places */
 export const ButtonBase = styled(ButtonClean)<ButtonPropsStyled>`
-  height: 2rem;
+  /* A floor, not a fixed height: a label that wraps needs room for the extra
+     line. With a fixed height the second line was simply clipped. Variants
+     that set their own exact size (ButtonIcon) opt out with min-height: 0. */
+  min-height: 2rem;
   display: flex;
   align-items: center;
   gap: 1ch;
   justify-content: center;
   background-color: ${props => props.theme.colors.main};
   color: ${props => props.theme.colors.bg};
-  white-space: nowrap;
+  /* Long labels used to run off the side of narrow (phone) screens rather
+     than wrap. The anywhere value covers the unbreakable cases too: a
+     recovery code or a URL in a label has no space to break at. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
   margin-bottom: ${p => (p.$gutter ? `${p.theme.margin}rem` : '')};
   ${transition(
     'background-color',
@@ -276,6 +284,9 @@ export const ButtonIcon = styled(ButtonDefault)`
   font-size: 0.8rem;
   width: 1.3rem;
   height: 1.3rem;
+  /* This variant is exactly sized and holds no text, so the base's wrapping
+     floor would only inflate it. */
+  min-height: 0;
   display: inline-flex;
   margin: 0;
   padding: 0;
@@ -296,6 +307,8 @@ export const ButtonInput = styled(ButtonBase)`
   color: ${props => props.theme.colors.textLight};
   flex: 0;
   height: auto;
+  /* Sized by the field it sits in, which can be shorter than the base floor. */
+  min-height: 0;
   border-left: solid 1px ${props => props.theme.colors.bg2};
   border-radius: 0;
 
