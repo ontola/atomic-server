@@ -3,6 +3,7 @@ import { styled } from 'styled-components';
 import { FaMobileScreenButton, FaLock } from 'react-icons/fa6';
 import { useStore } from '@tomic/react';
 import { useDriveVault } from '../../helpers/managed/useDriveVault';
+import { listVaultDrives } from '../../helpers/managed/vault';
 import { Button } from '../../components/Button';
 import { Column, Row } from '../../components/Row';
 import { PairingCode } from '../../components/PairingCode';
@@ -109,9 +110,33 @@ export function ConnectDeviceStep({
   useEffect(() => {
     let cancelled = false;
 
-    void resolveDriveSubject().then(subject => {
-      if (!cancelled) setVaultDrive(subject);
-    });
+    void (async () => {
+      const local = await resolveDriveSubject();
+
+      if (cancelled) return;
+
+      if (local) {
+        setVaultDrive(local);
+
+        return;
+      }
+
+      // Nothing locally, and `fetchPersonalDriveSubject` asks a *server* which
+      // a device holding nothing may not have — the desktop and Android apps
+      // embed their own, empty one. The control plane knows which drives this
+      // account has backed up, and asking it is the whole point of arriving
+      // with nothing: without this the restore offer never appears on exactly
+      // the device that needs it.
+      try {
+        const enrolled = await listVaultDrives();
+        const backed = enrolled.find(e => e.status === 'active') ?? enrolled[0];
+
+        if (!cancelled && backed) setVaultDrive(backed.drive_subject);
+      } catch {
+        // No session, or no control plane at all. Nothing to offer, which the
+        // panel renders as nothing rather than as an error.
+      }
+    })();
 
     return () => {
       cancelled = true;

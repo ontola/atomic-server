@@ -1,6 +1,8 @@
 import {
   getManagedApiBase,
   getManagedDeviceToken,
+  getRememberedManagedPortalUrl,
+  rememberManagedPortalUrl,
   setManagedDeviceToken,
 } from './api';
 
@@ -158,27 +160,25 @@ export function isDeviceLinked(): boolean {
   return getManagedDeviceToken() !== null;
 }
 
-const PROVIDER_STORAGE_KEY = 'atomic-managed-provider-url';
-
 /**
  * The provider this install linked to, so a later session knows where its token
  * is valid. Stored separately from the token: knowing the address is not the
  * same as being able to use it.
+ *
+ * Deliberately the *same* memory `getManagedApiBase()` reads. A provider we now
+ * hold a session for is a control plane by any definition, and it is the only
+ * one the desktop and Android apps ever learn — `tauri://localhost` has no
+ * same-origin `/api`, and their embedded node is not managed and names no
+ * portal. Keeping a second key here meant linking appeared to succeed while
+ * every managed call afterwards resolved against `tauri.localhost/api` and
+ * failed, which read as "no control plane" rather than as a bug.
  */
 export function rememberProvider(portalUrl: string): void {
-  try {
-    localStorage.setItem(PROVIDER_STORAGE_KEY, trimSlashes(portalUrl));
-  } catch {
-    // Storage disabled — the link cannot outlive this session anyway.
-  }
+  rememberManagedPortalUrl(trimSlashes(portalUrl));
 }
 
 export function getRememberedProvider(): string | null {
-  try {
-    return localStorage.getItem(PROVIDER_STORAGE_KEY);
-  } catch {
-    return null;
-  }
+  return getRememberedManagedPortalUrl();
 }
 
 /** Where the user approves. The provider owns this path; we only address it. */

@@ -8,7 +8,19 @@ import {
   unlinkDevice,
   type LinkRequest,
 } from './deviceLink';
-import { getManagedDeviceToken, setManagedDeviceToken } from './api';
+import {
+  getManagedApiBase,
+  getManagedDeviceToken,
+  getRememberedManagedPortalUrl,
+  setManagedDeviceToken,
+} from './api';
+
+// The case that matters here is the one with no origin to fall back on. A
+// browser on the provider's own site resolves `/api` same-origin and never
+// depends on what linking remembered; the desktop and Android apps, on
+// `tauri://localhost`, depend on it entirely.
+const inTauri = { value: false };
+vi.mock('../tauri', () => ({ isRunningInTauri: () => inTauri.value }));
 
 const PORTAL = 'https://portal.example';
 
@@ -117,6 +129,32 @@ describe('awaitDeviceLink', () => {
     expect(await awaitDeviceLink(PORTAL, request)).toBe('linked');
     expect(getManagedDeviceToken()).toBe('sess');
     expect(isDeviceLinked()).toBe(true);
+  });
+
+  /**
+   * A session is useless without knowing where to spend it. The desktop and
+   * Android apps learn their control plane from nowhere else: `tauri://localhost`
+   * has no same-origin `/api`, and their embedded node is not managed and names
+   * no portal. Linking once stored this under a key `getManagedApiBase()` did
+   * not read, so every managed call afterwards resolved against
+   * `tauri.localhost/api` — the link looked fine and the vault simply never
+   * appeared.
+   */
+  it('remembers the provider where the API base will look for it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse({ state: 'approved', token: 'sess' }),
+    );
+
+    inTauri.value = true;
+
+    try {
+      await awaitDeviceLink(PORTAL, request);
+
+      expect(getRememberedManagedPortalUrl()).toBe(PORTAL);
+      expect(getManagedApiBase()).toBe(`${PORTAL}/api`);
+    } finally {
+      inTauri.value = false;
+    }
   });
 
   it('gives up when the provider says the code is gone', async () => {
