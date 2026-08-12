@@ -15,6 +15,7 @@ import { saveAgentToIDB } from '../../helpers/agentStorage';
 import { beat } from '../../helpers/deviceLock';
 import { fetchPersonalDriveSubject } from '../../helpers/personalDrive';
 import { deviceHasDriveData } from '../../helpers/driveData';
+import { withDeadline } from '../../helpers/withDeadline';
 import { constructOpenURL } from '../../helpers/navigation';
 import { paths } from '../../routes/paths';
 import { Button } from '../../components/Button';
@@ -85,6 +86,17 @@ type Props = {
   subject: string;
   initialStep?: Step;
 };
+
+/**
+ * How long sign-in will wait on a server before deciding this device cannot
+ * find out where the account's data lives.
+ *
+ * Generous, because answering slowly is normal on a cold connection and the
+ * cost of giving up early is a screen the user did not need. Bounded, because
+ * the alternative is what shipped: an await that never settled, and a spinner
+ * that never stopped, on a device holding nothing.
+ */
+const SIGN_IN_LOOKUP_TIMEOUT_MS = 8_000;
 
 const swapIn = keyframes`
   from {
@@ -561,14 +573,34 @@ export function GettingStartedFlow({
       beat();
 
       if (newAgent.subject) {
-        await releaseConflictingPortalSession(newAgent.subject);
+        await withDeadline(
+          releaseConflictingPortalSession(newAgent.subject),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          undefined,
+        );
       }
 
       // Where this sign-in wants to end up: the drive it came from, or the
       // account's own. One target, so there is one gate below — an early
       // return for the guard case is an early return around the gate.
+      //
+      // Bounded, because both lookups below ask a server and neither fetch has
+      // a timeout of its own. On a device that just restored a secret there may
+      // be no server that knows this account — the desktop and Android apps
+      // embed their own node, which answers, but not about an account it has
+      // never seen. That await never settled, so sign-in sat on "Restoring…"
+      // forever on exactly the device that had nothing. Not finding out is
+      // already a handled outcome here (both helpers have a "no" answer), and
+      // it lands on the connect-device step, which is the screen for a device
+      // holding none of your data — including its offer to restore from the
+      // vault.
       const target =
-        nextDrive ?? (await fetchPersonalDriveSubject(store, newAgent));
+        nextDrive ??
+        (await withDeadline(
+          fetchPersonalDriveSubject(store, newAgent),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          undefined,
+        ));
 
       // Name the account's drive even when its data hasn't arrived: the Sync
       // page says "your data is on another device" about *that* drive, which
@@ -582,7 +614,14 @@ export function GettingStartedFlow({
       // A secret restores who you are, not what you have. So the app only
       // opens once the workspace is here to read: opening one we cannot read
       // shows an empty shell wearing its name, which reads as data loss.
-      if (target && (await deviceHasDriveData(store, target))) {
+      if (
+        target &&
+        (await withDeadline(
+          deviceHasDriveData(store, target),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          false,
+        ))
+      ) {
         navigate(constructOpenURL(target));
       } else {
         setMissingDrive(target);
