@@ -640,7 +640,7 @@ function SecretStep({
             Are you sure you&apos;ve stored this secret somewhere safe? You
             cannot recover it if you lose it.
           </p>
-          <Row key='confirm-row' gap='1rem'>
+          <Row key='confirm-row' gap='1rem' wrapItems>
             <Button onClick={onConfirm}>
               {verifySecret
                 ? "Yes, I've stored it — sign me out to verify"
@@ -743,7 +743,7 @@ function ProfileStep({
               />
             </InputWrapper>
           </Field>
-          <Row key='submit' gap='1rem'>
+          <Row key='submit' gap='1rem' wrapItems>
             <ContinueButton type='submit' disabled={loading || !name.trim()}>
               {loading ? 'Creating drive…' : 'Save & continue'}
             </ContinueButton>
@@ -801,7 +801,7 @@ function RecoveryBackupStep({
           reset it for you, and losing it means losing your account and
           everything in it. Fine if you&apos;ll genuinely keep it safe.
         </SkipWarning>
-        <Row key='actions' gap='1rem'>
+        <Row key='actions' gap='1rem' wrapItems>
           <ContinueButton
             type='button'
             onClick={() => setConfirmingSkip(false)}
@@ -830,7 +830,7 @@ function RecoveryBackupStep({
           email to use it, so it&apos;s safe to keep on paper.
         </p>
         {error && <ErrorText key='error'>{error}</ErrorText>}
-        <Row key='actions' gap='1rem'>
+        <Row key='actions' gap='1rem' wrapItems>
           <ContinueButton
             type='button'
             onClick={onAddCodeToPasskey}
@@ -873,7 +873,7 @@ function RecoveryBackupStep({
               Are you sure you&apos;ve stored this code somewhere safe? You
               cannot recover your account without it.
             </p>
-            <Row key='confirm-row' gap='1rem'>
+            <Row key='confirm-row' gap='1rem' wrapItems>
               <ContinueButton onClick={onContinue}>
                 Yes, I&apos;ve stored it safely
               </ContinueButton>
@@ -911,7 +911,7 @@ function RecoveryBackupStep({
           safe to keep in a password manager or on paper.
         </p>
         {error && <ErrorText key='error'>{error}</ErrorText>}
-        <Row key='actions' gap='1rem'>
+        <Row key='actions' gap='1rem' wrapItems>
           <ContinueButton type='button' onClick={onGenerate} disabled={loading}>
             {loading ? 'Generating…' : 'Generate my recovery code'}
           </ContinueButton>
@@ -938,7 +938,7 @@ function RecoveryBackupStep({
         too.
       </p>
       {error && <ErrorText key='error'>{error}</ErrorText>}
-      <Row key='actions' gap='1rem'>
+      <Row key='actions' gap='1rem' wrapItems>
         <ContinueButton type='button' onClick={onUsePasskey} disabled={loading}>
           {loading ? 'Waiting for your passkey…' : 'Use a passkey'}
         </ContinueButton>
