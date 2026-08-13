@@ -4,6 +4,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+### Atomic Browser
+
+- [#1158](https://github.com/atomicdata-dev/atomic-server/issues/1158) Resources without a valid Class can be edited: the form shows their existing properties and still lets you add more, instead of hard-blocking with "is not a Class".
+
 ## [v0.41.0-beta.2] - 2026-08-01
 
 ### Atomic Browser

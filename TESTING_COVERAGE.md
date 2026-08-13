@@ -110,6 +110,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Sync page status renders | `browser/e2e/tests/sync.spec.ts` |
 | Offline edits persist and sync on reconnect | `sync.spec.ts` |
 | Second device cold-loads a drive from the server | `second-device-load.spec.ts` |
+| Classless resource edit form (no `isA` / invalid Class) | `browser/e2e/tests/classless-edit.spec.ts` |
 
 ---
 
