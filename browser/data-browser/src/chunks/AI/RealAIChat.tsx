@@ -540,10 +540,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       return;
     }
 
-    if (text.trim() === '') {
-      return;
-    }
-
     if (onBeforeSubmit) {
       try {
         await onBeforeSubmit(text);
@@ -556,6 +552,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
         return;
       }
+    }
+
+    if (text.trim() === '' && attachedFiles.length === 0) {
+      return;
     }
 
     const context = [...externalContextItems, ...userSelectedContextItems];

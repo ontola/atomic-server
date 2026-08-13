@@ -97,7 +97,7 @@ interface AsyncAIChatInputProps {
   large?: boolean;
   onMentionUpdate: (mentions: MentionItem[]) => void;
   onChange: (markdown: string) => void;
-  onSubmit: () => void;
+  onSubmit: () => void | Promise<void>;
   onCompact?: () => void;
   onEditModel?: () => void;
   onEditAgent?: () => void;
@@ -167,9 +167,15 @@ const AsyncAIChatInput: React.FC<
                 }
 
                 // The content has to be read from a ref because this callback is not updated often leading to stale content.
-                onSubmitRef.current();
-                setMarkdown('');
-                this.editor.commands.clearContent();
+                Promise.resolve(onSubmitRef.current()).then(
+                  () => {
+                    setMarkdown('');
+                    this.editor.commands.clearContent();
+                  },
+                  () => {
+                    // Keep the input on error
+                  },
+                );
 
                 return true;
               },
@@ -301,9 +307,15 @@ const AsyncAIChatInput: React.FC<
               disabled || disableSubmit || (markdown.length === 0 && !hasFiles)
             }
             onClick={() => {
-              onSubmit();
-              setMarkdown('');
-              editor?.commands.clearContent();
+              Promise.resolve(onSubmit()).then(
+                () => {
+                  setMarkdown('');
+                  editor?.commands.clearContent();
+                },
+                () => {
+                  // Keep the input on error
+                },
+              );
             }}
             title='Send'
             variant={IconButtonVariant.Fill}

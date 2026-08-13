@@ -127,6 +127,12 @@ export function NewDriveSetup({
       return;
     }
 
+    if (busy) {
+      throw new Error('Drive is already being created, please wait.');
+    }
+
+    setBusy(true);
+
     try {
       await createDrive(driveNameFromPrompt(text));
     } catch (err) {
@@ -134,6 +140,8 @@ export function NewDriveSetup({
         err instanceof Error ? err : new Error('Could not create the drive.');
       store.notifyError(asError);
       throw asError;
+    } finally {
+      setBusy(false);
     }
   };
 
