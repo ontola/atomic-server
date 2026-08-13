@@ -1,5 +1,14 @@
 import { styled } from 'styled-components';
 import { FaLock, FaRotateLeft, FaCloudArrowUp } from 'react-icons/fa6';
+import {
+  cardSurface,
+  CARD_ACTIONS_GAP,
+  CARD_BODY_GAP,
+  CARD_ICON_FONT,
+  CARD_ICON_SIZE,
+  CARD_SUB_FONT,
+  CARD_TITLE_FONT,
+} from '../cardSurface';
 import { Button } from '../Button';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
@@ -170,20 +179,21 @@ function formatWhen(unixSeconds: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+// This panel sits in the Sync page's list of cards, so it uses that list's
+// surface and type scale rather than its own. It used to set padding and gap
+// from `theme.size(2)` (8px) while the cards around it used 0.9rem (14.4px),
+// and left its body text at the inherited 1rem against their 0.82rem — close
+// enough to look like a mistake rather than a distinction.
 const Panel = styled.div`
-  display: flex;
-  gap: ${p => p.theme.size(2)};
-  padding: ${p => p.theme.size(2)};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
+  ${cardSurface}
 `;
 
 const Icon = styled.div`
   display: grid;
   place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: ${CARD_ICON_SIZE};
+  height: ${CARD_ICON_SIZE};
+  font-size: ${CARD_ICON_FONT};
   flex-shrink: 0;
   border-radius: 50%;
   background-color: ${p => p.theme.colors.bg2};
@@ -193,28 +203,31 @@ const Icon = styled.div`
 const Body = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${p => p.theme.size(1)};
+  gap: ${CARD_BODY_GAP};
   min-width: 0;
 `;
 
 const Title = styled.h3`
   margin: 0;
-  font-size: 1rem;
+  font-size: ${CARD_TITLE_FONT};
+  font-weight: 600;
 `;
 
 const Sub = styled.p`
   margin: 0;
   color: ${p => p.theme.colors.textLight};
+  font-size: ${CARD_SUB_FONT};
 `;
 
 const ErrorText = styled.p`
   margin: 0;
   color: ${p => p.theme.colors.alert};
+  font-size: ${CARD_SUB_FONT};
 `;
 
 const Actions = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: ${p => p.theme.size(1)};
-  margin-top: ${p => p.theme.size(1)};
+  gap: ${CARD_ACTIONS_GAP};
+  margin-top: ${CARD_ACTIONS_GAP};
 `;

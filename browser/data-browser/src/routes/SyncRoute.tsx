@@ -11,6 +11,7 @@ import {
   Datatype,
 } from '@tomic/react';
 import { styled, keyframes, css, type DefaultTheme } from 'styled-components';
+import { cardSurface, CARD_SUB_FONT } from '../components/cardSurface';
 import {
   FaLaptop,
   FaServer,
@@ -544,6 +545,9 @@ function SyncPage() {
     cloudEnrolled === false &&
     deviceLocalDrive &&
     !driveMissing;
+  /** Where "Learn more" goes. Null on a build with no provider, which is also
+   *  the case where there is no tier to explain. */
+  const cloudPortalUrl = getManagedPortalUrl(managedInfo);
 
   const usagePct =
     nodeUsage && quotaBytes
@@ -941,6 +945,19 @@ function SyncPage() {
                   <Button onClick={backupToCloud} disabled={cloudBusy}>
                     {cloudBusy ? 'Setting up…' : 'Set up Cloud Server'}
                   </Button>
+                  {/* This tier costs money and reads our copy of your data, so
+                      "what am I agreeing to" deserves an answer that isn't a
+                      paragraph on this card. The sales page already explains
+                      the tiers side by side. */}
+                  {cloudPortalUrl && (
+                    <LearnMore
+                      href={`${cloudPortalUrl}/#pricing`}
+                      target='_blank'
+                      rel='noreferrer'
+                    >
+                      Learn more
+                    </LearnMore>
+                  )}
                 </ConnActions>
               </ConnBody>
             </LocalDriveNotice>
@@ -1665,22 +1682,12 @@ const PendingCount = styled.span`
 
 // --- Connection cards ---
 
-const cardBase = css`
-  display: flex;
-  align-items: flex-start;
-  gap: 0.9rem;
-  padding: 0.9rem 1rem;
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  background: ${p => p.theme.colors.bg};
-  min-width: 0;
-`;
+const cardBase = cardSurface;
 
-/** The "This device" card — the source of truth, visually distinct. */
+/** The "This device" card. Same surface as the rest of the list — it is one
+ *  of the devices, not a different kind of object. */
 const DeviceCard = styled.div`
   ${cardBase}
-  background: ${p => p.theme.colors.bg1};
-  border-color: transparent;
   margin-bottom: 1.5rem;
 `;
 
@@ -1726,13 +1733,10 @@ const ConnCard = styled.div<{ $active?: boolean }>`
   background: ${p => (p.$active ? `${p.theme.colors.main}0a` : undefined)};
 `;
 
-/** Accent card for a local-only (unsynced) workspace — visually distinct
- *  from the neutral connection cards, since it's a call to action. */
+/** A call to action, but still one of the cards in this list. The button
+ *  inside it is the affordance; a second accent surface was just noise. */
 const LocalDriveNotice = styled.div`
   ${cardBase}
-  align-items: center;
-  border-color: ${p => p.theme.colors.main}55;
-  background: ${p => p.theme.colors.main}0d;
   margin-bottom: 1.5rem;
 `;
 
@@ -1901,6 +1905,18 @@ const ConnActions = styled.div`
   gap: 1rem;
   margin-top: 0.5rem;
   flex-wrap: wrap;
+`;
+
+/** A link, styled as one. The primary action next to it is the button. */
+const LearnMore = styled.a`
+  color: ${p => p.theme.colors.main};
+  font-size: ${CARD_SUB_FONT};
+  text-decoration: underline;
+
+  &:hover,
+  &:focus-visible {
+    color: ${p => p.theme.colors.mainDark};
+  }
 `;
 
 const StatusPill = styled.span<{ $status: NodeStatus }>`

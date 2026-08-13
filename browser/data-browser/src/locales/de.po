@@ -6780,3 +6780,7 @@ msgstr ""
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "…or bring it from another device instead"
 msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Learn more"
+msgstr ""

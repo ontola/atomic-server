@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { styled } from 'styled-components';
 import { FaCloudArrowUp } from 'react-icons/fa6';
+import {
+  cardSurface,
+  CARD_ACTIONS_GAP,
+  CARD_BODY_GAP,
+  CARD_ICON_FONT,
+  CARD_ICON_SIZE,
+  CARD_SUB_FONT,
+  CARD_TITLE_FONT,
+} from '../cardSurface';
 import { Button } from '../Button';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import {
@@ -150,13 +159,7 @@ function hostOf(url: string): string {
 }
 
 const Panel = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 0.9rem;
-  padding: 0.9rem 1rem;
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  background: ${p => p.theme.colors.bg};
+  ${cardSurface}
   margin-bottom: 1.5rem;
 `;
 
@@ -164,9 +167,9 @@ const Icon = styled.div`
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 2.4rem;
-  height: 2.4rem;
-  font-size: 1.1rem;
+  width: ${CARD_ICON_SIZE};
+  height: ${CARD_ICON_SIZE};
+  font-size: ${CARD_ICON_FONT};
   border-radius: 50%;
   background-color: ${p => p.theme.colors.main};
   color: white;
@@ -175,26 +178,26 @@ const Icon = styled.div`
 const Body = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: ${CARD_BODY_GAP};
   min-width: 0;
 `;
 
 const Title = styled.h3`
   margin: 0;
-  font-size: 0.95rem;
+  font-size: ${CARD_TITLE_FONT};
   font-weight: 600;
 `;
 
 const Sub = styled.p`
   margin: 0;
   color: ${p => p.theme.colors.textLight};
-  font-size: 0.82rem;
+  font-size: ${CARD_SUB_FONT};
 `;
 
 const ErrorText = styled.p`
   margin: 0;
   color: ${p => p.theme.colors.alert};
-  font-size: 0.82rem;
+  font-size: ${CARD_SUB_FONT};
 `;
 
 const Link = styled.a`
@@ -213,6 +216,6 @@ const Code = styled.output`
 const Actions = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: ${CARD_ACTIONS_GAP};
+  margin-top: ${CARD_ACTIONS_GAP};
 `;

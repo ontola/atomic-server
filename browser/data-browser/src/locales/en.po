@@ -6814,3 +6814,7 @@ msgstr "Restore my workspace"
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "…or bring it from another device instead"
 msgstr "…or bring it from another device instead"
+
+#: src/routes/SyncRoute.tsx
+msgid "Learn more"
+msgstr "Learn more"
