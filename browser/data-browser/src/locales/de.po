@@ -6659,14 +6659,11 @@ msgstr ""
 msgid "Turn on encrypted backup"
 msgstr ""
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Nothing has been backed up yet."
-msgstr ""
+#~ msgid "Nothing has been backed up yet."
+#~ msgstr ""
 
-#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'; 2: formatBytes(enrollment.used_bytes)
-#: src/components/Vault/VaultPanel.tsx
-msgid "{0} encrypted object{1} · {2} stored."
-msgstr ""
+#~ msgid "{0} encrypted object{1} · {2} stored."
+#~ msgstr ""
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Working…"
@@ -6783,4 +6780,24 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Learn more"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "Nothing has been backed up to {0} yet."
+msgstr ""
+
+#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'; 2: formatBytes(enrollment.used_bytes); 3: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "{0} encrypted object{1} · {2} stored in {3}."
+msgstr ""
+
+#: src/helpers/managed/deviceLink.test.ts
+#: src/helpers/managed/deviceLink.test.ts
+msgid "Joep’s Pixel"
+msgstr ""
+
+#: src/helpers/managed/vault.test.ts
+#: src/helpers/managed/vault.test.ts
+msgid "Cloud Vault quota exceeded"
 msgstr ""

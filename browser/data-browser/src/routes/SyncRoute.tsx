@@ -12,6 +12,7 @@ import {
 } from '@tomic/react';
 import { styled, keyframes, css, type DefaultTheme } from 'styled-components';
 import { cardSurface, CARD_SUB_FONT } from '../components/cardSurface';
+import { openExternal } from '../helpers/openExternal';
 import {
   FaLaptop,
   FaServer,
@@ -952,8 +953,18 @@ function SyncPage() {
                   {cloudPortalUrl && (
                     <LearnMore
                       href={`${cloudPortalUrl}/#pricing`}
-                      target='_blank'
+                      // No `_blank` in the app: Tauri intercepts a new-window
+                      // request natively, before the click handler can cancel
+                      // it, and hands it to `shell.open` — which is denied and
+                      // then fails on Android regardless. The href stays real
+                      // either way, so this is still a link to assistive tech
+                      // and to "copy link address".
+                      target={isNode ? undefined : '_blank'}
                       rel='noreferrer'
+                      onClick={e => {
+                        e.preventDefault();
+                        void openExternal(`${cloudPortalUrl}/#pricing`);
+                      }}
                     >
                       Learn more
                     </LearnMore>

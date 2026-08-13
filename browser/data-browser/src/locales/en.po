@@ -6693,14 +6693,11 @@ msgstr "Keep an encrypted copy of this workspace in {0}. It is sealed on this de
 msgid "Turn on encrypted backup"
 msgstr "Turn on encrypted backup"
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Nothing has been backed up yet."
-msgstr "Nothing has been backed up yet."
+#~ msgid "Nothing has been backed up yet."
+#~ msgstr "Nothing has been backed up yet."
 
-#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'; 2: formatBytes(enrollment.used_bytes)
-#: src/components/Vault/VaultPanel.tsx
-msgid "{0} encrypted object{1} · {2} stored."
-msgstr "{0} encrypted object{1} · {2} stored."
+#~ msgid "{0} encrypted object{1} · {2} stored."
+#~ msgstr "{0} encrypted object{1} · {2} stored."
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Working…"
@@ -6818,3 +6815,23 @@ msgstr "…or bring it from another device instead"
 #: src/routes/SyncRoute.tsx
 msgid "Learn more"
 msgstr "Learn more"
+
+#. 0: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "Nothing has been backed up to {0} yet."
+msgstr "Nothing has been backed up to {0} yet."
+
+#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'; 2: formatBytes(enrollment.used_bytes); 3: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "{0} encrypted object{1} · {2} stored in {3}."
+msgstr "{0} encrypted object{1} · {2} stored in {3}."
+
+#: src/helpers/managed/deviceLink.test.ts
+#: src/helpers/managed/deviceLink.test.ts
+msgid "Joep’s Pixel"
+msgstr "Joep’s Pixel"
+
+#: src/helpers/managed/vault.test.ts
+#: src/helpers/managed/vault.test.ts
+msgid "Cloud Vault quota exceeded"
+msgstr "Cloud Vault quota exceeded"

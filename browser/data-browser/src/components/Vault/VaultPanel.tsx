@@ -95,11 +95,16 @@ export function VaultPanel({
           data-vault-objects={details.confirmed_objects}
           data-vault-bytes={enrollment.used_bytes}
         >
+          {/* Name where it goes, in the state the user actually sits in. The
+              off-state copy says "in {PRODUCT_NAME}" and then the on-state used
+              to drop it, so the one screen you see every day never mentioned
+              that your data leaves the device at all. Sealed or not, who is
+              holding it is not a detail to infer. */}
           {details.confirmed_objects === 0
-            ? 'Nothing has been backed up yet.'
+            ? `Nothing has been backed up to ${PRODUCT_NAME} yet.`
             : `${details.confirmed_objects} encrypted object${
                 details.confirmed_objects === 1 ? '' : 's'
-              } · ${formatBytes(enrollment.used_bytes)} stored.`}
+              } · ${formatBytes(enrollment.used_bytes)} stored in ${PRODUCT_NAME}.`}
           {enrollment.last_backup_at
             ? ` Last backup ${formatWhen(enrollment.last_backup_at)}.`
             : ''}
