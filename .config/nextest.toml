@@ -30,5 +30,22 @@ test-group = 'serial'
 # truly unlucky run still has a fallback before the hard fail.
 retries = 5
 
+# Cap the `it` integration binary. Each test boots one or more actix
+# servers (and iroh_pairing spawns *extra* OS processes). CI overrides
+# `--test-threads` for Mancave; without this group, concurrent `it`
+# tests + their child servers starve peer boot / lib db setup and tip
+# ntest ceilings.
+[[profile.default.overrides]]
+filter = 'package(atomic-server) and binary(it)'
+test-group = 'it-limited'
+
+# Iroh pairing tests each spawn 1–2 full server subprocesses on top of
+# the suite's own load. Serialize them so a peer can finish writing its
+# port handoff file under CI contention.
+[[profile.default.overrides]]
+filter = 'package(atomic-server) and binary(it) and test(iroh_pairing::)'
+test-group = 'serial'
+
 [test-groups]
 serial = { max-threads = 1 }
+it-limited = { max-threads = 2 }

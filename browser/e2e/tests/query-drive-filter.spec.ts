@@ -63,7 +63,7 @@ test.describe('query GETs after refresh', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
 
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === true,
+      () => window.store?.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 30000 },
     );
@@ -113,8 +113,8 @@ test.describe('query GETs after refresh', () => {
     // load), not the bug we're testing.
     await page.waitForFunction(
       () =>
-        window.store.getSyncStatus().pendingDirtyCount === 0 &&
-        window.store.getClientDb()?.isReady === true,
+        window.store?.getSyncStatus().pendingDirtyCount === 0 &&
+        window.store?.getClientDb()?.isReady === true,
       undefined,
       { timeout: 30000 },
     );
@@ -163,12 +163,18 @@ test.describe('query GETs after refresh', () => {
     // "skipping seed" when the fingerprint matches).
     await page.waitForFunction(
       () =>
-        window.store.getSyncStatus().serverConnected === true &&
-        window.store.getClientDb()?.isReady === true,
+        window.store?.getSyncStatus().serverConnected === true &&
+        window.store?.getClientDb()?.isReady === true,
       undefined,
       { timeout: 30000 },
     );
-    // Settle window for any deferred fetches.
+
+    // Drop frames from the bootstrap window. `Collection.fetchPage` falls
+    // through to `/query` while ClientDb isn't ready (or before this drive
+    // has completed a local sync) — those are cold-load fetches, not the
+    // redundant post-ready storm this regression guards. Clear, then watch
+    // only the settle window where the local WASM DB must win.
+    wsGetFrames.length = 0;
     await page.waitForTimeout(2000);
 
     // No `/query?` frames should fire at all — those are exclusively
@@ -176,8 +182,8 @@ test.describe('query GETs after refresh', () => {
     const queryFrames = wsGetFrames.filter(f => f.includes('/query?'));
     expect(
       queryFrames,
-      'After refresh, no `/query?` WS GET should fire (collection layer ' +
-        'must serve from local WASM DB).\n' +
+      'After ClientDb is ready, no `/query?` WS GET should fire (collection ' +
+        'layer must serve from local WASM DB).\n' +
         queryFrames.map(u => '  ' + u).join('\n'),
     ).toEqual([]);
 
@@ -196,8 +202,8 @@ test.describe('query GETs after refresh', () => {
     const subjectFrames = wsGetFrames.filter(f => !f.includes('/query?'));
     expect(
       subjectFrames.length,
-      'After refresh, the per-subject WS GET count should be tiny — pre-fix ' +
-        'this routinely hit 20+ on a populated drive. Found ' +
+      'After ClientDb is ready, the per-subject WS GET count should be tiny — ' +
+        'pre-fix this routinely hit 20+ on a populated drive. Found ' +
         subjectFrames.length +
         ':\n' +
         subjectFrames.map(u => '  ' + u).join('\n'),

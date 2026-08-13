@@ -34,8 +34,8 @@ type PeopleTable = {
 async function createPeopleTable(page: Page): Promise<PeopleTable> {
   await page.waitForFunction(
     () =>
-      window.store.getClientDb()?.isReady === true &&
-      window.store.getSyncStatus().serverConnected === true,
+      window.store?.getClientDb()?.isReady === true &&
+      window.store?.getSyncStatus().serverConnected === true,
     undefined,
     { timeout: 30000 },
   );
@@ -110,7 +110,7 @@ async function createPeopleTable(page: Page): Promise<PeopleTable> {
   }, props);
 
   await page.waitForFunction(
-    () => window.store.getSyncStatus().pendingDirtyCount === 0,
+    () => window.store?.getSyncStatus().pendingDirtyCount === 0,
     undefined,
     { timeout: 30000 },
   );
@@ -253,7 +253,7 @@ test.describe('table filtering + views', () => {
       { timeout: 30000 },
     );
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 30000 },
     );

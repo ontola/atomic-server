@@ -30,7 +30,7 @@ test.describe('offline reload', () => {
     // Wait for the ClientDb to be ready (don't require pendingDirtyCount=0
     // — dev-drive may have persistent dirty state we don't care about here).
     await page.waitForFunction(
-      () => window.store.getClientDb()?.isReady === true,
+      () => window.store?.getClientDb()?.isReady === true,
       undefined,
       { timeout: 30000 },
     );
@@ -38,9 +38,9 @@ test.describe('offline reload', () => {
     // about to assert on, so bind to it directly.
     await page.waitForFunction(
       async () => {
-        const drive = window.store.getSyncStatus().drive;
+        const drive = window.store?.getSyncStatus().drive;
         if (!drive) return false;
-        const clientDb = window.store.getClientDb();
+        const clientDb = window.store?.getClientDb();
         const jsonAd = await clientDb?.getResource?.(drive);
 
         return !!jsonAd;
@@ -74,9 +74,9 @@ test.describe('offline reload', () => {
     // log finalState below either way). Without this we sample mid-flight.
     await page.waitForFunction(
       () => {
-        const drive = window.store.getSyncStatus().drive;
+        const drive = window.store?.getSyncStatus().drive;
         if (!drive) return false;
-        const r = window.store.resources.get(drive);
+        const r = window.store?.resources.get(drive);
 
         return !!r && !r.loading;
       },

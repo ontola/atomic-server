@@ -1,4 +1,4 @@
-import { Resource } from '@tomic/react';
+import { Resource, useStore } from '@tomic/react';
 import { useEffect, useRef } from 'react';
 import {
   CursorMode,
@@ -57,9 +57,24 @@ export function useMaterializeWhenDeselected(
   index: number,
 ): void {
   const { selectedRow, cursorMode } = useTableEditorContext();
+  const store = useStore();
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const counted = useRef(false);
 
   useEffect(() => {
+    // The row's only copy lives in this timer until it fires, so the store has
+    // to count it as pending work — `pendingDirtyCount === 0` is documented to
+    // mean "safe to reload/navigate — nothing will be lost", and a row waiting
+    // on `setTimeout` is neither in the outbox nor saving. `useDebouncedSave`
+    // reports its own window the same way; this path had no equivalent, so a
+    // reload during it dropped the row while sync status read as settled.
+    const stopCounting = () => {
+      if (counted.current) {
+        counted.current = false;
+        store.finishScheduledSave();
+      }
+    };
+
     // Actively editing THIS row — keep it virtual and cancel any pending
     // materialize (the user came back to it before the timer fired).
     if (selectedRow === index && cursorMode === CursorMode.Edit) {
@@ -68,6 +83,8 @@ export function useMaterializeWhenDeselected(
         timer.current = undefined;
       }
 
+      stopCounting();
+
       return;
     }
 
@@ -75,6 +92,11 @@ export function useMaterializeWhenDeselected(
     // between rows while still editing is the rapid-entry path → debounce.
     const delay =
       cursorMode === CursorMode.Edit ? MATERIALIZE_DEBOUNCE : MATERIALIZE_FLUSH;
+
+    if (!counted.current) {
+      counted.current = true;
+      store.startScheduledSave();
+    }
 
     timer.current = setTimeout(() => {
       timer.current = undefined;
@@ -85,17 +107,25 @@ export function useMaterializeWhenDeselected(
         !resource.subject.startsWith('_new:') ||
         resource.getEntries().length <= 2
       ) {
+        stopCounting();
+
         return;
       }
 
-      void resource.save().catch(() => undefined);
+      void resource
+        .save()
+        .catch(() => undefined)
+        .then(stopCounting);
     }, delay);
 
     return () => {
+      // Only release what this cleanup actually cancels: a save already in
+      // flight releases itself when it settles.
       if (timer.current !== undefined) {
         clearTimeout(timer.current);
         timer.current = undefined;
+        stopCounting();
       }
     };
-  }, [selectedRow, cursorMode, index, resource]);
+  }, [selectedRow, cursorMode, index, resource, store]);
 }

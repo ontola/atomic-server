@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, FRONTEND_URL } from './test-utils';
+import {
+  before,
+  FRONTEND_URL,
+  nodeReachableServerUrl,
+  SERVER_URL,
+} from './test-utils';
 
 /**
  * Taking someone else's pairing code — the paste path, and what the dialog
@@ -8,10 +13,11 @@ import { before, FRONTEND_URL } from './test-utils';
  * This surface is gated on `isRunningInTauri()`, because dialling a peer needs
  * a node and a browser tab is not one. So it never renders in a normal e2e run
  * and had no coverage at all. Faking the Tauri global is enough to reach it:
- * `isRunningInTauri()` only checks for `window.__TAURI_INTERNALS__`, and the
- * one thing the page then does differently — resolve the local server as
- * `localhost:9883` — happens to be the dev server anyway. Nothing here calls
- * `invoke`, so an empty stand-in object is sufficient.
+ * `isRunningInTauri()` only checks for `window.__TAURI_INTERNALS__`. The page
+ * then also resolves its embedded server as `localhost:9883`, so
+ * `pretendToBeTheApp` proxies that origin to `SERVER_URL` when they differ
+ * (dagger CI). Nothing here calls `invoke`, so an empty stand-in object is
+ * sufficient.
  *
  * `/iroh-sync` is intercepted rather than dialled for real: what is under test
  * is how the UI reports an outcome, and the endpoint itself is covered against
@@ -24,8 +30,33 @@ import { before, FRONTEND_URL } from './test-utils';
 const NODE = `did:ad:node:${'a'.repeat(64)}`;
 const VALID_CODE = `atomic://pair?v=1&node=${NODE}&drives=*`;
 
-/** Make the page believe it is the desktop/mobile app. */
+/**
+ * Make the page believe it is the desktop/mobile app.
+ *
+ * `isRunningInTauri()` only checks for `window.__TAURI_INTERNALS__`, but once
+ * that is set the app also hardcodes its embedded server as
+ * `http://localhost:9883` (`getLocalServerOrigin`). Locally that is the real
+ * server; in dagger CI the server is `atomic.localhost` / `atomic`. Without a
+ * proxy, `useOwnNodeDid` never gets a node id and the paste form stays hidden
+ * behind `pairNodeId && …`.
+ */
 async function pretendToBeTheApp(page: Page) {
+  const embeddedOrigin = 'http://localhost:9883';
+  // Fetch from Node via the service-binding host — not SERVER_URL's
+  // `atomic.localhost`, which only Chromium can resolve in dagger.
+  const realOrigin = nodeReachableServerUrl(SERVER_URL);
+
+  if (realOrigin !== embeddedOrigin) {
+    await page.route(`${embeddedOrigin}/**`, async route => {
+      const rewritten = route
+        .request()
+        .url()
+        .replace(embeddedOrigin, realOrigin);
+      const response = await route.fetch({ url: rewritten });
+      await route.fulfill({ response });
+    });
+  }
+
   await page.addInitScript(() => {
     (
       window as unknown as { __TAURI_INTERNALS__: unknown }

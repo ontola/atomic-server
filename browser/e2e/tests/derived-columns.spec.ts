@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, inDialog, newResource } from './test-utils';
+import { before, createTableFromDialog, inDialog } from './test-utils';
 
 /** The grid row containing `text`. */
 const row = (page: Page, text: string) =>
@@ -75,10 +75,10 @@ test.describe('computed columns', () => {
   }) => {
     // The Time tracker template gives two timestamp columns and a quick way to
     // fill them: start an entry and stop it.
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Time tracker/ }).click();
-    await page.getByPlaceholder('New Table').fill('Computed columns');
-    await page.getByRole('button', { name: 'Create' }).click();
+    await createTableFromDialog(page, {
+      template: /Time tracker/,
+      name: 'Computed columns',
+    });
 
     await expect(page.getByTestId('timer-new-input')).toBeVisible();
     await expect(page.getByRole('grid')).toBeVisible();
@@ -182,10 +182,10 @@ test.describe('computed columns', () => {
     // whatever it computed when it mounted, because reading the row during
     // render let the React Compiler cache the result on a resource identity
     // that never changes.
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Inventory/ }).click();
-    await page.getByPlaceholder('New Table').fill('Live values');
-    await page.getByRole('button', { name: 'Create' }).click();
+    await createTableFromDialog(page, {
+      template: /Inventory/,
+      name: 'Live values',
+    });
     await expect(page.getByRole('grid')).toBeVisible();
     await page.waitForTimeout(1000);
 
@@ -196,7 +196,7 @@ test.describe('computed columns', () => {
     // Reload once, so the row under test is a saved row rather than the trailing
     // draft — a draft's cells are a separate story (see the gaps list).
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 15_000 },
     );
@@ -222,10 +222,10 @@ test.describe('computed columns', () => {
   }) => {
     // The Time tracker template's timer view has both kinds of view-added
     // column: a configured Duration and the timer's own Start/Stop.
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Time tracker/ }).click();
-    await page.getByPlaceholder('New Table').fill('Resizable');
-    await page.getByRole('button', { name: 'Create' }).click();
+    await createTableFromDialog(page, {
+      template: /Time tracker/,
+      name: 'Resizable',
+    });
 
     await expect(page.getByTestId('timer-new-input')).toBeVisible();
     await expect(page.getByRole('grid')).toBeVisible();
@@ -278,10 +278,10 @@ test.describe('computed columns', () => {
   test('columns can be reordered, including the ones a view adds', async ({
     page,
   }) => {
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Time tracker/ }).click();
-    await page.getByPlaceholder('New Table').fill('Reorderable');
-    await page.getByRole('button', { name: 'Create' }).click();
+    await createTableFromDialog(page, {
+      template: /Time tracker/,
+      name: 'Reorderable',
+    });
 
     await expect(page.getByTestId('timer-new-input')).toBeVisible();
     await expect(page.getByRole('grid')).toBeVisible();
@@ -336,10 +336,10 @@ test.describe('computed columns', () => {
 
     // Two entries: one logged for a moment, one still running. Their Duration is
     // computed, so the store has to evaluate it to answer this filter.
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Time tracker/ }).click();
-    await page.getByPlaceholder('New Table').fill('Filtered durations');
-    await page.getByRole('button', { name: 'Create' }).click();
+    await createTableFromDialog(page, {
+      template: /Time tracker/,
+      name: 'Filtered durations',
+    });
 
     await expect(page.getByTestId('timer-new-input')).toBeVisible();
     await expect(page.getByRole('grid')).toBeVisible();
@@ -380,7 +380,7 @@ test.describe('computed columns', () => {
     // still 0 in the window before the commit is queued at all.
     await page.waitForFunction(
       () => {
-        for (const res of window.store.resources.values()) {
+        for (const res of window.store?.resources.values() ?? []) {
           const stored = res?.get?.(
             'https://atomicdata.dev/properties/view-filters',
           ) as { derived?: string }[] | undefined;
@@ -396,15 +396,20 @@ test.describe('computed columns', () => {
       { timeout: 30_000 },
     );
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 30_000 },
     );
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('grid')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('filter-chip')).toContainText('1 hours');
-    await expect(row(page, 'Short task')).toHaveCount(0);
-    await expect(row(page, 'Long task')).toHaveCount(0);
+    // Same budget as the pre-reload assertions above, because this side has
+    // strictly more to do: the chip only proves the View loaded, and every
+    // row's Duration still has to be recomputed before the filter can exclude
+    // it. There is nothing positive to await instead — the expected end state
+    // is an empty grid, so `toHaveCount(0)` polling for it IS the signal.
+    await expect(row(page, 'Short task')).toHaveCount(0, { timeout: 15_000 });
+    await expect(row(page, 'Long task')).toHaveCount(0, { timeout: 15_000 });
 
     // Removing it brings both entries back, the running one included.
     await page.getByTestId('filter-chip').click();

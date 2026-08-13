@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, newResource } from './test-utils';
+import { before, createTableFromDialog, reloadReconnected } from './test-utils';
 
 /** Local YYYY-MM-DD key, same derivation the CalendarDay cells use. */
 function localDayKey(d: Date): string {
@@ -11,10 +11,7 @@ function localDayKey(d: Date): string {
 
 /** Creates an Issue Tracker table (Board + All issues views, no date property). */
 async function createIssueTracker(page: Page, name: string) {
-  await newResource('table', page);
-  await page.getByRole('button', { name: /Issue Tracker/ }).click();
-  await page.getByPlaceholder('New Table').fill(name);
-  await page.getByRole('button', { name: 'Create' }).click();
+  await createTableFromDialog(page, { template: /Issue Tracker/, name });
   await expect(page.getByTestId('kanban-board')).toBeVisible();
 }
 
@@ -61,19 +58,22 @@ test.describe('calendar view', () => {
     await page.getByRole('button', { name: 'Today' }).click();
     await expect(event).toBeVisible();
 
-    // Persisted: after a reload (which lands on the default Board view), the
-    // calendar tab — named after its kind — still renders as a calendar with
-    // the item on today.
-    // The active view is in the URL, so a reload comes back to the calendar
-    // rather than the table's default view.
-    await page.reload();
-    await expect(page.getByTestId('calendar-view')).toBeVisible();
+    // Persisted: the active view is in the URL (`?view=`), so a reload comes
+    // back to the calendar rather than the table's default Board. While the
+    // View resource is still loading, `normalizeViewKind(undefined)` falls
+    // back to `table`, so `calendar-view` is absent until that fetch lands —
+    // under a contended CI server that routinely exceeds the default 10s
+    // expect budget.
+    await reloadReconnected(page);
+    await expect(page.getByTestId('calendar-view')).toBeVisible({
+      timeout: 30000,
+    });
     await expect(
       page
         .locator(`[data-testid="calendar-day"][data-date="${todayKey}"]`)
         .getByTestId('calendar-event')
         .filter({ hasText: 'Ship calendar' }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15000 });
 
     // The auto-created Date property landed on the item: open it and check.
     await event.click();

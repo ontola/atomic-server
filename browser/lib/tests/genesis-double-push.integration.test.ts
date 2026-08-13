@@ -47,7 +47,7 @@ describe('parallel pushCommits race on genesis commits', () => {
 
   beforeAll(async () => {
     server = await startServer();
-  }, 60_000);
+  }, 120_000);
 
   afterAll(async () => {
     await server?.stop();

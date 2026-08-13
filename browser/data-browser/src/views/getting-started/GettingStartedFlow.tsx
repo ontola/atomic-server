@@ -15,18 +15,27 @@ import { saveAgentToIDB } from '../../helpers/agentStorage';
 import { beat } from '../../helpers/deviceLock';
 import { fetchPersonalDriveSubject } from '../../helpers/personalDrive';
 import { deviceHasDriveData } from '../../helpers/driveData';
+import { withDeadline } from '../../helpers/withDeadline';
 import { constructOpenURL } from '../../helpers/navigation';
 import { paths } from '../../routes/paths';
 import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
 import { getManagedAccount } from '../../helpers/managed/session';
+import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
 import {
   fetchManagedInfo,
   accountCreationTarget,
   type AccountCreationTarget,
 } from '../../helpers/managedServer';
-import { createManagedSyncEnrollment } from '../../helpers/managed/enrollment';
+import { loadVaultKeyOps } from '../../helpers/managed/vaultKeyOps';
+import {
+  agentVaultProof,
+  runVaultBackup,
+  setUpVaultForDrive,
+  vaultLaneId,
+} from '../../helpers/managed/vault';
+import { getOrCreateDeviceId } from '../../helpers/managed/devices';
 import {
   buildEnvelopeV2,
   buildEnvelopeWithPasskey,
@@ -78,6 +87,17 @@ type Props = {
   initialStep?: Step;
 };
 
+/**
+ * How long sign-in will wait on a server before deciding this device cannot
+ * find out where the account's data lives.
+ *
+ * Generous, because answering slowly is normal on a cold connection and the
+ * cost of giving up early is a screen the user did not need. Bounded, because
+ * the alternative is what shipped: an await that never settled, and a spinner
+ * that never stopped, on a device holding nothing.
+ */
+const SIGN_IN_LOOKUP_TIMEOUT_MS = 8_000;
+
 const swapIn = keyframes`
   from {
     opacity: 0;
@@ -103,11 +123,27 @@ export function GettingStartedFlow({
   const [createTarget, setCreateTarget] = useState<AccountCreationTarget>({
     kind: 'local',
   });
+  /**
+   * Any control plane this build knows of, which is a weaker question than
+   * `createTarget` answers.
+   *
+   * Creating an account locally is a perfectly good outcome, so that decision
+   * stays strict: only a node that says it is managed sends people to a portal.
+   * Restoring one is different — the portal is the *only* route, so a screen
+   * that cannot name one has nothing to offer at all. Resolved through
+   * `getManagedPortalUrl`, so a build-time override counts even before any
+   * server has answered, which is the state a wiped browser is in. Null on a
+   * self-hosted install, where the button stays hidden rather than dead.
+   */
+  const [knownPortalUrl, setKnownPortalUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void fetchManagedInfo(baseURL).then(info => {
-      if (!cancelled) setCreateTarget(accountCreationTarget(info));
+      if (cancelled) return;
+
+      setCreateTarget(accountCreationTarget(info));
+      setKnownPortalUrl(getManagedPortalUrl(info));
     });
 
     return () => {
@@ -117,7 +153,8 @@ export function GettingStartedFlow({
   // A user who just verified their email via the managed portal lands at
   // /app/welcome?from_portal=true. Skip the generic Create/Sign-in choice and go
   // straight into identity creation, with the username prefilled from their
-  // account email and the new drive auto-enrolled in managed sync after create.
+  // account email and the new drive given encrypted backup after create. Sync is
+  // the premium option and is not enabled here; see `enableEncryptedBackup`.
   const fromManaged =
     new URLSearchParams(window.location.search).get('from_portal') === 'true';
   // The portal hands the account email in the URL (`?from_portal=true&email=…`)
@@ -180,21 +217,65 @@ export function GettingStartedFlow({
     };
   }, [fromManaged, emailParam]);
 
-  // Best-effort: enroll the freshly-created drive in managed sync. The identity
-  // and drive already exist by the time this runs, so a failure here never
-  // blocks onboarding — the user can retry from Managed Sync settings.
   // The new drive's subject, captured during onAfterCreate so the recovery
   // backup step can reference it.
   const newDriveSubject = useRef<string | undefined>(undefined);
 
-  async function enrollManagedSync(driveSubject: string) {
+  /**
+   * Set the freshly-created drive up with encrypted backup.
+   *
+   * **Only runs for accounts arriving from the portal** — the call site is
+   * `onAfterCreate={fromManaged ? … : undefined}`, so a self-hosted or FOSS
+   * install never reaches it and its onboarding is untouched. Nothing about
+   * this is baked into the drive: a vault-enrolled drive is an ordinary
+   * local-first drive whose owner happens to have a backup.
+   *
+   * This used to enroll the drive in managed sync instead. Sync is the premium
+   * option, so onboarding no longer pushes it: a new account gets blind
+   * encrypted backup, and an always-on peer is something they choose from the
+   * Sync page. That also puts the honest version of the pitch first — the tier
+   * we cannot read comes as standard, and the tier we can read is opt-in.
+   *
+   * Best-effort, exactly as the sync enrollment was: the identity and drive
+   * both exist by the time this runs, so a failure here leaves a working
+   * workspace with backup switched off rather than blocking onboarding. The
+   * Sync page will offer it again.
+   */
+  async function enableEncryptedBackup(driveSubject: string) {
     newDriveSubject.current = driveSubject;
     const agentSubject = store.getAgent()?.subject;
+    const agent = store.getAgent();
 
-    if (!agentSubject) return;
+    if (!agentSubject || !agent) return;
 
     try {
-      await createManagedSyncEnrollment({ driveSubject, agentSubject });
+      const keys = await loadVaultKeyOps();
+      const { enrollment, driveKey } = await setUpVaultForDrive({
+        keys,
+        driveSubject,
+        agentSubject,
+        // The agent signs a fixed message; its key is never read. That is what
+        // keeps non-extractable and hardware-backed keys usable here.
+        agentSecret: await agentVaultProof(agent, keys.proofMessage),
+      });
+
+      const db = store.getClientDb();
+      const deviceId = getOrCreateDeviceId();
+
+      if (!db || !deviceId) return;
+
+      // Back up straight away, exactly as turning it on by hand does. Enrolling
+      // alone would leave the account with backup "on" and nothing in it —
+      // reporting a protection it does not yet have, which is the failure this
+      // whole feature keeps producing. It is also the moment it costs least: a
+      // brand-new drive is a few KB.
+      await runVaultBackup({
+        db,
+        driveSubject,
+        drivePseudonym: enrollment.drive_pseudonym,
+        devicePubkey: await vaultLaneId(deviceId),
+        driveKey,
+      });
     } catch {
       // swallow — see above.
     }
@@ -492,14 +573,34 @@ export function GettingStartedFlow({
       beat();
 
       if (newAgent.subject) {
-        await releaseConflictingPortalSession(newAgent.subject);
+        await withDeadline(
+          releaseConflictingPortalSession(newAgent.subject),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          undefined,
+        );
       }
 
       // Where this sign-in wants to end up: the drive it came from, or the
       // account's own. One target, so there is one gate below — an early
       // return for the guard case is an early return around the gate.
+      //
+      // Bounded, because both lookups below ask a server and neither fetch has
+      // a timeout of its own. On a device that just restored a secret there may
+      // be no server that knows this account — the desktop and Android apps
+      // embed their own node, which answers, but not about an account it has
+      // never seen. That await never settled, so sign-in sat on "Restoring…"
+      // forever on exactly the device that had nothing. Not finding out is
+      // already a handled outcome here (both helpers have a "no" answer), and
+      // it lands on the connect-device step, which is the screen for a device
+      // holding none of your data — including its offer to restore from the
+      // vault.
       const target =
-        nextDrive ?? (await fetchPersonalDriveSubject(store, newAgent));
+        nextDrive ??
+        (await withDeadline(
+          fetchPersonalDriveSubject(store, newAgent),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          undefined,
+        ));
 
       // Name the account's drive even when its data hasn't arrived: the Sync
       // page says "your data is on another device" about *that* drive, which
@@ -513,7 +614,14 @@ export function GettingStartedFlow({
       // A secret restores who you are, not what you have. So the app only
       // opens once the workspace is here to read: opening one we cannot read
       // shows an empty shell wearing its name, which reads as data loss.
-      if (target && (await deviceHasDriveData(store, target))) {
+      if (
+        target &&
+        (await withDeadline(
+          deviceHasDriveData(store, target),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          false,
+        ))
+      ) {
         navigate(constructOpenURL(target));
       } else {
         setMissingDrive(target);
@@ -587,8 +695,8 @@ export function GettingStartedFlow({
                 key='create'
                 type='button'
                 onClick={() => {
-                  // Managed node → create the account on the portal
-                  // (email verification). FOSS node → local identity.
+                  // Hosted build or managed node → create the account on the
+                  // portal (email verification). FOSS node → local identity.
                   if (createTarget.kind === 'portal') {
                     window.location.assign(createTarget.url);
                   } else {
@@ -598,6 +706,22 @@ export function GettingStartedFlow({
               >
                 Create account
               </CtaButton>
+              {/* The local path stays reachable in a hosted build, one tap
+                  down rather than gone. Someone who already has an identity,
+                  or who wants nothing to do with our account system, must not
+                  be walled out of their own software — and on a FOSS build
+                  "Create account" already is this, so offering it twice would
+                  just be noise. */}
+              {createTarget.kind === 'portal' && (
+                <CtaButton
+                  key='local'
+                  type='button'
+                  subtle
+                  onClick={() => setStep('create')}
+                >
+                  Use my own secret
+                </CtaButton>
+              )}
               <CtaButton
                 key='signin'
                 type='button'
@@ -842,18 +966,21 @@ export function GettingStartedFlow({
                     <p key='copy'>
                       {`To restore your account, sign in to your ${PRODUCT_NAME} account first, then come back here.`}
                     </p>
-                    <Button
-                      key='signin'
-                      type='button'
-                      disabled={createTarget.kind !== 'portal'}
-                      onClick={() => {
-                        if (createTarget.kind === 'portal') {
-                          window.location.assign(createTarget.url);
-                        }
-                      }}
-                    >
-                      {`Sign in to your ${PRODUCT_NAME} account`}
-                    </Button>
+                    {knownPortalUrl && (
+                      <Button
+                        key='signin'
+                        type='button'
+                        onClick={() => {
+                          // `/signin` rather than the root, which is the sales
+                          // page — someone mid-recovery should land on the form.
+                          window.location.assign(
+                            new URL('/signin', knownPortalUrl).toString(),
+                          );
+                        }}
+                      >
+                        {`Sign in to your ${PRODUCT_NAME} account`}
+                      </Button>
+                    )}
                   </Column>
                 ) : restore.phase === 'no-backup' ? (
                   <p key='no-backup'>
@@ -1036,7 +1163,9 @@ export function GettingStartedFlow({
                       fromManaged ? backupWithPasskey : undefined
                     }
                     onBackupWithCode={fromManaged ? backupWithCode : undefined}
-                    onAfterCreate={fromManaged ? enrollManagedSync : undefined}
+                    onAfterCreate={
+                      fromManaged ? enableEncryptedBackup : undefined
+                    }
                     onDone={() => {
                       // After verify, NewIdentitySection navigates to personalDrive / home
                     }}

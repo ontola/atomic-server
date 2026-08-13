@@ -331,6 +331,16 @@ export interface IncomingChange {
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
 
 /**
+ * How long a fetch that is about to fail a resource will wait for the app's
+ * local database to attach. It is a boot-time event — `initClientDb` derives a
+ * database name and unwraps a key first — so it either happens within seconds
+ * of the page loading or not at all. Only ever waited on paths that would
+ * otherwise fail the resource permanently, and only when a database was
+ * actually announced (see `Store.expectClientDb`).
+ */
+const CLIENT_DB_ATTACH_GRACE = 5000;
+
+/**
  * The server-managed props that `Resource.rebuildCacheFromLoro` preserves even
  * when a Loro doc carries no delta for them (drive/parent/lastCommit/createdAt).
  * A resource that has ONLY these — no class, no user content — is a skeleton,
@@ -430,6 +440,10 @@ export class Store {
 
   /** Optional WASM-backed client-side database running in a Web Worker. */
   private clientDb?: ClientDbWorker;
+  /** Whether one is on its way — see {@link expectClientDb}. */
+  private clientDbExpected = false;
+  /** Callbacks parked in {@link waitForClientDb} until the attach happens. */
+  private clientDbWaiters = new Set<() => void>();
   /** Client-side full-text search index (MiniSearch). */
   private localSearch = new LocalSearch();
   /**
@@ -641,6 +655,45 @@ export class Store {
    * The worker runs the WASM ClientDb in a background thread.
    * Call this after constructing the Store — the worker initializes lazily.
    */
+  /**
+   * Declare that a local database is being attached, before it is ready to
+   * attach. `initClientDb` derives the agent's database name and unwraps its
+   * key before it can call {@link setClientDb}, and React renders (and starts
+   * fetching) in the meantime — so a fetch in that window has to be able to
+   * tell "no local database in this app" from "not attached yet". Only the
+   * former should conclude a resource isn't stored locally.
+   *
+   * Call it synchronously at app start, and only when a database really is
+   * coming: an app that opts out never waits.
+   */
+  public expectClientDb(): void {
+    this.clientDbExpected = true;
+  }
+
+  /**
+   * Resolves `true` once a ClientDb is attached, `false` if none arrives
+   * within `timeoutMs` — or immediately, if none was ever expected.
+   */
+  private waitForClientDb(timeoutMs: number): Promise<boolean> {
+    if (this.clientDb) return Promise.resolve(true);
+    if (!this.clientDbExpected) return Promise.resolve(false);
+
+    return new Promise<boolean>(resolve => {
+      const done = () => {
+        clearTimeout(timer);
+        this.clientDbWaiters.delete(done);
+        resolve(true);
+      };
+
+      const timer = setTimeout(() => {
+        this.clientDbWaiters.delete(done);
+        resolve(false);
+      }, timeoutMs);
+
+      this.clientDbWaiters.add(done);
+    });
+  }
+
   public setClientDb(clientDb: ClientDbWorker): void {
     // `initClientDb` calls this three times per page load (eager,
     // post-init, post-init-error) to refresh sync status. Only the
@@ -650,6 +703,11 @@ export class Store {
     // so gate it on the worker actually changing.
     const isNew = this.clientDb !== clientDb;
     this.clientDb = clientDb;
+
+    // Release fetches that started before the attach and would otherwise be
+    // about to fail a resource this database can answer for.
+    for (const waiter of [...this.clientDbWaiters]) waiter();
+
     this.emitSyncStatus();
 
     if (!isNew) return;
@@ -1264,13 +1322,59 @@ export class Store {
     if (!agent) return;
 
     // Offline-edit recovery: if this subject went dirty while offline, the
-    // outbox holds the last-synced version. On reload the doc rehydrates
-    // with the offline ops already applied and its save cursor resets to
-    // the current version — exporting from there yields an empty delta and
-    // the edit is lost. Rewind the cursor to the synced baseline so the
-    // export below emits the offline delta. No-op during normal online
-    // operation (`baseVersion` is only set on the offline path).
+    // outbox holds the last-synced version, and the ops past it live ONLY in
+    // the OPFS snapshot until the ClientDb hydration lands. That makes two
+    // rules absolute here:
+    //
+    //  1. Do not drain before the ClientDb is ready. A reconnect reload can
+    //     hydrate this resource from the SERVER first (the WS GET wins the
+    //     race against OPFS on a fast boot) — a doc with Loro state, so the
+    //     cold-drain guard above doesn't catch it, but WITHOUT the offline
+    //     ops. Exporting from it re-encodes ops the server already has; the
+    //     server acks the no-op, `caughtUp` clears the dirty bit, and the
+    //     offline edit is silently orphaned in OPFS — the CI-traced shape of
+    //     sync.spec's "offline edits sync to server" failure (a fresh device
+    //     kept reading the pre-offline title while every gate showed green).
+    //  2. Once ready, import the OPFS snapshot BEFORE the first export — not
+    //     only after an empty one. The poisoned export above is NOT empty,
+    //     so an empty-export fallback never runs for it.
+    //
+    // Then rewind the cursor to the synced baseline so the export emits the
+    // offline delta. No-op during normal online operation (`baseVersion` is
+    // only set on the offline path).
     if (entry.baseVersion) {
+      if (this.clientDb && !this.clientDb.isReady) {
+        this.emitSyncStatus();
+
+        return;
+      }
+
+      if (this.clientDb?.isReady) {
+        try {
+          const { jsonAd, snapshot } =
+            await this.clientDb.getResourceWithSnapshot(subject);
+
+          if (jsonAd) {
+            this.hydrateResourceFromJson(subject, JSON.parse(jsonAd));
+          }
+
+          const refreshed = this.resources.get(subject);
+
+          if (refreshed && snapshot && snapshot.length > 0) {
+            // OPFS stores a full snapshot — replace any server-hydrated doc
+            // that raced ahead of the offline local state.
+            refreshed.importLoroUpdate(snapshot, true);
+          }
+
+          if (refreshed) resource = refreshed;
+        } catch (e) {
+          console.warn(
+            `[Outbox] OPFS rehydrate before offline drain failed for ${subject}:`,
+            e,
+          );
+        }
+      }
+
       resource.restoreSaveCursor(entry.baseVersion);
     }
 
@@ -1286,12 +1390,18 @@ export class Store {
     // Capture {bytes, version} atomically so the cursor advances to
     // the version that's in this commit — not to a later one that
     // arrived during the await on `postCommit`.
-    const exported = resource.exportLoroDeltaForDrain(
-      isFirstCommit,
-      commitToken,
-    );
+    let exported = resource.exportLoroDeltaForDrain(isFirstCommit, commitToken);
 
     if (!exported) {
+      if (entry.baseVersion) {
+        console.warn(
+          `[Outbox] empty Loro export for ${subject} with offline baseVersion; leaving dirty for retry`,
+        );
+        this.emitSyncStatus();
+
+        return;
+      }
+
       this.outbox.clearBaseVersion(subject);
       this.outbox.clearDirty(subject);
       this.emitSyncStatus();
@@ -1347,6 +1457,7 @@ export class Store {
     // typed more characters mid-round-trip, the Loro subscriber already
     // called `markDirty` (synchronously) and our `clearDirty` would
     // erase that entry — so leave it dirty and nudge another drain.
+
     if (caughtUp) {
       this.outbox.clearDirty(subject);
 
@@ -2446,18 +2557,17 @@ export class Store {
   }
 
   /**
-   * Try the local WASM DB first, then fall back to server.
-   * If the WASM DB has the resource, it's used immediately (and a background
-   * server fetch can refresh it later). This keeps the UI fast while the
-   * network catches up.
+   * Try the local WASM DB (OPFS) for a persisted copy of `subject` and hydrate
+   * the store from it.
    *
-   * If both the WASM DB and the server fail (offline + cold cache),
-   * the resource stays in `loading` state rather than throwing.
+   * @returns `true` when a local copy hydrated into something renderable,
+   *   `false` when the database was asked and does not have it, and
+   *   `undefined` when there was no database to ask — callers must not read
+   *   that silence as "not stored locally".
    */
-  private async fetchResourceWithLocalFallback(
+  private async hydrateFromLocalDb(
     subject: string,
-    opts: FetchOpts = {},
-  ): Promise<void> {
+  ): Promise<boolean | undefined> {
     let hasLocalData = false;
 
     // Wait for the WASM DB to initialize (if one is set).
@@ -2475,12 +2585,17 @@ export class Store {
       await this.clientDb.waitForInit();
     }
 
+    // No database to ask. Say so rather than reporting a miss: the caller
+    // decides what to do about it, and "we never asked" and "it isn't there"
+    // lead to opposite conclusions when offline.
+    if (!this.clientDb?.isInitialized) return undefined;
+
     // Try the WASM DB (OPFS) for persisted resources. One combined
     // round-trip instead of `getResource` + `getLoroSnapshot`: every
     // mounted useResource takes this path on cold-load, and each
     // worker postMessage costs ~ms; halving the round-trips visibly
     // reduces time-to-first-paint on a populated drive.
-    if (this.clientDb?.isInitialized) {
+    {
       try {
         const { jsonAd, snapshot } =
           await this.clientDb.getResourceWithSnapshot(subject);
@@ -2556,11 +2671,57 @@ export class Store {
       }
     }
 
+    return hasLocalData;
+  }
+
+  /**
+   * Try the local WASM DB first, then fall back to server.
+   * If the WASM DB has the resource, it's used immediately (and a background
+   * server fetch can refresh it later). This keeps the UI fast while the
+   * network catches up.
+   *
+   * If both the WASM DB and the server fail (offline + cold cache),
+   * the resource stays in `loading` state rather than throwing.
+   */
+  private async fetchResourceWithLocalFallback(
+    subject: string,
+    opts: FetchOpts = {},
+  ): Promise<void> {
+    let local = await this.hydrateFromLocalDb(subject);
+    let hasLocalData = local === true;
+
+    /**
+     * Ask the local database again, if the first attempt had none to ask.
+     *
+     * The app attaches its ClientDb a few hundred milliseconds into boot —
+     * `initClientDb` has to derive the agent's database name and unwrap its
+     * key first — which is AFTER React's first render. A `useResource` that
+     * mounts in that window finds no database, and the only thing it can
+     * conclude from that silence is nothing at all. Offline that used to
+     * become "Offline: resource not available locally", permanently: the
+     * database attached moments later with the resource in it, but nothing
+     * re-runs this fetch.
+     *
+     * So before any outcome that fails the resource, wait out the attach and
+     * look again. A store that will never get a ClientDb (Node, SSR, the Sync
+     * page's opt-out, Tauri's embedded server) never signalled `expectClientDb`
+     * and so doesn't wait at all.
+     */
+    const askOnceAttached = async (): Promise<void> => {
+      if (hasLocalData || local !== undefined) return;
+      if (!(await this.waitForClientDb(CLIENT_DB_ATTACH_GRACE))) return;
+
+      local = await this.hydrateFromLocalDb(subject);
+      hasLocalData = local === true;
+    };
+
     // Local-only subjects never exist on any server — the OPFS lookup
     // above is authoritative. Without this guard a cache miss would GET
     // the subject from the server (a guaranteed 404 that also leaks
     // local-only subjects onto the wire).
     if (this.isLocalOnlySubject(subject)) {
+      await askOnceAttached();
+
       if (!hasLocalData) {
         this.failResource(
           subject,
@@ -2602,6 +2763,13 @@ export class Store {
             const alreadyResolved =
               current && current.loading === false && !current.error;
 
+            // The five seconds just spent waiting for the server are five
+            // seconds the local database had to attach. Ask it before
+            // declaring the resource unavailable.
+            await askOnceAttached();
+
+            if (hasLocalData) return;
+
             if (!alreadyResolved) {
               this.failResource(
                 subject,
@@ -2633,6 +2801,8 @@ export class Store {
       // error (e.g. 401 Unauthorized) so callers (ErrorPage, GettingStartedFlow)
       // can react correctly. Only fall back to a generic offline message when
       // we have no other signal.
+      await askOnceAttached();
+
       if (!hasLocalData) {
         this.failResource(
           subject,

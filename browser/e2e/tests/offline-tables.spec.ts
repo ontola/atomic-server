@@ -78,12 +78,12 @@ test.describe('offline tables', () => {
     // 5. Reload — still offline (disconnect persists) — and verify the table
     //    and row come back from OPFS.
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => window.store.getClientDb()?.isReady, {
+    await page.waitForFunction(() => window.store?.getClientDb()?.isReady, {
       timeout: 30000,
     });
     await expect
       .poll(() =>
-        page.evaluate(() => window.store.getSyncStatus().serverConnected),
+        page.evaluate(() => window.store?.getSyncStatus().serverConnected),
       )
       .toBe(false);
 

@@ -19,6 +19,37 @@ export const SECRET =
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
 
+/**
+ * Hostname the Node test process can actually reach.
+ *
+ * Dagger serves the SPA at `http://atomic.localhost:9883` so Chromium treats
+ * it as a secure context (`crypto.subtle` / WASM ClientDb). Chromium is told
+ * to map that name via `--host-resolver-rules`; Node is not, and `/etc/hosts`
+ * is read-only in the playwright container. When `ATOMIC_SERVICE_URL` is set
+ * (dagger: `http://atomic:9883`), rewrite browser-facing URLs to that
+ * service-binding host for anything fetched from the test process itself
+ * (`route.fetch`, create-template, …).
+ */
+export function nodeReachableServerUrl(browserFacingUrl: string): string {
+  const service = process.env.ATOMIC_SERVICE_URL?.replace(/\/$/, '');
+
+  if (!service) {
+    return browserFacingUrl.replace(/\/$/, '');
+  }
+
+  try {
+    const from = new URL(browserFacingUrl);
+    const to = new URL(service);
+    from.hostname = to.hostname;
+    from.port = to.port;
+    from.protocol = to.protocol;
+
+    return from.toString().replace(/\/$/, '');
+  } catch {
+    return browserFacingUrl.replace(/\/$/, '');
+  }
+}
+
 export const DEMO_INVITE_NAME = 'document demo invite';
 
 export const testFilePath = (filename: string) => {
@@ -678,8 +709,50 @@ export async function waitForCommitOnCurrentResource(
  * browser context (drive scoping) and the overlay's streaming re-render races a
  * click that fires too soon.
  */
-export async function waitForSearchIndex(page: Page): Promise<void> {
-  await page.waitForTimeout(REBUILD_INDEX_TIME);
+/**
+ * Waits until the server's search index can answer for `query`.
+ *
+ * Without a query this is the old fallback: a fixed sleep, hoping Tantivy
+ * committed inside it. That is a guess, and on a loaded server it is wrong —
+ * the search then returns fewer hits than the test expects and fails on
+ * whatever it was about to select.
+ *
+ * With a query it polls the real thing. `expected` is how many hits to wait
+ * for, which matters when a test is about to index into the results.
+ */
+export async function waitForSearchIndex(
+  page: Page,
+  query?: string,
+  expected = 1,
+): Promise<void> {
+  if (query === undefined) {
+    await page.waitForTimeout(REBUILD_INDEX_TIME);
+
+    return;
+  }
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          async args => {
+            try {
+              const hits = await window.store.search(args.query, {
+                parents: window.store.getDrive(),
+                include: false,
+                limit: 30,
+              });
+
+              return Array.isArray(hits) ? hits.length : 0;
+            } catch {
+              return 0;
+            }
+          },
+          { query },
+        ),
+      { timeout: 30_000, intervals: [500] },
+    )
+    .toBeGreaterThanOrEqual(expected);
 }
 
 export async function openAgentPage(page: Page) {
@@ -764,10 +837,18 @@ export const SEARCHBOX_PROPERTY_PLACEHOLDER = /Search for a .+ or enter a URL/;
 /** Create a new Resource in the current Drive.
  * Class can be an Class URL or a shortname available in the new page. */
 export async function newResource(klass: string, page: Page) {
-  await sidebarNewResourceButton(page).click();
   // Sidebar "New" navigates to /app/new?parentSubject=<parent> to preserve
   // the container context (see QuickCreateRow). Match pathname only.
-  await expect(page).toHaveURL(/\/app\/new(\?|$)/);
+  //
+  // Retry the click AND the navigation as a unit: the button can be clicked
+  // before its handler is attached, and the click is then simply swallowed —
+  // the app stays where it was, and no amount of waiting on a navigation that
+  // was never started will produce one. Seen in CI as this assertion timing
+  // out with the URL still on `/app/show`.
+  await expect(async () => {
+    await sidebarNewResourceButton(page).click();
+    await expect(page).toHaveURL(/\/app\/new(\?|$)/, { timeout: 3_000 });
+  }).toPass({ timeout: 20_000 });
 
   const waitForResourceForm = async () => {
     await Promise.any([
@@ -821,6 +902,225 @@ export async function newResource(klass: string, page: Page) {
         .waitFor({ state: 'visible', timeout: 10000 }),
     ]);
   }
+}
+
+/**
+ * Waits out a table build started from the New Table dialog.
+ *
+ * A template is a few dozen commits, and the dialog carries that wait: the
+ * Create button sits in its "Creating table…" state until the build resolves,
+ * and only then does the dialog close and the app navigate to the new table.
+ * Asserting on the view the table opens in — a grid, a board, a timer — right
+ * after clicking Create therefore races the build, not the render. Under load
+ * the build is the long leg, so the assertion fails with the view "not found"
+ * while the dialog is still visibly building, which reads like a broken view.
+ *
+ * The dialog closing IS the build's completion signal, so wait for that first
+ * and let the view assertions keep their ordinary budget.
+ */
+export async function waitForTableBuild(page: Page, timeoutMs = 60_000) {
+  const dialog = currentDialog(page);
+
+  try {
+    await dialog.waitFor({ state: 'hidden', timeout: timeoutMs });
+  } catch (cause) {
+    // A build that throws leaves the dialog up with the reason inline. Say
+    // what it said, rather than "timed out waiting for hidden".
+    const footer = await dialog
+      .locator('footer')
+      .textContent({ timeout: 1_000 })
+      .catch(() => '');
+    throw new Error(
+      `The New Table dialog was still building after ${timeoutMs}ms: ${footer?.trim()}`,
+      { cause },
+    );
+  }
+}
+
+/**
+ * Creates a table through the New Table dialog and returns once it exists.
+ *
+ * `template` names the card to start from — omit it for a blank table. Omit
+ * `name` to keep the one the dialog pre-fills, which is the template's own
+ * title. The caller is left on the new table's page, on whichever view the
+ * template defaults to, and still has to wait for that view: a board, a grid,
+ * a timer.
+ */
+export async function createTableFromDialog(
+  page: Page,
+  { template, name }: { template?: RegExp; name?: string },
+) {
+  await newResource('table', page);
+
+  if (template) {
+    await page.getByRole('button', { name: template }).click();
+  }
+
+  if (name !== undefined) {
+    await page.getByPlaceholder('New Table').fill(name);
+  }
+
+  await page.getByRole('button', { name: 'Create' }).click();
+  await waitForTableBuild(page);
+}
+
+/**
+ * Opens a totals footer cell's menu and picks one of its options — an
+ * aggregate, a second totals row, a breakdown.
+ *
+ * Two things move under the pointer here: the menu plays an entrance
+ * transition (opacity + scale), and the totals footer re-renders whenever an
+ * aggregate recomputes — which takes the menu with it. A single click races
+ * both and fails as "element is not stable" or "element was detached".
+ *
+ * Picking an option closes the menu, so retry while it is gone: a click that
+ * took effect ends the loop, one that lost the race gets a fresh menu.
+ */
+/**
+ * Reloads, and waits until the app is talking to the server again.
+ *
+ * Which view a table opens in is configuration on its View resource, fetched
+ * after the page boots. Until that lands `normalizeViewKind(undefined)` falls
+ * back to `table`, so the marker for a board / calendar / timer is simply
+ * absent, and any filter the view carries has not been applied yet. Asserting
+ * on either straight after `reload()` races that fetch rather than testing the
+ * view — on a contended CI server, well past the default 10s budget.
+ *
+ * Callers still need a budget of their own on the view marker: being
+ * reconnected is when the fetch can start, not when it has finished.
+ */
+export async function reloadReconnected(page: Page) {
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(
+    () => window.store.getSyncStatus().serverConnected === true,
+    undefined,
+    { timeout: 30_000 },
+  );
+}
+
+/**
+ * Opens the menu behind `trigger` and clicks `item` in it.
+ *
+ * Two things go wrong with a plain click-then-click. The dropdown mounts
+ * `visibility: hidden` and reveals itself a frame after it has been
+ * positioned, and a dismissed menu can linger in the DOM — so an unscoped
+ * locator can resolve to a hidden item and wait out its whole budget on
+ * something that will never appear. And the trigger TOGGLES its menu, so a
+ * click landing while a previous menu is still closing closes this one
+ * instead of opening it.
+ *
+ * Hence: scope to a visible instance, and retry the open as well as the pick.
+ */
+/**
+ * Waits until every row typed into a grid is a real member of its table.
+ *
+ * A new row is held purely locally under a `_new:` subject until its
+ * materialize timer fires — no commit, no collection membership. Anything
+ * computed OVER that collection therefore cannot see it yet: a total renders
+ * an em-dash, a filter does not match it, a chart omits it. Asserting on such
+ * a value before this point is asserting about a table that does not contain
+ * the row yet, and it fails as a wrong number rather than as a missing row.
+ *
+ * Also waits for the outbox, since a materialized row still has to reach the
+ * server before anything server-side (search, a reload) will agree.
+ */
+export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
+  await page.waitForFunction(
+    () => {
+      const resources = Array.from(window.store.resources?.values?.() ?? []);
+      const stillVirtual = resources.some(
+        // A placeholder holds only its seeded `isA` + `parent`; anything more
+        // is a row someone typed into.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (r: any) =>
+          String(r.subject).startsWith('_new:') &&
+          (r.getEntries?.()?.length ?? 0) > 2,
+      );
+
+      return (
+        !stillVirtual && window.store.getSyncStatus().pendingDirtyCount === 0
+      );
+    },
+    undefined,
+    { timeout: timeoutMs },
+  );
+}
+
+/**
+ * Reloads a table page once everything typed into it would survive the reload.
+ *
+ * Waiting on the outbox alone is not enough: a row typed into the grid stays
+ * virtual until it is deselected or edit mode is left, so `pendingDirtyCount`
+ * can legitimately read zero while a row exists only in this tab — and the
+ * reload then drops it. {@link waitForRowsMaterialized} covers both halves.
+ */
+export async function reloadGrid(page: Page) {
+  await waitForRowsMaterialized(page);
+  // `pendingDirtyCount === 0` means the rows reached the SERVER — not that
+  // their post-ack re-persist reached OPFS durably. Those writes commit with
+  // `Durability::None` and only survive a reload after the worker's 1s flush
+  // tick; reloading inside that window rolls them back, and the local db then
+  // answers post-reload queries with the pre-edit copy (the CI-only em-dash
+  // totals: member indexed, its newest value missing). Ask for the flush —
+  // the durability signal — instead of racing the tick.
+  await page.evaluate(() => window.store?.getClientDb()?.flush?.());
+  await page.reload();
+  await expect(page.getByRole('grid')).toBeVisible();
+  // The grid binds its cell handlers after the first render.
+  await page.waitForTimeout(500);
+}
+
+/**
+ * Clicks a grid cell and confirms the grid actually took input focus.
+ *
+ * Typing goes wherever focus is, and after a table is created focus is on the
+ * title input — not the grid. A click that lands before the grid is listening
+ * leaves it there, so the keystrokes go into the title and the row is never
+ * created. Nothing about the page looks wrong afterwards: the cells are
+ * present and empty, and the failure surfaces later as a total with nothing
+ * to add or a row missing after a reload.
+ *
+ * There is no "grid is ready" flag to await, but focus landing inside the
+ * grid is observable and is the precondition that actually matters.
+ */
+export async function focusCell(page: Page, cell: Locator) {
+  await expect(async () => {
+    await cell.click({ force: true });
+
+    const inGrid = await page.evaluate(
+      () => !!document.activeElement?.closest('[role="grid"]'),
+    );
+
+    expect(inGrid, 'click did not give the grid focus').toBe(true);
+  }).toPass({ timeout: 15_000 });
+}
+
+export async function pickFromMenu(trigger: Locator, item: Locator) {
+  const visible = item.filter({ visible: true }).first();
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (!(await visible.isVisible())) {
+        await trigger.click();
+        await visible.waitFor({ state: 'visible', timeout: 5_000 });
+      }
+
+      await visible.click({ timeout: 5_000 });
+
+      return;
+    } catch {
+      // Fall through and try the whole open-and-pick again.
+    }
+  }
+
+  // Bounded, so a menu that is genuinely dead still fails loudly.
+  await trigger.click();
+  await visible.click({ timeout: 5_000 });
+}
+
+/** {@link pickFromMenu} for a totals footer cell's aggregate menu. */
+export async function pickTotal(page: Page, cell: Locator, option: string) {
+  await pickFromMenu(cell, page.getByTestId(`menu-item-${option}`));
 }
 
 /** Opens a new browser page for multi-user testing */

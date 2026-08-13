@@ -4,6 +4,7 @@ import {
   before,
   makeDrivePublic,
   newDrive,
+  nodeReachableServerUrl,
   signIn,
   sidebarNewResourceButton,
 } from './test-utils';
@@ -146,8 +147,12 @@ async function setupTemplateSite(
 ) {
   fs.mkdirSync(EXEC_DIR, { recursive: true });
 
+  // `serverUrl` comes from the browser store (`atomic.localhost` in dagger).
+  // create-template runs in Node and needs the service-binding hostname.
+  const reachable = nodeReachableServerUrl(serverUrl);
+
   await execAsync(
-    `node ${CREATE_TEMPLATE_BIN} ${siteType} --template ${siteType} --server-url ${serverUrl} --drive ${drive}`,
+    `node ${CREATE_TEMPLATE_BIN} ${siteType} --template ${siteType} --server-url ${reachable} --drive ${drive}`,
   );
 
   await useWorkspacePackages(siteType);

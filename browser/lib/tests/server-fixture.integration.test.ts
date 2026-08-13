@@ -6,7 +6,7 @@ describe('server-fixture', () => {
 
   beforeAll(async () => {
     server = await startServer();
-  });
+  }, 120_000);
 
   afterAll(async () => {
     await server?.stop();

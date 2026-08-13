@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { before, newResource } from './test-utils';
+import { before, createTableFromDialog } from './test-utils';
 
 test.describe('default ontology', () => {
   test.beforeEach(before);
@@ -10,9 +10,7 @@ test.describe('default ontology', () => {
     // Create a table from the Issue Tracker template (name defaults to the
     // template title). Its Row class must be filed under the drive's default
     // ontology (created by `store.createDrive`) instead of under the drive.
-    await newResource('table', page);
-    await page.getByRole('button', { name: /Issue Tracker/ }).click();
-    await page.getByRole('button', { name: 'Create' }).click();
+    await createTableFromDialog(page, { template: /Issue Tracker/ });
     await expect(page.getByTestId('kanban-board')).toBeVisible();
 
     // The sidebar shows the table, but NOT the default ontology — it's schema

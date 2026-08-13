@@ -17,12 +17,21 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 actix-rt = "2.6.0"
+# Cloud Vault IPC: base64 for the bytes crossing it, tokio for the
+# current-thread runtime the non-`Send` vault futures need. Shared rather
+# than desktop-only — Android is the platform that needed this most.
+base64 = "0.22"
 clap = "4"
 serde_json = "1.0"
 tauri = { version = "2", features = ["tray-icon", "image-png", "devtools"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-process = "2"
+# Opening a URL in the system browser. `shell.open` is the v1 way and fails on
+# Android with EACCES; this is the supported one, and it is what an <a
+# target="_blank"> ultimately needs in a webview with nowhere to put a tab.
+tauri-plugin-opener = "2"
+tokio = { version = "1", features = ["rt", "sync", "time"] }
 
 # Mobile-only: the in-app QR scanner for device pairing. The Android WebView
 # doesn't grant getUserMedia to web content, so a web BarcodeDetector scanner
@@ -52,7 +61,7 @@ hex = "0.4"
 blake3 = "1"
 fastcdc = "3"
 async-trait = "0.1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [dependencies.atomic-server]
 # No HTTPS for desktop, but include Iroh for p2p sync

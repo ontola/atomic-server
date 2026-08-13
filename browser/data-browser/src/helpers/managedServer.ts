@@ -143,9 +143,70 @@ export type AccountCreationTarget =
   | { kind: 'portal'; url: string }
   | { kind: 'local' };
 
+/**
+ * The portal a build was compiled against, if any.
+ *
+ * Env-only, and separate from anything a server reports: it is the one source
+ * that answers before a server has. Null in a source build, which keeps the
+ * open core neutral.
+ */
+export function managedPortalOverride(): string | null {
+  const fromEnv =
+    typeof import.meta !== 'undefined'
+      ? (import.meta.env?.VITE_MANAGED_PORTAL_URL as string | undefined)
+      : undefined;
+
+  return fromEnv ? fromEnv.replace(/\/+$/, '') : null;
+}
+
+/**
+ * Is this build *the hosted distribution* — the one on the app stores?
+ *
+ * A distinct question from "does the connected node mention a portal", and the
+ * one that was missing. `accountCreationTarget` used to infer hosted-ness from
+ * the node, which works for a browser served by a managed node and cannot work
+ * for a shipped app: the desktop and Android builds embed a plain
+ * atomic-server, it reports `managed: false`, and so an app we publish could
+ * never present the hosted flow it exists to present.
+ *
+ * Separate from `VITE_MANAGED_PORTAL_URL` on purpose. That answers "where is
+ * the portal" and is set in local development so Cloud Server can be tested;
+ * reusing it here made the dev server's onboarding redirect to the portal and
+ * broke local identity creation. Two questions, two flags.
+ *
+ * Unset in a `cargo build` from source, so the FOSS experience is untouched.
+ */
+export function isHostedDistribution(): boolean {
+  const flag =
+    typeof import.meta !== 'undefined'
+      ? (import.meta.env?.VITE_ATOMIC_HOSTED_DISTRIBUTION as
+          | string
+          | undefined)
+      : undefined;
+
+  return flag === '1' || flag === 'true';
+}
+
 export function accountCreationTarget(
   info: ManagedInfo,
 ): AccountCreationTarget {
+  // A hosted build sends people to its own portal without waiting to be told
+  // by a server, because the server it embeds is not one of ours.
+  if (isHostedDistribution()) {
+    const portalUrl = managedPortalOverride() ?? info.portalUrl;
+
+    if (portalUrl) {
+      try {
+        return {
+          kind: 'portal',
+          url: new URL('/signin', portalUrl).toString(),
+        };
+      } catch {
+        return { kind: 'portal', url: portalUrl };
+      }
+    }
+  }
+
   if (info.managed && info.portalUrl) {
     // `/signin`, not the portal root: the root is the landing page, so
     // someone who just clicked "Create account" would arrive at a sales

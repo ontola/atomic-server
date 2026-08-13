@@ -1,0 +1,99 @@
+# Reusable Main CI body. Called from main.yml so Mancave and the
+# GitHub-hosted fallback share one step list.
+#
+# Not triggered directly — `workflow_call` only.
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: JSON array of runs-on labels, e.g. '["self-hosted","Linux","X64"]'
+        type: string
+        required: true
+      artifact-name:
+        description: upload-artifact name (must differ across Mancave / fallback)
+        type: string
+        required: true
+      host-profile:
+        description: Dagger `--host-profile` — mancave (hot) or hosted (conservative)
+        type: string
+        required: true
+    secrets:
+      NETLIFY_TOKEN:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+      DAGGER_CLOUD_TOKEN:
+        required: true
+
+name: Main CI
+
+jobs:
+  ci:
+    name: CI
+    runs-on: ${{ fromJSON(inputs.runner) }}
+    env:
+      NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: joepmeneer
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Transition period: images publish to BOTH registries. GHCR
+      # (org-owned, GITHUB_TOKEN-authenticated, no pull rate limits) is the
+      # long-term home; the Docker Hub image stays until users and docs have
+      # moved over. Dagger's publish reads the host docker config, so these
+      # login steps are what authenticate it.
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        with:
+          images: |
+            joepmeneer/atomic-server
+            ghcr.io/ontola/atomic-server
+          # The tags land in a dagger `--tags` list argument, which is
+          # comma-separated — the default newline separator would split the
+          # shell command instead.
+          sep-tags: ","
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Dagger CI (test, lint, build)
+        uses: dagger/dagger-for-github@8.0.0
+        with:
+          version: "latest"
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          verb: call
+          # `--publish-docs` only from master. This pipeline runs on every push
+          # to every branch, and netlifyDeploy used to pass `--prod`
+          # unconditionally — so any feature branch republished the public docs
+          # and typedoc. Every other branch now gets a preview URL instead.
+          # `--host-profile` selects parallelism (mancave hot / hosted quiet).
+          args: ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} ${{ github.ref == 'refs/heads/master' && '--publish-docs' || '' }}
+      - name: Dagger docker images (build images & publish)
+        # develop and master only. There is no `main` branch here — that clause
+        # could never fire, and left in place it invites someone to conclude
+        # one exists.
+        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'
+        uses: dagger/dagger-for-github@8.0.0
+        with:
+          version: "latest"
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          verb: call
+          args: create-docker-images --tags ${{ steps.meta.outputs.tags }}
+      - name: Upload artifacts
+        # `always()`: the e2e traces exported above are only interesting when
+        # the CI step failed, and without this the upload is skipped exactly
+        # then.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ./artifact
+          if-no-files-found: ignore

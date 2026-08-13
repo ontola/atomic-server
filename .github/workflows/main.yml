@@ -1,87 +1,146 @@
 on: [push, workflow_dispatch]
 
-# Which machine this pipeline runs on is a repository variable, not a literal,
-# so switching between the self-hosted runner and GitHub's is one settings
-# change rather than an edit here.
+# Main prefers Mancave (self-hosted) so Dagger cache volumes stay warm.
+# GitHub-hosted runs ONLY when Mancave is unavailable — never as a retry
+# after a red test suite.
 #
+# Flow:
+#   1. Pick runner — online self-hosted? (optional CI_RUNNER_STATUS_TOKEN)
+#   2. Main (Mancave) XOR Main (GitHub) — one path, not failure-failover
+#   3. Main — aggregator for the required status check
+#
+# Availability check needs a PAT that can list repo runners (GITHUB_TOKEN
+# cannot). Store it as Actions secret CI_RUNNER_STATUS_TOKEN. Without that
+# secret we assume Mancave is up (same as before) and will not fall back
+# when tests fail.
+#
+# Escape hatch (force hosted, skip Mancave):
 #   Settings -> Secrets and variables -> Actions -> Variables
-#   CI_RUNNER = ["self-hosted", "Linux", "X64"]
+#   CI_RUNNER = ["ubuntu-latest"]
 #
-# Unset or delete it and this falls back to `ubuntu-latest`. There is NO
-# automatic failover: if the self-hosted runner is offline, jobs QUEUE (GitHub
-# gives up after 24h) rather than moving to a hosted runner. Clearing
-# CI_RUNNER is the manual escape hatch.
+# Only this workflow uses the self-hosted runner. Releasing/deploying stay
+# on ubuntu-latest — a release must not depend on one PC being awake.
 #
-# Only this workflow uses it, on purpose. Releasing and deploying are pinned to
-# `ubuntu-latest` and must stay that way: a tag push once left the crates.io
-# publish queued for a day because the runner was switched off, and a release
-# that depends on a particular PC being awake is not a release process. Here a
-# stall costs slow CI and nothing else, and the warm Dagger cache is worth the
-# trade.
-#
-# (Automatic fallback is not available. The usual trick -- a picker job that
-# queries the runner API and emits labels for the rest -- needs
-# `administration:read`, which GITHUB_TOKEN cannot be granted, so it would mean
-# storing a long-lived PAT purely to decide where to run.)
-#
-# SECURITY: this repo is public, and a self-hosted runner must never execute
-# untrusted code -- a fork's PR branch is code anyone can write, and running it
-# on your own machine hands over arbitrary code execution, plus any secret and
-# any cached credential that machine can reach.
-#
-# So `pull_request` and `pull_request_target` are forced onto GitHub-hosted
-# runners in the expression itself, whatever CI_RUNNER says. Today nothing here
-# triggers on either, and this stays correct if someone adds one later: the
-# guard is structural, not a convention to remember. Trusted events (push,
-# workflow_dispatch, workflow_call -- all requiring write access) still get
-# CI_RUNNER and its warm Dagger cache.
-#
-# Do not "simplify" this back to a bare `vars.CI_RUNNER` lookup.
+# SECURITY: pull_request / pull_request_target are forced onto hosted
+# runners (never Mancave).
 
 name: "Main pipeline: build, lint, test"
+
 jobs:
+  pick:
+    name: Pick runner
+    runs-on: ubuntu-latest
+    outputs:
+      host: ${{ steps.pick.outputs.host }}
+    steps:
+      - id: pick
+        env:
+          GH_TOKEN: ${{ secrets.CI_RUNNER_STATUS_TOKEN }}
+          FORCE_RUNNER: ${{ vars.CI_RUNNER }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "pull_request" ] || [ "$EVENT_NAME" = "pull_request_target" ]; then
+            echo "PR event — forcing GitHub-hosted (never run untrusted code on Mancave)"
+            echo "host=hosted" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$FORCE_RUNNER" = '["ubuntu-latest"]' ]; then
+            echo "CI_RUNNER escape hatch — forcing GitHub-hosted"
+            echo "host=hosted" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "No CI_RUNNER_STATUS_TOKEN — assuming Mancave online"
+            echo "host=mancave" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Any online runner carrying the self-hosted label counts as
+          # available (busy is fine — the job will wait its turn).
+          # On API errors (bad/insufficient PAT), prefer Mancave — do NOT
+          # treat a 403 as "offline" or we skip the warm box forever.
+          set +e
+          body=$(gh api "repos/$REPO/actions/runners" 2>/tmp/runner-api.err)
+          api_status=$?
+          set -e
+          if [ "$api_status" -ne 0 ]; then
+            echo "Runner API failed (is CI_RUNNER_STATUS_TOKEN a fine-grained PAT with Repository Administration: Read?):"
+            cat /tmp/runner-api.err || true
+            echo "Assuming Mancave online"
+            echo "host=mancave" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if printf '%s' "$body" | jq -e \
+            'any(.runners[]; .status == "online" and any(.labels[]; .name == "self-hosted"))' \
+            >/dev/null; then
+            echo "Self-hosted runner online — using Mancave"
+            echo "host=mancave" >> "$GITHUB_OUTPUT"
+          else
+            echo "No online self-hosted runner — falling back to GitHub-hosted"
+            echo "host=hosted" >> "$GITHUB_OUTPUT"
+          fi
+
+  mancave:
+    name: Main (Mancave)
+    needs: pick
+    if: needs.pick.outputs.host == 'mancave'
+    uses: ./.github/workflows/main-ci.yml
+    # `packages: write` lets the GITHUB_TOKEN push images to GHCR. An explicit
+    # permissions block replaces the defaults, so `contents: read` (checkout)
+    # has to come along.
+    permissions:
+      contents: read
+      packages: write
+    with:
+      runner: ${{ vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]' }}
+      artifact-name: build-artifacts-mancave
+      host-profile: mancave
+    secrets:
+      NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+
+  # Hosted only when pick said Mancave is unavailable (or escape/PR).
+  # Deliberately does NOT run when Mancave finished with test failures.
+  github:
+    name: Main (GitHub)
+    needs: pick
+    if: needs.pick.outputs.host == 'hosted'
+    uses: ./.github/workflows/main-ci.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      runner: '["ubuntu-latest"]'
+      artifact-name: build-artifacts-github
+      host-profile: hosted
+    secrets:
+      NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+
   Main:
     name: Main
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["ubuntu-latest"]')) }}
-    env:
-      NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
+    needs: [pick, mancave, github]
+    if: always() && needs.pick.result == 'success'
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: joepmeneer
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
-        with:
-          images: joepmeneer/atomic-server
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Dagger CI (test, lint, build)
-        uses: dagger/dagger-for-github@8.0.0
-        with:
-          version: "latest"
-          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
-          verb: call
-          # `--publish-docs` only from master. This pipeline runs on every push
-          # to every branch, and netlifyDeploy used to pass `--prod`
-          # unconditionally — so any feature branch republished the public docs
-          # and typedoc. Every other branch now gets a preview URL instead.
-          args: ci --netlify-auth-token env://NETLIFY_TOKEN ${{ github.ref == 'refs/heads/master' && '--publish-docs' || '' }}
-      - name: Dagger docker images (build images & publish)
-        # develop and master only. There is no `main` branch here — that clause
-        # could never fire, and left in place it invites someone to conclude
-        # one exists.
-        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'
-        uses: dagger/dagger-for-github@8.0.0
-        with:
-          version: "latest"
-          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
-          verb: call
-          args: create-docker-images --tags ${{ steps.meta.outputs.tags }}
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: ./artifact
+      - name: Resolve runner outcome
+        run: |
+          host="${{ needs.pick.outputs.host }}"
+          m="${{ needs.mancave.result }}"
+          g="${{ needs.github.result }}"
+          echo "host=$host mancave=$m github=$g"
+          if [ "$host" = "mancave" ] && [ "$m" = "success" ]; then
+            exit 0
+          fi
+          if [ "$host" = "hosted" ] && [ "$g" = "success" ]; then
+            exit 0
+          fi
+          exit 1

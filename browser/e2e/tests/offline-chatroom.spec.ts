@@ -36,8 +36,8 @@ async function waitForReady(page: Page) {
   await page.waitForFunction(
     () => {
       return (
-        window.store.getClientDb()?.isReady === true &&
-        window.store.getSyncStatus().serverConnected === true
+        window.store?.getClientDb()?.isReady === true &&
+        window.store?.getSyncStatus().serverConnected === true
       );
     },
     undefined,
@@ -50,7 +50,7 @@ async function disconnect(page: Page) {
   // syncStatus updates fire on the next event-loop tick after the WS close;
   // under suite-wide load that can run past the default 5s budget.
   await page.waitForFunction(
-    () => window.store.getSyncStatus().serverConnected === false,
+    () => window.store?.getSyncStatus().serverConnected === false,
     undefined,
     { timeout: 15000 },
   );
@@ -61,8 +61,8 @@ async function reconnectAndDrain(page: Page) {
   await page.waitForFunction(
     () => {
       return (
-        window.store.getSyncStatus().serverConnected === true &&
-        window.store.getSyncStatus().pendingDirtyCount === 0
+        window.store?.getSyncStatus().serverConnected === true &&
+        window.store?.getSyncStatus().pendingDirtyCount === 0
       );
     },
     undefined,
@@ -132,7 +132,7 @@ test.describe('offline chatroom', () => {
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(chatSubject)}`,
     );
     await page.waitForFunction(
-      () => window.store.getSyncStatus().serverConnected === true,
+      () => window.store?.getSyncStatus().serverConnected === true,
       undefined,
       { timeout: 15000 },
     );

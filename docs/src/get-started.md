@@ -21,7 +21,7 @@ There's a couple of levels at which you can start working with Atomic Data (from
 
 ## Host your own Atomic-Sesrver (locally)
 
-- If you have docker running, you can use this one-liner: `docker run -p 80:80 -v atomic-storage:/atomic-storage joepmeneer/atomic-server` (or use `cargo install atomic-server`, or the [binaries](https://github.com/atomicdata-dev/atomic-server/releases/))
+- If you have docker running, you can use this one-liner: `docker run -p 80:80 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server` (or use `cargo install atomic-server`, or the [binaries](https://github.com/atomicdata-dev/atomic-server/releases/))
 - Now, visit `localhost` in your browser to access your server.
 - It's now only available locally. If you want to get it on the _internet_, you need to set up a domain name, and make sure its traffic is routed to your computer (search `port forwarding`).
 
@@ -34,7 +34,7 @@ There's a couple of levels at which you can start working with Atomic Data (from
 
 - Browser app [atomic-data-browser](https://github.com/atomicdata-dev/atomic-data-browser) ([demo on atomicdata.dev](https://atomicdata.dev))
 - Build a react app using [typescript & react libraries](https://github.com/atomicdata-dev/atomic-data-browser). Start with the [react template on codesandbox](https://codesandbox.io/s/atomic-data-react-template-4y9qu?file=/src/MyResource.tsx)
-- Host your own [atomic-server](https://github.com/atomicdata-dev/atomic-data-browser) (powers [atomicdata.dev](https://atomicdata.dev), run with `docker run -p 80:80 -v atomic-storage:/atomic-storage joepmeneer/atomic-server`)
+- Host your own [atomic-server](https://github.com/atomicdata-dev/atomic-data-browser) (powers [atomicdata.dev](https://atomicdata.dev), run with `docker run -p 80:80 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`)
 - Discover the command line tool: [atomic-cli](https://github.com/atomicdata-dev/atomic-server) (`cargo install atomic-cli`)
 - Use the Rust library: [atomic-lib](https://github.com/atomicdata-dev/atomic-server)
 

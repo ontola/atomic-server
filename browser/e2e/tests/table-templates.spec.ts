@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, newResource } from './test-utils';
+import {
+  before,
+  createTableFromDialog,
+  newResource,
+  reloadGrid,
+  waitForRowsMaterialized,
+} from './test-utils';
 
 /**
  * The template catalogue, exercised as a user meets it: pick a starting point,
@@ -18,10 +24,7 @@ const row = (page: Page, text: string) =>
 
 /** Creates a table from a template card and waits for its grid. */
 async function createFromTemplate(page: Page, template: RegExp, name: string) {
-  await newResource('table', page);
-  await page.getByRole('button', { name: template }).click();
-  await page.getByPlaceholder('New Table').fill(name);
-  await page.getByRole('button', { name: 'Create' }).click();
+  await createTableFromDialog(page, { template, name });
   await expect(page.getByRole('grid')).toBeVisible();
   // The grid binds its cell handlers after the first render; clicking before
   // that lands on nothing.
@@ -69,6 +72,14 @@ async function setCell(
   await page.waitForTimeout(200);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
+
+  // Check the value actually arrived. Keystrokes can land on a grid that is
+  // not listening yet and nothing above would notice — the cell stays empty
+  // and the failure surfaces much later as a total with nothing to add or a
+  // filter that matches nothing, pointing at the wrong feature entirely.
+  // Matched loosely because a column may reformat what it was given ("4.50"
+  // renders as "4.5"); what is being ruled out is the cell being empty.
+  await expect(cell).toContainText(/\S/);
 }
 
 /**
@@ -78,17 +89,6 @@ async function setCell(
  * computed at mount until the row is rendered afresh. See the React-Compiler gap
  * in `planning/table-templates-and-mini-apps.md`.
  */
-async function reloadGrid(page: Page) {
-  await page.waitForFunction(
-    () => window.store.getSyncStatus().pendingDirtyCount === 0,
-    undefined,
-    { timeout: 15_000 },
-  );
-  await page.reload();
-  await expect(page.getByRole('grid')).toBeVisible();
-  await page.waitForTimeout(500);
-}
-
 test.describe('table templates', () => {
   test.beforeEach(before);
 
@@ -137,6 +137,10 @@ test.describe('table templates', () => {
     await setCell(page, 2, 2, 'Coffee');
     await setCell(page, 2, 5, '4.50');
     await expect(row(page, 'Coffee')).toBeVisible();
+    // The total is computed over the table's COLLECTION, which a still-virtual
+    // row is not part of — so it would render an em-dash rather than a wrong
+    // number, and the assertion below would be about an empty table.
+    await waitForRowsMaterialized(page);
 
     // The sum under Amount was configured by the template — nobody opened a
     // menu to ask for it.
@@ -235,12 +239,17 @@ test.describe('table templates', () => {
       '0.60',
       { timeout: 15_000 },
     );
-    // 2 + 20 pieces in stock, totalled by the template.
+    // 2 + 20 pieces in stock, totalled by the template. 30s on both: the
+    // total needs an aggregate read to get through the ClientDb worker, and
+    // post-reload that queue sits behind the re-drain's write storm for 15s+
+    // on a loaded runner (measured ~18.5s in the instrumented CI runs).
+    // Tracked as the OPFS write-amplification issue — when write count
+    // drops, these budgets can too.
     await expect(page.getByTestId('table-totals')).toContainText('Sum', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
     await expect(page.getByTestId('table-totals')).toContainText('22', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
 
     // The second view is the same table with a filter on it: two bolts are low

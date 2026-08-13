@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, inDialog, newResource } from './test-utils';
+import {
+  before,
+  createTableFromDialog,
+  inDialog,
+  reloadGrid,
+} from './test-utils';
 
 /**
  * A row action is a button on every row that writes one thing — the verb a
@@ -22,17 +27,10 @@ async function createFromTemplate(
   name: string,
   openView?: string,
 ) {
-  await newResource('table', page);
-  await page.getByRole('button', { name: template }).click();
-  await page.getByPlaceholder('New Table').fill(name);
-  await page.getByRole('button', { name: 'Create' }).click();
+  await createTableFromDialog(page, { template, name });
 
   if (openView) {
-    const tab = page.getByRole('tab', { name: openView });
-    // The tab bar renders once the table's views load, which is after Create
-    // returns.
-    await expect(tab).toBeVisible({ timeout: 15_000 });
-    await tab.click();
+    await page.getByRole('tab', { name: openView }).click();
   }
 
   await expect(page.getByRole('grid')).toBeVisible();
@@ -71,17 +69,6 @@ const headings = (page: Page) =>
       .slice(1)
       .map(el => (el.textContent ?? '').replace('Drag column', '').trim()),
   );
-
-async function reloadGrid(page: Page) {
-  await page.waitForFunction(
-    () => window.store.getSyncStatus().pendingDirtyCount === 0,
-    undefined,
-    { timeout: 15_000 },
-  );
-  await page.reload();
-  await expect(page.getByRole('grid')).toBeVisible();
-  await page.waitForTimeout(500);
-}
 
 test.describe('row actions', () => {
   test.beforeEach(before);
@@ -151,8 +138,13 @@ test.describe('row actions', () => {
     await expect(bolts).toContainText('3', { timeout: 15_000 });
 
     // Value block: the totals footer sums the quantity the buttons changed.
+    // 30s: the total needs an aggregate read to get through the ClientDb
+    // worker, and post-reload that queue sits behind the re-drain's write
+    // storm for 15s+ on a loaded runner (measured ~18.5s in the instrumented
+    // CI runs). Tracked as the OPFS write-amplification issue — when write
+    // count drops, this budget can too.
     await expect(page.getByTestId('table-totals')).toContainText('3', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
   });
 
@@ -190,9 +182,15 @@ test.describe('row actions', () => {
     await milk.getByTestId('row-action-two-more').click();
     await expect(milk).toContainText('2', { timeout: 15_000 });
 
-    // Configuration lives on the View, so it comes back.
+    // Configuration lives on the View, so it comes back. Column headers
+    // hydrate from the View resource after the grid mounts — a one-shot
+    // `headings()` read right after `reloadGrid`'s 500ms settle often saw
+    // `[]` under CI load even though the action column appeared a moment
+    // later.
     await reloadGrid(page);
-    expect(await headings(page)).toContain('Two more');
+    await expect
+      .poll(() => headings(page), { timeout: 15_000 })
+      .toContain('Two more');
     await row(page, 'Milk').getByTestId('row-action-two-more').click();
     await expect(row(page, 'Milk')).toContainText('4', { timeout: 15_000 });
   });

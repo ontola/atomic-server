@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, inDialog, newResource } from './test-utils';
+import {
+  before,
+  createTableFromDialog,
+  inDialog,
+  reloadGrid,
+} from './test-utils';
 
 /**
  * A quick-add is the button a personal app is mostly used through: name a thing
@@ -18,30 +23,46 @@ async function createFromTemplate(
   name: string,
   openView?: string,
 ) {
-  await newResource('table', page);
-  await page.getByRole('button', { name: template }).click();
-  await page.getByPlaceholder('New Table').fill(name);
-  await page.getByRole('button', { name: 'Create' }).click();
+  await createTableFromDialog(page, { template, name });
 
   if (openView) {
-    const tab = page.getByRole('tab', { name: openView });
-    await expect(tab).toBeVisible({ timeout: 15_000 });
-    await tab.click();
+    await page.getByRole('tab', { name: openView }).click();
   }
 
   await expect(page.getByRole('grid')).toBeVisible();
   await page.waitForTimeout(1000);
 }
 
-async function reloadGrid(page: Page) {
-  await page.waitForFunction(
-    () => window.store.getSyncStatus().pendingDirtyCount === 0,
-    undefined,
-    { timeout: 15_000 },
-  );
-  await page.reload();
-  await expect(page.getByRole('grid')).toBeVisible();
-  await page.waitForTimeout(500);
+/**
+ * The dates a "stamped today" cell could legitimately be showing.
+ *
+ * Two things make a single `toLocaleDateString()` the wrong expectation. The
+ * stamp lands at some instant after this is read, so a run crossing midnight
+ * would compare against a day that arrived later. And the stamp is derived in
+ * UTC while this reads local time — in a UTC+2 timezone just after local
+ * midnight the app writes YESTERDAY's date, which is worth a look on its own
+ * but is not what this test is about.
+ */
+async function plausibleStampDates(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const now = new Date();
+    const utc = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+
+    return [
+      now.toLocaleDateString('en-GB'),
+      utc.toLocaleDateString('en-GB', { timeZone: 'UTC' }),
+    ];
+  });
+}
+
+/** Matches any date the stamp could carry, read across the stamping action. */
+async function stampedSince(page: Page, earlier: string[]): Promise<RegExp> {
+  const esc = (d: string) => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const all = [...new Set([...earlier, ...(await plausibleStampDates(page))])];
+
+  return new RegExp(all.map(esc).join('|'));
 }
 
 test.describe('quick add', () => {
@@ -89,17 +110,16 @@ test.describe('quick add', () => {
 
     const button = page.getByTestId('quick-add-button');
     await expect(button).toContainText('Log set');
+    const dateBeforeStamp = await plausibleStampDates(page);
     await button.click();
 
     // The preset stamped today's date, so the row lands where it belongs
     // without anything being typed.
     await reloadGrid(page);
-    const today = await page.evaluate(() =>
-      new Date().toLocaleDateString('en-GB'),
+    await expect(page.getByRole('grid')).toContainText(
+      await stampedSince(page, dateBeforeStamp),
+      { timeout: 15_000 },
     );
-    await expect(page.getByRole('grid')).toContainText(today, {
-      timeout: 15_000,
-    });
   });
 
   test('a person can add a create button, and it persists', async ({
@@ -131,6 +151,7 @@ test.describe('quick add', () => {
     await expect(button).toContainText('Add expense', { timeout: 15_000 });
 
     await page.getByTestId('quick-add-input').fill('Coffee');
+    const dateBeforeStamp2 = await plausibleStampDates(page);
     await button.click();
     await expect(row(page, 'Coffee')).toBeVisible({ timeout: 15_000 });
 
@@ -140,9 +161,8 @@ test.describe('quick add', () => {
     await expect(page.getByTestId('quick-add-button')).toContainText(
       'Add expense',
     );
-    const today = await page.evaluate(() =>
-      new Date().toLocaleDateString('en-GB'),
+    await expect(row(page, 'Coffee')).toContainText(
+      await stampedSince(page, dateBeforeStamp2),
     );
-    await expect(row(page, 'Coffee')).toContainText(today);
   });
 });

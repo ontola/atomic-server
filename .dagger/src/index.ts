@@ -15,10 +15,21 @@ import {
 const NODE_IMAGE = 'node:22';
 const RUST_IMAGE = 'rust:bookworm';
 
-// Must match `@playwright/test` in `browser/e2e/package.json`. A mismatch
-// makes the chromium browser binary missing inside the container — every
-// test times out at `page.goto`.
-const PLAYWRIGHT_VERSION = 'v1.58.2-noble';
+// Must match `@playwright/test` in `browser/e2e/package.json`.
+//
+// The image bakes in the browser builds its own Playwright wants, and each
+// release wants different revisions (1.58.2 → chromium-1208, 1.60.0 →
+// chromium-1223). Drift here does not fail loudly: `playwright install`
+// quietly re-downloads chromium, firefox AND webkit — measured at 30s in the
+// image, ~52s on Mancave, against 0s when the versions agree.
+//
+// That cost lands whenever the install layer is invalidated, which is any
+// change under `browser/` outside `e2e/tests` (the tests mount AFTER it, so
+// test-only commits stay cached). A cache volume cannot rescue it either: the
+// image sets `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`, so the download lands
+// there rather than in `~/.cache`.
+const PLAYWRIGHT_PACKAGE_VERSION = '1.60.0';
+const PLAYWRIGHT_VERSION = `v${PLAYWRIGHT_PACKAGE_VERSION}-noble`;
 // Keep in sync with `flutter/.mise.toml` (`[tools].flutter`).
 const FLUTTER_IMAGE = 'ghcr.io/cirruslabs/flutter:3.44.0';
 // See https://github.com/rust-cross/rust-musl-cross?tab=readme-ov-file#prebuilt-images
@@ -40,9 +51,102 @@ const TARGET_IMAGE_MAP = {
 // chromium below so the test browser exposes the secure-context APIs.
 const ATOMIC_DOMAIN = 'atomic';
 
+// CI host profiles. Main.yml passes `--host-profile mancave` only on the
+// self-hosted job; the GitHub-hosted fallback keeps the conservative
+// `hosted` defaults (2 vCPU). `.config/nextest.toml` still caps `it` at 2
+// and serializes `iroh_pairing::*`.
+//
+// `cargoBuildJobs` is the important one on Mancave: dagger containers see
+// all host CPUs (24 threads on the current box), so bare `cargo build` /
+// `clippy` / `wasm-pack` default to -j24 and burn ~30% of wall time in
+// system/context-switch. `nextest --build-jobs` only covers the nextest
+// invocation — pin `CARGO_BUILD_JOBS` on every cargo container too.
+type HostProfile = 'mancave' | 'hosted';
+
+type HostKnobs = {
+  e2eShardCount: number;
+  e2ePlaywrightWorkers: string;
+  e2ePlaywrightRetries: string;
+  nextestTestThreads: string;
+  nextestRetries: string;
+  nextestBuildJobs: string;
+  /** Caps rustc parallelism inside each container via CARGO_BUILD_JOBS. */
+  cargoBuildJobs: string;
+};
+
+/**
+ * Trim a Playwright `error-context.md` to the part worth reading in a CI log.
+ *
+ * The file leads with ~2.5k characters of breadcrumbs, sidebar and app menu —
+ * identical on every failure — and only then reaches the `main` region where
+ * the grid, board or form under test lives. A flat head-truncation therefore
+ * spends its whole budget on boilerplate and cuts off exactly the part that
+ * explains the failure.
+ */
+function condenseErrorContext(body: string): string {
+  const details = body.match(/# Error details\s*```\n([\s\S]{0,900}?)```/);
+  const main = body.indexOf('- main:');
+  const region =
+    main === -1
+      ? body.slice(-2500)
+      : body.slice(main, main + 2500);
+
+  return `${details ? details[1].trim() : ''}\n\n${region}`;
+}
+
+const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
+  // 4 shards × 2 workers ≈ 8 browsers. `ci()` runs endToEnd concurrently with
+  // clippy/nextest/flutter/vitest, so the box carries those browsers AND their
+  // four debug atomic-servers AND cargoBuildJobs=8 AND a 6-wide nextest at the
+  // same time. At 3 workers that was 12 browsers on 12 cores and the suite
+  // failed accordingly — including a chromium killed outright ("Target page,
+  // context or browser has been closed"), which is starvation, not a race.
+  // Raise this only alongside the cargo/nextest widths it shares the host with.
+  mancave: {
+    e2eShardCount: 4,
+    e2ePlaywrightWorkers: '2',
+    // Back to the suite's own documented default (playwright.config.ts): three
+    // attempts catch a genuinely flaky path while a real regression still
+    // fails all three. This branch dropped it to 1 for runtime, and that trade
+    // stopped paying: what remains red here rotates run to run — a click that
+    // did not land, a menu that did not open — which is the shape of a
+    // contended host, not of a broken test. Mitigation, not a fix; the fix is
+    // headroom, and `ci()` still runs these browsers alongside clippy,
+    // nextest, flutter and two vitest suites.
+    e2ePlaywrightRetries: '2',
+    nextestTestThreads: '6',
+    nextestRetries: '1',
+    nextestBuildJobs: '4',
+    cargoBuildJobs: '8',
+  },
+  hosted: {
+    e2eShardCount: 2,
+    e2ePlaywrightWorkers: '1',
+    e2ePlaywrightRetries: '2',
+    nextestTestThreads: '2',
+    nextestRetries: '2',
+    nextestBuildJobs: '2',
+    cargoBuildJobs: '2',
+  },
+};
+
+function resolveHostProfile(value: string): HostProfile {
+  return value === 'mancave' ? 'mancave' : 'hosted';
+}
+
+// Official `rust:*` images set `CARGO_HOME=/usr/local/cargo`. The
+// rust-musl-cross images set `CARGO_HOME=/root/.cargo`. Cache mounts
+// must match the image in use — a mount at the other path is a silent
+// no-op and every `cargo fetch` re-downloads the world.
+const CARGO_HOME_BOOKWORM = '/usr/local/cargo';
+const CARGO_HOME_MUSL = '/root/.cargo';
+
 @object()
 export class AtomicServer {
   source: Directory;
+  /** Active host knobs for this `ci()` invocation. Standalone func calls
+   *  (rustTest/endToEnd alone) keep the conservative hosted defaults. */
+  private hostKnobs: HostKnobs = HOST_PROFILES.hosted;
 
   constructor(
     @argument({
@@ -81,6 +185,108 @@ export class AtomicServer {
     this.source = source;
   }
 
+  /**
+   * Mount shared crates.io + git dependency caches under `cargoHome`, and
+   * pin `CARGO_BUILD_JOBS` so rustc doesn't spawn one job per visible host
+   * CPU (containers see the full Mancave SMT count). Registry content is
+   * identical across glibc/musl images, so both share the `cargo` /
+   * `cargo-git` volumes — only the mount path differs.
+   */
+  private withCargoHomeCache(
+    container: Container,
+    cargoHome: string,
+  ): Container {
+    return container
+      .withMountedCache(`${cargoHome}/registry`, dag.cacheVolume('cargo'), {
+        // Shared: Locked serialized every parallel CI lane behind whichever
+        // job held the volume. Cargo's own flock handles concurrent writers.
+        sharing: CacheSharingMode.Shared,
+      })
+      .withMountedCache(`${cargoHome}/git`, dag.cacheVolume('cargo-git'), {
+        sharing: CacheSharingMode.Shared,
+      })
+      .withEnvVariable(
+        'CARGO_BUILD_JOBS',
+        this.hostKnobs.cargoBuildJobs,
+      );
+  }
+
+  /**
+   * Cold/warm timing for the install caches this module relies on.
+   * Run twice: first populates volumes, second should be near-instant
+   * `cargo install` / `npm install -g` no-ops.
+   */
+  @func()
+  async cacheBench(): Promise<string> {
+    const cargoBinPath =
+      '/opt/cargo-bin/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+
+    const [mdbookOut, netlifyOut, pubOut] = await Promise.all([
+      this.withCargoHomeCache(
+        dag.container().from(RUST_IMAGE),
+        CARGO_HOME_BOOKWORM,
+      )
+        .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
+          sharing: CacheSharingMode.Shared,
+        })
+        .withEnvVariable('CARGO_INSTALL_ROOT', '/opt/cargo-bin')
+        .withEnvVariable('PATH', cargoBinPath)
+        .withExec([
+          'sh',
+          '-c',
+          'echo "=== mdbook install ===" && ' +
+            'if [ -x /opt/cargo-bin/bin/mdbook ] && [ -x /opt/cargo-bin/bin/mdbook-linkcheck ]; then echo "cache_hit=1"; fi && ' +
+            'START=$(date +%s) && ' +
+            'cargo install mdbook mdbook-linkcheck --quiet && ' +
+            'END=$(date +%s) && ' +
+            'echo "elapsed_s=$((END-START))" && ' +
+            'mdbook --version && mdbook-linkcheck --version',
+        ])
+        .stdout(),
+      dag
+        .container()
+        .from(NODE_IMAGE)
+        .withMountedCache('/opt/npm-global', dag.cacheVolume('npm-global'))
+        .withMountedCache('/root/.npm', dag.cacheVolume('npm-cache'))
+        .withEnvVariable('NPM_CONFIG_PREFIX', '/opt/npm-global')
+        .withEnvVariable(
+          'PATH',
+          '/opt/npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        )
+        .withExec([
+          'sh',
+          '-c',
+          'echo "=== netlify-cli install ===" && ' +
+            'START=$(date +%s) && ' +
+            'if [ ! -x /opt/npm-global/bin/netlify ]; then npm install -g netlify-cli --quiet; else echo "cache_hit=1"; fi && ' +
+            'END=$(date +%s) && ' +
+            'echo "elapsed_s=$((END-START))" && ' +
+            'netlify --version',
+        ])
+        .stdout(),
+      dag
+        .container()
+        .from(FLUTTER_IMAGE)
+        .withEnvVariable('CI', 'true')
+        .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
+        .withMountedCache('/root/.pub-cache', dag.cacheVolume('flutter-pub-cache'))
+        .withDirectory('/workspace/flutter', this.source.directory('flutter'))
+        .withWorkdir('/workspace/flutter')
+        .withExec([
+          'bash',
+          '-lc',
+          'echo "=== flutter pub get ===" && ' +
+            'START=$(date +%s) && ' +
+            'flutter --version >/dev/null && flutter pub get && ' +
+            'END=$(date +%s) && ' +
+            'echo "elapsed_s=$((END-START))"',
+        ])
+        .stdout(),
+    ]);
+
+    return [mdbookOut, netlifyOut, pubOut].join('\n');
+  }
+
   @func()
   async ci(
     @argument() netlifyAuthToken: Secret,
@@ -91,23 +297,30 @@ export class AtomicServer {
      * whatever master last put there.
      */
     @argument() publishDocs = false,
+    /**
+     * `mancave` = hot parallelism for the 12c/64GB self-hosted runner.
+     * `hosted` (default) = conservative knobs for ubuntu-latest fallback.
+     * Passed from `.github/workflows/main.yml` per job.
+     */
+    @argument() hostProfile: string = 'hosted',
   ): Promise<string> {
-    // Rust tasks (test/clippy/fmt) all extend `rustBuild()` and share the
-    // `rust-target` cache mount. Running them via `Promise.all` makes the
-    // parallel cargo processes fight for cargo's per-target file lock —
-    // we observed ~16-minute lock waits ending in `exit 101`. Serialize
-    // the rust pipeline (cheap: build is cached after the first run),
-    // and parallelize only the genuinely-independent JS + publish work.
+    this.hostKnobs = HOST_PROFILES[resolveHostProfile(hostProfile)];
+
+    // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
+    // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
+    await Promise.all([this.jsLint(), this.rustFmt()]);
+
+    // Rust clippy/test still share the `rust-target` cache mount — keep
+    // them serialized (parallel cargo contended the target lock for
+    // ~16 minutes and exited 101). Everything else is independent.
     await Promise.all([
       this.docsPublish(netlifyAuthToken, publishDocs),
       this.typedocPublish(netlifyAuthToken, publishDocs),
       this.endToEnd(netlifyAuthToken),
-      this.jsLint(),
       this.jsTest(),
       this.jsTestIntegration(),
       this.flutterTest(),
       (async () => {
-        await this.rustFmt();
         await this.rustClippy();
         await this.rustTest();
       })(),
@@ -143,8 +356,14 @@ export class AtomicServer {
    */
   @func()
   async flutterTest(): Promise<string> {
-    const cargoCache = dag.cacheVolume('cargo');
+    // Dedicated registry volume — do NOT share the main `cargo` volume used
+    // by the rust/wasm lanes. A Locked mount here used to serialize pub get /
+    // analyze / dart test behind the rust pipeline (~10+ min of lock wait on
+    // the step that merely ran `flutter pub get`).
+    const flutterCargoCache = dag.cacheVolume('flutter-cargo');
     const flutterRustTarget = dag.cacheVolume('flutter-plugin-rust-target');
+    const flutterPubCache = dag.cacheVolume('flutter-pub-cache');
+    const flutterRustup = dag.cacheVolume('flutter-rustup');
     const pathPrefix = 'export PATH="$HOME/.cargo/bin:$PATH"';
 
     return (
@@ -152,6 +371,15 @@ export class AtomicServer {
         .container()
         .from(FLUTTER_IMAGE)
         .withEnvVariable('CI', 'true')
+        // Same pin as withCargoHomeCache — flutter's cargokit build would
+        // otherwise see all host CPUs.
+        .withEnvVariable('CARGO_BUILD_JOBS', this.hostKnobs.cargoBuildJobs)
+        // Persist hosted Dart packages across CI runs.
+        .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
+        .withMountedCache('/root/.pub-cache', flutterPubCache)
+        // Persist the rustup toolchain so a layer-cache miss doesn't
+        // re-download rustc. Idempotent install below.
+        .withMountedCache('/root/.rustup', flutterRustup)
         .withExec(['apt-get', 'update', '-qq'])
         .withExec([
           'apt-get',
@@ -171,11 +399,8 @@ export class AtomicServer {
         .withExec([
           'sh',
           '-c',
-          'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal',
+          'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi',
         ])
-        .withMountedCache('/root/.cargo/registry', cargoCache, {
-          sharing: CacheSharingMode.Locked,
-        })
         .withDirectory('/workspace/lib', this.source.directory('lib'))
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
         .withMountedCache('/workspace/flutter/rust/target', flutterRustTarget, {
@@ -191,6 +416,11 @@ export class AtomicServer {
         // Dart package — analyzing the whole repo without its own pub get fails.
         .withExec(['bash', '-lc', `${pathPrefix} && flutter analyze lib test`])
         .withExec(['bash', '-lc', `${pathPrefix} && flutter test --no-pub`])
+        // Mount cargo registry only for the Rust step so Dart work above
+        // never contends for a cache volume.
+        .withMountedCache('/root/.cargo/registry', flutterCargoCache, {
+          sharing: CacheSharingMode.Shared,
+        })
         // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
         // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
         // `flutter test` only runs Dart. Without this step the entire bridge —
@@ -199,7 +429,9 @@ export class AtomicServer {
         .withExec([
           'bash',
           '-lc',
-          `${pathPrefix} && cargo test --manifest-path rust/Cargo.toml`,
+          `${pathPrefix} && ` +
+            'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi && ' +
+            'cargo test --manifest-path rust/Cargo.toml',
         ])
         .stdout()
     );
@@ -210,15 +442,11 @@ export class AtomicServer {
    *  emitted `pkg/` artifacts. */
   @func()
   wasmBuild(): Directory {
-    const cargoCache = dag.cacheVolume('cargo');
-
     return (
-      dag
-        .container()
-        .from(RUST_IMAGE)
-        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          sharing: CacheSharingMode.Locked,
-        })
+      this.withCargoHomeCache(
+        dag.container().from(RUST_IMAGE),
+        CARGO_HOME_BOOKWORM,
+      )
         // Cache `cargo install`-built binaries (wasm-pack here). Without
         // this, each CI run recompiled wasm-pack from source (~2 min).
         // Routed through `CARGO_INSTALL_ROOT` to a non-default path so
@@ -228,7 +456,8 @@ export class AtomicServer {
         // \`cargo install\` no-ops when the latest version is already
         // present.
         .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
-          sharing: CacheSharingMode.Locked,
+          // Shared so wasm-pack and mdbook installs can proceed in parallel.
+          sharing: CacheSharingMode.Shared,
         })
         .withEnvVariable('CARGO_INSTALL_ROOT', '/opt/cargo-bin')
         .withEnvVariable(
@@ -288,24 +517,22 @@ export class AtomicServer {
    *  tests that don't render the front-end. */
   @func()
   rustBuildSlim(): File {
-    const cargoCache = dag.cacheVolume('cargo');
-
     return (
-      dag
-        .container()
-        .from(RUST_IMAGE)
-        // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
-        // build script (transitive dep via the default `vector-search`
-        // feature, which this container builds with — unlike `rustBuild`'s
-        // musl targets, this glibc container doesn't need `--features
-        // light`, since `ort`'s missing-prebuilt-binary gap is musl-cuda
-        // specific). Matches the apt list already on `rustBuild()` /
-        // `rustChecksContainer()` — this container just never had it.
-        .withExec(['apt-get', 'update', '-qq'])
-        .withExec(['apt', 'install', '-y', 'protobuf-compiler'])
-        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          sharing: CacheSharingMode.Locked,
-        })
+      this.withCargoHomeCache(
+        dag
+          .container()
+          .from(RUST_IMAGE)
+          // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
+          // build script (transitive dep via the default `vector-search`
+          // feature, which this container builds with — unlike `rustBuild`'s
+          // musl targets, this glibc container doesn't need `--features
+          // light`, since `ort`'s missing-prebuilt-binary gap is musl-cuda
+          // specific). Matches the apt list already on `rustBuild()` /
+          // `rustChecksContainer()` — this container just never had it.
+          .withExec(['apt-get', 'update', '-qq'])
+          .withExec(['apt', 'install', '-y', 'protobuf-compiler']),
+        CARGO_HOME_BOOKWORM,
+      )
         .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
         .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
         .withDirectory('/code/server', this.source.directory('server'))
@@ -433,6 +660,16 @@ export class AtomicServer {
         '/repo/browser/tsconfig.build.json',
         browser.file('tsconfig.build.json'),
       )
+      // Same pnpm-store volume as jsBuild() — without this, every
+      // integration-test run re-downloaded the registry graph.
+      .withMountedCache('/repo/browser/.pnpm-store', dag.cacheVolume('pnpm-store'))
+      .withExec([
+        'pnpm',
+        'config',
+        'set',
+        'store-dir',
+        '/repo/browser/.pnpm-store',
+      ])
       .withExec([
         'sh',
         '-c',
@@ -487,22 +724,52 @@ export class AtomicServer {
   ): Promise<string> {
     const target = prod ? '--prod' : '';
 
-    return dag
-      .container()
-      .from(NODE_IMAGE)
-      .withExec(['npm', 'install', '-g', 'netlify-cli'])
-      .withDirectory('/deploy', directory)
-      .withWorkdir('/deploy')
-      .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
-      .withExec([
-        'sh',
-        '-c',
-        // Skip silently when no auth token is configured (PR builds from
-        // forks, branches without secret access). Netlify CLI 23+ rejects
-        // empty `--auth ""` instead of treating it as missing.
-        `if [ -z "$NETLIFY_AUTH_TOKEN" ]; then echo 'NETLIFY_AUTH_TOKEN not set — skipping ${siteName} deploy'; exit 0; fi; for i in $(seq 1 5); do netlify link --name ${siteName} --auth "$NETLIFY_AUTH_TOKEN" && break || sleep 2; done && netlify deploy --dir . ${target} --auth "$NETLIFY_AUTH_TOKEN"`,
-      ])
-      .stdout();
+    return (
+      this.netlifyCliContainer()
+        .withDirectory('/deploy', directory)
+        .withWorkdir('/deploy')
+        .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
+        .withExec([
+          'sh',
+          '-c',
+          // Skip silently when no auth token is configured (PR builds from
+          // forks, branches without secret access). Netlify CLI 23+ rejects
+          // empty `--auth ""` instead of treating it as missing.
+          `if [ -z "$NETLIFY_AUTH_TOKEN" ]; then echo 'NETLIFY_AUTH_TOKEN not set — skipping ${siteName} deploy'; exit 0; fi; for i in $(seq 1 5); do netlify link --name ${siteName} --auth "$NETLIFY_AUTH_TOKEN" && break || sleep 2; done && netlify deploy --dir . ${target} --auth "$NETLIFY_AUTH_TOKEN"`,
+        ])
+        .stdout()
+    );
+  }
+
+  /**
+   * Node image with a cached global `netlify-cli`. Routed through
+   * `NPM_CONFIG_PREFIX=/opt/npm-global` so the cache mount can't hide
+   * the image's preinstalled npm/node. `npm install -g` no-ops when the
+   * package is already present at that prefix.
+   */
+  private netlifyCliContainer(): Container {
+    return (
+      dag
+        .container()
+        .from(NODE_IMAGE)
+        .withMountedCache('/opt/npm-global', dag.cacheVolume('npm-global'))
+        .withMountedCache('/root/.npm', dag.cacheVolume('npm-cache'))
+        .withEnvVariable('NPM_CONFIG_PREFIX', '/opt/npm-global')
+        .withEnvVariable(
+          'PATH',
+          '/opt/npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        )
+        // Install + version check in one exec so a cleared volume can't
+        // leave `netlify` missing on a dagger layer-cache hit. Unlike
+        // `cargo install`, `npm install -g` is NOT a no-op when the
+        // package is already present — it still walks the tree (~15-60s) —
+        // so skip when the binary exists.
+        .withExec([
+          'sh',
+          '-c',
+          'if [ ! -x /opt/npm-global/bin/netlify ]; then npm install -g netlify-cli --quiet; fi && netlify --version',
+        ])
+    );
   }
 
   /** Extracts the unique deploy URL from netlify output */
@@ -514,16 +781,13 @@ export class AtomicServer {
 
   @func()
   docsFolder(): Directory {
-    const cargoCache = dag.cacheVolume('cargo');
     const actualDocsDirectory = this.source.directory('docs');
 
     return (
-      dag
-        .container()
-        .from(RUST_IMAGE)
-        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          sharing: CacheSharingMode.Locked,
-        })
+      this.withCargoHomeCache(
+        dag.container().from(RUST_IMAGE),
+        CARGO_HOME_BOOKWORM,
+      )
         // Same cargo-install binary cache as wasmBuild() — without it,
         // every CI run recompiled mdbook + mdbook-linkcheck from source
         // (~4 min). Routed through `CARGO_INSTALL_ROOT` so the cache
@@ -531,7 +795,8 @@ export class AtomicServer {
         // at `/usr/local/cargo/bin`. `cargo install` no-ops when the
         // binaries are already present at the install root.
         .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
-          sharing: CacheSharingMode.Locked,
+          // Shared so wasm-pack and mdbook installs can proceed in parallel.
+          sharing: CacheSharingMode.Shared,
         })
         .withEnvVariable('CARGO_INSTALL_ROOT', '/opt/cargo-bin')
         .withEnvVariable(
@@ -677,18 +942,18 @@ export class AtomicServer {
     @argument() e2e: boolean = false,
   ): Container {
     const source = this.source;
-    const cargoCache = dag.cacheVolume('cargo');
 
     const image = TARGET_IMAGE_MAP[target as keyof typeof TARGET_IMAGE_MAP];
 
-    const rustContainer = dag
-      .container()
-      .from(image)
-      .withExec(['apt-get', 'update', '-qq'])
-      .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler'])
-      .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-        sharing: CacheSharingMode.Locked,
-      })
+    // musl-cross: CARGO_HOME=/root/.cargo (NOT /usr/local/cargo).
+    const rustContainer = this.withCargoHomeCache(
+      dag
+        .container()
+        .from(image)
+        .withExec(['apt-get', 'update', '-qq'])
+        .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler']),
+      CARGO_HOME_MUSL,
+    )
       .withExec(['rustup', 'component', 'add', 'clippy'])
       .withExec(['rustup', 'component', 'add', 'rustfmt']);
     // cargo-nextest used to be installed here, but recent versions need
@@ -736,9 +1001,15 @@ export class AtomicServer {
     // Scope the build to `atomic-server` so cargo doesn't try to build
     // workspace siblings like the wasm cdylib plugin examples — which
     // can't be compiled for the host musl target.
-    const buildArgs = release
-      ? ['cargo', 'build', '--release', '-p', 'atomic-server']
-      : ['cargo', 'build', '-p', 'atomic-server'];
+    // `e2e` selects the `e2e` cargo profile (see the workspace Cargo.toml):
+    // the debug build's behaviour — assertions and overflow checks included —
+    // at an optimisation level where commit round-trips stop dominating, and
+    // cheap enough to compile that Playwright is not left waiting on LTO.
+    const buildArgs = e2e
+      ? ['cargo', 'build', '--profile', 'e2e', '-p', 'atomic-server']
+      : release
+        ? ['cargo', 'build', '--release', '-p', 'atomic-server']
+        : ['cargo', 'build', '-p', 'atomic-server'];
 
     // ⚠️ PRODUCTION IMPACT, not just CI plumbing (2026-07-02): this
     // function backs BOTH the e2e test server (atomicService) AND the real
@@ -771,12 +1042,29 @@ export class AtomicServer {
     // Same fix as `rustChecksContainer`'s clippy/test path and
     // `rustBuildSlim`'s glibc path (different symptom there — ABI mismatch,
     // not a missing binary — same root cause).
+    //
+    // E2E exception: `plugin.spec.ts` needs `wasm-plugins` so the test
+    // plugin's `after_commit` can rename folders. `light` is https-only and
+    // silently makes that assertion hang until timeout. Defaults minus
+    // `vector-search` (the ort/musl gap above) is enough — wasmtime builds
+    // fine on this musl-cross image.
     if (target.includes('musl')) {
-      buildArgs.push('--no-default-features', '--features', 'light');
+      if (e2e) {
+        buildArgs.push(
+          '--no-default-features',
+          '--features',
+          'https,wasm-plugins',
+        );
+      } else {
+        buildArgs.push('--no-default-features', '--features', 'light');
+      }
     }
-    const targetPath = release
-      ? `/code/target/${target}/release/atomic-server`
-      : `/code/target/${target}/debug/atomic-server`;
+    // A named profile lands in `target/<triple>/<profile>/`, not `release/`.
+    const targetPath = e2e
+      ? `/code/target/${target}/e2e/atomic-server`
+      : release
+        ? `/code/target/${target}/release/atomic-server`
+        : `/code/target/${target}/debug/atomic-server`;
 
     return (
       containerWithAssets
@@ -813,24 +1101,26 @@ export class AtomicServer {
    */
   private rustChecksContainer(): Container {
     const source = this.source;
-    const cargoCache = dag.cacheVolume('cargo');
     const image = TARGET_IMAGE_MAP['x86_64-unknown-linux-musl'];
 
+    // musl-cross: CARGO_HOME=/root/.cargo (NOT /usr/local/cargo). Mounting
+    // the bookworm path here was a silent miss — every CI run re-ran
+    // `Downloading crates ...` for nextest/clippy/fmt.
     return (
-      dag
-        .container()
-        .from(image)
-        .withExec(['apt-get', 'update', '-qq'])
-        // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
-        // build script (a transitive dep via the vector-search feature) —
-        // without it `cargo fetch`-triggered builds under this container
-        // (nextest, clippy) fail with "Could not find `protoc`". Matches
-        // `rustBuild()`'s apt list; this container split off from it later
-        // and the package was missed.
-        .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler'])
-        .withMountedCache('/usr/local/cargo/registry', cargoCache, {
-          sharing: CacheSharingMode.Locked,
-        })
+      this.withCargoHomeCache(
+        dag
+          .container()
+          .from(image)
+          .withExec(['apt-get', 'update', '-qq'])
+          // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
+          // build script (a transitive dep via the vector-search feature) —
+          // without it `cargo fetch`-triggered builds under this container
+          // (nextest, clippy) fail with "Could not find `protoc`". Matches
+          // `rustBuild()`'s apt list; this container split off from it later
+          // and the package was missed.
+          .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler']),
+        CARGO_HOME_MUSL,
+      )
         .withExec(['rustup', 'component', 'add', 'clippy'])
         .withExec(['rustup', 'component', 'add', 'rustfmt'])
         .withFile('/code/Cargo.toml', source.file('Cargo.toml'))
@@ -880,20 +1170,20 @@ export class AtomicServer {
   rustTest(): Promise<string> {
     return (
       this.rustChecksContainer()
-        // Install nextest from a prebuilt tarball — the `cargo install`
-        // path fails on the musl-cross image. The `linux-musl` URL is
-        // required: the default `linux` artifact is the glibc binary,
-        // which silently exits 1 on the musl-cross container (cargo
-        // then reports "no such command: nextest" because the
-        // subcommand returned nonzero). Place the binary in
-        // `$CARGO_HOME/bin` (resolved at runtime — the rust-musl-cross
-        // image puts it under /root/.cargo, the official rust:bookworm
-        // under /usr/local/cargo).
-        .withExec([
-          'sh',
-          '-c',
-          'BIN_DIR="${CARGO_HOME:-$HOME/.cargo}/bin" && mkdir -p "$BIN_DIR" && curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR" && "$BIN_DIR/cargo-nextest" --version',
-        ])
+        // Persist nextest in the shared cargo-bin volume. Previously the
+        // curl install sat *after* the source mount, so every Rust source
+        // change re-downloaded it. The `linux-musl` URL is required: the
+        // default `linux` artifact is glibc and silently exits 1 on the
+        // musl-cross image. Bundle install + run so a cleared volume
+        // can't leave nextest missing on a dagger layer-cache hit.
+        //
+        // Prepend to PATH in-shell — do NOT replace the container PATH.
+        // The musl-cross image needs `/usr/local/musl/bin` (for
+        // `x86_64-unknown-linux-musl-gcc`); a hardcoded PATH drop caused
+        // "linker not found" while compiling plugin-example tests.
+        .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
+          sharing: CacheSharingMode.Shared,
+        })
         // `--exclude atomic-server-tauri`: same reason as `rustClippy` —
         // the Tauri desktop crate needs system libs (glib-2.0, pkg-config)
         // that aren't installed in the musl-cross CI image.
@@ -909,27 +1199,21 @@ export class AtomicServer {
         // scope only strips `atomic-server`'s own defaults — other members
         // don't define a `light` feature and are unaffected.
         //
-        // `--build-jobs 2`: this workspace produces a lot of large,
-        // `-static-pie`-linked musl test binaries (one per integration
-        // test file). Left at nextest's default (num-cpus), several link
-        // concurrently and the linker gets OOM-killed (`ld terminated
-        // with signal 9`) partway through — observed locally even with
-        // 15GB available to the Docker VM. Capping build (link)
-        // concurrency avoids the spike; doesn't affect `--test-threads`
-        // (runtime test parallelism), only how many rustc/link jobs run
-        // at once during compilation.
+        // `--build-jobs` / `--test-threads` / `--retries`: from
+        // `--host-profile` (mancave hot / hosted quiet). The toml still
+        // caps `it` at 2 and serializes `iroh_pairing::*`.
         .withExec([
-          'cargo',
-          'nextest',
-          'run',
-          '--workspace',
-          '--exclude',
-          'atomic-server-tauri',
-          '--no-default-features',
-          '--features',
-          'light',
-          '--build-jobs',
-          '2',
+          'sh',
+          '-c',
+          'export PATH="/opt/cargo-bin/bin:$PATH" && ' +
+            'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
+            'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
+            'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
+            'cargo nextest run --workspace --exclude atomic-server-tauri ' +
+            '--no-default-features --features light ' +
+            `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +
+            `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
+            `--retries ${this.hostKnobs.nextestRetries}`,
         ])
         .stdout()
     );
@@ -1055,7 +1339,12 @@ export class AtomicServer {
     return dag
       .container()
       .from(`mcr.microsoft.com/playwright:${PLAYWRIGHT_VERSION}`)
-      .withExec(['npm', 'install', '-g', 'playwright@1.58.2'])
+      .withExec([
+        'npm',
+        'install',
+        '-g',
+        `playwright@${PLAYWRIGHT_PACKAGE_VERSION}`,
+      ])
       .withExec(['npx', 'playwright', 'install', 'chromium'])
       .withServiceBinding('atomic', this.atomicService(true))
       .withNewFile(
@@ -1124,8 +1413,14 @@ export class AtomicServer {
   @func()
   /** Returns a Service running atomic-server for use in tests */
   atomicService(@argument() e2e: boolean = false): Service {
+    // E2E builds with the `e2e` cargo profile (workspace Cargo.toml): a debug
+    // server costs ~7x per commit round-trip, and four of them run alongside
+    // eight browsers, so the slowness lands as timing failures. Full
+    // `--release` was reverted once for 15-30 min of cold compile; the `e2e`
+    // profile drops LTO and the single codegen unit, which is where that time
+    // went. Deploy still goes through `rustBuildRelease` (release=true).
     const atomicServerBinary = this.rustBuild(
-      true,
+      !e2e,
       'x86_64-unknown-linux-musl',
       e2e,
     ).file('/atomic-server-binary');
@@ -1149,40 +1444,50 @@ export class AtomicServer {
     );
   }
 
-  @func()
-  async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
+  /**
+   * Shared Playwright + workspace install for e2e shards. No service binding
+   * and no test run yet — each shard forks from this and binds its own
+   * `atomicService` so 4 servers don't share state.
+   */
+  private e2eBaseContainer(): Container {
+    // Workspace deps only — SPA assets come from `atomicService(true)` →
+    // `rustBuild(..., e2e=true)` → `jsBuild(true)`.
     const browserContainer = this.jsBuild();
 
-    // Setup Playwright container - debug and fix package manager
+    // Reuses the npm-global volume so `netlify-cli` isn't re-downloaded when
+    // docs deploy already warmed it.
     const playwrightContainer = dag
       .container()
       .from(`mcr.microsoft.com/playwright:${PLAYWRIGHT_VERSION}`)
+      .withMountedCache('/opt/npm-global', dag.cacheVolume('npm-global'))
+      .withMountedCache('/root/.npm', dag.cacheVolume('npm-cache'))
+      .withEnvVariable('NPM_CONFIG_PREFIX', '/opt/npm-global')
+      .withEnvVariable(
+        'PATH',
+        '/root/.local/share/pnpm:/opt/npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+      )
       .withExec([
         '/bin/sh',
         '-c',
-        'curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=10.15.1 ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && export PATH=/root/.local/share/pnpm:$PATH && /bin/apt update && /bin/apt install -y zip',
-      ])
-      .withEnvVariable(
-        'PATH',
-        '/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-      )
-      // .withExec(['pnpm', 'dlx', 'playwright', 'install', '--with-deps'])
-      .withExec(['npm', 'install', '-g', 'netlify-cli']);
+        'curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=10.15.1 ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && ' +
+          'export PATH=/root/.local/share/pnpm:/opt/npm-global/bin:$PATH && ' +
+          '/bin/apt update && /bin/apt install -y zip && ' +
+          'if [ ! -x /opt/npm-global/bin/netlify ]; then npm install -g netlify-cli --quiet; fi && netlify --version',
+      ]);
 
-    // Setup e2e test environment
-    // Bug fix (2026-07-02): `pnpm install` used to run right after mounting
-    // only `/app/e2e`, before the rest of the pnpm workspace (root
-    // package.json/pnpm-workspace.yaml, and the sibling `lib`/`cli`/etc.
-    // packages `@tomic/lib` et al. resolve against via the `workspace:*`
-    // protocol) was mounted at all — `pnpm install` failed outright with
-    // `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`. This path had never actually been
-    // exercised before (every prior CI run failed earlier in the pipeline),
-    // so the bug was latent. Fix: mount the full workspace context — root
-    // manifest files (borrowed from `browserContainer`, i.e. `jsBuild()`'s
-    // already-fully-installed container, for consistency) and every sibling
-    // package — before running `pnpm install`, not after.
-    const e2eContainer = playwrightContainer
+    // Bug fix (2026-07-02): mount the full pnpm workspace before
+    // `pnpm install` — see git history for ERR_PNPM_WORKSPACE_PKG_NOT_FOUND.
+    return playwrightContainer
       .withEnvVariable('CI', 'true')
+      // Host-profile knobs — see HOST_PROFILES / `--host-profile`.
+      .withEnvVariable(
+        'PLAYWRIGHT_WORKERS',
+        this.hostKnobs.e2ePlaywrightWorkers,
+      )
+      .withEnvVariable(
+        'PLAYWRIGHT_RETRIES',
+        this.hostKnobs.e2ePlaywrightRetries,
+      )
       .withFile('/app/package.json', browserContainer.file('/app/package.json'))
       .withFile(
         '/app/pnpm-lock.yaml',
@@ -1214,60 +1519,152 @@ export class AtomicServer {
         browserContainer.directory('/app/node_modules'),
       )
       .withWorkdir('/app/e2e')
+      .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
+      .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
       .withExec(['pnpm', 'install'])
+      // No browser cache volume: the image already carries the builds this
+      // Playwright wants (see PLAYWRIGHT_VERSION), so this verifies them and
+      // exits. Mounting a volume over `~/.cache/ms-playwright` did nothing —
+      // the image points `PLAYWRIGHT_BROWSERS_PATH` at `/ms-playwright`.
       .withExec(['pnpm', 'exec', 'playwright', 'install'])
       .withEnvVariable('LANGUAGE', 'en_GB')
-      // The browser hits a `*.localhost` URL so chromium considers it a
-      // secure context (required for `crypto.subtle` → WASM ClientDb init).
-      // The host-resolver rule below tells chromium to route that hostname
-      // to the dagger `atomic` service binding, since chromium otherwise
-      // hardcodes `*.localhost` to 127.0.0.1.
       .withEnvVariable('FRONTEND_URL', `http://atomic.localhost:9883`)
       .withEnvVariable('SERVER_URL', `http://atomic.localhost:9883`)
+      .withEnvVariable(
+        'ATOMIC_SERVICE_URL',
+        `http://${ATOMIC_DOMAIN}:9883`,
+      )
       .withEnvVariable(
         'ATOMIC_TEST_HOST_MAP',
         `MAP atomic.localhost ${ATOMIC_DOMAIN}`,
       )
-      .withServiceBinding('atomic', this.atomicService(true))
       .withDirectory(
         '/app/e2e/tests',
         this.source.directory('browser/e2e/tests'),
-      )
-      // Wait for the server to be ready
+      );
+  }
+
+  /** One Playwright shard against its own atomic-server service. */
+  private e2eShardContainer(base: Container, shardIndex: number): Container {
+    return base
+      .withServiceBinding('atomic', this.atomicService(true))
       .withExec([
         'sh',
         '-c',
-        `for i in $(seq 1 10); do curl http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
+        `for i in $(seq 1 30); do curl -fsS http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
       ])
-      // Test the server is running
       .withExec([
         '/bin/bash',
         '-c',
-        'set -o pipefail; pnpm run test-e2e 2>&1 | tee /test-output.log; echo ${PIPESTATUS[0]} > /test-exit-code; exit 0',
+        'set -o pipefail; ' +
+          `pnpm exec playwright test --config=./playwright.config.ts --shard=${shardIndex}/${this.hostKnobs.e2eShardCount} 2>&1 | tee /test-output.log; ` +
+          'echo ${PIPESTATUS[0]} > /test-exit-code; exit 0',
       ]);
+  }
 
-    // Extract the test results directory and upload to Netlify
-    const testReportDirectory = e2eContainer.directory('playwright-report');
-    const testOutput = await e2eContainer.file('/test-output.log').contents();
-    const deployOutput = await this.netlifyDeploy(
-      testReportDirectory,
-      'atomic-tests',
-      netlifyAuthToken,
+  @func()
+  async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
+    // Shards × own atomic-server. Count comes from `--host-profile`
+    // (Mancave hot / hosted conservative). Dagger dedupes the shared
+    // debug `rustBuild(e2e)` / base-container graph.
+    const shardCount = this.hostKnobs.e2eShardCount;
+    const base = this.e2eBaseContainer();
+    const shardIndexes = Array.from({ length: shardCount }, (_, i) => i + 1);
+    const shardContainers = shardIndexes.map(i =>
+      this.e2eShardContainer(base, i),
     );
 
-    // Extract the deploy URL
-    const deployUrl = this.extractDeployUrl(deployOutput);
+    const results = await Promise.all(
+      shardContainers.map(async (container, idx) => {
+        const shard = idx + 1;
+        const [exitCode, testOutput] = await Promise.all([
+          container.file('/test-exit-code').contents(),
+          container.file('/test-output.log').contents(),
+        ]);
 
-    // Check the test exit code and fail if tests failed
-    const exitCode = await e2eContainer.file('/test-exit-code').contents();
+        return {
+          shard,
+          exitCode: exitCode.trim(),
+          testOutput,
+          report: container.directory('playwright-report'),
+          // Traces, screenshots and `error-context.md` per failed test. The
+          // 20k-char log tail below says WHICH assertion failed; this is the
+          // only thing that says why.
+          testResults: container.directory('test-results'),
+        };
+      }),
+    );
 
-    if (exitCode.trim() !== '0') {
-      throw new Error(
-        `E2E tests failed (exit code: ${exitCode.trim()}). Test report deployed to: \n${deployUrl}\n\n===== TEST OUTPUT (tail) =====\n${testOutput.slice(-60000)}\n===== END TEST OUTPUT =====`,
+    const failed = results.filter(r => r.exitCode !== '0');
+    const reportUrls: string[] = [];
+
+    // Deploy reports sequentially — concurrent `netlify deploy` to the same
+    // site races. Prefer failed shards so the error message has a URL.
+    const toDeploy = failed.length > 0 ? failed : results.slice(0, 1);
+
+    for (const r of toDeploy) {
+      const deployOutput = await this.netlifyDeploy(
+        r.report,
+        'atomic-tests',
+        netlifyAuthToken,
+      );
+      reportUrls.push(
+        `shard ${r.shard}/${shardCount}: ${this.extractDeployUrl(deployOutput)}`,
       );
     }
 
-    return deployUrl;
+    if (failed.length > 0) {
+      const tails = failed
+        .map(
+          r =>
+            `===== SHARD ${r.shard}/${shardCount} (exit ${r.exitCode}) =====\n${r.testOutput.slice(-20000)}`,
+        )
+        .join('\n\n');
+      const contexts = (await Promise.all(failed.map(r => this.errorContexts(r))))
+        .filter(Boolean)
+        .join('\n\n');
+      throw new Error(
+        `E2E tests failed on ${failed.length}/${shardCount} shard(s).\n` +
+          `Reports:\n${reportUrls.join('\n')}\n\n${tails}` +
+          (contexts ? `\n\n${contexts}` : ''),
+      );
+    }
+
+    return reportUrls.join('\n') || 'e2e ok (no report URL)';
+  }
+
+  /**
+   * The page snapshot Playwright writes beside each failed test.
+   *
+   * The stdout tail says which assertion failed; this says what the page
+   * actually was at that moment, which is the difference between diagnosing a
+   * CI-only failure and guessing at it. Reports go to netlify and nowhere
+   * else, and `NETLIFY_TOKEN` is empty on this pipeline, so without this the
+   * snapshots are simply discarded when the run ends.
+   *
+   * Capped per file and per shard: this lands in a CI log, and a trace dump
+   * nobody scrolls through is no more useful than no trace at all.
+   */
+  private async errorContexts(r: {
+    shard: number;
+    testResults: Directory;
+  }): Promise<string> {
+    try {
+      const paths = await r.testResults.glob('**/error-context.md');
+      const bodies = await Promise.all(
+        paths.slice(0, 12).map(async path => {
+          const body = await r.testResults.file(path).contents();
+
+          return `--- ${path} ---\n${condenseErrorContext(body)}`;
+        }),
+      );
+
+      return bodies.length
+        ? `===== SHARD ${r.shard} PAGE SNAPSHOTS =====\n${bodies.join('\n\n')}`
+        : '';
+    } catch (e) {
+      return `===== SHARD ${r.shard}: could not read error contexts: ${e} =====`;
+    }
   }
 
   @func()
@@ -1387,9 +1784,12 @@ VOLUME /atomic-storage
     );
 
     return (
-      dag
-        .container({ platform })
-        .build(dir)
+      dir
+        // `Container.build` was removed in the SDK that came with the v0.21
+        // engine bump — the Dockerfile build now hangs off the Directory.
+        // Branch CI never runs this function (publish is develop-only), so
+        // the bump's break only surfaced on the first develop run after it.
+        .dockerBuild({ platform })
         // .from(innerImage)
         .withFile('/usr/local/bin/atomic-server', binary)
         .withExec(['chmod', '+x', '/usr/local/bin/atomic-server'])
@@ -1418,9 +1818,18 @@ VOLUME /atomic-storage
       .filter(target => target !== firstImageArchitecture)
       .map(target => this.createDockerImage(target));
 
-    // Publish the multi-platform image with all variants
+    // Publish the multi-platform image with all variants.
+    //
+    // `docker/metadata-action` (the CI caller) outputs FULL references —
+    // `joepmeneer/atomic-server:develop` — and prefixing those again produced
+    // `joepmeneer/atomic-server:joepmeneer/atomic-server:develop`, which the
+    // registry rejects as "invalid reference format". Every develop publish
+    // since the tags became a list failed on it. Bare tag names (manual
+    // `dagger call create-docker-images --tags latest`) keep working via the
+    // prefix.
     for (const tag of tags) {
-      await firstImage.publish(`joepmeneer/atomic-server:${tag}`, {
+      const ref = tag.includes('/') ? tag : `joepmeneer/atomic-server:${tag}`;
+      await firstImage.publish(ref, {
         platformVariants: otherVariants,
       });
     }

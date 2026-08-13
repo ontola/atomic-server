@@ -1,10 +1,33 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import {
   newResource,
   before,
+  createTableFromDialog,
   inDialog,
+  reloadGrid,
+  waitForTableBuild,
   REBUILD_INDEX_TIME,
 } from './test-utils';
+
+/**
+ * Creates a blank table from the drive page's quick-create button and leaves
+ * the caller on its grid, out of the title's edit mode and ready to type.
+ */
+async function createBlankTable(page: Page, name: string) {
+  await page.getByTitle('New Table').first().click();
+  await page.getByPlaceholder('New Table').fill(name);
+  await page.locator('dialog[open] button:has-text("Create")').click();
+  // The dialog carries the wait: it closes once the table exists and the app
+  // has navigated to it, so nothing below races the create.
+  await waitForTableBuild(page);
+  // EditableTitle auto-enters edit mode on creation (renders an input); when
+  // not editing it renders an h1. Match either form by test-id.
+  await expect(page.getByTestId('editable-title').first()).toBeVisible();
+  // Exit edit mode so subsequent keyboard actions (Tab to move into the grid)
+  // don't get swallowed by the title input.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('gridcell').first()).toBeVisible();
+}
 
 type Row = {
   name: string;
@@ -133,12 +156,9 @@ test.describe('tables', async () => {
     };
 
     // --- Test Start ---
-    await newResource('table', page);
-
     // Name table (pre-filled with "table", replace it)
     const tableName = 'Made up music genres';
-    await page.getByPlaceholder('New Table').fill(tableName);
-    await page.locator('dialog[open] button:has-text("Create")').click();
+    await createTableFromDialog(page, { name: tableName });
     // Newly-created resources auto-enter edit mode, so the title renders as
     // an input. Match either form.
     await expect(
@@ -212,7 +232,7 @@ test.describe('tables', async () => {
     // connections (commit subscriptions, the open WS, etc.). The dirty
     // queue is the actual saved-to-server signal.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -252,9 +272,13 @@ test.describe('tables', async () => {
     // `activeCell` + `CursorMode.Visual`, the precondition for Enter → Edit).
     // fillRow owns all positioning — clicking an already-active cell enters
     // edit mode instead of just focusing it, so we must not pre-click here.
+    // 30s, not the 10s default: the first data row renders after the new
+    // columns' commits clear the ClientDb worker queue, which under a loaded
+    // runner sits behind seconds of index-rebuilding writes (same measured
+    // budget as the rest of the totals/tables family).
     await expect(
       page.locator('[aria-rowindex="2"] > [aria-colindex="2"]'),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
     await page.waitForTimeout(1000);
 
     for (const [index, row] of rows.entries()) {
@@ -304,29 +328,9 @@ test.describe('tables', async () => {
   test('fast row entry - rapidly adding rows with Enter', async ({ page }) => {
     test.slow();
     // Use the quick-create "New Table" button on the drive page directly.
-    await page.getByTitle('New Table').first().click();
+    await createBlankTable(page, 'Fast Entry Test');
 
-    await page.getByPlaceholder('New Table').fill('Fast Entry Test');
-    await page.locator('dialog[open] button:has-text("Create")').click();
-    // Wait for navigation away from the drive page — the dialog's
-    // createResourceAndNavigate is async and slower than the default 5s assert.
-    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
-      timeout: 15000,
-    });
-    // EditableTitle auto-enters edit mode on creation (renders an input);
-    // when not editing it renders an h1. Match either form by test-id.
-    await expect(page.getByTestId('editable-title').first()).toBeVisible({
-      timeout: 15000,
-    });
-    // Exit edit mode so subsequent keyboard actions (Tab to move into the
-    // grid) don't get swallowed by the title input.
-    await page.keyboard.press('Escape');
-
-    // Wait for the table grid to be ready before clicking. Under suite-wide
-    // load the row-virtualizer mounts more slowly than the default 5s click
-    // timeout, so wait for the first gridcell explicitly.
     const firstCell = page.getByRole('gridcell').first();
-    await expect(firstCell).toBeVisible({ timeout: 15000 });
 
     // Click first cell to focus the table
     await firstCell.click({ force: true });
@@ -368,11 +372,32 @@ test.describe('tables', async () => {
     // Exit edit mode
     await page.keyboard.press('Escape');
 
-    // Wait for all debounced saves to drain into the server.
+    // Wait for the two things the reload below actually depends on, rather
+    // than for the aggregate counter to happen to reach zero.
+    //
+    // A row keeps a `_new:` subject until its materialize timer fires: it
+    // exists in this tab and nowhere else, so the count above being right
+    // says nothing about whether it would survive. And a materialized row
+    // still has to reach the server. Assert both directly.
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
+      expected => {
+        const NAME = 'https://atomicdata.dev/properties/name';
+        const rows = Array.from(
+          window.store.resources?.values?.() ?? [],
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ).filter((r: any) => /^row\d+$/.test(r.get?.(NAME) ?? ''));
+
+        if (rows.length !== expected) return false;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (rows.some((r: any) => String(r.subject).startsWith('_new:'))) {
+          return false;
+        }
+
+        return window.store.getSyncStatus().pendingDirtyCount === 0;
+      },
+      values.length,
+      { timeout: 15_000 },
     );
 
     // Spot-check the bottom of the list is rendered (the active cell stayed in
@@ -386,12 +411,24 @@ test.describe('tables', async () => {
     // Refresh and verify the rows persisted. The collection is virtualized, so
     // assert the loaded member count, then spot-check the first row (scroll to
     // top) and the last row (scroll to bottom).
-    await page.reload();
+    //
+    // `reloadGrid`, not a bare `page.reload()`: forty rows just went through
+    // materialize timers, outbox drains and OPFS persists, and a reload that
+    // does not wait for materialization + the durability flush rolls the tail
+    // of that work back (the CI-only "row40 missing after refresh").
+    await reloadGrid(page);
     await expect(page.getByTestId('editable-title').first()).toBeVisible();
     await page.waitForTimeout(REBUILD_INDEX_TIME);
 
-    await expect.poll(namedRowCount, { timeout: 15000 }).toBe(values.length);
+    // 30s, not the default: the post-reload re-drain queues forty rows of
+    // writes ahead of the member query in the ClientDb worker, and on a
+    // loaded runner that queue takes 15s+ to drain (measured ~18.5s in the
+    // instrumented CI runs). Tracked as the OPFS write-amplification issue —
+    // when write count drops, this budget can too.
+    await expect.poll(namedRowCount, { timeout: 30000 }).toBe(values.length);
 
+    // Same 30s budget as the count poll above, for the same reason: the
+    // spot-checked rows render from hydrations queued behind the re-drain.
     const grid = page.getByRole('grid');
     await grid.evaluate(g => g.scrollIntoView({ block: 'start' }));
     await page.mouse.move(600, 300);
@@ -399,30 +436,20 @@ test.describe('tables', async () => {
     await expect(
       page.getByRole('gridcell', { name: 'row1', exact: true }),
       'First row should be visible after refresh',
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
 
     await page.mouse.wheel(0, 5000); // scroll to bottom
     await expect(
       page.getByRole('gridcell', { name: last, exact: true }),
       `Last row "${last}" should be visible after refresh`,
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
   });
 
   test('sorting reorders freshly-entered (virtual) rows', async ({ page }) => {
     test.slow();
-    await page.getByTitle('New Table').first().click();
-    await page.getByPlaceholder('New Table').fill('Sort Test');
-    await page.locator('dialog[open] button:has-text("Create")').click();
-    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
-      timeout: 15000,
-    });
-    await expect(page.getByTestId('editable-title').first()).toBeVisible({
-      timeout: 15000,
-    });
-    await page.keyboard.press('Escape');
+    await createBlankTable(page, 'Sort Test');
 
     const firstCell = page.getByRole('gridcell').first();
-    await expect(firstCell).toBeVisible({ timeout: 15000 });
     await firstCell.click({ force: true });
     await page.waitForTimeout(300);
 
@@ -436,7 +463,7 @@ test.describe('tables', async () => {
 
     await page.keyboard.press('Escape');
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -467,19 +494,9 @@ test.describe('tables', async () => {
 
   test('Shift+Enter inserts a row below the current row', async ({ page }) => {
     test.slow();
-    await page.getByTitle('New Table').first().click();
-    await page.getByPlaceholder('New Table').fill('Insert Below Test');
-    await page.locator('dialog[open] button:has-text("Create")').click();
-    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
-      timeout: 15000,
-    });
-    await expect(page.getByTestId('editable-title').first()).toBeVisible({
-      timeout: 15000,
-    });
-    await page.keyboard.press('Escape');
+    await createBlankTable(page, 'Insert Below Test');
 
     const firstCell = page.getByRole('gridcell').first();
-    await expect(firstCell).toBeVisible({ timeout: 15000 });
     await firstCell.click({ force: true });
     await page.waitForTimeout(300);
 
@@ -493,7 +510,7 @@ test.describe('tables', async () => {
 
     await page.keyboard.press('Escape');
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -524,7 +541,7 @@ test.describe('tables', async () => {
     await page.keyboard.press('Escape');
 
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );
@@ -555,19 +572,9 @@ test.describe('tables', async () => {
     page,
   }) => {
     test.slow();
-    await page.getByTitle('New Table').first().click();
-    await page.getByPlaceholder('New Table').fill('Insert Session Test');
-    await page.locator('dialog[open] button:has-text("Create")').click();
-    await page.waitForURL(url => url.pathname.startsWith('/app/show'), {
-      timeout: 15000,
-    });
-    await expect(page.getByTestId('editable-title').first()).toBeVisible({
-      timeout: 15000,
-    });
-    await page.keyboard.press('Escape');
+    await createBlankTable(page, 'Insert Session Test');
 
     const firstCell = page.getByRole('gridcell').first();
-    await expect(firstCell).toBeVisible({ timeout: 15000 });
     await firstCell.click({ force: true });
     await page.waitForTimeout(300);
 
@@ -603,7 +610,7 @@ test.describe('tables', async () => {
     await page.keyboard.press('Escape');
 
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
       undefined,
       { timeout: 10000 },
     );

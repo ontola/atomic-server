@@ -70,6 +70,17 @@ Assure, NGI0 Entrust and NGI0 Commons funds, with financial support from the Eur
 of why the project is MIT licensed and has no proprietary core.
 [Details and grant agreement numbers](https://docs.atomicdata.dev/acknowledgements.html).
 
+## Licence and trademarks
+
+The code is [MIT licensed](./LICENSE) — fork it, modify it, sell it.
+
+The Atomic **names and logos** are not covered by that grant; they are
+reserved. Trademark is what lets the code stay permissively licensed, so a
+fork can do anything except present itself as the official Atomic Server. See
+[TRADEMARKS.md](./TRADEMARKS.md) for the policy and [brand/](./brand/) for the
+artwork, which is the single source of truth for every icon across all the
+Atomic apps.
+
 [documentation]:https://docs.atomicdata.dev/atomicserver/installation
 
 [discord-badge]: https://img.shields.io/discord/723588174747533393.svg?logo=discord

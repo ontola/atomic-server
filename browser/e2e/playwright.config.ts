@@ -34,6 +34,12 @@ const config: PlaywrightTestConfig = {
           origin: 'http://atomic:9883',
           localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
         },
+        {
+          // Dagger e2e FRONTEND_URL — chromium treats `*.localhost` as a
+          // secure context (needed for WASM ClientDb / crypto.subtle).
+          origin: 'http://atomic.localhost:9883',
+          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
+        },
       ],
     },
   },
@@ -47,13 +53,15 @@ const config: PlaywrightTestConfig = {
       },
     ],
   ],
-  // Up to 2 retries on CI — the dagger container has noticeably less
-  // CPU than a dev laptop, and the shared atomic-server occasionally
-  // surfaces transient WS / search-index / multi-context-sync races
-  // that don't reproduce serially. Two retries (3 attempts total)
-  // catches genuinely flaky paths without hiding real regressions:
-  // a regression fails three times. Matches nextest's `retries = 2`.
-  retries: process.env.CI ? 2 : 0,
+  // CI retries: default 1 (was 2 — triple runtime on flakes dominated the
+  // ~50 min e2e budget). Override with PLAYWRIGHT_RETRIES. Dagger Main sets
+  // it explicitly; hosted/local CI without the env still get 1.
+  retries:
+    process.env.PLAYWRIGHT_RETRIES !== undefined
+      ? Number(process.env.PLAYWRIGHT_RETRIES)
+      : process.env.CI
+        ? 1
+        : 0,
   // Per-test budget — not a race-prevention timeout. Playwright's
   // default is 30s; some tests (chatroom invite flow, share menu,
   // tables) legitimately run 25–35s when the shared atomic-server is
@@ -128,19 +136,14 @@ const config: PlaywrightTestConfig = {
       : []),
   ],
   fullyParallel: true,
-  // 2 workers for speed. CI defaults to 1 worker + retries=2; locally we
-  // prefer the speed and depend on the tests themselves to be robust
-  // against the contention storms the shared atomic-server produces.
+  // Worker count:
+  // - local (no CI): 2
+  // - CI without override: 1 (safe for 2-vCPU hosted runners)
+  // - dagger Main on Mancave (12c/64GB WSL): PLAYWRIGHT_WORKERS=3 per
+  //   shard, 4 shards in `.dagger/src/index.ts` (≈12 browsers total)
   //
-  // PLAYWRIGHT_WORKERS overrides both. The CI default of 1 was chosen for
-  // GitHub-hosted runners, which have 2 vCPUs -- a self-hosted machine with
-  // real cores is being wasted at one worker. Raise it there rather than
-  // changing the default, because the limit is contention on the SHARED
-  // atomic-server, not CPU alone: more workers means more of the WS,
-  // search-index and multi-context-sync races the retries above exist to
-  // absorb, and `retries: 2` would quietly convert them into slow passes.
-  // Start at 2 (what local dev already survives) and only go higher with
-  // the trace to show it is actually the long pole.
+  // Per-shard limit is contention on that shard's atomic-server. Raise
+  // via the env var rather than changing the hosted-runner default.
   workers: process.env.PLAYWRIGHT_WORKERS
     ? Number(process.env.PLAYWRIGHT_WORKERS)
     : process.env.CI

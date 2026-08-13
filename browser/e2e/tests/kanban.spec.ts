@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { before, newResource } from './test-utils';
+import { before, createTableFromDialog, reloadReconnected } from './test-utils';
 
 /**
  * Drag `source` onto `target` in a way that satisfies @dnd-kit's MouseSensor,
@@ -84,10 +84,7 @@ const cardIn = (col: Locator, title: string) =>
 
 /** Creates an Issue Tracker table and lands on its kanban board. */
 async function createIssueTracker(page: Page, name: string) {
-  await newResource('table', page);
-  await page.getByRole('button', { name: /Issue Tracker/ }).click();
-  await page.getByPlaceholder('New Table').fill(name);
-  await page.getByRole('button', { name: 'Create' }).click();
+  await createTableFromDialog(page, { template: /Issue Tracker/, name });
   await expect(page.getByTestId('kanban-board')).toBeVisible();
 }
 
@@ -185,8 +182,10 @@ test.describe('kanban', () => {
     await expect(cardIn(todo, 'Login button misaligned')).toHaveCount(0);
 
     // Survives a reload (the status change was persisted to the resource).
-    await page.reload();
-    await expect(page.getByTestId('kanban-board')).toBeVisible();
+    await reloadReconnected(page);
+    await expect(page.getByTestId('kanban-board')).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(
       column(page, 'doing').getByTestId('kanban-card').filter({
         hasText: 'Login button misaligned',
@@ -230,8 +229,10 @@ test.describe('kanban', () => {
     await titleInput.press('Enter');
 
     await expect(cardIn(todo, 'New title')).toBeVisible();
-    await page.reload();
-    await expect(page.getByTestId('kanban-board')).toBeVisible();
+    await reloadReconnected(page);
+    await expect(page.getByTestId('kanban-board')).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(cardIn(column(page, 'todo'), 'New title')).toBeVisible();
   });
 

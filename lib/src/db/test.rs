@@ -6,6 +6,13 @@ use ntest::timeout;
 use std::sync::Mutex;
 use tokio::sync::OnceCell;
 
+// `#[timeout(120000)]` below: under dagger Main, nextest runs beside e2e
+// Chromium shards and heavy `atomic-server::it` servers. `Db::init_temp` +
+// `populate` that finish in a couple of seconds locally routinely sit
+// near/past 30s on a contended Mancave run — which used to fail-fast the
+// rest of the suite. 120s is the wedged-test ceiling, not the expected
+// runtime. (`ntest::timeout` only accepts an integer literal.)
+
 static DB: OnceCell<Mutex<Db>> = OnceCell::const_new();
 
 /// Share the Db instance between tests. Otherwise, all tests try to init the same location on disk and throw errors.
@@ -21,7 +28,7 @@ pub async fn get_shared_db() -> &'static Mutex<Db> {
 }
 
 #[tokio::test]
-#[timeout(30000)]
+#[timeout(120000)]
 async fn basic() {
     let store = get_shared_db().await.lock().unwrap().clone();
     // We can create a new Resource, linked to the store.
@@ -1535,7 +1542,7 @@ async fn loro_non_property_container_survives_commit_roundtrip() {
 /// `Tree::LoroSnapshots`, and the subject must be tombstoned so bulk sync
 /// does not resurrect it.
 #[tokio::test]
-#[timeout(30000)]
+#[timeout(120000)]
 async fn remove_resource_deletes_loro_snapshot() {
     let store = Db::init_temp("orphan_snapshot").await.unwrap();
     let drive = store.create_drive("test-drive").await.unwrap();
@@ -1580,7 +1587,7 @@ async fn remove_resource_deletes_loro_snapshot() {
 /// snapshot — it is keyed by `pure_id()`. Regression test for the mis-keyed
 /// `apply_destroy` snapshot removal.
 #[tokio::test]
-#[timeout(30000)]
+#[timeout(120000)]
 async fn remove_resource_with_drive_hint_subject_deletes_snapshot() {
     let store = Db::init_temp("orphan_snapshot_hint").await.unwrap();
     let drive = store.create_drive("test-drive").await.unwrap();
@@ -1626,7 +1633,7 @@ async fn remove_resource_with_drive_hint_subject_deletes_snapshot() {
 /// carries a `loroUpdate` propval — and the `Tree::Resources` blob is a pure
 /// projection with no `loroUpdate`.
 #[tokio::test]
-#[timeout(30000)]
+#[timeout(120000)]
 async fn add_resource_opts_always_writes_loro_snapshot() {
     let store = Db::init_temp("add_resource_snapshot").await.unwrap();
 
@@ -1703,8 +1710,11 @@ async fn add_resource_opts_always_writes_loro_snapshot() {
 /// Note this test would pass against the old code too: with no DID resolver
 /// reachable, the fetch fails fast instead of hanging. It pins the predicate,
 /// not the latency — the hang only reproduces where resolution can stall.
+///
+/// Timeout is 120s (was 10s, then 30s): see the file-level note on
+/// `#[timeout(120000)]`. The predicate itself is instant.
 #[tokio::test]
-#[timeout(10000)]
+#[timeout(120000)]
 async fn load_agent_from_secret_reports_a_missing_drive_without_materialising_it() {
     let db_a = Db::init_temp("agent_secret_local_drive_a").await.unwrap();
     let (agent_a, drive) = db_a.setup("Alice").await.unwrap();
@@ -1736,7 +1746,7 @@ async fn load_agent_from_secret_reports_a_missing_drive_without_materialising_it
 /// has to recognise them and fan them out itself. `from_commit` is that
 /// discriminator; if it ever lies, a device holds new data and renders the old.
 #[tokio::test]
-#[timeout(20000)]
+#[timeout(120000)]
 async fn db_events_say_whether_a_commit_produced_the_change() {
     use crate::DbEvent;
 
@@ -1820,7 +1830,7 @@ async fn db_events_say_whether_a_commit_produced_the_change() {
 /// specific drive — template localIds repeat across drives, so the drive
 /// constraint is the only thing disambiguating them.
 #[tokio::test]
-#[timeout(30000)]
+#[timeout(120000)]
 async fn find_resource_scoped_to_its_drive() {
     let store = Db::init_temp("drive_scoped_query").await.unwrap();
     store.populate().await.unwrap();
