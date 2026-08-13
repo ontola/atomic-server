@@ -6835,3 +6835,30 @@ msgstr "Joep’s Pixel"
 #: src/helpers/managed/vault.test.ts
 msgid "Cloud Vault quota exceeded"
 msgstr "Cloud Vault quota exceeded"
+
+#. 0: PRODUCT_NAME
+#: src/helpers/managed/enrollment.ts
+msgid "Your {0} session expired. Sign in and retry."
+msgstr "Your {0} session expired. Sign in and retry."
+
+#. 0: PRODUCT_NAME
+#: src/helpers/managed/enrollment.ts
+msgid "{0} could not place this drive right now. This is usually "
+msgstr "{0} could not place this drive right now. This is usually "
+
+#. 0: PRODUCT_NAME; 1: response.status
+#: src/helpers/managed/enrollment.ts
+msgid "Could not enable {0} hosting (HTTP {1})."
+msgstr "Could not enable {0} hosting (HTTP {1})."
+
+#: src/helpers/managed/enrollment.test.ts
+msgid "Cloud Server requires a subscription"
+msgstr "Cloud Server requires a subscription"
+
+#: src/helpers/managed/enrollment.test.ts
+msgid "No session"
+msgstr "No session"
+
+#: src/helpers/managed/enrollment.test.ts
+msgid "Internal Server Error"
+msgstr "Internal Server Error"
