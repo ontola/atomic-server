@@ -187,10 +187,12 @@ export const useClientOnlyTransport = (options: ClientOnlyTransportOptions) => {
   const prepareSystemPrompt = async (systemPrompt: string) => {
     let modifiedSystemPrompt = systemPrompt;
 
+    const activeDrive = store.getDrive() ?? drive;
+
     if (systemPrompt.includes('{{drive}}')) {
       modifiedSystemPrompt = modifiedSystemPrompt.replaceAll(
         '{{drive}}',
-        drive,
+        activeDrive,
       );
     }
 
@@ -203,7 +205,7 @@ export const useClientOnlyTransport = (options: ClientOnlyTransportOptions) => {
     }
 
     if (systemPrompt.includes('{{custom-classes}}')) {
-      const classSubjects = await getClassesOnDrive(drive, store);
+      const classSubjects = await getClassesOnDrive(activeDrive, store);
       const customClasses = await Promise.all(
         classSubjects.map(async cls => {
           const resource = await store.getResource(cls);

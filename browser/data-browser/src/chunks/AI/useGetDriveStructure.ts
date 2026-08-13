@@ -106,8 +106,9 @@ export function useGetDriveStructure() {
   };
 
   return async (): Promise<TreeNode> => {
-    const rootSubjects = await fetchChildren(store, drive);
+    const activeDrive = store.getDrive() ?? drive;
+    const rootSubjects = await fetchChildren(store, activeDrive);
 
-    return buildTree(rootSubjects, new Set([drive]));
+    return buildTree(rootSubjects, new Set([activeDrive]));
   };
 }

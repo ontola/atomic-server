@@ -8,6 +8,11 @@ import tablesSkillContent from './tables/SKILL.md?raw';
 import creatingTablesContent from './tables/references/creating-tables.md?raw';
 import skillCreationContent from './skill-creation/SKILL.md?raw';
 import ontologiesSkillContent from './ontologies/SKILL.md?raw';
+import driveSetupSkillContent from './drive-setup/SKILL.md?raw';
+import driveSetupLayoutsContent from './drive-setup/references/layouts.md?raw';
+import { DRIVE_SETUP_SKILL_NAME } from './driveSetupSkill';
+
+export { DRIVE_SETUP_SKILL_NAME };
 
 import { stringToSlug } from '@helpers/stringToSlug';
 
@@ -70,6 +75,21 @@ export const atomicSkills: AgentSkill[] = [
     },
     content: ontologiesSkillContent,
     references: [],
+  },
+  {
+    meta: {
+      id: 'atomic.skills.drive-setup',
+      name: DRIVE_SETUP_SKILL_NAME,
+      description:
+        'Use this when setting up a newly created drive: ask what it is for, research a company website or other hint if given, then build a small starter workspace (name, tables, folders, a welcome doc).',
+    },
+    content: driveSetupSkillContent,
+    references: [
+      {
+        path: '/layouts',
+        content: driveSetupLayoutsContent,
+      },
+    ],
   },
 ];
 

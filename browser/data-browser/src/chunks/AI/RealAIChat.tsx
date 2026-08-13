@@ -99,6 +99,19 @@ interface RealAIChatProps {
   >;
   onDeleteMessage: (message: AtomicUIMessage) => void;
   onRegenerateMessage: (message: AtomicUIMessage) => void | Promise<void>;
+  /**
+   * Fit the chat into a parent (dialog, card) instead of the full-page /
+   * sidebar viewport. Width and height follow the parent.
+   */
+  embedded?: boolean;
+  /**
+   * Runs before the first (and every later) send. Throw to keep the message
+   * in the input and skip the request — used to create a drive before the
+   * first setup message is sent.
+   */
+  onBeforeSubmit?: (text: string) => Promise<void> | void;
+  /** Shown above the input while the conversation is still empty. */
+  starterPrompts?: string[];
 }
 
 export const RealAIChat: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
@@ -126,6 +139,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   onSummaryDeleted,
   onDeleteMessage,
   onRegenerateMessage,
+  embedded = false,
+  onBeforeSubmit,
+  starterPrompts,
   children,
 }) => {
   const store = useStore();
@@ -524,6 +540,24 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       return;
     }
 
+    if (text.trim() === '') {
+      return;
+    }
+
+    if (onBeforeSubmit) {
+      try {
+        await onBeforeSubmit(text);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not send the message.';
+        setRequestError(message);
+
+        return;
+      }
+    }
+
     const context = [...externalContextItems, ...userSelectedContextItems];
     const message: AtomicUIMessage = {
       id: store.newLocalId(),
@@ -666,7 +700,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   }, [selectedAgent.autoCompactThresholdPercent, modelContextLength]);
 
   return (
-    <ChatWindow fullView={fullView} empty={messages.length === 0}>
+    <ChatWindow
+      fullView={fullView}
+      empty={messages.length === 0}
+      embedded={embedded}
+    >
       {children}
       <ChatMessagesContainer
         enableAutoScroll={status === 'streaming'}
@@ -716,6 +754,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         )}
         {!readonly && (
           <>
+            {isEmptyChat && starterPrompts && starterPrompts.length > 0 && (
+              <Column gap='0px'>
+                {starterPrompts.map(prompt => (
+                  <FollowUpPrompt
+                    key={prompt}
+                    text={prompt}
+                    onClick={() => handleSubmit(prompt)}
+                  />
+                ))}
+              </Column>
+            )}
             {followUpQuestions.length > 0 && (
               <Column gap='0px'>
                 {followUpQuestions.map(question => (
@@ -1007,7 +1056,11 @@ const AttachmentPreview = styled.div`
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 `;
 
-const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
+const ChatWindow = styled.div<{
+  fullView?: boolean;
+  empty?: boolean;
+  embedded?: boolean;
+}>`
   ${p => p.fullView && `background-color: ${p.theme.colors.bgBody};`}
   padding: ${p => (p.fullView ? p.theme.size() : 0)};
   padding-top: ${p => (p.fullView ? p.theme.size(2) : 0)};
@@ -1015,8 +1068,9 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
   display: grid;
   grid-template-rows: ${p =>
     p.empty && p.fullView ? 'auto 1fr auto 1fr' : 'auto 1fr auto'};
-  height: '100%';
-  width: min(100%, 70rem);
+  height: ${p => (p.embedded ? '100%' : '100%')};
+  min-height: ${p => (p.embedded ? '22rem' : undefined)};
+  width: ${p => (p.embedded ? '100%' : 'min(100%, 70rem)')};
   margin-inline: auto;
   gap: 1rem;
 
@@ -1026,7 +1080,7 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
   }
 
   @media (max-width: 1550px) {
-    height: 90vh;
+    height: ${p => (p.embedded ? '100%' : '90vh')};
   }
 `;
 
