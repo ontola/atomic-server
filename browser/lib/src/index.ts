@@ -44,7 +44,7 @@ export * from './agent.js';
 // agent's base64 key into the raw seed before wrapping a drive key. Doing that
 // conversion anywhere else risks the wrong representation being wrapped, which
 // produces an envelope that cannot be opened with the real seed.
-export { decodeB64 } from './base64.js';
+export { decodeB64, encodeB64 } from './base64.js';
 export * from './authentication.js';
 export * from './client.js';
 export * from './genesis.js';

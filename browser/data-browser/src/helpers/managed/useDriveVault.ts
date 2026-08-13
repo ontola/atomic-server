@@ -3,6 +3,8 @@ import { useStore } from '@tomic/react';
 import { loadVaultKeyOps } from './vaultKeyOps';
 import { vaultLaneId, type VaultKeyOps } from './vault';
 import { getOrCreateDeviceId } from './devices';
+import { nodeVault } from './nodeVault';
+import { isRunningInTauri } from '../tauri';
 import { useVaultBackup, type UseVaultBackup } from './useVaultBackup';
 
 /**
@@ -52,7 +54,11 @@ export function useDriveVault(driveSubject: string | null): UseVaultBackup {
   const agent = store.getAgent();
 
   return useVaultBackup({
-    db: store.getClientDb() ?? null,
+    // Whichever local store this build actually keeps the drive in. A browser
+    // has the ClientDb; the desktop and Android apps have the embedded node and
+    // deliberately no ClientDb, since a second copy of the same drive is the
+    // thing that arrangement exists to avoid. Both reach the same Rust.
+    db: isRunningInTauri() ? nodeVault : (store.getClientDb() ?? null),
     keys,
     driveSubject,
     agentSubject: agent?.subject ?? null,
