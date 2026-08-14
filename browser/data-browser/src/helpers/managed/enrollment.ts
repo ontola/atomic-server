@@ -1,5 +1,5 @@
 import { PRODUCT_NAME } from './product';
-import { getManagedApiBase, managedFetch } from './api';
+import { managedFetch } from './api';
 import { writeManagedAccountBinding } from './binding';
 import { getManagedAccount } from './session';
 
@@ -34,7 +34,9 @@ async function enrollmentError(response: Response): Promise<Error> {
   } | null;
 
   if (response.status === 401) {
-    return new Error(`Your ${PRODUCT_NAME} session expired. Sign in and retry.`);
+    return new Error(
+      `Your ${PRODUCT_NAME} session expired. Sign in and retry.`,
+    );
   }
 
   // The server's own words when it has them: it knows why far better than a

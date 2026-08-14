@@ -13,7 +13,7 @@
 //
 // Canonical design: planning/device-pairing.md (§ SaaS-assisted pairing).
 
-import { getManagedApiBase, managedFetch } from './api';
+import { managedFetch } from './api';
 import { getManagedAccount } from './session';
 import { getLocalServerOrigin, isRunningInTauri } from '../tauri';
 import { pairAndSync } from '../pairing';

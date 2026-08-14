@@ -90,7 +90,9 @@ describe('requestDeviceLink', () => {
     await expect(requestDeviceLink(PORTAL)).rejects.toThrow(/Too many/);
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({}, 500));
-    await expect(requestDeviceLink(PORTAL)).rejects.toThrow(/Check the address/);
+    await expect(requestDeviceLink(PORTAL)).rejects.toThrow(
+      /Check the address/,
+    );
   });
 });
 
@@ -124,7 +126,9 @@ describe('awaitDeviceLink', () => {
   it('keeps the session once approved', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(jsonResponse({ state: 'pending' }))
-      .mockResolvedValueOnce(jsonResponse({ state: 'approved', token: 'sess' }));
+      .mockResolvedValueOnce(
+        jsonResponse({ state: 'approved', token: 'sess' }),
+      );
 
     expect(await awaitDeviceLink(PORTAL, request)).toBe('linked');
     expect(getManagedDeviceToken()).toBe('sess');

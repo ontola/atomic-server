@@ -179,9 +179,7 @@ export function managedPortalOverride(): string | null {
 export function isHostedDistribution(): boolean {
   const flag =
     typeof import.meta !== 'undefined'
-      ? (import.meta.env?.VITE_ATOMIC_HOSTED_DISTRIBUTION as
-          | string
-          | undefined)
+      ? (import.meta.env?.VITE_ATOMIC_HOSTED_DISTRIBUTION as string | undefined)
       : undefined;
 
   return flag === '1' || flag === 'true';

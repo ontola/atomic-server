@@ -44,8 +44,9 @@ describe('isRunningInTauri', () => {
 
   it('trusts the injected global whatever the origin', () => {
     windowAt('http://localhost:6747/app/sync');
-    (globalThis.window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ =
-      {};
+    (
+      globalThis.window as unknown as Record<string, unknown>
+    ).__TAURI_INTERNALS__ = {};
     expect(isRunningInTauri()).toBe(true);
   });
 });
