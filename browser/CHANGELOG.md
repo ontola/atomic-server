@@ -4,7 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
-- **Headless CMS:** generated Next.js and SvelteKit sites now hide forks and blog posts with a missing or future `published-at` from listings, search, and routes. Cmd/Ctrl+E and an **Edit this page** footer link open the current resource in the Data Browser (`/app/edit?subject=…`); pass `--cms-url` when the editor is not on the server origin. `cover-image` and `published-at` on `blogpost` are recommended rather than required. Tutorial: [Using Atomic as a headless CMS](https://docs.atomicdata.dev/headless-cms.html).
+- **Headless CMS:** generated Next.js and SvelteKit sites now hide forks and blog posts with a missing or future `published-at` from listings, search, and routes. Cmd/Ctrl+E and an **Edit this page** footer link open the current resource in the Data Browser (`/app/edit?subject=…`); pass `--cms-url` when the editor is not on the server origin. `cover-image` and `published-at` on `blogpost` are recommended rather than required. `@tomic/lib` exports `isListedCmsResource` and `cmsEditUrl`. Tutorial: [Using Atomic as a headless CMS](https://docs.atomicdata.dev/headless-cms.html).
 
 ## [v0.41.0-beta.2] - 2026-08-01
 

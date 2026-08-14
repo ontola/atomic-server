@@ -276,6 +276,7 @@ consume.
 | Same for SvelteKit, including `<html lang>` | `template.spec.ts` (`apply sveltekit template`) |
 | Future-dated post hidden from listing, search, and direct URL (404) | `template.spec.ts` (`assertTwoLocaleSite` + search `Time Travel`) |
 | Cmd/Ctrl+E and **Edit this page** open `/app/edit?subject=` | `template.spec.ts` (`assertCmsEditFromSite`) |
+| Forks hidden; scheduled / undated blog posts hidden; `cmsEditUrl` | `browser/lib/src/cms.test.ts` |
 | Fork → edit → merge; pending forks listed on the original | `browser/e2e/tests/forks.spec.ts` |
 | Three-way merge / conflict / document body CRDT | `browser/lib/src/forks.test.ts` |
 | LocalizedText table editor | `browser/e2e/tests/localized-text.spec.ts` |
