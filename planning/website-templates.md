@@ -101,15 +101,16 @@
 - [x] Add a configurable CMS origin to generated sites and use it for a
       Cmd/Ctrl+E deep link. Do not assume the content server and Data Browser
       have the same origin. **Done (2026-08-14):** `--cms-url` (defaults to
-      `--server-url`) writes `ATOMIC_CMS_URL`; Cmd/Ctrl+E and **Edit this page**
-      open `/app/edit?subject=…`.
+      `--server-url`) writes `ATOMIC_CMS_URL`.
 - [x] Add a small authenticated edit affordance for editors; it must not embed
       credentials or private agent material in the public bundle.
-      The link is public; sign-in happens in the Data Browser.
-- [ ] Decide whether "in-page editing" means navigation to Data Browser,
-      an extracted shared editor surface, or framework-native fields backed by
-      `@tomic/react` / `@tomic/svelte`. Avoid duplicating the existing editor
-      behavior independently in both templates.
+      Next.js: **Edit this page** / Cmd/Ctrl+E enter `@tomic/edit-mode` in-place
+      WYSIWYG; the agent secret is stored in `localStorage` on the site origin.
+      Cmd/Ctrl+Shift+E and the banner **Open in Data Browser** still open
+      `/app/edit?subject=…`. SvelteKit keeps the Data Browser footer link.
+- [x] In-page editing on generated Next.js sites uses `@tomic/edit-mode`
+      (`Editable` + `EditModeProvider`) against the live resources. SvelteKit
+      does not yet: the package's UI is React.
 
 ### Internationalization
 

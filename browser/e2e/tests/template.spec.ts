@@ -6,6 +6,7 @@ import {
   clickSidebarItem,
   contextMenuClick,
   editTitle,
+  getDevDriveSecret,
   makeDrivePublic,
   newDrive,
   nodeReachableServerUrl,
@@ -164,7 +165,7 @@ async function applyWebsiteTemplate(page: Page) {
 }
 
 const pathToPackage = (
-  libName: 'lib' | 'cli' | 'react' | 'svelte' | 'create-template',
+  libName: 'lib' | 'cli' | 'react' | 'svelte' | 'create-template' | 'edit-mode',
 ) => {
   return path.join(__dirname, '..', '..', libName);
 };
@@ -216,6 +217,7 @@ const WORKSPACE_PACKAGES = {
   '@tomic/cli': 'cli',
   '@tomic/react': 'react',
   '@tomic/svelte': 'svelte',
+  '@tomic/edit-mode': 'edit-mode',
 } as const satisfies Record<string, Parameters<typeof pathToPackage>[0]>;
 
 /**
@@ -578,29 +580,89 @@ async function assertCmsFeeds(page: Page, url: string) {
 /**
  * Editors can jump from the published page to the Data Browser edit form.
  * The CMS origin is a public URL; credentials stay in the Data Browser.
- * The footer link is the reliable e2e signal; Cmd/Ctrl+E uses the same URL.
+ * The footer link is the reliable e2e signal; Cmd/Ctrl+E uses the same URL
+ * on SvelteKit. Next.js uses the footer button for in-place editing and
+ * exposes the Data Browser URL on the sign-in banner.
  */
-async function assertCmsEditFromSite(page: Page, siteOrigin: string) {
+async function assertCmsEditFromSite(
+  page: Page,
+  siteOrigin: string,
+  options: { inPlace?: boolean } = {},
+) {
   await page.goto(siteOrigin);
   const editLink = page.getByTestId('cms-edit-link');
   await expect(editLink).toBeVisible();
 
-  const href = await editLink.getAttribute('href');
-  expect(
-    href,
-    'Edit this page should point at the Data Browser edit form',
-  ).toBeTruthy();
+  if (!options.inPlace) {
+    const href = await editLink.getAttribute('href');
+    expect(
+      href,
+      'Edit this page should point at the Data Browser edit form',
+    ).toBeTruthy();
+    expect(href).toContain('/app/edit');
+    expect(href).toContain('subject=');
+    expect(new URL(href!).origin).toBe(new URL(FRONTEND_URL).origin);
+
+    const popupPromise = page.waitForEvent('popup');
+    await editLink.click();
+    const popup = await popupPromise;
+    expect(popup.url()).toContain('/app/edit');
+    expect(popup.url()).toContain('subject=');
+    expect(new URL(popup.url()).origin).toBe(new URL(FRONTEND_URL).origin);
+    await popup.close();
+    return;
+  }
+
+  await editLink.click();
+  await expect(page.getByTestId('cms-signin')).toBeVisible();
+
+  const href = await page
+    .getByTestId('cms-data-browser-link')
+    .getAttribute('href');
   expect(href).toContain('/app/edit');
   expect(href).toContain('subject=');
   expect(new URL(href!).origin).toBe(new URL(FRONTEND_URL).origin);
 
   const popupPromise = page.waitForEvent('popup');
-  await editLink.click();
+  await page.getByTestId('cms-data-browser-link').click();
   const popup = await popupPromise;
   expect(popup.url()).toContain('/app/edit');
   expect(popup.url()).toContain('subject=');
   expect(new URL(popup.url()).origin).toBe(new URL(FRONTEND_URL).origin);
   await popup.close();
+}
+
+/** Sign in on the generated Next.js site and rename the About heading in place. */
+async function assertInPlaceEdit(page: Page, siteOrigin: string) {
+  await page.goto(FRONTEND_URL);
+  const secret = await getDevDriveSecret(page);
+
+  await page.goto(`${siteOrigin}/about`);
+  const editLink = page.getByTestId('cms-edit-link');
+  await expect(editLink).toBeVisible();
+  await editLink.click();
+  await expect(page.getByTestId('cms-signin')).toBeVisible();
+  await page.getByTestId('cms-agent-secret').fill(secret);
+  await page.getByTestId('cms-signin-submit').click();
+  await expect(page.getByTestId('cms-editing-banner')).toBeVisible();
+
+  const heading = page.locator('h1 .tomic-editable');
+  await expect(heading).toBeVisible();
+  const saved = page.waitForResponse(
+    response => response.url().includes('/commit') && response.ok(),
+  );
+  await heading.click();
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('About the team');
+  await heading.blur();
+  await saved;
+  await page.getByTestId('cms-edit-link').click();
+  await expect(page.getByTestId('cms-editing-banner')).toBeHidden();
+
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'About the team',
+  );
 }
 
 test.describe('Test create-template package', () => {
@@ -663,7 +725,8 @@ test.describe('Test create-template package', () => {
       );
 
       await assertTwoLocaleSite(page, url, true);
-      await assertCmsEditFromSite(page, url);
+      await assertCmsEditFromSite(page, url, { inPlace: true });
+      await assertInPlaceEdit(page, url);
       await assertLocaleBlogCards(page, url);
       await assertCmsFeeds(page, url);
     } finally {

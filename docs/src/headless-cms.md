@@ -8,7 +8,7 @@ This is the supported product path. If you want to model a site from scratch ins
 
 - Pages, nested menus, and blog posts you edit in the Data Browser
 - A generated Next.js or SvelteKit app that renders that data
-- Cmd/Ctrl+E (and an **Edit this page** link) from the live site back into the editor
+- Cmd/Ctrl+E (and an **Edit this page** button) on a generated Next.js site enter in-place WYSIWYG editing via `@tomic/edit-mode`. Cmd/Ctrl+Shift+E (and **Open in Data Browser** on the edit banner) still open `/app/edit?subject=…`. SvelteKit still uses the Data Browser link.
 - Document-level translations (`language` + `translationOf`)
 - Scheduled posts: a `published-at` in the future is stored but not listed or routed
 - `sitemap.xml`, `robots.txt`, and `rss.xml` generated from the same public-content filter
@@ -69,7 +69,9 @@ Open the printed localhost URL. You should see the homepage copy from the templa
 
 In the Data Browser, open **Site Data**. Change a text block, add a blog post, or rename a menu item, then refresh the generated site.
 
-From the generated site, press **Cmd/Ctrl+E** or click **Edit this page** in the footer. That opens `/app/edit?subject=…` on the Data Browser. Sign-in stays in the editor; the public bundle never embeds an agent secret.
+From a generated **Next.js** site, press **Cmd/Ctrl+E** or click **Edit this page** in the footer. That turns on `@tomic/edit-mode`: click the heading or body text and edit it in place. Changes save to Atomic when you click away. Sign-in is an agent secret stored in `localStorage` on the site origin — it is never baked into the public bundle. **Cmd/Ctrl+Shift+E** or **Open in Data Browser** on the edit banner still opens `/app/edit?subject=…` for properties that are not on the page.
+
+SvelteKit still uses the footer **Edit this page** link to the Data Browser.
 
 Blog posts:
 
@@ -107,7 +109,6 @@ Empty listings at build are retried a few times, then expire in 60 seconds inste
 ## 7. What this is not (yet)
 
 - **Confidential drafts next to a public site.** Rights are additive. A private Drafts folder only stays private if the Drive itself is not blanket-public; grant public read on the site folder instead. That workflow is not wired into the template yet.
-- **In-page editing.** Cmd/Ctrl+E goes to the Data Browser; the generated site is a reader.
 - **Image resizing.** Files are stored as uploaded ([issue](https://github.com/atomicdata-dev/atomic-server/issues/257)).
 - **GraphQL.** Query with collections, `@tomic/lib`, or the REST/JSON-AD API ([issue](https://github.com/atomicdata-dev/atomic-server/issues/251)).
 

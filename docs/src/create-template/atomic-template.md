@@ -13,7 +13,7 @@ Full walkthrough: [Using Atomic as a headless CMS](../headless-cms.md).
 
 `SERVER_URL` is the HTTP(S) API origin (`http://localhost:9883`). `DRIVE_SUBJECT` is the `did:ad:` identity of the Drive where the Website template data was installed. Those are not interchangeable.
 
-Optional `--cms-url` is the Data Browser origin used for Cmd/Ctrl+E / **Edit this page**. It defaults to `SERVER_URL` (AtomicServer serves the GUI on the same origin). Set it when the editor runs elsewhere, for example Vite on `http://localhost:6747`.
+Optional `--cms-url` is the Data Browser origin used for Cmd/Ctrl+Shift+E / **Open in Data Browser**. It defaults to `SERVER_URL` (AtomicServer serves the GUI on the same origin). Set it when the editor runs elsewhere, for example Vite on `http://localhost:6747`.
 
 ## Before you generate
 
@@ -32,7 +32,7 @@ pnpm update-ontologies
 pnpm dev
 ```
 
-From the running site, Cmd/Ctrl+E opens the current page in the Data Browser edit form. `/` is the Website resource's `homepage` property, not whichever page happens to have path `/`. A blog post with `published-at` in the future is not listed or routed. Forks of pages and posts are excluded too. Nav on `/nl/...` keeps the language prefix. Generated sites expose `/sitemap.xml`, `/robots.txt`, and `/rss.xml` from the same public-content filter. Pages are prerendered and sent with `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400` so a CDN can serve the correct language and content on the first byte.
+From the running site, Cmd/Ctrl+E on a Next.js template enters in-place WYSIWYG editing (`@tomic/edit-mode`); Cmd/Ctrl+Shift+E opens the Data Browser. SvelteKit's **Edit this page** still opens the Data Browser. `/` is the Website resource's `homepage` property, not whichever page happens to have path `/`. A blog post with `published-at` in the future is not listed or routed. Forks of pages and posts are excluded too. Nav on `/nl/...` keeps the language prefix. Generated sites expose `/sitemap.xml`, `/robots.txt`, and `/rss.xml` from the same public-content filter. Pages are prerendered and sent with `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400` so a CDN can serve the correct language and content on the first byte.
 
 The following templates are available:
 

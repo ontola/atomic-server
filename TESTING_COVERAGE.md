@@ -275,7 +275,8 @@ consume.
 | Apply template, scaffold Next.js, production build, homepage, blog search, two-locale routing | `browser/e2e/tests/template.spec.ts` (`apply next-js template`) |
 | Same for SvelteKit, including `<html lang>` | `template.spec.ts` (`apply sveltekit template`) |
 | Future-dated post hidden from listing, search, and direct URL (404) | `template.spec.ts` (`assertTwoLocaleSite` + search `Time Travel`) |
-| Cmd/Ctrl+E and **Edit this page** open `/app/edit?subject=` on the Data Browser origin (`--cms-url`) | `template.spec.ts` (`assertCmsEditFromSite`) |
+| Cmd/Ctrl+E and **Edit this page** open `/app/edit?subject=` on the Data Browser origin (`--cms-url`) | `template.spec.ts` (`assertCmsEditFromSite`) — SvelteKit footer link; Next.js sign-in banner **Open in Data Browser** |
+| Next.js in-place WYSIWYG (`@tomic/edit-mode`): sign in with agent secret, rename About heading, reload | `template.spec.ts` (`assertInPlaceEdit`) |
 | Nav on `/nl/blog` → Home stays on `/nl` | `template.spec.ts` (`assertTwoLocaleSite`) |
 | Next.js `<html lang>` follows the URL prefix **on the first HTML byte** | `template.spec.ts` (`assertCdnFriendlyPages` + `checkHtmlLang`) |
 | `/` serves `website.homepage` even when that page's path is not `/` | `template.spec.ts` (`assertHomepageIsAbout`) |

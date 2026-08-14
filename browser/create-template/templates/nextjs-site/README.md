@@ -42,7 +42,7 @@ $ yarn dev
 
 ## Editing content
 
-Change pages and posts in the Data Browser. From this site, press Cmd/Ctrl+E or use **Edit this page** in the footer. That opens `/app/edit?subject=…` — sign-in stays in the editor.
+Change pages and posts in the Data Browser. From the running site, press Cmd/Ctrl+E or use **Edit this page** in the footer to edit the heading and body in place (`@tomic/edit-mode`). Cmd/Ctrl+Shift+E opens the Data Browser. `NEXT_PUBLIC_ATOMIC_CMS_URL` in `.env` is that editor origin (defaults to the server URL).
 
 A blog post with `published-at` in the future (or missing) is not listed, searchable, or routable. Forks are excluded from public queries because they copy the original `href`.
 

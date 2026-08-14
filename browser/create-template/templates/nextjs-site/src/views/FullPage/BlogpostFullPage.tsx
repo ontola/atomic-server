@@ -3,7 +3,7 @@ import type { Blogpost } from '@/ontologies/website';
 import { Resource } from '@tomic/lib';
 import styles from './BlogpostFullPage.module.css';
 import { Image } from '@/components/Image';
-import { MarkdownContent } from '@/components/MarkdownContent';
+import { EditableDescription, EditableName } from '@/components/EditableField';
 
 const formatter = new Intl.DateTimeFormat('default', {
   year: 'numeric',
@@ -25,9 +25,13 @@ const BlogpostFullPage = ({ resource }: { resource: Resource<Blogpost> }) => {
           </div>
         )}
         <div className={styles.content}>
-          <h1 className={styles.h1}>{resource.title}</h1>
+          <EditableName
+            className={styles.h1}
+            subject={resource.subject}
+            initialValue={resource.title}
+          />
           {date && <p className={styles.publishDate}>{date}</p>}
-          <MarkdownContent
+          <EditableDescription
             subject={resource.subject}
             initialValue={resource.props.description}
           />

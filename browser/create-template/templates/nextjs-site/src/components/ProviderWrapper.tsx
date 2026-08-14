@@ -8,6 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { getCurrentResource } from '@/atomic/getCurrentResource';
 import { CmsEditHotkey } from '@/components/CmsEditor';
+import { InPlaceEditProvider } from '@/components/InPlaceEdit';
 
 const ProviderWrapper = ({ children }: { children: React.ReactNode }) => {
   // Registers your ontologies with the store
@@ -25,8 +26,10 @@ const ProviderWrapper = ({ children }: { children: React.ReactNode }) => {
   return (
     <StoreContext.Provider value={store}>
       <CurrentSubjectProvider currentSubject={currentSubject}>
-        <CmsEditHotkey />
-        {children}
+        <InPlaceEditProvider>
+          <CmsEditHotkey />
+          {children}
+        </InPlaceEditProvider>
       </CurrentSubjectProvider>
     </StoreContext.Provider>
   );

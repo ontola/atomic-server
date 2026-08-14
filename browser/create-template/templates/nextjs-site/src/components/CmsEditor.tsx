@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useCurrentSubject } from '@/app/context/CurrentSubjectProvider';
 import { cmsEditUrl } from '@/atomic/cmsEditUrl';
 import { env } from '@/env';
+import { useInPlaceEdit } from '@/components/InPlaceEdit';
 import styles from './CmsEditor.module.css';
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -28,9 +29,10 @@ function openCmsEditor(subject: string) {
   );
 }
 
-/** Cmd/Ctrl+E opens the current page in the Data Browser edit form. */
+/** Cmd/Ctrl+E enters in-place edit. Cmd/Ctrl+Shift+E opens the Data Browser. */
 export function CmsEditHotkey() {
   const { currentSubject } = useCurrentSubject();
+  const { enterEdit, exitEdit, editing } = useInPlaceEdit();
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -38,7 +40,7 @@ export function CmsEditHotkey() {
         return;
       }
 
-      if (event.altKey || event.shiftKey) {
+      if (event.altKey) {
         return;
       }
 
@@ -47,34 +49,44 @@ export function CmsEditHotkey() {
       }
 
       event.preventDefault();
-      openCmsEditor(currentSubject);
+
+      if (event.shiftKey) {
+        openCmsEditor(currentSubject);
+        return;
+      }
+
+      if (editing) {
+        exitEdit();
+      } else {
+        enterEdit();
+      }
     };
 
     window.addEventListener('keydown', onKeyDown);
 
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [currentSubject]);
+  }, [currentSubject, editing, enterEdit, exitEdit]);
 
   return null;
 }
 
-/** Footer affordance for the same edit URL. Hidden until the page subject is known. */
+/** Footer control for in-place editing. Hidden until the page subject is known. */
 export function CmsEditLink() {
   const { currentSubject } = useCurrentSubject();
+  const { enterEdit, exitEdit, editing } = useInPlaceEdit();
 
   if (!currentSubject) {
     return null;
   }
 
   return (
-    <a
+    <button
       className={styles.link}
       data-testid='cms-edit-link'
-      href={cmsEditUrl(env.NEXT_PUBLIC_ATOMIC_CMS_URL, currentSubject)}
-      rel='noreferrer'
-      target='_blank'
+      type='button'
+      onClick={editing ? exitEdit : enterEdit}
     >
-      Edit this page
-    </a>
+      {editing ? 'Done editing' : 'Edit this page'}
+    </button>
   );
 }

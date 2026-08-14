@@ -1,0 +1,64 @@
+.banner {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--theme-color-accent);
+  color: #fff;
+}
+
+.banner p {
+  margin: 0;
+  flex: 1 1 16rem;
+}
+
+.signInForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.secret {
+  width: 100%;
+  max-width: 40rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  padding: 0.5rem;
+  border: none;
+  border-radius: var(--theme-border-radius);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.actions button,
+.bannerLink {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: transparent;
+  color: inherit;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--theme-border-radius);
+  cursor: pointer;
+  text-decoration: none;
+  font: inherit;
+}
+
+.actions button:hover,
+.bannerLink:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.error {
+  color: #ffe0e0;
+}
+
