@@ -1,6 +1,6 @@
 import { styled } from 'styled-components';
 import { useEffect, useEffectEvent, useRef } from 'react';
-import { ScrollArea } from '@components/ScrollArea';
+import { ScrollArea, ScrollViewPort } from '@components/ScrollArea';
 import { Column } from '@components/Row';
 
 /** How close to the bottom (px) still counts as "stuck to the bottom". */
@@ -163,9 +163,13 @@ export const ChatMessagesContainer: React.FC<
 const MessagesContainer = styled(ScrollArea)<{ $fullView?: boolean }>`
   overflow: auto;
   height: 100%;
-  /* Even flush against a panel that provides its own chrome, keep a hair of
-   * inline/block room so an avatar's following/hover outline (2px + 1px offset)
-   * isn't clipped by this scroll container. Right stays 0 so message chips can
-   * still bleed into the panel's right padding. */
-  padding: ${p => (p.$fullView ? '0.25rem 0 0.25rem 0.25rem' : p.theme.size())};
+  padding: ${p => (p.$fullView ? '0.25rem 0' : p.theme.size())};
+
+  /* The viewport is what scrolls and therefore what clips, so the room for an
+   * avatar's following/hover outline (2px + 1px offset) has to live here —
+   * padding on the ScrollArea root sits outside the clip and does nothing.
+   * Start only: message chips still bleed into the panel's right padding. */
+  ${ScrollViewPort} {
+    padding-inline-start: 3px;
+  }
 `;
