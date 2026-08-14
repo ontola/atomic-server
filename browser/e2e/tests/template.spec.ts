@@ -299,6 +299,14 @@ function startServer(siteType: string) {
   });
 }
 
+async function freePort(port: number) {
+  try {
+    await kill(port);
+  } catch {
+    // Nothing was listening — the next startServer call needs the port free.
+  }
+}
+
 const waitForServer = (
   childProcess: ChildProcess,
   timeout = 300000,
@@ -511,6 +519,7 @@ test.describe('Test create-template package', () => {
     );
 
     try {
+      await freePort(3000);
       //start server
       const child = startServer('nextjs-site');
       const url = await waitForServer(child);
@@ -571,6 +580,7 @@ test.describe('Test create-template package', () => {
     );
 
     try {
+      await freePort(4174);
       const child = startServer('sveltekit-site');
       //start server
       const url = await waitForServer(child);
