@@ -108,22 +108,3 @@ export async function getRssItems(): Promise<{
     items,
   };
 }
-
-/**
- * Catch-all `entries()` for prerender. `/` is the root `+page` route, so it is
- * omitted. An empty or failed listing means those paths SSR on demand instead
- * of failing the build.
- */
-export async function getPrerenderPathEntries(): Promise<{ path: string }[]> {
-  try {
-    const paths = await getSitemapPaths();
-
-    return paths
-      .filter((path) => path !== "/")
-      .map((path) => ({ path: path.replace(/^\//, "") }));
-  } catch (error) {
-    console.warn("Could not list CMS pages at prerender time:", error);
-
-    return [];
-  }
-}

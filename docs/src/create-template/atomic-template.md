@@ -38,5 +38,5 @@ The following templates are available:
 
 | Name             | Description                                                          | AtomicServer Template |
 | ---------------- | -------------------------------------------------------------------- | --------------------- |
-| `sveltekit-site` | A SvelteKit website with prerendered, CDN-cacheable pages and blog posts | Website               |
+| `sveltekit-site` | A SvelteKit website with CDN-cacheable SSR pages and blog posts | Website               |
 | `nextjs-site`    | A Next.js website with ISR/prerendered, CDN-cacheable pages and blog posts | Website               |
