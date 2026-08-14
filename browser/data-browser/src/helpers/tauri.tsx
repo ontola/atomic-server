@@ -11,12 +11,21 @@ export function isRunningInTauri(): boolean {
   if (typeof window === 'undefined') return false;
 
   // Tauri 2 exposes __TAURI_INTERNALS__; Tauri 1 exposed __TAURI_METADATA__.
-  // The tauri: protocol fallback covers cases where the global isn't set yet
-  // (e.g. top-level module evaluation before the runtime injects it).
+  // The origin fallbacks cover the window before the runtime injects those
+  // globals — a call made during that window would otherwise be told this is
+  // an ordinary web page.
+  //
+  // Both shapes are needed. The desktop webview serves from `tauri://localhost`,
+  // but Android serves from `http://tauri.localhost`, so a protocol-only check
+  // silently fails there. That is not hypothetical: it made `getManagedApiBase()`
+  // return the same-origin `/api`, and `tauri.localhost/api/me` answers 200 with
+  // the SPA's own HTML rather than failing — so a linked device was told it had
+  // no session, by its own index page.
   return (
     window.__TAURI_INTERNALS__ !== undefined ||
     window.__TAURI_METADATA__ !== undefined ||
-    window.location.protocol === 'tauri:'
+    window.location.protocol === 'tauri:' ||
+    window.location.hostname === 'tauri.localhost'
   );
 }
 

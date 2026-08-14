@@ -91,6 +91,42 @@ const PAIR_LINK_RETRY_WINDOW: std::time::Duration = std::time::Duration::from_se
 struct EmbeddedNode {
   store: std::sync::OnceLock<atomic_lib::Db>,
   config_file: std::sync::OnceLock<std::path::PathBuf>,
+  /// Why the node never came up, if it didn't. The server runs on its own
+  /// thread, so a boot failure there used to be an unwind into nothing: the
+  /// window stayed open, `store` stayed empty, and every node-backed feature
+  /// reported "still starting up" forever. Recording the reason lets the UI say
+  /// what actually went wrong.
+  startup_error: std::sync::OnceLock<String>,
+}
+
+impl EmbeddedNode {
+  /// The store, or an explanation of why there isn't one.
+  fn require_store(&self) -> Result<atomic_lib::Db, String> {
+    if let Some(store) = self.store.get() {
+      return Ok(store.clone());
+    }
+
+    Err(match self.startup_error.get() {
+      Some(error) => format!("The local node failed to start: {error}"),
+      None => "The local node has not finished starting up.".to_string(),
+    })
+  }
+}
+
+/// Turn a store-open failure into advice, because the common cause has a cure
+/// the message doesn't hint at. The desktop app and a command-line
+/// `atomic-server` default to the same data directory, and the store may only be
+/// opened once — so a server left running in a terminal keeps the app's node
+/// locked out.
+fn explain_startup_failure(error: &str) -> String {
+  if error.contains("Database already open") {
+    format!(
+      "{error}\n\nAnother atomic-server is already using this data directory. \
+       Quit it (or start it with --data-dir pointing elsewhere) and restart the app."
+    )
+  } else {
+    error.to_string()
+  }
 }
 
 /// Make this device's node act as the signed-in user, rather than as the
@@ -115,11 +151,7 @@ async fn adopt_agent(
   secret: String,
   node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
 ) -> Result<(), String> {
-  let store = node
-    .store
-    .get()
-    .ok_or("The local node has not finished starting up.")?
-    .clone();
+  let store = node.require_store()?;
   let config_file = node
     .config_file
     .get()
@@ -148,6 +180,240 @@ async fn adopt_agent(
   Ok(())
 }
 
+/// Cloud Vault, against the embedded node's own store.
+///
+/// In a browser the vault runs inside the WASM ClientDb, because that *is* the
+/// local database there. This app has no ClientDb — the embedded server already
+/// persists everything, and running an OPFS copy alongside it would mean two
+/// databases holding the same drive. So the same `atomic_lib::vault` functions
+/// are called here against the node's store instead: one copy of the data, one
+/// implementation of the format.
+///
+/// Tauri commands rather than HTTP endpoints, for the reason `adopt_agent`
+/// gives above: the embedded server listens on `localhost`, which on Android
+/// any other app can reach, and these take the drive's encryption key. Tauri
+/// IPC is callable only from our own webview.
+///
+/// Only sealing moves here. The network half — presigned URLs, uploads, and
+/// the agent-signed proof the control plane checks — stays in JS, where the
+/// agent's key already lives (see `helpers/managed/vault.ts`).
+///
+/// Keys and sealed bytes cross the IPC boundary base64-encoded rather than as
+/// byte arrays. Deliberate: a `Vec<u8>` renders as a JSON number array here,
+/// and getting exactly that wrong at the WASM boundary is what silently stored
+/// a stringified array in every vault object once already.
+mod vault_ipc {
+  pub use atomic_lib::vault::{
+    dek::DriveVaultKey,
+    store::{MemoryVaultStore, VaultObjectStore},
+    sync::{commit_lane_state, drive_prefix, export_vault_delta, import_vault_batch},
+  };
+  pub use base64::engine::general_purpose::STANDARD;
+  use base64::Engine as _;
+
+  #[derive(serde::Deserialize)]
+  #[serde(rename_all = "camelCase")]
+  pub struct VaultObjectIn {
+    pub object_key: String,
+    /// base64
+    pub sealed: String,
+  }
+
+  #[derive(serde::Serialize)]
+  #[serde(rename_all = "camelCase")]
+  pub struct VaultExportOut {
+    pub object_key: String,
+    /// base64
+    pub sealed: String,
+    pub resources: usize,
+    pub tombstones: usize,
+  }
+
+  #[derive(serde::Serialize)]
+  #[serde(rename_all = "camelCase")]
+  pub struct VaultImportOut {
+    pub packs_read: usize,
+    pub resources_restored: usize,
+    pub tombstones_applied: usize,
+  }
+
+  pub fn decode_key(key_b64: &str, epoch: u32) -> Result<DriveVaultKey, String> {
+    let raw = STANDARD
+      .decode(key_b64)
+      .map_err(|e| format!("drive vault key is not valid base64: {e}"))?;
+    let bytes: [u8; 32] = raw
+      .try_into()
+      .map_err(|_| "drive vault key must be exactly 32 bytes".to_string())?;
+
+    Ok(DriveVaultKey::from_bytes(bytes, epoch))
+  }
+
+  pub fn store_of(
+    node: &std::sync::Arc<super::EmbeddedNode>,
+  ) -> Result<atomic_lib::Db, String> {
+    node
+      .store
+      .get()
+      .ok_or_else(|| "The local node has not finished starting up.".to_string())
+      .cloned()
+  }
+
+  /// Run vault work on a thread of its own.
+  ///
+  /// `export_vault_delta` and `import_vault_batch` borrow a `&dyn
+  /// VaultObjectStore` across their awaits, so their futures are not `Send` and
+  /// cannot live in a Tauri command's future directly. Giving them a
+  /// current-thread runtime keeps that constraint where it belongs instead of
+  /// pushing `Send` bounds through the vault API for one caller's benefit.
+  ///
+  /// It also keeps a large export off the UI thread, which a synchronous
+  /// command would not.
+  pub async fn on_worker_thread<T, F>(work: F) -> Result<T, String>
+  where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+  {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    std::thread::spawn(move || {
+      let _ = tx.send(work());
+    });
+
+    rx.await
+      .map_err(|_| "The vault worker stopped before it answered.".to_string())?
+  }
+
+  /// A current-thread runtime for one non-`Send` future.
+  pub fn block_on<F: std::future::Future>(future: F) -> Result<F::Output, String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+      .enable_all()
+      .build()
+      .map_err(|e| format!("Could not start the vault worker: {e}"))?;
+
+    Ok(runtime.block_on(future))
+  }
+}
+
+/// Seal this drive's history into one vault object.
+///
+/// `None` when the drive has not changed since the last segment, so a periodic
+/// backup skips the upload instead of storing an empty object every tick.
+#[tauri::command]
+async fn vault_export(
+  drive_subject: String,
+  key: String,
+  key_epoch: u32,
+  drive_pseudonym: String,
+  device_pubkey: String,
+  segment: u32,
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+) -> Result<Option<vault_ipc::VaultExportOut>, String> {
+  let store = vault_ipc::store_of(&node)?;
+  let key = vault_ipc::decode_key(&key, key_epoch)?;
+
+  vault_ipc::on_worker_thread(move || {
+    use atomic_lib::Storelike as _;
+    use base64::Engine as _;
+    use vault_ipc::{VaultObjectStore as _, STANDARD};
+
+    let subject = atomic_lib::Subject::from_raw(&drive_subject, store.get_base_domain().as_deref());
+    let staging = vault_ipc::MemoryVaultStore::new();
+
+    let summary = vault_ipc::block_on(vault_ipc::export_vault_delta(
+      &store,
+      &subject,
+      &key,
+      &staging,
+      &drive_pseudonym,
+      &device_pubkey,
+      segment,
+    ))?
+    .map_err(|e| format!("Could not seal this drive: {e}"))?;
+
+    let Some(summary) = summary else {
+      return Ok(None);
+    };
+
+    let sealed = staging
+      .get(&summary.object_key)
+      .map_err(|e| format!("Sealed object went missing before it could be read: {e}"))?;
+
+    Ok(Some(vault_ipc::VaultExportOut {
+      sealed: STANDARD.encode(&sealed),
+      object_key: summary.object_key,
+      resources: summary.resources,
+      tombstones: summary.tombstones,
+    }))
+  })
+  .await
+}
+
+/// Record that a sealed segment is durably in the vault.
+///
+/// Separate from `vault_export` on purpose: until this is called the lane's
+/// progress stays provisional, so an upload that failed is retried against the
+/// same view of what has been backed up rather than one that assumed success.
+#[tauri::command]
+async fn vault_commit_segment(
+  drive_pseudonym: String,
+  device_pubkey: String,
+  segment: u32,
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+) -> Result<(), String> {
+  let store = vault_ipc::store_of(&node)?;
+
+  vault_ipc::commit_lane_state(&store, &drive_pseudonym, &device_pubkey, segment)
+    .map_err(|e| format!("Could not record the segment: {e}"))
+}
+
+/// Merge downloaded vault objects into the node's store.
+///
+/// Objects are applied in the order given, so the caller must pass them sorted
+/// by key: a later segment's deletion has to win over an earlier segment's copy
+/// of the same resource.
+#[tauri::command]
+async fn vault_import(
+  key: String,
+  key_epoch: u32,
+  drive_pseudonym: String,
+  objects: Vec<vault_ipc::VaultObjectIn>,
+  node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
+) -> Result<vault_ipc::VaultImportOut, String> {
+  let store = vault_ipc::store_of(&node)?;
+  let key = vault_ipc::decode_key(&key, key_epoch)?;
+
+  vault_ipc::on_worker_thread(move || {
+    use base64::Engine as _;
+    use vault_ipc::{VaultObjectStore as _, STANDARD};
+
+    let staging = vault_ipc::MemoryVaultStore::new();
+
+    for object in &objects {
+      let sealed = STANDARD
+        .decode(&object.sealed)
+        .map_err(|e| format!("Vault object {} is not valid base64: {e}", object.object_key))?;
+      staging
+        .put(&object.object_key, &sealed)
+        .map_err(|e| format!("Could not stage vault object {}: {e}", object.object_key))?;
+    }
+
+    let summary = vault_ipc::block_on(vault_ipc::import_vault_batch(
+      &store,
+      &key,
+      &staging,
+      &vault_ipc::drive_prefix(&drive_pseudonym),
+    ))?
+    .map_err(|e| format!("Could not restore from the vault: {e}"))?;
+
+    Ok(vault_ipc::VaultImportOut {
+      packs_read: summary.packs_read,
+      resources_restored: summary.resources_restored,
+      tombstones_applied: summary.tombstones_applied,
+    })
+  })
+  .await
+}
+
 /// Start the read-only NFS virtual drive (desktop only — mobile can't mount
 /// NFS). Returns the current status, including the `mount` command to run.
 #[cfg(all(desktop, unix))]
@@ -156,11 +422,7 @@ fn virtual_drive_start(
   node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>,
   vfs: tauri::State<'_, std::sync::Arc<vfs::VfsController>>,
 ) -> Result<vfs::VfsStatus, String> {
-  let store = node
-    .store
-    .get()
-    .ok_or("The local node has not finished starting up.")?
-    .clone();
+  let store = node.require_store()?;
   vfs.start(store)?;
 
   Ok(vfs.status())
@@ -193,7 +455,8 @@ pub fn run() {
   let builder = tauri::Builder::default()
     .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_shell::init())
-    .plugin(tauri_plugin_process::init());
+    .plugin(tauri_plugin_process::init())
+    .plugin(tauri_plugin_opener::init());
 
   // In-app QR scanner for device pairing (Android/iOS only).
   #[cfg(mobile)]
@@ -211,13 +474,21 @@ pub fn run() {
     .manage(std::sync::Arc::new(vfs::VfsController::default()))
     .invoke_handler(tauri::generate_handler![
       adopt_agent,
+      vault_export,
+      vault_commit_segment,
+      vault_import,
       virtual_drive_start,
       virtual_drive_stop,
       virtual_drive_status,
       virtual_drive_open
     ]);
   #[cfg(not(all(desktop, unix)))]
-  let builder = builder.invoke_handler(tauri::generate_handler![adopt_agent]);
+  let builder = builder.invoke_handler(tauri::generate_handler![
+    adopt_agent,
+    vault_export,
+    vault_commit_segment,
+    vault_import
+  ]);
 
   builder
     .setup(move |app| {
@@ -333,13 +604,20 @@ pub fn run() {
         let rt = actix_rt::Runtime::new().unwrap();
         // The hook hands us the store once it's up, so `adopt_agent` can point
         // the node's identity at the signed-in user.
-        rt.block_on(atomic_server_lib::serve::serve_with_hook(
+        let result = rt.block_on(atomic_server_lib::serve::serve_with_hook(
           config_clone,
           |appstate| {
             let _ = node_for_server.store.set(appstate.store.clone());
           },
-        ))
-        .unwrap();
+        ));
+
+        // Don't panic: this thread has no one to unwind to, and the window
+        // outlives it either way. Record the reason so the UI can show it.
+        if let Err(e) = result {
+          let reason = explain_startup_failure(&e.to_string());
+          eprintln!("[node] the embedded server stopped: {reason}");
+          let _ = node_for_server.startup_error.set(reason);
+        }
       });
 
       #[cfg(desktop)]

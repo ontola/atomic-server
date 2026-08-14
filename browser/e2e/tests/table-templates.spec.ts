@@ -239,12 +239,17 @@ test.describe('table templates', () => {
       '0.60',
       { timeout: 15_000 },
     );
-    // 2 + 20 pieces in stock, totalled by the template.
+    // 2 + 20 pieces in stock, totalled by the template. 30s on both: the
+    // total needs an aggregate read to get through the ClientDb worker, and
+    // post-reload that queue sits behind the re-drain's write storm for 15s+
+    // on a loaded runner (measured ~18.5s in the instrumented CI runs).
+    // Tracked as the OPFS write-amplification issue — when write count
+    // drops, these budgets can too.
     await expect(page.getByTestId('table-totals')).toContainText('Sum', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
     await expect(page.getByTestId('table-totals')).toContainText('22', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
 
     // The second view is the same table with a filter on it: two bolts are low

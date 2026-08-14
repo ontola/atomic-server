@@ -138,8 +138,13 @@ test.describe('row actions', () => {
     await expect(bolts).toContainText('3', { timeout: 15_000 });
 
     // Value block: the totals footer sums the quantity the buttons changed.
+    // 30s: the total needs an aggregate read to get through the ClientDb
+    // worker, and post-reload that queue sits behind the re-drain's write
+    // storm for 15s+ on a loaded runner (measured ~18.5s in the instrumented
+    // CI runs). Tracked as the OPFS write-amplification issue — when write
+    // count drops, this budget can too.
     await expect(page.getByTestId('table-totals')).toContainText('3', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
   });
 

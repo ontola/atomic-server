@@ -4,7 +4,7 @@
 // route. Mirrors the captured `getManagedUser()` in helpers/managedUsage.ts.
 
 import { PRODUCT_NAME } from './product';
-import { getManagedApiBase } from './api';
+import { getManagedApiBase, managedFetch } from './api';
 
 export type ManagedAccount = {
   email: string;
@@ -16,9 +16,7 @@ export type ManagedAccount = {
  * or null when not signed in. 204/401 both mean "no session".
  */
 export async function getManagedAccount(): Promise<ManagedAccount | null> {
-  const response = await fetch(`${getManagedApiBase()}/me`, {
-    credentials: 'include',
-  });
+  const response = await managedFetch(`/me`, {});
 
   if (response.status === 204 || response.status === 401) {
     return null;
@@ -38,9 +36,8 @@ export async function getManagedAccount(): Promise<ManagedAccount | null> {
  */
 export async function logoutManagedSession(): Promise<void> {
   try {
-    await fetch(`${getManagedApiBase()}/logout`, {
+    await managedFetch(`/logout`, {
       method: 'POST',
-      credentials: 'include',
     });
   } catch {
     // No control plane reachable (self-hosted) — nothing to sign out of.

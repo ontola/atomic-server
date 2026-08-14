@@ -355,7 +355,7 @@ OR
 Docker publishing is handled by the Dagger pipeline. Prefer publishing immutable version tags and, when appropriate, `latest`.
 
 1. build and publish: `dagger call create-docker-images --tags 0.41.0-beta.0 --tags latest`
-1. run, make sure it works: `docker run -p 9883:80 joepmeneer/atomic-server:0.41.0-beta.0`
+1. run, make sure it works: `docker run -p 9883:80 ghcr.io/ontola/atomic-server:0.41.0-beta.0`
 
 For a single local ARM64 image, use `dagger call create-docker-image --target aarch64-unknown-linux-musl export --path /tmp/atomic-server.tar`, then load and tag it with Docker.
 

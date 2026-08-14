@@ -144,6 +144,7 @@ msgstr "<0/> Create New Agent"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
+#: src/routes/SyncRoute.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/Plugin/AssignRights.tsx
@@ -830,9 +831,6 @@ msgstr "Result"
 #: src/routes/Search/SearchRoute.tsx
 msgid "With Tags:"
 msgstr "With Tags:"
-
-#~ msgid "The easiest way to create, share and model linked data."
-#~ msgstr "The easiest way to create, share and model linked data."
 
 #: src/routes/AboutRoute.tsx
 msgid "Features"
@@ -1771,6 +1769,7 @@ msgstr "Synced {0} resource{1} with {2}"
 msgid "Synced {0} resource{1}"
 msgstr "Synced {0} resource{1}"
 
+#: src/helpers/managed/deviceLink.ts
 #: src/routes/SettingsAgent.tsx
 #: src/routes/SyncRoute.tsx
 msgid "This device"
@@ -4027,6 +4026,8 @@ msgstr "Restore account"
 msgid "Enter the recovery password you set for {0}."
 msgstr "Enter the recovery password you set for {0}."
 
+#: src/components/Vault/VaultPanel.tsx
+#: src/views/getting-started/ConnectDeviceStep.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restoring…"
 msgstr "Restoring…"
@@ -4282,9 +4283,6 @@ msgstr ""
 #: src/routes/AboutRoute.tsx
 msgid "Atomic Data Browser"
 msgstr "Atomic Data Browser"
-
-#~ msgid "Atomic Data combines the ease of use of JSON, the connectivity of linked data and the reliability of type-safety — one open protocol for knowledge graphs, collaborative apps and shareable datasets."
-#~ msgstr "Atomic Data combines the ease of use of JSON, the connectivity of linked data and the reliability of type-safety — one open protocol for knowledge graphs, collaborative apps and shareable datasets."
 
 #. 0: ' '; 1: ' '
 #: src/routes/PruneTestsRoute.tsx
@@ -4858,6 +4856,7 @@ msgstr "Could not copy — select and copy the code manually."
 
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
+#: src/routes/SyncRoute.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connect"
 msgstr "Connect"
@@ -4937,10 +4936,6 @@ msgstr "Cached locally · works offline"
 #: src/routes/SyncRoute.tsx
 msgid "Server-only · no local cache"
 msgstr "Server-only · no local cache"
-
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Sync"
-msgstr "Cloud Sync"
 
 #. 0: usagePct
 #: src/routes/SyncRoute.tsx
@@ -5138,25 +5133,10 @@ msgstr "No {0} portal is configured for this server."
 msgid "Backing up this workspace to {0}…"
 msgstr "Backing up this workspace to {0}…"
 
+#: src/components/Vault/VaultPanel.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Setting up…"
 msgstr "Setting up…"
-
-#. 0: PRODUCT_NAME
-#. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Back up to {0}"
-msgstr "Back up to {0}"
-
-#. 0: PRODUCT_NAME; 1: ' '
-#: src/routes/SyncRoute.tsx
-msgid "This workspace lives only on this device. Turn on {0}{1} to back it up and reach it from your other devices and the web."
-msgstr "This workspace lives only on this device. Turn on {0}{1} to back it up and reach it from your other devices and the web."
-
-#: src/helpers/managed/cloudSync.ts
-msgid "Timed out connecting to the Cloud Sync node."
-msgstr "Timed out connecting to the Cloud Sync node."
 
 #: src/routes/SyncRoute.tsx
 msgid "Sign-in wasn’t completed — nothing was backed up."
@@ -5296,6 +5276,7 @@ msgid "Virtual drive"
 msgstr "Virtual drive"
 
 #: src/components/Settings/VirtualDriveSettings.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Turn off"
 msgstr "Turn off"
 
@@ -6113,7 +6094,9 @@ msgid "Could not start the entry"
 msgstr "Could not start the entry"
 
 #. 0: days
+#. 0: Math.floor(hours / 24)
 #: src/chunks/TablePage/derivedColumns.ts
+#: src/components/Vault/VaultPanel.tsx
 msgid "{0}d ago"
 msgstr "{0}d ago"
 
@@ -6633,9 +6616,222 @@ msgstr "{0} presets \"{1}\", which is not a column"
 msgid "The one workspace for everything, owned by you."
 msgstr "The one workspace for everything, owned by you."
 
-#~ msgid "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device — it can run with no server at all — and adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
-#~ msgstr "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device — it can run with no server at all — and adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
-
 #: src/routes/AboutRoute.tsx
 msgid "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device, and can run with no server at all. It adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
 msgstr "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device, and can run with no server at all. It adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
+
+#. 0: token
+#: src/helpers/managed/api.ts
+msgid "Bearer {0}"
+msgstr "Bearer {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Set up Cloud Server"
+msgstr "Set up Cloud Server"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server"
+msgstr "Cloud Server"
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike encrypted backup, our servers process what you put here."
+msgstr "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike encrypted backup, our servers process what you put here."
+
+#: src/routes/SyncRoute.tsx
+msgid "Devices"
+msgstr "Devices"
+
+#: src/routes/SyncRoute.tsx
+msgid "An always-on device has an address. One you carry has a code — scan it below instead."
+msgstr "An always-on device has an address. One you carry has a code — scan it below instead."
+
+#: src/routes/SyncRoute.tsx
+msgid "How to run your own server"
+msgstr "How to run your own server"
+
+#: src/routes/SyncRoute.tsx
+msgid "<0/> Connect a device"
+msgstr "<0/> Connect a device"
+
+#: src/helpers/managed/cloudSync.ts
+msgid "Timed out connecting to the Cloud Server node."
+msgstr "Timed out connecting to the Cloud Server node."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup"
+msgstr "Encrypted backup"
+
+#. 0: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "Keep an encrypted copy of this workspace in {0}. It is sealed on this device, so we store it without being able to read it."
+msgstr "Keep an encrypted copy of this workspace in {0}. It is sealed on this device, so we store it without being able to read it."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Turn on encrypted backup"
+msgstr "Turn on encrypted backup"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Working…"
+msgstr "Working…"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Back up now"
+msgstr "Back up now"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backups are paused. You can still restore what is already stored."
+msgstr "Backups are paused. You can still restore what is already stored."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup is on"
+msgstr "Encrypted backup is on"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "<0/> Restore"
+msgstr "<0/> Restore"
+
+#. 0: minutes
+#: src/components/Vault/VaultPanel.tsx
+msgid "{0} min ago"
+msgstr "{0} min ago"
+
+#. 0: hours
+#: src/components/Vault/VaultPanel.tsx
+msgid "{0}h ago"
+msgstr "{0}h ago"
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "That code expired. Start again when you are ready."
+msgstr "That code expired. Start again when you are ready."
+
+#. 0: providerName(portalUrl)
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Connect your {0} account"
+msgstr "Connect your {0} account"
+
+#. 0: ' '; 0.0: hostOf(portalUrl); 1: ' '
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Open{0} <0>{0}/link</0>{1} on a device where you are signed in, and enter this code."
+msgstr "Open{0} <0>{0}/link</0>{1} on a device where you are signed in, and enter this code."
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Waiting for you to approve it…"
+msgstr "Waiting for you to approve it…"
+
+#. 0: providerName(portalUrl)
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "This app cannot sign in on its own, so approve it from somewhere you already are. Then it can keep an encrypted copy of your workspaces — sealed here, so {0} stores it without being able to read it."
+msgstr "This app cannot sign in on its own, so approve it from somewhere you already are. Then it can keep an encrypted copy of your workspaces — sealed here, so {0} stores it without being able to read it."
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Getting a code…"
+msgstr "Getting a code…"
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Connect this device"
+msgstr "Connect this device"
+
+#: src/helpers/managed/deviceLink.ts
+msgid "Android"
+msgstr "Android"
+
+#: src/helpers/managed/deviceLink.ts
+msgid "Mac"
+msgstr "Mac"
+
+#: src/helpers/managed/deviceLink.ts
+msgid "Windows"
+msgstr "Windows"
+
+#: src/helpers/managed/deviceLink.ts
+msgid "Linux"
+msgstr "Linux"
+
+#: src/helpers/managed/deviceLink.ts
+msgid "Firefox"
+msgstr "Firefox"
+
+#: src/helpers/managed/deviceLink.ts
+msgid "Edge"
+msgstr "Edge"
+
+#: src/helpers/managed/deviceLink.ts
+msgid "Chrome"
+msgstr "Chrome"
+
+#: src/helpers/managed/deviceLink.ts
+msgid "Safari"
+msgstr "Safari"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use my own secret"
+msgstr "Use my own secret"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Restore this workspace"
+msgstr "Restore this workspace"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
+msgstr "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Restore my workspace"
+msgstr "Restore my workspace"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "…or bring it from another device instead"
+msgstr "…or bring it from another device instead"
+
+#: src/routes/SyncRoute.tsx
+msgid "Learn more"
+msgstr "Learn more"
+
+#. 0: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "Nothing has been backed up to {0} yet."
+msgstr "Nothing has been backed up to {0} yet."
+
+#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'; 2: formatBytes(enrollment.used_bytes); 3: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "{0} encrypted object{1} · {2} stored in {3}."
+msgstr "{0} encrypted object{1} · {2} stored in {3}."
+
+#: src/helpers/managed/deviceLink.test.ts
+#: src/helpers/managed/deviceLink.test.ts
+msgid "Joep’s Pixel"
+msgstr "Joep’s Pixel"
+
+#: src/helpers/managed/vault.test.ts
+#: src/helpers/managed/vault.test.ts
+msgid "Cloud Vault quota exceeded"
+msgstr "Cloud Vault quota exceeded"
+
+#. 0: PRODUCT_NAME
+#: src/helpers/managed/enrollment.ts
+msgid "Your {0} session expired. Sign in and retry."
+msgstr "Your {0} session expired. Sign in and retry."
+
+#. 0: PRODUCT_NAME
+#: src/helpers/managed/enrollment.ts
+msgid "{0} could not place this drive right now. This is usually "
+msgstr "{0} could not place this drive right now. This is usually "
+
+#. 0: PRODUCT_NAME; 1: response.status
+#: src/helpers/managed/enrollment.ts
+msgid "Could not enable {0} hosting (HTTP {1})."
+msgstr "Could not enable {0} hosting (HTTP {1})."
+
+#: src/helpers/managed/enrollment.test.ts
+msgid "Cloud Server requires a subscription"
+msgstr "Cloud Server requires a subscription"
+
+#: src/helpers/managed/enrollment.test.ts
+msgid "No session"
+msgstr "No session"
+
+#: src/helpers/managed/enrollment.test.ts
+msgid "Internal Server Error"
+msgstr "Internal Server Error"

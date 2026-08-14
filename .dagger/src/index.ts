@@ -1784,9 +1784,12 @@ VOLUME /atomic-storage
     );
 
     return (
-      dag
-        .container({ platform })
-        .build(dir)
+      dir
+        // `Container.build` was removed in the SDK that came with the v0.21
+        // engine bump — the Dockerfile build now hangs off the Directory.
+        // Branch CI never runs this function (publish is develop-only), so
+        // the bump's break only surfaced on the first develop run after it.
+        .dockerBuild({ platform })
         // .from(innerImage)
         .withFile('/usr/local/bin/atomic-server', binary)
         .withExec(['chmod', '+x', '/usr/local/bin/atomic-server'])
@@ -1815,9 +1818,18 @@ VOLUME /atomic-storage
       .filter(target => target !== firstImageArchitecture)
       .map(target => this.createDockerImage(target));
 
-    // Publish the multi-platform image with all variants
+    // Publish the multi-platform image with all variants.
+    //
+    // `docker/metadata-action` (the CI caller) outputs FULL references —
+    // `joepmeneer/atomic-server:develop` — and prefixing those again produced
+    // `joepmeneer/atomic-server:joepmeneer/atomic-server:develop`, which the
+    // registry rejects as "invalid reference format". Every develop publish
+    // since the tags became a list failed on it. Bare tag names (manual
+    // `dagger call create-docker-images --tags latest`) keep working via the
+    // prefix.
     for (const tag of tags) {
-      await firstImage.publish(`joepmeneer/atomic-server:${tag}`, {
+      const ref = tag.includes('/') ? tag : `joepmeneer/atomic-server:${tag}`;
+      await firstImage.publish(ref, {
         platformVariants: otherVariants,
       });
     }

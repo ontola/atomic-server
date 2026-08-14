@@ -4,6 +4,7 @@ import {
   before,
   createTableFromDialog,
   inDialog,
+  reloadGrid,
   waitForTableBuild,
   REBUILD_INDEX_TIME,
 } from './test-utils';
@@ -271,9 +272,13 @@ test.describe('tables', async () => {
     // `activeCell` + `CursorMode.Visual`, the precondition for Enter → Edit).
     // fillRow owns all positioning — clicking an already-active cell enters
     // edit mode instead of just focusing it, so we must not pre-click here.
+    // 30s, not the 10s default: the first data row renders after the new
+    // columns' commits clear the ClientDb worker queue, which under a loaded
+    // runner sits behind seconds of index-rebuilding writes (same measured
+    // budget as the rest of the totals/tables family).
     await expect(
       page.locator('[aria-rowindex="2"] > [aria-colindex="2"]'),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
     await page.waitForTimeout(1000);
 
     for (const [index, row] of rows.entries()) {
@@ -406,12 +411,24 @@ test.describe('tables', async () => {
     // Refresh and verify the rows persisted. The collection is virtualized, so
     // assert the loaded member count, then spot-check the first row (scroll to
     // top) and the last row (scroll to bottom).
-    await page.reload();
+    //
+    // `reloadGrid`, not a bare `page.reload()`: forty rows just went through
+    // materialize timers, outbox drains and OPFS persists, and a reload that
+    // does not wait for materialization + the durability flush rolls the tail
+    // of that work back (the CI-only "row40 missing after refresh").
+    await reloadGrid(page);
     await expect(page.getByTestId('editable-title').first()).toBeVisible();
     await page.waitForTimeout(REBUILD_INDEX_TIME);
 
-    await expect.poll(namedRowCount, { timeout: 15000 }).toBe(values.length);
+    // 30s, not the default: the post-reload re-drain queues forty rows of
+    // writes ahead of the member query in the ClientDb worker, and on a
+    // loaded runner that queue takes 15s+ to drain (measured ~18.5s in the
+    // instrumented CI runs). Tracked as the OPFS write-amplification issue —
+    // when write count drops, this budget can too.
+    await expect.poll(namedRowCount, { timeout: 30000 }).toBe(values.length);
 
+    // Same 30s budget as the count poll above, for the same reason: the
+    // spot-checked rows render from hydrations queued behind the re-drain.
     const grid = page.getByRole('grid');
     await grid.evaluate(g => g.scrollIntoView({ block: 'start' }));
     await page.mouse.move(600, 300);
@@ -419,13 +436,13 @@ test.describe('tables', async () => {
     await expect(
       page.getByRole('gridcell', { name: 'row1', exact: true }),
       'First row should be visible after refresh',
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
 
     await page.mouse.wheel(0, 5000); // scroll to bottom
     await expect(
       page.getByRole('gridcell', { name: last, exact: true }),
       `Last row "${last}" should be visible after refresh`,
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
   });
 
   test('sorting reorders freshly-entered (virtual) rows', async ({ page }) => {

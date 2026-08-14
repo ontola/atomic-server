@@ -10,7 +10,11 @@ use atomic_lib::{
     commit::CommitOpts,
     parse::ParseOpts,
     storelike::{Query, QueryResult, Storelike},
+    vault::dek::DriveVaultKey,
     vault::keys::{argon2id_derive_key, Argon2Params},
+    vault::secret_envelope::{NewWrapper, SecretEnvelope, Unlock},
+    vault::store::{MemoryVaultStore, VaultObjectStore},
+    vault::sync::{commit_lane_state, drive_prefix, export_vault_delta, import_vault_batch},
     Commit, Db, Resource, Subject, Value,
 };
 use wasm_bindgen::prelude::*;
@@ -700,4 +704,289 @@ pub async fn migrate_legacy_client_db(
     atomic_lib::db::opfs_backend::migrate_legacy_db(LEGACY_DB_NAME, &target, key.as_ref())
         .await
         .map_err(to_js_err)
+}
+
+// ── Cloud Vault ─────────────────────────────────────────────────────────────
+//
+// The split of work here is deliberate: **Rust does crypto and format, JS does
+// the network.**
+//
+// A vault client has to talk to the control plane for presigned URLs and then
+// to object storage for the bytes. All of that — session cookies, fetch,
+// retries, CORS — already exists in TypeScript and works. Reimplementing it
+// behind WASM would mean an async object-store trait, an HTTP client compiled
+// to wasm32, and credential plumbing across the boundary, to arrive at what the
+// browser already does well.
+//
+// So these functions take and return *bytes*. `vaultExport` seals a drive into
+// an object and hands it over; JS uploads it wherever the control plane said.
+// `vaultImport` takes objects JS has downloaded and merges them into the store.
+// The encrypted payload never leaves Rust unencrypted, which is the only
+// property that actually matters for a blind vault.
+
+use serde::{Deserialize, Serialize};
+
+/// One sealed object, ready for JS to upload.
+///
+/// `sealed` is deliberately NOT a field here. `serde_wasm_bindgen` renders a
+/// `Vec<u8>` as a JS *array of numbers*, not a `Uint8Array` — and `fetch` has
+/// no binary meaning for an array, so it stringifies it. Every object uploaded
+/// that way lands in the bucket as the ASCII text `"1,1,0,0,..."`, which reads
+/// as a successful backup and can never be restored (the first byte decodes as
+/// 49, the character '1', instead of the envelope version).
+///
+/// So the bytes are attached separately, as a real `Uint8Array`. See
+/// `attach_sealed` below.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultExportResult {
+    /// Where the control plane expects this object. JS should still use the key
+    /// the server returns from `upload-urls`; this one is computed from the
+    /// same rules and exists so a mismatch is visible rather than silent.
+    object_key: String,
+    resources: usize,
+    tombstones: usize,
+}
+
+/// Add `sealed` to a serialised {@link VaultExportResult} as a `Uint8Array`.
+fn attach_sealed(value: JsValue, sealed: &[u8]) -> Result<JsValue, JsError> {
+    js_sys::Reflect::set(
+        &value,
+        &JsValue::from_str("sealed"),
+        &js_sys::Uint8Array::from(sealed).into(),
+    )
+    .map_err(|_| JsError::new("could not attach sealed bytes to the export result"))?;
+
+    Ok(value)
+}
+
+/// An object JS downloaded, on its way back into the store.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultObjectInput {
+    object_key: String,
+    sealed: Vec<u8>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultImportResult {
+    packs_read: usize,
+    resources_restored: usize,
+    tombstones_applied: usize,
+}
+
+/// The message an agent signs to derive its vault key-encryption key.
+///
+/// Callers sign these exact bytes and pass the signature to `vaultWrapKey` /
+/// `vaultUnwrapKey`. Fixed and versioned: changing it would orphan every
+/// envelope already stored.
+#[wasm_bindgen(js_name = "vaultProofMessage")]
+pub fn vault_proof_message() -> Vec<u8> {
+    atomic_lib::vault::secret_envelope::AGENT_VAULT_PROOF_MESSAGE.to_vec()
+}
+
+/// Wrap a drive vault key so it survives this device.
+///
+/// This is what makes "clear site data, sign in again, restore" work. The key
+/// is sealed under the account's agent secret — the credential the user already
+/// has — so enabling backup adds nothing for them to remember. Whatever
+/// restores their identity restores their drive keys.
+///
+/// The returned JSON is opaque and safe for the control plane to store: it
+/// holds the key only in ciphertext, and the server never sees an agent secret.
+///
+/// Wrapping, not deriving. A derived key would weld data encryption to identity
+/// forever — no re-keying a drive without a new identity, no sharing one
+/// without sharing the agent secret. Wrapping keeps the drive key independent
+/// and costs the user nothing.
+#[wasm_bindgen(js_name = "vaultWrapKey")]
+pub fn vault_wrap_key(drive_key: &[u8], agent_secret: &[u8]) -> Result<String, JsError> {
+    if drive_key.len() != 32 {
+        return Err(JsError::new("drive vault key must be exactly 32 bytes"));
+    }
+
+    check_agent_proof(agent_secret)?;
+
+    SecretEnvelope::create(drive_key, &[NewWrapper::AgentSecret { agent_secret }])
+        .map_err(to_js_err)?
+        .to_json()
+        .map_err(to_js_err)
+}
+
+/// Recover a drive vault key from its wrapped form.
+///
+/// Fails rather than returning nonsense when the agent secret is wrong: a
+/// restore that proceeded with a bad key would produce a drive full of
+/// undecryptable objects, which is far harder to diagnose than a refusal here.
+#[wasm_bindgen(js_name = "vaultUnwrapKey")]
+pub fn vault_unwrap_key(envelope_json: &str, agent_secret: &[u8]) -> Result<Vec<u8>, JsError> {
+    check_agent_proof(agent_secret)?;
+
+    let secret = SecretEnvelope::from_json(envelope_json)
+        .map_err(to_js_err)?
+        .unwrap_secret(&Unlock::AgentSecret(agent_secret))
+        .map_err(to_js_err)?;
+
+    // An envelope that opened but does not hold a drive key means the wrong
+    // envelope was fetched. Refusing here names the problem; letting it through
+    // surfaces later as objects that will not decrypt, which reads like data
+    // corruption.
+    if secret.len() != 32 {
+        return Err(JsError::new(
+            "this envelope does not contain a drive vault key",
+        ));
+    }
+
+    Ok(secret)
+}
+
+/// A fresh random drive vault key, as raw bytes.
+///
+/// Generated in Rust so the browser's key material comes from the same CSPRNG
+/// as everything else in the format, rather than depending on which JS crypto
+/// the caller reaches for.
+#[wasm_bindgen(js_name = "vaultGenerateKey")]
+pub fn vault_generate_key() -> Vec<u8> {
+    DriveVaultKey::generate(1).expose_secret().to_vec()
+}
+
+/// The proof must be a 64-byte Ed25519 signature.
+///
+/// Not the private key: the browser's `CryptoProvider` exposes signing rather
+/// than key bytes, deliberately, so that hardware-backed and non-extractable
+/// keys remain possible. Requiring the key would have closed that door
+/// permanently.
+///
+/// Enforcing the length also removes an ambiguity that already caused a bug:
+/// the "agent secret" has several representations in this codebase, and
+/// wrapping under one while unwrapping with another produced an envelope
+/// nothing could open. A signature has exactly one representation.
+fn check_agent_proof(proof: &[u8]) -> Result<(), JsError> {
+    if proof.len() != 64 {
+        return Err(JsError::new(
+            "agent proof must be the 64-byte signature over the vault derivation message",
+        ));
+    }
+
+    Ok(())
+}
+
+fn drive_key(key_bytes: &[u8], epoch: u32) -> Result<DriveVaultKey, JsError> {
+    let bytes: [u8; 32] = key_bytes
+        .try_into()
+        .map_err(|_| JsError::new("drive vault key must be exactly 32 bytes"))?;
+    Ok(DriveVaultKey::from_bytes(bytes, epoch))
+}
+
+#[wasm_bindgen]
+impl ClientDb {
+    /// Seal this drive's history into one vault object.
+    ///
+    /// Returns `null` when the drive has nothing to back up, so a caller can
+    /// skip the upload instead of storing an empty object every tick.
+    ///
+    /// The returned bytes are already encrypted: the control plane and the
+    /// bucket only ever see ciphertext.
+    #[wasm_bindgen(js_name = "vaultExport")]
+    pub async fn vault_export(
+        &self,
+        drive_subject: &str,
+        key_bytes: &[u8],
+        key_epoch: u32,
+        drive_pseudonym: &str,
+        device_pubkey: &str,
+        segment: u32,
+    ) -> Result<JsValue, JsError> {
+        let key = drive_key(key_bytes, key_epoch)?;
+        let subject = Subject::from_raw(drive_subject, self.db.get_base_domain().as_deref());
+        let staging = MemoryVaultStore::new();
+
+        let summary = export_vault_delta(
+            &self.db,
+            &subject,
+            &key,
+            &staging,
+            drive_pseudonym,
+            device_pubkey,
+            segment,
+        )
+        .await
+        .map_err(to_js_err)?;
+
+        let Some(summary) = summary else {
+            return Ok(JsValue::NULL);
+        };
+
+        let sealed = staging.get(&summary.object_key).map_err(to_js_err)?;
+        let result = serde_wasm_bindgen::to_value(&VaultExportResult {
+            object_key: summary.object_key,
+            resources: summary.resources,
+            tombstones: summary.tombstones,
+        })
+        .map_err(to_js_err)?;
+
+        attach_sealed(result, &sealed)
+    }
+
+    /// Record that a sealed segment is durably in the vault.
+    ///
+    /// Sealing and storing are separate steps here: `vaultExport` produces
+    /// bytes and JS uploads them afterwards. Until this is called the lane's
+    /// progress is provisional, so an upload that failed is retried against the
+    /// same view of what has been backed up rather than one that assumed
+    /// success. Call it after the control plane confirms the object.
+    #[wasm_bindgen(js_name = "vaultCommitSegment")]
+    pub fn vault_commit_segment(
+        &self,
+        drive_pseudonym: &str,
+        device_pubkey: &str,
+        segment: u32,
+    ) -> Result<(), JsError> {
+        commit_lane_state(&self.db, drive_pseudonym, device_pubkey, segment).map_err(to_js_err)
+    }
+
+    /// Merge downloaded vault objects into this store.
+    ///
+    /// Safe against a populated store as well as an empty one: Loro merges
+    /// rather than overwrites, so restoring onto a device that already has
+    /// some of the drive converges instead of clobbering local edits.
+    ///
+    /// Objects are applied in the order given, so JS must pass them sorted by
+    /// key — a later segment's deletion has to win over an earlier segment's
+    /// copy of the same resource.
+    ///
+    /// Spans every device lane, not just this device's. Each device appends
+    /// only to its own lane, so restoring one lane would silently drop every
+    /// other device's history while reporting success.
+    #[wasm_bindgen(js_name = "vaultImport")]
+    pub async fn vault_import(
+        &self,
+        key_bytes: &[u8],
+        key_epoch: u32,
+        drive_pseudonym: &str,
+        objects: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let key = drive_key(key_bytes, key_epoch)?;
+        let objects: Vec<VaultObjectInput> =
+            serde_wasm_bindgen::from_value(objects).map_err(to_js_err)?;
+
+        let staging = MemoryVaultStore::new();
+        for object in &objects {
+            staging
+                .put(&object.object_key, &object.sealed)
+                .map_err(to_js_err)?;
+        }
+
+        let summary = import_vault_batch(&self.db, &key, &staging, &drive_prefix(drive_pseudonym))
+            .await
+            .map_err(to_js_err)?;
+
+        serde_wasm_bindgen::to_value(&VaultImportResult {
+            packs_read: summary.packs_read,
+            resources_restored: summary.resources_restored,
+            tombstones_applied: summary.tombstones_applied,
+        })
+        .map_err(to_js_err)
+    }
 }

@@ -2,19 +2,27 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 import { before, focusCell, newResource } from './test-utils';
 
 /**
- * Right-clicks `target` until its context menu is actually open.
+ * Right-clicks `target` until its context menu is open AND shows `items`.
  *
  * The menu mounts hidden and reveals a frame after positioning, and a
  * right-click landing while a previous menu is still closing is swallowed —
- * so the open has to be retried, not merely waited on.
+ * so the open has to be retried, not merely waited on. The expected items
+ * are part of the retried unit, not asserted afterwards: a menu can open and
+ * then close again before a follow-up assertion runs (a late re-render or a
+ * focus steal under load unmounts it), and "some menu was briefly visible"
+ * is not the thing any caller actually needs.
  */
-async function openContextMenu(page: Page, target: Locator) {
+async function openContextMenu(page: Page, target: Locator, items: Locator[]) {
   await expect(async () => {
     await target.click({ button: 'right' });
     await expect(
       page.getByRole('menu').filter({ visible: true }).first(),
     ).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 15_000 });
+
+    for (const item of items) {
+      await expect(item).toBeVisible({ timeout: 2_000 });
+    }
+  }).toPass({ timeout: 20_000 });
 }
 
 test.describe('resource context menu', () => {
@@ -36,8 +44,9 @@ test.describe('resource context menu', () => {
       .getByRole('navigation')
       .getByRole('button', { name: 'Widgets' })
       .first();
-    await openContextMenu(page, sidebarLink);
-    await expect(page.getByTestId('menu-item-history')).toBeVisible();
+    await openContextMenu(page, sidebarLink, [
+      page.getByTestId('menu-item-history'),
+    ]);
     // Close it.
     await page.keyboard.press('Escape');
     await expect(page.getByRole('menu')).toHaveCount(0);
@@ -79,15 +88,17 @@ test.describe('resource context menu', () => {
       .first();
     await expect(persistedCell).toBeVisible();
     // Right-click the persisted cell → resource menu.
-    await openContextMenu(page, persistedCell);
-    await expect(page.getByTestId('menu-item-history')).toBeVisible();
+    await openContextMenu(page, persistedCell, [
+      page.getByTestId('menu-item-history'),
+    ]);
     await page.keyboard.press('Escape');
 
     // --- Table header (column menu on right-click) ---
     // Right-clicking a column header opens the same menu as its kebab button.
-    await openContextMenu(page, page.getByRole('columnheader').nth(1));
-    await expect(page.getByTestId('menu-item-hide')).toBeVisible();
-    await expect(page.getByTestId('menu-item-remove')).toBeVisible();
+    await openContextMenu(page, page.getByRole('columnheader').nth(1), [
+      page.getByTestId('menu-item-hide'),
+      page.getByTestId('menu-item-remove'),
+    ]);
   });
 
   test('cmd+m opens searchable action menu; cmd+up goes to parent', async ({

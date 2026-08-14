@@ -13,16 +13,6 @@ import { Button } from '../components/Button';
 import { Column } from '../components/Row';
 import Field from '../components/forms/Field';
 import { InputWrapper, InputStyled } from '../components/forms/InputStyles';
-import {
-  fetchManagedInfo,
-  type ManagedInfo,
-  EMPTY_NODE_INFO,
-} from '../helpers/managedServer';
-import {
-  enableCloudSyncForDrive,
-  ensureManagedSession,
-} from '../helpers/managed/cloudSync';
-import { PRODUCT_NAME } from '../helpers/managed/product';
 
 export const NewDriveRoute = createRoute({
   path: pathNames.newDrive,
@@ -30,40 +20,33 @@ export const NewDriveRoute = createRoute({
   component: () => <NewDrivePage />,
 });
 
-// Reached from the managed portal's dashboard ("+ New drive"): creates a
-// drive on whichever node this device is connected to, then immediately
-// enrolls it in Cloud Sync — the portal only ever holds a session cookie,
-// never the agent's private key, so the drive has to be created here, not
-// there. Mirrors what GettingStartedFlow does for a brand new account's
-// first drive, but for an Nth drive on an already-signed-in device. See
-// SyncRoute's `backupToCloud` for the enrollment half of this, reused as-is
-// via `enableCloudSyncForDrive`.
+// Reached from the managed portal's dashboard ("+ New drive"). The drive is
+// created *here* rather than in the portal because the portal only ever holds
+// a session cookie, never the agent's private key.
+//
+// It creates the drive and stops there. It used to also enroll the new drive
+// in Cloud Server, which was right when hosting was what every account got and
+// is wrong now: Cloud Server is the paid tier, and the default is a local-first
+// drive with encrypted backup offered from the Sync page like any other drive.
+//
+// That leftover was not a cosmetic mismatch. Enrolling needs a node with free
+// capacity, so creating a drive failed outright whenever the fleet was full —
+// a 500 reported as "Could not enable backup" — and once plan limits are
+// enforced it fails again with a 402 for anyone without a subscription. Neither
+// has anything to do with making a drive.
 function NewDrivePage(): JSX.Element {
   const store = useStore();
-  const { agent, baseURL, setServer, setDrive } = useSettings();
+  const { agent, setDrive } = useSettings();
   const navigate = useNavigateWithTransition();
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | undefined>();
-  const [managedInfo, setManagedInfo] = useState<ManagedInfo>(EMPTY_NODE_INFO);
 
   useEffect(() => {
     if (!agent) {
       navigate(paths.welcome);
     }
   }, [agent, navigate]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void fetchManagedInfo(baseURL).then(info => {
-      if (!cancelled) setManagedInfo(info);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [baseURL]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -79,37 +62,6 @@ function NewDrivePage(): JSX.Element {
       const resource = await store.createDrive(trimmed, { personal: false });
       store.notifyResourceManuallyCreated(resource);
       setDrive(resource.subject);
-
-      const args = {
-        store,
-        drive: resource.subject,
-        agentSubject,
-        setServer,
-        managedInfo,
-      };
-      let result = await enableCloudSyncForDrive(args);
-
-      if (!result.ok) {
-        if (!result.portalUrl) {
-          throw new Error(
-            `No ${PRODUCT_NAME} portal is configured for this server.`,
-          );
-        }
-
-        const signedIn = await ensureManagedSession(result.portalUrl);
-
-        if (!signedIn) {
-          throw new Error('Sign-in wasn’t completed — nothing was created.');
-        }
-
-        result = await enableCloudSyncForDrive(args);
-
-        if (!result.ok) {
-          throw new Error(
-            `Could not enable ${PRODUCT_NAME} backup for this drive.`,
-          );
-        }
-      }
 
       toast.success('Drive created');
       navigate(constructOpenURL(resource.subject));

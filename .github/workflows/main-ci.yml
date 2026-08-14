@@ -41,11 +41,28 @@ jobs:
         with:
           username: joepmeneer
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Transition period: images publish to BOTH registries. GHCR
+      # (org-owned, GITHUB_TOKEN-authenticated, no pull rate limits) is the
+      # long-term home; the Docker Hub image stays until users and docs have
+      # moved over. Dagger's publish reads the host docker config, so these
+      # login steps are what authenticate it.
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
         with:
-          images: joepmeneer/atomic-server
+          images: |
+            joepmeneer/atomic-server
+            ghcr.io/ontola/atomic-server
+          # The tags land in a dagger `--tags` list argument, which is
+          # comma-separated — the default newline separator would split the
+          # shell command instead.
+          sep-tags: ","
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Dagger CI (test, lint, build)
         uses: dagger/dagger-for-github@8.0.0

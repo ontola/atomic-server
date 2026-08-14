@@ -71,7 +71,35 @@ export type WorkerRequest =
   | { id: number; type: 'getBlob'; hash: Uint8Array }
   | { id: number; type: 'blake3Hash'; data: Uint8Array }
   | { id: number; type: 'getAllVersionVectors' }
-  | { id: number; type: 'getVersionVectorsForDrive'; drive: string };
+  | { id: number; type: 'getVersionVectorsForDrive'; drive: string }
+  // Cloud Vault. These live in the worker because it holds the only Db handle;
+  // the network half stays on the main thread, where the control-plane session
+  // and CORS setup already work. What crosses this boundary is ciphertext.
+  | {
+      id: number;
+      type: 'vaultExport';
+      driveSubject: string;
+      key: Uint8Array;
+      keyEpoch: number;
+      drivePseudonym: string;
+      devicePubkey: string;
+      segment: number;
+    }
+  | {
+      id: number;
+      type: 'vaultImport';
+      key: Uint8Array;
+      keyEpoch: number;
+      drivePseudonym: string;
+      objects: { objectKey: string; sealed: Uint8Array }[];
+    }
+  | {
+      id: number;
+      type: 'vaultCommitSegment';
+      drivePseudonym: string;
+      devicePubkey: string;
+      segment: number;
+    };
 
 /** Message types sent from worker back to main thread */
 export type WorkerResponse =
@@ -280,6 +308,61 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return db!.getAllVersionVectors();
+    }
+
+    case 'vaultExport': {
+      await ensureInit();
+
+      return db!.vaultExport(
+        msg.driveSubject,
+        msg.key,
+        msg.keyEpoch,
+        msg.drivePseudonym,
+        msg.devicePubkey,
+        msg.segment,
+      );
+    }
+
+    case 'vaultImport': {
+      await ensureInit();
+      const summary = await db!.vaultImport(
+        msg.key,
+        msg.keyEpoch,
+        msg.drivePseudonym,
+        msg.objects,
+      );
+      // A restore writes a whole drive behind `Durability::None`, so without
+      // persisting it here those writes wait for the next flush tick.
+      //
+      // Marking dirty is not enough: the tick is 1s away and the caller
+      // reloads the page the moment this resolves (`onRestored` in
+      // `VaultPanel`), so the reload regularly wins that race and the drive
+      // comes back empty — a restore that reported success and silently did
+      // nothing, which is the precise failure this is meant to prevent.
+      //
+      // A restore is one bulk write, so the amortisation the tick exists for
+      // does not apply. Flush now; we are already inside the work queue, so
+      // this cannot race an in-flight mutation.
+      try {
+        db!.flush();
+      } catch (e) {
+        // Fall back to the tick rather than failing a restore that did land.
+        dirty = true;
+        console.error('[ClientDb] flush after vault import failed:', e);
+      }
+
+      return summary;
+    }
+
+    case 'vaultCommitSegment': {
+      await ensureInit();
+      db!.vaultCommitSegment(msg.drivePseudonym, msg.devicePubkey, msg.segment);
+      // Lane bookkeeping is a normal write behind `Durability::None`; without
+      // this the next tick's flush is what persists it, and a reload in between
+      // would re-report an already-committed segment as pending.
+      dirty = true;
+
+      return undefined;
     }
 
     case 'getVersionVectorsForDrive': {

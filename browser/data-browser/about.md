@@ -22,7 +22,7 @@ The back-end of this app is [atomic-server](https://github.com/atomicdata-dev/at
 
 The easiest way to run an [atomic-server](https://github.com/atomicdata-dev/atomic-data-browser) is by using Docker:
 
-`docker run -p 80:80 -p 443:443 -v atomic-storage:/atomic-storage joepmeneer/atomic-server`
+`docker run -p 80:80 -p 443:443 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`
 
 ...and visit [localhost](http://localhost).
 
