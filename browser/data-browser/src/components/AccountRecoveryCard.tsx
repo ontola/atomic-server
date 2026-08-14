@@ -10,6 +10,8 @@ import { InputStyled, InputWrapper } from './forms/InputStyles';
 import { getManagedAccount, PRODUCT_NAME } from '../helpers/managed';
 import { useSettings } from '../helpers/AppSettings';
 import { fetchManagedInfo } from '../helpers/managedServer';
+import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
+import { getRememberedManagedPortalUrl } from '../helpers/managed/api';
 import {
   addRecoveryCodeWrapper,
   envelopeWrapperKinds,
@@ -66,7 +68,18 @@ export function AccountRecoveryCard({
       if (cancelled) return;
 
       setHasSession(!!session);
-      setPortalUrl(info?.portalUrl ?? null);
+      // Resolve the portal the same way every other surface does, rather than
+      // reading `info.portalUrl` straight off the connected node.
+      //
+      // That direct read meant only a *managed* node could produce a portal
+      // link, so this card hid "Sign in to add a recovery code" on exactly the
+      // devices that need it — a browser pointed at a self-hosted or local
+      // node, or a desktop app on its own embedded one. Worse, the hint below
+      // still told the reader to sign in, because it keys off `hasSession`
+      // alone: instructions to do something with no way to do it.
+      setPortalUrl(
+        getManagedPortalUrl(info) ?? getRememberedManagedPortalUrl(),
+      );
     })();
 
     return () => {
