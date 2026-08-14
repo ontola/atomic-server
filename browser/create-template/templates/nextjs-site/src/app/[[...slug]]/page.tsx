@@ -5,6 +5,9 @@ import { core } from '@tomic/lib';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 type Params = {
   slug?: string[];
 };

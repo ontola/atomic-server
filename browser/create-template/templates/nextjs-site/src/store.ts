@@ -12,6 +12,12 @@ store.setDrive(env.NEXT_PUBLIC_ATOMIC_DRIVE);
 // local fallback; client-side stores still derive this state from WebSocket.
 if (typeof window === 'undefined') {
   store.setServerConnected(true);
+  // Next.js caches `fetch` during SSR and `next build`. An empty collection
+  // on first hit (index still catching up after applying the template) would
+  // then be reused, so blog listings stay empty until a rebuild.
+  store.injectFetch((input, init) =>
+    fetch(input, { ...init, cache: 'no-store' }),
+  );
 }
 
 /**
