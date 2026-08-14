@@ -168,6 +168,7 @@ fn should_build(dirs: &Dirs) -> bool {
                         .to_str()
                         .map(|s| !s.starts_with(".DS_Store"))
                         .unwrap_or(false)
+                        && !is_js_build_output(entry.path())
                 })
                 .any(|entry| {
                     if let Ok(entry) = entry {
@@ -403,6 +404,36 @@ fn precompress_assets(root: &Path) -> std::io::Result<()> {
         );
     }
     Ok(())
+}
+
+/// Paths under `src/` that the JS build *writes*, so they are output, not
+/// input, even though they live among the sources (and `main.loader.js` is
+/// committed, unlike its two siblings).
+///
+/// wuchale rewrites all three on every `pnpm run build` — same bytes, new
+/// mtime. Counting them as "a source changed" makes this check
+/// self-triggering: one build guarantees the next one rebuilds too, so the
+/// ~35s data-browser build is paid every single time and the mtime comparison
+/// never gets to do its job. CI feels it hardest, where each job starts from
+/// whatever the previous one left behind.
+///
+/// A genuine wuchale change still forces a rebuild: it arrives as a
+/// `pnpm-lock.yaml` bump, which is watched.
+fn is_js_build_output(path: &Path) -> bool {
+    // Matched on the tail rather than the file name alone: `data.js` is a
+    // name plausible enough to exist as real source elsewhere under src/, and
+    // silently ignoring *that* would be the opposite bug — a source edit that
+    // never triggers a rebuild.
+    const GENERATED: &[&str] = &[
+        "src/locales/main.loader.js",
+        "src/locales/data.js",
+        "src/locales/.wuchale",
+    ];
+
+    // `.wuchale` needs no contents check: WalkDir consults filter_entry on a
+    // directory before descending, so rejecting it here prunes the subtree.
+    let path = path.to_string_lossy().replace('\\', "/");
+    GENERATED.iter().any(|suffix| path.ends_with(suffix))
 }
 
 /// Finds the modification time of the newest file in the dist directory
