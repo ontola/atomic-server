@@ -4,6 +4,7 @@ import {
   handlePushWake,
   shouldOpenAfterPushWake,
   shouldSurfaceAfterPushSync,
+  visiblePushCopy,
   type PushPlatform,
 } from './devicePushToken.js';
 import { watchDedupeKey } from './mentions.js';
@@ -17,6 +18,18 @@ describe('buildPushWakePayload', () => {
     expect(payload).toEqual({ about: 'did:ad:doc1', type: 'mention' });
     expect(payload).not.toHaveProperty('body');
     expect(payload).not.toHaveProperty('summary');
+  });
+});
+
+describe('visiblePushCopy', () => {
+  it('stays generic and never echoes the about subject', () => {
+    const copy = visiblePushCopy('mention');
+    expect(copy.title).toBe('Atomic');
+    expect(copy.body).toBe('Someone mentioned you');
+    expect(visiblePushCopy('message').body).toBe('You have a new message');
+    expect(visiblePushCopy('access-request').body).toBe(
+      'Someone requested access',
+    );
   });
 });
 

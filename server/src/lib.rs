@@ -23,6 +23,8 @@ pub mod node_key;
 pub mod plugins;
 /// Phase 5 push wake helpers (payload contract + mention/watch match).
 pub mod push_wake;
+/// In-process FCM OAuth / APNs JWT minting from service-account JSON and `.p8`.
+pub mod push_credentials;
 /// Env-configured FCM/APNs sender (`ATOMIC_FCM_*` / `ATOMIC_APNS_*`).
 pub mod push_provider;
 pub mod rate_limit;

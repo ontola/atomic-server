@@ -83,10 +83,17 @@ export function NotificationOsPresenter(): null {
           return;
         }
 
+        const subject = result.itemSubject ?? `wake:${result.about}`;
+
+        if (seenRef.current.has(subject)) {
+          return;
+        }
+
+        seenRef.current.add(subject);
         liveRef.current = true;
         await present(
           {
-            subject: result.itemSubject ?? `wake:${result.about}`,
+            subject,
             summary: result.summary ?? 'New notification',
             about: result.about,
             type: result.type,

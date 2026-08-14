@@ -1,9 +1,9 @@
-//! Remote push wake helpers for Phase 5 (APNs / FCM / web-push).
+//! Remote push helpers for Phase 5 (APNs / FCM).
 //!
-//! Hub fan-out must stay **wake-only**: payload carries `about` + `type`, never
-//! a trusted summary/body. Clients sync, run `NotificationEngine`, and suppress
-//! if the item is already read. See `planning/notifications.md` Phase 5 and
-//! `social-apps.md` P2.3.
+//! Data bag stays **wake-only** (`about` + `type`, never a trusted summary).
+//! The OS banner uses generic title/body so a killed iOS/Android app still
+//! shows a lock-screen notification. Clients sync, run `NotificationEngine`,
+//! and suppress/cancel if the item is already read.
 //!
 //! `CommitMonitor` builds mention + watch wake candidates, looks up
 //! `DevicePushToken`s, and delivers via [`PushSender`] (default:
@@ -32,12 +32,37 @@ impl PushWakeHint {
         }
     }
 
-    /// Serialize to the on-the-wire data payload (no alert body).
+    /// Serialize to the on-the-wire **data** bag (no trusted document body).
+    /// Visible APNs/FCM banners use [`visible_title`] / [`visible_body`] instead.
     pub fn to_data_payload(&self) -> JsonValue {
         json!({
             "about": self.about,
             "type": self.notification_type,
         })
+    }
+
+    /// Generic lock-screen title. Never includes resource content.
+    pub fn visible_title(&self) -> &'static str {
+        "Atomic"
+    }
+
+    /// Generic lock-screen body keyed only by `notification_type`.
+    /// iOS drops silent (`content-available`) pushes when the app is killed;
+    /// a visible alert is required for true app notifications.
+    pub fn visible_body(&self) -> &'static str {
+        visible_body_for_type(&self.notification_type)
+    }
+}
+
+/// Generic OS-banner copy. Keep in sync with `@tomic/lib` `visiblePushCopy`.
+pub fn visible_body_for_type(notification_type: &str) -> &'static str {
+    match notification_type {
+        "mention" => "Someone mentioned you",
+        "message" => "You have a new message",
+        "access-request" => "Someone requested access",
+        "watch-membership" => "A list you follow changed",
+        "watch-content" => "Something you follow was updated",
+        _ => "You have a new notification",
     }
 }
 
@@ -392,6 +417,31 @@ mod tests {
         assert!(!obj.contains_key("body"));
         assert!(!obj.contains_key("summary"));
         assert!(!obj.contains_key("title"));
+    }
+
+    #[test]
+    fn visible_copy_is_generic_per_type() {
+        let mention = PushWakeHint::new("did:ad:secret-doc", "mention");
+        assert_eq!(mention.visible_title(), "Atomic");
+        assert_eq!(mention.visible_body(), "Someone mentioned you");
+        assert!(!mention.visible_body().contains("secret-doc"));
+
+        assert_eq!(
+            PushWakeHint::new("did:ad:x", "message").visible_body(),
+            "You have a new message"
+        );
+        assert_eq!(
+            PushWakeHint::new("did:ad:x", "access-request").visible_body(),
+            "Someone requested access"
+        );
+        assert_eq!(
+            PushWakeHint::new("did:ad:x", "watch-membership").visible_body(),
+            "A list you follow changed"
+        );
+        assert_eq!(
+            PushWakeHint::new("did:ad:x", "watch-content").visible_body(),
+            "Something you follow was updated"
+        );
     }
 
     #[test]

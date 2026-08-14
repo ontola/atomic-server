@@ -9,6 +9,7 @@ import {
   clearPushWakeTap,
   onPushWakeReceive,
   peekPushWakeReceive,
+  peekPushWakeTap,
 } from './pushWakeTap';
 
 describe('tauriPushBridge', () => {
@@ -37,6 +38,16 @@ describe('tauriPushBridge', () => {
       about: 'did:ad:doc2',
       type: 'watch-content',
     });
+  });
+
+  it('treats userInteraction as a tap, not a receive', () => {
+    ingestRemotePushPayload({
+      about: 'did:ad:doc3',
+      type: 'mention',
+      userInteraction: true,
+    });
+    expect(peekPushWakeReceive()).toBeUndefined();
+    expect(peekPushWakeTap()).toBe('did:ad:doc3');
   });
 
   it('onPushDeviceToken delivers cached token immediately', () => {
