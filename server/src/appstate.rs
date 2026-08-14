@@ -150,9 +150,26 @@ impl AppState {
         // We don't create a Drive here anymore; that's handled in the data-browser (new identity flow).
         if should_init {
             tracing::info!("Initialize: bootstrapping core models...");
+            // `bootstrap()` no-ops when SHORTNAME already exists. `--initialize`
+            // is documented as re-running populate, so an already-seeded store
+            // still needs new default ontologies (e.g. NotificationItem).
+            let already_seeded = store
+                .has_stored_resource(&atomic_lib::urls::SHORTNAME.into());
             atomic_lib::populate::bootstrap(&store)
                 .await
                 .map_err(|e| format!("Failed to bootstrap store. {}", e))?;
+
+            if already_seeded {
+                tracing::info!(
+                    "Initialize: store already seeded, importing current default ontologies..."
+                );
+                atomic_lib::populate::populate_base_models(&store)
+                    .await
+                    .map_err(|e| format!("Failed to repopulate base models. {}", e))?;
+                atomic_lib::populate::populate_default_store(&store)
+                    .await
+                    .map_err(|e| format!("Failed to repopulate defaults. {}", e))?;
+            }
         } else if config.repopulate_defaults {
             // Re-import the built-in ontologies + default resources into an
             // already-seeded store (without an index rebuild). `import` upserts,
