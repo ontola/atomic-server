@@ -8,6 +8,9 @@ import type { Resource } from './resource.js';
  * draft instead of the published page. A blog post with a missing or future
  * `published-at` is stored but not rendered. Visibility is still location/ACL;
  * this is presentation only.
+ *
+ * Do not pass this directly to `array.filter` — that supplies the index as
+ * `options`. Call `r => isListedCmsResource(r, options)` instead.
  */
 export function isListedCmsResource(
   resource: Resource,
