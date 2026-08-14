@@ -3,6 +3,8 @@
 Atomic Server is a great fit for a headless CMS because it works seamlessly on the server and client while providing a top-notch developer experience.
 In this guide, we will build a portfolio site using [Astro](https://astro.build/) to serve and build our pages and use Atomic Data to hold our data.
 
+If you want a working Next.js or SvelteKit site with pages, menus, and a blog already modelled, use the Website template instead: [Using Atomic as a headless CMS](../headless-cms.md). This Astro guide is the from-scratch modelling path.
+
 Astro is a web framework for creating fast multi-page applications using web technology.
 It plays very nicely with the `@tomic/lib` client library.
 
