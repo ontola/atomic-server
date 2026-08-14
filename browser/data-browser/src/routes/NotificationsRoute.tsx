@@ -146,19 +146,8 @@ function NotificationsPage(): React.JSX.Element {
       timer = setTimeout(() => setTick(t => t + 1), 300);
     };
 
-    const onResource = (resource: { getClasses: () => string[] }) => {
-      if (
-        resource.getClasses().includes(notifications.classes.notificationItem)
-      ) {
-        bump();
-      }
-    };
-
-    const unsubUpdated = store.on(StoreEvents.ResourceUpdated, onResource);
-    const unsubCreated = store.on(
-      StoreEvents.ResourceManuallyCreated,
-      onResource,
-    );
+    const unsubUpdated = store.on(StoreEvents.ResourceUpdated, bump);
+    const unsubCreated = store.on(StoreEvents.ResourceManuallyCreated, bump);
     const unsubSync = store.on(StoreEvents.SyncStatusChanged, bump);
 
     return () => {
