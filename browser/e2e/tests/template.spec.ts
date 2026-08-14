@@ -278,7 +278,10 @@ async function assertCmsEditFromSite(page: Page, siteOrigin: string) {
   await expect(editLink).toBeVisible();
 
   const href = await editLink.getAttribute('href');
-  expect(href, 'Edit this page should point at the Data Browser edit form').toBeTruthy();
+  expect(
+    href,
+    'Edit this page should point at the Data Browser edit form',
+  ).toBeTruthy();
   expect(href).toContain('/app/edit');
   expect(href).toContain('subject=');
 

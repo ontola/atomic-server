@@ -86,7 +86,7 @@
 				);
 				nextResults = hits
 					.filter(isListedCmsResource)
-					.map((resource) => resource.subject);
+					.map((hit) => hit.subject);
 
 				if (nextResults.length > 0 || version !== searchVersion) {
 					break;
