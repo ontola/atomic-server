@@ -309,8 +309,35 @@ pub async fn set_property(subject: String, property: String, value: String) -> R
         .get_resource(&subject.as_str().into())
         .await
         .map_err(err)?;
-    resource.set_unsafe(property, atomic_lib::Value::String(value));
+    resource
+        .set_unsafe(property.clone(), value_for_written_property(&property, &value))
+        .map_err(err)?;
     save_and_push(&mut resource, store.as_ref()).await
+}
+
+/// Map a string write onto the Atomic Value variant the property expects.
+/// DevicePushToken registration uses `isA` (resourceArray) and `devicePushAgent`
+/// (atomic URL); a bare string would not reverse-query on the hub.
+fn value_for_written_property(property: &str, value: &str) -> atomic_lib::Value {
+    use atomic_lib::{urls, Value};
+    match property {
+        urls::IS_A => Value::ResourceArray(
+            value
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.into())
+                .collect(),
+        ),
+        urls::DEVICE_PUSH_AGENT | urls::PARENT | urls::CREATED_BY => {
+            Value::AtomicUrl(value.into())
+        }
+        urls::PUSH_TOKEN_UPDATED_AT => match value.parse::<i64>() {
+            Ok(n) => Value::Integer(n),
+            Err(_) => Value::String(value.into()),
+        },
+        _ => Value::String(value.into()),
+    }
 }
 
 pub async fn get_property(subject: String, property: String) -> Result<String, String> {
@@ -1441,4 +1468,36 @@ pub fn get_known_peers_json() -> String {
     let Ok(store) = db() else { return "[]".into() };
     let peers = atomic_lib::sync::peer::get_known_peers(store.as_ref());
     serde_json::to_string(&peers).unwrap_or_else(|_| "[]".into())
+}
+
+#[cfg(test)]
+mod property_value_tests {
+    use super::value_for_written_property;
+    use atomic_lib::{urls, Value};
+
+    #[test]
+    fn is_a_becomes_resource_array() {
+        let v = value_for_written_property(urls::IS_A, urls::DEVICE_PUSH_TOKEN);
+        match v {
+            Value::ResourceArray(a) => {
+                assert_eq!(a.len(), 1);
+                match &a[0] {
+                    atomic_lib::values::SubResource::Subject(s) => {
+                        assert_eq!(s.to_string(), urls::DEVICE_PUSH_TOKEN);
+                    }
+                    other => panic!("expected subject, got {other:?}"),
+                }
+            }
+            other => panic!("expected resource array, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn device_push_agent_is_atomic_url() {
+        let v = value_for_written_property(urls::DEVICE_PUSH_AGENT, "did:ad:agent:x");
+        match v {
+            Value::AtomicUrl(s) => assert_eq!(s, "did:ad:agent:x"),
+            other => panic!("expected atomic url, got {other:?}"),
+        }
+    }
 }

@@ -211,8 +211,9 @@ const AppSettings: React.FunctionComponent = () => {
                   access from Share when you can see a resource but cannot edit
                   it. When this tab or window is in the background, alerts can
                   also show as {isRunningInTauri() ? 'system' : 'browser'}{' '}
-                  notifications. Push wake when the app is closed is not wired
-                  yet (Android/iOS need FCM/APNs later).
+                  notifications. On Android and iOS the hub sends a real APNs /
+                  FCM lock-screen notification when the app is closed (generic
+                  copy; tap opens the resource after sync).
                 </p>
                 <OsNotificationPermissionRow />
                 <div>

@@ -23,8 +23,8 @@ export interface RegisterDevicePushTokenOpts {
  * Matching key: `(devicePushAgent, pushPlatform, pushAppId)` — same install
  * updates `pushToken` / `pushTokenUpdatedAt` instead of creating duplicates.
  *
- * Phase 5 scaffold: no FCM/APNs transport yet — this only writes the registry
- * resource the hub will fan out to later.
+ * Phase 5: register a platform token on the personal-drive
+ * {@link notifications.classes.devicePushToken} the hub fans out to.
  */
 export async function registerDevicePushToken(
   opts: RegisterDevicePushTokenOpts,
@@ -115,14 +115,34 @@ async function findExistingToken(
 }
 
 /**
- * Wake-only push payload contract (social-apps P2.3 / notifications Phase 5).
- * Hub must never put summary/body in the push; client syncs then materializes.
+ * Wake-only **data** bag (social-apps P2.3). Hub never puts document body here.
+ * Visible OS banners use {@link visiblePushCopy} (generic title/body).
  */
 export function buildPushWakePayload(input: {
   about: string;
   type: string;
 }): { about: string; type: string } {
   return { about: input.about, type: input.type };
+}
+
+/** Generic lock-screen copy. Keep in sync with `push_wake::visible_body_for_type`. */
+export function visiblePushCopy(type: string): { title: string; body: string } {
+  const title = 'Atomic';
+
+  switch (type) {
+    case 'mention':
+      return { title, body: 'Someone mentioned you' };
+    case 'message':
+      return { title, body: 'You have a new message' };
+    case 'access-request':
+      return { title, body: 'Someone requested access' };
+    case 'watch-membership':
+      return { title, body: 'A list you follow changed' };
+    case 'watch-content':
+      return { title, body: 'Something you follow was updated' };
+    default:
+      return { title, body: 'You have a new notification' };
+  }
 }
 
 /**

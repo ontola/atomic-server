@@ -386,11 +386,10 @@ Client on receive (background or cold start):
 4. Else show local notification (or let the OS show the remote one if we used
    an alert push) and open `about` on tap.
 
-Prefer **data / silent-ish wake** where the platform allows, then render locally
-after sync — so a read-on-laptop wins the race before the phone paints a
-stale banner. Where iOS requires a visible alert to guarantee delivery, keep
-title/body generic ("New mention in Atomic") and collapse/cancel once sync
-confirms read state.
+Prefer **visible alert** on iOS/Android (killed apps never receive silent
+wakes). Title/body stay generic ("New mention in Atomic") so a read-on-laptop
+can still win: client syncs, then cancels the delivered notification if
+`read`/`dismissed`. Data bag remains `about` + `type` only.
 
 ### Cross-device + badge
 
@@ -418,10 +417,10 @@ registered watches/mentions → look up `DevicePushToken`s → send wake.
 
 ### Flutter canvas
 
-Out of Tauri. When Flutter needs the same product notifications, use
-`firebase_messaging` + `flutter_local_notifications` against the **same**
-ontology and push payload contract — do not invent a second registry format.
-v1 remains data-browser + Tauri.
+Out of Tauri. Uses `firebase_messaging` + `flutter_local_notifications` against
+the **same** `DevicePushToken` ontology and hub payload (generic alert + data
+bag). `AtomicPush.registerAfterSignIn()` upserts the FCM token. Canvas does not
+run `NotificationEngine`; a tap foregrounds the app. See Phase 5 enablement.
 
 ## Notification engine (client module)
 
@@ -520,7 +519,10 @@ mentions/watches — still no trusted body in the push (see payload contract).
 - [x] `useDevicePushRegistration` on launch (real token via bridge; DEV desktop stub)
 - [x] Client: on push → sync → materialize (`handlePushWake` / `processPushWake` + `queuePushWakeReceive`) — needs plugin wake delivery to exercise end-to-end
 - [x] Cold-start tap: drain `active()` local notifs in `tauriPushBridge` (module-scope) + `onAction` warm path; remote launch details once Cargo plugin is enabled
-- [x] Env-based hub send scaffold (`server/src/push_provider.rs`) — live when bearer env vars set
+- [x] Env-based hub send scaffold (`server/src/push_provider.rs`) — live when bearer env vars **or** key files are set
+- [x] **Visible APNs alert + FCM notification** (not silent-only). Data bag stays `about` + `type`; lock-screen copy is generic (`visible_body_for_type`). Silent `content-available` never reaches a killed iOS app.
+- [x] In-process JWT minting: FCM service-account JSON → OAuth; APNs `.p8` + Key ID + Team ID → provider JWT
+- [x] Flutter canvas: `firebase_messaging` + `flutter_local_notifications`, same ontology + payload, `DevicePushToken` upsert after sign-in
 - Track operational secrets (APNs `.p8`, FCM service account) with hub deploy;
   product behavior stays aligned with social-apps P2.3.
 
@@ -530,24 +532,37 @@ mentions/watches — still no trusted body in the push (see payload contract).
 
 | Env var | Purpose |
 | --- | --- |
-| `ATOMIC_FCM_PROJECT_ID` | Firebase project id |
-| `ATOMIC_FCM_BEARER_TOKEN` | Short-lived OAuth2 access token (scope `https://www.googleapis.com/auth/firebase.messaging`) minted from the service account JSON |
-| `ATOMIC_APNS_TOPIC` | iOS app bundle id (APNs topic) |
-| `ATOMIC_APNS_BEARER_TOKEN` | APNs provider JWT signed with your `.p8` key |
-| `ATOMIC_APNS_HOST` | Optional; default `api.push.apple.com` (use `api.sandbox.push.apple.com` for sandbox) |
+| `ATOMIC_FCM_PROJECT_ID` | Firebase project id (optional if present in the service-account JSON) |
+| `ATOMIC_FCM_SERVICE_ACCOUNT_FILE` | Path to Firebase service-account JSON (preferred) |
+| `ATOMIC_FCM_SERVICE_ACCOUNT_JSON` | Inline service-account JSON (same fields) |
+| `ATOMIC_FCM_BEARER_TOKEN` | Optional override: already-minted OAuth2 access token |
+| `ATOMIC_APNS_TOPIC` | iOS app bundle id (APNs topic) — Tauri `com.atomicdata.dev`, Flutter `com.ontola.atomiccanvasFlutter` |
+| `ATOMIC_APNS_KEY_FILE` | Path to APNs Auth Key `.p8` |
+| `ATOMIC_APNS_KEY_ID` | 10-char Key ID from Apple Developer |
+| `ATOMIC_APNS_TEAM_ID` | Apple Team ID |
+| `ATOMIC_APNS_BEARER_TOKEN` | Optional override: already-minted APNs provider JWT |
+| `ATOMIC_APNS_HOST` | Optional; default `api.push.apple.com` |
+| `ATOMIC_APNS_SANDBOX` | `true` → `api.sandbox.push.apple.com` |
 
-`serve` calls `push_provider::install_from_env()` at boot. Missing vars → log-only wakes (safe default). Refresh FCM/APNs bearers out-of-band (cron / sidecar); in-process JWT minting can land later.
+`serve` calls `push_provider::install_from_env()` at boot. Missing vars → log-only wakes (safe default). File-based keys mint JWTs in-process and cache them (~50 min).
 
-Payload remains **wake-only** (`data.about` + `data.type` on FCM; `aps.content-available` + same fields on APNs).
+Payload: FCM `notification` + `data`; APNs `aps.alert` + custom `about`/`type`. Title/body are generic ("Someone mentioned you") so a read-on-laptop can still cancel after sync. Do **not** put document content in the push.
 
-**Tauri mobile client**
+**Tauri mobile client** (`desktop/`, bundle id `com.atomicdata.dev`)
 
-1. Place `google-services.json` under the generated Android app; apply Google Services Gradle plugin.
-2. Xcode: Push Notifications + Background Modes → Remote notifications; `aps-environment` entitlement.
+1. Place `google-services.json` under `desktop/gen/android/app/` (see `.example`). Gradle applies Google Services only if the file exists.
+2. Copy `desktop/entitlements/ios.entitlements` into the generated Xcode project; enable Push Notifications + Background Modes → Remote notifications.
 3. Build with feature: `cargo tauri android build --features mobile-push` (same for iOS).
-4. JS already depends on `tauri-plugin-push-notifications` and registers tokens via `tauriPushBridge` → `DevicePushToken`.
+4. JS registers tokens via `tauriPushBridge` → `DevicePushToken`. Incoming payloads go to `ingestRemotePushPayload`.
 
-Do **not** commit `.p8`, service-account JSON, or `google-services.json` with private keys.
+**Flutter canvas** (`flutter/`, Android `com.ontola.atomiccanvas_flutter`, iOS `com.ontola.atomiccanvasFlutter`)
+
+1. Copy `flutter/android/app/google-services.json.example` → `google-services.json` with real Firebase Android app.
+2. Copy `flutter/ios/Runner/GoogleService-Info.plist.example` → `GoogleService-Info.plist` and add it to the Xcode target. Entitlements (`aps-environment`) are already in `Runner.entitlements`.
+3. `AtomicPush.start()` on launch; `registerAfterSignIn()` requests permission and upserts `DevicePushToken`.
+4. Same hub payload. Foreground: `flutter_local_notifications`. Background/killed: OS shows the FCM/APNs banner.
+
+Do **not** commit `.p8`, service-account JSON, or `google-services.json` / `GoogleService-Info.plist` with private keys.
 
 ### Phase 6 — Direct messages + access requests
 
@@ -590,16 +605,19 @@ Per [`TESTING_COVERAGE.md`](../TESTING_COVERAGE.md) preference for cheaper layer
 5. **Group mentions / `@everyone`.** Defer; needs groups (zones.md / social-apps
    P3.7).
 6. **Flutter canvas.** Same ontology + push payload; native stack is
-   firebase_messaging, not Tauri plugins. v1 is data-browser + Tauri.
+   `firebase_messaging` + `flutter_local_notifications` (not Tauri plugins).
+   Token registry is the same `DevicePushToken` class. Canvas does not run
+   `NotificationEngine`; tap currently foregrounds the app.
 7. ~~**Which Tauri push plugin?**~~ **Chosen:** `tauri-plugin-push-notifications`
    (npm/crates `0.1.x`). Rationale: documented cold-start event replay via
    `start_notification_events`, mobile-only (no desktop false hope), pairs with
    existing `tauri-plugin-notification` for local banners. Enable Cargo dep +
    Firebase/APNs project files when shipping mobile push; JS bridge already
    dynamic-imports the npm package.
-8. **Alert push vs silent wake on iOS.** Silent pushes are best-effort and
-   throttled; may need visible APNs with generic copy + client cancel-on-read.
-   Validate on device before locking.
+8. ~~**Alert push vs silent wake on iOS.**~~ **Decided:** visible APNs
+   `alert` + FCM `notification` with generic copy. Silent wakes are not
+   delivered to a killed iOS app. Client still syncs and cancels if already
+   read.
 
 ## Relationship to other plans
 

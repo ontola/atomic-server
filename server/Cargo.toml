@@ -78,7 +78,10 @@ reqwest = { version = "0.13.3", default-features = false, features = [
   "rustls",
   "json",
   "stream",
+  "http2",
+  "form",
 ] }
+jsonwebtoken = "9"
 mainline = "6.2.0"
 sha1 = "0.11"
 blake3 = "1.8.5"

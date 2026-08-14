@@ -138,8 +138,8 @@ export async function refreshPushDeviceToken(): Promise<string | undefined> {
 }
 
 /**
- * Parse a remote wake payload (data message) into our receive queue.
- * Call from plugin event handlers when they exist.
+ * Parse a remote wake payload (data message or visible APNs/FCM notification)
+ * into our receive queue. Call from plugin event handlers when they exist.
  */
 export function ingestRemotePushPayload(payload: unknown): void {
   if (!payload || typeof payload !== 'object') {
@@ -147,22 +147,52 @@ export function ingestRemotePushPayload(payload: unknown): void {
   }
 
   const data = payload as Record<string, unknown>;
-  // Nested `data` bag (FCM) or flat wake payload.
-  const bag =
+  // Nested `data` bag (FCM) or flat wake payload. APNs puts custom keys next
+  // to `aps`.
+  const bag: Record<string, unknown> =
     data.data && typeof data.data === 'object'
       ? (data.data as Record<string, unknown>)
       : data;
   const about =
     typeof bag.about === 'string'
       ? bag.about
-      : aboutFromExtra(bag);
+      : aboutFromExtra(bag) ?? aboutFromExtra(data.extra);
 
   if (!about) {
     return;
   }
 
-  const type = typeFromExtra(bag);
-  queuePushWakeReceive({ about, type });
+  const type = typeFromExtra(bag) || typeFromExtra(data);
+  const tapped =
+    data.userInteraction === true || data.actionId === 'tap';
+
+  if (tapped) {
+    queuePushWakeTap(about);
+  } else {
+    queuePushWakeReceive({ about, type });
+  }
+}
+
+async function subscribeRemotePushEvents(): Promise<void> {
+  if (!isRunningInTauri()) {
+    return;
+  }
+
+  try {
+    const { listen } = await import('@tauri-apps/api/event');
+    // Best-effort: plugin / OS may emit any of these when a remote push lands.
+    for (const name of [
+      'push-notification',
+      'push://notification',
+      'plugin:push-notifications://notification',
+    ]) {
+      void listen(name, event => {
+        ingestRemotePushPayload(event.payload);
+      });
+    }
+  } catch {
+    // Event API unavailable.
+  }
 }
 
 /** Test helper. */
@@ -176,4 +206,5 @@ export function __resetPushBridgeForTests(): void {
 if (typeof window !== 'undefined' && isRunningInTauri()) {
   void drainColdStartNotificationTaps();
   void refreshPushDeviceToken();
+  void subscribeRemotePushEvents();
 }

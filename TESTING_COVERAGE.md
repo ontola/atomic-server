@@ -156,6 +156,10 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Hub watch → wake candidates | unit | `push_wake::watch_owner_agent` / mute / enabled |
 | Hub DevicePushToken lookup + PushSender | unit | `push_wake` enqueue path (`LoggingPushSender`) |
 | Env FCM/APNs sender config | unit | `push_provider::tests` (no network) |
+| APNs/FCM JWT minting | unit | `push_credentials::tests` (throwaway keys) |
+| Visible FCM/APNs payload shape | unit | `push_provider::fcm_message_body` / `apns_alert_body` |
+| Generic lock-screen copy | unit | `visiblePushCopy` (JS) + `push_payload_test` (Dart) + `visible_body_for_type` |
+| OS / APNs / FCM delivery | flow | **gap** — needs a device + Firebase/APNs project; payload + token registry are unit-tested |
 | Mention → NotificationItem materialization (engine) | flow | `notifications.spec.ts` (fake other-agent actor) |
 | A mentions B → B sees unread (two agents / invite) | flow | `notifications.spec.ts` (invite + reconcile backlog) |
 | Mark read on A clears badge on B | flow | `notifications.spec.ts` (same agent, two contexts) |
@@ -164,7 +168,6 @@ Both matter because `iroh_transport` holds the router and node identity in
 | DirectMessage from other actor → inbox | flow | `notifications.spec.ts` |
 | AccessRequest from other actor → Grant in inbox | flow | `notifications.spec.ts` |
 | Send message button on notifications page | flow | `notifications.spec.ts` |
-| OS / APNs / FCM delivery | flow | **gap** — Phase 5 transport (ontology + wake helpers + tap queue wired) |
 
 ---
 
