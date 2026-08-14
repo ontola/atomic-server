@@ -1,5 +1,9 @@
 # Using Atomic-Server as an open source headless CMS
 
+AtomicServer stores typed, live-updating content. You edit it in the Data Browser and render it with any front-end. The supported path is the **Website** template plus `@tomic/template` (Next.js or SvelteKit).
+
+**Walkthrough:** [Using Atomic as a headless CMS](../headless-cms.md).
+
 ## Why people are switching to Headless CMS
 
 Traditionally, content management systems were responsible for both managing the content as well as producing the actual HTML views that the user saw.
@@ -13,20 +17,19 @@ This approach has some issues regarding performance and flexibility that headles
 
 The [Atomic-Server](https://github.com/atomicdata-dev/atomic-server/blob/master/server/README.md) project may be the right choice for you if you're looking for a Headless CMS:
 
-<!-- List copied from https://github.com/atomicdata-dev/atomic-server/blob/master/README.md -->
 - **Free and open source**. MIT licensed, no strings attached.
 - **Easy to use API**. Atomic-Server is built using the [Atomic Data specification](../atomic-data-overview.md). It is well-documented, and uses conventions that most web developers are already familiar with.
-- **Typescript & React libraries**. Use the existing react hooks to make your own fully editable, live-reloaded web application.
-- **Fast**. 1ms responses on my laptop. It's written in Rust, so it squeezes out every cycle of your server.
-- **Lightweight**. It's a single 8MB binary, no external dependencies needed.
-- **Easy to setup**. Just run the binary and open the address. Even HTTPS support is built-in.
-- **Clean, powerful admin GUI**. The Atomic-Data-Browser front-end gives you a very easy interface to manage your content.
-- **Share your data models**. Atomic Data is designed to achieve a more decentralized web. You can easily re-use existing data models, or share the ones you built.
+- **Typescript, React, and Svelte libraries**. Use `@tomic/lib` with `@tomic/react` or `@tomic/svelte` for live-reloaded, typed resources.
+- **Fast**. Written in Rust; millisecond-range responses on a laptop.
+- **Lightweight**. A single binary, no external database required.
+- **Easy to setup**. Run the binary and open the address. HTTPS support is built-in.
+- **Clean admin GUI**. The Data Browser is the editor: pages, tables, ontologies, history, forks.
+- **Share your data models**. Re-use existing ontologies, or share the ones you built.
 - **Files / Attachments**. Upload and preview files.
 - **Pagination / sorting / filtering**. Query your data.
 - **Versioning**. Built-in history, where each transaction is saved.
-- **Websockets**. If you need live updates and highly interactive apps (collaborative documents and chatrooms), we've got your back.
-- **Full-text search**. No need for a big elasticsearch server - atomic-server has one built-in.
+- **Websockets**. Live updates for collaborative documents and other interactive apps.
+- **Full-text search**. Built-in; no separate search cluster.
 - **Translations / i18n**. Localize content per language — see below.
 
 ## Internationalization (i18n)
@@ -42,17 +45,18 @@ Declare `defaultLanguage` (and optionally `languages`) on your website or drive,
 
 - No support for image resizing, [as of now](https://github.com/atomicdata-dev/atomic-server/issues/257)
 - No GraphQL support [(see issue)](https://github.com/atomicdata-dev/atomic-server/issues/251)
+- Scheduled `published-at` dates hide posts on generated sites, but they are not an authorization boundary. A Drive with public read still serves the resource over HTTP.
+- Confidential drafts require a private folder (the Drive itself must not be blanket-public). The Website template does not yet ship that layout.
 
 ## Setting up the server
 
 - One-liners: `cargo install atomic-server` or `docker run -p 80:80 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`
 - Check out the [readme!](https://github.com/atomicdata-dev/atomic-server)
+- Then follow [Using Atomic as a headless CMS](../headless-cms.md) to apply the Website template and generate a site.
 
-## Using the data in your (React / NextJS) app
+## Using the data in your (React / NextJS / Svelte) app
 
-The `@tomic/lib` and `@tomic/react` typescript NPM libraries can be used in any JS project.
-
-In the next section, we'll discuss how to use Atomic-Server in your React project.
+The `@tomic/lib`, `@tomic/react`, and `@tomic/svelte` typescript NPM libraries can be used in any JS project. Generated sites already wire them up.
 
 ## Compared to alternative open source headless CMS software
 
