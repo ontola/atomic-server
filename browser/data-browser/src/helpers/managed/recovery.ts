@@ -1,4 +1,5 @@
 import { isRunningInTauri } from '../tauri';
+import { wasmBinaryUrl, wasmJsUrl } from '../wasmUrls';
 import { PRODUCT_NAME } from './product';
 import { getManagedApiBase, managedFetch } from './api';
 import { writeManagedAccountBinding } from './binding';
@@ -256,7 +257,7 @@ export async function decryptRecoverySecret(
 // --- Envelope v2 (DEK + recovery-code wrapper via Argon2id) ---
 
 type Argon2WasmModule = {
-  default: () => Promise<unknown>;
+  default: (init?: { module_or_path: string }) => Promise<unknown>;
   argon2idDeriveKey: (
     secret: string,
     salt: Uint8Array,
@@ -266,23 +267,47 @@ type Argon2WasmModule = {
   ) => Uint8Array;
 };
 
+/** What the dynamic import actually gives us: an older build of the glue has
+ * `default` but not the KDF, which is the case {@link loadArgon2Wasm} checks. */
+type LoadedWasmModule = Partial<Argon2WasmModule> &
+  Pick<Argon2WasmModule, 'default'>;
+
 let argon2ModulePromise: Promise<Argon2WasmModule> | null = null;
 
 /**
  * Lazily loads the atomic_wasm bundle on the main thread, independent of the
  * ClientDb worker (initClientDb.ts) — this is a stateless KDF call, not a
  * database, so it doesn't need OPFS or worker/leader-election machinery.
+ *
+ * The export is verified rather than assumed. A page that spans a deploy can
+ * hold a module from an older build (see `helpers/wasmUrls.ts`), where calling
+ * the missing KDF surfaces as a bare "is not a function" TypeError halfway
+ * through generating a recovery code. Failing here instead says what to do.
  */
 async function loadArgon2Wasm(): Promise<Argon2WasmModule> {
   if (!argon2ModulePromise) {
     argon2ModulePromise = (async () => {
-      const url = `${window.location.origin}/wasm/atomic_wasm.js`;
-      const wasmModule = (await import(
-        /* @vite-ignore */ url
-      )) as Argon2WasmModule;
-      await wasmModule.default();
+      try {
+        const url = wasmJsUrl();
+        const loaded = (await import(
+          /* @vite-ignore */ url
+        )) as LoadedWasmModule;
+        await loaded.default({ module_or_path: wasmBinaryUrl() });
 
-      return wasmModule;
+        if (typeof loaded.argon2idDeriveKey !== 'function') {
+          throw new Error(
+            'This page is running an outdated version of Atomic. Reload the page and try again.',
+          );
+        }
+
+        return loaded as Argon2WasmModule;
+      } catch (e) {
+        // Never memoize a failure: after the reload this asks for, and for an
+        // offline blip on the way to a 6MB binary, a retry must be able to
+        // load it rather than replay the rejection for the tab's lifetime.
+        argon2ModulePromise = null;
+        throw e;
+      }
     })();
   }
 

@@ -57,19 +57,23 @@
 
       `as="fetch"` + `crossorigin` + `type="application/wasm"` is the
       contract that lets the worker reuse the cached response.
+
+      `__WASM_VERSION__` is substituted at build time (vite.config.ts) and must
+      stay in step with the urls the app itself requests, or these preloads
+      warm a url nothing goes on to use.
     -->
     <link
       rel="preload"
       as="fetch"
       crossorigin="anonymous"
       type="application/wasm"
-      href="/wasm/atomic_wasm_bg.wasm"
+      href="/wasm/atomic_wasm_bg.wasm?v=__WASM_VERSION__"
     />
     <link
       rel="preload"
       as="script"
       crossorigin="anonymous"
-      href="/wasm/atomic_wasm.js"
+      href="/wasm/atomic_wasm.js?v=__WASM_VERSION__"
     />
     <link
       rel="preconnect"

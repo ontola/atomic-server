@@ -9,6 +9,7 @@ import {
   getSessionDbKey,
   hasWrappedDbKey,
 } from './localDbKey';
+import { wasmJsUrl } from './wasmUrls';
 
 // Track the current worker so we can terminate it on HMR reload and on
 // agent switches.
@@ -141,8 +142,7 @@ async function startForIdentity(
     dbKey = await resolveDbKey(agentSubject);
   }
 
-  const origin = window.location.origin;
-  const wasmUrl = `${origin}/wasm/atomic_wasm.js`;
+  const wasmUrl = wasmJsUrl();
 
   const clientDb = new ClientDbWorker(wasmUrl, clientDbWorkerUrl, {
     dbName,
