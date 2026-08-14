@@ -22,3 +22,27 @@ body {
   margin: 0;
   padding: 0;
 }
+
+.tomic-editable {
+  outline: 2px dashed var(--theme-color-accent);
+  outline-offset: 4px;
+  cursor: text;
+  border-radius: 4px;
+}
+
+h1 .tomic-editable {
+  display: inline-block;
+  min-width: 4ch;
+}
+
+.tomic-editable[contenteditable='true']:focus {
+  outline-style: solid;
+  background: color-mix(in srgb, var(--theme-color-accent) 10%, white);
+}
+
+.tomic-editable-block {
+  display: block;
+  width: 100%;
+  white-space: pre-wrap;
+  min-height: 4em;
+}

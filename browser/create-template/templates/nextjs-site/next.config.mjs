@@ -3,6 +3,7 @@ const CDN_CACHE_CONTROL =
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: ['@tomic/edit-mode'],
   // Keep Loro outside the server bundle so Node resolves the package's
   // `main` entry, which loads the wasm binary from disk. The browser bundle
   // continues to use Loro's web build through @tomic/lib's lazy loader.

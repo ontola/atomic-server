@@ -47,7 +47,8 @@
       "data-browser",
       "svelte",
       "cli",
-      "create-template"
+      "create-template",
+      "edit-mode"
     ]
   },
   "packageManager": "pnpm@10.15.1"
