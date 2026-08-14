@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Forms: branching — a "Show when" editor on questions and pages hides follow-ups unless earlier answers match. Published forms skip hidden pages in Next/Back/progress/Submit. [#875](https://github.com/ontola/atomic-server/issues/875)
+
 ## [v0.41.0-beta.2] - 2026-08-01
 
 ### Atomic Browser
