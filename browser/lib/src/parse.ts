@@ -15,6 +15,8 @@ export class JSONADParser {
   private nestedResources: Resource[] = [];
 
   public parse(json: unknown, subject: string = unknownSubject): Resource[] {
+    this.nestedResources = [];
+
     if (Array.isArray(json)) {
       // Array responses contain multiple resources (e.g. search with include=true).
       // Each item has its own @id. Parse without enforcing a subject match — the
