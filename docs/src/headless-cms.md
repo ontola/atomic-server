@@ -79,7 +79,7 @@ Blog posts:
 - `cover-image` and `published-at` are recommended, not required, so you can save an incomplete post. Until it has a `published-at` in the past, it stays off the site.
 - `/sitemap.xml` lists every public page and post in each declared language. `/rss.xml` is the blog feed. Both omit forks and unpublished posts. `/robots.txt` points crawlers at the sitemap.
 
-Generated pages are built to sit behind a CDN. Next.js prerenders every public path (`generateStaticParams`) and revalidates every 60 seconds (ISR). SvelteKit prerenders those same paths and sets `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400` on HTML and feeds. Language lives in the URL (`/nl/...`) and in the first HTML byte (`<html lang="nl">`), so a cached file is already the right locale — no client round-trip to fix it. Blog search filters the prerendered list in the browser so `/blog` stays cacheable.
+Generated pages are built to sit behind a CDN. Next.js prerenders every public path (`generateStaticParams`) and revalidates every 60 seconds (ISR). SvelteKit SSR's each path with `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400` on HTML and feeds. Language lives in the URL (`/nl/...`) and in the first HTML byte (`<html lang="nl">`), so a cached file is already the right locale — no client round-trip to fix it. Blog search filters the rendered list in the browser so `/blog` stays cacheable.
 
 A new post appears on the site within that 60-second window, or immediately after a rebuild. Put Cloudflare, Netlify, or Fastly in front and honour `s-maxage`; do not override it with `no-store`.
 
@@ -98,7 +98,7 @@ The templates resolve `/nl/blog/the-english-slug` to the Dutch sibling, list one
 The public site is static HTML plus a short shared-cache lifetime:
 
 - **Next.js:** `generateStaticParams` prerenders every listed path. `revalidate = 60` (ISR) and `fetch` `next.revalidate` keep AtomicServer reads from being baked empty forever. Feeds send `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400`.
-- **SvelteKit:** `entries()` prerenders those paths; `hooks.server.ts` sets the same `Cache-Control` on HTML, sitemap, RSS, and robots. New URLs after publish still SSR on demand and are then cacheable.
+- **SvelteKit:** pages are SSR'd with `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400` on HTML, sitemap, RSS, and robots. A CDN caches that HTML; new URLs after publish are included on the next origin hit.
 - **Language** is in the path and in `<html lang>` of the first byte. `/nl/blog/...` is a different cache key from `/blog/...`.
 - **Search** is client-side over the already-rendered list, so `/blog` is not `?search=`-dynamic.
 

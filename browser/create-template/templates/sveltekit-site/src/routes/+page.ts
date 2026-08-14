@@ -4,8 +4,6 @@ import { getLanguageAlternates, parseLocalizedPath } from '$lib/atomic/i18n';
 import { error } from '@sveltejs/kit';
 import { preloadResources } from '$lib/atomic/preloadResources';
 
-export const prerender = true;
-
 export const load = (async ({ fetch, url }) => {
 	const resource = await getCurrentResource(fetch, url);
 

@@ -724,14 +724,10 @@ test.describe('Test create-template package', () => {
       await assertLocaleBlogCards(page, url);
       await assertCmsFeeds(page, url);
     } finally {
-      try {
-        await kill(4174);
-        log('SvelteKit server shut down successfully');
-        // We need to wait for the process to be killed and playwright does not wait unless there is another expect coming.
-        expect(true).toBe(true);
-      } catch (err) {
-        console.error('Failed to shut down SvelteKit server:', err);
-      }
+      await freePort(4174);
+      log('SvelteKit server shut down successfully');
+      // We need to wait for the process to be killed and playwright does not wait unless there is another expect coming.
+      expect(true).toBe(true);
     }
   });
 
