@@ -32,7 +32,7 @@ pnpm update-ontologies
 pnpm dev
 ```
 
-From the running site, Cmd/Ctrl+E opens the current page in the Data Browser edit form. A blog post with `published-at` in the future is not listed or routed. Forks of pages and posts are excluded too.
+From the running site, Cmd/Ctrl+E opens the current page in the Data Browser edit form. `/` is the Website resource's `homepage` property, not whichever page happens to have path `/`. A blog post with `published-at` in the future is not listed or routed. Forks of pages and posts are excluded too. Nav on `/nl/...` keeps the language prefix.
 
 The following templates are available:
 

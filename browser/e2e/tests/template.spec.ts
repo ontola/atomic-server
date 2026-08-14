@@ -1,5 +1,6 @@
 import { expect, test as baseTest, type Page } from './fixtures';
 import {
+  FRONTEND_URL,
   before,
   makeDrivePublic,
   nodeReachableServerUrl,
@@ -203,6 +204,8 @@ async function setupTemplateSite(
     reachable,
     '--drive',
     drive,
+    '--cms-url',
+    FRONTEND_URL,
   ]);
   await useWorkspacePackages(site.directory, siteType);
   await runCommand(
@@ -294,6 +297,11 @@ async function assertTwoLocaleSite(
   await expect(
     page.locator('link[rel="alternate"][hreflang="nl"]'),
   ).toHaveCount(1);
+
+  // Nav on a prefixed route keeps the language prefix.
+  await page.goto(`${url}/nl/blog`);
+  await page.getByRole('link', { name: 'Home', exact: true }).click();
+  await expect(page).toHaveURL(/\/nl\/?$/);
 }
 
 /**
@@ -312,6 +320,7 @@ async function assertCmsEditFromSite(page: Page, siteOrigin: string) {
   ).toBeTruthy();
   expect(href).toContain('/app/edit');
   expect(href).toContain('subject=');
+  expect(new URL(href!).origin).toBe(new URL(FRONTEND_URL).origin);
 
   const popupPromise = page.waitForEvent('popup');
   // Dispatch on the page so the browser chrome cannot swallow Control+E.
@@ -328,6 +337,7 @@ async function assertCmsEditFromSite(page: Page, siteOrigin: string) {
   const popup = await popupPromise;
   expect(popup.url()).toContain('/app/edit');
   expect(popup.url()).toContain('subject=');
+  expect(new URL(popup.url()).origin).toBe(new URL(FRONTEND_URL).origin);
   await popup.close();
 }
 
@@ -381,7 +391,7 @@ test.describe('Test create-template package', () => {
         'Scheduled: Why Time Travel Is Overrated',
       );
 
-      await assertTwoLocaleSite(page, url, false);
+      await assertTwoLocaleSite(page, url, true);
       await assertCmsEditFromSite(page, url);
     }
   });
