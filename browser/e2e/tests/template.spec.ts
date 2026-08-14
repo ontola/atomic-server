@@ -402,6 +402,52 @@ async function assertTwoLocaleSite(
   await expect(page).toHaveURL(/\/nl\/?$/);
 }
 
+/**
+ * Public HTML and feeds must be cacheable at a CDN: no `no-store`, and a
+ * shared-cache directive (`s-maxage` / `public` / `stale-while-revalidate`).
+ */
+function expectCdnCacheControl(
+  headers: Record<string, string>,
+  label: string,
+) {
+  const cacheControl = headers['cache-control'] ?? '';
+  expect(
+    cacheControl,
+    `${label} must send Cache-Control (got ${JSON.stringify(headers)})`,
+  ).not.toEqual('');
+  expect(
+    cacheControl,
+    `${label} must not disable shared caches (${cacheControl})`,
+  ).not.toMatch(/no-store/i);
+  expect(
+    cacheControl,
+    `${label} should be CDN-cacheable (${cacheControl})`,
+  ).toMatch(/s-maxage=\d+|stale-while-revalidate|public/i);
+}
+
+/**
+ * First HTML byte — no JS. Language and content must already be correct so a
+ * CDN can serve the file as-is.
+ */
+async function assertCdnFriendlyPages(page: Page, url: string) {
+  const home = await page.request.get(url);
+  expect(home.status()).toBe(200);
+  expectCdnCacheControl(home.headers(), `${url}/`);
+  const homeHtml = await home.text();
+  expect(homeHtml).toMatch(/<html[^>]*lang=["']en["']/i);
+  expect(homeHtml).toContain('About');
+  expect(homeHtml).toContain('and I love');
+  expect(homeHtml).not.toContain(FORK_TITLE);
+
+  const dutchPath = `${url}/nl/blog/the-biology-of-balloon-animals`;
+  const dutch = await page.request.get(dutchPath);
+  expect(dutch.status()).toBe(200);
+  expectCdnCacheControl(dutch.headers(), dutchPath);
+  const dutchHtml = await dutch.text();
+  expect(dutchHtml).toMatch(/<html[^>]*lang=["']nl["']/i);
+  expect(dutchHtml).toContain('De biologie van ballondieren');
+}
+
 async function assertHomepageIsAbout(page: Page, url: string) {
   const response = await page.goto(url);
   expect(response?.status()).toBe(200);
@@ -428,6 +474,7 @@ async function assertLocaleBlogCards(page: Page, url: string) {
 async function assertCmsFeeds(page: Page, url: string) {
   const sitemap = await page.request.get(`${url}/sitemap.xml`);
   expect(sitemap.status()).toBe(200);
+  expectCdnCacheControl(sitemap.headers(), `${url}/sitemap.xml`);
   const sitemapBody = await sitemap.text();
   expect(sitemapBody).toContain('/blog/the-biology-of-balloon-animals');
   expect(sitemapBody).toContain('/nl/blog');
@@ -437,6 +484,7 @@ async function assertCmsFeeds(page: Page, url: string) {
 
   const rss = await page.request.get(`${url}/rss.xml`);
   expect(rss.status()).toBe(200);
+  expectCdnCacheControl(rss.headers(), `${url}/rss.xml`);
   const rssBody = await rss.text();
   expect(rssBody).toContain('Balloon');
   expect(rssBody).not.toContain('Time Travel');
@@ -444,6 +492,7 @@ async function assertCmsFeeds(page: Page, url: string) {
 
   const robots = await page.request.get(`${url}/robots.txt`);
   expect(robots.status()).toBe(200);
+  expectCdnCacheControl(robots.headers(), `${url}/robots.txt`);
   const robotsBody = await robots.text();
   expect(robotsBody).toContain('Sitemap:');
   expect(robotsBody).toContain('/sitemap.xml');
@@ -520,6 +569,7 @@ test.describe('Test create-template package', () => {
       const url = await waitForServer(child);
 
       await assertHomepageIsAbout(page, url);
+      await assertCdnFriendlyPages(page, url);
 
       await page.goto(`${url}/blog`);
 
@@ -581,6 +631,7 @@ test.describe('Test create-template package', () => {
       const url = await waitForServer(child);
 
       await assertHomepageIsAbout(page, url);
+      await assertCdnFriendlyPages(page, url);
 
       await page.goto(`${url}/blog`);
 

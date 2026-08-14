@@ -48,7 +48,7 @@ A blog post with `published-at` in the future (or missing) is not listed, search
 
 `/sitemap.xml`, `/robots.txt`, and `/rss.xml` are generated from that same filter. Blog cards on `/nl/blog` keep the `/nl` prefix.
 
-The catch-all route is `force-dynamic` and the store's server `fetch` uses `cache: 'no-store'`, so listings re-query AtomicServer on each request instead of baking an empty collection into a static page.
+Public pages are prerendered (`generateStaticParams`) and revalidated every 60 seconds (ISR). AtomicServer `fetch` uses `next.revalidate` rather than `no-store`, so a CDN can cache HTML. `<html lang>` is set from the URL on the first byte (`/nl/...` is `lang="nl"`). Blog search filters the prerendered list in the browser, so `/blog` stays cacheable. Feeds send `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400`.
 
 `NEXT_PUBLIC_ATOMIC_CMS_URL` in `.env` is the Data Browser origin. It defaults to the server URL.
 

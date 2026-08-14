@@ -125,6 +125,11 @@
       filter. Scheduled posts and forks are omitted. **Done (2026-08-14).**
 - [x] E2E: `/` serves `website.homepage` when that is About (path `/about`),
       and a renamed fork of About does not replace the published page.
+- [x] Generated pages are CDN-friendly: prerender/ISR, `Cache-Control:
+      public, s-maxage=60, stale-while-revalidate=86400`, correct `<html lang>`
+      and body content on the first HTML byte (no JS). Blog search is
+      client-side so `/blog` stays cacheable. Empty listings retry then expire
+      instead of baking forever. **Done (2026-08-14).**
 - [ ] Separate translated content resources from translated template chrome
       (template UI strings are still English).
 

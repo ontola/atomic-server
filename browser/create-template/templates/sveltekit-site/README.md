@@ -1,7 +1,7 @@
 # sveltekit-site
 
 A website built with [SvelteKit](https://kit.svelte.dev/) powered by [AtomicServer](https://github.com/atomicdata-dev/atomic-server).
-Data is dynamically rendered based on the data present in AtomicServer.
+Known pages are prerendered at build; HTML and feeds are sent with `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400` so a CDN can serve the correct language and content on the first byte.
 
 Apply the **Website** template in the Data Browser first, then generate this project with `--server-url` (HTTP origin) and `--drive` (the Drive's `did:ad:` subject). Full walkthrough: [Using Atomic as a headless CMS](https://docs.atomicdata.dev/headless-cms.html).
 
@@ -9,7 +9,7 @@ From the running site, press Cmd/Ctrl+E or use **Edit this page** in the footer 
 
 A blog post with `published-at` in the future (or missing) is not listed, searchable, or routable. Forks are excluded from public queries.
 
-`/sitemap.xml`, `/robots.txt`, and `/rss.xml` are generated from that same filter. Blog cards on `/nl/blog` keep the `/nl` prefix.
+`/sitemap.xml`, `/robots.txt`, and `/rss.xml` are generated from that same filter. Blog cards on `/nl/blog` keep the `/nl` prefix. `<html lang>` comes from the URL on the first byte. Blog search filters the prerendered list in the browser.
 
 ## Architecture
 

@@ -1,9 +1,28 @@
+const CDN_CACHE_CONTROL =
+  'public, s-maxage=60, stale-while-revalidate=86400';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Keep Loro outside the server bundle so Node resolves the package's
   // `main` entry, which loads the wasm binary from disk. The browser bundle
   // continues to use Loro's web build through @tomic/lib's lazy loader.
   serverExternalPackages: ['loro-crdt'],
+  async headers() {
+    return [
+      {
+        source: '/sitemap.xml',
+        headers: [{ key: 'Cache-Control', value: CDN_CACHE_CONTROL }],
+      },
+      {
+        source: '/rss.xml',
+        headers: [{ key: 'Cache-Control', value: CDN_CACHE_CONTROL }],
+      },
+      {
+        source: '/robots.txt',
+        headers: [{ key: 'Cache-Control', value: CDN_CACHE_CONTROL }],
+      },
+    ];
+  },
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals.push({

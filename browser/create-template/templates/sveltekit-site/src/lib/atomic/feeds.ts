@@ -3,6 +3,26 @@
  * on an unreleased `@tomic/lib` export. Canonical copy: `browser/lib/src/cms.ts`.
  */
 
+/**
+ * Shared-cache header for public CMS HTML and feeds.
+ * `s-maxage` is what CDNs honour; `stale-while-revalidate` keeps serving the
+ * last good page while the origin refreshes from AtomicServer.
+ */
+export const CMS_CDN_CACHE_CONTROL =
+  "public, s-maxage=60, stale-while-revalidate=86400";
+
+/** ISR / fetch revalidate window, in seconds. Matches `s-maxage` above. */
+export const CMS_REVALIDATE_SECONDS = 60;
+
+/** Pathname `/nl/blog/x` → catch-all slug `['nl', 'blog', 'x']`. `/` → `[]`. */
+export function cmsPathToSlug(path: string): string[] {
+  if (!path || path === "/") {
+    return [];
+  }
+
+  return path.split("/").filter(Boolean);
+}
+
 /** Prefix an internal href with a language. The default language stays unprefixed. */
 export function localizeCmsPath(
   href: string,

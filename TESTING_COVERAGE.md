@@ -277,12 +277,14 @@ consume.
 | Future-dated post hidden from listing, search, and direct URL (404) | `template.spec.ts` (`assertTwoLocaleSite` + search `Time Travel`) |
 | Cmd/Ctrl+E and **Edit this page** open `/app/edit?subject=` on the Data Browser origin (`--cms-url`) | `template.spec.ts` (`assertCmsEditFromSite`) |
 | Nav on `/nl/blog` → Home stays on `/nl` | `template.spec.ts` (`assertTwoLocaleSite`) |
-| Next.js `<html lang>` follows the URL prefix | `template.spec.ts` (`checkHtmlLang: true` for both templates) |
+| Next.js `<html lang>` follows the URL prefix **on the first HTML byte** | `template.spec.ts` (`assertCdnFriendlyPages` + `checkHtmlLang`) |
 | `/` serves `website.homepage` even when that page's path is not `/` | `template.spec.ts` (`assertHomepageIsAbout`) |
 | Fork of a page with a copied `href` does not replace the published page | `template.spec.ts` (`assertHomepageIsAbout` + `DRAFT ABOUT LEAK`) |
 | Blog cards on `/nl/blog` keep the `/nl` prefix | `template.spec.ts` (`assertLocaleBlogCards`) |
 | `sitemap.xml` / `rss.xml` / `robots.txt` omit unpublished posts and forks | `template.spec.ts` (`assertCmsFeeds`) + `browser/lib/src/cms.test.ts` |
-| Forks hidden; scheduled / undated blog posts hidden; `cmsEditUrl` | `browser/lib/src/cms.test.ts` |
+| CDN cache headers (`s-maxage` / `public`, not `no-store`) on HTML and feeds | `template.spec.ts` (`assertCdnFriendlyPages` + `assertCmsFeeds`) |
+| Dutch `/nl/...` HTML already contains Dutch copy and `lang="nl"` without JS | `template.spec.ts` (`assertCdnFriendlyPages`) |
+| Forks hidden; scheduled / undated blog posts hidden; `cmsEditUrl`; slug/cache helpers | `browser/lib/src/cms.test.ts` |
 | Fork → edit → merge; pending forks listed on the original | `browser/e2e/tests/forks.spec.ts` |
 | Three-way merge / conflict / document body CRDT | `browser/lib/src/forks.test.ts` |
 | LocalizedText table editor | `browser/e2e/tests/localized-text.spec.ts` |

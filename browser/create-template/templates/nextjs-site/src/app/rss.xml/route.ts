@@ -1,7 +1,11 @@
 import { getRssItems } from '@/atomic/getPublicPages';
-import { renderRssXml } from '@/atomic/feeds';
+import {
+  CMS_CDN_CACHE_CONTROL,
+  CMS_REVALIDATE_SECONDS,
+  renderRssXml,
+} from '@/atomic/feeds';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = CMS_REVALIDATE_SECONDS;
 
 export async function GET(request: Request) {
   const { title, items } = await getRssItems();
@@ -10,7 +14,7 @@ export async function GET(request: Request) {
   return new Response(xml, {
     headers: {
       'Content-Type': 'application/rss+xml; charset=utf-8',
-      'Cache-Control': 'no-store',
+      'Cache-Control': CMS_CDN_CACHE_CONTROL,
     },
   });
 }
