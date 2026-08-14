@@ -117,9 +117,14 @@
       content uses document-level `language` + `translationOf`.
 - [x] Locale on each page/post (`language`) and `defaultLanguage` / `languages`
       on the website resource. Templates route `/nl/...`, emit `hreflang`, and
-      keep the language prefix on nav links.
+      keep the language prefix on nav links **and blog cards**.
 - [x] E2E: two locales (en default, nl balloon post), `<html lang>`, nav prefix
-      (`template.spec.ts` `assertTwoLocaleSite`).
+      (`template.spec.ts` `assertTwoLocaleSite`), blog-card prefix
+      (`assertLocaleBlogCards`).
+- [x] `/sitemap.xml`, `/robots.txt`, `/rss.xml` from the same public-content
+      filter. Scheduled posts and forks are omitted. **Done (2026-08-14).**
+- [x] E2E: `/` serves `website.homepage` when that is About (path `/about`),
+      and a renamed fork of About does not replace the published page.
 - [ ] Separate translated content resources from translated template chrome
       (template UI strings are still English).
 

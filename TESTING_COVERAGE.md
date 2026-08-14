@@ -278,6 +278,10 @@ consume.
 | Cmd/Ctrl+E and **Edit this page** open `/app/edit?subject=` on the Data Browser origin (`--cms-url`) | `template.spec.ts` (`assertCmsEditFromSite`) |
 | Nav on `/nl/blog` → Home stays on `/nl` | `template.spec.ts` (`assertTwoLocaleSite`) |
 | Next.js `<html lang>` follows the URL prefix | `template.spec.ts` (`checkHtmlLang: true` for both templates) |
+| `/` serves `website.homepage` even when that page's path is not `/` | `template.spec.ts` (`assertHomepageIsAbout`) |
+| Fork of a page with a copied `href` does not replace the published page | `template.spec.ts` (`assertHomepageIsAbout` + `DRAFT ABOUT LEAK`) |
+| Blog cards on `/nl/blog` keep the `/nl` prefix | `template.spec.ts` (`assertLocaleBlogCards`) |
+| `sitemap.xml` / `rss.xml` / `robots.txt` omit unpublished posts and forks | `template.spec.ts` (`assertCmsFeeds`) + `browser/lib/src/cms.test.ts` |
 | Forks hidden; scheduled / undated blog posts hidden; `cmsEditUrl` | `browser/lib/src/cms.test.ts` |
 | Fork → edit → merge; pending forks listed on the original | `browser/e2e/tests/forks.spec.ts` |
 | Three-way merge / conflict / document body CRDT | `browser/lib/src/forks.test.ts` |
@@ -287,8 +291,6 @@ consume.
 
 | Gap | Why it hurts |
 |---|---|
-| No e2e that a *fork* of a page is 404 on the generated site | The path filter is the same helper as scheduled posts, but a fork is the realistic collision (`href` is copied). Only unit-shaped filtering in the templates, no live fork+site run. |
-| Changing `website.homepage` away from the page with path `/` | Routing now reads `homepage` for `/`, but the e2e seed still has both set to the same page, so a mismatch is untested. |
 | Confidential drafts (private folder in a non-public Drive) | Not built. `makeDrivePublic()` still publishes the whole Drive. A `published-at` filter is not an ACL. |
 | Suggest-an-edit for non-writers, reject-with-reason, Canvas body fork | Platform gaps in `planning/drafts-and-suggestions.md`; templates cannot paper over them. |
 | Astro from-scratch guide | No test. The Website-template path is what CI exercises. |
