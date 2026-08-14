@@ -248,9 +248,7 @@ mod vault_ipc {
     Ok(DriveVaultKey::from_bytes(bytes, epoch))
   }
 
-  pub fn store_of(
-    node: &std::sync::Arc<super::EmbeddedNode>,
-  ) -> Result<atomic_lib::Db, String> {
+  pub fn store_of(node: &std::sync::Arc<super::EmbeddedNode>) -> Result<atomic_lib::Db, String> {
     node
       .store
       .get()
@@ -389,9 +387,12 @@ async fn vault_import(
     let staging = vault_ipc::MemoryVaultStore::new();
 
     for object in &objects {
-      let sealed = STANDARD
-        .decode(&object.sealed)
-        .map_err(|e| format!("Vault object {} is not valid base64: {e}", object.object_key))?;
+      let sealed = STANDARD.decode(&object.sealed).map_err(|e| {
+        format!(
+          "Vault object {} is not valid base64: {e}",
+          object.object_key
+        )
+      })?;
       staging
         .put(&object.object_key, &sealed)
         .map_err(|e| format!("Could not stage vault object {}: {e}", object.object_key))?;

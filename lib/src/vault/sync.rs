@@ -853,7 +853,9 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        let target = Db::init_temp("vault_history_roundtrip_target").await.unwrap();
+        let target = Db::init_temp("vault_history_roundtrip_target")
+            .await
+            .unwrap();
         import_vault_batch(&target, &key, &vault, &drive_prefix(PSEUDONYM))
             .await
             .unwrap();
@@ -941,7 +943,9 @@ mod tests {
         assert_eq!(keys.len(), 2, "the fixture needs two segments");
         let newest = keys.iter().max().unwrap().clone();
         let latest_only = MemoryVaultStore::new();
-        latest_only.put(&newest, &vault.get(&newest).unwrap()).unwrap();
+        latest_only
+            .put(&newest, &vault.get(&newest).unwrap())
+            .unwrap();
 
         let target = Db::init_temp("vault_latest_segment_target").await.unwrap();
         import_vault_batch(&target, &key, &latest_only, &drive_prefix(PSEUDONYM))
@@ -964,5 +968,4 @@ mod tests {
             "a resource deleted before this segment must stay deleted — recovering it is what an OLDER segment would be kept for"
         );
     }
-
 }
