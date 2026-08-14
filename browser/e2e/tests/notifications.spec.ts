@@ -487,18 +487,8 @@ test.describe('notifications', () => {
     });
 
     await page.waitForFunction(
-      async subject => {
-        try {
-          const res = await window.store.fetchResourceFromServer(subject, {
-            noWebSocket: true,
-          });
-
-          return !res.error;
-        } catch {
-          return false;
-        }
-      },
-      seededSubject,
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
       { timeout: 20_000 },
     );
 
@@ -529,7 +519,6 @@ test.describe('notifications', () => {
     );
 
     await page2.goto(`${FRONTEND_URL}/app/notifications`);
-
     await page2.waitForFunction(
       async subject => {
         try {
@@ -537,13 +526,7 @@ test.describe('notifications', () => {
             noWebSocket: true,
           });
 
-          if (res.error) {
-            return false;
-          }
-
-          window.store.notifyResourceUpdated(res);
-
-          return true;
+          return !res.error;
         } catch {
           return false;
         }
@@ -551,21 +534,6 @@ test.describe('notifications', () => {
       seededSubject,
       { timeout: 30_000 },
     );
-
-    await page2.waitForFunction(
-      itemClass => {
-        for (const res of window.store.resources.values()) {
-          if (res.getClasses?.().includes(itemClass) && !res.new && !res.error) {
-            return true;
-          }
-        }
-
-        return false;
-      },
-      NOTIFICATION_ITEM,
-      { timeout: 15_000 },
-    );
-
     await expect(page2.getByTestId('notification-item').first()).toBeVisible({
       timeout: 20_000,
     });
