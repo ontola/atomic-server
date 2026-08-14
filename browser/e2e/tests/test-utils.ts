@@ -1044,6 +1044,14 @@ export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
     undefined,
     { timeout: timeoutMs },
   );
+
+  // Acked is not queryable. The ClientDb writes each row — and rebuilds the
+  // index inside that write — on a flush tick, so a query issued in between
+  // answers from an index that is missing rows the grid already shows. The
+  // worker handles its messages in order, so awaiting a flush means everything
+  // queued ahead of it has landed. Without this a filter drops a matching row,
+  // and a total reads an em-dash because the value it sums is not there yet.
+  await page.evaluate(() => window.store?.getClientDb()?.flush?.());
 }
 
 /**
@@ -1055,15 +1063,10 @@ export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
  * reload then drops it. {@link waitForRowsMaterialized} covers both halves.
  */
 export async function reloadGrid(page: Page) {
+  // Includes the OPFS flush: those writes commit with `Durability::None`, so
+  // reloading inside the worker's 1s tick rolls them back and the local db
+  // answers post-reload queries with the pre-edit copy.
   await waitForRowsMaterialized(page);
-  // `pendingDirtyCount === 0` means the rows reached the SERVER — not that
-  // their post-ack re-persist reached OPFS durably. Those writes commit with
-  // `Durability::None` and only survive a reload after the worker's 1s flush
-  // tick; reloading inside that window rolls them back, and the local db then
-  // answers post-reload queries with the pre-edit copy (the CI-only em-dash
-  // totals: member indexed, its newest value missing). Ask for the flush —
-  // the durability signal — instead of racing the tick.
-  await page.evaluate(() => window.store?.getClientDb()?.flush?.());
   await page.reload();
   await expect(page.getByRole('grid')).toBeVisible();
   // The grid binds its cell handlers after the first render.

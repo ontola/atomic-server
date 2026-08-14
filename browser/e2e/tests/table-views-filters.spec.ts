@@ -115,6 +115,14 @@ async function createPeopleTable(page: Page): Promise<PeopleTable> {
     { timeout: 30000 },
   );
 
+  // A drained outbox means the commits are ACKED, not that the local index can
+  // answer for them: the ClientDb writes (and the index rebuild inside each)
+  // sit on a flush tick, and a filter query issued before they land silently
+  // returns a short row set — the grid then shows Alice without Charlie. The
+  // worker processes its messages in order, so a flush resolves only once
+  // everything queued ahead of it has been written and indexed.
+  await page.evaluate(() => window.store?.getClientDb()?.flush?.());
+
   await page.goto(
     `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(created.table)}`,
   );
