@@ -1,23 +1,20 @@
 # Notifications (mentions + watch subscriptions)
 
-> Status: **In progress (2026-08-02).** Design + implementation for in-app
+> Status: **In progress (2026-08-14).** Design + implementation for in-app
 > notifications in the data-browser (and later Tauri). Scope: **mentions** of
-> agents, and **watch settings** for updated queries / collections / tables.
+> agents, **watch settings** for updated queries / collections / tables,
+> **direct messages** to drive collaborators, and **access requests**.
 > Complements [`social-apps.md`](./social-apps.md) P2.3 (push as hint-to-sync) and
 > [`authorization-sync.md`](./authorization-sync.md) (inbox reserved; actor-side
 > social preferred).
 >
 > **Shipped so far:** ontology (`lib/defaults/notifications.json`), TipTap /
-> chat `mentions` write path, `NotificationEngine` (incl. DriveChanged
-> reverse-query reconcile), sidebar entry + `/app/notifications` center,
-> table **and collection** Watch toggle, Settings watches list, App Settings
-> blurb + OS permission, Playwright e2e (inbox / mark-read / Watch /
-> watch→item / mention / multi-device / invite A→B backlog), **Phase 4 local
-> OS notifications**, **Phase 5** client wake path + hub DevicePushToken lookup
-> stub, plugin choice (`tauri-plugin-push-notifications`) + cold-start local
-> drain. Hub ships `EnvPushSender` (FCM/APNs HTTP when `ATOMIC_FCM_*` /
-> `ATOMIC_APNS_*` env set; otherwise log-only). Client: `--features mobile-push`
-> after Firebase/APNs project files exist. Product sign-off still open.
+> chat `mentions` write path, `DirectMessage` + `AccessRequest` classes,
+> `NotificationEngine` (incl. DriveChanged reverse-query reconcile), sidebar
+> entry + `/app/notifications` center (Send message + Grant), table **and
+> collection** Watch toggle, Settings watches list, App Settings blurb + OS
+> permission, Playwright e2e, **Phase 4 local OS notifications**, **Phase 5**
+> client wake path + hub DevicePushToken lookup stub. Product sign-off still open.
 
 ## Problem
 
@@ -460,6 +457,8 @@ mentions/watches — still no trusted body in the push (see payload contract).
   hub formatting).
 - Replacing chat Presence toasts — they remain session-scoped; engine can
   later absorb them as `notificationType: meeting-chat` if desired.
+- Full constrained `/inbox/` append for stranger DMs (authorization-sync).
+  Same-drive messages and access requests use actor-side `mentions` instead.
 
 ## Build phases
 
@@ -549,6 +548,17 @@ Payload remains **wake-only** (`data.about` + `data.type` on FCM; `aps.content-a
 4. JS already depends on `tauri-plugin-push-notifications` and registers tokens via `tauriPushBridge` → `DevicePushToken`.
 
 Do **not** commit `.p8`, service-account JSON, or `google-services.json` with private keys.
+
+### Phase 6 — Direct messages + access requests
+
+- [x] `DirectMessage` / `AccessRequest` ontology (`requestedRight`, `accessRequestStatus`)
+- [x] Same-drive Send message (Notifications page) — `mentions` the recipient
+- [x] Request access from Share (when `!canWrite`) and Unauthorized page
+- [x] Inbox Grant action adds requester to target `read` / `write`
+- [x] Engine summaries: `message` and `access-request` types
+- [x] Watch stays on Table **and** Collection (saved query)
+
+Same-drive only for live delivery (drive `SUB` → `ResourceUpdated`). Cross-drive first-contact still belongs to the constrained inbox in [`authorization-sync.md`](./authorization-sync.md); until that exists, requests/messages created on the sender's personal drive grant the recipient `read` on that one resource.
 
 ## Test plan (where tests belong)
 

@@ -4,6 +4,7 @@ import {
   extractAgentMentionsFromTipTap,
   isAgentSubject,
   mentionDedupeKey,
+  messageDedupeKey,
 } from './mentions.js';
 
 describe('isAgentSubject', () => {
@@ -63,16 +64,13 @@ describe('extractAgentMentionsFromTipTap', () => {
       ],
     };
 
-    expect(extractAgentMentionsFromTipTap(doc)).toEqual([
-      'did:ad:agent:alice',
-    ]);
+    expect(extractAgentMentionsFromTipTap(doc)).toEqual(['did:ad:agent:alice']);
   });
 });
 
 describe('extractAgentMentionsFromText', () => {
   it('finds bare agent DIDs in chat text', () => {
-    const text =
-      'hey did:ad:agent:alice and also did:ad:agent:bob please look';
+    const text = 'hey did:ad:agent:alice and also did:ad:agent:bob please look';
 
     expect(extractAgentMentionsFromText(text).sort()).toEqual([
       'did:ad:agent:alice',
@@ -83,8 +81,16 @@ describe('extractAgentMentionsFromText', () => {
 
 describe('mentionDedupeKey', () => {
   it('is stable', () => {
-    expect(
-      mentionDedupeKey('about', 'actor', 'mentioned'),
-    ).toBe('mention|about|actor|mentioned');
+    expect(mentionDedupeKey('about', 'actor', 'mentioned')).toBe(
+      'mention|about|actor|mentioned',
+    );
+  });
+});
+
+describe('messageDedupeKey', () => {
+  it('is stable', () => {
+    expect(messageDedupeKey('about', 'actor', 'me')).toBe(
+      'message|about|actor|me',
+    );
   });
 });

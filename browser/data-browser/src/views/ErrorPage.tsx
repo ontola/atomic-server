@@ -15,6 +15,7 @@ import { isDriveSignInError } from '../helpers/isDriveSignInError';
 import { isOriginWithoutNode } from '../helpers/originNode';
 import { RootWelcomeGate } from './RootWelcomeGate';
 import { VaultRestoreAction } from '../components/Vault/VaultRestoreAction';
+import { RequestAccessButton } from '../components/RequestAccessButton';
 
 import type { JSX } from 'react';
 
@@ -78,8 +79,8 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
           <h1>This account does not have access</h1>
           <p>
             You’re signed in, but this account cannot read this resource. Open
-            it with the account that owns it, or ask its owner to share it with
-            you.
+            it with the account that owns it, ask its owner to share it with
+            you, or request access below.
           </p>
           <Row wrapItems>
             <Button
@@ -98,6 +99,7 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
             >
               Retry
             </Button>
+            <RequestAccessButton resource={resource} />
           </Row>
         </Column>
       </ContainerWide>

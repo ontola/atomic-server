@@ -6,6 +6,7 @@ import {
   CollectionBuilder,
   core,
   dataBrowser,
+  grantAccessRequest,
   notifications,
   useResource,
   useStore,
@@ -13,7 +14,7 @@ import {
   useTitle,
   useValue,
 } from '@tomic/react';
-import { FaBell, FaCheck, FaTrash } from 'react-icons/fa6';
+import { FaBell, FaCheck, FaTrash, FaUnlockKeyhole } from 'react-icons/fa6';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
 import { Button } from '../components/Button';
@@ -28,6 +29,9 @@ import {
 import { constructOpenURL } from '../helpers/navigation';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
+import { SendMessageButton } from '../components/SendMessageDialog';
+import toast from 'react-hot-toast';
+
 export const NotificationsRoute = createRoute({
   path: pathNames.notifications,
   component: () => <NotificationsPage />,
@@ -150,23 +154,27 @@ function NotificationsPage(): React.JSX.Element {
       <ContainerNarrow>
         <Row justify='space-between' center>
           <h1>Notifications</h1>
-          {unread > 0 && (
-            <Button
-              subtle
-              data-testid='mark-all-read'
-              onClick={() => void markAllRead()}
-            >
-              <FaCheck /> Mark all read
-            </Button>
-          )}
+          <Row gap='0.5rem' center>
+            <SendMessageButton />
+            {unread > 0 && (
+              <Button
+                subtle
+                data-testid='mark-all-read'
+                onClick={() => void markAllRead()}
+              >
+                <FaCheck /> Mark all read
+              </Button>
+            )}
+          </Row>
         </Row>
         {subjects.length === 0 ? (
           <Empty data-testid='notifications-empty'>
             <FaBell />
             <p>No notifications yet.</p>
             <Hint>
-              You&apos;ll be notified when someone mentions you, or when a table
-              or collection you watch updates.
+              You&apos;ll be notified when someone mentions you, sends you a
+              message, requests access, or when a table or collection you watch
+              updates.
             </Hint>
           </Empty>
         ) : (
@@ -193,6 +201,7 @@ function NotificationRow({
   onChanged: () => void;
 }) {
   const resource = useResource(subject);
+  const store = useStore();
   const engine = useNotificationEngine();
   const navigate = useNavigateWithTransition();
   const [summary] = useString(
@@ -201,6 +210,7 @@ function NotificationRow({
   );
   const [type] = useString(resource, notifications.properties.notificationType);
   const [about] = useString(resource, dataBrowser.properties.about);
+  const source = useResource(about ?? '');
   const [title] = useTitle(resource);
   // useValue (not resource.get during render) so LocalChange from markRead
   // re-renders — useResource alone only wakes on store.notify.
@@ -209,6 +219,15 @@ function NotificationRow({
     notifications.properties.notificationRead,
   );
   const read = readRaw === true;
+  const [requestStatus] = useString(
+    source,
+    notifications.properties.accessRequestStatus,
+  );
+  const [targetSubject] = useString(source, dataBrowser.properties.about);
+  const [busyGrant, setBusyGrant] = useState(false);
+
+  const isAccessRequest = type === 'access-request';
+  const alreadyGranted = requestStatus === 'granted';
 
   const open = async () => {
     if (engine && !read) {
@@ -216,8 +235,40 @@ function NotificationRow({
       onChanged();
     }
 
-    if (about) {
-      navigate(constructOpenURL(about));
+    const dest = isAccessRequest ? (targetSubject ?? about) : about;
+
+    if (dest) {
+      navigate(constructOpenURL(dest));
+    }
+  };
+
+  const grant = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (busyGrant || !about) {
+      return;
+    }
+
+    setBusyGrant(true);
+
+    try {
+      const accessRequest = await store.getResource(about);
+      await grantAccessRequest(store, accessRequest);
+
+      if (engine && !read) {
+        await engine.markRead(subject);
+      }
+
+      toast.success('Access granted');
+      onChanged();
+      setBusyGrant(false);
+
+      if (targetSubject) {
+        navigate(constructOpenURL(targetSubject));
+      }
+    } catch (err) {
+      toast.error((err as Error).message);
+      setBusyGrant(false);
     }
   };
 
@@ -242,8 +293,16 @@ function NotificationRow({
               {about && (
                 <>
                   {' · '}
-                  <span onClick={e => e.stopPropagation()}>
-                    <ResourceInline subject={about} />
+                  <span
+                    role='presentation'
+                    onClick={e => e.stopPropagation()}
+                    onKeyDown={e => e.stopPropagation()}
+                  >
+                    <ResourceInline
+                      subject={
+                        isAccessRequest && targetSubject ? targetSubject : about
+                      }
+                    />
                   </span>
                 </>
               )}
@@ -251,6 +310,18 @@ function NotificationRow({
           </Column>
         </Row>
       </ItemBody>
+      {isAccessRequest && !alreadyGranted && (
+        <Button
+          subtle
+          data-testid='grant-access'
+          title='Grant access'
+          disabled={busyGrant}
+          onClick={e => void grant(e)}
+        >
+          <FaUnlockKeyhole />
+          Grant
+        </Button>
+      )}
       <Button
         subtle
         title='Dismiss'
