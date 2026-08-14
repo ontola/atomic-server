@@ -28,10 +28,17 @@ import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
 export function VaultPanel({
   vault,
   onRestored,
+  embedded = false,
 }: {
   vault: UseVaultBackup;
   /** Called after a successful restore, so the host can refresh its view. */
   onRestored?: () => void;
+  /**
+   * Render as a row inside a surface the host already drew, rather than as a
+   * card of its own. Nesting a card in a card reads as two things when this is
+   * one service listed under an account.
+   */
+  embedded?: boolean;
 }) {
   const { status, busy, error, restoreProgress } = vault;
 
@@ -50,12 +57,16 @@ export function VaultPanel({
   // and leave the decision to the reader.
   if (status.state === 'unavailable') {
     return (
-      <Panel data-testid='vault-panel' data-vault-state='unavailable'>
+      <Panel
+        data-testid='vault-panel'
+        data-vault-state='unavailable'
+        $embedded={embedded}
+      >
         <Icon>
           <FaLock />
         </Icon>
         <Body>
-          <Title>Encrypted backup</Title>
+          <Title>Cloud Vault</Title>
           <Sub data-testid='vault-unavailable-reason'>{status.reason}</Sub>
         </Body>
       </Panel>
@@ -70,12 +81,16 @@ export function VaultPanel({
 
   if (status.state === 'off') {
     return (
-      <Panel data-testid='vault-panel' data-vault-state='off'>
+      <Panel
+        data-testid='vault-panel'
+        data-vault-state='off'
+        $embedded={embedded}
+      >
         <Icon $accent>
           <FaLock />
         </Icon>
         <Body>
-          <Title>Encrypted backup</Title>
+          <Title>Cloud Vault</Title>
           <Sub>
             Keep an encrypted copy of this workspace in {PRODUCT_NAME}. It is
             sealed on this device, so we store it without being able to read it.
@@ -87,7 +102,7 @@ export function VaultPanel({
               onClick={vault.enable}
               disabled={busy}
             >
-              {busy ? 'Setting up…' : 'Turn on encrypted backup'}
+              {busy ? 'Setting up…' : 'Turn on Cloud Vault'}
             </Button>
           </Actions>
         </Body>
@@ -102,13 +117,14 @@ export function VaultPanel({
     <Panel
       data-testid='vault-panel'
       data-vault-state={suspended ? 'suspended' : 'on'}
-      $accent
+      $accent={!embedded}
+      $embedded={embedded}
     >
       <Icon $accent>
         <FaLock />
       </Icon>
       <Body>
-        <Title>Encrypted backup is on</Title>
+        <Title>Cloud Vault is on</Title>
         {/* The object count is an attribute as well as prose: a test asserting
             that a second backup actually stored something should read the
             number, not parse a sentence that is free to be reworded. */}
@@ -211,10 +227,21 @@ function formatWhen(unixSeconds: number): string {
 // from `theme.size(2)` (8px) while the cards around it used 0.9rem (14.4px),
 // and left its body text at the inherited 1rem against their 0.82rem — close
 // enough to look like a mistake rather than a distinction.
-const Panel = styled.div<{ $accent?: boolean }>`
+const Panel = styled.div<{ $accent?: boolean; $embedded?: boolean }>`
   ${cardSurface}
   border-color: ${p => (p.$accent ? p.theme.colors.main : undefined)};
   background: ${p => (p.$accent ? `${p.theme.colors.main}0a` : undefined)};
+
+  /* Inside the provider card the surrounding card already supplies the
+     surface and the accent, so drawing them again would box one service
+     inside another box. */
+  ${p =>
+    p.$embedded &&
+    `
+      border: none;
+      background: none;
+      padding: 0;
+    `}
 `;
 
 /**
