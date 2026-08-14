@@ -235,9 +235,12 @@ cd browser && pnpm run test-e2e                  # Full e2e test
 
 ## Cursor Cloud specific instructions
 
-The startup update script only runs `pnpm install` (in `browser/`). Everything below is
-already handled in the VM snapshot; these notes capture the non-obvious gotchas for
-building/running the stack again after pulling changes.
+The startup update script keeps the JS deps and Rust build prerequisites fresh: it sets
+pnpm's `script-shell` to bash, adds the `wasm32-unknown-unknown` rustup target, and runs
+`pnpm install` (in `browser/`). It does NOT build anything — the WASM bundle, the Rust
+`atomic-server` binary, and the running services are captured in the VM snapshot. These
+notes capture the non-obvious gotchas for building/running the stack again after pulling
+changes.
 
 ### Run the server on port 9885 (not the default 9883)
 
