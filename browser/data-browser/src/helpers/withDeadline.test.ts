@@ -16,7 +16,11 @@ describe('withDeadline', () => {
   it('gives up on a promise that never settles', async () => {
     vi.useFakeTimers();
 
-    const result = withDeadline(new Promise<string>(() => {}), 5000, 'fallback');
+    const result = withDeadline(
+      new Promise<string>(() => {}),
+      5000,
+      'fallback',
+    );
 
     await vi.advanceTimersByTimeAsync(5000);
     expect(await result).toBe('fallback');

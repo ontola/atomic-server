@@ -31,7 +31,8 @@ import {
   timestamp,
 } from './test-utils';
 
-const PORTAL_URL = process.env.ATOMIC_VAULT_PORTAL_URL ?? 'http://localhost:3030';
+const PORTAL_URL =
+  process.env.ATOMIC_VAULT_PORTAL_URL ?? 'http://localhost:3030';
 
 /**
  * A fresh account per test.
@@ -138,13 +139,14 @@ async function completeOnboarding(
   // The confirm button stays disabled until the code has been copied — the
   // flow's own guard against a user skipping past the one thing they must keep.
   await page.getByRole('button', { name: 'Copy to clipboard' }).click();
-  await page.getByRole('button', { name: "Yes, I've stored it safely" }).click();
+  await page
+    .getByRole('button', { name: "Yes, I've stored it safely" })
+    .click();
 
   await expect(page).toHaveURL(/\/app\/show\?subject=/, { timeout: 30_000 });
 
   return { recoveryCode: code.trim(), driveUrl: page.url() };
 }
-
 
 /**
  * Rename the open resource and wait for it to stick locally.
@@ -393,9 +395,13 @@ test.describe('Cloud Vault backup and restore', () => {
       // And the vault agrees it is on for this drive, from a device that had
       // to learn that from the control plane rather than from local state.
       await openSync(fresh);
-      await expect(vaultPanel(fresh)).toHaveAttribute('data-vault-state', 'on', {
-        timeout: 60_000,
-      });
+      await expect(vaultPanel(fresh)).toHaveAttribute(
+        'data-vault-state',
+        'on',
+        {
+          timeout: 60_000,
+        },
+      );
       await expect(fresh.getByTestId('vault-error')).toBeHidden();
     } finally {
       await wiped.close();

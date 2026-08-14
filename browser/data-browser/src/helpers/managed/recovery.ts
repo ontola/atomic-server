@@ -1,7 +1,7 @@
 import { isRunningInTauri } from '../tauri';
 import { wasmBinaryUrl, wasmJsUrl } from '../wasmUrls';
 import { PRODUCT_NAME } from './product';
-import { getManagedApiBase, managedFetch } from './api';
+import { managedFetch } from './api';
 import { writeManagedAccountBinding } from './binding';
 
 export type RecoveryWrapperInput = {

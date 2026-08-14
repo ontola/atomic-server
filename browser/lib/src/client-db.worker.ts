@@ -343,6 +343,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       // A restore is one bulk write, so the amortisation the tick exists for
       // does not apply. Flush now; we are already inside the work queue, so
       // this cannot race an in-flight mutation.
+
       try {
         db!.flush();
       } catch (e) {

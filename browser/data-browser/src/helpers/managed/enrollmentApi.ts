@@ -6,7 +6,7 @@
 //        drive_name, resource_count, blob_bytes, loro_bytes, quota_bytes)
 // against the control-plane `GET /api/sync-enrollments` route.
 
-import { getManagedApiBase, managedFetch } from './api';
+import { managedFetch } from './api';
 
 export type ManagedEnrollmentStatus = 'Active' | 'Disabled' | string;
 
