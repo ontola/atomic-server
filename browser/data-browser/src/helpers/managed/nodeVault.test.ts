@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const invoke = vi.fn();
-vi.mock('@tauri-apps/api/core', () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...a: unknown[]) => invoke(...a),
+}));
 
 const { nodeVault } = await import('./nodeVault');
 
@@ -29,9 +31,19 @@ describe('nodeVault', () => {
       tombstones: 1,
     });
 
-    const result = await nodeVault.vaultExport('did:ad:drive', key, 2, 'pseudo', 'dev', 1);
+    const result = await nodeVault.vaultExport(
+      'did:ad:drive',
+      key,
+      2,
+      'pseudo',
+      'dev',
+      1,
+    );
 
-    const [command, args] = invoke.mock.calls[0] as [string, Record<string, unknown>];
+    const [command, args] = invoke.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(command).toBe('vault_export');
     expect(typeof args.key).toBe('string');
     expect(args.keyEpoch).toBe(2);
@@ -45,7 +57,9 @@ describe('nodeVault', () => {
   /** Nothing to back up is an answer, not a failure. */
   it('passes through the "unchanged since last segment" null', async () => {
     invoke.mockResolvedValue(null);
-    expect(await nodeVault.vaultExport('did:ad:drive', key, 1, 'p', 'd', 4)).toBeNull();
+    expect(
+      await nodeVault.vaultExport('did:ad:drive', key, 1, 'p', 'd', 4),
+    ).toBeNull();
   });
 
   it('encodes objects for import and preserves their order', async () => {

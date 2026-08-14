@@ -1,5 +1,5 @@
 import { decodeB64 } from '@tomic/lib';
-import { getManagedApiBase, managedFetch } from './api';
+import { managedFetch } from './api';
 
 /**
  * Cloud Vault client: encrypted, blind backup of a drive.

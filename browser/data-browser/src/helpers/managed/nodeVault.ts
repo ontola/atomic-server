@@ -65,7 +65,12 @@ export const nodeVault: VaultCapableDb = {
     };
   },
 
-  async vaultImport(key, keyEpoch, drivePseudonym, objects): Promise<RestoreOutcome> {
+  async vaultImport(
+    key,
+    keyEpoch,
+    drivePseudonym,
+    objects,
+  ): Promise<RestoreOutcome> {
     return invoke<RestoreOutcome>('vault_import', {
       key: encodeB64(key),
       keyEpoch,

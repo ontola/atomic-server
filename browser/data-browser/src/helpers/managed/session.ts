@@ -4,7 +4,7 @@
 // route. Mirrors the captured `getManagedUser()` in helpers/managedUsage.ts.
 
 import { PRODUCT_NAME } from './product';
-import { getManagedApiBase, managedFetch } from './api';
+import { managedFetch } from './api';
 
 export type ManagedAccount = {
   email: string;
