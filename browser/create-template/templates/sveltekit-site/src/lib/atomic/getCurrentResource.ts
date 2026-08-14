@@ -13,7 +13,9 @@ type Fetch = typeof fetch;
 /** The Website resource's `homepage` is what `/` (and `/nl`) serve. */
 async function getWebsiteHomepage(): Promise<Resource | undefined> {
   const store = getStore();
-  const site = await store.getResource(PUBLIC_WEBSITE_RESOURCE);
+  const site = await store.fetchResourceFromServer(PUBLIC_WEBSITE_RESOURCE, {
+    noWebSocket: true,
+  });
 
   if (site.error) {
     return undefined;
@@ -25,7 +27,9 @@ async function getWebsiteHomepage(): Promise<Resource | undefined> {
     return undefined;
   }
 
-  const homepage = await store.getResource(homepageSubject);
+  const homepage = await store.fetchResourceFromServer(homepageSubject, {
+    noWebSocket: true,
+  });
 
   return isListedCmsResource(homepage) ? homepage : undefined;
 }

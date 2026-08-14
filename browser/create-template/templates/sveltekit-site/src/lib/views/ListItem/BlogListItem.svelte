@@ -2,6 +2,8 @@
 	import { type Blogpost } from '$lib/ontologies/website';
 	import type { Resource } from '@tomic/lib';
 	import { Image } from '@tomic/svelte';
+	import { page } from '$app/stores';
+	import { localizeHrefForPath } from '$lib/atomic/i18n';
 
 	interface Props {
 		resource: Resource<Blogpost>;
@@ -20,9 +22,17 @@
 			? formatter.format(new Date(resource.props.publishedAt))
 			: undefined
 	);
+
+	let href = $derived(
+		localizeHrefForPath(
+			resource.props.href ?? '/',
+			$page.url.pathname,
+			$page.data.languageConfig ?? { defaultLanguage: 'en', languages: ['en'] }
+		)
+	);
 </script>
 
-<a class="card" href={resource.props.href}>
+<a class="card" {href}>
 	{#if resource.props.coverImage}
 		<div class="image-wrapper">
 			<Image subject={resource.props.coverImage} alt="" />

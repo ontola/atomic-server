@@ -49,6 +49,7 @@
 <svelte:head>
 	<title>{page.title}</title>
 	<meta content={page.get(core.properties.description)} name="description" />
+	<link rel="alternate" type="application/rss+xml" title="RSS" href="/rss.xml" />
 </svelte:head>
 <slot />
 

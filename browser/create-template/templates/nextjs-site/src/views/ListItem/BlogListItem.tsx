@@ -1,9 +1,22 @@
 import { Blogpost } from '@/ontologies/website';
 import { Resource } from '@tomic/react';
 import { Image } from '@/components/Image';
+import { getLanguageConfig, localizePath } from '@/atomic/i18n';
 import styles from './BlogListItem.module.css';
 
-const BlogListItem = async ({ resource }: { resource: Resource<Blogpost> }) => {
+const BlogListItem = async ({
+  resource,
+  lang,
+}: {
+  resource: Resource<Blogpost>;
+  lang?: string;
+}) => {
+  const { defaultLanguage } = await getLanguageConfig();
+  const href = localizePath(
+    resource.props.href ?? '/',
+    lang ?? defaultLanguage,
+    defaultLanguage,
+  );
   const formatter = new Intl.DateTimeFormat('default', {
     year: 'numeric',
     month: 'long',
@@ -15,7 +28,7 @@ const BlogListItem = async ({ resource }: { resource: Resource<Blogpost> }) => {
     : undefined;
 
   return (
-    <a className={styles.card} href={resource.props.href}>
+    <a className={styles.card} href={href}>
       {resource.props.coverImage && (
         <div className={styles.imageWrapper}>
           <Image subject={resource.props.coverImage} alt='' />

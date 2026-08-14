@@ -32,6 +32,7 @@
 			<p>© {year} Your Company</p>
 			<div class="links">
 				{#if appState.currentSubject}
+					<a href="/rss.xml">RSS</a>
 					<a
 						data-testid="cms-edit-link"
 						href={cmsEditUrl(PUBLIC_ATOMIC_CMS_URL, appState.currentSubject)}

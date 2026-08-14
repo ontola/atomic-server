@@ -46,6 +46,8 @@ Change pages and posts in the Data Browser. From this site, press Cmd/Ctrl+E or 
 
 A blog post with `published-at` in the future (or missing) is not listed, searchable, or routable. Forks are excluded from public queries because they copy the original `href`.
 
+`/sitemap.xml`, `/robots.txt`, and `/rss.xml` are generated from that same filter. Blog cards on `/nl/blog` keep the `/nl` prefix.
+
 The catch-all route is `force-dynamic` and the store's server `fetch` uses `cache: 'no-store'`, so listings re-query AtomicServer on each request instead of baking an empty collection into a static page.
 
 `NEXT_PUBLIC_ATOMIC_CMS_URL` in `.env` is the Data Browser origin. It defaults to the server URL.

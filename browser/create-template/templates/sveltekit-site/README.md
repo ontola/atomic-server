@@ -9,6 +9,8 @@ From the running site, press Cmd/Ctrl+E or use **Edit this page** in the footer 
 
 A blog post with `published-at` in the future (or missing) is not listed, searchable, or routable. Forks are excluded from public queries.
 
+`/sitemap.xml`, `/robots.txt`, and `/rss.xml` are generated from that same filter. Blog cards on `/nl/blog` keep the `/nl` prefix.
+
 ## Architecture
 
 Atomic Data resources are rendered by views.
