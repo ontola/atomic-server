@@ -168,7 +168,7 @@ export function useVaultBackup({
     const timer = setTimeout(() => {
       setStatus({
         state: 'unavailable',
-        reason: `Encrypted backup is not available here: ${missing.join(', ')}.`,
+        reason: `Cloud Vault is not available here: ${missing.join(', ')}.`,
       });
     }, READINESS_GRACE_MS);
 

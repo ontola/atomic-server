@@ -826,42 +826,113 @@ function SyncPage() {
         <h1>Sync</h1>
         <Lead>{summaryLine()}</Lead>
 
-        {/* Signed in to a provider, so say so and offer the way back.
+        {/* Everything our paid services own, in one card.
 
-            Gated on holding an account rather than on the active node being
-            managed, which is what the only other link to the portal on this
-            page uses. That condition is wrong for an account: encrypted backup
-            is blind storage that needs no managed node, so someone can be
-            signed in, backing up daily, and never meet a managed node at all —
-            which is exactly the state that had no way back to the portal.
+            These used to be loose entries in the Devices list, on the reasoning
+            that a person does not think of "this device", "the backup" and "the
+            hosted workspace" as different kinds of thing — they are all places
+            the same data lives. True as far as it goes, but it left no answer to
+            a different question the page is also asked: which of this is a
+            product I am paying for, and where do I go to manage it. Grouping
+            under the account answers that without returning to the old stack of
+            free-floating offer cards, because this is one card, not three.
 
-            The URL still comes from configuration (a managed node's
-            `portalUrl`, a build-time override, or the control plane one pointed
-            us at before), never from anything hardcoded. A self-hosted node
-            that has never seen a portal yields null and renders nothing, which
-            is the FOSS boundary this page keeps elsewhere. */}
-        {managedAccount && accountPortalUrl && (
-          <AccountBar data-testid='managed-account-bar'>
-            <AccountIcon>
-              <FaCloud />
-            </AccountIcon>
-            <AccountBody>
-              <AccountLabel>Signed in to {PRODUCT_NAME}</AccountLabel>
-              <AccountEmail title={managedAccount.email}>
-                {managedAccount.email}
-              </AccountEmail>
-            </AccountBody>
-            <ManagedLink
-              // The dashboard, not the portal root: a signed-in visitor gets
-              // the marketing page at `/`, so the link would land on a sales
-              // pitch rather than the account it promises to manage.
-              href={`${accountPortalUrl}/dashboard`}
-              target='_blank'
-              rel='noopener noreferrer'
-            >
-              {'Manage account →'}
-            </ManagedLink>
-          </AccountBar>
+            Gated on a portal being known at all, so a self-hosted node with no
+            control plane renders none of it. That URL comes from a managed
+            node, a build-time override, or one a node named earlier — never
+            from anything hardcoded here. */}
+        {accountPortalUrl && (
+          <ProviderCard data-testid='provider-card'>
+            <ProviderHeader>
+              <AccountIcon>
+                <FaCloud />
+              </AccountIcon>
+              <AccountBody>
+                <AccountLabel>{PRODUCT_NAME}</AccountLabel>
+                <AccountEmail
+                  title={managedAccount?.email ?? undefined}
+                  data-testid='provider-account'
+                >
+                  {managedAccount
+                    ? managedAccount.email
+                    : 'Hosted services for this workspace'}
+                </AccountEmail>
+              </AccountBody>
+              {managedAccount && (
+                <ManagedLink
+                  // The dashboard, not the portal root: a signed-in visitor
+                  // gets the marketing page at `/`, so the link would land on
+                  // a sales pitch rather than the account it promises to
+                  // manage.
+                  href={`${accountPortalUrl}/dashboard`}
+                  target='_blank'
+                  rel='noopener noreferrer'
+                >
+                  {'Manage account →'}
+                </ManagedLink>
+              )}
+            </ProviderHeader>
+
+            {/* The wrapper is conditional, not just the panel. `VaultPanel`
+                renders nothing while its prerequisites are still resolving,
+                and an unconditional row left a bordered empty strip under the
+                account header. */}
+            {vault.status.state !== 'loading' && (
+              <ProviderService>
+                <VaultPanel
+                  vault={vault}
+                  embedded
+                  onRestored={() => window.location.reload()}
+                />
+              </ProviderService>
+            )}
+
+            {showCloudBackup && (
+              <ProviderService>
+                <ConnIcon $tone='cloud'>
+                  <FaCloud />
+                </ConnIcon>
+                <ConnBody>
+                  <ConnTitle>Cloud Server</ConnTitle>
+                  <ConnSub>
+                    A hosted workspace on {PRODUCT_NAME}: shareable links,
+                    search across everything, API access, and no waiting on
+                    another device to be awake. Unlike Cloud Vault, our servers
+                    process what you put here.
+                  </ConnSub>
+                  <ConnActions>
+                    <Button onClick={backupToCloud} disabled={cloudBusy}>
+                      {cloudBusy ? 'Setting up…' : 'Set up Cloud Server'}
+                    </Button>
+                    {/* This tier costs money and reads our copy of your data,
+                        so "what am I agreeing to" deserves an answer that
+                        isn't a paragraph on this card. The sales page already
+                        explains the tiers side by side. */}
+                    {cloudPortalUrl && (
+                      <LearnMore
+                        href={`${cloudPortalUrl}/#pricing`}
+                        // No `_blank` in the app: Tauri intercepts a
+                        // new-window request natively, before the click
+                        // handler can cancel it, and hands it to `shell.open`
+                        // — which is denied and then fails on Android
+                        // regardless. The href stays real either way, so this
+                        // is still a link to assistive tech and to "copy link
+                        // address".
+                        target={isNode ? undefined : '_blank'}
+                        rel='noreferrer'
+                        onClick={e => {
+                          e.preventDefault();
+                          void openExternal(`${cloudPortalUrl}/#pricing`);
+                        }}
+                      >
+                        Learn more
+                      </LearnMore>
+                    )}
+                  </ConnActions>
+                </ConnBody>
+              </ProviderService>
+            )}
+          </ProviderCard>
         )}
 
         {/* Signed in, but this device holds none of the account's data — it's
@@ -932,12 +1003,12 @@ function SyncPage() {
         <Section>
           <SectionTitle>Devices</SectionTitle>
 
-          {/* One list, because a person does not think of these as
-              different kinds of thing. This device, the encrypted
-              backup and the hosted workspace are all places the same
-              data lives; splitting them into a stack of cards above an
-              empty "Devices" heading made the page read as a pile of
-              offers rather than an inventory. */}
+          {/* Devices only. The hosted services moved up into the provider
+              card, which is a narrower split than the one this list was
+              built to avoid: that earlier layout scattered them as separate
+              offer cards, where they are now one card under the account that
+              pays for them. What is left here is an inventory of places this
+              workspace physically lives. */}
           {/* This device — always the source of truth for local-first data. */}
           <DeviceCard>
             <ConnIcon $tone='device'>
@@ -987,66 +1058,6 @@ function SyncPage() {
             />
           )}
 
-          <VaultSlot>
-            <VaultPanel
-              vault={vault}
-              onRestored={() => window.location.reload()}
-            />
-          </VaultSlot>
-
-          {/* Cloud Server, the hosted tier, offered below the vault rather than
-              above it.
-
-              Deliberately not called "back up" any more. Backup is Cloud Vault's
-              job, and having two things on one page both offering to "back up
-              your workspace" made the only distinction that matters — whether we
-              can read it — the one thing the screen did not say. The copy leads
-              with what hosting buys and states plainly that this side is
-              readable, matching the tier described on the sales page. */}
-          {showCloudBackup && (
-            <LocalDriveNotice>
-              <ConnIcon $tone='cloud'>
-                <FaCloud />
-              </ConnIcon>
-              <ConnBody>
-                <ConnTitle>Cloud Server</ConnTitle>
-                <ConnSub>
-                  A hosted workspace on {PRODUCT_NAME}: shareable links, search
-                  across everything, API access, and no waiting on another
-                  device to be awake. Unlike encrypted backup, our servers
-                  process what you put here.
-                </ConnSub>
-                <ConnActions>
-                  <Button onClick={backupToCloud} disabled={cloudBusy}>
-                    {cloudBusy ? 'Setting up…' : 'Set up Cloud Server'}
-                  </Button>
-                  {/* This tier costs money and reads our copy of your data, so
-                      "what am I agreeing to" deserves an answer that isn't a
-                      paragraph on this card. The sales page already explains
-                      the tiers side by side. */}
-                  {cloudPortalUrl && (
-                    <LearnMore
-                      href={`${cloudPortalUrl}/#pricing`}
-                      // No `_blank` in the app: Tauri intercepts a new-window
-                      // request natively, before the click handler can cancel
-                      // it, and hands it to `shell.open` — which is denied and
-                      // then fails on Android regardless. The href stays real
-                      // either way, so this is still a link to assistive tech
-                      // and to "copy link address".
-                      target={isNode ? undefined : '_blank'}
-                      rel='noreferrer'
-                      onClick={e => {
-                        e.preventDefault();
-                        void openExternal(`${cloudPortalUrl}/#pricing`);
-                      }}
-                    >
-                      Learn more
-                    </LearnMore>
-                  )}
-                </ConnActions>
-              </ConnBody>
-            </LocalDriveNotice>
-          )}
           {localOnlyDrive && connectionCount > 0 && (
             <ConnNote>
               These sync your other drives — not this workspace.
@@ -1693,13 +1704,38 @@ const Lead = styled.p`
  * reads blue, so a glance separates "this is yours and local" from "this
  * involves your account".
  */
-const AccountBar = styled.div`
+const ProviderCard = styled.div`
   ${cardSurface}
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
   margin-bottom: 2rem;
   border-color: ${p => p.theme.colors.main};
   background: ${p => `${p.theme.colors.main}0a`};
+`;
+
+const ProviderHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+`;
+
+/**
+ * One service under the account header.
+ *
+ * Separated by a rule rather than by gaps between cards: these belong to the
+ * account above them, and whitespace alone made them read as neighbours of it
+ * instead of contents.
+ */
+const ProviderService = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border-top: 1px solid ${p => `${p.theme.colors.main}33`};
+  min-width: 0;
 `;
 
 const AccountIcon = styled.div`
@@ -1872,20 +1908,6 @@ const ConnCard = styled.div<{ $active?: boolean }>`
  *  inside it is the affordance; a second accent surface was just noise. */
 const LocalDriveNotice = styled.div`
   ${cardBase}
-  margin-bottom: 1.5rem;
-`;
-
-/**
- * Vertical rhythm for the vault panel.
- *
- * This page spaces blocks with their own `margin-bottom` rather than a
- * container `gap`, and `VaultPanel` is a standalone component that sets no
- * outer margin — deliberately, so it can be dropped elsewhere without bringing
- * one page's spacing with it. Without this wrapper it sits flush against
- * whatever follows, which put the "Devices" heading directly on the card's
- * bottom border. The host owns the rhythm; the component stays layout-agnostic.
- */
-const VaultSlot = styled.div`
   margin-bottom: 1.5rem;
 `;
 
