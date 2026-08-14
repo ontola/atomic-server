@@ -85,7 +85,7 @@
 					nextResults.map((subject) => store.getResource(subject))
 				);
 				nextResults = hits
-					.filter(isListedCmsResource)
+					.filter((hit) => isListedCmsResource(hit))
 					.map((hit) => hit.subject);
 
 				if (nextResults.length > 0 || version !== searchVersion) {
