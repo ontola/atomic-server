@@ -529,8 +529,31 @@ test.describe('notifications', () => {
     );
 
     await page2.goto(`${FRONTEND_URL}/app/notifications`);
+
+    await page2.waitForFunction(
+      async subject => {
+        try {
+          const res = await window.store.fetchResourceFromServer(subject, {
+            noWebSocket: true,
+          });
+
+          if (res.error) {
+            return false;
+          }
+
+          window.store.notifyResourceUpdated(res);
+
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      seededSubject,
+      { timeout: 30_000 },
+    );
+
     await expect(page2.getByTestId('notification-item').first()).toBeVisible({
-      timeout: 45_000,
+      timeout: 20_000,
     });
     await expect(page2.getByTestId('sidebar-notification-badge')).toBeVisible({
       timeout: 15_000,
