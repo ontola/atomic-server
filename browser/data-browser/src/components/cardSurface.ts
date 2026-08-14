@@ -1,4 +1,4 @@
-import { css } from 'styled-components';
+import { css, styled } from 'styled-components';
 
 /**
  * The one card surface the Sync page and its panels share.
@@ -38,3 +38,29 @@ export const CARD_SUB_FONT = '0.82rem';
 /** Between title and subtitle: they read as one block. */
 export const CARD_BODY_GAP = '0.15rem';
 export const CARD_ACTIONS_GAP = '0.5rem';
+
+/**
+ * The round glyph chip on a {@link cardSurface}.
+ *
+ * One component with exactly two tones, because there were three separate
+ * implementations of this circle — one per card family — and they had drifted:
+ * a device chip was light grey with a dark glyph while a server chip was dark
+ * grey with a white one, so two things in the same category looked like two
+ * categories. Anything that reads as a distinction here should be a real one.
+ *
+ * The only real one left is whose service it is. Blue means the provider owns
+ * it; everything else is neutral, including a self-hosted node, which is
+ * somebody else's box however live it happens to be.
+ */
+export const CardIcon = styled.div<{ $tone?: 'neutral' | 'provider' }>`
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: ${CARD_ICON_SIZE};
+  height: ${CARD_ICON_SIZE};
+  border-radius: 50%;
+  font-size: ${CARD_ICON_FONT};
+  color: ${p => (p.$tone === 'provider' ? 'white' : p.theme.colors.text)};
+  background: ${p =>
+    p.$tone === 'provider' ? p.theme.colors.main : p.theme.colors.bg2};
+`;

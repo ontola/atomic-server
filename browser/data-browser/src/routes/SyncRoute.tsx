@@ -13,8 +13,7 @@ import {
 import { styled, keyframes, css, type DefaultTheme } from 'styled-components';
 import {
   cardSurface,
-  CARD_ICON_FONT,
-  CARD_ICON_SIZE,
+  CardIcon,
   CARD_SUB_FONT,
   CARD_TITLE_FONT,
 } from '../components/cardSurface';
@@ -30,6 +29,7 @@ import {
   FaPlus,
   FaMobileScreenButton,
   FaCloudArrowUp,
+  FaKey,
 } from 'react-icons/fa6';
 import { Button } from '../components/Button';
 import { VaultPanel } from '../components/Vault/VaultPanel';
@@ -40,6 +40,7 @@ import {
   type ManagedAccount,
 } from '../helpers/managed/session';
 import { getRememberedManagedPortalUrl } from '../helpers/managed/api';
+import { getRecoverySecret } from '../helpers/managed/recovery';
 import { useDriveVault } from '../helpers/managed/useDriveVault';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
@@ -194,6 +195,235 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
 }
 
+type ServerCardProps = {
+  server: string;
+  status: StoreSyncStatus;
+  managedInfo: ManagedInfo;
+  /** Sync status of the server actually in use. */
+  serverStatus: NodeStatus;
+  hasWorkingLocalStore: boolean;
+  nodeUsage: NodeDriveUsage | null;
+  quotaBytes: number | null;
+  serverNodeId: string | null;
+  onSwitch: (server: string) => void;
+  onRemove: (server: string) => void;
+};
+
+/**
+ * One server, as a card.
+ *
+ * Rendered in two places, which is why it is a component: a managed node is no
+ * longer listed among the devices, because it is one of the provider's
+ * services and belongs inside the account card. Both places want the same
+ * content — status, usage, node id, the way to disconnect — and one renderer
+ * is what stops the two copies drifting.
+ *
+ * At module scope with every input passed in, even though all of them are to
+ * hand in `SyncPage`. A component declared inside another component is a fresh
+ * type on every parent render, so React remounts the subtree rather than
+ * updating it — which for this card means throwing away a live connection's
+ * DOM on every keystroke elsewhere on the page.
+ */
+function ServerCard({
+  server,
+  status,
+  managedInfo,
+  serverStatus,
+  hasWorkingLocalStore,
+  nodeUsage,
+  quotaBytes,
+  serverNodeId,
+  onSwitch,
+  onRemove,
+}: ServerCardProps) {
+  const store = useStore();
+  const isActive = sameOrigin(server, status.serverUrl);
+  const isCloud = isActive && managedInfo.managed;
+  const serverHostname = status.serverUrl
+    ? new URL(status.serverUrl).hostname
+    : undefined;
+  const usagePct =
+    nodeUsage && quotaBytes
+      ? Math.min(
+          100,
+          Math.round(
+            ((nodeUsage.blobBytes + nodeUsage.loroBytes) / quotaBytes) * 100,
+          ),
+        )
+      : null;
+
+  const syncedAgo = status.lastDriveSync
+    ? formatTimeAgo(new Date(status.lastDriveSync.timestamp))
+    : null;
+  const usedBytes = nodeUsage
+    ? nodeUsage.blobBytes + nodeUsage.loroBytes
+    : null;
+  /**
+   * What is true of the server in use, as whole phrases joined by a dot.
+   *
+   * Assembled here rather than written inline in the JSX for two reasons.
+   * Interpolated text placed directly inside a `&&` guard extracts wrong —
+   * wuchale keeps the leading literal and drops the arguments, so at runtime
+   * the lookup wants more placeholders than the catalogue entry has and the
+   * line renders as `[i18n-404:…]`. And a translator given a whole phrase can
+   * reorder it, which is the whole point; given `resources ·` and ` of ` they
+   * cannot.
+   *
+   * Each phrase has to start with a capital or a placeholder: wuchale's
+   * default heuristic drops script-scope strings with a lower-case beginning,
+   * on the reasoning that those are usually identifiers rather than prose. A
+   * dropped string is not an error, it is simply never translated — which is
+   * the quiet failure, so it is worth knowing about.
+   */
+  const facts: string[] = [];
+
+  if (nodeUsage && usedBytes !== null) {
+    facts.push(`${nodeUsage.resourceCount.toLocaleString()} resources`);
+    facts.push(
+      quotaBytes
+        ? `${formatBytes(usedBytes)} of ${formatBytes(quotaBytes)}`
+        : formatBytes(usedBytes),
+    );
+  }
+
+  if (status.lastDriveSync) {
+    facts.push(syncedAgo ? `Synced ${syncedAgo}` : 'Synced just now');
+  }
+
+  return (
+    <ConnCard $active={isActive} $provider={isCloud}>
+      <CardIcon $tone={isCloud ? 'provider' : 'neutral'}>
+        {isCloud ? <FaCloud /> : <FaServer />}
+      </CardIcon>
+      <ConnBody>
+        <ConnTopRow>
+          <ConnTitle>
+            {isCloud ? 'Cloud Server' : serverLabel(server)}
+          </ConnTitle>
+          <ConnTopRight>
+            {isActive ? (
+              <>
+                <StatusPill $status={serverStatus}>
+                  <StatusIcon status={serverStatus} />
+                  {statusLabel(serverStatus)}
+                </StatusPill>
+                {status.serverConnected ? (
+                  // Without a working local store (embedded node or
+                  // ready OPFS cache), the server is the only data
+                  // source — disconnecting would leave the app with
+                  // no data at all.
+                  <NodeAction
+                    onClick={() => store.disconnect()}
+                    disabled={!hasWorkingLocalStore}
+                    title={
+                      hasWorkingLocalStore
+                        ? undefined
+                        : 'Local storage is off, so this server is the only data source. Enable local storage below to work disconnected.'
+                    }
+                  >
+                    Disconnect
+                  </NodeAction>
+                ) : (
+                  <NodeAction
+                    onClick={() =>
+                      store.reconnect().catch(e => store.notifyError(e))
+                    }
+                  >
+                    Reconnect
+                  </NodeAction>
+                )}
+              </>
+            ) : (
+              <>
+                <StatusPill $status='unknown'>Not connected</StatusPill>
+                <NodeAction onClick={() => onSwitch(server)}>Switch</NodeAction>
+              </>
+            )}
+          </ConnTopRight>
+        </ConnTopRow>
+
+        <ConnSub>
+          {isActive
+            ? isCloud
+              ? serverHostname
+              : 'Always-on · in use'
+            : 'Always-on device'}
+        </ConnSub>
+
+        {/* Status details belong to the server actually in use. */}
+        {isActive &&
+          !status.serverConnected &&
+          status.serverConnectionError && (
+            <ConnError role='alert'>
+              <FaCircleExclamation aria-hidden />
+              <span>{status.serverConnectionError}</span>
+            </ConnError>
+          )}
+
+        {isActive && usagePct !== null && (
+          <UsageBar
+            aria-label={`${usagePct}% of storage used`}
+            title={`${usagePct}% used`}
+          >
+            <UsageFill style={{ width: `${usagePct}%` }} />
+          </UsageBar>
+        )}
+
+        {isActive && facts.length > 0 && (
+          <ConnMeta>{facts.join(' · ')}</ConnMeta>
+        )}
+
+        {/* A node id identifies this server's node, so it belongs on
+                    the server — not buried in Developer. */}
+        {isActive && serverNodeId && (
+          <NodeIdRow>
+            <NodeIdLabel>Node ID</NodeIdLabel>
+            <NodeIdValue
+              title={`Copy ${rawToNodeDid(serverNodeId)}`}
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(
+                    rawToNodeDid(serverNodeId),
+                  );
+                  toast.success('Node ID copied');
+                } catch (e) {
+                  store.notifyError(e as Error);
+                }
+              }}
+            >
+              {rawToNodeDid(serverNodeId)}
+            </NodeIdValue>
+          </NodeIdRow>
+        )}
+
+        {isCloud && managedInfo.portalUrl && (
+          <ConnActions>
+            <ManagedLink
+              // The dashboard, not the portal root: signed-in
+              // visitors get the marketing page at `/`, so the
+              // link landed on a sales pitch rather than the
+              // account it promises to manage.
+              href={`${managedInfo.portalUrl}/dashboard`}
+              target='_blank'
+              rel='noopener noreferrer'
+            >
+              {'Manage account & plan →'}
+            </ManagedLink>
+          </ConnActions>
+        )}
+        {/* Removing the server you're using would strand the app. */}
+        {!isActive && (
+          <ConnActions>
+            <NodeActionSubtle onClick={() => onRemove(server)}>
+              Remove
+            </NodeActionSubtle>
+          </ConnActions>
+        )}
+      </ConnBody>
+    </ConnCard>
+  );
+}
+
 function SyncPage() {
   const store = useStore();
   const [status, setStatus] = useState<StoreSyncStatus>(() =>
@@ -288,6 +518,37 @@ function SyncPage() {
   const [managedAccount, setManagedAccount] = useState<ManagedAccount | null>(
     null,
   );
+
+  /**
+   * Whether the account holds an encrypted recovery backup.
+   *
+   * `null` until asked, and on failure — "we could not check" is not "you have
+   * none", and telling someone their recovery is missing when the control
+   * plane was merely unreachable is the one wrong answer this row can give.
+   */
+  const [hasRecoveryBackup, setHasRecoveryBackup] = useState<boolean | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!managedAccount) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const secret = await getRecoverySecret();
+
+        if (!cancelled) setHasRecoveryBackup(secret !== null);
+      } catch {
+        if (!cancelled) setHasRecoveryBackup(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [managedAccount]);
 
   useEffect(() => {
     let cancelled = false;
@@ -570,19 +831,50 @@ function SyncPage() {
     cloudEnrolled === false &&
     deviceLocalDrive &&
     !driveMissing;
-  /** Where "Learn more" goes. Null on a build with no provider, which is also
-   *  the case where there is no tier to explain. */
-  const cloudPortalUrl = getManagedPortalUrl(managedInfo);
 
-  const usagePct =
-    nodeUsage && quotaBytes
-      ? Math.min(
-          100,
-          Math.round(
-            ((nodeUsage.blobBytes + nodeUsage.loroBytes) / quotaBytes) * 100,
-          ),
-        )
-      : null;
+  /**
+   * Why Cloud Server can't be switched on from here, or null when it can.
+   *
+   * The row itself is unconditional once an account is known: a service that
+   * vanishes when it is off cannot be discovered, and "is this on?" is exactly
+   * the question this card exists to answer. But most of the reasons it can't
+   * be enabled right now are about *this device* rather than about the
+   * product, and saying which one is the difference between a page that reads
+   * as broken and one that reads as informative.
+   *
+   * The order matters: each line assumes the ones above it are false. `null`
+   * here is the same condition as `showCloudBackup`, by construction.
+   */
+  function cloudServerBlocker(): string | null {
+    if (!status.drive) {
+      return 'Open a workspace to see whether it can be hosted.';
+    }
+
+    if (driveMissing) {
+      return 'This device doesn’t have this workspace yet. Pair the device that does, and you can host it from here.';
+    }
+
+    if (cloudEnrolled === true) {
+      return `Already set up for this workspace. This app is reading from ${serverHostname ?? 'another server'} instead.`;
+    }
+
+    if (!isCloudSyncAvailable(managedInfo)) {
+      return `${serverHostname ?? 'This server'} doesn’t offer hosting, so it can’t be switched on from here.`;
+    }
+
+    if (cloudEnrolled === null) {
+      return 'Checking whether this workspace is hosted…';
+    }
+
+    if (!deviceLocalDrive) {
+      return `This workspace already lives on ${serverHostname ?? 'another server'}. Moving it here is a migration, not a backup.`;
+    }
+
+    return null;
+  }
+
+  /** Evaluated once: three JSX call sites want the same answer. */
+  const cloudServerBlocked = cloudServerBlocker();
 
   function summaryLine(): string {
     if (localOnlyDrive) {
@@ -600,6 +892,41 @@ function SyncPage() {
     return `Your data lives on this device and syncs with ${connectionCount} other ${
       connectionCount === 1 ? 'device' : 'devices'
     }.`;
+  }
+
+  /** The provider's own node, when this drive is on one. */
+  const managedServer =
+    connectionServers.find(server => isManagedServer(server)) ?? null;
+
+  /** Is this one of ours? Mirrors `isCloud` inside the card renderer. */
+  function isManagedServer(server: string): boolean {
+    return sameOrigin(server, status.serverUrl) && managedInfo.managed;
+  }
+
+  /**
+   * A sales-page link for one tier, carrying what it would apply to.
+   *
+   * The portal only lists prices today, but buying a tier is per drive (that is
+   * how Cloud Server placement and Cloud Vault storage are both costed), so a
+   * checkout will need to know which drive and which agent it is selling to.
+   * Both identifiers are already on this page and both are public DIDs — the
+   * agent's *secret* never leaves the device — so passing them costs nothing
+   * now and saves the round trip later. Unknown values are omitted rather than
+   * sent empty.
+   */
+  function tierOfferUrl(portalUrl: string, tier: 'vault' | 'server'): string {
+    const url = new URL(portalUrl);
+    url.searchParams.set('tier', tier);
+
+    if (status.drive) url.searchParams.set('drive', status.drive);
+
+    const agentSubject = store.getAgent()?.subject;
+
+    if (agentSubject) url.searchParams.set('agent', agentSubject);
+
+    url.hash = 'pricing';
+
+    return url.toString();
   }
 
   /**
@@ -844,18 +1171,15 @@ function SyncPage() {
         {accountPortalUrl && (
           <ProviderCard data-testid='provider-card'>
             <ProviderHeader>
-              <AccountIcon>
+              <CardIcon $tone='provider'>
                 <FaCloud />
-              </AccountIcon>
+              </CardIcon>
               <AccountBody>
                 <AccountLabel>{PRODUCT_NAME}</AccountLabel>
-                <AccountEmail
-                  title={managedAccount?.email ?? undefined}
-                  data-testid='provider-account'
-                >
+                <AccountEmail data-testid='provider-account'>
                   {managedAccount
-                    ? managedAccount.email
-                    : 'Hosted services for this workspace'}
+                    ? 'Your cloud services'
+                    : 'Cloud services for this workspace'}
                 </AccountEmail>
               </AccountBody>
               {managedAccount && (
@@ -873,25 +1197,68 @@ function SyncPage() {
               )}
             </ProviderHeader>
 
-            {/* The wrapper is conditional, not just the panel. `VaultPanel`
-                renders nothing while its prerequisites are still resolving,
-                and an unconditional row left a bordered empty strip under the
-                account header. */}
-            {vault.status.state !== 'loading' && (
-              <ProviderService>
-                <VaultPanel
-                  vault={vault}
-                  embedded
-                  onRestored={() => window.location.reload()}
-                />
+            {/* Email recovery. Blue when it is actually set up, which is the
+                rule for every row here: colour answers "is this on", not "does
+                this exist". Left neutral while unknown too — a failed check
+                must not be drawn as a missing backup. */}
+            {managedAccount && (
+              <ProviderService data-testid='recovery-row'>
+                <CardIcon $tone={hasRecoveryBackup ? 'provider' : 'neutral'}>
+                  <FaKey />
+                </CardIcon>
+                <ConnBody>
+                  <ConnTitle>Email recovery</ConnTitle>
+                  <ConnSub>
+                    {hasRecoveryBackup === null
+                      ? `Signed in as ${managedAccount.email}.`
+                      : hasRecoveryBackup
+                        ? `${managedAccount.email} — we hold your key sealed, so this email gets you back in on a new device.`
+                        : `${managedAccount.email} — no recovery backup stored. Lose every device and this workspace is gone.`}
+                  </ConnSub>
+                </ConnBody>
               </ProviderService>
             )}
 
-            {showCloudBackup && (
-              <ProviderService>
-                <ConnIcon $tone='cloud'>
+            {/* Unconditional, like the other two: a service that disappears
+                when it is off cannot be found, and the question this card
+                answers is "is this on". `VaultPanel` renders every state
+                itself, including the seconds it spends deciding. */}
+            <ProviderService>
+              <VaultPanel
+                vault={vault}
+                embedded
+                offerUrl={tierOfferUrl(accountPortalUrl, 'vault')}
+                onOfferClick={url => void openExternal(url)}
+                onRestored={() => window.location.reload()}
+              />
+            </ProviderService>
+
+            {/* On: the managed node itself, rendered by the same function the
+                Devices list uses, so the two cannot drift. Off: the offer,
+                which stays on the page in every other state — with the reason
+                in place of the button when there is nothing to press. */}
+            {managedServer ? (
+              <ProviderService data-testid='cloud-server-row'>
+                <ServerCard
+                  server={managedServer}
+                  status={status}
+                  managedInfo={managedInfo}
+                  serverStatus={nodes.server}
+                  hasWorkingLocalStore={hasWorkingLocalStore}
+                  nodeUsage={nodeUsage}
+                  quotaBytes={quotaBytes}
+                  serverNodeId={serverNodeId}
+                  onSwitch={switchToServer}
+                  onRemove={removeServer}
+                />
+              </ProviderService>
+            ) : (
+              <ProviderService data-testid='cloud-server-row'>
+                {/* Glyph blue, card neutral: an offer should be findable as
+                    one of ours without being mistaken for a live service. */}
+                <CardIcon $tone='provider'>
                   <FaCloud />
-                </ConnIcon>
+                </CardIcon>
                 <ConnBody>
                   <ConnTitle>Cloud Server</ConnTitle>
                   <ConnSub>
@@ -900,34 +1267,43 @@ function SyncPage() {
                     another device to be awake. Unlike Cloud Vault, our servers
                     process what you put here.
                   </ConnSub>
+                  {cloudServerBlocked && (
+                    <ConnMeta>{cloudServerBlocked}</ConnMeta>
+                  )}
                   <ConnActions>
-                    <Button onClick={backupToCloud} disabled={cloudBusy}>
-                      {cloudBusy ? 'Setting up…' : 'Set up Cloud Server'}
-                    </Button>
+                    {!cloudServerBlocked && (
+                      <Button onClick={backupToCloud} disabled={cloudBusy}>
+                        {cloudBusy ? 'Setting up…' : 'Set up Cloud Server'}
+                      </Button>
+                    )}
                     {/* This tier costs money and reads our copy of your data,
                         so "what am I agreeing to" deserves an answer that
                         isn't a paragraph on this card. The sales page already
-                        explains the tiers side by side. */}
-                    {cloudPortalUrl && (
-                      <LearnMore
-                        href={`${cloudPortalUrl}/#pricing`}
-                        // No `_blank` in the app: Tauri intercepts a
-                        // new-window request natively, before the click
-                        // handler can cancel it, and hands it to `shell.open`
-                        // — which is denied and then fails on Android
-                        // regardless. The href stays real either way, so this
-                        // is still a link to assistive tech and to "copy link
-                        // address".
-                        target={isNode ? undefined : '_blank'}
-                        rel='noreferrer'
-                        onClick={e => {
-                          e.preventDefault();
-                          void openExternal(`${cloudPortalUrl}/#pricing`);
-                        }}
-                      >
-                        Learn more
-                      </LearnMore>
-                    )}
+                        explains the tiers side by side.
+
+                        Linked off the *account's* portal, not the connected
+                        node's: the states that most need a price are the ones
+                        where this device is talking to a node that has never
+                        heard of a portal. */}
+                    <LearnMore
+                      href={tierOfferUrl(accountPortalUrl, 'server')}
+                      // No `_blank` in the app: Tauri intercepts a new-window
+                      // request natively, before the click handler can cancel
+                      // it, and hands it to `shell.open` — which is denied and
+                      // then fails on Android regardless. The href stays real
+                      // either way, so this is still a link to assistive tech
+                      // and to "copy link address".
+                      target={isNode ? undefined : '_blank'}
+                      rel='noreferrer'
+                      onClick={e => {
+                        e.preventDefault();
+                        void openExternal(
+                          tierOfferUrl(accountPortalUrl, 'server'),
+                        );
+                      }}
+                    >
+                      See plans
+                    </LearnMore>
                   </ConnActions>
                 </ConnBody>
               </ProviderService>
@@ -941,9 +1317,9 @@ function SyncPage() {
             there is nothing here to promote. */}
         {driveMissing && (
           <LocalDriveNotice>
-            <ConnIcon $tone='device'>
+            <CardIcon>
               <FaMobileScreenButton />
-            </ConnIcon>
+            </CardIcon>
             <ConnBody>
               <ConnTitle>Your data is on another device</ConnTitle>
               <ConnSub>
@@ -976,9 +1352,9 @@ function SyncPage() {
             server — the same reconcile a regular drive uses, no special path. */}
         {localOnlyDrive && !driveMissing && !showCloudBackup && (
           <LocalDriveNotice>
-            <ConnIcon $tone='cloud'>
+            <CardIcon $tone='provider'>
               <FaCloudArrowUp />
-            </ConnIcon>
+            </CardIcon>
             <ConnBody>
               <ConnTitle>Only on this device</ConnTitle>
               <ConnSub>
@@ -1011,9 +1387,9 @@ function SyncPage() {
               workspace physically lives. */}
           {/* This device — always the source of truth for local-first data. */}
           <DeviceCard>
-            <ConnIcon $tone='device'>
+            <CardIcon>
               <FaLaptop />
-            </ConnIcon>
+            </CardIcon>
             <ConnBody>
               <ConnTitle>This device</ConnTitle>
               <ConnSub>
@@ -1078,175 +1454,35 @@ function SyncPage() {
             </EmptyConnections>
           )}
 
-          {/* Servers — one stable list; the active one is marked, not moved. */}
-          {connectionServers.map(server => {
-            const isActive = sameOrigin(server, status.serverUrl);
-            const isCloud = isActive && managedInfo.managed;
-
-            return (
-              <ConnCard key={server} $active={isActive}>
-                <ConnIcon
-                  $tone={isCloud ? 'cloud' : 'server'}
-                  $active={isActive}
-                >
-                  {isCloud ? <FaCloud /> : <FaServer />}
-                </ConnIcon>
-                <ConnBody>
-                  <ConnTopRow>
-                    <ConnTitle>
-                      {isCloud ? 'Cloud Server' : serverLabel(server)}
-                    </ConnTitle>
-                    <ConnTopRight>
-                      {isActive ? (
-                        <>
-                          <StatusPill $status={nodes.server}>
-                            <StatusIcon status={nodes.server} />
-                            {statusLabel(nodes.server)}
-                          </StatusPill>
-                          {status.serverConnected ? (
-                            // Without a working local store (embedded node or
-                            // ready OPFS cache), the server is the only data
-                            // source — disconnecting would leave the app with
-                            // no data at all.
-                            <NodeAction
-                              onClick={() => store.disconnect()}
-                              disabled={!hasWorkingLocalStore}
-                              title={
-                                hasWorkingLocalStore
-                                  ? undefined
-                                  : 'Local storage is off, so this server is the only data source. Enable local storage below to work disconnected.'
-                              }
-                            >
-                              Disconnect
-                            </NodeAction>
-                          ) : (
-                            <NodeAction
-                              onClick={() =>
-                                store
-                                  .reconnect()
-                                  .catch(e => store.notifyError(e))
-                              }
-                            >
-                              Reconnect
-                            </NodeAction>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <StatusPill $status='unknown'>
-                            Not connected
-                          </StatusPill>
-                          <NodeAction onClick={() => switchToServer(server)}>
-                            Switch
-                          </NodeAction>
-                        </>
-                      )}
-                    </ConnTopRight>
-                  </ConnTopRow>
-
-                  <ConnSub>
-                    {isActive
-                      ? isCloud
-                        ? serverHostname
-                        : 'Always-on · in use'
-                      : 'Always-on device'}
-                  </ConnSub>
-
-                  {/* Status details belong to the server actually in use. */}
-                  {isActive &&
-                    !status.serverConnected &&
-                    status.serverConnectionError && (
-                      <ConnError role='alert'>
-                        <FaCircleExclamation aria-hidden />
-                        <span>{status.serverConnectionError}</span>
-                      </ConnError>
-                    )}
-
-                  {isActive && usagePct !== null && (
-                    <UsageBar
-                      aria-label={`${usagePct}% of storage used`}
-                      title={`${usagePct}% used`}
-                    >
-                      <UsageFill style={{ width: `${usagePct}%` }} />
-                    </UsageBar>
-                  )}
-
-                  {isActive && nodeUsage && (
-                    <ConnMeta>
-                      {nodeUsage.resourceCount.toLocaleString()} resources ·{' '}
-                      {formatBytes(nodeUsage.blobBytes + nodeUsage.loroBytes)}
-                      {quotaBytes ? ` of ${formatBytes(quotaBytes)}` : ''}
-                      {status.lastDriveSync
-                        ? ` · synced ${formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ?? 'just now'}`
-                        : ''}
-                    </ConnMeta>
-                  )}
-                  {isActive && !nodeUsage && status.lastDriveSync && (
-                    <ConnMeta>
-                      Last synced{' '}
-                      {formatTimeAgo(
-                        new Date(status.lastDriveSync.timestamp),
-                      ) ?? 'just now'}
-                    </ConnMeta>
-                  )}
-
-                  {/* A node id identifies this server's node, so it belongs on
-                      the server — not buried in Developer. */}
-                  {isActive && serverNodeId && (
-                    <NodeIdRow>
-                      <NodeIdLabel>Node ID</NodeIdLabel>
-                      <NodeIdValue
-                        title={`Copy ${rawToNodeDid(serverNodeId)}`}
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(
-                              rawToNodeDid(serverNodeId),
-                            );
-                            toast.success('Node ID copied');
-                          } catch (e) {
-                            store.notifyError(e as Error);
-                          }
-                        }}
-                      >
-                        {rawToNodeDid(serverNodeId)}
-                      </NodeIdValue>
-                    </NodeIdRow>
-                  )}
-
-                  {isCloud && managedInfo.portalUrl && (
-                    <ConnActions>
-                      <ManagedLink
-                        // The dashboard, not the portal root: signed-in
-                        // visitors get the marketing page at `/`, so the
-                        // link landed on a sales pitch rather than the
-                        // account it promises to manage.
-                        href={`${managedInfo.portalUrl}/dashboard`}
-                        target='_blank'
-                        rel='noopener noreferrer'
-                      >
-                        {'Manage account & plan →'}
-                      </ManagedLink>
-                    </ConnActions>
-                  )}
-                  {/* Removing the server you're using would strand the app. */}
-                  {!isActive && (
-                    <ConnActions>
-                      <NodeActionSubtle onClick={() => removeServer(server)}>
-                        Remove
-                      </NodeActionSubtle>
-                    </ConnActions>
-                  )}
-                </ConnBody>
-              </ConnCard>
-            );
-          })}
+          {/* Servers we do not own — one stable list; the active one is marked,
+              not moved. A managed node is deliberately absent: it moved up into
+              the account card, because "what am I paying for" and "where does
+              this drive live" are different questions and it was answering the
+              second while looking like the first. */}
+          {connectionServers
+            .filter(server => !isManagedServer(server))
+            .map(server => (
+              <ServerCard
+                key={server}
+                server={server}
+                status={status}
+                managedInfo={managedInfo}
+                serverStatus={nodes.server}
+                hasWorkingLocalStore={hasWorkingLocalStore}
+                nodeUsage={nodeUsage}
+                quotaBytes={quotaBytes}
+                serverNodeId={serverNodeId}
+                onSwitch={switchToServer}
+                onRemove={removeServer}
+              />
+            ))}
 
           {/* Paired devices (Iroh peers) */}
           {pairedPeers.map(peer => (
             <ConnCard key={peer.nodeId}>
-              <ConnIcon $tone='device'>
+              <CardIcon>
                 <FaMobileScreenButton />
-              </ConnIcon>
+              </CardIcon>
               <ConnBody>
                 <ConnTopRow>
                   <ConnTitle title={peer.nodeId}>{peer.label}</ConnTitle>
@@ -1285,9 +1521,9 @@ function SyncPage() {
 
             return (
               <ConnCard key={peer.nodeId}>
-                <ConnIcon $tone='device'>
+                <CardIcon>
                   <FaMobileScreenButton />
-                </ConnIcon>
+                </CardIcon>
                 <ConnBody>
                   <ConnTopRow>
                     <ConnTitle title={peer.nodeId}>{name}</ConnTitle>
@@ -1736,18 +1972,16 @@ const ProviderService = styled.div`
   padding: 0.9rem 1rem;
   border-top: 1px solid ${p => `${p.theme.colors.main}33`};
   min-width: 0;
-`;
 
-const AccountIcon = styled.div`
-  flex-shrink: 0;
-  width: ${CARD_ICON_SIZE};
-  height: ${CARD_ICON_SIZE};
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: ${CARD_ICON_FONT};
-  color: white;
-  background: ${p => p.theme.colors.main};
+  /* A connection row is one ellipsised line because a server origin has no
+     useful second line. These rows explain a service, so their text wraps —
+     otherwise the recovery row trails off mid-sentence. */
+  p,
+  span {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
 `;
 
 const AccountBody = styled.div`
@@ -1897,11 +2131,25 @@ const NodeIdValue = styled.button`
 /** `$active` marks the server actually in use. The list order is stable across
  *  switches, so this accent is the only thing that changes — which is the point:
  *  a reshuffling list is far harder to follow than a highlighted row. */
-const ConnCard = styled.div<{ $active?: boolean }>`
+/**
+ * Blue means "one of the provider's services", not "the one in use".
+ *
+ * These used to be the same thing, because the accent keyed off `$active`. A
+ * self-hosted node someone runs on their own hardware is not a hosted product
+ * no matter how live it is, and painting it the same blue as the account card
+ * said it was. Being in use is still worth showing, so it keeps a neutral
+ * emphasis, and the "In sync" badge next to the title carries the state.
+ */
+const ConnCard = styled.div<{ $active?: boolean; $provider?: boolean }>`
   ${cardBase}
   margin-bottom: 0.6rem;
-  border-color: ${p => (p.$active ? p.theme.colors.main : undefined)};
-  background: ${p => (p.$active ? `${p.theme.colors.main}0a` : undefined)};
+  border-color: ${p =>
+    p.$provider
+      ? p.theme.colors.main
+      : p.$active
+        ? p.theme.colors.textLight
+        : undefined};
+  background: ${p => (p.$provider ? `${p.theme.colors.main}0a` : undefined)};
 `;
 
 /** A call to action, but still one of the cards in this list. The button
@@ -1965,31 +2213,6 @@ const PairLabel = styled.span`
   font-size: 0.82rem;
   font-weight: 600;
   color: ${p => p.theme.colors.textLight};
-`;
-
-const ConnIcon = styled.div<{
-  $tone: 'device' | 'cloud' | 'server';
-  /** The server in use — accented, so which one is live reads at a glance. */
-  $active?: boolean;
-}>`
-  flex-shrink: 0;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
-  color: ${p =>
-    p.$tone === 'device' && !p.$active ? p.theme.colors.text : 'white'};
-  background: ${p =>
-    p.$active
-      ? p.theme.colors.main
-      : p.$tone === 'device'
-        ? p.theme.colors.bg2
-        : p.$tone === 'cloud'
-          ? p.theme.colors.main
-          : p.theme.colors.textLight};
 `;
 
 const ConnBody = styled.div`

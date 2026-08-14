@@ -144,7 +144,6 @@ msgstr "<0/> Create New Agent"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
-#: src/routes/SyncRoute.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/Plugin/AssignRights.tsx
@@ -284,6 +283,7 @@ msgstr "Automatically compact the conversation when input tokens exceed this per
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
+#: src/routes/SyncRoute.tsx
 #: src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Remove"
 msgstr "Remove"
@@ -831,9 +831,6 @@ msgstr "Result"
 #: src/routes/Search/SearchRoute.tsx
 msgid "With Tags:"
 msgstr "With Tags:"
-
-#~ msgid "The easiest way to create, share and model linked data."
-#~ msgstr "The easiest way to create, share and model linked data."
 
 #: src/routes/AboutRoute.tsx
 msgid "Features"
@@ -4287,9 +4284,6 @@ msgstr ""
 msgid "Atomic Data Browser"
 msgstr "Atomic Data Browser"
 
-#~ msgid "Atomic Data combines the ease of use of JSON, the connectivity of linked data and the reliability of type-safety — one open protocol for knowledge graphs, collaborative apps and shareable datasets."
-#~ msgstr "Atomic Data combines the ease of use of JSON, the connectivity of linked data and the reliability of type-safety — one open protocol for knowledge graphs, collaborative apps and shareable datasets."
-
 #. 0: ' '; 1: ' '
 #: src/routes/PruneTestsRoute.tsx
 msgid "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
@@ -4862,7 +4856,6 @@ msgstr "Could not copy — select and copy the code manually."
 
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
-#: src/routes/SyncRoute.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connect"
 msgstr "Connect"
@@ -4943,9 +4936,6 @@ msgstr "Cached locally · works offline"
 msgid "Server-only · no local cache"
 msgstr "Server-only · no local cache"
 
-#~ msgid "Cloud Sync"
-#~ msgstr "Cloud Sync"
-
 #. 0: usagePct
 #: src/routes/SyncRoute.tsx
 msgid "{0}% of storage used"
@@ -4970,6 +4960,7 @@ msgstr "Sync now"
 msgid "Embedded (this device)"
 msgstr "Embedded (this device)"
 
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Node ID"
 msgstr "Node ID"
@@ -5146,15 +5137,6 @@ msgstr "Backing up this workspace to {0}…"
 #: src/routes/SyncRoute.tsx
 msgid "Setting up…"
 msgstr "Setting up…"
-
-#~ msgid "Back up to {0}"
-#~ msgstr "Back up to {0}"
-
-#~ msgid "This workspace lives only on this device. Turn on {0}{1} to back it up and reach it from your other devices and the web."
-#~ msgstr "This workspace lives only on this device. Turn on {0}{1} to back it up and reach it from your other devices and the web."
-
-#~ msgid "Timed out connecting to the Cloud Sync node."
-#~ msgstr "Timed out connecting to the Cloud Sync node."
 
 #: src/routes/SyncRoute.tsx
 msgid "Sign-in wasn’t completed — nothing was backed up."
@@ -6634,9 +6616,6 @@ msgstr "{0} presets \"{1}\", which is not a column"
 msgid "The one workspace for everything, owned by you."
 msgstr "The one workspace for everything, owned by you."
 
-#~ msgid "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device — it can run with no server at all — and adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
-#~ msgstr "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device — it can run with no server at all — and adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
-
 #: src/routes/AboutRoute.tsx
 msgid "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device, and can run with no server at all. It adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
 msgstr "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device, and can run with no server at all. It adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
@@ -6655,49 +6634,35 @@ msgstr "Set up Cloud Server"
 msgid "Cloud Server"
 msgstr "Cloud Server"
 
-#. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
-msgid "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike encrypted backup, our servers process what you put here."
-msgstr "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike encrypted backup, our servers process what you put here."
+#~ msgid "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike encrypted backup, our servers process what you put here."
+#~ msgstr "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike encrypted backup, our servers process what you put here."
 
-#: src/routes/SyncRoute.tsx
-msgid "Devices"
-msgstr "Devices"
+#~ msgid "Devices"
+#~ msgstr "Devices"
 
-#: src/routes/SyncRoute.tsx
-msgid "An always-on device has an address. One you carry has a code — scan it below instead."
-msgstr "An always-on device has an address. One you carry has a code — scan it below instead."
+#~ msgid "An always-on device has an address. One you carry has a code — scan it below instead."
+#~ msgstr "An always-on device has an address. One you carry has a code — scan it below instead."
 
-#: src/routes/SyncRoute.tsx
-msgid "How to run your own server"
-msgstr "How to run your own server"
+#~ msgid "How to run your own server"
+#~ msgstr "How to run your own server"
 
-#: src/routes/SyncRoute.tsx
-msgid "<0/> Connect a device"
-msgstr "<0/> Connect a device"
+#~ msgid "<0/> Connect a device"
+#~ msgstr "<0/> Connect a device"
 
 #: src/helpers/managed/cloudSync.ts
 msgid "Timed out connecting to the Cloud Server node."
 msgstr "Timed out connecting to the Cloud Server node."
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup"
-msgstr "Encrypted backup"
+#~ msgid "Encrypted backup"
+#~ msgstr "Encrypted backup"
 
 #. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
 msgid "Keep an encrypted copy of this workspace in {0}. It is sealed on this device, so we store it without being able to read it."
 msgstr "Keep an encrypted copy of this workspace in {0}. It is sealed on this device, so we store it without being able to read it."
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Turn on encrypted backup"
-msgstr "Turn on encrypted backup"
-
-#~ msgid "Nothing has been backed up yet."
-#~ msgstr "Nothing has been backed up yet."
-
-#~ msgid "{0} encrypted object{1} · {2} stored."
-#~ msgstr "{0} encrypted object{1} · {2} stored."
+#~ msgid "Turn on encrypted backup"
+#~ msgstr "Turn on encrypted backup"
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Working…"
@@ -6711,9 +6676,8 @@ msgstr "Back up now"
 msgid "Backups are paused. You can still restore what is already stored."
 msgstr "Backups are paused. You can still restore what is already stored."
 
-#: src/components/Vault/VaultPanel.tsx
-msgid "Encrypted backup is on"
-msgstr "Encrypted backup is on"
+#~ msgid "Encrypted backup is on"
+#~ msgstr "Encrypted backup is on"
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "<0/> Restore"
@@ -6812,9 +6776,8 @@ msgstr "Restore my workspace"
 msgid "…or bring it from another device instead"
 msgstr "…or bring it from another device instead"
 
-#: src/routes/SyncRoute.tsx
-msgid "Learn more"
-msgstr "Learn more"
+#~ msgid "Learn more"
+#~ msgstr "Learn more"
 
 #. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
@@ -6862,3 +6825,215 @@ msgstr "No session"
 #: src/helpers/managed/enrollment.test.ts
 msgid "Internal Server Error"
 msgstr "Internal Server Error"
+
+#~ msgid "The easiest way to create, share and model linked data."
+#~ msgstr "The easiest way to create, share and model linked data."
+
+#~ msgid "Atomic Data combines the ease of use of JSON, the connectivity of linked data and the reliability of type-safety — one open protocol for knowledge graphs, collaborative apps and shareable datasets."
+#~ msgstr "Atomic Data combines the ease of use of JSON, the connectivity of linked data and the reliability of type-safety — one open protocol for knowledge graphs, collaborative apps and shareable datasets."
+
+#~ msgid "Cloud Sync"
+#~ msgstr "Cloud Sync"
+
+#~ msgid "Back up to {0}"
+#~ msgstr "Back up to {0}"
+
+#~ msgid "This workspace lives only on this device. Turn on {0}{1} to back it up and reach it from your other devices and the web."
+#~ msgstr "This workspace lives only on this device. Turn on {0}{1} to back it up and reach it from your other devices and the web."
+
+#~ msgid "Timed out connecting to the Cloud Sync node."
+#~ msgstr "Timed out connecting to the Cloud Sync node."
+
+#~ msgid "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device — it can run with no server at all — and adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
+#~ msgstr "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device — it can run with no server at all — and adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
+
+#~ msgid "Nothing has been backed up yet."
+#~ msgstr "Nothing has been backed up yet."
+
+#~ msgid "{0} encrypted object{1} · {2} stored."
+#~ msgstr "{0} encrypted object{1} · {2} stored."
+
+#~ msgid "Encrypted backup is not available here: {0}."
+#~ msgstr "Encrypted backup is not available here: {0}."
+
+#~ msgid "Signed in to {0}"
+#~ msgstr "Signed in to {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Manage account →"
+msgstr "Manage account →"
+
+#: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultPanel.tsx
+msgid "Cloud Vault"
+msgstr "Cloud Vault"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Turn on Cloud Vault"
+msgstr "Turn on Cloud Vault"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Cloud Vault is on"
+msgstr "Cloud Vault is on"
+
+#~ msgid "Hosted services for this workspace"
+#~ msgstr "Hosted services for this workspace"
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike Cloud Vault, our servers process what you put here."
+msgstr "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike Cloud Vault, our servers process what you put here."
+
+#. 0: missing.join(', ')
+#: src/helpers/managed/useVaultBackup.ts
+msgid "Cloud Vault is not available here: {0}."
+msgstr "Cloud Vault is not available here: {0}."
+
+#~ msgid "See plans"
+#~ msgstr "See plans"
+
+#: src/routes/SyncRoute.tsx
+msgid "Disconnect"
+msgstr "Disconnect"
+
+#: src/routes/SyncRoute.tsx
+msgid "Reconnect"
+msgstr "Reconnect"
+
+#: src/routes/SyncRoute.tsx
+msgid "Not connected"
+msgstr "Not connected"
+
+#: src/routes/SyncRoute.tsx
+msgid "Switch"
+msgstr "Switch"
+
+#: src/routes/SyncRoute.tsx
+msgid "Your cloud services"
+msgstr "Your cloud services"
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud services for this workspace"
+msgstr "Cloud services for this workspace"
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "Signed in as {0}."
+msgstr "Signed in as {0}."
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0} — we hold your key sealed, so this email gets you back in on a new device."
+msgstr "{0} — we hold your key sealed, so this email gets you back in on a new device."
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0} — no recovery backup stored. Lose every device and this workspace is gone."
+msgstr "{0} — no recovery backup stored. Lose every device and this workspace is gone."
+
+#: src/routes/SyncRoute.tsx
+msgid "Email recovery"
+msgstr "Email recovery"
+
+#~ msgid "ProbeBetaNested {0} tail"
+#~ msgstr "ProbeBetaNested {0} tail"
+
+#~ msgid "ProbeAlphaTop {0} tail"
+#~ msgstr "ProbeAlphaTop {0} tail"
+
+#~ msgid "ProbeOne {0} tail"
+#~ msgstr "ProbeOne {0} tail"
+
+#~ msgid "ProbeTwo{0} {1}"
+#~ msgstr "ProbeTwo{0} {1}"
+
+#~ msgid "ProbeThree{0} {1}"
+#~ msgstr "ProbeThree{0} {1}"
+
+#~ msgid "ProbeFour{0} {1}"
+#~ msgstr "ProbeFour{0} {1}"
+
+#~ msgid "ProbeFive {0}"
+#~ msgstr "ProbeFive {0}"
+
+#~ msgid "ProbeSix {0}"
+#~ msgstr "ProbeSix {0}"
+
+#~ msgid "ProbeGuard"
+#~ msgstr "ProbeGuard"
+
+#~ msgid "ProbeGuardTwo"
+#~ msgstr "ProbeGuardTwo"
+
+#~ msgid "ProbeGuardThree"
+#~ msgstr "ProbeGuardThree"
+
+#. 0: nodeUsage.resourceCount.toLocaleString()
+#: src/routes/SyncRoute.tsx
+msgid "{0} resources"
+msgstr "{0} resources"
+
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
+#: src/routes/SyncRoute.tsx
+msgid "{0} of {1}"
+msgstr "{0} of {1}"
+
+#~ msgid "ProbeFallbackA"
+#~ msgstr "ProbeFallbackA"
+
+#~ msgid "ProbeLiteralB"
+#~ msgstr "ProbeLiteralB"
+
+#~ msgid "ProbeGammaC {0}"
+#~ msgstr "ProbeGammaC {0}"
+
+#~ msgid "ProbeDeltaD {0}"
+#~ msgstr "ProbeDeltaD {0}"
+
+#~ msgid "ProbeEpsilonE {0}"
+#~ msgstr "ProbeEpsilonE {0}"
+
+#. 0: syncedAgo
+#: src/routes/SyncRoute.tsx
+msgid "Synced {0}"
+msgstr "Synced {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Synced just now"
+msgstr "Synced just now"
+
+#: src/routes/SyncRoute.tsx
+msgid "Open a workspace to see whether it can be hosted."
+msgstr "Open a workspace to see whether it can be hosted."
+
+#: src/routes/SyncRoute.tsx
+msgid "This device doesn’t have this workspace yet. Pair the device that does, and you can host it from here."
+msgstr "This device doesn’t have this workspace yet. Pair the device that does, and you can host it from here."
+
+#. 0: serverHostname ?? 'another server'
+#: src/routes/SyncRoute.tsx
+msgid "Already set up for this workspace. This app is reading from {0} instead."
+msgstr "Already set up for this workspace. This app is reading from {0} instead."
+
+#: src/routes/SyncRoute.tsx
+msgid "This server"
+msgstr "This server"
+
+#. 0: serverHostname ?? 'This server'
+#: src/routes/SyncRoute.tsx
+msgid "{0} doesn’t offer hosting, so it can’t be switched on from here."
+msgstr "{0} doesn’t offer hosting, so it can’t be switched on from here."
+
+#: src/routes/SyncRoute.tsx
+msgid "Checking whether this workspace is hosted…"
+msgstr "Checking whether this workspace is hosted…"
+
+#. 0: serverHostname ?? 'another server'
+#: src/routes/SyncRoute.tsx
+msgid "This workspace already lives on {0}. Moving it here is a migration, not a backup."
+msgstr "This workspace already lives on {0}. Moving it here is a migration, not a backup."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Checking this workspace’s backup…"
+msgstr "Checking this workspace’s backup…"
