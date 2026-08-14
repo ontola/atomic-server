@@ -11,8 +11,9 @@ This is the supported product path. If you want to model a site from scratch ins
 - Cmd/Ctrl+E (and an **Edit this page** link) from the live site back into the editor
 - Document-level translations (`language` + `translationOf`)
 - Scheduled posts: a `published-at` in the future is stored but not listed or routed
+- `sitemap.xml`, `robots.txt`, and `rss.xml` generated from the same public-content filter
 
-Authorization is still location. Making the Drive publicly readable publishes everything in it. A future `published-at` is presentation, not an ACL. Staging a change to an existing page is [Edit as fork](commits/suggestions.md) — forks are excluded from the public site.
+Authorization is still location. Making the Drive publicly readable publishes everything in it. A future `published-at` is presentation, not an ACL. Staging a change to an existing page is [Edit as fork](commits/suggestions.md) — forks are excluded from the public site, sitemap, and RSS.
 
 ## 1. Run AtomicServer
 
@@ -76,6 +77,7 @@ Blog posts:
 - The Website resource's **homepage** property is what `/` (and `/nl`) serve. Change it in the Data Browser to point at a different page without renaming paths.
 - `published-at` in the future hides the post from listings, search, and direct routes.
 - `cover-image` and `published-at` are recommended, not required, so you can save an incomplete post. Until it has a `published-at` in the past, it stays off the site.
+- `/sitemap.xml` lists every public page and post in each declared language. `/rss.xml` is the blog feed. Both omit forks and unpublished posts. `/robots.txt` points crawlers at the sitemap.
 
 ## 5. Translations
 
@@ -85,7 +87,7 @@ The Website resource has `defaultLanguage` (`en`) and `languages` (`en`, `nl`). 
 - `translationOf` — the canonical resource
 - its own `path` (`/blog/de-biologie-van-ballondieren`)
 
-The templates resolve `/nl/blog/the-english-slug` to the Dutch sibling, list one version per post, and emit `hreflang`. Nav links keep the current language prefix (`/nl/blog` → Home is `/nl`). See [Translations & Localization](schema/translations.md).
+The templates resolve `/nl/blog/the-english-slug` to the Dutch sibling, list one version per post, and emit `hreflang`. Nav links and blog cards keep the current language prefix (`/nl/blog` → Home is `/nl`, a Coffee card stays under `/nl/blog/...`). See [Translations & Localization](schema/translations.md).
 
 ## 6. What this is not (yet)
 

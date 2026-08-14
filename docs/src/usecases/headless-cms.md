@@ -45,7 +45,7 @@ Declare `defaultLanguage` (and optionally `languages`) on your website or drive,
 
 - No support for image resizing, [as of now](https://github.com/atomicdata-dev/atomic-server/issues/257)
 - No GraphQL support [(see issue)](https://github.com/atomicdata-dev/atomic-server/issues/251)
-- Scheduled `published-at` dates hide posts on generated sites, but they are not an authorization boundary. A Drive with public read still serves the resource over HTTP.
+- Scheduled `published-at` dates hide posts on generated sites (including sitemap and RSS), but they are not an authorization boundary. A Drive with public read still serves the resource over HTTP.
 - Confidential drafts require a private folder (the Drive itself must not be blanket-public). The Website template does not yet ship that layout.
 
 ## Setting up the server

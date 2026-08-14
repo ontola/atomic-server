@@ -2,9 +2,12 @@ import { expect, test as baseTest, type Page } from './fixtures';
 import {
   FRONTEND_URL,
   before,
+  contextMenuClick,
+  editTitle,
   makeDrivePublic,
   nodeReachableServerUrl,
   openNewResourcePage,
+  openSubject,
   waitForSynced,
 } from './test-utils';
 import fs from 'node:fs';
@@ -42,6 +45,102 @@ const test = baseTest.extend<{
   },
 });
 const TEMPLATE_IMPORT_TIMEOUT = 60_000;
+const WEBSITE_LOCAL_ID = '01j5zrevq917dp0wm4p2vnd7nr';
+const ABOUT_LOCAL_ID = '01j67112t57y1nefp8gerjz4ba';
+const HOMEPAGE_PROP_LOCAL_ID = 'website/property/homepage';
+const FORK_TITLE = 'DRAFT ABOUT LEAK';
+
+async function subjectByLocalId(
+  page: Page,
+  drive: string,
+  localId: string,
+): Promise<string> {
+  const deadline = Date.now() + 30_000;
+
+  while (Date.now() < deadline) {
+    const subject = await page.evaluate(
+      async ({ drive, localId }) => {
+        const store = window.store;
+        const server = store.getServerUrl().replace(/\/$/, '');
+        const url = new URL(`${server}/query`);
+        url.searchParams.set(
+          'property',
+          'https://atomicdata.dev/properties/localId',
+        );
+        url.searchParams.set('value', localId);
+        url.searchParams.set('drive', drive);
+        url.searchParams.set('page_size', '5');
+        url.searchParams.set(
+          'filters',
+          JSON.stringify([
+            {
+              property: 'https://atomicdata.dev/properties/drive',
+              value: drive,
+            },
+          ]),
+        );
+
+        const resource = await store.fetchResourceFromServer(url.toString());
+
+        if (resource.error) {
+          return null;
+        }
+
+        const members = resource.get(
+          'https://atomicdata.dev/properties/collection/members',
+        );
+
+        if (!Array.isArray(members) || members.length === 0) {
+          return null;
+        }
+
+        return String(members[0]);
+      },
+      { drive, localId },
+    );
+
+    if (subject) {
+      return subject;
+    }
+
+    await page.waitForTimeout(400);
+  }
+
+  throw new Error(`No resource with localId ${localId} in ${drive}`);
+}
+
+/** Fork the About page and rename the fork so a leak is obvious on the public site. */
+async function forkAboutPage(page: Page, drive: string) {
+  const about = await subjectByLocalId(page, drive, ABOUT_LOCAL_ID);
+  await openSubject(page, about);
+  await contextMenuClick('editAsFork', page);
+  await expect(page.getByText('Fork of')).toBeVisible();
+  await editTitle(FORK_TITLE, page);
+}
+
+/** `/` should serve About, not the page that happens to have path `/`. */
+async function pointHomepageAtAbout(page: Page, drive: string) {
+  const websiteSubject = await subjectByLocalId(page, drive, WEBSITE_LOCAL_ID);
+  const aboutSubject = await subjectByLocalId(page, drive, ABOUT_LOCAL_ID);
+  const homepageProp = await subjectByLocalId(
+    page,
+    drive,
+    HOMEPAGE_PROP_LOCAL_ID,
+  );
+
+  const saved = await page.evaluate(
+    async ({ websiteSubject, aboutSubject, homepageProp }) => {
+      const website = await window.store.getResource(websiteSubject);
+      await website.set(homepageProp, aboutSubject);
+      await website.save();
+
+      return website.get(homepageProp) === aboutSubject;
+    },
+    { websiteSubject, aboutSubject, homepageProp },
+  );
+
+  expect(saved, 'homepage property should point at About').toBe(true);
+}
 
 /**
  * The atomic-server the *app* talks to.
@@ -304,6 +403,53 @@ async function assertTwoLocaleSite(
   await expect(page).toHaveURL(/\/nl\/?$/);
 }
 
+async function assertHomepageIsAbout(page: Page, url: string) {
+  const response = await page.goto(url);
+  expect(response?.status()).toBe(200);
+  await expect(page.locator('h1')).toContainText('About');
+  await expect(page.locator('body')).toContainText('and I love');
+  await expect(page.locator('body')).not.toContainText(
+    'This is a template site generated with @tomic/template.',
+  );
+  await expect(page.locator('body')).not.toContainText(FORK_TITLE);
+
+  await page.goto(`${url}/about`);
+  await expect(page.locator('h1')).toContainText('About');
+  await expect(page.locator('body')).not.toContainText(FORK_TITLE);
+}
+
+async function assertLocaleBlogCards(page: Page, url: string) {
+  await page.goto(`${url}/nl/blog`);
+  await page.getByRole('link', { name: /Coffee/i }).click();
+  await expect(page).toHaveURL(
+    /\/nl\/blog\/can-you-really-survive-on-coffee-alone/,
+  );
+}
+
+async function assertCmsFeeds(page: Page, url: string) {
+  const sitemap = await page.request.get(`${url}/sitemap.xml`);
+  expect(sitemap.status()).toBe(200);
+  const sitemapBody = await sitemap.text();
+  expect(sitemapBody).toContain('/blog/the-biology-of-balloon-animals');
+  expect(sitemapBody).toContain('/nl/blog');
+  expect(sitemapBody).not.toContain('scheduled-why-time-travel');
+  expect(sitemapBody).not.toContain('Time Travel');
+  expect(sitemapBody).not.toContain('DRAFT ABOUT LEAK');
+
+  const rss = await page.request.get(`${url}/rss.xml`);
+  expect(rss.status()).toBe(200);
+  const rssBody = await rss.text();
+  expect(rssBody).toContain('Balloon');
+  expect(rssBody).not.toContain('Time Travel');
+  expect(rssBody).not.toContain('DRAFT ABOUT LEAK');
+
+  const robots = await page.request.get(`${url}/robots.txt`);
+  expect(robots.status()).toBe(200);
+  const robotsBody = await robots.text();
+  expect(robotsBody).toContain('Sitemap:');
+  expect(robotsBody).toContain('/sitemap.xml');
+}
+
 /**
  * Editors can jump from the published page to the Data Browser edit form.
  * The CMS origin is a public URL; credentials stay in the Data Browser.
@@ -356,6 +502,8 @@ test.describe('Test create-template package', () => {
     await page.getByTestId('template-button').click();
 
     await applyWebsiteTemplate(page);
+    await forkAboutPage(page, drive.driveURL);
+    await pointHomepageAtAbout(page, drive.driveURL);
 
     await waitForSynced(page);
     const serverUrl = await appServerUrl(page);
@@ -369,13 +517,7 @@ test.describe('Test create-template package', () => {
       const url = await test.step('Template HTTP readiness', () =>
         child.readyURL());
 
-      // check if the server is running
-      const response = await page.goto(url);
-      expect(response?.status()).toBe(200);
-
-      await expect(page.locator('body')).toContainText(
-        'This is a template site generated with @tomic/template.',
-      );
+      await assertHomepageIsAbout(page, url);
 
       await page.goto(`${url}/blog`);
 
@@ -393,6 +535,8 @@ test.describe('Test create-template package', () => {
 
       await assertTwoLocaleSite(page, url, true);
       await assertCmsEditFromSite(page, url);
+      await assertLocaleBlogCards(page, url);
+      await assertCmsFeeds(page, url);
     }
   });
 
@@ -409,6 +553,8 @@ test.describe('Test create-template package', () => {
     await button.click();
 
     await applyWebsiteTemplate(page);
+    await forkAboutPage(page, drive.driveURL);
+    await pointHomepageAtAbout(page, drive.driveURL);
 
     await waitForSynced(page);
     const serverUrl = await appServerUrl(page);
@@ -421,13 +567,7 @@ test.describe('Test create-template package', () => {
       const url = await test.step('Template HTTP readiness', () =>
         child.readyURL());
 
-      // check if the server is running
-      const response = await page.goto(url);
-      expect(response?.status()).toBe(200);
-
-      await expect(page.locator('body')).toContainText(
-        'This is a template site generated with @tomic/template.',
-      );
+      await assertHomepageIsAbout(page, url);
 
       await page.goto(`${url}/blog`);
 
@@ -444,6 +584,8 @@ test.describe('Test create-template package', () => {
 
       await assertTwoLocaleSite(page, url, true);
       await assertCmsEditFromSite(page, url);
+      await assertLocaleBlogCards(page, url);
+      await assertCmsFeeds(page, url);
     }
   });
 });
