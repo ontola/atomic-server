@@ -3,6 +3,7 @@ import { website } from '@/ontologies/website';
 import { driveFilter, store } from '@/store';
 import { env } from '@/env';
 import { findTranslation, parseLocalizedPath } from './i18n';
+import { isListedCmsResource } from './publicContent';
 
 /**
  * Queries the server for a resource with a href property that matches the given url pathname.
@@ -27,15 +28,20 @@ export async function getCurrentResource(
     return undefined;
   }
 
-  const currentResourceSubject = await collection.getMemberWithIndex(0);
+  const subjects = await collection.getAllMembers();
+  const candidates = (
+    await Promise.all(
+      subjects.map(subject =>
+        store.fetchResourceFromServer(subject, { noWebSocket: true }),
+      ),
+    )
+  ).filter(isListedCmsResource);
 
-  if (!currentResourceSubject) {
+  if (candidates.length === 0) {
     return undefined;
   }
 
-  const resource = await store.fetchResourceFromServer(currentResourceSubject, {
-    noWebSocket: true,
-  });
+  const resource = candidates[0];
 
   if (!prefixed) {
     // Without an explicit language in the URL, the resource's own href wins:

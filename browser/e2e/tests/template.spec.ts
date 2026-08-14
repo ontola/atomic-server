@@ -227,6 +227,7 @@ async function assertTwoLocaleSite(
 ) {
   const ENGLISH_TITLE = 'The Biology of Balloon Animals';
   const DUTCH_TITLE = 'De biologie van ballondieren';
+  const SCHEDULED_TITLE = 'Scheduled: Why Time Travel Is Overrated';
 
   // The nl route of the ENGLISH slug serves the Dutch sibling.
   await page.goto(`${url}/nl/blog/the-biology-of-balloon-animals`);
@@ -246,17 +247,57 @@ async function assertTwoLocaleSite(
   await expect(page.locator('body')).toContainText(DUTCH_TITLE);
   await expect(page.locator('body')).toContainText('Coffee');
   await expect(page.locator('body')).not.toContainText(ENGLISH_TITLE);
+  await expect(page.locator('body')).not.toContainText(SCHEDULED_TITLE);
 
-  // The default-language listing is unchanged.
+  // The default-language listing is unchanged, and a future-dated post is hidden.
   await page.goto(`${url}/blog`);
   await expect(page.locator('body')).toContainText(ENGLISH_TITLE);
   await expect(page.locator('body')).not.toContainText(DUTCH_TITLE);
+  await expect(page.locator('body')).not.toContainText(SCHEDULED_TITLE);
+
+  // Direct URL to a scheduled post is a 404, not a leak of unpublished content.
+  const scheduled = await page.goto(
+    `${url}/blog/scheduled-why-time-travel-is-overrated`,
+  );
+  expect(scheduled?.status()).toBe(404);
 
   // The English post advertises its Dutch sibling.
   await page.goto(`${url}/blog/the-biology-of-balloon-animals`);
   await expect(
     page.locator('link[rel="alternate"][hreflang="nl"]'),
   ).toHaveCount(1);
+}
+
+/**
+ * Editors can jump from the published page to the Data Browser edit form.
+ * The CMS origin is a public URL; credentials stay in the Data Browser.
+ */
+async function assertCmsEditFromSite(page: Page, siteOrigin: string) {
+  await page.goto(siteOrigin);
+  const editLink = page.getByTestId('cms-edit-link');
+  await expect(editLink).toBeVisible();
+
+  const href = await editLink.getAttribute('href');
+  expect(href, 'Edit this page should point at the Data Browser edit form').toBeTruthy();
+  expect(href).toContain('/app/edit');
+  expect(href).toContain('subject=');
+
+  const popupPromise = page.waitForEvent('popup');
+  // Dispatch on the page so the browser chrome cannot swallow Control+E.
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'e',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  const popup = await popupPromise;
+  expect(popup.url()).toContain('/app/edit');
+  expect(popup.url()).toContain('subject=');
+  await popup.close();
 }
 
 test.describe('Test create-template package', () => {
@@ -314,7 +355,13 @@ test.describe('Test create-template package', () => {
       await expect(page.locator('body')).toContainText('Balloon');
       await expect(page.locator('body')).not.toContainText('coffee');
 
+      await searchInput.fill('Time Travel');
+      await expect(page.locator('body')).not.toContainText(
+        'Scheduled: Why Time Travel Is Overrated',
+      );
+
       await assertTwoLocaleSite(page, url, false);
+      await assertCmsEditFromSite(page, url);
     } finally {
       try {
         await kill(3000);
@@ -368,7 +415,13 @@ test.describe('Test create-template package', () => {
       await expect(page.locator('body')).toContainText('Balloon');
       await expect(page.locator('body')).not.toContainText('coffee');
 
+      await searchInput.fill('Time Travel');
+      await expect(page.locator('body')).not.toContainText(
+        'Scheduled: Why Time Travel Is Overrated',
+      );
+
       await assertTwoLocaleSite(page, url, true);
+      await assertCmsEditFromSite(page, url);
     } finally {
       try {
         await kill(4174);

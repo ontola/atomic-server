@@ -10,6 +10,7 @@
 	import { getStoreFromContext } from '@tomic/svelte';
 	import { PUBLIC_ATOMIC_DRIVE } from '$env/static/public';
 	import { appState } from '$lib/stores/appstate.svelte';
+	import { isListedCmsResource } from '$lib/atomic/publicContent';
 
 	interface Props {
 		resource: Resource<BlogIndexPage>;
@@ -79,6 +80,13 @@
 						[core.properties.isA]: website.classes.blogpost
 					}
 				});
+
+				const hits = await Promise.all(
+					nextResults.map((subject) => store.getResource(subject))
+				);
+				nextResults = hits
+					.filter(isListedCmsResource)
+					.map((resource) => resource.subject);
 
 				if (nextResults.length > 0 || version !== searchVersion) {
 					break;

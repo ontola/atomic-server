@@ -83,19 +83,26 @@
       by explicitly copying or applying an approved diff to the public page.
       A status or `publishedAt` property alone is presentation metadata, not an
       authorization boundary.
-- [ ] Add a publication query shared by both templates. Today `publishedAt` is
+- [x] Add a publication query shared by both templates. Today `publishedAt` is
       only used for sorting, so future-dated or otherwise unpublished posts are
-      still rendered.
+      still rendered. **Done (2026-08-14):** both templates drop forks and
+      blog posts with a missing or future `published-at` from listings, search,
+      and path routing. A scheduled 2030 post is seeded in the Website template
+      and asserted in `template.spec.ts`. This is still presentation, not an
+      ACL — a public Drive will serve the resource over HTTP.
 
 ### Editing from the website
 
 - [x] Record the existing Data Browser contract:
       `/app/edit?subject=<resource>` and Cmd/Ctrl+E inside Data Browser.
-- [ ] Add a configurable CMS origin to generated sites and use it for a
+- [x] Add a configurable CMS origin to generated sites and use it for a
       Cmd/Ctrl+E deep link. Do not assume the content server and Data Browser
-      have the same origin.
-- [ ] Add a small authenticated edit affordance for editors; it must not embed
+      have the same origin. **Done (2026-08-14):** `--cms-url` (defaults to
+      `--server-url`) writes `ATOMIC_CMS_URL`; Cmd/Ctrl+E and **Edit this page**
+      open `/app/edit?subject=…`.
+- [x] Add a small authenticated edit affordance for editors; it must not embed
       credentials or private agent material in the public bundle.
+      The link is public; sign-in happens in the Data Browser.
 - [ ] Decide whether "in-page editing" means navigation to Data Browser,
       an extracted shared editor surface, or framework-native fields backed by
       `@tomic/react` / `@tomic/svelte`. Avoid duplicating the existing editor

@@ -212,8 +212,12 @@ so each verb appears in the context menu, ⌘K, ⌘M and the AI/MCP surface for 
 - Ship a `Drafts` folder (private) next to the public site folder.
 - Loosen the over-strict `requires` on `blogpost` (`cover-image`, `published-at`) so an
   incomplete post is saveable anywhere.
+  **Done (2026-08-14):** both are `recommends`. Generated sites treat a missing
+  `published-at` as unpublished.
 - Generated queries must exclude `Fork` and stop rendering future-dated posts. Today
   `published-at` is used only for sorting and display, so a post dated 2099 renders now.
+  **Done (2026-08-14) for generated sites:** listings, search, and path lookup skip
+  forks and unpublished posts. Drive-level public read is unchanged.
 - E2E: a draft is invisible to an anonymous visitor of the generated site, and visible
   after publish.
 

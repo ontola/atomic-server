@@ -17,17 +17,25 @@
 		day: 'numeric'
 	});
 
-	let date = $derived(formatter.format(new Date(resource.props.publishedAt)));
+	let date = $derived(
+		resource.props.publishedAt
+			? formatter.format(new Date(resource.props.publishedAt))
+			: undefined
+	);
 </script>
 
 <Container>
 	<div class="blog-wrapper">
-		<Image subject={resource.props.coverImage} alt="" />
+		{#if resource.props.coverImage}
+			<Image subject={resource.props.coverImage} alt="" />
+		{/if}
 		<div class="content">
 			<h1>{resource.title}</h1>
-			<p class="publish-date">
-				{date}
-			</p>
+			{#if date}
+				<p class="publish-date">
+					{date}
+				</p>
+			{/if}
 			<SvelteMarkdown source={resource.props.description} />
 		</div>
 	</div>

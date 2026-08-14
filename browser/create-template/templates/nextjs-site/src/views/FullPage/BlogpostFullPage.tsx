@@ -12,17 +12,21 @@ const formatter = new Intl.DateTimeFormat('default', {
 });
 
 const BlogpostFullPage = ({ resource }: { resource: Resource<Blogpost> }) => {
-  const date = formatter.format(new Date(resource.props.publishedAt));
+  const date = resource.props.publishedAt
+    ? formatter.format(new Date(resource.props.publishedAt))
+    : undefined;
 
   return (
     <Container>
       <div className={styles.blogWrapper}>
-        <div className={styles.coverImageWrapper}>
-          <Image subject={resource.props.coverImage} alt='' />
-        </div>
+        {resource.props.coverImage && (
+          <div className={styles.coverImageWrapper}>
+            <Image subject={resource.props.coverImage} alt='' />
+          </div>
+        )}
         <div className={styles.content}>
           <h1 className={styles.h1}>{resource.title}</h1>
-          <p className={styles.publishDate}>{date}</p>
+          {date && <p className={styles.publishDate}>{date}</p>}
           <MarkdownContent
             subject={resource.subject}
             initialValue={resource.props.description}

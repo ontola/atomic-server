@@ -15,15 +15,23 @@
 		day: 'numeric'
 	});
 
-	let date = $derived(formatter.format(new Date(resource.props.publishedAt)));
+	let date = $derived(
+		resource.props.publishedAt
+			? formatter.format(new Date(resource.props.publishedAt))
+			: undefined
+	);
 </script>
 
 <a class="card" href={resource.props.href}>
-	<div class="image-wrapper">
-		<Image subject={resource.props.coverImage} alt="" />
-	</div>
+	{#if resource.props.coverImage}
+		<div class="image-wrapper">
+			<Image subject={resource.props.coverImage} alt="" />
+		</div>
+	{/if}
 	<div class="card-content">
-		<div class="publish-date">{date}</div>
+		{#if date}
+			<div class="publish-date">{date}</div>
+		{/if}
 		<h2>{resource.title}</h2>
 		<p>{resource.props.description.slice(0, 300)}...</p>
 	</div>
