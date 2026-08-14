@@ -10,6 +10,9 @@ import { DocumentLang } from '@/components/DocumentLang';
 import { LanguageConfigProvider } from '@/atomic/languageConfig';
 import { getLanguageConfig } from '@/atomic/i18n';
 
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 export const metadata: Metadata = {
   title: 'Next.js Atomic',
   description: 'A Next.js template for Atomic Server',
