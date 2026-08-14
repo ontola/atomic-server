@@ -113,8 +113,8 @@ async function getOrCreateNotificationsFolder(
 async function seedUnreadItem(
   page: import('@playwright/test').Page,
   opts: { folder: string; about: string; summary: string; dedupeKey: string },
-) {
-  await page.evaluate(
+): Promise<string> {
+  return page.evaluate(
     async ({
       folder: parent,
       about,
@@ -145,6 +145,8 @@ async function seedUnreadItem(
       });
       await item.save();
       store.notifyResourceManuallyCreated(item);
+
+      return item.subject;
     },
     {
       folder: opts.folder,
@@ -477,7 +479,7 @@ test.describe('notifications', () => {
       return doc.subject;
     }, personalDrive);
 
-    await seedUnreadItem(page, {
+    const seededSubject = await seedUnreadItem(page, {
       folder,
       about: aboutSubject,
       summary: 'Mentioned you in SyncReadTarget',
@@ -485,9 +487,19 @@ test.describe('notifications', () => {
     });
 
     await page.waitForFunction(
-      () => window.store.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 15_000 },
+      async subject => {
+        try {
+          const res = await window.store.fetchResourceFromServer(subject, {
+            noWebSocket: true,
+          });
+
+          return !res.error;
+        } catch {
+          return false;
+        }
+      },
+      seededSubject,
+      { timeout: 20_000 },
     );
 
     await page.goto(`${FRONTEND_URL}/app/notifications`);
