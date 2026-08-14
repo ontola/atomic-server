@@ -525,6 +525,56 @@ describe('Resource.merge Loro options', () => {
 
     expect(local.get(name)).toBe('baseline');
   });
+
+  /**
+   * Regression: bootstrapped stubs carry an `incomplete` marker so visiting
+   * the subject triggers a real fetch. The marker lives in the stub's local
+   * Loro ops, and a CRDT merge UNIONS docs — so merging the fetched full
+   * copy left the marker in place, and `getResourceLoading` kept refetching
+   * forever. Merging a full copy must resolve the staleness.
+   */
+  it('drops the incomplete marker when merging in a full copy', async ({
+    expect,
+  }) => {
+    const subject = 'https://example.com/merge-incomplete';
+    const name = 'https://atomicdata.dev/properties/name';
+
+    const stub = new Resource(subject);
+    stub.applyHydratedValues([
+      [core.properties.parent, 'https://example.com'],
+      [core.properties.incomplete, true],
+    ]);
+    // Seed the stub's Loro doc so the merge goes down the CRDT-union path.
+    stub.getLoroDoc();
+
+    const full = new Resource(subject);
+    await full.set(name, 'The real resource', false);
+    full.loading = false;
+
+    stub.merge(full);
+
+    expect(stub.get(core.properties.incomplete)).toBeUndefined();
+    expect(stub.get(name)).toBe('The real resource');
+    expect(stub.loading).toBe(false);
+  });
+
+  it('keeps the incomplete marker when the incoming copy is itself incomplete', async ({
+    expect,
+  }) => {
+    const subject = 'https://example.com/merge-still-incomplete';
+
+    const stub = new Resource(subject);
+    stub.applyHydratedValues([[core.properties.incomplete, true]]);
+    stub.getLoroDoc();
+
+    const alsoPartial = new Resource(subject);
+    alsoPartial.applyHydratedValues([[core.properties.incomplete, true]]);
+    alsoPartial.getLoroDoc();
+
+    stub.merge(alsoPartial);
+
+    expect(stub.get(core.properties.incomplete)).toBe(true);
+  });
 });
 
 describe('getLoroHistory', () => {

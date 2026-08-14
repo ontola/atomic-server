@@ -56,6 +56,67 @@ describe('parse.ts', () => {
     expect(resources).toHaveLength(3);
   });
 
+  /**
+   * Regression: legacy servers (and `include_nested` responses) inline
+   * member resources as full objects. Leaving those objects in the propval
+   * hands consumers an object where they expect a subject string —
+   * `normalizeSubject` crashed rendering such a collection. The parser must
+   * extract each nested resource and keep only its `@id` as the reference.
+   */
+  it('extracts nested resources with an @id, keeping only the reference', ({
+    expect,
+  }) => {
+    const jsonObject = {
+      '@id': EXAMPLE_SUBJECT,
+      [NESTED_RESOURCE_PROPERTY]: [
+        {
+          '@id': EXAMPLE_SUBJECT2,
+          [STRING_PROPERTY]: 'First member',
+        },
+        // Plain refs mixed in stay untouched.
+        EXAMPLE_SUBJECT3,
+      ],
+    };
+
+    const parser = new JSONADParser();
+    const resources = parser.parse(jsonObject, EXAMPLE_SUBJECT);
+
+    expect(resources).toHaveLength(2);
+
+    // The requested resource stays last — `fetchResourceHTTP` falls back to
+    // "last parsed resource" when no subject matches exactly.
+    const main = resources.at(-1)!;
+    expect(main.subject).toBe(EXAMPLE_SUBJECT);
+    expect(main.get(NESTED_RESOURCE_PROPERTY)).toEqual([
+      EXAMPLE_SUBJECT2,
+      EXAMPLE_SUBJECT3,
+    ]);
+
+    const member = resources.find(r => r.subject === EXAMPLE_SUBJECT2);
+    expect(member?.get(STRING_PROPERTY)).toBe('First member');
+  });
+
+  it('passes objects without an @id through as plain JSON values', ({
+    expect,
+  }) => {
+    const columnWidths = { col1: 120, col2: 80 };
+    const jsonObject = {
+      '@id': EXAMPLE_SUBJECT,
+      [NESTED_RESOURCE_PROPERTY]: columnWidths,
+    };
+
+    const parser = new JSONADParser();
+    const resources = parser.parse(jsonObject, EXAMPLE_SUBJECT);
+
+    // No extraction: the object is a value, not a resource. (The resource
+    // layer stores object values JSON-stringified; equality after parsing is
+    // what matters here.)
+    expect(resources).toHaveLength(1);
+    const value = resources[0].get(NESTED_RESOURCE_PROPERTY);
+    const roundTripped = typeof value === 'string' ? JSON.parse(value) : value;
+    expect(roundTripped).toEqual(columnWidths);
+  });
+
   it('Handles resources without an ID', ({ expect }) => {
     const jsonObject = {
       [STRING_PROPERTY]: 'Hoi',
