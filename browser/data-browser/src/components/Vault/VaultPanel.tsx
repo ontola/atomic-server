@@ -35,10 +35,31 @@ export function VaultPanel({
 }) {
   const { status, busy, error, restoreProgress } = vault;
 
-  // "Cannot say" is not "off": offering an enable button when we could not even
-  // ask would turn a missing session into a confusing failure on click.
-  if (status.state === 'loading' || status.state === 'unavailable') {
+  // Still settling. Genuinely brief — the hook gives up on `loading` rather
+  // than sitting in it, so this is a flicker and not a resting state.
+  if (status.state === 'loading') {
     return null;
+  }
+
+  // "Cannot say" is not "off": offering an enable button when we could not
+  // even ask would turn a missing session into a confusing failure on click.
+  //
+  // But it is not nothing either. Rendering null here meant a device that
+  // could never run the vault looked exactly like one where the feature does
+  // not exist — no panel, no reason, nothing to act on. Say what is missing
+  // and leave the decision to the reader.
+  if (status.state === 'unavailable') {
+    return (
+      <Panel data-testid='vault-panel' data-vault-state='unavailable'>
+        <Icon>
+          <FaLock />
+        </Icon>
+        <Body>
+          <Title>Encrypted backup</Title>
+          <Sub data-testid='vault-unavailable-reason'>{status.reason}</Sub>
+        </Body>
+      </Panel>
+    );
   }
 
   async function handleRestore() {
