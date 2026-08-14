@@ -305,6 +305,83 @@ async function freePort(port: number) {
   } catch {
     // Nothing was listening — the next startServer call needs the port free.
   }
+
+  // kill-port sometimes misses IPv6 `next-server` leftovers. Fall back to
+  // /proc so we kill by PID, never by process name.
+  for (const pid of pidsListeningOn(port)) {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // Already gone.
+    }
+  }
+}
+
+/** PIDs with a listening TCP socket on `port` (IPv4 and IPv6). */
+function pidsListeningOn(port: number): number[] {
+  const hexPort = port.toString(16).toUpperCase().padStart(4, '0');
+  const inodes = new Set<string>();
+
+  for (const file of ['/proc/net/tcp', '/proc/net/tcp6']) {
+    if (!fs.existsSync(file)) {
+      continue;
+    }
+
+    const lines = fs.readFileSync(file, 'utf8').split('\n').slice(1);
+
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+
+      if (parts.length < 10) {
+        continue;
+      }
+
+      const localPort = parts[1]?.split(':').pop()?.toUpperCase();
+      const state = parts[3];
+      const inode = parts[9];
+
+      if (state === '0A' && localPort === hexPort && inode && inode !== '0') {
+        inodes.add(inode);
+      }
+    }
+  }
+
+  if (inodes.size === 0) {
+    return [];
+  }
+
+  const pids: number[] = [];
+
+  for (const dir of fs.readdirSync('/proc')) {
+    if (!/^\d+$/.test(dir)) {
+      continue;
+    }
+
+    const fdDir = path.join('/proc', dir, 'fd');
+
+    try {
+      for (const fd of fs.readdirSync(fdDir)) {
+        try {
+          const target = fs.readlinkSync(path.join(fdDir, fd));
+          const match = target.match(/^socket:\[(\d+)\]$/);
+
+          if (match && inodes.has(match[1])) {
+            const pid = Number(dir);
+
+            if (!pids.includes(pid)) {
+              pids.push(pid);
+            }
+          }
+        } catch {
+          // fd disappeared
+        }
+      }
+    } catch {
+      // process exited or fd dir unreadable
+    }
+  }
+
+  return pids;
 }
 
 const waitForServer = (
@@ -590,13 +667,9 @@ test.describe('Test create-template package', () => {
       await assertLocaleBlogCards(page, url);
       await assertCmsFeeds(page, url);
     } finally {
-      try {
-        await kill(3000);
-        log('Next.js server shut down successfully');
-        expect(true).toBe(true);
-      } catch (err) {
-        console.error('Failed to shut down Next.js server:', err);
-      }
+      await freePort(3000);
+      log('Next.js server shut down successfully');
+      expect(true).toBe(true);
     }
   });
 
