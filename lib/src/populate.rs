@@ -409,6 +409,18 @@ mod notifications_populate_tests {
             "DevicePushToken class missing after populate"
         );
         assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/classes/DirectMessage".into()),
+            "DirectMessage class missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/classes/AccessRequest".into()),
+            "AccessRequest class missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/properties/requestedRight".into()),
+            "requestedRight property missing after populate"
+        );
+        assert!(
             store.has_stored_resource(&"https://atomicdata.dev/properties/pushToken".into()),
             "pushToken property missing after populate"
         );

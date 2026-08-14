@@ -11,6 +11,7 @@ import { ErrorLook } from '../../components/ErrorLook';
 import { Column } from '../../components/Row';
 import { Main } from '../../components/Main';
 import { FaShare } from 'react-icons/fa6';
+import { RequestAccessButton } from '../../components/RequestAccessButton';
 import { useRights } from './useRights';
 import { AgentRights } from './AgentRights';
 import { useInheritedRights } from './useInheritedRights';
@@ -91,6 +92,7 @@ function SharePage(): JSX.Element {
               </Button>
             </span>
           )}
+          {!canWrite && <RequestAccessButton resource={resource} />}
           {showInviteForm && <InviteForm target={resource} />}
           <Card>
             <Column>

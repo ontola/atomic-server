@@ -160,6 +160,10 @@ Both matter because `iroh_transport` holds the router and node identity in
 | A mentions B → B sees unread (two agents / invite) | flow | `notifications.spec.ts` (invite + reconcile backlog) |
 | Mark read on A clears badge on B | flow | `notifications.spec.ts` (same agent, two contexts) |
 | Reverse query mentions ∋ agent | flow | same invite e2e (`reconcileMentionBacklog`) |
+| Collaborator list / rights merge / summaries | glue | `browser/lib/src/socialNotifications.test.ts` |
+| DirectMessage from other actor → inbox | flow | `notifications.spec.ts` |
+| AccessRequest from other actor → Grant in inbox | flow | `notifications.spec.ts` |
+| Send message button on notifications page | flow | `notifications.spec.ts` |
 | OS / APNs / FCM delivery | flow | **gap** — Phase 5 transport (ontology + wake helpers + tap queue wired) |
 
 ---

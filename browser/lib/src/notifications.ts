@@ -3,8 +3,9 @@ import {
   applyMentionsProperty,
   extractAgentMentionsFromText,
   extractAgentMentionsFromTipTap,
-  isAgentSubject,
   mentionDedupeKey,
+  messageDedupeKey,
+  accessRequestDedupeKey,
   resourceActor,
   type MentionScanNode,
   watchDedupeKey,
@@ -15,11 +16,17 @@ import { dataBrowser } from './ontologies/dataBrowser.js';
 import { notifications } from './ontologies/notifications.js';
 import type { Resource } from './resource.js';
 import { Store, StoreEvents } from './store.js';
+import {
+  accessRequestNotificationSummary,
+  messageNotificationSummary,
+} from './socialNotifications.js';
 
 export type NotificationType =
   | 'mention'
   | 'watch-membership'
-  | 'watch-content';
+  | 'watch-content'
+  | 'message'
+  | 'access-request';
 
 export type WatchKind = 'membership' | 'content' | 'both';
 
@@ -154,12 +161,9 @@ export class NotificationEngine {
     await this.reloadWatches();
     await this.reconcileMentionBacklog();
 
-    this.unsubUpdated = this.store.on(
-      StoreEvents.ResourceUpdated,
-      resource => {
-        void this.onResourceUpdated(resource);
-      },
-    );
+    this.unsubUpdated = this.store.on(StoreEvents.ResourceUpdated, resource => {
+      void this.onResourceUpdated(resource);
+    });
     this.unsubRemoved = this.store.on(StoreEvents.ResourceRemoved, () => {
       // Membership leave deferred — enter is the valuable v1 signal.
     });
@@ -230,8 +234,9 @@ export class NotificationEngine {
       }
 
       const kind =
-        (res.get(notifications.properties.watchKind) as WatchKind | undefined) ??
-        'membership';
+        (res.get(notifications.properties.watchKind) as
+          | WatchKind
+          | undefined) ?? 'membership';
       const enabled =
         (res.get(notifications.properties.notificationEnabled) as
           | boolean
@@ -303,12 +308,11 @@ export class NotificationEngine {
   private async considerMentionResource(resource: Resource): Promise<void> {
     if (
       resource.getClasses().includes(notifications.classes.notificationItem) ||
+      resource.getClasses().includes(notifications.classes.watchSubscription) ||
       resource
         .getClasses()
-        .includes(notifications.classes.watchSubscription) ||
-      resource
-        .getClasses()
-        .includes(notifications.classes.notificationPreferences)
+        .includes(notifications.classes.notificationPreferences) ||
+      resource.getClasses().includes(notifications.classes.devicePushToken)
     ) {
       return;
     }
@@ -327,29 +331,67 @@ export class NotificationEngine {
       return;
     }
 
-    const key = mentionDedupeKey(
-      resource.subject,
-      actor,
-      this.agentSubject,
-    );
+    const classes = resource.getClasses();
+    let type: NotificationType = 'mention';
+    let key = mentionDedupeKey(resource.subject, actor, this.agentSubject);
+    let summary: string;
+    let requestedRight: string | undefined;
+
+    if (classes.includes(notifications.classes.directMessage)) {
+      type = 'message';
+      key = messageDedupeKey(resource.subject, actor, this.agentSubject);
+      const body =
+        (resource.get(core.properties.description) as string | undefined) ?? '';
+      summary = messageNotificationSummary(body);
+    } else if (classes.includes(notifications.classes.accessRequest)) {
+      type = 'access-request';
+      requestedRight =
+        (resource.get(notifications.properties.requestedRight) as
+          | string
+          | undefined) ?? 'read';
+      const targetSubject = resource.get(dataBrowser.properties.about) as
+        | string
+        | undefined;
+      key = accessRequestDedupeKey(
+        targetSubject ?? resource.subject,
+        actor,
+        this.agentSubject,
+        requestedRight,
+      );
+      let targetTitle = targetSubject ?? 'a resource';
+
+      if (targetSubject) {
+        try {
+          const target = await this.store.getResource(targetSubject);
+          targetTitle =
+            (target.get(core.properties.name) as string | undefined) ??
+            targetSubject;
+        } catch {
+          // keep subject
+        }
+      }
+
+      summary = accessRequestNotificationSummary(requestedRight, targetTitle);
+    } else {
+      const title =
+        (resource.get(core.properties.name) as string | undefined) ??
+        resource.subject;
+      summary = `Mentioned you in ${title}`;
+    }
 
     if (this.seenKeys.has(key)) {
       return;
     }
 
-    const title =
-      (resource.get(core.properties.name) as string | undefined) ??
-      resource.subject;
-    const summary = `Mentioned you in ${title}`;
-
     await this.upsertItem({
       dedupeKey: key,
-      type: 'mention',
+      type,
       about: resource.subject,
       actor,
       mentionedAgent: this.agentSubject,
       summary,
       name: summary,
+      requestedRight,
     });
   }
 
@@ -403,6 +445,17 @@ export class NotificationEngine {
       return;
     }
 
+    const classes = resource.getClasses();
+
+    if (
+      classes.includes(notifications.classes.notificationItem) ||
+      classes.includes(notifications.classes.watchSubscription) ||
+      classes.includes(notifications.classes.directMessage) ||
+      classes.includes(notifications.classes.accessRequest)
+    ) {
+      return;
+    }
+
     const actor = resourceActor(resource);
 
     if (actor === this.agentSubject) {
@@ -435,12 +488,7 @@ export class NotificationEngine {
         // content-only watches still fire for member prop changes
       }
 
-      this.queueWatchEvent(
-        type,
-        resource.subject,
-        target,
-        actor ?? 'unknown',
-      );
+      this.queueWatchEvent(type, resource.subject, target, actor ?? 'unknown');
     }
   }
 
@@ -499,7 +547,9 @@ export class NotificationEngine {
     }
 
     const summary =
-      count > 1 ? `${count} updates in ${targetTitle}` : `Update in ${targetTitle}`;
+      count > 1
+        ? `${count} updates in ${targetTitle}`
+        : `Update in ${targetTitle}`;
 
     const baseKey = watchDedupeKey(
       type === 'watch-content' ? 'watch-content' : 'watch-membership',
@@ -531,6 +581,7 @@ export class NotificationEngine {
     watchTarget?: string;
     summary: string;
     name: string;
+    requestedRight?: string;
   }): Promise<void> {
     if (this.seenKeys.has(input.dedupeKey)) {
       return;
@@ -583,6 +634,9 @@ export class NotificationEngine {
         }),
         ...(input.watchTarget && {
           [notifications.properties.watchTarget]: input.watchTarget,
+        }),
+        ...(input.requestedRight && {
+          [notifications.properties.requestedRight]: input.requestedRight,
         }),
       },
     });
@@ -659,5 +713,7 @@ export {
   extractAgentMentionsFromTipTap,
   isAgentSubject,
   mentionDedupeKey,
+  messageDedupeKey,
+  accessRequestDedupeKey,
   watchDedupeKey,
 } from './mentions.js';

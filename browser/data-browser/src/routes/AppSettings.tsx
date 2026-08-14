@@ -200,17 +200,19 @@ const AppSettings: React.FunctionComponent = () => {
             >
               <Column gap='0.5rem'>
                 <p>
-                  Mentions and watched tables appear under{' '}
+                  Mentions, messages, and access requests appear under{' '}
                   <strong>Notifications</strong> in the sidebar (below User
                   Settings). Read status syncs across your devices.
                 </p>
                 <p>
-                  Use <strong>Watch</strong> on a table or collection to get
-                  alerted when rows change. When this tab or window is in the
-                  background, alerts can also show as{' '}
-                  {isRunningInTauri() ? 'system' : 'browser'} notifications.
-                  Push wake when the app is closed is not wired yet
-                  (Android/iOS need FCM/APNs later).
+                  Use <strong>Watch</strong> on a table or collection (a saved
+                  query) to get alerted when rows change. Send a message to
+                  someone on the same drive from the Notifications page. Request
+                  access from Share when you can see a resource but cannot edit
+                  it. When this tab or window is in the background, alerts can
+                  also show as {isRunningInTauri() ? 'system' : 'browser'}{' '}
+                  notifications. Push wake when the app is closed is not wired
+                  yet (Android/iOS need FCM/APNs later).
                 </p>
                 <OsNotificationPermissionRow />
                 <div>
@@ -372,21 +374,21 @@ function OsNotificationPermissionRow(): React.JSX.Element {
     <Row gap='0.75rem' center>
       <SubLabel>{label}</SubLabel>
       {(permission === 'default' || permission === 'denied') && (
-          <Button
-            subtle
-            disabled={busy || permission === 'denied'}
-            onClick={() => {
-              setBusy(true);
-              void ensureOsNotificationPermission()
-                .then(() => getOsNotificationPermission())
-                .then(setPermission)
-                .finally(() => setBusy(false));
-            }}
-          >
-            <FaBell />
-            Enable OS notifications
-          </Button>
-        )}
+        <Button
+          subtle
+          disabled={busy || permission === 'denied'}
+          onClick={() => {
+            setBusy(true);
+            void ensureOsNotificationPermission()
+              .then(() => getOsNotificationPermission())
+              .then(setPermission)
+              .finally(() => setBusy(false));
+          }}
+        >
+          <FaBell />
+          Enable OS notifications
+        </Button>
+      )}
     </Row>
   );
 }

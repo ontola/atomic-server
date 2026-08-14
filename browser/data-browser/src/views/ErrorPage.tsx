@@ -14,6 +14,7 @@ import { paths } from '../routes/paths';
 import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceError';
 import { isDriveSignInError } from '../helpers/isDriveSignInError';
 import { RootWelcomeGate } from './RootWelcomeGate';
+import { RequestAccessButton } from '../components/RequestAccessButton';
 
 import type { JSX } from 'react';
 
@@ -82,6 +83,7 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
                   Retry
                 </Button>
               </span>
+              <RequestAccessButton resource={resource} />
             </>
           ) : (
             <>

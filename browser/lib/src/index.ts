@@ -40,6 +40,7 @@ export * from './ontologies/forks.js';
 export * from './ontologies/i18n.js';
 export * from './ontologies/notifications.js';
 export * from './notifications.js';
+export * from './socialNotifications.js';
 export * from './devicePushToken.js';
 export * from './canvas-strokes.js';
 export * from './agent.js';

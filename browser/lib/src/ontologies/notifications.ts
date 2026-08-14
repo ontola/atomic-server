@@ -16,6 +16,8 @@ export const notifications = {
     notificationPreferences:
       'https://atomicdata.dev/classes/NotificationPreferences',
     devicePushToken: 'https://atomicdata.dev/classes/DevicePushToken',
+    directMessage: 'https://atomicdata.dev/classes/DirectMessage',
+    accessRequest: 'https://atomicdata.dev/classes/AccessRequest',
   },
   properties: {
     mentions: 'https://atomicdata.dev/properties/mentions',
@@ -38,8 +40,10 @@ export const notifications = {
     pushPlatform: 'https://atomicdata.dev/properties/pushPlatform',
     pushToken: 'https://atomicdata.dev/properties/pushToken',
     pushAppId: 'https://atomicdata.dev/properties/pushAppId',
-    pushTokenUpdatedAt:
-      'https://atomicdata.dev/properties/pushTokenUpdatedAt',
+    pushTokenUpdatedAt: 'https://atomicdata.dev/properties/pushTokenUpdatedAt',
+    requestedRight: 'https://atomicdata.dev/properties/requestedRight',
+    accessRequestStatus:
+      'https://atomicdata.dev/properties/accessRequestStatus',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/NotificationItem']: [
@@ -56,6 +60,15 @@ export const notifications = {
       'https://atomicdata.dev/properties/pushPlatform',
       'https://atomicdata.dev/properties/pushToken',
     ],
+    ['https://atomicdata.dev/classes/DirectMessage']: [
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/mentions',
+    ],
+    ['https://atomicdata.dev/classes/AccessRequest']: [
+      'https://atomicdata.dev/properties/about',
+      'https://atomicdata.dev/properties/mentions',
+      'https://atomicdata.dev/properties/requestedRight',
+    ],
   },
 } as const satisfies OntologyBaseObject;
 
@@ -67,6 +80,8 @@ export namespace Notifications {
   export type NotificationPreferences =
     typeof notifications.classes.notificationPreferences;
   export type DevicePushToken = typeof notifications.classes.devicePushToken;
+  export type DirectMessage = typeof notifications.classes.directMessage;
+  export type AccessRequest = typeof notifications.classes.accessRequest;
 }
 
 declare module '../index.js' {
@@ -84,6 +99,7 @@ declare module '../index.js' {
         | typeof notifications.properties.notificationRead
         | typeof notifications.properties.dismissed
         | typeof notifications.properties.notificationSummary
+        | typeof notifications.properties.requestedRight
         | 'https://atomicdata.dev/properties/name';
     };
     [notifications.classes.watchSubscription]: {
@@ -113,6 +129,24 @@ declare module '../index.js' {
         | typeof notifications.properties.pushTokenUpdatedAt
         | 'https://atomicdata.dev/properties/name';
     };
+    [notifications.classes.directMessage]: {
+      requires:
+        | BaseProps
+        | 'https://atomicdata.dev/properties/description'
+        | typeof notifications.properties.mentions;
+      recommends: 'https://atomicdata.dev/properties/name';
+    };
+    [notifications.classes.accessRequest]: {
+      requires:
+        | BaseProps
+        | 'https://atomicdata.dev/properties/about'
+        | typeof notifications.properties.mentions
+        | typeof notifications.properties.requestedRight;
+      recommends:
+        | 'https://atomicdata.dev/properties/description'
+        | typeof notifications.properties.accessRequestStatus
+        | 'https://atomicdata.dev/properties/name';
+    };
   }
 
   interface PropTypeMapping {
@@ -134,6 +168,8 @@ declare module '../index.js' {
     [notifications.properties.pushToken]: string;
     [notifications.properties.pushAppId]: string;
     [notifications.properties.pushTokenUpdatedAt]: number;
+    [notifications.properties.requestedRight]: string;
+    [notifications.properties.accessRequestStatus]: string;
   }
 
   interface PropSubjectToNameMapping {
@@ -155,5 +191,7 @@ declare module '../index.js' {
     [notifications.properties.pushToken]: 'pushToken';
     [notifications.properties.pushAppId]: 'pushAppId';
     [notifications.properties.pushTokenUpdatedAt]: 'pushTokenUpdatedAt';
+    [notifications.properties.requestedRight]: 'requestedRight';
+    [notifications.properties.accessRequestStatus]: 'accessRequestStatus';
   }
 }

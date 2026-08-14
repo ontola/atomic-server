@@ -6,16 +6,20 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/",
     "https://atomicdata.dev/properties/shortname": "notifications",
-    "https://atomicdata.dev/properties/description": "Product notifications: agent mentions on content, and watch subscriptions for collections / tables / queries. Mention edges are actor-side (`mentions` on the host resource); `NotificationItem`s are personal, recipient-owned inbox rows with synced read state. See planning/notifications.md.",
+    "https://atomicdata.dev/properties/description": "Product notifications: agent mentions on content, watch subscriptions for collections / tables / queries, same-drive direct messages, and access requests. Mention edges are actor-side (`mentions` on the host resource); `NotificationItem`s are personal, recipient-owned inbox rows with synced read state. See planning/notifications.md.",
     "https://atomicdata.dev/properties/classes": [
       "https://atomicdata.dev/classes/NotificationItem",
       "https://atomicdata.dev/classes/WatchSubscription",
       "https://atomicdata.dev/classes/NotificationPreferences",
-      "https://atomicdata.dev/classes/DevicePushToken"
+      "https://atomicdata.dev/classes/DevicePushToken",
+      "https://atomicdata.dev/classes/DirectMessage",
+      "https://atomicdata.dev/classes/AccessRequest"
     ],
     "https://atomicdata.dev/properties/properties": [
       "https://atomicdata.dev/properties/mentions",
       "https://atomicdata.dev/properties/notificationType",
+      "https://atomicdata.dev/properties/requestedRight",
+      "https://atomicdata.dev/properties/accessRequestStatus",
       "https://atomicdata.dev/properties/mentionedAgent",
       "https://atomicdata.dev/properties/watchTarget",
       "https://atomicdata.dev/properties/watchKind",
@@ -128,7 +132,7 @@
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
     "https://atomicdata.dev/properties/shortname": "notification-type",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-    "https://atomicdata.dev/properties/description": "Kind of notification: `mention`, `watch-membership`, `watch-content`, or later types (`invite`, `fork`, …)."
+    "https://atomicdata.dev/properties/description": "Kind of notification: `mention`, `watch-membership`, `watch-content`, `message`, `access-request`, or later types (`invite`, `fork`, …)."
   },
   {
     "@id": "https://atomicdata.dev/properties/mentionedAgent",
@@ -292,5 +296,60 @@
     "https://atomicdata.dev/properties/shortname": "push-token-updated-at",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
     "https://atomicdata.dev/properties/description": "When this push token was last registered or refreshed."
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/DirectMessage",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "direct-message",
+    "https://atomicdata.dev/properties/description": "A message from one agent to another, discovered via the actor-side `mentions` property. Lives on a shared drive when both parties can read it, otherwise on the sender's personal drive with `read` granted to the recipient. Recipients materialize a `NotificationItem` of type `message`.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/mentions"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/name"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/AccessRequest",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "access-request",
+    "https://atomicdata.dev/properties/description": "A request to be added to a resource's `read` or `write` list. `about` is the target resource; `mentions` are the agents who can grant (typically current writers). Recipients materialize a `NotificationItem` of type `access-request` and can grant from the inbox.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/about",
+      "https://atomicdata.dev/properties/mentions",
+      "https://atomicdata.dev/properties/requestedRight"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/accessRequestStatus",
+      "https://atomicdata.dev/properties/name"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/requestedRight",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "requested-right",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Which right the requester wants: `read` or `write`. Used on AccessRequest (and copied onto the resulting NotificationItem)."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/accessRequestStatus",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/shortname": "access-request-status",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Lifecycle of an AccessRequest: `pending`, `granted`, or `denied`."
   }
 ]

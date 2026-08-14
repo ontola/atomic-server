@@ -10,6 +10,9 @@
  *   6. Mention ResourceUpdated (other actor) → inbox item (engine path).
  *   7. Mark read on device A clears badge on device B (same agent, two contexts).
  *   8. Invite: A mentions B → B reconciles backlog → unread (two agents).
+ *   9. Send message button is on the notifications page.
+ *  10. DirectMessage from another actor materializes an inbox item.
+ *  11. AccessRequest from another actor shows Grant in the inbox.
  */
 
 import { test, expect } from '@playwright/test';
@@ -660,5 +663,200 @@ test.describe('notifications', () => {
     });
 
     await context2.close();
+  });
+
+  test('send message button is on the notifications page', async ({ page }) => {
+    await page.getByRole('link', { name: 'Notifications' }).click();
+    await expect(page).toHaveURL(/\/app\/notifications/);
+    await expect(page.getByTestId('send-message')).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByTestId('send-message').click();
+    await expect(page.getByRole('heading', { name: 'Send message' })).toBeVisible();
+  });
+
+  test('direct message ResourceUpdated materializes inbox item', async ({
+    page,
+  }) => {
+    test.slow();
+
+    await page.waitForFunction(
+      () =>
+        !!(window as Window & { __notificationEngine?: unknown })
+          .__notificationEngine,
+      null,
+      { timeout: 20_000 },
+    );
+
+    const personalDrive = await resolvePersonalDrive(page);
+    const myAgent = await page.evaluate(() => window.store.getAgent()?.subject);
+    expect(myAgent).toBeTruthy();
+
+    const created = await page.evaluate(
+      async ({
+        drive,
+        me,
+        createdByProp,
+        mentionsProp,
+        nameProp,
+        descProp,
+        isAProp,
+        messageClass,
+        notificationItem,
+      }) => {
+        const store = window.store;
+        const engine = (
+          window as Window & { __notificationEngine?: unknown }
+        ).__notificationEngine;
+
+        if (!engine) {
+          throw new Error('__notificationEngine not ready');
+        }
+
+        const msg = await store.newResource({
+          parent: drive,
+          isA: messageClass,
+          propVals: {
+            [nameProp]: 'Hello from e2e',
+            [descProp]: 'Ping from the other seat',
+          },
+        });
+        await msg.set(mentionsProp, [me], false);
+        await msg.set(createdByProp, 'did:ad:agent:messageActorE2E', false);
+        store.notifyResourceUpdated(msg);
+
+        for (let i = 0; i < 40; i++) {
+          await new Promise(r => setTimeout(r, 250));
+
+          for (const res of store.resources.values()) {
+            if (
+              res.getClasses?.().includes(notificationItem) &&
+              String(res.get?.(nameProp) ?? '').includes('Sent you a message')
+            ) {
+              return { ok: true };
+            }
+          }
+        }
+
+        return { ok: false };
+      },
+      {
+        drive: personalDrive,
+        me: myAgent,
+        createdByProp: CREATED_BY,
+        mentionsProp: MENTIONS,
+        nameProp: NAME,
+        descProp: 'https://atomicdata.dev/properties/description',
+        isAProp: 'https://atomicdata.dev/properties/isA',
+        messageClass: 'https://atomicdata.dev/classes/DirectMessage',
+        notificationItem: NOTIFICATION_ITEM,
+      },
+    );
+
+    expect(created).toMatchObject({ ok: true });
+
+    await page.getByRole('link', { name: 'Notifications' }).click();
+    await expect(page).toHaveURL(/\/app\/notifications/);
+    const item = page.getByTestId('notification-item').first();
+    await expect(item).toBeVisible({ timeout: 20_000 });
+    await expect(item).toContainText(/Sent you a message/i);
+  });
+
+  test('access request ResourceUpdated shows Grant in inbox', async ({
+    page,
+  }) => {
+    test.slow();
+
+    await page.waitForFunction(
+      () =>
+        !!(window as Window & { __notificationEngine?: unknown })
+          .__notificationEngine,
+      null,
+      { timeout: 20_000 },
+    );
+
+    const personalDrive = await resolvePersonalDrive(page);
+    const myAgent = await page.evaluate(() => window.store.getAgent()?.subject);
+    expect(myAgent).toBeTruthy();
+
+    const created = await page.evaluate(
+      async ({
+        drive,
+        me,
+        createdByProp,
+        mentionsProp,
+        nameProp,
+        aboutProp,
+        rightProp,
+        requestClass,
+        notificationItem,
+      }) => {
+        const store = window.store;
+        const engine = (
+          window as Window & { __notificationEngine?: unknown }
+        ).__notificationEngine;
+
+        if (!engine) {
+          throw new Error('__notificationEngine not ready');
+        }
+
+        const target = await store.newResource({
+          parent: drive,
+          isA: 'https://atomicdata.dev/classes/DocumentV2',
+          propVals: {
+            [nameProp]: 'Private Notes',
+          },
+        });
+        await target.save();
+
+        const req = await store.newResource({
+          parent: drive,
+          isA: requestClass,
+          propVals: {
+            [nameProp]: 'Access request: Private Notes',
+            [aboutProp]: target.subject,
+            [rightProp]: 'write',
+          },
+        });
+        await req.set(mentionsProp, [me], false);
+        await req.set(createdByProp, 'did:ad:agent:accessActorE2E', false);
+        store.notifyResourceUpdated(req);
+
+        for (let i = 0; i < 40; i++) {
+          await new Promise(r => setTimeout(r, 250));
+
+          for (const res of store.resources.values()) {
+            if (
+              res.getClasses?.().includes(notificationItem) &&
+              String(res.get?.(nameProp) ?? '').includes('Requested write access')
+            ) {
+              return { ok: true };
+            }
+          }
+        }
+
+        return { ok: false };
+      },
+      {
+        drive: personalDrive,
+        me: myAgent,
+        createdByProp: CREATED_BY,
+        mentionsProp: MENTIONS,
+        nameProp: NAME,
+        aboutProp: ABOUT,
+        rightProp: 'https://atomicdata.dev/properties/requestedRight',
+        requestClass: 'https://atomicdata.dev/classes/AccessRequest',
+        notificationItem: NOTIFICATION_ITEM,
+      },
+    );
+
+    expect(created).toMatchObject({ ok: true });
+
+    await page.getByRole('link', { name: 'Notifications' }).click();
+    await expect(page).toHaveURL(/\/app\/notifications/);
+    const item = page.getByTestId('notification-item').first();
+    await expect(item).toBeVisible({ timeout: 20_000 });
+    await expect(item).toContainText(/Requested write access to Private Notes/i);
+    await expect(page.getByTestId('grant-access')).toBeVisible();
   });
 });

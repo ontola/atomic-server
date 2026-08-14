@@ -91,9 +91,9 @@ export async function applyMentionsProperty(
   agentSubjects: string[],
 ): Promise<boolean> {
   const unique = [...new Set(agentSubjects.filter(isAgentSubject))].sort();
-  const existing = (resource.get(notifications.properties.mentions) as
-    | string[]
-    | undefined) ?? [];
+  const existing =
+    (resource.get(notifications.properties.mentions) as string[] | undefined) ??
+    [];
   const existingSorted = [...existing].sort();
 
   if (
@@ -136,6 +136,25 @@ export function watchDedupeKey(
   actor: string,
 ): string {
   return `${type}|${about}|${watchTarget}|${actor}`;
+}
+
+/** Stable dedupe key for a direct-message NotificationItem. */
+export function messageDedupeKey(
+  about: string,
+  actor: string,
+  mentionedAgent: string,
+): string {
+  return `message|${about}|${actor}|${mentionedAgent}`;
+}
+
+/** Stable dedupe key for an access-request NotificationItem. */
+export function accessRequestDedupeKey(
+  target: string,
+  actor: string,
+  mentionedAgent: string,
+  right: string,
+): string {
+  return `access-request|${target}|${actor}|${mentionedAgent}|${right}`;
 }
 
 /** Read `createdBy` from a resource, falling back to undefined. */
