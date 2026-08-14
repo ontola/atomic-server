@@ -4,6 +4,7 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { styled } from 'styled-components';
 import {
   CollectionBuilder,
+  StoreEvents,
   core,
   dataBrowser,
   grantAccessRequest,
@@ -13,6 +14,7 @@ import {
   useString,
   useTitle,
   useValue,
+  visibleNotificationItems,
 } from '@tomic/react';
 import { FaBell, FaCheck, FaTrash, FaUnlockKeyhole } from 'react-icons/fa6';
 import { ContainerNarrow } from '../components/Containers';
@@ -68,42 +70,50 @@ function NotificationsPage(): React.JSX.Element {
   }, [store, agent]);
 
   const refresh = useCallback(async () => {
-    if (!personalDrive) {
-      setSubjects([]);
+    const seen = new Set<string>();
+    const next: string[] = [];
 
-      return;
-    }
-
-    try {
-      const collection = await new CollectionBuilder(store)
-        .setDrive(personalDrive)
-        .setProperty(core.properties.isA)
-        .setValue(notifications.classes.notificationItem)
-        .setPageSize(100)
-        .buildAndFetch();
-
-      const next: string[] = [];
-
-      for (let i = 0; i < collection.totalMembers; i++) {
-        const subject = await collection.getMemberWithIndex(i);
-
-        if (!subject) {
-          continue;
-        }
-
-        const res = store.getResourceLoading(subject);
-
-        if (res.get(notifications.properties.dismissed) === true) {
-          continue;
-        }
-
-        next.push(subject);
+    const consider = (subject: string) => {
+      if (seen.has(subject)) {
+        return;
       }
 
-      setSubjects(next);
-    } catch {
-      setSubjects([]);
+      seen.add(subject);
+      const res = store.getResourceLoading(subject);
+
+      if (res.get(notifications.properties.dismissed) === true) {
+        return;
+      }
+
+      next.push(subject);
+    };
+
+    for (const res of visibleNotificationItems(store)) {
+      consider(res.subject);
     }
+
+    if (personalDrive) {
+      try {
+        const collection = await new CollectionBuilder(store)
+          .setDrive(personalDrive)
+          .setProperty(core.properties.isA)
+          .setValue(notifications.classes.notificationItem)
+          .setPageSize(100)
+          .buildAndFetch();
+
+        for (let i = 0; i < collection.totalMembers; i++) {
+          const subject = await collection.getMemberWithIndex(i);
+
+          if (subject) {
+            consider(subject);
+          }
+        }
+      } catch {
+        // In-memory items still render if the index query races drive sync.
+      }
+    }
+
+    setSubjects(next);
   }, [store, personalDrive]);
 
   useEffect(() => {
@@ -113,6 +123,37 @@ function NotificationsPage(): React.JSX.Element {
   useEffect(() => {
     return engine?.subscribe(() => setTick(t => t + 1));
   }, [engine]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const bump = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setTick(t => t + 1), 300);
+    };
+
+    const onResource = (resource: { getClasses: () => string[] }) => {
+      if (
+        resource.getClasses().includes(notifications.classes.notificationItem)
+      ) {
+        bump();
+      }
+    };
+
+    const unsubUpdated = store.on(StoreEvents.ResourceUpdated, onResource);
+    const unsubCreated = store.on(
+      StoreEvents.ResourceManuallyCreated,
+      onResource,
+    );
+    const unsubSync = store.on(StoreEvents.SyncStatusChanged, bump);
+
+    return () => {
+      clearTimeout(timer);
+      unsubUpdated();
+      unsubCreated();
+      unsubSync();
+    };
+  }, [store]);
 
   const markAllRead = async () => {
     if (engine) {

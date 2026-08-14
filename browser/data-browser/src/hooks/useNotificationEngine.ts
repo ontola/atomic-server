@@ -14,6 +14,7 @@ import {
   core,
   notifications,
   useStore,
+  visibleNotificationItems,
 } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
@@ -120,52 +121,61 @@ export function useUnreadNotificationCount(): number {
       return;
     }
 
-    const personalDrive = await fetchPersonalDriveSubject(store, agent);
+    const seen = new Set<string>();
+    let n = 0;
 
-    if (!personalDrive) {
-      setUnread(0);
-
-      return;
-    }
-
-    try {
-      const collection = await new CollectionBuilder(store)
-        .setDrive(personalDrive)
-        .setProperty(core.properties.isA)
-        .setValue(notifications.classes.notificationItem)
-        .setPageSize(100)
-        .buildAndFetch();
-
-      let n = 0;
-
-      for (let i = 0; i < collection.totalMembers; i++) {
-        const subject = await collection.getMemberWithIndex(i);
-
-        if (!subject) {
-          continue;
-        }
-
-        const res = store.getResourceLoading(subject);
-
-        if (res.get(notifications.properties.dismissed) === true) {
-          continue;
-        }
-
-        if (res.get(notifications.properties.notificationRead) !== true) {
-          n += 1;
-        }
+    const consider = (subject: string) => {
+      if (seen.has(subject)) {
+        return;
       }
 
-      setUnread(n);
-    } catch {
-      setUnread(0);
+      seen.add(subject);
+      const res = store.getResourceLoading(subject);
+
+      if (res.get(notifications.properties.dismissed) === true) {
+        return;
+      }
+
+      if (res.get(notifications.properties.notificationRead) !== true) {
+        n += 1;
+      }
+    };
+
+    for (const res of visibleNotificationItems(store)) {
+      consider(res.subject);
     }
+
+    const personalDrive = await fetchPersonalDriveSubject(store, agent);
+
+    if (personalDrive) {
+      try {
+        const collection = await new CollectionBuilder(store)
+          .setDrive(personalDrive)
+          .setProperty(core.properties.isA)
+          .setValue(notifications.classes.notificationItem)
+          .setPageSize(100)
+          .buildAndFetch();
+
+        for (let i = 0; i < collection.totalMembers; i++) {
+          const subject = await collection.getMemberWithIndex(i);
+
+          if (subject) {
+            consider(subject);
+          }
+        }
+      } catch {
+        // Keep the in-memory count if the index query is still empty.
+      }
+    }
+
+    setUnread(n);
   }, [store, agent]);
 
   useEffect(() => {
     void refresh();
 
     let timer: ReturnType<typeof setTimeout> | undefined;
+
     const schedule = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
@@ -181,11 +191,24 @@ export function useUnreadNotificationCount(): number {
         schedule();
       }
     });
+    const unsubCreated = store.on(
+      StoreEvents.ResourceManuallyCreated,
+      resource => {
+        if (
+          resource.getClasses().includes(notifications.classes.notificationItem)
+        ) {
+          schedule();
+        }
+      },
+    );
+    const unsubSync = store.on(StoreEvents.SyncStatusChanged, schedule);
 
     return () => {
       clearTimeout(timer);
       unsubEngine?.();
       unsubStore();
+      unsubCreated();
+      unsubSync();
     };
   }, [store, engine, refresh]);
 

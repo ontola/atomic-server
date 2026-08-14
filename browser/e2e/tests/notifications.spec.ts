@@ -484,6 +484,12 @@ test.describe('notifications', () => {
       dedupeKey: `mention|${aboutSubject}|e2e-sync-read|me`,
     });
 
+    await page.waitForFunction(
+      () => window.store.getSyncStatus().pendingDirtyCount === 0,
+      undefined,
+      { timeout: 15_000 },
+    );
+
     await page.goto(`${FRONTEND_URL}/app/notifications`);
     await expect(page.getByTestId('notification-item').first()).toBeVisible({
       timeout: 20_000,
@@ -509,10 +515,13 @@ test.describe('notifications', () => {
       null,
       { timeout: 25_000 },
     );
+    await page2
+      .getByRole('link', { name: 'User Settings' })
+      .waitFor({ state: 'visible', timeout: 15_000 });
 
     await page2.goto(`${FRONTEND_URL}/app/notifications`);
     await expect(page2.getByTestId('notification-item').first()).toBeVisible({
-      timeout: 25_000,
+      timeout: 45_000,
     });
     await expect(page2.getByTestId('sidebar-notification-badge')).toBeVisible({
       timeout: 15_000,

@@ -688,6 +688,33 @@ export class NotificationEngine {
   }
 }
 
+/**
+ * Inbox subjects already in the JS store. Used by the UI so a second device
+ * that receives items via drive sync does not depend on a one-shot WASM
+ * `/query` that can race `hasCompletedDriveSync` and stay empty.
+ */
+export function visibleNotificationItems(store: Store): Resource[] {
+  const items: Resource[] = [];
+
+  for (const res of store.resources.values()) {
+    if (!res.getClasses().includes(notifications.classes.notificationItem)) {
+      continue;
+    }
+
+    if (res.new || res.error) {
+      continue;
+    }
+
+    if (res.get(notifications.properties.dismissed) === true) {
+      continue;
+    }
+
+    items.push(res);
+  }
+
+  return items;
+}
+
 /** Apply mentions from TipTap JSON onto a document resource (no save). */
 export async function syncDocumentMentions(
   resource: Resource,
