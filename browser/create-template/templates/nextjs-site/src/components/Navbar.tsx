@@ -9,7 +9,7 @@ import {
 import MenuItem, { type MenuItemSnapshot } from '@/views/MenuItem/MenuItem';
 import styles from './Navbar.module.css';
 import { store } from '@/store';
-import Link from 'next/link';
+import LocalizedLink from './LocalizedLink';
 
 async function snapshotMenu(subject: string): Promise<MenuItemSnapshot> {
   const item = await store.getResource<MenuItemResource>(subject);
@@ -44,9 +44,9 @@ const Navbar = async () => {
     <Container>
       <nav className={styles.nav}>
         <HStack align='center' justify='space-between' wrap>
-          <Link href='/' className={styles.title}>
+          <LocalizedLink href='/' className={styles.title}>
             {site.title}
-          </Link>
+          </LocalizedLink>
           <ul className={styles.ul}>
             {menu.map(menuItem => (
               <li key={menuItem.subject}>

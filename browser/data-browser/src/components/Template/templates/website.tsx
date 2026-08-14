@@ -8,10 +8,11 @@ const description = (
 The website features blog posts, nested menu items and content blocks to create expressive pages from data.\n
 An \`@tomic/template\` template is also available to setup a fully working website in a variety of front-end frameworks that you can then customize to your preferences.
 \`\`\`
-npm create @tomic/template my-project -- --template sveltekit-site --server-url ${context.serverURL} --drive ${context.driveURL}
 pnpm create @tomic/template my-project --template sveltekit-site --server-url ${context.serverURL} --drive ${context.driveURL}
-yarn create @tomic/template my-project --template sveltekit-site --server-url ${context.serverURL} --drive ${context.driveURL}
+pnpm create @tomic/template my-project --template nextjs-site --server-url ${context.serverURL} --drive ${context.driveURL}
+npm create @tomic/template my-project -- --template sveltekit-site --server-url ${context.serverURL} --drive ${context.driveURL}
 \`\`\`
+If the Data Browser is not on the same origin as the API (Vite on \`http://localhost:6747\`), add \`--cms-url http://localhost:6747\`.
 Currently available @tomic/templates for the website template are:
 - sveltekit-site
 - nextjs-site`;
@@ -521,8 +522,7 @@ export const website: TemplateFn = context => ({
       [core.properties.localId]: '01k0m3future0post0unpublished',
       'website/property/cover-image':
         'https://atomicdata.dev/files/1726129576337-pexels-karolina-grabowska-7273405.jpg',
-      'website/property/path':
-        '/blog/scheduled-why-time-travel-is-overrated',
+      'website/property/path': '/blog/scheduled-why-time-travel-is-overrated',
       // 2030-01-01 — listed and routable only after this timestamp.
       'website/property/published-at': 1893456000000,
       [core.properties.description]:

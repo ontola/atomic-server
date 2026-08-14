@@ -99,6 +99,34 @@ export function localizePath(
   return href === '/' ? `/${lang}` : `/${lang}${href}`;
 }
 
+/**
+ * Prefix an internal href with the language of the current pathname.
+ * External URLs, hashes, and mailto links are left alone.
+ */
+export function localizeHrefForPath(
+  href: string,
+  pathname: string,
+  config: LanguageConfig,
+): string {
+  if (
+    !href ||
+    href.startsWith('http://') ||
+    href.startsWith('https://') ||
+    href.startsWith('#') ||
+    href.startsWith('mailto:')
+  ) {
+    return href;
+  }
+
+  const first = pathname.split('/').filter(Boolean)[0];
+  const lang =
+    first && config.languages.includes(first)
+      ? first
+      : config.defaultLanguage;
+
+  return localizePath(href, lang, config.defaultLanguage);
+}
+
 /** The language of a resource. Resources without a `language` property count as the default language. */
 export function getResourceLanguage(
   resource: Resource,
