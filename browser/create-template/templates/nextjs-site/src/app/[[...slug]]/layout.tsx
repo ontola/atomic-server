@@ -6,9 +6,8 @@ import Footer from '@/components/Footer';
 import { DocumentLang } from '@/components/DocumentLang';
 import { LanguageConfigProvider } from '@/atomic/languageConfig';
 import { getLanguageConfig, parseLocalizedPath } from '@/atomic/i18n';
-import { CMS_REVALIDATE_SECONDS } from '@/atomic/feeds';
 
-export const revalidate = CMS_REVALIDATE_SECONDS;
+export const revalidate = 60;
 export const dynamicParams = true;
 
 type Params = {

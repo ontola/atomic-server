@@ -1,11 +1,10 @@
 import { getRssItems } from '@/atomic/getPublicPages';
 import {
   CMS_CDN_CACHE_CONTROL,
-  CMS_REVALIDATE_SECONDS,
   renderRssXml,
 } from '@/atomic/feeds';
 
-export const revalidate = CMS_REVALIDATE_SECONDS;
+export const revalidate = 60;
 
 export async function GET(request: Request) {
   const { title, items } = await getRssItems();

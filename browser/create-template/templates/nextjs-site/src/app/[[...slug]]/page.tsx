@@ -1,13 +1,13 @@
 import { getCurrentResource } from '@/atomic/getCurrentResource';
 import { getSitemapPaths } from '@/atomic/getPublicPages';
 import { getLanguageAlternates, parseLocalizedPath } from '@/atomic/i18n';
-import { cmsPathToSlug, CMS_REVALIDATE_SECONDS } from '@/atomic/feeds';
+import { cmsPathToSlug } from '@/atomic/feeds';
 import FullPageView from '@/views/FullPage/FullPageView';
 import { core } from '@tomic/lib';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
-export const revalidate = CMS_REVALIDATE_SECONDS;
+export const revalidate = 60;
 export const dynamicParams = true;
 
 type Params = {
