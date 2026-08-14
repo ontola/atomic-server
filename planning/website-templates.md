@@ -90,6 +90,9 @@
       and path routing. A scheduled 2030 post is seeded in the Website template
       and asserted in `template.spec.ts`. This is still presentation, not an
       ACL — a public Drive will serve the resource over HTTP.
+- [x] `/` is the Website resource's `homepage` property, not whichever page
+      happens to have path `/`. Changing homepage in the Data Browser changes
+      the site root. **Done (2026-08-14).**
 
 ### Editing from the website
 
@@ -111,16 +114,14 @@
 ### Internationalization
 
 - [x] Record the current boundary: Wuchale translates Data Browser chrome only;
-      the website content model is scalar and both templates hardcode
-      `<html lang="en">`.
-- [ ] Model locale explicitly; do not infer content language only from UI
-      chrome or browser locale.
-- [ ] Prefer localized content resources linked by a stable translation key,
-      with `locale` on each resource and `defaultLocale` on the website.
-- [ ] Decide locale-aware path uniqueness, routing, and fallback rules, for
-      example `/en/about` and `/nl/over` within one website.
-- [ ] Separate translated content resources from translated template chrome.
-- [ ] Add E2E coverage for at least two locales before claiming i18n support.
+      content uses document-level `language` + `translationOf`.
+- [x] Locale on each page/post (`language`) and `defaultLanguage` / `languages`
+      on the website resource. Templates route `/nl/...`, emit `hreflang`, and
+      keep the language prefix on nav links.
+- [x] E2E: two locales (en default, nl balloon post), `<html lang>`, nav prefix
+      (`template.spec.ts` `assertTwoLocaleSite`).
+- [ ] Separate translated content resources from translated template chrome
+      (template UI strings are still English).
 
 ## Decisions still open
 

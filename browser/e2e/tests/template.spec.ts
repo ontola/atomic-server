@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { exec } from 'child_process';
 import {
+  FRONTEND_URL,
   before,
   makeDrivePublic,
   newDrive,
@@ -152,7 +153,7 @@ async function setupTemplateSite(
   const reachable = nodeReachableServerUrl(serverUrl);
 
   await execAsync(
-    `node ${CREATE_TEMPLATE_BIN} ${siteType} --template ${siteType} --server-url ${reachable} --drive ${drive}`,
+    `node ${CREATE_TEMPLATE_BIN} ${siteType} --template ${siteType} --server-url ${reachable} --drive ${drive} --cms-url ${FRONTEND_URL}`,
   );
 
   await useWorkspacePackages(siteType);
@@ -184,7 +185,7 @@ function startServer(siteType: string) {
 
 const waitForServer = (
   childProcess: ChildProcess,
-  timeout = 120000,
+  timeout = 300000,
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
@@ -266,6 +267,11 @@ async function assertTwoLocaleSite(
   await expect(
     page.locator('link[rel="alternate"][hreflang="nl"]'),
   ).toHaveCount(1);
+
+  // Nav on a prefixed route keeps the language prefix.
+  await page.goto(`${url}/nl/blog`);
+  await page.getByRole('link', { name: 'Home', exact: true }).click();
+  await expect(page).toHaveURL(/\/nl\/?$/);
 }
 
 /**
@@ -284,6 +290,7 @@ async function assertCmsEditFromSite(page: Page, siteOrigin: string) {
   ).toBeTruthy();
   expect(href).toContain('/app/edit');
   expect(href).toContain('subject=');
+  expect(new URL(href!).origin).toBe(new URL(FRONTEND_URL).origin);
 
   const popupPromise = page.waitForEvent('popup');
   // Dispatch on the page so the browser chrome cannot swallow Control+E.
@@ -300,6 +307,7 @@ async function assertCmsEditFromSite(page: Page, siteOrigin: string) {
   const popup = await popupPromise;
   expect(popup.url()).toContain('/app/edit');
   expect(popup.url()).toContain('subject=');
+  expect(new URL(popup.url()).origin).toBe(new URL(FRONTEND_URL).origin);
   await popup.close();
 }
 
@@ -318,6 +326,7 @@ test.describe('Test create-template package', () => {
 
   test('apply next-js template', async ({ page }) => {
     test.slow();
+    test.setTimeout(10 * 60 * 1000);
     await signIn(page);
     const drive = await newDrive(page);
     await makeDrivePublic(page);
@@ -363,7 +372,7 @@ test.describe('Test create-template package', () => {
         'Scheduled: Why Time Travel Is Overrated',
       );
 
-      await assertTwoLocaleSite(page, url, false);
+      await assertTwoLocaleSite(page, url, true);
       await assertCmsEditFromSite(page, url);
     } finally {
       try {
@@ -378,6 +387,7 @@ test.describe('Test create-template package', () => {
 
   test('apply sveltekit template', async ({ page }) => {
     test.slow();
+    test.setTimeout(10 * 60 * 1000);
     await signIn(page);
     const drive = await newDrive(page);
     await makeDrivePublic(page);

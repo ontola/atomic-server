@@ -73,6 +73,7 @@ From the generated site, press **Cmd/Ctrl+E** or click **Edit this page** in the
 Blog posts:
 
 - `href` / `path` is the public URL, relative to the site root (`/blog/my-post`).
+- The Website resource's **homepage** property is what `/` (and `/nl`) serve. Change it in the Data Browser to point at a different page without renaming paths.
 - `published-at` in the future hides the post from listings, search, and direct routes.
 - `cover-image` and `published-at` are recommended, not required, so you can save an incomplete post. Until it has a `published-at` in the past, it stays off the site.
 
@@ -84,7 +85,7 @@ The Website resource has `defaultLanguage` (`en`) and `languages` (`en`, `nl`). 
 - `translationOf` — the canonical resource
 - its own `path` (`/blog/de-biologie-van-ballondieren`)
 
-The templates resolve `/nl/blog/the-english-slug` to the Dutch sibling, list one version per post, and emit `hreflang`. See [Translations & Localization](schema/translations.md).
+The templates resolve `/nl/blog/the-english-slug` to the Dutch sibling, list one version per post, and emit `hreflang`. Nav links keep the current language prefix (`/nl/blog` → Home is `/nl`). See [Translations & Localization](schema/translations.md).
 
 ## 6. What this is not (yet)
 
