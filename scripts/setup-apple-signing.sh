@@ -26,18 +26,28 @@
 # re-downloaded with its private key, and a team is limited to five of them —
 # so losing one is not a free do-over. The .p12 is the only complete copy.
 #
-# Usage:  scripts/setup-apple-signing.sh [--macos-only|--ios-only] [workdir]
+# Usage:  scripts/setup-apple-signing.sh [--macos-only|--ios-only] [--macos-p12 FILE] [workdir]
 
 set -euo pipefail
 
 WORKDIR=""
 DO_MACOS=true
 DO_IOS=true
+MACOS_P12=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --macos-only) DO_IOS=false ;;
     --ios-only)   DO_MACOS=false ;;
+    # Reuse a Developer ID certificate you already hold, instead of issuing a
+    # new one. Prefer this whenever `security find-identity -v -p codesigning`
+    # already lists "Developer ID Application: <your team>": a team may hold
+    # only FIVE of them, and revoking one invalidates nothing already signed
+    # but does burn a slot you cannot get back cheaply. Export it first via
+    # Keychain Access -> My Certificates -> right-click -> Export as .p12,
+    # making sure you export the certificate WITH its private key (the
+    # disclosure triangle should show a key underneath it).
+    --macos-p12) shift; MACOS_P12="${1:-}"; [ -n "$MACOS_P12" ] || { echo "--macos-p12 needs a path" >&2; exit 1; } ;;
     -*) echo "unknown flag: $1" >&2; exit 1 ;;
     *)  WORKDIR="$1" ;;
   esac
@@ -154,7 +164,37 @@ EOF
 }
 
 if [ "$DO_MACOS" = true ]; then
-  request_cert "developer-id" "Developer ID Application" "Developer ID Application"
+  if [ -n "$MACOS_P12" ]; then
+    [ -e "$MACOS_P12" ] || die "$MACOS_P12 not found."
+    echo
+    echo "──── Developer ID Application (existing certificate) ────"
+    read -r -s -p "Password for $MACOS_P12: " PASS; echo
+    [ -n "$PASS" ] || die "a password is required — an unprotected .p12 cannot be imported by CI."
+
+    # Verify before uploading. A .p12 exported from Keychain Access WITHOUT the
+    # private key is the classic mistake here: it looks fine, uploads fine, and
+    # then fails deep inside a release build with an error about no identity
+    # being found rather than about the file.
+    openssl pkcs12 -in "$MACOS_P12" -nokeys "${P12_LEGACY[@]}" \
+      -passin "pass:$PASS" -out "$WORKDIR/developer-id.pem" 2>/dev/null \
+      || die "could not read $MACOS_P12 — wrong password, or OpenSSL cannot parse it."
+    # Grep the extracted key rather than relying on an exit code: `pkcs12
+    # -nocerts -noout` exits 0 on a certificate-only .p12, so it detects
+    # nothing. Verified both ways against a with-key and a no-key file.
+    openssl pkcs12 -in "$MACOS_P12" -nocerts -nodes "${P12_LEGACY[@]}" \
+      -passin "pass:$PASS" 2>/dev/null | grep -q 'PRIVATE KEY' \
+      || die "$MACOS_P12 contains no private key. In Keychain Access, expand the certificate's disclosure triangle and export the certificate itself (which carries the key underneath), not the bare certificate."
+
+    IDENTITY=$(openssl x509 -in "$WORKDIR/developer-id.pem" -noout -subject -nameopt multiline \
+      | sed -n 's/ *commonName *= //p')
+    [ -n "$IDENTITY" ] || die "could not read the certificate common name."
+    echo "Identity: $IDENTITY"
+
+    cp "$MACOS_P12" "$WORKDIR/developer-id.p12"
+    chmod 600 "$WORKDIR/developer-id.p12"
+  else
+    request_cert "developer-id" "Developer ID Application" "Developer ID Application"
+  fi
 
   set_secret_file APPLE_CERTIFICATE "developer-id.p12"
   set_secret APPLE_CERTIFICATE_PASSWORD "$PASS"
