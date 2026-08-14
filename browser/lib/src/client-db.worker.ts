@@ -6,6 +6,7 @@
  */
 
 import { openClientDb, isStorageBlockedDbError } from './client-db-open.js';
+import { wasmBinaryUrl } from './wasm-url.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WasmModule = any;
@@ -403,8 +404,11 @@ async function doInit(
   const t0 = performance.now();
   const wasm = await import(/* webpackIgnore: true */ wasmUrl);
   const t1 = performance.now();
-  // Compile + instantiate the WASM module.
-  await wasm.default();
+  // Compile + instantiate the WASM module. The binary is named explicitly
+  // instead of left to wasm-bindgen's `import.meta.url` default, which would
+  // drop any version query on `wasmUrl` and pair this glue with a binary from
+  // a different build — see `wasmBinaryUrl`.
+  await wasm.default({ module_or_path: wasmBinaryUrl(wasmUrl) });
   const t2 = performance.now();
 
   // One-time migration of the legacy shared DB file into the per-agent

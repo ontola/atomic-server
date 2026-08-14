@@ -8,6 +8,7 @@ import wasm from 'vite-plugin-wasm';
 import { wuchale } from 'wuchale/vite';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
 
 // TAURI=1 produces a Tauri-compatible bundle: no CSP nonces (Tauri serves
@@ -52,11 +53,45 @@ try {
 
 const buildTime = new Date().toISOString();
 
+// A content hash of the atomic-wasm pair, appended to their URLs as `?v=`.
+//
+// These two files are the only ones the app loads from a STABLE url: they're
+// copied into `public/wasm/` by `build:wasm` instead of going through Rollup,
+// so unlike every hashed chunk their url stays identical across builds. That is
+// what let a page span a service-worker update in 2026-08 and run the NEW app
+// chunks against the PREVIOUS generation's precached glue, whose namespace has
+// no `argon2idDeriveKey` — recovery-code generation died on a stale module the
+// server had already replaced. Hashing the content into the url means the two
+// generations no longer collide, so a mixed-generation page misses and refetches
+// instead of silently resolving to the old body.
+function wasmVersion(): string {
+  const dir = path.resolve(__dirname, 'public/wasm');
+  const hash = crypto.createHash('sha256');
+  let hashedAny = false;
+
+  for (const file of ['atomic_wasm.js', 'atomic_wasm_bg.wasm']) {
+    const full = path.join(dir, file);
+
+    if (!fs.existsSync(full)) continue;
+
+    hash.update(fs.readFileSync(full));
+    hashedAny = true;
+  }
+
+  // Absent under SKIP_WASM_BUILD=1 (and before the first `build:wasm`). A
+  // constant beats a hash of nothing, which would read as a real version.
+  return hashedAny ? hash.digest('hex').slice(0, 12) : 'dev';
+}
+
+// Computed once: hashing the pair reads ~6MB off disk.
+const wasmVersionHash = wasmVersion();
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
     __GIT_COMMIT__: JSON.stringify(gitCommit),
     __BUILD_TIME__: JSON.stringify(buildTime),
+    __WASM_VERSION__: JSON.stringify(wasmVersionHash),
   },
   resolve: {
     // `loro-prosemirror` is excluded from dep-optimization (see
@@ -97,6 +132,14 @@ export default defineConfig({
   },
   plugins: [
     wasm(),
+    {
+      // index.html preloads the wasm pair to warm the worker's fetch, so those
+      // hrefs have to carry the same `?v=` the app requests — a preload for a
+      // url nobody asks for is a wasted download plus a console warning.
+      name: 'atomic-wasm-version-html',
+      transformIndexHtml: (html: string) =>
+        html.replaceAll('__WASM_VERSION__', wasmVersionHash),
+    },
     !isVitest && webfontDownload(),
     !isVitest && wuchale(),
     // OXC handles the bulk JSX/TS transform via @vitejs/plugin-react v6.
@@ -216,7 +259,13 @@ export default defineConfig({
           // CSP nonces dynamically. Instead we use runtime caching with NetworkFirst
           // so the SW caches whatever HTML the server serves (with nonce), and falls
           // back to it offline.
-          globIgnores: ['**/index.html'],
+          // `/wasm/` is excluded because the app now requests those files with
+          // a `?v=<hash>` query (see `wasmVersion` above), which no precache
+          // entry keyed on the bare path can serve — precaching them would
+          // just park ~6MB per generation that nothing ever reads. The
+          // runtimeCaching rule below still caches them (keyed by the full
+          // versioned url), so offline use is unaffected after first load.
+          globIgnores: ['**/index.html', '**/wasm/**'],
           // Purge precache entries from prior builds on SW activation, so a
           // stale worker/wasm can never linger after the hashed names change.
           cleanupOutdatedCaches: true,
