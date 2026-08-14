@@ -1,12 +1,16 @@
 import { env } from '@/env';
 import { Store } from '@tomic/lib';
 import { CMS_REVALIDATE_SECONDS } from '@/atomic/feeds';
+import { initOntologies } from '@/ontologies';
 
 export const store = new Store({
   serverUrl: env.NEXT_PUBLIC_ATOMIC_SERVER_URL,
 });
 
 store.setDrive(env.NEXT_PUBLIC_ATOMIC_DRIVE);
+// `instrumentation.ts` does not run during `generateStaticParams` / SSG, so
+// typed `.props` (blocks, menuItems, href) would be empty in prerendered HTML.
+initOntologies();
 
 // Server Components have no browser connection lifecycle. Mark the HTTP
 // origin available so collection queries use the server instead of the empty
