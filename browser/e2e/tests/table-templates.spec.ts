@@ -144,6 +144,15 @@ test.describe('table templates', () => {
 
     // The sum under Amount was configured by the template — nobody opened a
     // menu to ask for it.
+    //
+    // When this fails on CI it reads "1ΣΣΣSum—ΣΣ": the label is there and the
+    // value is an em-dash. Traced 2026-08-14 — the two `setCell` calls above
+    // are two separate commits, and the aggregate read that follows the FIRST
+    // correctly reports the row as a member with no value to sum. Only a read
+    // that observes the second commit settles the total, so an em-dash here
+    // means the last read predates the value, not that the total is wrong.
+    // Don't widen the budget to cover it; the read is queued behind the
+    // post-save write storm (see `useTableAggregates`' max-wait note).
     const footer = page.getByTestId('table-totals');
     await expect(footer).toContainText('Sum', { timeout: 15_000 });
     await expect(footer).toContainText('4.5', { timeout: 15_000 });
