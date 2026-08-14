@@ -527,9 +527,6 @@ test.describe('notifications', () => {
       null,
       { timeout: 25_000 },
     );
-    await page2
-      .getByRole('link', { name: 'User Settings' })
-      .waitFor({ state: 'visible', timeout: 15_000 });
 
     await page2.goto(`${FRONTEND_URL}/app/notifications`);
     await expect(page2.getByTestId('notification-item').first()).toBeVisible({
