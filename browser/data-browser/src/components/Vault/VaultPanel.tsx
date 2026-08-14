@@ -71,7 +71,7 @@ export function VaultPanel({
   if (status.state === 'off') {
     return (
       <Panel data-testid='vault-panel' data-vault-state='off'>
-        <Icon>
+        <Icon $accent>
           <FaLock />
         </Icon>
         <Body>
@@ -102,8 +102,9 @@ export function VaultPanel({
     <Panel
       data-testid='vault-panel'
       data-vault-state={suspended ? 'suspended' : 'on'}
+      $accent
     >
-      <Icon>
+      <Icon $accent>
         <FaLock />
       </Icon>
       <Body>
@@ -210,11 +211,24 @@ function formatWhen(unixSeconds: number): string {
 // from `theme.size(2)` (8px) while the cards around it used 0.9rem (14.4px),
 // and left its body text at the inherited 1rem against their 0.82rem — close
 // enough to look like a mistake rather than a distinction.
-const Panel = styled.div`
+const Panel = styled.div<{ $accent?: boolean }>`
   ${cardSurface}
+  border-color: ${p => (p.$accent ? p.theme.colors.main : undefined)};
+  background: ${p => (p.$accent ? `${p.theme.colors.main}0a` : undefined)};
 `;
 
-const Icon = styled.div`
+/**
+ * Blue marks a surface as account-backed, the same accent an active
+ * connection card wears, so the Sync page reads in two tones: what is yours
+ * and local, and what involves the provider.
+ *
+ * Split from the card's own accent on purpose. The glyph turns blue as soon as
+ * this is recognisably a provider feature — including while it is still only
+ * an offer — but the card only tints once the feature is actually on. If the
+ * offer looked identical to the live thing, the page would answer "is my data
+ * backed up?" with a colour that means nothing.
+ */
+const Icon = styled.div<{ $accent?: boolean }>`
   display: grid;
   place-items: center;
   width: ${CARD_ICON_SIZE};
@@ -222,8 +236,9 @@ const Icon = styled.div`
   font-size: ${CARD_ICON_FONT};
   flex-shrink: 0;
   border-radius: 50%;
-  background-color: ${p => p.theme.colors.bg2};
-  color: ${p => p.theme.colors.textLight};
+  background-color: ${p =>
+    p.$accent ? p.theme.colors.main : p.theme.colors.bg2};
+  color: ${p => (p.$accent ? 'white' : p.theme.colors.textLight)};
 `;
 
 const Body = styled.div`
