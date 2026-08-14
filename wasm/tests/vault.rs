@@ -171,7 +171,10 @@ async fn a_real_export_hands_js_binary_not_a_number_array() {
         .await
         .expect("export should succeed");
 
-    assert!(!out.is_null(), "a drive with a resource has something to back up");
+    assert!(
+        !out.is_null(),
+        "a drive with a resource has something to back up"
+    );
 
     let sealed = js_sys::Reflect::get(&out, &wasm_bindgen::JsValue::from_str("sealed"))
         .expect("the export result carries the sealed bytes");
@@ -186,5 +189,8 @@ async fn a_real_export_hands_js_binary_not_a_number_array() {
     // The envelope's own header, which is what a restore reads first. Asserting
     // it here means a future change to the boundary fails on the byte that
     // actually matters rather than on a type name.
-    assert_eq!(bytes[0], 1, "first byte is the envelope version, not '1' (49)");
+    assert_eq!(
+        bytes[0], 1,
+        "first byte is the envelope version, not '1' (49)"
+    );
 }
