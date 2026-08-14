@@ -7,6 +7,7 @@ import {
   StoreEvents,
   core,
   dataBrowser,
+  fetchNotificationItemSubjectsFromServer,
   grantAccessRequest,
   notifications,
   useResource,
@@ -110,6 +111,19 @@ function NotificationsPage(): React.JSX.Element {
         }
       } catch {
         // In-memory items still render if the index query races drive sync.
+      }
+
+      try {
+        const fromServer = await fetchNotificationItemSubjectsFromServer(
+          store,
+          personalDrive,
+        );
+
+        for (const subject of fromServer) {
+          consider(subject);
+        }
+      } catch {
+        // Offline / query 404 — keep whatever we already listed.
       }
     }
 
