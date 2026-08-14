@@ -10,15 +10,19 @@ const BlogListItem = async ({ resource }: { resource: Resource<Blogpost> }) => {
     day: 'numeric',
   });
 
-  const date = formatter.format(new Date(resource.props.publishedAt));
+  const date = resource.props.publishedAt
+    ? formatter.format(new Date(resource.props.publishedAt))
+    : undefined;
 
   return (
     <a className={styles.card} href={resource.props.href}>
-      <div className={styles.imageWrapper}>
-        <Image subject={resource.props.coverImage} alt='' />
-      </div>
+      {resource.props.coverImage && (
+        <div className={styles.imageWrapper}>
+          <Image subject={resource.props.coverImage} alt='' />
+        </div>
+      )}
       <div className={styles.cardContent}>
-        <div className={styles.publishDate}>{date}</div>
+        {date && <div className={styles.publishDate}>{date}</div>}
         <h2 className={styles.h2}>{resource.title}</h2>
         <p className={styles.p}>
           {resource.props.description?.slice(0, 300)}...

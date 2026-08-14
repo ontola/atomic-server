@@ -2149,3 +2149,32 @@ and upload hook, then delivers multiple files through the drop callback. It
 verifies the upload targets the displayed drive even when the current drive
 setting differs. Native drag events, overlay geometry and the refreshed child
 list are not covered by this component test.
+---
+
+## Headless CMS (Website template)
+
+The CMS is the Website template in the Data Browser plus `@tomic/create-template`
+(Next.js / SvelteKit). Forks and i18n are generic platform features the templates
+consume.
+
+### Covered
+
+| Flow | Where |
+|---|---|
+| Apply template, scaffold Next.js, production build, homepage, blog search, two-locale routing | `browser/e2e/tests/template.spec.ts` (`apply next-js template`) |
+| Same for SvelteKit, including `<html lang>` | `template.spec.ts` (`apply sveltekit template`) |
+| Future-dated post hidden from listing, search, and direct URL (404) | `template.spec.ts` (`assertTwoLocaleSite` + search `Time Travel`) |
+| Cmd/Ctrl+E and **Edit this page** open `/app/edit?subject=` | `template.spec.ts` (`assertCmsEditFromSite`) |
+| Fork → edit → merge; pending forks listed on the original | `browser/e2e/tests/forks.spec.ts` |
+| Three-way merge / conflict / document body CRDT | `browser/lib/src/forks.test.ts` |
+| LocalizedText table editor | `browser/e2e/tests/localized-text.spec.ts` |
+
+### Blind spots
+
+| Gap | Why it hurts |
+|---|---|
+| No e2e that a *fork* of a page is 404 on the generated site | The path filter is the same helper as scheduled posts, but a fork is the realistic collision (`href` is copied). Only unit-shaped filtering in the templates, no live fork+site run. |
+| Confidential drafts (private folder in a non-public Drive) | Not built. `makeDrivePublic()` still publishes the whole Drive. A `published-at` filter is not an ACL. |
+| Suggest-an-edit for non-writers, reject-with-reason, Canvas body fork | Platform gaps in `planning/drafts-and-suggestions.md`; templates cannot paper over them. |
+| Astro from-scratch guide | No test. The Website-template path is what CI exercises. |
+| Image resizing / GraphQL | Documented product absences, not test gaps. |

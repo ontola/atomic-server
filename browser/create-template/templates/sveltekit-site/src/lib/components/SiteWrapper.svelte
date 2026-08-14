@@ -2,10 +2,49 @@
 	import { core } from '@tomic/lib';
 	import { getResource } from '@tomic/svelte';
 	import { appState } from '$lib/stores/appstate.svelte';
+	import { cmsEditUrl } from '$lib/atomic/cmsEditUrl';
+	import { PUBLIC_ATOMIC_CMS_URL } from '$env/static/public';
 	import '../../styles/reset.css';
 
 	let page = getResource(() => appState.currentSubject);
+
+	function isTypingTarget(target: EventTarget | null): boolean {
+		if (!(target instanceof HTMLElement)) {
+			return false;
+		}
+
+		if (target.isContentEditable) {
+			return true;
+		}
+
+		const tag = target.tagName;
+
+		return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+	}
+
+	function onKeyDown(event: KeyboardEvent) {
+		if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'e') {
+			return;
+		}
+
+		if (event.altKey || event.shiftKey || isTypingTarget(event.target)) {
+			return;
+		}
+
+		if (!appState.currentSubject) {
+			return;
+		}
+
+		event.preventDefault();
+		window.open(
+			cmsEditUrl(PUBLIC_ATOMIC_CMS_URL, appState.currentSubject),
+			'_blank',
+			'noopener,noreferrer'
+		);
+	}
 </script>
+
+<svelte:window onkeydown={onKeyDown} />
 
 <svelte:head>
 	<title>{page.title}</title>

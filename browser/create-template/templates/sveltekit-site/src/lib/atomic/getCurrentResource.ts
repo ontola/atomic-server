@@ -1,6 +1,7 @@
 import { CollectionBuilder, type Resource } from "@tomic/lib";
 import { driveFilter, getStore } from "./getStore";
 import { findTranslation, parseLocalizedPath } from "./i18n";
+import { isListedCmsResource } from "./publicContent";
 import { website } from "$lib/ontologies/website";
 import { PUBLIC_ATOMIC_DRIVE } from "$env/static/public";
 
@@ -36,13 +37,16 @@ export async function getCurrentResource(
     return undefined;
   }
 
-  const currentResourceSubject = await collection.getMemberWithIndex(0);
+  const subjects = await collection.getAllMembers();
+  const candidates = (
+    await Promise.all(subjects.map((subject) => store.getResource(subject)))
+  ).filter(isListedCmsResource);
 
-  if (currentResourceSubject === undefined) {
+  if (candidates.length === 0) {
     return undefined;
   }
 
-  const resource = await store.getResource(currentResourceSubject);
+  const resource = candidates[0];
 
   if (!prefixed) {
     // Without an explicit language in the URL, the resource's own href wins:

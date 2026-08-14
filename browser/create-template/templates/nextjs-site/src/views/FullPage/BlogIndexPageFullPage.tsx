@@ -11,6 +11,7 @@ import { Suspense } from 'react';
 import Searchbar from '@/components/Searchbar';
 import { store } from '@/store';
 import { env } from '@/env';
+import { isListedCmsResource } from '@/atomic/publicContent';
 
 const BlogIndexPageFullPage = async ({
   resource,
@@ -40,6 +41,10 @@ const BlogIndexPageFullPage = async ({
         [core.properties.isA]: website.classes.blogpost,
       },
     });
+    const hits = await Promise.all(
+      results.map(subject => store.getResource(subject)),
+    );
+    results = hits.filter(isListedCmsResource).map(resource => resource.subject);
   } else {
     results = allItems;
   }

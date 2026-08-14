@@ -73,13 +73,13 @@ export const website: TemplateFn = context => ({
       [core.properties.recommends]: [
         i18n.properties.language,
         i18n.properties.translationOf,
+        'website/property/cover-image',
+        'website/property/published-at',
       ],
       [core.properties.requires]: [
         core.properties.name,
         core.properties.description,
         'website/property/path',
-        'website/property/cover-image',
-        'website/property/published-at',
       ],
       [core.properties.shortname]: 'blogpost',
     },
@@ -444,6 +444,7 @@ export const website: TemplateFn = context => ({
         '01j6ccm53p4bv9f92m4tpehcba',
         '01j6ewtynjsyq7b3sc1pgqppde',
         '01k0m3balloon5nl0translatn',
+        '01k0m3future0post0unpublished',
       ],
       'https://atomicdata.dev/property/display-style':
         'https://atomicdata.dev/display-style/list',
@@ -514,6 +515,20 @@ export const website: TemplateFn = context => ({
       [i18n.properties.translationOf]: '01j6ewtynjsyq7b3sc1pgqppde',
       [core.properties.name]:
         'De biologie van ballondieren: een duik in hun wilde wereld',
+      [core.properties.parent]: '01j6cbg9djf269zdwwv5114jsd',
+    },
+    {
+      [core.properties.localId]: '01k0m3future0post0unpublished',
+      'website/property/cover-image':
+        'https://atomicdata.dev/files/1726129576337-pexels-karolina-grabowska-7273405.jpg',
+      'website/property/path':
+        '/blog/scheduled-why-time-travel-is-overrated',
+      // 2030-01-01 — listed and routable only after this timestamp.
+      'website/property/published-at': 1893456000000,
+      [core.properties.description]:
+        'This post is dated in the future on purpose. Generated sites must not list or route it until the publish date.',
+      [core.properties.isA]: ['website/class/blogpost'],
+      [core.properties.name]: 'Scheduled: Why Time Travel Is Overrated',
       [core.properties.parent]: '01j6cbg9djf269zdwwv5114jsd',
     },
     {

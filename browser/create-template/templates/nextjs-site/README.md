@@ -14,6 +14,10 @@ $ pnpm create @tomic/template my-project --template nextjs-site --server-url htt
 $ yarn create @tomic/template my-project --template nextjs-site --server-url http://localhost:9883 --drive did:ad:YOUR_DRIVE
 ```
 
+Apply the **Website** template in the Data Browser first (New resource → Templates). `--server-url` is the HTTP origin; `--drive` is the Drive's `did:ad:` subject. If the Data Browser is not on the same origin as the API, add `--cms-url http://localhost:6747`.
+
+Full walkthrough: [Using Atomic as a headless CMS](https://docs.atomicdata.dev/headless-cms.html).
+
 ### 2. Generate ontologies
 
 ```bash
@@ -35,6 +39,14 @@ $ npm run dev
 $ pnpm dev
 $ yarn dev
 ```
+
+## Editing content
+
+Change pages and posts in the Data Browser. From this site, press Cmd/Ctrl+E or use **Edit this page** in the footer. That opens `/app/edit?subject=…` — sign-in stays in the editor.
+
+A blog post with `published-at` in the future (or missing) is not listed, searchable, or routable. Forks are excluded from public queries because they copy the original `href`.
+
+`NEXT_PUBLIC_ATOMIC_CMS_URL` in `.env` is the Data Browser origin. It defaults to the server URL.
 
 ## Structure
 

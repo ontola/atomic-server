@@ -22,10 +22,11 @@ export interface PostProcessContext {
   template: TemplateKey;
   serverUrl: string;
   drive: string;
+  cmsUrl: string;
 }
 
 export async function postProcess(context: PostProcessContext) {
-  const { folderPath, template, serverUrl, drive } = context;
+  const { folderPath, template, serverUrl, drive, cmsUrl } = context;
 
   const store = new Store({ serverUrl });
   const baseTemplate = templates[template];
@@ -98,6 +99,7 @@ export async function postProcess(context: PostProcessContext) {
     serverUrl,
     drive,
     websiteSubject: website.subject,
+    cmsUrl,
   };
 
   await modifyConfig(folderPath, ontology, serverUrl);

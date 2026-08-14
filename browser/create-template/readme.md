@@ -7,6 +7,8 @@ bun create @tomic/template my-project --template <TEMPLATE> --server-url <SERVER
 ```
 
 `SERVER_URL` is the HTTP(S) API origin. `DRIVE_SUBJECT` is the `did:ad:`
-identity of the drive where the template data was installed.
+identity of the drive where the template data was installed. Optional
+`--cms-url` is the Data Browser origin for Cmd/Ctrl+E (defaults to the
+server URL).
 
 _Check out [the docs here](https://docs.atomicdata.dev/create-template/atomic-template)._
