@@ -1,7 +1,15 @@
 import { describe, it } from 'vitest';
 import { core, server } from './index.js';
 import { forks } from './ontologies/forks.js';
-import { cmsEditUrl, isListedCmsResource } from './cms.js';
+import {
+  cmsEditUrl,
+  cmsSitemapPaths,
+  escapeXml,
+  isListedCmsResource,
+  renderRobotsTxt,
+  renderRssXml,
+  renderSitemapXml,
+} from './cms.js';
 import { forkResource } from './forks.js';
 import { testStore } from './test-store.js';
 
@@ -98,5 +106,49 @@ describe('cms listing', () => {
     expect(isListedCmsResource(original, listing)).toBe(true);
     expect(fork.getClasses()).toContain(forks.classes.fork);
     expect(isListedCmsResource(fork, listing)).toBe(false);
+  });
+});
+
+describe('cms feeds', () => {
+  it('emits each href once per language, default unprefixed', ({ expect }) => {
+    expect(
+      cmsSitemapPaths(['/', '/blog', '/blog/later'], ['en', 'nl'], 'en'),
+    ).toEqual([
+      '/',
+      '/blog',
+      '/blog/later',
+      '/nl',
+      '/nl/blog',
+      '/nl/blog/later',
+    ]);
+  });
+
+  it('renders sitemap, robots, and RSS without leaking unpublished paths', ({
+    expect,
+  }) => {
+    const listed = cmsSitemapPaths(['/', '/blog/out-now'], ['en', 'nl'], 'en');
+    const sitemap = renderSitemapXml('http://localhost:3000', listed);
+
+    expect(sitemap).toContain('http://localhost:3000/blog/out-now');
+    expect(sitemap).toContain('http://localhost:3000/nl/blog/out-now');
+    expect(sitemap).not.toContain('scheduled');
+
+    expect(renderRobotsTxt('http://localhost:3000/')).toContain(
+      'Sitemap: http://localhost:3000/sitemap.xml',
+    );
+
+    const rss = renderRssXml('http://localhost:3000', 'Demo & Co', [
+      {
+        title: 'Out now',
+        path: '/blog/out-now',
+        description: 'A <post> & more',
+        publishedAt: 1_700_000_000_000,
+      },
+    ]);
+
+    expect(rss).toContain('<title>Demo &amp; Co</title>');
+    expect(rss).toContain('A &lt;post&gt; &amp; more');
+    expect(rss).not.toContain('Time Travel');
+    expect(escapeXml(`"'`)).toBe('&quot;&apos;');
   });
 });
