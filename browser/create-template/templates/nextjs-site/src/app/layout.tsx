@@ -1,17 +1,9 @@
 import type { Metadata } from 'next';
 import 'modern-css-reset/dist/reset.min.css';
 import '@/app/globals.css';
-import ProviderWrapper from '@/components/ProviderWrapper';
-import VStack from '@/components/Layout/VStack';
-import Navbar from '@/components/Navbar';
-import styles from './layout.module.css';
-import Footer from '@/components/Footer';
-import { DocumentLang } from '@/components/DocumentLang';
-import { LanguageConfigProvider } from '@/atomic/languageConfig';
-import { getLanguageConfig } from '@/atomic/i18n';
+import { CMS_REVALIDATE_SECONDS } from '@/atomic/feeds';
 
-export const dynamic = 'force-dynamic';
-export const fetchCache = 'force-no-store';
+export const revalidate = CMS_REVALIDATE_SECONDS;
 
 export const metadata: Metadata = {
   title: 'Next.js Atomic',
@@ -23,31 +15,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+/**
+ * Pass-through root layout so `[[...slug]]/layout.tsx` can own `<html lang>`.
+ * That puts the correct language on the first HTML byte of each prerendered
+ * path (`/nl/...` is `lang="nl"`), which a CDN can cache as a static file.
+ */
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // The root layout cannot read the catch-all route params, so `<html lang>`
-  // starts as the website default. DocumentLang updates it from the URL prefix.
-  const languageConfig = await getLanguageConfig();
-
-  return (
-    <html lang={languageConfig.defaultLanguage}>
-      <body>
-        <LanguageConfigProvider value={languageConfig}>
-          <DocumentLang />
-          <ProviderWrapper>
-            <VStack align='stretch' height='100vh'>
-              <header>
-                <Navbar />
-              </header>
-              <main className={styles.main}>{children}</main>
-              <Footer />
-            </VStack>
-          </ProviderWrapper>
-        </LanguageConfigProvider>
-      </body>
-    </html>
-  );
+  return children;
 }

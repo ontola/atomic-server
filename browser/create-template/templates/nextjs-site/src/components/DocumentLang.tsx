@@ -5,8 +5,8 @@ import { useEffect } from 'react';
 import { useLanguageConfig } from '@/atomic/languageConfig';
 
 /**
- * The root layout cannot read the catch-all slug, so `<html lang>` starts as
- * the website default. This keeps it in sync with the URL prefix on navigation.
+ * Keeps `<html lang>` in sync on client-side navigations. The catch-all layout
+ * already sets the attribute on the first HTML byte for each prerendered path.
  */
 export function DocumentLang() {
   const pathname = usePathname();

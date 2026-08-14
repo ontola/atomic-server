@@ -1,5 +1,6 @@
 import { env } from '@/env';
 import { Store } from '@tomic/lib';
+import { CMS_REVALIDATE_SECONDS } from '@/atomic/feeds';
 
 export const store = new Store({
   serverUrl: env.NEXT_PUBLIC_ATOMIC_SERVER_URL,
@@ -12,11 +13,14 @@ store.setDrive(env.NEXT_PUBLIC_ATOMIC_DRIVE);
 // local fallback; client-side stores still derive this state from WebSocket.
 if (typeof window === 'undefined') {
   store.setServerConnected(true);
-  // Next.js caches `fetch` during SSR and `next build`. An empty collection
-  // on first hit (index still catching up after applying the template) would
-  // then be reused, so blog listings stay empty until a rebuild.
+  // ISR / CDN: cache AtomicServer reads for `CMS_REVALIDATE_SECONDS`. A
+  // transient empty collection at build is retried in getAllBlogposts /
+  // getPublicPages, then expires instead of sticking until the next deploy.
   store.injectFetch((input, init) =>
-    fetch(input, { ...init, cache: 'no-store' }),
+    fetch(input, {
+      ...init,
+      next: { revalidate: CMS_REVALIDATE_SECONDS },
+    }),
   );
 }
 

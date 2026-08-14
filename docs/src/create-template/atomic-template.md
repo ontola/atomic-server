@@ -32,11 +32,11 @@ pnpm update-ontologies
 pnpm dev
 ```
 
-From the running site, Cmd/Ctrl+E opens the current page in the Data Browser edit form. `/` is the Website resource's `homepage` property, not whichever page happens to have path `/`. A blog post with `published-at` in the future is not listed or routed. Forks of pages and posts are excluded too. Nav on `/nl/...` keeps the language prefix. Generated sites expose `/sitemap.xml`, `/robots.txt`, and `/rss.xml` from the same public-content filter.
+From the running site, Cmd/Ctrl+E opens the current page in the Data Browser edit form. `/` is the Website resource's `homepage` property, not whichever page happens to have path `/`. A blog post with `published-at` in the future is not listed or routed. Forks of pages and posts are excluded too. Nav on `/nl/...` keeps the language prefix. Generated sites expose `/sitemap.xml`, `/robots.txt`, and `/rss.xml` from the same public-content filter. Pages are prerendered and sent with `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400` so a CDN can serve the correct language and content on the first byte.
 
 The following templates are available:
 
 | Name             | Description                                                          | AtomicServer Template |
 | ---------------- | -------------------------------------------------------------------- | --------------------- |
-| `sveltekit-site` | A sveltekit website with dynamically rendered content and blog posts | Website               |
-| `nextjs-site`    | A nextjs website with dynamically rendered content and blog posts    | Website               |
+| `sveltekit-site` | A SvelteKit website with prerendered, CDN-cacheable pages and blog posts | Website               |
+| `nextjs-site`    | A Next.js website with ISR/prerendered, CDN-cacheable pages and blog posts | Website               |

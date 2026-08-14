@@ -35,4 +35,4 @@
 	{/each}
 </svelte:head>
 
-<FullPageView {subject} />
+<FullPageView {subject} lang={data.lang} />

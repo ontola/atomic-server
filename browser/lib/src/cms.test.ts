@@ -2,7 +2,9 @@ import { describe, it } from 'vitest';
 import { core, server } from './index.js';
 import { forks } from './ontologies/forks.js';
 import {
+  CMS_CDN_CACHE_CONTROL,
   cmsEditUrl,
+  cmsPathToSlug,
   cmsSitemapPaths,
   escapeXml,
   isListedCmsResource,
@@ -110,6 +112,16 @@ describe('cms listing', () => {
 });
 
 describe('cms feeds', () => {
+  it('splits public paths into catch-all slugs for static generation', ({
+    expect,
+  }) => {
+    expect(cmsPathToSlug('/')).toEqual([]);
+    expect(cmsPathToSlug('/nl/blog/coffee')).toEqual(['nl', 'blog', 'coffee']);
+    expect(CMS_CDN_CACHE_CONTROL).toContain('public');
+    expect(CMS_CDN_CACHE_CONTROL).toContain('s-maxage=60');
+    expect(CMS_CDN_CACHE_CONTROL).not.toContain('no-store');
+  });
+
   it('emits each href once per language, default unprefixed', ({ expect }) => {
     expect(
       cmsSitemapPaths(['/', '/blog', '/blog/later'], ['en', 'nl'], 'en'),
