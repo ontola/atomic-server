@@ -394,7 +394,11 @@ async function assertTwoLocaleSite(
 
   // Nav on a prefixed route keeps the language prefix.
   await page.goto(`${url}/nl/blog`);
-  await page.getByRole('link', { name: 'Home', exact: true }).click();
+  const home = page
+    .getByRole('navigation')
+    .getByRole('link', { name: 'Home', exact: true });
+  await expect(home).toHaveAttribute('href', /\/nl\/?$/);
+  await home.click();
   await expect(page).toHaveURL(/\/nl\/?$/);
 }
 
