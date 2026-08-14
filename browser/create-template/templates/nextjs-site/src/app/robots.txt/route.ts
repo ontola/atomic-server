@@ -1,10 +1,9 @@
 import {
   CMS_CDN_CACHE_CONTROL,
-  CMS_REVALIDATE_SECONDS,
   renderRobotsTxt,
 } from '@/atomic/feeds';
 
-export const revalidate = CMS_REVALIDATE_SECONDS;
+export const revalidate = 60;
 
 export async function GET(request: Request) {
   return new Response(renderRobotsTxt(new URL(request.url).origin), {

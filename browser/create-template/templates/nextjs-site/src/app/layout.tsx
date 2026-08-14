@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
 import 'modern-css-reset/dist/reset.min.css';
 import '@/app/globals.css';
-import { CMS_REVALIDATE_SECONDS } from '@/atomic/feeds';
 
-export const revalidate = CMS_REVALIDATE_SECONDS;
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: 'Next.js Atomic',
