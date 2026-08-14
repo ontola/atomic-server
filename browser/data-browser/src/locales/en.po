@@ -4587,70 +4587,6 @@ msgstr "Select File"
 msgid "{0} preview"
 msgstr "{0} preview"
 
-#~ msgid ""
-#~ "{0}{1}\n"
-#~ "const value = resource.get({2});\n"
-#~ ""
-#~ msgstr ""
-#~ "{0}{1}\n"
-#~ "const value = resource.get({2});\n"
-#~ ""
-
-#~ msgid "{0}const resource = await store.getResource{1}('{2}');"
-#~ msgstr "{0}const resource = await store.getResource{1}('{2}');"
-
-#~ msgid ""
-#~ "{0}\n"
-#~ "const value = {1};\n"
-#~ ""
-#~ msgstr ""
-#~ "{0}\n"
-#~ "const value = {1};\n"
-#~ ""
-
-#~ msgid ""
-#~ "{0}const Component = () => {\n"
-#~ "  const resource = useResource('{1}');\n"
-#~ "\n"
-#~ "  return <div>{resource.title}</div>;\n"
-#~ "}"
-#~ msgstr ""
-#~ "{0}const Component = () => {\n"
-#~ "  const resource = useResource('{1}');\n"
-#~ "\n"
-#~ "  return <div>{resource.title}</div>;\n"
-#~ "}"
-
-#~ msgid ""
-#~ "{0}\n"
-#~ "const Component = () => {\n"
-#~ "  const resource = useResource('{1}');\n"
-#~ "  const [value] = {2}(resource, {3});\n"
-#~ "\n"
-#~ "  return <div>{value}</div>;\n"
-#~ "}"
-#~ msgstr ""
-#~ "{0}\n"
-#~ "const Component = () => {\n"
-#~ "  const resource = useResource('{1}');\n"
-#~ "  const [value] = {2}(resource, {3});\n"
-#~ "\n"
-#~ "  return <div>{value}</div>;\n"
-#~ "}"
-
-#~ msgid ""
-#~ "{0}\n"
-#~ "const Component = () => {\n"
-#~ "  const resource = useResource{1}('{2}');\n"
-#~ "{3}\n"
-#~ "}"
-#~ msgstr ""
-#~ "{0}\n"
-#~ "const Component = () => {\n"
-#~ "  const resource = useResource{1}('{2}');\n"
-#~ "{3}\n"
-#~ "}"
-
 #. 0: prefix; 1: formatImportNames(prefix, names); 2: file
 #: src/views/CodeUsage/generators/generatorUtils.ts
 msgid "{0}import {1} from '{2}';"
@@ -5471,10 +5407,6 @@ msgstr "<0/> Add"
 msgid "The languages this drive publishes content in (BCP 47 tags, e.g.{0} <0/> or <1/>). Language pickers offer these, and a missing translation is flagged against this set."
 msgstr "The languages this drive publishes content in (BCP 47 tags, e.g.{0} <0/> or <1/>). Language pickers offer these, and a missing translation is flagged against this set."
 
-#: src/chunks/TablePage/ColumnLanguageChip.tsx
-msgid "LanguageChipTrigger"
-msgstr "LanguageChipTrigger"
-
 #: src/components/forms/ResourceForm.tsx
 msgid "This property is server-managed and cannot be edited."
 msgstr "This property is server-managed and cannot be edited."
@@ -5713,10 +5645,6 @@ msgstr "Generating…"
 #: src/components/NewIdentitySection.tsx
 msgid "Generate my recovery code"
 msgstr "Generate my recovery code"
-
-#: src/helpers/managed/recovery.ts
-msgid "PrfUnsupportedError"
-msgstr "PrfUnsupportedError"
 
 #. 0: new Date().toISOString().slice(0, 10)
 #: src/helpers/managed/recovery.ts
@@ -7464,14 +7392,6 @@ msgid "and"
 msgstr "and"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
-msgid "<0/> Add condition"
-msgstr "<0/> Add condition"
-
-#: src/chunks/FormBuilder/ConditionsEditor.tsx
-msgid "Show when"
-msgstr "Show when"
-
-#: src/chunks/FormBuilder/ConditionsEditor.tsx
 msgid "All of these must match. Leave empty to always show."
 msgstr "All of these must match. Leave empty to always show."
 
@@ -7488,5 +7408,35 @@ msgid "unchecked"
 msgstr "unchecked"
 
 #: src/chunks/FormBuilder/FieldRow.tsx
+#: src/chunks/FormBuilder/PageTabBar.tsx
 msgid "Conditional"
 msgstr "Conditional"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "Add condition"
+msgstr "Add condition"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "Done"
+msgstr "Done"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "Always shown"
+msgstr "Always shown"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "1 condition"
+msgstr "1 condition"
+
+#. 0: count
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "{0} conditions"
+msgstr "{0} conditions"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "Show Page When"
+msgstr "Show Page When"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "Show Field When"
+msgstr "Show Field When"
