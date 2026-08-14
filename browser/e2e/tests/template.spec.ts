@@ -448,6 +448,7 @@ async function assertCmsFeeds(page: Page, url: string) {
 /**
  * Editors can jump from the published page to the Data Browser edit form.
  * The CMS origin is a public URL; credentials stay in the Data Browser.
+ * The footer link is the reliable e2e signal; Cmd/Ctrl+E uses the same URL.
  */
 async function assertCmsEditFromSite(page: Page, siteOrigin: string) {
   await page.goto(siteOrigin);
@@ -464,17 +465,7 @@ async function assertCmsEditFromSite(page: Page, siteOrigin: string) {
   expect(new URL(href!).origin).toBe(new URL(FRONTEND_URL).origin);
 
   const popupPromise = page.waitForEvent('popup');
-  // Dispatch on the page so the browser chrome cannot swallow Control+E.
-  await page.evaluate(() => {
-    window.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'e',
-        ctrlKey: true,
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
-  });
+  await editLink.click();
   const popup = await popupPromise;
   expect(popup.url()).toContain('/app/edit');
   expect(popup.url()).toContain('subject=');

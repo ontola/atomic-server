@@ -4,6 +4,7 @@
 	import { appState } from '$lib/stores/appstate.svelte';
 	import { cmsEditUrl } from '$lib/atomic/cmsEditUrl';
 	import { PUBLIC_ATOMIC_CMS_URL } from '$env/static/public';
+	import { onMount } from 'svelte';
 	import '../../styles/reset.css';
 
 	let page = getResource(() => appState.currentSubject);
@@ -42,9 +43,13 @@
 			'noopener,noreferrer'
 		);
 	}
-</script>
 
-<svelte:window onkeydown={onKeyDown} />
+	onMount(() => {
+		window.addEventListener('keydown', onKeyDown);
+
+		return () => window.removeEventListener('keydown', onKeyDown);
+	});
+</script>
 
 <svelte:head>
 	<title>{page.title}</title>
