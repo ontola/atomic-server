@@ -12,6 +12,7 @@ import {
   NotificationEngine,
   StoreEvents,
   core,
+  fetchNotificationItemSubjectsFromServer,
   notifications,
   useStore,
   visibleNotificationItems,
@@ -165,6 +166,21 @@ export function useUnreadNotificationCount(): number {
         }
       } catch {
         // Keep the in-memory count if the index query is still empty.
+      }
+
+      if (n === 0) {
+        try {
+          const fromServer = await fetchNotificationItemSubjectsFromServer(
+            store,
+            personalDrive,
+          );
+
+          for (const subject of fromServer) {
+            consider(subject);
+          }
+        } catch {
+          // Offline — badge stays at the in-memory count.
+        }
       }
     }
 

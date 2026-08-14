@@ -715,6 +715,51 @@ export function visibleNotificationItems(store: Store): Resource[] {
   return items;
 }
 
+/**
+ * Server `/query` for NotificationItems on a drive. Second devices can finish
+ * drive sync before nested inbox rows are in the parent index, so a local
+ * WASM collection query stays empty; this path does not trust that empty.
+ */
+export async function fetchNotificationItemSubjectsFromServer(
+  store: Store,
+  drive: string,
+): Promise<string[]> {
+  const url = new URL(`${new URL(store.getServerUrl()).origin}/query`);
+  url.searchParams.set('property', core.properties.isA);
+  url.searchParams.set('value', notifications.classes.notificationItem);
+  url.searchParams.set('drive', drive);
+  url.searchParams.set('page_size', '100');
+  url.searchParams.set('current_page', '0');
+
+  const page = await store.fetchResourceFromServer(url.toString(), {
+    noWebSocket: true,
+  });
+
+  if (page.error) {
+    return [];
+  }
+
+  const subjects = page.getSubjects(collections.properties.members);
+
+  for (const subject of subjects) {
+    const existing = store.resources.get(subject);
+
+    if (existing && !existing.loading && !existing.error && !existing.new) {
+      continue;
+    }
+
+    const res = await store.fetchResourceFromServer(subject, {
+      noWebSocket: true,
+    });
+
+    if (!res.error) {
+      store.notifyResourceUpdated(res);
+    }
+  }
+
+  return subjects;
+}
+
 /** Apply mentions from TipTap JSON onto a document resource (no save). */
 export async function syncDocumentMentions(
   resource: Resource,
