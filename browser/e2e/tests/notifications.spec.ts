@@ -552,6 +552,20 @@ test.describe('notifications', () => {
       { timeout: 30_000 },
     );
 
+    await page2.waitForFunction(
+      itemClass => {
+        for (const res of window.store.resources.values()) {
+          if (res.getClasses?.().includes(itemClass) && !res.new && !res.error) {
+            return true;
+          }
+        }
+
+        return false;
+      },
+      NOTIFICATION_ITEM,
+      { timeout: 15_000 },
+    );
+
     await expect(page2.getByTestId('notification-item').first()).toBeVisible({
       timeout: 20_000,
     });
