@@ -11,7 +11,13 @@ import {
   Datatype,
 } from '@tomic/react';
 import { styled, keyframes, css, type DefaultTheme } from 'styled-components';
-import { cardSurface, CARD_SUB_FONT } from '../components/cardSurface';
+import {
+  cardSurface,
+  CARD_ICON_FONT,
+  CARD_ICON_SIZE,
+  CARD_SUB_FONT,
+  CARD_TITLE_FONT,
+} from '../components/cardSurface';
 import { openExternal } from '../helpers/openExternal';
 import {
   FaLaptop,
@@ -29,7 +35,11 @@ import { Button } from '../components/Button';
 import { VaultPanel } from '../components/Vault/VaultPanel';
 import { LinkProviderPanel } from '../components/Vault/LinkProviderPanel';
 import { isDeviceLinked } from '../helpers/managed/deviceLink';
-import { getManagedAccount } from '../helpers/managed/session';
+import {
+  getManagedAccount,
+  type ManagedAccount,
+} from '../helpers/managed/session';
+import { getRememberedManagedPortalUrl } from '../helpers/managed/api';
 import { useDriveVault } from '../helpers/managed/useDriveVault';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
@@ -267,25 +277,39 @@ function SyncPage() {
    */
   const [needsProviderLink, setNeedsProviderLink] = useState(false);
 
+  /**
+   * The provider account this client is signed in to, if any.
+   *
+   * Kept rather than reduced to a boolean because the account is what earns a
+   * link back to the portal, and that relationship exists independently of any
+   * managed node: Cloud Vault is blind backup and needs no hosting, so a user
+   * can be signed in with nothing managed in sight.
+   */
+  const [managedAccount, setManagedAccount] = useState<ManagedAccount | null>(
+    null,
+  );
+
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
-      if (isDeviceLinked()) {
-        if (!cancelled) setNeedsProviderLink(false);
-
-        return;
-      }
+      // Asked even when this device is already linked. The link only settles
+      // *how* this client authenticates; it says nothing about who, and the
+      // portal link needs the account itself.
+      const linked = isDeviceLinked();
 
       try {
         const account = await getManagedAccount();
 
-        if (!cancelled) setNeedsProviderLink(account === null);
+        if (cancelled) return;
+
+        setManagedAccount(account);
+        setNeedsProviderLink(!linked && account === null);
       } catch {
         // Unreachable control plane. Offering to link is the useful answer —
         // the alternative is a Sync page that silently omits backup with no
         // way to ask for it.
-        if (!cancelled) setNeedsProviderLink(true);
+        if (!cancelled) setNeedsProviderLink(!linked);
       }
     })();
 
@@ -578,6 +602,18 @@ function SyncPage() {
     }.`;
   }
 
+  /**
+   * Where to send someone who holds an account.
+   *
+   * Same sources as the Cloud Server CTA, then the control plane a managed
+   * node named earlier in this install's life. That fallback is what makes the
+   * link work on a device whose active node is unmanaged — a desktop app on
+   * its own embedded node, say — without inventing a URL for a node that has
+   * never heard of a portal.
+   */
+  const accountPortalUrl =
+    getManagedPortalUrl(managedInfo) ?? getRememberedManagedPortalUrl();
+
   async function promoteDrive() {
     if (!status.drive || promoting) return;
     setPromoting(true);
@@ -789,6 +825,44 @@ function SyncPage() {
       <ContainerNarrow>
         <h1>Sync</h1>
         <Lead>{summaryLine()}</Lead>
+
+        {/* Signed in to a provider, so say so and offer the way back.
+
+            Gated on holding an account rather than on the active node being
+            managed, which is what the only other link to the portal on this
+            page uses. That condition is wrong for an account: encrypted backup
+            is blind storage that needs no managed node, so someone can be
+            signed in, backing up daily, and never meet a managed node at all —
+            which is exactly the state that had no way back to the portal.
+
+            The URL still comes from configuration (a managed node's
+            `portalUrl`, a build-time override, or the control plane one pointed
+            us at before), never from anything hardcoded. A self-hosted node
+            that has never seen a portal yields null and renders nothing, which
+            is the FOSS boundary this page keeps elsewhere. */}
+        {managedAccount && accountPortalUrl && (
+          <AccountBar data-testid='managed-account-bar'>
+            <AccountIcon>
+              <FaCloud />
+            </AccountIcon>
+            <AccountBody>
+              <AccountLabel>Signed in to {PRODUCT_NAME}</AccountLabel>
+              <AccountEmail title={managedAccount.email}>
+                {managedAccount.email}
+              </AccountEmail>
+            </AccountBody>
+            <ManagedLink
+              // The dashboard, not the portal root: a signed-in visitor gets
+              // the marketing page at `/`, so the link would land on a sales
+              // pitch rather than the account it promises to manage.
+              href={`${accountPortalUrl}/dashboard`}
+              target='_blank'
+              rel='noopener noreferrer'
+            >
+              {'Manage account →'}
+            </ManagedLink>
+          </AccountBar>
+        )}
 
         {/* Signed in, but this device holds none of the account's data — it's
             still on whatever device created it. Pairing is the way across, so
@@ -1609,6 +1683,56 @@ function formatValue(value: unknown): string {
 const Lead = styled.p`
   color: ${p => p.theme.colors.textLight};
   margin-bottom: 2rem;
+`;
+
+/**
+ * The account strip under the lead line.
+ *
+ * Wears the same accent as an active connection card rather than a style of
+ * its own: everything on this page that is backed by the provider account
+ * reads blue, so a glance separates "this is yours and local" from "this
+ * involves your account".
+ */
+const AccountBar = styled.div`
+  ${cardSurface}
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+  border-color: ${p => p.theme.colors.main};
+  background: ${p => `${p.theme.colors.main}0a`};
+`;
+
+const AccountIcon = styled.div`
+  flex-shrink: 0;
+  width: ${CARD_ICON_SIZE};
+  height: ${CARD_ICON_SIZE};
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: ${CARD_ICON_FONT};
+  color: white;
+  background: ${p => p.theme.colors.main};
+`;
+
+const AccountBody = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+`;
+
+const AccountLabel = styled.span`
+  font-size: ${CARD_TITLE_FONT};
+  font-weight: 600;
+`;
+
+const AccountEmail = styled.span`
+  color: ${p => p.theme.colors.textLight};
+  font-size: ${CARD_SUB_FONT};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 const Section = styled.section`
