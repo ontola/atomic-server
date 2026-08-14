@@ -2,10 +2,9 @@ import { styled } from 'styled-components';
 import { FaLock, FaRotateLeft, FaCloudArrowUp } from 'react-icons/fa6';
 import {
   cardSurface,
+  CardIcon,
   CARD_ACTIONS_GAP,
   CARD_BODY_GAP,
-  CARD_ICON_FONT,
-  CARD_ICON_SIZE,
   CARD_SUB_FONT,
   CARD_TITLE_FONT,
 } from '../cardSurface';
@@ -29,6 +28,8 @@ export function VaultPanel({
   vault,
   onRestored,
   embedded = false,
+  offerUrl,
+  onOfferClick,
 }: {
   vault: UseVaultBackup;
   /** Called after a successful restore, so the host can refresh its view. */
@@ -39,13 +40,41 @@ export function VaultPanel({
    * one service listed under an account.
    */
   embedded?: boolean;
+  /**
+   * Where to read what this tier costs. Shown only while the vault is off:
+   * once it is on, the price is a question for the account page, not for a
+   * panel whose job is the state of one drive's backup.
+   */
+  offerUrl?: string | null;
+  /**
+   * Opening the link is the host's business. A plain anchor is wrong in the
+   * desktop app, where Tauri intercepts a new window natively and the shell
+   * refuses it; the host already knows how to open one properly.
+   */
+  onOfferClick?: (url: string) => void;
 }) {
   const { status, busy, error, restoreProgress } = vault;
 
-  // Still settling. Genuinely brief — the hook gives up on `loading` rather
-  // than sitting in it, so this is a flicker and not a resting state.
+  // Still settling. Bounded — the hook gives up on `loading` rather than
+  // sitting in it — but the bound is seconds, not a frame, so rendering
+  // nothing meant the row appeared out of nowhere and shoved the rest of the
+  // account card down with it. Hold the space and say what is happening.
   if (status.state === 'loading') {
-    return null;
+    return (
+      <Panel
+        data-testid='vault-panel'
+        data-vault-state='loading'
+        $embedded={embedded}
+      >
+        <CardIcon>
+          <FaLock />
+        </CardIcon>
+        <Body>
+          <Title>Cloud Vault</Title>
+          <Sub>Checking this workspace’s backup…</Sub>
+        </Body>
+      </Panel>
+    );
   }
 
   // "Cannot say" is not "off": offering an enable button when we could not
@@ -62,9 +91,9 @@ export function VaultPanel({
         data-vault-state='unavailable'
         $embedded={embedded}
       >
-        <Icon>
+        <CardIcon>
           <FaLock />
-        </Icon>
+        </CardIcon>
         <Body>
           <Title>Cloud Vault</Title>
           <Sub data-testid='vault-unavailable-reason'>{status.reason}</Sub>
@@ -86,9 +115,9 @@ export function VaultPanel({
         data-vault-state='off'
         $embedded={embedded}
       >
-        <Icon $accent>
+        <CardIcon $tone='provider'>
           <FaLock />
-        </Icon>
+        </CardIcon>
         <Body>
           <Title>Cloud Vault</Title>
           <Sub>
@@ -104,6 +133,21 @@ export function VaultPanel({
             >
               {busy ? 'Setting up…' : 'Turn on Cloud Vault'}
             </Button>
+            {offerUrl && (
+              <OfferLink
+                data-testid='vault-offer'
+                href={offerUrl}
+                rel='noreferrer'
+                onClick={e => {
+                  if (!onOfferClick) return;
+
+                  e.preventDefault();
+                  onOfferClick(offerUrl);
+                }}
+              >
+                See plans
+              </OfferLink>
+            )}
           </Actions>
         </Body>
       </Panel>
@@ -120,9 +164,9 @@ export function VaultPanel({
       $accent={!embedded}
       $embedded={embedded}
     >
-      <Icon $accent>
+      <CardIcon $tone='provider'>
         <FaLock />
-      </Icon>
+      </CardIcon>
       <Body>
         <Title>Cloud Vault is on</Title>
         {/* The object count is an attribute as well as prose: a test asserting
@@ -244,30 +288,6 @@ const Panel = styled.div<{ $accent?: boolean; $embedded?: boolean }>`
     `}
 `;
 
-/**
- * Blue marks a surface as account-backed, the same accent an active
- * connection card wears, so the Sync page reads in two tones: what is yours
- * and local, and what involves the provider.
- *
- * Split from the card's own accent on purpose. The glyph turns blue as soon as
- * this is recognisably a provider feature — including while it is still only
- * an offer — but the card only tints once the feature is actually on. If the
- * offer looked identical to the live thing, the page would answer "is my data
- * backed up?" with a colour that means nothing.
- */
-const Icon = styled.div<{ $accent?: boolean }>`
-  display: grid;
-  place-items: center;
-  width: ${CARD_ICON_SIZE};
-  height: ${CARD_ICON_SIZE};
-  font-size: ${CARD_ICON_FONT};
-  flex-shrink: 0;
-  border-radius: 50%;
-  background-color: ${p =>
-    p.$accent ? p.theme.colors.main : p.theme.colors.bg2};
-  color: ${p => (p.$accent ? 'white' : p.theme.colors.textLight)};
-`;
-
 const Body = styled.div`
   display: flex;
   flex-direction: column;
@@ -291,6 +311,18 @@ const ErrorText = styled.p`
   margin: 0;
   color: ${p => p.theme.colors.alert};
   font-size: ${CARD_SUB_FONT};
+`;
+
+const OfferLink = styled.a`
+  align-self: center;
+  color: ${p => p.theme.colors.main};
+  font-size: ${CARD_SUB_FONT};
+  text-decoration: underline;
+
+  &:hover,
+  &:focus-visible {
+    color: ${p => p.theme.colors.mainDark};
+  }
 `;
 
 const Actions = styled.div`
