@@ -42,6 +42,43 @@ export type UseVaultBackup = {
   restoreProgress: number | null;
 };
 
+/**
+ * What the vault is still waiting on, in words a reader can act on.
+ *
+ * Each of these is a legitimate "not yet" for a moment and a permanent state
+ * after that — a server that serves no wasm bundle, a signed-out store, a
+ * drive that never resolves. The panel rendered nothing for either case, so a
+ * device that would never be ready looked identical to one still starting,
+ * forever, with nothing on screen to say so.
+ *
+ * Pure and exported so the wording is testable without rendering a hook.
+ */
+export function describeMissingVaultInputs(inputs: {
+  db: unknown;
+  keys: unknown;
+  driveSubject: unknown;
+  agentSubject: unknown;
+  signer: unknown;
+  devicePubkey: unknown;
+}): string[] {
+  return [
+    !inputs.db && 'no local database',
+    !inputs.keys && 'the encryption keys did not load',
+    !inputs.driveSubject && 'no drive is open',
+    !(inputs.agentSubject && inputs.signer) && 'not signed in',
+    !inputs.devicePubkey && 'this device has no identity yet',
+  ].filter(Boolean) as string[];
+}
+
+/**
+ * How long the inputs get to arrive before the panel says so instead.
+ *
+ * Generous: the wasm bundle and the device id are async on a cold load, and a
+ * panel that flashed an error before settling would be worse than the silence
+ * it replaces.
+ */
+const READINESS_GRACE_MS = 6_000;
+
 export function useVaultBackup({
   db,
   keys,
@@ -79,6 +116,15 @@ export function useVaultBackup({
     devicePubkey,
   );
 
+  const missing = describeMissingVaultInputs({
+    db,
+    keys,
+    driveSubject,
+    agentSubject,
+    signer,
+    devicePubkey,
+  });
+
   const refresh = useCallback(async () => {
     if (!driveSubject) return;
 
@@ -106,13 +152,30 @@ export function useVaultBackup({
   }, [driveSubject]);
 
   useEffect(() => {
-    if (!ready) {
-      setStatus({ state: 'loading' });
+    if (ready) {
+      void refresh();
 
       return;
     }
 
-    void refresh();
+    setStatus({ state: 'loading' });
+
+    // Stop calling it "loading" once it plainly is not. Everything `ready`
+    // waits on either arrives within a second or two or never does, and
+    // "loading" forever is indistinguishable from a feature that does not
+    // exist — which is how the panel came to be invisible on a device with a
+    // perfectly good local drive.
+    const timer = setTimeout(() => {
+      setStatus({
+        state: 'unavailable',
+        reason: `Encrypted backup is not available here: ${missing.join(', ')}.`,
+      });
+    }, READINESS_GRACE_MS);
+
+    return () => clearTimeout(timer);
+    // `missing` is derived from the same inputs as `ready`; listing it would
+    // reset the timer on every render for no gain.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, refresh]);
 
   /** Make sure we hold the drive key, fetching and unwrapping if needed. */
