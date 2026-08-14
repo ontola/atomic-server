@@ -21,6 +21,9 @@ import type { JSX } from 'react';
 
 export type ResourceInlineInstanceProps = {
   subject: string;
+  /** Render the title only. For places that already show the resource's
+   *  picture next to this link, like a chat message's avatar. */
+  hideGlyph?: boolean;
 };
 
 type ResourceInlineProps = {
@@ -34,6 +37,7 @@ export function ResourceInline({
   subject,
   untabbable,
   basic,
+  hideGlyph,
   className,
 }: ResourceInlineProps): JSX.Element {
   const resource = useResource(subject, { allowIncomplete: true });
@@ -65,23 +69,25 @@ export function ResourceInline({
 
   return (
     <AtomicLink subject={subject} untabbable={untabbable} className={className}>
-      <Comp subject={subject} />
+      <Comp subject={subject} hideGlyph={hideGlyph} />
     </AtomicLink>
   );
 }
 
-function DefaultInline({ subject }: ResourceInlineInstanceProps): JSX.Element {
+function DefaultInline({
+  subject,
+  hideGlyph,
+}: ResourceInlineInstanceProps): JSX.Element {
   const resource = useResource(subject);
   const [description] = useString(resource, core.properties.description);
   const [emoji] = useString(resource, dataBrowser.properties.emoji);
   const [iconImage] = useSubject(resource, dataBrowser.properties.icon);
+  const showGlyph = !hideGlyph && (emoji || iconImage);
 
   return (
     <InlineText title={description ? description : ''}>
-      {(emoji || iconImage) && (
-        <ResourceGlyph resource={resource} requireCustom />
-      )}
-      {emoji && !iconImage ? ' ' : ''}
+      {showGlyph && <ResourceGlyph resource={resource} requireCustom />}
+      {showGlyph && emoji && !iconImage ? ' ' : ''}
       {resource.title}
     </InlineText>
   );

@@ -2,8 +2,11 @@ import { styled } from 'styled-components';
 import {
   useResource,
   useString,
+  useSubject,
   useTitle,
+  useFileObjectUrl,
   dataBrowser,
+  server,
   Image,
 } from '@tomic/react';
 /** Same palette as the collaborative editor's cursors, but picked
@@ -30,10 +33,14 @@ interface AgentAvatarProps {
 }
 
 /**
- * Round avatar for an agent: their profile image if they set one (the
- * `image` File property, or an external `imageUrl`), otherwise their
- * initial on a per-agent deterministic color. Pass `online` to overlay a
+ * Round avatar for an agent: their profile picture if they set one, otherwise
+ * their initial on a per-agent deterministic color. Pass `online` to overlay a
  * green presence dot.
+ *
+ * The picture is the `icon` File — the same property the profile editor writes
+ * and every other surface reads through `ResourceGlyph`, so one upload shows up
+ * everywhere. `image`/`imageUrl` are the older properties, still honoured for
+ * agents that carry them.
  */
 export function AgentAvatar({
   agentSubject,
@@ -42,12 +49,29 @@ export function AgentAvatar({
 }: AgentAvatarProps): React.JSX.Element {
   const agentResource = useResource(agentSubject);
   const [name] = useTitle(agentResource);
+  const [iconFile] = useSubject(agentResource, dataBrowser.properties.icon);
   const [imageFile] = useString(agentResource, dataBrowser.properties.image);
   const [imageUrl] = useString(agentResource, dataBrowser.properties.imageUrl);
 
+  // The icon File resolves to a local blob when the bytes are already here
+  // (fresh upload, offline) and to the server download URL otherwise.
+  const iconResource = useResource(iconFile);
+  const [iconDownloadUrl] = useString(
+    iconResource,
+    server.properties.downloadUrl,
+  );
+  const localIconUrl = useFileObjectUrl(iconResource);
+  const iconSrc = iconFile ? (localIconUrl ?? iconDownloadUrl) : undefined;
+
   let circle: React.JSX.Element;
 
-  if (imageFile) {
+  if (iconSrc) {
+    circle = (
+      <ImageCircle $size={size} title={name}>
+        <img src={iconSrc} alt={name} />
+      </ImageCircle>
+    );
+  } else if (imageFile) {
     circle = (
       <ImageCircle $size={size} title={name}>
         <Image subject={imageFile} alt={name} sizeIndication='2rem' />
