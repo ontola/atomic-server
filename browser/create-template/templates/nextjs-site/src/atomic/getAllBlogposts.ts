@@ -16,7 +16,7 @@ export async function getAllBlogposts(lang?: string): Promise<string[]> {
 
   const resources = (
     await Promise.all(subjects.map(subject => store.getResource(subject)))
-  ).filter(isListedCmsResource);
+  ).filter(resource => isListedCmsResource(resource));
 
   // Group the different translations of a post together.
   // Translations point at their canonical version via `translationOf`.

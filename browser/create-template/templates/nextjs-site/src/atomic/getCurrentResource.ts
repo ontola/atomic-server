@@ -67,7 +67,7 @@ export async function getCurrentResource(
         store.fetchResourceFromServer(subject, { noWebSocket: true }),
       ),
     )
-  ).filter(isListedCmsResource);
+  ).filter(resource => isListedCmsResource(resource));
 
   if (candidates.length === 0) {
     return undefined;

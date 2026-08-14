@@ -71,7 +71,7 @@ export async function getCurrentResource(
   const subjects = await collection.getAllMembers();
   const candidates = (
     await Promise.all(subjects.map((subject) => store.getResource(subject)))
-  ).filter(isListedCmsResource);
+  ).filter((resource) => isListedCmsResource(resource));
 
   if (candidates.length === 0) {
     return undefined;

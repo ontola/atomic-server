@@ -44,7 +44,7 @@ const BlogIndexPageFullPage = async ({
     const hits = await Promise.all(
       results.map(subject => store.getResource(subject)),
     );
-    results = hits.filter(isListedCmsResource).map(hit => hit.subject);
+    results = hits.filter(hit => isListedCmsResource(hit)).map(hit => hit.subject);
   } else {
     results = allItems;
   }
