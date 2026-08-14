@@ -36,9 +36,9 @@ describe('describeMissingVaultInputs', () => {
 
   /** What staging showed: a local drive, but the page never resolved one. */
   it('names a drive that never resolved', () => {
-    expect(describeMissingVaultInputs({ ...ready, driveSubject: null })).toEqual(
-      ['no drive is open'],
-    );
+    expect(
+      describeMissingVaultInputs({ ...ready, driveSubject: null }),
+    ).toEqual(['no drive is open']);
   });
 
   /**
