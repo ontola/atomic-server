@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { unknownSubject, type Resource } from '@tomic/lib';
+	import { type Resource } from '@tomic/lib';
 	import { type Page, type MenuItem } from '$lib/ontologies/website';
 	import { getResource } from '@tomic/svelte';
+	import { page as navPage } from '$app/stores';
+	import { localizeHrefForPath } from '$lib/atomic/i18n';
 
 	interface Props {
 		resource: Resource<MenuItem>;
@@ -13,7 +15,13 @@
 	let page = getResource<Page>(() => resource.props.linksTo);
 
 	// If the menu item has a linksTo prop we want the href value of the page it links to. If that doesn't exist we check for an external link.
-	let href = $derived(page.props.href ?? resource.props.externalLink ?? '');
+	let href = $derived(
+		localizeHrefForPath(
+			page.props.href ?? resource.props.externalLink ?? '',
+			$navPage.url.pathname,
+			$navPage.data.languageConfig ?? { defaultLanguage: 'en', languages: ['en'] }
+		)
+	);
 </script>
 
 <a {href} aria-current={active ? 'page' : 'false'}>{resource.title}</a>

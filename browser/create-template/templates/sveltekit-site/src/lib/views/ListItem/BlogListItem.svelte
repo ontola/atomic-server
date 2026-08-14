@@ -33,7 +33,7 @@
 			<div class="publish-date">{date}</div>
 		{/if}
 		<h2>{resource.title}</h2>
-		<p>{resource.props.description.slice(0, 300)}...</p>
+		<p>{resource.props.description?.slice(0, 300) ?? ''}...</p>
 	</div>
 </a>
 

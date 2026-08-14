@@ -3,7 +3,7 @@ import { unknownSubject, Resource } from '@tomic/lib';
 import styles from './MenuItemLink.module.css';
 import clsx from 'clsx';
 import { useResource } from '@tomic/react';
-import Link from 'next/link';
+import LocalizedLink from '@/components/LocalizedLink';
 
 const MenuItemLink = ({
   resource,
@@ -22,13 +22,13 @@ const MenuItemLink = ({
     '#';
 
   return (
-    <Link
+    <LocalizedLink
       href={href}
       className={clsx(styles.link, { [styles.linkActive]: active })}
       aria-current={active ? 'page' : 'false'}
     >
       {resource.loading ? '' : page.title}
-    </Link>
+    </LocalizedLink>
   );
 };
 

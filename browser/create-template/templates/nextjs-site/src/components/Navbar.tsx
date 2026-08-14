@@ -5,7 +5,7 @@ import type { Website } from '@/ontologies/website';
 import MenuItem from '@/views/MenuItem/MenuItem';
 import styles from './Navbar.module.css';
 import { store } from '@/store';
-import Link from 'next/link';
+import LocalizedLink from './LocalizedLink';
 
 const Navbar = async () => {
   const site = await store.getResource<Website>(
@@ -16,9 +16,9 @@ const Navbar = async () => {
     <Container>
       <nav className={styles.nav}>
         <HStack align='center' justify='space-between' wrap>
-          <Link href='/' className={styles.title}>
+          <LocalizedLink href='/' className={styles.title}>
             {site.title}
-          </Link>
+          </LocalizedLink>
           <ul className={styles.ul}>
             {site.props.menuItems?.map(menuItem => (
               <li key={menuItem}>
