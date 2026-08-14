@@ -1924,6 +1924,7 @@ msgstr "Por favor, espera mientras conectamos tu cuenta de OpenRouter..."
 msgid "Set a title"
 msgstr "Establecer un título"
 
+#: src/chunks/FormBuilder/useFormQuestions.ts
 #: src/components/EditableTitle.tsx
 #: src/components/NavBar.tsx
 msgid "Untitled"
@@ -7460,4 +7461,39 @@ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "Open a drive by URL or DID"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "Add a question before this one first"
+msgstr ""
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "and"
+msgstr ""
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "<0/> Add condition"
+msgstr ""
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "Show when"
+msgstr ""
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "All of these must match. Leave empty to always show."
+msgstr ""
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "Remove condition"
+msgstr ""
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "checked"
+msgstr ""
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "unchecked"
+msgstr ""
+
+#: src/chunks/FormBuilder/FieldRow.tsx
+msgid "Conditional"
 msgstr ""

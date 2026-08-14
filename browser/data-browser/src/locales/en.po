@@ -1924,6 +1924,7 @@ msgstr "Please wait while we link your OpenRouter account..."
 msgid "Set a title"
 msgstr "Set a title"
 
+#: src/chunks/FormBuilder/useFormQuestions.ts
 #: src/components/EditableTitle.tsx
 #: src/components/NavBar.tsx
 msgid "Untitled"
@@ -7453,3 +7454,39 @@ msgstr "Each response is a"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 msgid "Names the class of a single submission — e.g. every response of a Job Application form is an Application."
 msgstr "Names the class of a single submission — e.g. every response of a Job Application form is an Application."
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "Add a question before this one first"
+msgstr "Add a question before this one first"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "and"
+msgstr "and"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "<0/> Add condition"
+msgstr "<0/> Add condition"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "Show when"
+msgstr "Show when"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "All of these must match. Leave empty to always show."
+msgstr "All of these must match. Leave empty to always show."
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "Remove condition"
+msgstr "Remove condition"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "checked"
+msgstr "checked"
+
+#: src/chunks/FormBuilder/ConditionsEditor.tsx
+msgid "unchecked"
+msgstr "unchecked"
+
+#: src/chunks/FormBuilder/FieldRow.tsx
+msgid "Conditional"
+msgstr "Conditional"
