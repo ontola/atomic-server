@@ -3,6 +3,7 @@ import { exec } from 'child_process';
 import {
   FRONTEND_URL,
   before,
+  clickSidebarItem,
   contextMenuClick,
   editTitle,
   makeDrivePublic,
@@ -31,55 +32,65 @@ async function subjectByLocalId(
   drive: string,
   localId: string,
 ): Promise<string> {
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + 60_000;
 
   while (Date.now() < deadline) {
-    const subject = await page.evaluate(
-      async ({ drive, localId }) => {
-        const store = window.store;
-        const server = store.getServerUrl().replace(/\/$/, '');
-        const url = new URL(`${server}/query`);
-        url.searchParams.set(
-          'property',
-          'https://atomicdata.dev/properties/localId',
-        );
-        url.searchParams.set('value', localId);
-        url.searchParams.set('drive', drive);
-        url.searchParams.set('page_size', '5');
-        url.searchParams.set(
-          'filters',
-          JSON.stringify([
-            {
-              property: 'https://atomicdata.dev/properties/drive',
-              value: drive,
-            },
-          ]),
-        );
+    try {
+      const subject = await page.evaluate(
+        async ({ drive, localId }) => {
+          try {
+            const store = window.store;
+            const server = store.getServerUrl().replace(/\/$/, '');
+            const url = new URL(`${server}/query`);
+            url.searchParams.set(
+              'property',
+              'https://atomicdata.dev/properties/localId',
+            );
+            url.searchParams.set('value', localId);
+            url.searchParams.set('drive', drive);
+            url.searchParams.set('page_size', '5');
+            url.searchParams.set(
+              'filters',
+              JSON.stringify([
+                {
+                  property: 'https://atomicdata.dev/properties/drive',
+                  value: drive,
+                },
+              ]),
+            );
 
-        const resource = await store.fetchResourceFromServer(url.toString());
+            const resource = await store.fetchResourceFromServer(
+              url.toString(),
+            );
 
-        if (resource.error) {
-          return null;
-        }
+            if (resource.error) {
+              return null;
+            }
 
-        const members = resource.get(
-          'https://atomicdata.dev/properties/collection/members',
-        );
+            const members = resource.get(
+              'https://atomicdata.dev/properties/collection/members',
+            );
 
-        if (!Array.isArray(members) || members.length === 0) {
-          return null;
-        }
+            if (!Array.isArray(members) || members.length === 0) {
+              return null;
+            }
 
-        return String(members[0]);
-      },
-      { drive, localId },
-    );
+            return String(members[0]);
+          } catch {
+            return null;
+          }
+        },
+        { drive, localId },
+      );
 
-    if (subject) {
-      return subject;
+      if (subject) {
+        return subject;
+      }
+    } catch {
+      // Query can time out while the server is still indexing the template.
     }
 
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(1000);
   }
 
   throw new Error(`No resource with localId ${localId} in ${drive}`);
@@ -87,8 +98,14 @@ async function subjectByLocalId(
 
 /** Fork the About page and rename the fork so a leak is obvious on the public site. */
 async function forkAboutPage(page: Page, drive: string) {
-  const about = await subjectByLocalId(page, drive, ABOUT_LOCAL_ID);
-  await openSubject(page, about);
+  try {
+    await clickSidebarItem('Site Data', page);
+    await clickSidebarItem('About', page);
+  } catch {
+    const about = await subjectByLocalId(page, drive, ABOUT_LOCAL_ID);
+    await openSubject(page, about);
+  }
+
   await contextMenuClick('editAsFork', page);
   await expect(page.getByText('Fork of')).toBeVisible();
   await editTitle(FORK_TITLE, page);
