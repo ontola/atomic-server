@@ -232,18 +232,26 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
   const { drive, sideBarLocked, setSideBarLocked } = useSettings();
   const driveResource = useResource(drive);
 
-  const resource =
+  /**
+   * The resource the user is actually looking at, if any. App routes
+   * (/app/settings, /app/sync, …) are pages of the app itself, not of a
+   * resource, so they have no subject.
+   */
+  const contextResource =
     resourceProp &&
     resourceProp.subject &&
     resourceProp.subject !== 'unknown-subject'
       ? resourceProp
-      : driveResource;
+      : undefined;
+
+  /** Falls back to the drive so the breadcrumb still names where you are. */
+  const resource = contextResource ?? driveResource;
 
   const [parent] = useString(resource, core.properties.parent);
   const { changes, revertResource, acceptChanges } = useAIChanges();
   const { enableAI } = useAISettings();
   const { isOpen: aiOpen, setIsOpen } = useAISidebar();
-  const hasAiChanges = changes.includes(resource.subject);
+  const hasAiChanges = !!contextResource && changes.includes(resource.subject);
 
   const handleAcceptChanges = async () => {
     acceptChanges(resource);
@@ -371,44 +379,52 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
       <ButtonArea $iconOnly={iconOnly}>
         <FollowStatus />
         <MeetingBanner />
-        <ResourcePresenceRow subject={resource.subject} />
-        {hasAiChanges && (
-          <Row gap='0.5rem' center>
-            <SmallButton clean onClick={() => revertResource(resource.subject)}>
-              Revert
-            </SmallButton>
-            <SmallButton onClick={handleAcceptChanges}>
-              Accept Changes
-            </SmallButton>
-          </Row>
-        )}
-
         <ContentLanguageSelect />
-        <CommentsButton subject={resource.subject} />
-        {enableAI && (
-          <LabelButton
-            $active={aiOpen}
-            onClick={() => setIsOpen(prev => !prev)}
-          >
-            <AIIcon />
-            <span>AI</span>
-          </LabelButton>
+        {/* Everything below acts on the resource you're looking at, so it only
+         * makes sense when there is one. */}
+        {contextResource && (
+          <>
+            <ResourcePresenceRow subject={contextResource.subject} />
+            {hasAiChanges && (
+              <Row gap='0.5rem' center>
+                <SmallButton
+                  clean
+                  onClick={() => revertResource(contextResource.subject)}
+                >
+                  Revert
+                </SmallButton>
+                <SmallButton onClick={handleAcceptChanges}>
+                  Accept Changes
+                </SmallButton>
+              </Row>
+            )}
+            <CommentsButton subject={contextResource.subject} />
+            {enableAI && (
+              <LabelButton
+                $active={aiOpen}
+                onClick={() => setIsOpen(prev => !prev)}
+              >
+                <AIIcon />
+                <span>AI</span>
+              </LabelButton>
+            )}
+            <TagSelectPopoverWrapper resource={contextResource} />
+            <ShareDialog
+              subject={contextResource.subject}
+              trigger={
+                <LabelButton as='button'>
+                  <FaShare />
+                  <span>Share</span>
+                </LabelButton>
+              }
+            />
+            <ResourceContextMenu
+              isMainMenu
+              subject={contextResource.subject}
+              trigger={ParentContextMenuTrigger}
+            />
+          </>
         )}
-        <TagSelectPopoverWrapper resource={resource} />
-        <ShareDialog
-          subject={resource.subject}
-          trigger={
-            <LabelButton as='button'>
-              <FaShare />
-              <span>Share</span>
-            </LabelButton>
-          }
-        />
-        <ResourceContextMenu
-          isMainMenu
-          subject={resource.subject}
-          trigger={ParentContextMenuTrigger}
-        />
       </ButtonArea>
     </NavBarWrapper>
   );
