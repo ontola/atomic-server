@@ -13,6 +13,9 @@ const Footer = () => {
         <HStack align='center' justify='space-between' wrap>
           <p>&copy; {year} Your Company</p>
           <HStack align='center' gap='1rem' wrap>
+            <a className={styles.link} href='/rss.xml'>
+              RSS
+            </a>
             <CmsEditLink />
             <LanguageSwitcher />
           </HStack>

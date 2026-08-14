@@ -74,7 +74,7 @@ const BlogIndexPageFullPage = async ({
             <ul>
               {results.map(post => (
                 <li key={post}>
-                  <ListItemView subject={post} />
+                  <ListItemView subject={post} lang={lang} />
                 </li>
               ))}
             </ul>

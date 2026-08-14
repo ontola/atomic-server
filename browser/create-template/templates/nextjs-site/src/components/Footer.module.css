@@ -6,3 +6,10 @@
 .footer p {
   padding: 1rem;
 }
+
+.link {
+  color: inherit;
+  padding: 1rem;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}

@@ -16,6 +16,11 @@ export const fetchCache = 'force-no-store';
 export const metadata: Metadata = {
   title: 'Next.js Atomic',
   description: 'A Next.js template for Atomic Server',
+  alternates: {
+    types: {
+      'application/rss+xml': '/rss.xml',
+    },
+  },
 };
 
 export default async function RootLayout({

@@ -3,7 +3,13 @@ import BlogListItem from './BlogListItem';
 import DefaultView from '@/views/DefaultView';
 import { store } from '@/store';
 
-const ListItemView = async ({ subject }: { subject: string }) => {
+const ListItemView = async ({
+  subject,
+  lang,
+}: {
+  subject: string;
+  lang?: string;
+}) => {
   const listItem = await store.getResource(subject);
 
   const Component = listItem.matchClass(
@@ -13,7 +19,7 @@ const ListItemView = async ({ subject }: { subject: string }) => {
     DefaultView,
   );
 
-  return <Component resource={listItem} />;
+  return <Component resource={listItem} lang={lang} />;
 };
 
 export default ListItemView;
