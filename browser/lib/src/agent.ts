@@ -1,5 +1,6 @@
 import { Client } from './client.js';
 import {
+  decodeSecret,
   generateKeyPair,
   JSCryptoProvider,
   legacySubjectFromSecret,
@@ -11,6 +12,7 @@ import { AtomicError, ErrorType } from './error.js';
 import {
   encodeGenesisCert,
   personalDriveCert,
+  personalDriveSubject as derivePersonalDriveSubject,
   subjectForSignature,
 } from './genesis.js';
 import { core } from './ontologies/core.js';
@@ -36,6 +38,13 @@ export class Agent implements AgentInterface {
    * way of knowing about.
    */
   public legacySubject?: string;
+  /**
+   * The derived personal-drive DID, computed once from the raw private key at
+   * sign-in (see {@link personalDriveSubject} for why it cannot be recomputed
+   * from a non-extractable key). Persisted alongside the agent so a restored
+   * session still knows which drive is its home.
+   */
+  public personalDrive?: string;
 
   #cryptoProvider: CryptoProvider;
 
@@ -79,10 +88,14 @@ export class Agent implements AgentInterface {
 
     return new Promise((resolve, reject) => {
       SubtleCryptoProvider.createKeysFromSecret(secretB64)
-        .then(([keys, subject, initialDrive]) => {
+        .then(async ([keys, subject, initialDrive]) => {
           const provider = new SubtleCryptoProvider(keys);
           const agent = new Agent(provider, subject, initialDrive);
           agent.legacySubject = legacySubjectFromSecret(secretB64);
+          // Last moment the raw key is in hand: the keypair above is
+          // non-extractable, and this provider cannot reproduce the subject.
+          agent.personalDrive =
+            await Agent.personalDriveSubjectFromSecret(secretB64);
 
           resolve(agent);
         })
@@ -156,12 +169,59 @@ export class Agent implements AgentInterface {
     return this.#cryptoProvider.signBytes(data);
   }
 
-  /** Deterministic personal-drive DID for this agent. Same key → same subject
-   *  on every device; no pointer to read. */
+  /**
+   * Deterministic personal-drive DID for this agent. Same key → same subject
+   * on every device; no pointer to read.
+   *
+   * The subject IS an Ed25519 signature over the fixed personal-drive
+   * certificate, so this is only stable if the signer is. WebCrypto is not:
+   * WKWebView returns a different valid signature every call, which minted a
+   * brand-new "My drive" on every lookup (411 of them in one session) because
+   * the reuse check in `Store.createDrive` searched for a DID that had never
+   * existed.
+   *
+   * So the value is derived ONCE from the raw private key — with noble's
+   * deterministic implementation, matching `ed25519_dalek` on the server — and
+   * cached. When neither a cached value nor a deterministic signer is
+   * available we throw rather than sign: an unreproducible subject is worse
+   * than no subject, because minting under it silently creates junk.
+   */
   public async personalDriveSubject(): Promise<string> {
-    const cert = personalDriveCert(decodeB64(await this.getPublicKey()));
+    if (this.personalDrive) {
+      return this.personalDrive;
+    }
 
-    return subjectForSignature(await this.signBytes(encodeGenesisCert(cert)));
+    if (!this.#cryptoProvider.signsDeterministically) {
+      throw new AtomicError(
+        "Cannot derive this agent's personal drive: its key signs " +
+          'non-deterministically and no derived subject was stored. ' +
+          'Sign in with the secret again to recompute it.',
+        ErrorType.Client,
+      );
+    }
+
+    const cert = personalDriveCert(decodeB64(await this.getPublicKey()));
+    const subject = subjectForSignature(
+      await this.signBytes(encodeGenesisCert(cert)),
+    );
+
+    this.personalDrive = subject;
+
+    return subject;
+  }
+
+  /**
+   * The personal-drive DID implied by a raw private key, independent of which
+   * provider ends up holding it. This is the only derivation that works for a
+   * SubtleCrypto agent, whose key is non-extractable once stored — hence
+   * computing it at sign-in, while the secret is still in hand.
+   */
+  public static async personalDriveSubjectFromSecret(
+    secretB64: string,
+  ): Promise<string> {
+    const { privateKey } = decodeSecret(secretB64);
+
+    return derivePersonalDriveSubject(new Uint8Array(decodeB64(privateKey)));
   }
 
   public createSignature(subject: string, timestamp: number): Promise<string> {

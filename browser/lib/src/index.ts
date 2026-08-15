@@ -50,6 +50,7 @@ export * from './client.js';
 export * from './genesis.js';
 export * from './commit.js';
 export * from './error.js';
+export * from './withDeadline.js';
 export * from './datatypes.js';
 export * from './parse.js';
 export * from './search.js';

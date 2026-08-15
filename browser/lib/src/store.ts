@@ -32,6 +32,7 @@ import {
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
+import { withDeadline } from './withDeadline.js';
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { initOntologies } from './ontologies/index.js';
 import { decodeB64, encodeB64, encodeB64Url } from './base64.js';
@@ -79,6 +80,12 @@ type DriveCallback = (drive: string) => void;
 
 /** Called when the server reports vector index activity for a drive (via websocket). */
 export type IndexingStatusCallback = (indexing: boolean) => void;
+
+/** How long a migration fetch may take before the answer stops being useful.
+ *  These are servers the device may never reach; sign-in must not wait on
+ *  them. */
+const LEGACY_FETCH_DEADLINE_MS = 5_000;
+
 type Fetch = typeof fetch;
 type CreateResourceOptions = {
   /** Optional subject of the new resource, if not given the store will generate a random subject */
@@ -2227,11 +2234,21 @@ export class Store {
       ? personalDriveCert(decodeB64(await agent.getPublicKey()))
       : undefined;
 
+    // Pin the personal drive to the derived subject. `newResource` would
+    // otherwise mint one by signing the certificate through the agent's
+    // provider — the same non-deterministic signature this method just looked
+    // the drive up by, so the drive would be created under a subject no
+    // subsequent lookup could ever find.
+    const personalSubject = personal
+      ? await agent.personalDriveSubject()
+      : undefined;
+
     const drive = await this.newResource({
       isA: server.classes.drive,
       noParent: true,
       propVals,
       genesisCert,
+      subject: personalSubject,
     });
 
     await drive.save();
@@ -2365,7 +2382,19 @@ export class Store {
     drive: Resource,
     _agentSubject: string,
   ): Promise<void> {
-    const personalDriveResource = await this.ensurePersonalDrive();
+    // An agent whose personal drive cannot be derived (see
+    // `Agent.personalDriveSubject`) must still be able to make ordinary
+    // drives; it just has nowhere to list them.
+    let personalDriveResource: Resource;
+
+    try {
+      personalDriveResource = await this.ensurePersonalDrive();
+    } catch (e) {
+      console.warn('Could not record the new drive on the personal drive:', e);
+
+      return;
+    }
+
     const already = personalDriveResource.getSubjects(server.properties.drives);
 
     if (!already.includes(drive.subject)) {
@@ -2420,9 +2449,11 @@ export class Store {
 
       if (!old || !old.isReady()) {
         try {
-          old = await this.fetchResourceFromServer(oldPointer, {
-            noWebSocket: true,
-          });
+          old = await withDeadline(
+            this.fetchResourceFromServer(oldPointer, { noWebSocket: true }),
+            LEGACY_FETCH_DEADLINE_MS,
+            undefined,
+          );
         } catch {
           return;
         }
@@ -2752,6 +2783,12 @@ export class Store {
     name = 'My drive',
     opts: Omit<CreateDriveOpts, 'personal'> = {},
   ): Promise<Resource> {
+    // `createDrive` returns the cached drive untouched when it already has
+    // one, which is what keeps this from renaming a home the user has titled.
+    // Deliberately no lookup for a drive that is not in memory: a bounded
+    // `getResource` cannot be cancelled, so the abandoned fetch outlives the
+    // deadline and fails the drive this call then creates. Materializing is
+    // therefore a sign-in action, not something boot repeats.
     return this.createDrive(name, {
       ...opts,
       personal: true,
@@ -4026,9 +4063,22 @@ export class Store {
 
     for (const candidate of candidates) {
       try {
-        const resource = await this.getResource(candidate);
+        // Bounded: these are servers this device may never reach, and an
+        // unbounded await here is felt as a frozen sign-in rather than a slow
+        // one. A late answer is no use once we have stopped waiting.
+        const resource = await withDeadline(
+          this.getResource(candidate),
+          LEGACY_FETCH_DEADLINE_MS,
+          undefined,
+        );
 
-        if (!resource.error) return resource;
+        if (resource && !resource.error) return resource;
+
+        console.warn(
+          `[atomic] Previous account not readable at '${candidate}'${
+            resource ? '' : ' (timed out)'
+          }.`,
+        );
       } catch {
         // Try the next candidate.
       }
@@ -4037,21 +4087,23 @@ export class Store {
     return undefined;
   }
 
+  /**
+   * Everything an agent needs on the way in: a home drive that exists, and —
+   * for a pre-DID account — the name and drives the old server holds.
+   *
+   * `setAgent` fires this and forgets it, and an app sets an agent more than
+   * once while booting (a node's own agent, then the signed-in one, then a
+   * rehydrate). Keyed on the agent, not a bare boolean: signing out and into a
+   * different account must still run. The key is added before the first await
+   * so concurrent callers collapse onto one run rather than racing.
+   */
   private async adoptLegacyAgentIdentity(agent: Agent): Promise<void> {
     const legacySubject = agent.legacySubject;
 
+    // Checked before the guard is claimed: an agent that gains a legacy
+    // subject after the first `setAgent` must still be able to migrate.
     if (!legacySubject || !agent.subject) return;
 
-    // `setAgent` fires this and forgets it, and an app sets an agent more than
-    // once while booting (a node's own agent, then the signed-in one, then a
-    // rehydrate). Each pass reached `ensurePersonalDrive` and made a drive, so
-    // a single sign-in could leave several "My drive"s behind — and because the
-    // list is adopted onto whichever one ran last, the UI showed an empty
-    // workspace next to a pile of orphans.
-    //
-    // Keyed on the agent, not a bare boolean: signing out and into a different
-    // account must still migrate. The key is added before the first await so
-    // concurrent callers collapse onto one run rather than racing.
     if (this.legacyAdoptionRuns.has(agent.subject)) return;
 
     this.legacyAdoptionRuns.add(agent.subject);
@@ -4059,11 +4111,26 @@ export class Store {
     try {
       const legacy = await this.fetchLegacyAgentResource(legacySubject);
 
-      if (!legacy) return;
+      if (!legacy) {
+        // Loud on purpose. This used to return in silence, so a migration that
+        // never ran was indistinguishable from one that found nothing to do —
+        // and the once-per-agent guard means it will not be retried.
+        console.warn(
+          `[atomic] Migration skipped: could not read the previous account at '${legacySubject}'.`,
+        );
+
+        return;
+      }
 
       const current = await this.getResource(agent.subject);
 
-      if (current.error) return;
+      if (current.error) {
+        console.warn(
+          `[atomic] Migration skipped: this agent's own resource did not load (${current.error.message}).`,
+        );
+
+        return;
+      }
 
       // Identity only. `drives` is deliberately NOT carried onto the Agent:
       // the two models keep that list in different places, and putting it back
@@ -4097,9 +4164,12 @@ export class Store {
       }
 
       await this.adoptLegacyDriveList(agent, legacy, current);
-    } catch {
+    } catch (e) {
       // Best effort. A failure here leaves the user signed in with an empty
-      // profile — bad, but not as bad as failing the sign-in itself.
+      // profile — bad, but not as bad as failing the sign-in itself. Say so:
+      // an empty profile with no explanation reads as "migration is broken"
+      // when it is usually one unreachable server.
+      console.warn('[atomic] Migrating the previous account failed:', e);
     }
   }
 

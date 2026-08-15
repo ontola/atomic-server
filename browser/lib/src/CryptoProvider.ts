@@ -6,6 +6,15 @@ hashes.sha512 = sha512;
 
 export interface CryptoProvider {
   type: string;
+  /**
+   * Whether `signBytes` returns the same signature for the same bytes every
+   * time. RFC 8032 Ed25519 is deterministic, but that is a property of the
+   * *implementation*, not something a caller may assume: WebCrypto is free to
+   * randomize the nonce, and WebKit does. Anything that derives an identity
+   * from a signature must refuse to run on a provider that says `false` —
+   * see `Agent.personalDriveSubject`.
+   */
+  signsDeterministically: boolean;
   sign(data: string): Promise<string>;
   /** Sign raw bytes (not a UTF-8 string). Needed for the binary genesis
    * certificate, whose signature mints a resource's DID. Works even with a
@@ -33,6 +42,11 @@ export class JSCryptoProvider implements CryptoProvider {
 
   public get type(): string {
     return 'js';
+  }
+
+  /** noble's Ed25519 is RFC 8032 deterministic. */
+  public get signsDeterministically(): boolean {
+    return true;
   }
 
   static fromSecret(
@@ -78,6 +92,14 @@ export class SubtleCryptoProvider implements CryptoProvider {
   }
   public get type(): string {
     return 'subtle';
+  }
+
+  /**
+   * WebCrypto makes no determinism guarantee, and WKWebView (the Tauri
+   * desktop webview) returns a different valid signature on every call.
+   */
+  public get signsDeterministically(): boolean {
+    return false;
   }
 
   static async createKeysFromSecret(

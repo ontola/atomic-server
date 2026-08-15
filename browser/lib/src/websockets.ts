@@ -307,7 +307,7 @@ export class WSClient {
           console.warn('[WS] Connection failed');
         }
 
-        this.store.setServerConnected(false, connectionFailedMessage(wsURL));
+        this.reportConnected(false, connectionFailedMessage(wsURL));
         // Some environments fire error without an immediately-following
         // close. Reject anyway — if close does fire later, the second
         // rejectAllPending sees an empty Map and is a no-op.
@@ -334,7 +334,7 @@ export class WSClient {
             ? `Connection to ${wsURL.origin} closed (code=${ev.code}${ev.reason ? `, reason=${ev.reason}` : ''}).`
             : connectionFailedMessage(wsURL);
 
-        this.store.setServerConnected(false, error);
+        this.reportConnected(false, error);
         this.rejectAllPending('WebSocket closed before response arrived');
 
         if (!this._closed) {
@@ -432,7 +432,7 @@ export class WSClient {
     // `serverConnected` stuck at true and pending GETs/commits hanging
     // until their own timeouts. The event handler still runs if it fires,
     // but both calls are idempotent (flag re-set to false, empty maps).
-    this.store.setServerConnected(false);
+    this.reportConnected(false);
     this.rejectAllPending('WebSocket closed by client');
 
     this.ws.close();
@@ -476,8 +476,8 @@ export class WSClient {
 
         this.authenticatedWith = agent.subject;
         recordServerVersionFromWsProtocol(
-          this.serverOrigin,
           this.ws.protocol || WS_PROTOCOL,
+          this.serverOrigin,
         );
 
         // Re-subscribe to the drive + active Loro sync and ephemeral channels.
@@ -757,6 +757,34 @@ export class WSClient {
     url.protocol = url.protocol === 'ws:' ? 'http:' : 'https:';
 
     return url.origin;
+  }
+
+  /**
+   * Report this socket's health as the app's connection state — but only if
+   * this socket IS the app's server.
+   *
+   * A client holds one socket per origin it talks to, and adopting drives from
+   * a previous account adds origins the app does not depend on. Those servers
+   * can be old (no v2 websocket protocol), unreachable, or simply gone, and
+   * their sockets fail and retry forever. Ungated, each failure flipped the
+   * whole store to disconnected — so the app showed "Working offline" and
+   * queued writes while its own server sat there answering in under a
+   * millisecond. On desktop, where no ClientDb backs the outbox, those queued
+   * writes are then lost on restart.
+   */
+  private reportConnected(connected: boolean, error?: string): void {
+    let isPrimary = false;
+
+    try {
+      isPrimary =
+        new URL(this.store.getServerUrl()).origin === this.serverOrigin;
+    } catch {
+      isPrimary = false;
+    }
+
+    if (!isPrimary) return;
+
+    this.store.setServerConnected(connected, error);
   }
 
   private handleMessage(ev: MessageEvent) {
@@ -1136,7 +1164,7 @@ export class WSClient {
           authClose('ok');
           // Only flip `_serverConnected` AFTER AUTH_OK arrives. See the
           // comment in the `open` handler above for the race this closes.
-          this.store.setServerConnected(true);
+          this.reportConnected(true);
           // Re-run subscriptions AFTER the connected flag flips. The
           // AUTH_OK handler already called reSubscribeAll(), but that runs
           // with `_serverConnected` still false — a subscription created
@@ -1157,12 +1185,12 @@ export class WSClient {
           // pending GETs already rejected via `rejectAllPending` if the
           // socket died; if it's still up, subsequent fetches will fail
           // unauthenticated and surface a 401 error to the user.
-          this.store.setServerConnected(true);
+          this.reportConnected(true);
         });
     } else {
       // No agent to authenticate — the socket is open and we're ready
       // to serve anonymous fetches. Flip immediately.
-      this.store.setServerConnected(true);
+      this.reportConnected(true);
       this.reSubscribeAll();
       doSync().catch(() => undefined);
     }

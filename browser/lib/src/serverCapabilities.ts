@@ -78,16 +78,21 @@ export function recordServerVersionFromResponse(
 
 /**
  * Records server version and DID auth support based on WebSocket protocol.
- * V1 protocol ('atomicdata-ws.v0.1') supports DID auth, legacy does not.
+ *
+ * Any negotiated `atomicdata-ws.*` subprotocol means a server new enough to
+ * speak DID auth; only a server that selects none is treated as legacy. The
+ * previous check compared against `atomicdata-ws.v0.1`, a name the client
+ * stopped sending when it moved to `v2` (see `WS_PROTOCOL`), so every server
+ * — including the app's own embedded one — was recorded as not supporting it.
  */
 export function recordServerVersionFromWsProtocol(
   protocol: string | undefined,
   origin: string,
 ): void {
-  const isV1 = protocol === 'atomicdata-ws.v0.1';
+  const speaksAtomicWs = protocol?.startsWith('atomicdata-ws.') ?? false;
 
   serverVersionByOrigin.set(origin, protocol ?? 'legacy');
-  supportsDidAuthByOrigin.set(origin, isV1);
+  supportsDidAuthByOrigin.set(origin, speaksAtomicWs);
 }
 
 function versionSupportsDidAuth(version: string): boolean {

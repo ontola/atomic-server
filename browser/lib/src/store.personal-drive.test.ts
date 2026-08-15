@@ -92,6 +92,22 @@ describe('deterministic personal drive', () => {
     expect(second).toBe(first);
   });
 
+  it('does not rename a personal drive the user has titled', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const drive = await store.createDrive('Home', { personal: true });
+
+    await drive.set(core.properties.name, "Joep's stuff", false);
+    await drive.save();
+
+    // Boot and sign-in both call this; neither may rewrite what is there.
+    const again = await store.ensurePersonalDrive('My drive');
+
+    expect(again.subject).toBe(drive.subject);
+    expect(again.get(core.properties.name)).toBe("Joep's stuff");
+  });
+
   it('an additional drive is recorded on the derived personal drive', async ({
     expect,
   }) => {
