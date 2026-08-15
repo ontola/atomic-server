@@ -1,6 +1,6 @@
 # Deterministic Personal Drive
 
-> **Status:** Proposal (2026-07-26), revised 2026-08-15. Builds on
+> **Status:** Implementing (2026-08-15). Builds on
 > [`genesis-self-verifying.md`](./genesis-self-verifying.md).
 >
 > Every Agent needs a personal drive — it is the home index for `drives`,

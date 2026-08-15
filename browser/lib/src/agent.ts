@@ -6,7 +6,13 @@ import {
   SubtleCryptoProvider,
   type CryptoProvider,
 } from './CryptoProvider.js';
+import { decodeB64 } from './base64.js';
 import { AtomicError, ErrorType } from './error.js';
+import {
+  encodeGenesisCert,
+  personalDriveCert,
+  subjectForSignature,
+} from './genesis.js';
 import { core } from './ontologies/core.js';
 
 export interface StoredAgent {
@@ -148,6 +154,14 @@ export class Agent implements AgentInterface {
    * its binary genesis certificate. */
   public async signBytes(data: Uint8Array): Promise<string> {
     return this.#cryptoProvider.signBytes(data);
+  }
+
+  /** Deterministic personal-drive DID for this agent. Same key → same subject
+   *  on every device; no pointer to read. */
+  public async personalDriveSubject(): Promise<string> {
+    const cert = personalDriveCert(decodeB64(await this.getPublicKey()));
+
+    return subjectForSignature(await this.signBytes(encodeGenesisCert(cert)));
   }
 
   public createSignature(subject: string, timestamp: number): Promise<string> {

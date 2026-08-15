@@ -815,10 +815,90 @@ impl Db {
         self.apply_commit(commit, &opts).await?;
         self.set_active_drive(&did)?;
 
-        // Add the new drive to the agent's `drives` array and persist.
+        // Record the new drive on the personal drive's `drives` list when
+        // that home already exists. Otherwise keep writing to the Agent so
+        // `create_drive` in tests / first-run does not mint a second drive.
+        let listed = if let Ok(personal) = self.personal_drive_subject() {
+            self.get_resource(&personal.as_str().into())
+                .await
+                .ok()
+                .map(|_| personal)
+        } else {
+            None
+        };
+        if let Some(personal) = listed {
+            if personal != did {
+                self.push_drive_to_list(&personal, &did).await?;
+            }
+        } else {
+            let agent = self.get_default_agent()?;
+            self.push_drive_to_list(&agent.subject.to_string(), &did)
+                .await?;
+        }
+
+        Ok(did)
+    }
+
+    /// The agent's derived personal-drive DID. Same key → same subject.
+    pub fn personal_drive_subject(&self) -> AtomicResult<String> {
         let agent = self.get_default_agent()?;
-        let mut agent_resource = self.get_resource(&agent.subject).await?;
-        let mut drives: Vec<crate::values::SubResource> = agent_resource
+        let private_key = agent
+            .private_key
+            .as_ref()
+            .ok_or("Cannot derive a personal drive without a private key")?;
+        crate::genesis::GenesisCert::personal_drive_subject(private_key)
+    }
+
+    /// Materialize the derived personal drive if it is not already stored.
+    /// Repeat genesis for the same subject merges.
+    pub async fn ensure_personal_drive(&self) -> AtomicResult<String> {
+        let agent = self.get_default_agent()?;
+        let did = self.personal_drive_subject()?;
+        if self.get_resource(&did.as_str().into()).await.is_ok() {
+            return Ok(did);
+        }
+
+        let signer_pubkey: [u8; 32] = crate::agents::decode_base64(&agent.public_key)?
+            .try_into()
+            .map_err(|_| "Agent public key must be 32 bytes")?;
+        let cert = crate::genesis::GenesisCert::for_personal_drive(signer_pubkey);
+
+        let mut builder = crate::commit::CommitBuilder::new("placeholder".into());
+        builder.set(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::DRIVE.into()]),
+        );
+        builder.set(urls::NAME.into(), Value::String("My drive".into()));
+        builder.set(
+            urls::WRITE.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        builder.set(
+            urls::READ.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        builder.set(
+            urls::DESCRIPTION.into(),
+            Value::String("Your personal drive.".into()),
+        );
+
+        let commit =
+            crate::commit::Commit::create_did_with_cert(builder, &agent, self, Some(cert)).await?;
+        let opts = crate::commit::CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            update_index: true,
+            ..crate::commit::CommitOpts::no_validations_no_index()
+        };
+        self.apply_commit(commit, &opts).await?;
+        Ok(did)
+    }
+
+    async fn push_drive_to_list(&self, list_subject: &str, drive_did: &str) -> AtomicResult<()> {
+        let mut resource = self.get_resource(&list_subject.into()).await?;
+        let mut drives: Vec<crate::values::SubResource> = resource
             .get(urls::DRIVES)
             .ok()
             .and_then(|v| match v {
@@ -826,14 +906,12 @@ impl Db {
                 _ => None,
             })
             .unwrap_or_default();
-        if !drives.iter().any(|d| d.to_string() == did) {
-            drives.push(did.clone().into());
-            agent_resource.set_unsafe(urls::DRIVES.into(), Value::ResourceArray(drives))?;
-            self.add_resource_opts(&agent_resource, false, true, true)
-                .await?;
+        if !drives.iter().any(|d| d.to_string() == drive_did) {
+            drives.push(drive_did.to_string().into());
+            resource.set_unsafe(urls::DRIVES.into(), Value::ResourceArray(drives))?;
+            self.add_resource_opts(&resource, false, true, true).await?;
         }
-
-        Ok(did)
+        Ok(())
     }
 
     /// Create a new resource with a `did:ad:` subject via genesis commit.
@@ -1100,9 +1178,14 @@ impl Db {
     pub async fn setup(&self, agent_name: &str) -> AtomicResult<(crate::agents::Agent, String)> {
         let mut agent = self.create_agent(Some(agent_name)).await?;
         self.set_default_agent(agent.clone());
-        let drive = self
-            .create_drive(&format!("{}'s Drive", agent_name))
-            .await?;
+        let drive = self.ensure_personal_drive().await?;
+        if let Ok(mut personal) = self.get_resource(&drive.as_str().into()).await {
+            personal.set_unsafe(
+                urls::NAME.into(),
+                Value::String(format!("{}'s Drive", agent_name)),
+            )?;
+            self.add_resource_opts(&personal, false, true, true).await?;
+        }
 
         // Set initial_drive so the secret contains the drive DID.
         // This lets other devices find this drive via DHT when restoring from secret.
@@ -3568,6 +3651,42 @@ mod pending_blob_request_ttl_tests {
         assert_eq!(
             db.take_pending_blob_request(&hash),
             Some("https://example.com/drive".to_string())
+        );
+    }
+}
+
+#[cfg(test)]
+mod personal_drive_tests {
+    use super::*;
+    use crate::Storelike;
+
+    #[tokio::test]
+    async fn setup_uses_the_derived_personal_drive_did() {
+        let store = Db::init_temp("personal_drive_setup").await.unwrap();
+        let (_agent, drive) = store.setup("Alice").await.unwrap();
+        let expected = store.personal_drive_subject().unwrap();
+        assert_eq!(drive, expected);
+        assert_eq!(store.ensure_personal_drive().await.unwrap(), expected);
+    }
+
+    #[tokio::test]
+    async fn extra_drive_is_listed_on_the_personal_drive() {
+        let store = Db::init_temp("personal_drive_list").await.unwrap();
+        let (_agent, personal) = store.setup("Alice").await.unwrap();
+        let extra = store.create_drive("Project").await.unwrap();
+        assert_ne!(extra, personal);
+
+        let listed = store
+            .get_resource(&personal.as_str().into())
+            .await
+            .unwrap()
+            .get(urls::DRIVES)
+            .unwrap()
+            .to_subjects(None)
+            .unwrap();
+        assert!(
+            listed.iter().any(|s| s == &extra),
+            "personal drive should list {extra}, got {listed:?}"
         );
     }
 }

@@ -213,9 +213,22 @@ impl Commit {
     /// Creates a new Commit with a `did:ad` Subject.
     /// The ID of the Subject is the signature of the Commit.
     pub async fn create_did(
+        commit_builder: CommitBuilder,
+        agent: &crate::agents::Agent,
+        store: &impl Storelike,
+    ) -> AtomicResult<Commit> {
+        Self::create_did_with_cert(commit_builder, agent, store, None).await
+    }
+
+    /// Like [`Self::create_did`], but uses `cert` when given instead of a
+    /// random-nonce certificate. The personal drive path passes
+    /// [`crate::genesis::GenesisCert::for_personal_drive`] so every device
+    /// mints the same subject.
+    pub async fn create_did_with_cert(
         mut commit_builder: CommitBuilder,
         agent: &crate::agents::Agent,
         store: &impl Storelike,
+        cert: Option<crate::genesis::GenesisCert>,
     ) -> AtomicResult<Commit> {
         let now = crate::utils::now();
         // Create a temporary commit with empty signature and subject
@@ -256,28 +269,40 @@ impl Commit {
         let signer_pubkey: [u8; 32] = crate::agents::decode_base64(&agent.public_key)?
             .try_into()
             .map_err(|_| "Agent public key must be 32 bytes for the genesis certificate")?;
-        let mut nonce = [0u8; 16];
-        {
-            use rand::RngCore;
-            rand::thread_rng().fill_bytes(&mut nonce);
-        }
-        let parent = commit_builder
-            .set
-            .get(urls::PARENT)
-            .map(|v| v.to_string())
-            .unwrap_or_default();
-        let drive = commit_builder
-            .set
-            .get(urls::DRIVE_PROP)
-            .map(|v| v.to_string())
-            .unwrap_or_default();
-        let cert = crate::genesis::GenesisCert {
-            signer_pubkey,
-            created_at: now,
-            nonce,
-            state_hash: None,
-            parent,
-            drive,
+        let cert = match cert {
+            Some(cert) => {
+                if cert.signer_pubkey != signer_pubkey {
+                    return Err(
+                        "Genesis certificate signer does not match the creating agent".into(),
+                    );
+                }
+                cert
+            }
+            None => {
+                let mut nonce = [0u8; 16];
+                {
+                    use rand::RngCore;
+                    rand::thread_rng().fill_bytes(&mut nonce);
+                }
+                let parent = commit_builder
+                    .set
+                    .get(urls::PARENT)
+                    .map(|v| v.to_string())
+                    .unwrap_or_default();
+                let drive = commit_builder
+                    .set
+                    .get(urls::DRIVE_PROP)
+                    .map(|v| v.to_string())
+                    .unwrap_or_default();
+                crate::genesis::GenesisCert {
+                    signer_pubkey,
+                    created_at: now,
+                    nonce,
+                    state_hash: None,
+                    parent,
+                    drive,
+                }
+            }
         };
         let cert_b64 = crate::agents::encode_base64(&cert.encode());
         let genesis_signature = cert.sign(&private_key)?;
@@ -443,6 +468,45 @@ impl Commit {
         Ok(())
     }
 
+    /// A second genesis for an existing subject is mergeable when it carries a
+    /// self-verifying cert for this subject whose signer is this commit's
+    /// signer. That is the personal-drive case: every device mints the same
+    /// cert, so the same DID, and Loro merges the two docs.
+    fn repeat_genesis_is_mergeable(&self) -> AtomicResult<bool> {
+        if !self.subject.is_did() || self.subject.is_agent_did() {
+            return Ok(false);
+        }
+        let subject_val = self
+            .subject
+            .as_str()
+            .strip_prefix("did:ad:")
+            .ok_or("Invalid did:ad subject")?;
+        let Some(cert_b64) = self
+            .loro_update
+            .as_ref()
+            .and_then(|u| crate::Resource::genesis_cert_b64_from_loro_update(u))
+        else {
+            return Ok(false);
+        };
+        let cert_bytes = decode_base64(&cert_b64)?;
+        let cert = crate::genesis::GenesisCert::decode(&cert_bytes)?;
+        if cert.verify(subject_val).is_err() {
+            return Ok(false);
+        }
+        let signer_key = self
+            .signer
+            .as_str()
+            .strip_prefix("did:ad:agent:")
+            .ok_or("Repeat genesis requires a did:ad:agent signer")?;
+        let signer_bytes: [u8; 32] = decode_base64(signer_key)?
+            .try_into()
+            .map_err(|_| "Agent public key must be 32 bytes")?;
+        if cert.signer_pubkey != signer_bytes {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
     /// Performs the checks specified in CommitOpts and constructs a new Resource.
     /// Warning: Does not save the new resource to the Store - doet not delete if it `destroy: true`.
     /// Use [Storelike::apply_commit] to save the resource to the Store.
@@ -525,11 +589,16 @@ impl Commit {
 
         if let Some(explicit_genesis) = commit.is_genesis {
             if explicit_genesis && !is_new {
-                return Err(format!(
-                    "Commit for {} has is_genesis: true, but the resource already exists.",
-                    commit.subject
-                )
-                .into());
+                // Deterministic subjects (personal drive) emit a repeat genesis
+                // from every device. Accept when the cert verifies and names
+                // this commit's signer; apply_changes merges the Loro update.
+                if !commit.repeat_genesis_is_mergeable()? {
+                    return Err(format!(
+                        "Commit for {} has is_genesis: true, but the resource already exists.",
+                        commit.subject
+                    )
+                    .into());
+                }
             }
             if !explicit_genesis && is_new {
                 return Err(format!(
@@ -1674,6 +1743,136 @@ mod test {
             stored.get(crate::urls::DESCRIPTION).unwrap().to_string(),
             "hello",
             "Stored resource should have the description from the commit"
+        );
+    }
+
+    /// Two devices holding the same key mint the same personal-drive DID.
+    /// Applying both geneses merges the Loro docs instead of rejecting the
+    /// second as "already exists".
+    #[tokio::test]
+    async fn repeat_personal_drive_genesis_merges() {
+        let (store, agent) = store_with_known_agent().await;
+        let pubkey: [u8; 32] = crate::agents::decode_base64(&agent.public_key)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let cert = crate::genesis::GenesisCert::for_personal_drive(pubkey);
+        let opts = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            validate_loro_causality: true,
+            ..CommitOpts::no_validations_no_index()
+        };
+
+        let mut first = CommitBuilder::new("placeholder".into());
+        first.set(
+            crate::urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::urls::DRIVE.into()]),
+        );
+        first.set(
+            crate::urls::NAME.into(),
+            Value::String("Device A home".into()),
+        );
+        first.set(
+            crate::urls::WRITE.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        let commit_a = Commit::create_did_with_cert(first, &agent, &store, Some(cert.clone()))
+            .await
+            .unwrap();
+        let subject = commit_a.subject.clone();
+        assert_eq!(
+            subject.to_string(),
+            crate::genesis::GenesisCert::personal_drive_subject(
+                agent.private_key.as_ref().unwrap()
+            )
+            .unwrap()
+        );
+        store.apply_commit(commit_a, &opts).await.unwrap();
+
+        let mut second = CommitBuilder::new("placeholder".into());
+        second.set(
+            crate::urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::urls::DRIVE.into()]),
+        );
+        second.set(
+            crate::urls::NAME.into(),
+            Value::String("Device B home".into()),
+        );
+        second.set(
+            crate::urls::DESCRIPTION.into(),
+            Value::String("from the second device".into()),
+        );
+        second.set(
+            crate::urls::WRITE.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        let commit_b = Commit::create_did_with_cert(second, &agent, &store, Some(cert))
+            .await
+            .unwrap();
+        assert_eq!(commit_b.subject, subject);
+        store
+            .apply_commit(commit_b, &opts)
+            .await
+            .expect("repeat genesis for the same personal-drive DID must merge");
+
+        let merged = store.get_resource(&subject).await.unwrap();
+        assert_eq!(
+            merged.get(crate::urls::DESCRIPTION).unwrap().to_string(),
+            "from the second device",
+            "property only set on the second device must survive the merge"
+        );
+        assert!(merged.get(crate::urls::NAME).is_ok());
+        assert_eq!(
+            merged
+                .get(crate::urls::IS_A)
+                .unwrap()
+                .to_subjects(None)
+                .unwrap()[0],
+            crate::urls::DRIVE
+        );
+    }
+
+    /// A genesis retry without a verifiable cert still fails — only a
+    /// same-signer, same-subject cert is treated as a merge.
+    #[tokio::test]
+    async fn repeat_genesis_without_cert_is_still_rejected() {
+        let (store, agent) = store_with_known_agent().await;
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(crate::urls::NAME.into(), Value::String("once".into()));
+        let genesis = Commit::create_did(builder, &agent, &store).await.unwrap();
+        let subject = genesis.subject.clone();
+        let opts = CommitOpts {
+            validate_signature: false,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            ..CommitOpts::no_validations_no_index()
+        };
+        store.apply_commit(genesis, &opts).await.unwrap();
+
+        let loro_doc = crate::loro::AtomicLoroDoc::new();
+        loro_doc
+            .set_property(crate::urls::NAME, &Value::String("twice".into()))
+            .unwrap();
+        let retry = Commit {
+            subject: subject.clone(),
+            signer: agent.subject.clone(),
+            loro_update: Some(loro_doc.export_snapshot()),
+            destroy: Some(false),
+            created_at: crate::utils::now(),
+            previous_commit: None,
+            is_genesis: Some(true),
+            signature: Some("not-checked".into()),
+            url: None,
+        };
+        let err = store.apply_commit(retry, &opts).await.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("is_genesis: true, but the resource already exists"),
+            "expected the old reject, got: {err}"
         );
     }
 

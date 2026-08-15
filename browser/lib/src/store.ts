@@ -37,6 +37,7 @@ import { initOntologies } from './ontologies/index.js';
 import { decodeB64, encodeB64, encodeB64Url } from './base64.js';
 import {
   encodeGenesisCert,
+  personalDriveCert,
   subjectForSignature,
   type GenesisCert,
 } from './genesis.js';
@@ -92,6 +93,9 @@ type CreateResourceOptions = {
   propVals?: Record<string, JSONValue>;
   /** Set to true if the resource should have a DID as subject. Defaults to `true` for `did:ad` agents, otherwise `false`. */
   did?: boolean;
+  /** When set, the resource is minted from this cert (deterministic DID)
+   *  instead of a random-nonce certificate. */
+  genesisCert?: GenesisCert;
 };
 
 export interface StoreOpts {
@@ -270,10 +274,10 @@ export interface CreateDriveOpts {
    *  separate save for callers (e.g. dev-drive) that want the agent to be
    *  renderable as a named resource right away. */
   agentName?: string;
-  /** A personal drive becomes the agent's home: it is linked as the agent's
-   *  `personalDrive` and hosts the saved-drives switcher list (seeded with
-   *  itself). A non-personal (additional) drive is instead pushed onto the
-   *  agent's EXISTING personal drive's list. Defaults to true. */
+  /** A personal drive is the agent's derived home DID (same subject on every
+   *  device). It is linked as `personalDrive` for older clients and hosts the
+   *  saved-drives switcher list. A non-personal drive is pushed onto that
+   *  list. Defaults to true. */
   personal?: boolean;
 }
 
@@ -2073,6 +2077,7 @@ export class Store {
     propVals,
     noParent,
     did,
+    genesisCert,
   }: CreateResourceOptions = {}): Promise<Resource<C>> {
     const shouldUseDid =
       did ?? this.getAgent()?.subject?.startsWith('did:ad:agent:') ?? false;
@@ -2103,7 +2108,11 @@ export class Store {
     let newSubject: string;
     let genesisCertB64: string | undefined;
 
-    if (subject) {
+    if (genesisCert) {
+      const minted = await this.mintFromCert(genesisCert);
+      newSubject = subject ?? minted.did;
+      genesisCertB64 = minted.certB64;
+    } else if (subject) {
       newSubject = subject;
     } else if (shouldUseDid) {
       const minted = await this.mintCertDid(
@@ -2149,7 +2158,7 @@ export class Store {
     // only `save()` does (it moves the stash into the outbox). So a
     // created-but-never-saved resource (e.g. an unfilled `TableNewRow`) is never
     // POSTed. This is the only remaining `signChanges` call site.
-    if (shouldUseDid && !subject) {
+    if ((shouldUseDid && !subject) || genesisCert) {
       const genesisCommit = await resource.signChanges(this.getAgent()!);
       resource.stashGenesis(genesisCommit);
     }
@@ -2195,24 +2204,53 @@ export class Store {
       propVals[SUBDOMAIN_PROP] = subdomain;
     }
 
+    if (personal) {
+      const existingDid = await agent.personalDriveSubject();
+      const existing = this._resources.get(existingDid);
+
+      if (existing && !existing.new && !existing.error) {
+        const oldPointer = await this.linkPersonalDrive(
+          existing,
+          agent.subject,
+          agentName,
+        );
+        await this.maybeMigrateOldPersonalDrive(existing, oldPointer);
+
+        return existing;
+      }
+    }
+
+    const genesisCert = personal
+      ? personalDriveCert(decodeB64(await agent.getPublicKey()))
+      : undefined;
+
     const drive = await this.newResource({
       isA: server.classes.drive,
       noParent: true,
       propVals,
+      genesisCert,
     });
 
     await drive.save();
 
     if (personal) {
-      await this.linkPersonalDrive(drive, agent.subject, agentName);
+      const oldPointer = await this.linkPersonalDrive(
+        drive,
+        agent.subject,
+        agentName,
+      );
+      await this.maybeMigrateOldPersonalDrive(drive, oldPointer);
     } else {
       await this.addToSavedDrives(drive, agent.subject);
     }
 
     // Every drive gets a default Ontology: the home for classes and
     // properties created inside the drive (e.g. table Row classes), so they
-    // don't pile up directly under the drive itself.
-    await this.createDefaultOntology(drive);
+    // don't pile up directly under the drive itself. Skip if a previous
+    // device already created one — two random ontology DIDs would fork.
+    if (!drive.get(server.properties.defaultOntology)) {
+      await this.createDefaultOntology(drive);
+    }
 
     return drive;
   }
@@ -2222,11 +2260,20 @@ export class Store {
    * switcher list with itself and links it on the Agent resource (optionally
    * naming the agent in the same commit).
    */
+  /**
+   * Seeds the switcher list on `drive` and, when a complete Agent resource is
+   * available, writes `personalDrive` for older clients.
+   *
+   * Returns a previous `personalDrive` pointer when it named a different
+   * subject, so migration can union that drive's lists. The pointer is
+   * captured before this write — otherwise migration would only ever see
+   * the derived DID it just stored.
+   */
   private async linkPersonalDrive(
     drive: Resource,
     agentSubject: string,
     agentName?: string,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     // The user's saved-drives switcher list lives on the personal DRIVE itself
     // (the per-user home index), not on the Agent. Seed it with this drive so
     // it shows up in the switcher. This must be a second commit: the drive's
@@ -2235,27 +2282,50 @@ export class Store {
     drive.push(server.properties.drives, [drive.subject], true);
     await drive.save();
 
-    // Link the drive to the Agent resource. We MUST force a fresh fetch
-    // from the server here. The agent may already be in the store (from a
-    // stale clientDb cache or a previous partial load) with `loading=false`,
-    // in which case `getResource()` short-circuits and returns the cached
-    // stub. Then `set/push/save` would commit a Loro snapshot that only
-    // carries the locally-set properties (personalDrive, drives) — the
-    // server-side state (isA, publicKey, read, etc.) was never merged into
-    // the local Loro doc, so it isn't part of the outgoing snapshot, and
-    // isn't written to clientDb. On reload the SPA reads the partial cache
-    // and the agent's edit form errors with "<class> is not a Class"
-    // because `isA` is missing. Forcing a fetch seeds the local resource
-    // with the full server state before we layer the new properties on top.
-    //
-    // Use HTTP (not WS): the WS may still be authenticated as a previous
-    // agent (e.g. onboarding switches from a dev-drive agent to a freshly-
-    // created one — the WS auth is fire-and-forget and races the GET).
-    // HTTP signs each request with the current agent and never has stale
-    // session state.
-    const agentResource = await this.fetchResourceFromServer(agentSubject, {
-      noWebSocket: true,
-    });
+    // Capture any local pointer before the server fetch. A failed GET
+    // applies an error stub into the same map slot and would otherwise
+    // erase the only copy of the old home subject.
+    const prior = this._resources.get(agentSubject);
+    const localPointer = prior?.isReady()
+      ? (prior.get(core.properties.personalDrive) as string | undefined)
+      : undefined;
+
+    // Prefer a fresh server copy when we can get one. A stale/partial
+    // local Agent (clientDb cache, previous incomplete load) would let
+    // `set/save` commit a Loro snapshot that only carries the properties
+    // we write here — `isA` / `publicKey` / `read` never make it into
+    // the outgoing snapshot, and the edit form later errors with
+    // "<class> is not a Class". HTTP (not WS): onboarding can still be
+    // authenticated as a previous agent on the socket.
+    let agentResource: Resource | undefined;
+
+    try {
+      agentResource = await this.fetchResourceFromServer(agentSubject, {
+        noWebSocket: true,
+      });
+
+      if (agentResource.error) {
+        throw agentResource.error;
+      }
+    } catch {
+      // Offline / local-only. An error stub is not usable — writing on
+      // it would mint a partial Agent Loro doc. The derived DID is
+      // identity; the pointer is only a cache for older clients.
+      agentResource = prior?.isReady() ? prior : undefined;
+    }
+
+    const oldPointer = agentResource?.isReady()
+      ? ((agentResource.get(core.properties.personalDrive) as
+          | string
+          | undefined) ?? localPointer)
+      : localPointer;
+
+    if (!agentResource || !agentResource.isReady()) {
+      return oldPointer && oldPointer !== drive.subject
+        ? oldPointer
+        : undefined;
+    }
+
     await agentResource.set(
       core.properties.personalDrive,
       drive.subject,
@@ -2277,30 +2347,84 @@ export class Store {
     }
 
     await agentResource.save();
+
+    return oldPointer && oldPointer !== drive.subject ? oldPointer : undefined;
   }
 
   /**
    * Adds a non-personal (additional) drive to the saved-drives switcher list
-   * on the agent's personal drive. Best-effort: the agent may not have
-   * provisioned a personal drive yet.
+   * on the agent's derived personal drive. Materializes that drive if needed.
    */
   private async addToSavedDrives(
     drive: Resource,
-    agentSubject: string,
+    _agentSubject: string,
+  ): Promise<void> {
+    const personalDriveResource = await this.ensurePersonalDrive();
+    const already = personalDriveResource.getSubjects(server.properties.drives);
+
+    if (!already.includes(drive.subject)) {
+      personalDriveResource.push(server.properties.drives, [drive.subject]);
+      await personalDriveResource.save();
+    }
+  }
+
+  /**
+   * If the Agent still points at a random-DID home, union its lists onto the
+   * derived drive and keep the old drive as an ordinary workspace. Best-effort:
+   * does not block sign-in or first write.
+   */
+  private async maybeMigrateOldPersonalDrive(
+    derived: Resource,
+    oldPointer: string | undefined,
   ): Promise<void> {
     try {
-      const agentResource = await this.getResource(agentSubject);
-      const personalDrive = agentResource.get(core.properties.personalDrive) as
-        | string
-        | undefined;
-
-      if (personalDrive) {
-        const personalDriveResource = await this.getResource(personalDrive);
-        personalDriveResource.push(server.properties.drives, [drive.subject]);
-        await personalDriveResource.save();
+      if (!oldPointer || oldPointer === derived.subject) {
+        return;
       }
-    } catch (_e) {
-      // Ignore (e.g. no personal drive yet, or an unwritable agent resource).
+
+      let old = this._resources.get(oldPointer);
+
+      if (!old || !old.isReady()) {
+        try {
+          old = await this.fetchResourceFromServer(oldPointer, {
+            noWebSocket: true,
+          });
+        } catch {
+          return;
+        }
+      }
+
+      if (!old || old.error) {
+        return;
+      }
+
+      const listProps = [
+        server.properties.drives,
+        core.properties.sharedWithMe,
+        'https://atomicdata.dev/properties/favorites',
+      ];
+
+      for (const prop of listProps) {
+        const incoming = old.getSubjects(prop);
+        const have = new Set(derived.getSubjects(prop));
+        const missing = incoming.filter(s => s && !have.has(s));
+
+        if (missing.length > 0) {
+          derived.push(prop, missing, true);
+        }
+      }
+
+      const drives = new Set(derived.getSubjects(server.properties.drives));
+
+      if (!drives.has(oldPointer)) {
+        derived.push(server.properties.drives, [oldPointer], true);
+      }
+
+      if (derived.hasUnsavedChanges()) {
+        await derived.save();
+      }
+    } catch {
+      // Migration is nice, not load-bearing.
     }
   }
 
@@ -2554,6 +2678,50 @@ export class Store {
       did: subjectForSignature(await agent.signBytes(certBytes)),
       certB64: encodeB64Url(certBytes),
     };
+  }
+
+  private async mintFromCert(
+    cert: GenesisCert,
+  ): Promise<{ did: string; certB64: string }> {
+    const agent = this.getAgent();
+
+    if (!agent) {
+      throw new Error(
+        'Cannot create a DID resource without an agent. Set an agent on the store first.',
+      );
+    }
+
+    const certBytes = encodeGenesisCert(cert);
+
+    return {
+      did: subjectForSignature(await agent.signBytes(certBytes)),
+      certB64: encodeB64Url(certBytes),
+    };
+  }
+
+  /** The agent's derived personal-drive DID. Same key → same subject. */
+  public async personalDriveSubject(): Promise<string> {
+    const agent = this.getAgent();
+
+    if (!agent) {
+      throw new Error('Cannot derive a personal drive without an agent');
+    }
+
+    return agent.personalDriveSubject();
+  }
+
+  /**
+   * Materialize the derived personal drive if needed and return it.
+   * Repeat genesis for the same subject merges on the server.
+   */
+  public async ensurePersonalDrive(
+    name = 'My drive',
+    opts: Omit<CreateDriveOpts, 'personal'> = {},
+  ): Promise<Resource> {
+    return this.createDrive(name, {
+      ...opts,
+      personal: true,
+    });
   }
 
   /**
@@ -3962,20 +4130,9 @@ export class Store {
 
     if (inherited.length === 0) return;
 
-    const existingSubject =
-      (didAgent.get(core.properties.personalDrive) as string | undefined) ??
-      agent.initialDrive;
-
-    // `createDrive(personal: true)` seeds the switcher list with itself and
-    // links `personalDrive` on the Agent, so afterwards this is an ordinary
-    // union into an existing list. It is only reached when the account has no
-    // private drive at all, so it cannot displace one the user already has.
-    const personalDrive = existingSubject
-      ? await this.getResource(existingSubject)
-      : await this.createDrive('My drive', {
-          personal: true,
-          agentName: legacy.get(core.properties.name) as string | undefined,
-        });
+    const personalDrive = await this.ensurePersonalDrive('My drive', {
+      agentName: legacy.get(core.properties.name) as string | undefined,
+    });
 
     if (personalDrive.error) return;
 
