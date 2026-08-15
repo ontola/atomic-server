@@ -125,6 +125,9 @@ and it counts as a public item, so the public-item gate will notice.
 ```sh
 scripts/consolidation-measure.py --baseline /tmp/consol-before.json -- \
   lib/src/sync/ws_apply.rs lib/src/sync/engine.rs
+# Kind 3 (shared fixtures, no deleted production path):
+scripts/consolidation-measure.py --kind bind-twins --baseline /tmp/consol-before.json -- \
+  lib/src/client/search.rs browser/lib/src/search.ts
 ```
 
 The script exits non-zero unless the gates below pass.
