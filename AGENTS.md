@@ -16,6 +16,11 @@ Use todo lists and checkboxes to track progress.
 Make sure to update the planning as you find new insights and see outdated planning text.
 Remove planning documents that are completed.
 
+A change that claims to remove duplication must follow
+[`planning/consolidation-contract.md`](./planning/consolidation-contract.md):
+characterization tests on the old code first, then
+`scripts/consolidation-measure.py` so production lines in scope go down.
+
 ## Quick Dev Setup
 
 Use the Charlotte MCP server and navigate to `http://localhost:6747/app/dev-drive` to instantly create a fresh agent.
