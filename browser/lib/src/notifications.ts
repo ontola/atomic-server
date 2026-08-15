@@ -711,9 +711,11 @@ export class NotificationEngine {
 }
 
 /**
- * Inbox subjects already in the JS store. Used by the UI so a second device
- * that receives items via drive sync does not depend on a one-shot WASM
- * `/query` that can race `hasCompletedDriveSync` and stay empty.
+ * Inbox subjects already in the JS store, including not-yet-confirmed
+ * (`new`) rows so a just-upserted item renders before the collection
+ * index catches up. Used by the UI so a second device that receives
+ * items via drive sync does not depend on a one-shot WASM `/query`
+ * that can race `hasCompletedDriveSync` and stay empty.
  */
 export function visibleNotificationItems(store: Store): Resource[] {
   const items: Resource[] = [];
@@ -723,7 +725,7 @@ export function visibleNotificationItems(store: Store): Resource[] {
       continue;
     }
 
-    if (res.new || res.error) {
+    if (res.error) {
       continue;
     }
 

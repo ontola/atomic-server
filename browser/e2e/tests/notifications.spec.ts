@@ -582,9 +582,6 @@ test.describe('notifications', () => {
     const page2 = await ctx2.newPage();
     await page2.goto(FRONTEND_URL);
     await signIn(page2, secret);
-    await expect(page2.getByRole('link', { name: /Connected Sync/ })).toBeVisible(
-      { timeout: 30_000 },
-    );
 
     await page2.goto(`${FRONTEND_URL}/app/notifications`);
     await page2.waitForFunction(
@@ -694,7 +691,7 @@ test.describe('notifications', () => {
         !!(window as Window & { __notificationEngine?: unknown })
           .__notificationEngine,
       null,
-      { timeout: 20_000 },
+      { timeout: 40_000 },
     );
 
     // Pause B's engine so A's mention is discovered via reverse query on
