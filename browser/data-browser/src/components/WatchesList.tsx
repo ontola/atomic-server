@@ -10,7 +10,7 @@ import { styled } from 'styled-components';
 import { Button } from './Button';
 import { Column, Row } from './Row';
 import { useSettings } from '../helpers/AppSettings';
-import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
+import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { useNotificationEngine } from '../hooks/useNotificationEngine';
 import { AtomicLink } from './AtomicLink';
 
@@ -40,7 +40,7 @@ export function WatchesList(): JSX.Element {
       return;
     }
 
-    const personalDrive = await fetchPersonalDriveSubject(store, agent);
+    const personalDrive = await fetchPrivateDriveSubject(store, agent);
 
     if (!personalDrive) {
       setRows([]);

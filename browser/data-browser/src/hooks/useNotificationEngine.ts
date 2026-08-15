@@ -18,8 +18,9 @@ import {
   visibleNotificationItems,
 } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
-import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
+import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { getOrCreateNotificationsFolder } from '../helpers/notificationsFolder';
+import { usePrivateDrive } from './usePrivateDrive';
 
 const NotificationEngineContext = createContext<NotificationEngine | null>(
   null,
@@ -27,7 +28,8 @@ const NotificationEngineContext = createContext<NotificationEngine | null>(
 
 /**
  * Starts a {@link NotificationEngine} for the current agent + personal drive.
- * Remounts when the agent changes.
+ * Remounts when the agent changes or when `privateDrive` appears after
+ * invite persist (the first `setAgent` often has no home drive yet).
  */
 export function NotificationEngineProvider({
   children,
@@ -36,6 +38,7 @@ export function NotificationEngineProvider({
 }): React.JSX.Element {
   const store = useStore();
   const { agent } = useSettings();
+  const { privateDrive: knownPrivateDrive } = usePrivateDrive();
   const [engine, setEngine] = useState<NotificationEngine | null>(null);
 
   useEffect(() => {
@@ -49,7 +52,8 @@ export function NotificationEngineProvider({
         return;
       }
 
-      const personalDrive = await fetchPersonalDriveSubject(store, agent);
+      const personalDrive =
+        (await fetchPrivateDriveSubject(store, agent)) ?? knownPrivateDrive;
 
       if (!personalDrive || cancelled) {
         setEngine(null);
@@ -57,16 +61,28 @@ export function NotificationEngineProvider({
         return;
       }
 
-      active = new NotificationEngine({
-        store,
-        agentSubject: agent.subject,
-        personalDrive,
-        getNotificationsFolder: getOrCreateNotificationsFolder,
-      });
-      await active.start();
+      try {
+        active = new NotificationEngine({
+          store,
+          agentSubject: agent.subject,
+          personalDrive,
+          getNotificationsFolder: getOrCreateNotificationsFolder,
+        });
+        await active.start();
+      } catch (err) {
+        console.warn('[NotificationEngine] failed to start', err);
+        active?.stop();
+        active = null;
+
+        if (!cancelled) {
+          setEngine(null);
+        }
+
+        return;
+      }
 
       if (cancelled) {
-        active.stop();
+        active?.stop();
 
         return;
       }
@@ -93,7 +109,7 @@ export function NotificationEngineProvider({
 
       setEngine(null);
     };
-  }, [store, agent]);
+  }, [store, agent, knownPrivateDrive]);
 
   return createElement(
     NotificationEngineContext.Provider,
@@ -146,7 +162,7 @@ export function useUnreadNotificationCount(): number {
       consider(res.subject);
     }
 
-    const personalDrive = await fetchPersonalDriveSubject(store, agent);
+    const personalDrive = await fetchPrivateDriveSubject(store, agent);
 
     if (personalDrive) {
       try {

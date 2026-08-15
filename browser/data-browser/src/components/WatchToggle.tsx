@@ -10,7 +10,7 @@ import {
 import { FaBell, FaBellSlash } from 'react-icons/fa6';
 import { Button } from './Button';
 import { useSettings } from '../helpers/AppSettings';
-import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
+import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { getOrCreateNotificationsFolder } from '../helpers/notificationsFolder';
 import { useNotificationEngine } from '../hooks/useNotificationEngine';
 import { ensureOsNotificationPermission } from '../helpers/osNotifications';
@@ -40,7 +40,7 @@ export function WatchToggle({
       return;
     }
 
-    const personalDrive = await fetchPersonalDriveSubject(store, agent);
+    const personalDrive = await fetchPrivateDriveSubject(store, agent);
 
     if (!personalDrive) {
       setWatchSubject(undefined);
@@ -102,7 +102,7 @@ export function WatchToggle({
     setBusy(true);
 
     try {
-      const personalDrive = await fetchPersonalDriveSubject(store, agent);
+      const personalDrive = await fetchPrivateDriveSubject(store, agent);
 
       if (!personalDrive) {
         setBusy(false);

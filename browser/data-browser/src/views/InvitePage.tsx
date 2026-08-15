@@ -246,6 +246,12 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         agentName,
       );
 
+      // Inbox / engine fall back to `agent.initialDrive`. Keep that on the
+      // private drive even though the sidebar activates the invite host.
+      if (drives.privateDrive && agent) {
+        agent.initialDrive = drives.privateDrive;
+      }
+
       goToRedirect(undefined, activateDrive(drives));
     },
   });
@@ -363,6 +369,10 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
           destination,
           undefined,
         );
+
+        if (drives.privateDrive && agent) {
+          agent.initialDrive = drives.privateDrive;
+        }
 
         goToRedirect(destination, activateDrive(drives));
       })();
