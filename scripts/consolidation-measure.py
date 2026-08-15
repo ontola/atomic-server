@@ -157,9 +157,16 @@ def render(summary: dict) -> str:
     )
 
 
-def compare(before: dict, after: dict) -> list[str]:
+def compare(before: dict, after: dict, kind: str = "delete-duplicate") -> list[str]:
     failures = []
-    if after["production_nonblank"] >= before["production_nonblank"]:
+    if kind == "bind-twins":
+        if after["production_nonblank"] > before["production_nonblank"]:
+            failures.append(
+                "bind-twins: production non-blank lines grew "
+                f"({before['production_nonblank']} → {after['production_nonblank']}); "
+                "must not add a third copy"
+            )
+    elif after["production_nonblank"] >= before["production_nonblank"]:
         failures.append(
             "production non-blank lines did not decrease "
             f"({before['production_nonblank']} → {after['production_nonblank']})"
@@ -221,6 +228,9 @@ def self_test() -> None:
         grown = dict(before)
         grown["production_nonblank"] = before["production_nonblank"] + 1
         assert compare(before, grown), "should fail when lines grow"
+
+        assert compare(before, before, kind="bind-twins") == [], "flat ok for bind-twins"
+        assert compare(before, grown, kind="bind-twins"), "bind-twins must not grow"
     print("self-test ok")
 
 
@@ -229,6 +239,12 @@ def main(argv: list[str]) -> int:
     parser.add_argument("paths", nargs="*", type=Path)
     parser.add_argument("--write", type=Path, help="write JSON snapshot")
     parser.add_argument("--baseline", type=Path, help="compare against a prior --write")
+    parser.add_argument(
+        "--kind",
+        choices=("delete-duplicate", "policy-split", "bind-twins", "extract"),
+        default="delete-duplicate",
+        help="bind-twins allows a flat line count; other kinds require a decrease",
+    )
     parser.add_argument("--json", action="store_true", help="print JSON instead of the table")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
@@ -266,15 +282,21 @@ def main(argv: list[str]) -> int:
 
     if args.baseline:
         before = json.loads(args.baseline.read_text())
-        failures = compare(before, summary)
+        failures = compare(before, summary, kind=args.kind)
         if failures:
             print("\nGATE FAILED:", file=sys.stderr)
             for failure in failures:
                 print(f"  - {failure}", file=sys.stderr)
             return 1
-        print(
-            "\ngates passed (production lines down; max file and public items did not grow)"
-        )
+        if args.kind == "bind-twins":
+            print(
+                "\ngates passed (bind-twins: production lines did not grow; "
+                "max file and public items did not grow)"
+            )
+        else:
+            print(
+                "\ngates passed (production lines down; max file and public items did not grow)"
+            )
     return 0
 
 

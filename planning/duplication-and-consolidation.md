@@ -158,10 +158,11 @@ and Rust `pure_id()` can disagree on the same DID.
 
 Blocks the runtime plan. Concrete copies:
 
-- **Tantivy escape** implemented three times: `browser/lib/src/search.ts`
-  `escapeTantivyKey`, `lib/src/client/search.rs` `escape_tantivy_key`, and
-  `server/tests/it/file_search_repro.rs` (test re-implements the browser
-  helper). `SearchOpts` / `build_search_subject` are also dual.
+- **Tantivy escape** in two languages, bound by `testdata/search-query.json`:
+  `browser/lib/src/search.ts` `escapeTantivyKey` and
+  `lib/src/client/search.rs` `escape_tantivy_key`. The File-picker repro
+  reads the escaped `isA` key from that fixture instead of a third copy.
+  `SearchOpts` / `build_search_subject` are also dual (same fixture).
 - **Blob write admission:** HTTP in `server/src/handlers/blob.rs`, WS in
   `lib/src/sync/engine.rs`. Same policy, two implementations.
 - **Upload File-resource construction** (`save_file_and_create_resource`) and
@@ -210,8 +211,8 @@ the browser unable to sign or speak the wire format without a round-trip.
 
 - Pairing: Flutter should call the same envelope rules as `pairing.ts`
   (golden URI fixtures, or parse in Rust and expose via FRB).
-- `normalizeServerUrl` / `isLocalAddress`: already documented twins; add
-  one shared test vector file both suites load.
+- `normalizeServerUrl` / `isLocalAddress`: **done** — `testdata/server-url.json`.
+  Empty input still disagrees (TS `https://`, Dart `''`).
 - Filter operators: WASM already runs Rust queries locally; client-side
   `valueMatches` is the live-membership shortcut. Either call WASM or
   share operator fixtures.
@@ -304,11 +305,11 @@ not a third UI — it loads the same SPA.
 | Server URL | `helpers/serverUrl.ts` | `atomic/server_url.dart` | Twin, tested separately |
 | Documents, tables, chat, AI | data-browser | absent | Expected; Flutter is canvas-first |
 
-`flutter/AGENTS.md` still says Loro is "the biggest remaining gap" and
-strokes are stored as JSON. That contradicts
+`flutter/AGENTS.md` previously said Loro was "the biggest remaining gap" and
+strokes were stored as JSON. That contradicted
 [`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md) (Phase A
-landed; tap-undo is Loro `UndoManager`). Stale agent context is its own
-kind of duplication.
+landed; tap-undo is Loro `UndoManager`). **Updated 2026-08-15.** Stale agent
+context is its own kind of duplication.
 
 Flutter `flutter/rust/src/api/simple.rs` (~1444 lines) is app-specific
 canvas/folder/peer glue. WASM `wasm/src/lib.rs` is closer to a generic
@@ -391,14 +392,16 @@ Every item still has to pass [`consolidation-contract.md`](./consolidation-contr
 2. **Delete `browser/lib/src/urls.ts`** — only after data-browser stops using
    the nested `urls.properties.*` public API. Not a six-file leftover.
 3. **Shared golden fixtures** for pairing URIs, `normalizeServerUrl`,
-   datatype tags, and Tantivy key escaping.
+   and Tantivy key escaping — **done (2026-08-15)** (`testdata/search-query.json`,
+   `testdata/server-url.json`). Datatype tags still open.
 4. **`ws_apply::apply_commit_json` → `ingest_commit_json`** — **done
    (2026-08-15).** `CommitIngestOpts::{hub,peer,replica}`. WASM `applyCommit`
    still has its own `CommitOpts`.
 5. **Extract `SearchResultsList`**; rename `useDriveHistory`.
 6. **One `check_read` helper** in `commit_monitor.rs` — **done (2026-08-15)**
    (`authorize_read`).
-7. **Update `flutter/AGENTS.md`** so it matches the Loro canvas path.
+7. **Update `flutter/AGENTS.md`** so it matches the Loro canvas path —
+   **done (2026-08-15)**.
 
 Then the existing plans, in this order, because each removes a class of
 copies rather than one function:
