@@ -836,19 +836,32 @@ export const SEARCHBOX_PROPERTY_PLACEHOLDER = /Search for a .+ or enter a URL/;
 
 /** Create a new Resource in the current Drive.
  * Class can be an Class URL or a shortname available in the new page. */
-export async function newResource(klass: string, page: Page) {
-  // Sidebar "New" navigates to /app/new?parentSubject=<parent> to preserve
-  // the container context (see QuickCreateRow). Match pathname only.
-  //
-  // Retry the click AND the navigation as a unit: the button can be clicked
-  // before its handler is attached, and the click is then simply swallowed —
-  // the app stays where it was, and no amount of waiting on a navigation that
-  // was never started will produce one. Seen in CI as this assertion timing
-  // out with the URL still on `/app/show`.
+/**
+ * Click the sidebar's "New" and land on `/app/new`.
+ *
+ * Sidebar "New" navigates to /app/new?parentSubject=<parent> to preserve the
+ * container context (see QuickCreateRow). Match pathname only.
+ *
+ * Retry the click AND the navigation as a unit: the button can be clicked
+ * before its handler is attached, and the click is then simply swallowed — the
+ * app stays where it was, and no amount of waiting on a navigation that was
+ * never started will produce one. Seen in CI as an assertion timing out with
+ * the URL still on `/app/show`, or as the next click waiting out its budget on
+ * a class button that was never going to render.
+ *
+ * Exported because every caller needs the retry, not just `newResource`.
+ * Clicking and then asserting the URL separately looks equivalent and is not:
+ * it waits for a navigation that the swallowed click never began.
+ */
+export async function openNewResourcePage(page: Page) {
   await expect(async () => {
     await sidebarNewResourceButton(page).click();
     await expect(page).toHaveURL(/\/app\/new(\?|$)/, { timeout: 3_000 });
   }).toPass({ timeout: 20_000 });
+}
+
+export async function newResource(klass: string, page: Page) {
+  await openNewResourcePage(page);
 
   const waitForResourceForm = async () => {
     await Promise.any([
@@ -1424,13 +1437,33 @@ export async function selectHistoryVersionShowing(
 
   for (let i = 0; i < count; i++) {
     await buttons.nth(i).click();
-    const visible = await page
+
+    // Judge the version by its *resource*, not by whatever text the page
+    // happens to contain.
+    //
+    // The default tab is the diff, and a diff names both sides of the change:
+    // the version that introduced "First Title" and the one that replaced it
+    // with "Second Title" both render "First Title". Scanning the page for
+    // that string therefore matched two different versions, and which one the
+    // loop settled on came down to how quickly a preview rendered. Landing on
+    // the newest version leaves "Restore this version" correctly disabled,
+    // because it is already the current one — a failure that looks like a
+    // broken button and is really a test picking the wrong row.
+    //
+    // The Resource tab shows only the selected version, so it can only match
+    // the version actually meant. Radix unmounts the inactive panel, so this
+    // has to be selected rather than read through.
+    await page.getByRole('tab', { name: 'Resource' }).click();
+
+    const shown = await page
+      .getByRole('tabpanel')
       .getByText(text, { exact: true })
       .first()
-      .isVisible()
+      .waitFor({ state: 'visible', timeout: 5_000 })
+      .then(() => true)
       .catch(() => false);
 
-    if (visible) {
+    if (shown) {
       return;
     }
   }

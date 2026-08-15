@@ -3,7 +3,6 @@ import {
   before,
   editTitle,
   setTitle,
-  sidebarNewResourceButton,
   contextMenuClick,
   timestamp,
   newResource,
@@ -108,8 +107,7 @@ test.describe('search', async () => {
     const driveSubject = await getCurrentSubject(page);
     const unique = Date.now().toString(36);
     const targetName = `Searchable-Folder-${unique}`;
-    await sidebarNewResourceButton(page).click();
-    await page.locator('button:has-text("folder")').click();
+    await newResource('folder', page);
     await setTitle(page, targetName);
     const folderSubject = await getCurrentSubject(page);
 
@@ -143,8 +141,7 @@ test.describe('search', async () => {
 
     // Create folder called 'Cake folder' at root
     await openSubject(page, driveSubject);
-    await sidebarNewResourceButton(page).click();
-    await page.locator('button:has-text("folder")').click();
+    await newResource('folder', page);
     await setTitle(page, 'Cake Folder');
     await expect(
       page.getByRole('heading', { name: 'Cake Folder' }),
@@ -216,8 +213,7 @@ test.describe('search', async () => {
 
   test('add tags and search for them', async ({ page }) => {
     const folderName = `TagTestFolder-${timestamp()}`;
-    await sidebarNewResourceButton(page).click();
-    await page.locator('button:has-text("folder")').click();
+    await newResource('folder', page);
     await setTitle(page, folderName);
     const driveSubject = await page.evaluate(() => window.store.getDrive());
     const folderSubject = await getCurrentSubject(page);
@@ -295,8 +291,7 @@ test.describe('search', async () => {
 
     // Create a folder with a distinctive name while online.
     const unique = `OfflineFindable-${timestamp()}`;
-    await sidebarNewResourceButton(page).click();
-    await page.locator('button:has-text("folder")').click();
+    await newResource('folder', page);
     await setTitle(page, unique);
 
     // It must be in the store (and therefore the local search index) before
