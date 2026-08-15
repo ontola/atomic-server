@@ -555,7 +555,8 @@ export async function devDrive(page: Page): Promise<string> {
 export async function newDrive(page: Page) {
   // Create new drive to prevent polluting the main drive
   const driveTitle = `testdrive-${timestamp()}`;
-  const previousSubject = await getCurrentSubject(page);
+  // Optional: User Settings / other app routes have no `main[about]`.
+  const previousSubject = await getCurrentSubject(page).catch(() => undefined);
 
   await expect(sideBarDriveSwitcher(page)).toBeVisible({ timeout: 15000 });
 
