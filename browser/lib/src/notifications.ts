@@ -764,10 +764,13 @@ export async function fetchNotificationItemSubjectsFromServer(
   const subjects = page.getSubjects(collections.properties.members);
 
   for (const subject of subjects) {
-    // Always re-fetch and subscribe. Skipping a cached row left device B
-    // with a stale `notificationRead` after A marked the item read, and
-    // `noWebSocket` meant the row never got live COMMITs.
-    const res = await store.fetchResourceFromServer(subject);
+    // Always HTTP-GET. Skipping a cached row left device B with a stale
+    // `notificationRead` after A marked the item read. Avoid the WS path
+    // here — fetching every inbox row over the socket can stall a fresh
+    // second-context handshake (e2e device B showed Offline).
+    const res = await store.fetchResourceFromServer(subject, {
+      noWebSocket: true,
+    });
 
     if (!res.error) {
       store.notifyResourceUpdated(res);
