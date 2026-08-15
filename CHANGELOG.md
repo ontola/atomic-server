@@ -7,6 +7,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- **Commit ingest is one function.** HTTP `/commit`, hub WS `COMMIT`, Iroh/peer `COMMIT`, and Flutter WS catch-up all call `ingest_commit_json` with a named preset (`hub` / `peer` / `replica`). Replica still skips write-rights and timestamp — the hub already checked, and a replica's ACL graph may be incomplete. WASM `applyCommit` is unchanged (its own `CommitOpts`, signature off).
+- **Subscribe auth is one helper.** `Subscribe`, `SubscribeDrive`, and `SubscribeQuery` share `authorize_read` in the commit monitor.
+
 ## [v0.41.0-beta.2] - 2026-08-01
 
 **This is the local-first release.** Atomic Data no longer needs a server to exist.

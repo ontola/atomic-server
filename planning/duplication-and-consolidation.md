@@ -321,7 +321,7 @@ surface, not grow more canvas FFI.
 
 | Copy | Where | Action |
 | --- | --- | --- |
-| Subscribe `check_read` ×3 | `server/src/commit_monitor.rs` (`Subscribe`, `SubscribeDrive`, `SubscribeQuery`) | One helper; or fold into [`unify-subscription-primitives.md`](./unify-subscription-primitives.md) |
+| Subscribe `check_read` ×3 | `server/src/commit_monitor.rs` | **Done (2026-08-15):** `authorize_read`. Remaining map split is [`unify-subscription-primitives.md`](./unify-subscription-primitives.md). |
 | `SUB` / `UNSUB` still hand-rolled | `server/src/handlers/web_sockets.rs` | Last actor-bound frames after GET/AUTH/COMMIT moved to the engine (`unified-sync.md` inventory item 1) |
 | AUTH parse ×3 | `engine.rs`, `web_sockets.rs`, `peer.rs` | `unified-sync.md` inventory item 2 — still open |
 | Compact-VV build ×2 | `peer.rs` vs browser `computeDriveSyncState` | inventory item 3 |
@@ -388,14 +388,16 @@ Work that is local and pays off without waiting on the runtime rewrite.
 Every item still has to pass [`consolidation-contract.md`](./consolidation-contract.md).
 
 1. **Port/env single source** — stop 9883/9885 drift.
-2. **Delete `browser/lib/src/urls.ts`** — migrate the six remaining imports
-   to generated ontologies.
+2. **Delete `browser/lib/src/urls.ts`** — only after data-browser stops using
+   the nested `urls.properties.*` public API. Not a six-file leftover.
 3. **Shared golden fixtures** for pairing URIs, `normalizeServerUrl`,
    datatype tags, and Tantivy key escaping.
-4. **`ws_apply::apply_commit_json` → `ingest_commit_json`** with an explicit
-   `CommitIngestOpts` for the Flutter/replica role.
+4. **`ws_apply::apply_commit_json` → `ingest_commit_json`** — **done
+   (2026-08-15).** `CommitIngestOpts::{hub,peer,replica}`. WASM `applyCommit`
+   still has its own `CommitOpts`.
 5. **Extract `SearchResultsList`**; rename `useDriveHistory`.
-6. **One `check_read` helper** in `commit_monitor.rs`.
+6. **One `check_read` helper** in `commit_monitor.rs` — **done (2026-08-15)**
+   (`authorize_read`).
 7. **Update `flutter/AGENTS.md`** so it matches the Loro canvas path.
 
 Then the existing plans, in this order, because each removes a class of
