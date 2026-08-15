@@ -106,14 +106,18 @@ export async function openDrive(page: Page, drive: string) {
   await page.evaluate(d => {
     window.store.setDrive(d);
   }, drive);
+  const adopt = page.getByRole('button', { name: 'Set as current drive' });
+
+  if (await adopt.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await adopt.click();
+  }
+
   await expect
     .poll(async () => page.evaluate(() => window.store.getDrive() ?? ''), {
       timeout: 10_000,
     })
     .toBe(drive);
-  await expect(
-    page.getByRole('button', { name: 'Set as current drive' }),
-  ).toHaveCount(0, { timeout: 15_000 });
+  await expect(adopt).toHaveCount(0, { timeout: 15_000 });
 }
 
 /**
@@ -1697,13 +1701,37 @@ export async function openNewSubjectWindow(
     await openSubject(page, url);
   }
 
-  // Secret `initialDrive` is Personal; a second window that lands on a
-  // Drive page would otherwise keep Personal as the session drive.
-  const adopt = page.getByRole('button', { name: 'Set as current drive' });
+  // Secret `initialDrive` is Personal. A second window that opens a
+  // workspace resource (canvas, document, drive) must join that
+  // resource's drive or live WS / presence stay on Personal.
+  await page.waitForFunction(
+    () =>
+      !!window.store &&
+      window.store.getSyncStatus?.().serverConnected === true,
+    undefined,
+    { timeout: 20_000 },
+  );
+  await page.evaluate(async () => {
+    const store = window.store;
+    const subject = new URLSearchParams(window.location.search).get('subject');
 
-  if (await adopt.isVisible({ timeout: 1_000 }).catch(() => false)) {
-    await adopt.click();
-  }
+    if (!subject) {
+      return;
+    }
+
+    const res = await store.getResource(subject);
+    const driveProp = res.get('https://atomicdata.dev/properties/drive');
+    const drive =
+      typeof driveProp === 'string' && driveProp.length > 0
+        ? driveProp
+        : res.getClasses().includes('https://atomicdata.dev/classes/Drive')
+          ? subject
+          : undefined;
+
+    if (drive && store.getDrive() !== drive) {
+      store.setDrive(drive);
+    }
+  });
 
   return page;
 }
