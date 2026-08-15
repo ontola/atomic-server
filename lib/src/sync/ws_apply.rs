@@ -295,6 +295,28 @@ pub async fn resolve_destroy_drive(store: &Db, subject: &str) -> Option<String> 
     )
 }
 
+/// Apply a DESTROY after the caller has already run its own admission check
+/// (or determined via [`resolve_destroy_drive`] returning `None` that there's
+/// nothing to check).
+pub async fn apply_destroy_checked(store: &Db, subject: &str) -> AtomicResult<()> {
+    if subject.is_empty() {
+        return Ok(());
+    }
+    set_importing(true);
+    let result = apply_destroy_unchecked(store, subject).await;
+    set_importing(false);
+    result
+}
+
+/// Apply a JSON-AD commit received over WS (legacy text `COMMIT` or after fetch).
+/// Replica policy: signature still checked; rights/timestamp are not — see
+/// [`super::ingest::CommitIngestOpts::replica`].
+pub async fn apply_commit_json(store: &Db, body: &str) -> AtomicResult<()> {
+    super::ingest::ingest_commit_json(store, body, &super::ingest::CommitIngestOpts::replica())
+        .await
+        .map(|_| ())
+}
+
 #[cfg(test)]
 mod replica_commit_ingest_tests {
     use super::*;
