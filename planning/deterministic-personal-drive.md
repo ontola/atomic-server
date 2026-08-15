@@ -1,6 +1,6 @@
 # Deterministic Personal Drive
 
-> **Status:** Proposal (2026-07-26). Builds on
+> **Status:** Proposal (2026-07-26), revised 2026-08-15. Builds on
 > [`genesis-self-verifying.md`](./genesis-self-verifying.md).
 >
 > Every Agent needs a personal drive — it is the home index for `drives`,
@@ -9,6 +9,11 @@
 > drive's subject **deterministically from the Agent's key** instead of
 > recording it in a pointer, so it always exists, is the same on every device,
 > and merges rather than conflicts.
+>
+> **2026-08-15 — derived subject is identity, not a fallback.** An existing
+> `personalDrive` pointer or a random-DID home created on another machine does
+> not stay authoritative. A best-effort list union is enough; do not design
+> around preserving those drives.
 
 ## Thesis
 
@@ -172,18 +177,31 @@ purpose string (`"atomic-personal-drive-v1"`) rather than randomness. Versioning
 the string leaves room to derive other per-identity singletons later without
 re-deriving this one.
 
-### 3. Resolution order and migration
+### 3. Derived subject is always the personal drive
 
-`personalDrive` stops being authoritative but must not be ignored:
+The derived DID **is** the personal drive, on every device, including accounts
+that already have a `personalDrive` pointer or a random-DID home. Do not keep
+the pointer as identity. Do not special-case "this account already has one."
 
-1. If the Agent has a `personalDrive` pointer, that drive **is** the personal
-   drive. Accounts that already have one keep it; nothing is re-derived and no
-   second drive appears.
-2. Otherwise the derived subject is the personal drive, materialized on first
-   write.
+That is the point of a computed subject: sign-in on a new machine with only
+the secret, old machine unavailable, still lands on the same home. Two devices
+that never saw each other both materialize that subject; Loro merges when they
+meet. A pointer that "wins" for existing accounts reintroduces the split this
+design exists to close.
 
-New accounts can keep writing the pointer for a release or two so older clients
-continue to resolve it, then stop.
+`personalDrive` is deprecated. New writes may set it to the derived subject so
+older clients keep resolving *something*, but readers that know the derivation
+ignore the pointer. Stop writing it once those clients are gone.
+
+**Migration is nice, not load-bearing.** If a device can see an old pointer
+drive (or lists parked on the Agent), union `drives` / `favorites` /
+`sharedWithMe` onto the derived drive and keep the old drive as an ordinary
+workspace in that list. Do not rewrite child `parent` / `drive` stamps. Do not
+block sign-in or first write on that union. If the old home is unreachable,
+the derived drive starts empty — same as today — and the old one remains a
+normal drive if it ever shows up. Stranded lists on a machine that never
+returns are acceptable; vault / another replica is how content survives, not
+the pointer.
 
 ### 4. Collapse the `drives` divergence
 
@@ -218,11 +236,9 @@ worth landing on its own, ahead of the rest.
 - Should the derived drive be created eagerly at sign-in, or lazily on first
   write? Lazily avoids creating drives for read-only sessions; eagerly means
   features never have to handle "not yet materialized".
-- What should happen when a device holds an offline personal drive and the
-  Agent *also* has a pointer to a different one? Resolution order says the
-  pointer wins, which could strand the offline drive's contents. Merging both
-  into the pointer's drive is possible but needs a defined rule.
 - Does anything assume a drive root's subject is unpredictable? Nothing found,
   but worth a sweep before implementing.
-- Should other per-identity singletons (a default ontology, an inbox) use the
-  same derivation, given the versioned domain separator makes room for it?
+- Should other per-identity singletons (a default ontology, drafts folder, AI
+  chats, an inbox) use the same derivation, given the versioned domain
+  separator makes room for it? Eager children with random DIDs would still
+  fork if both devices create them before sync.
