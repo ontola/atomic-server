@@ -153,8 +153,7 @@ impl AppState {
             // `bootstrap()` no-ops when SHORTNAME already exists. `--initialize`
             // is documented as re-running populate, so an already-seeded store
             // still needs new default ontologies (e.g. NotificationItem).
-            let already_seeded = store
-                .has_stored_resource(&atomic_lib::urls::SHORTNAME.into());
+            let already_seeded = store.has_stored_resource(&atomic_lib::urls::SHORTNAME.into());
             atomic_lib::populate::bootstrap(&store)
                 .await
                 .map_err(|e| format!("Failed to bootstrap store. {}", e))?;

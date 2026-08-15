@@ -118,10 +118,10 @@ async function findExistingToken(
  * Wake-only **data** bag (social-apps P2.3). Hub never puts document body here.
  * Visible OS banners use {@link visiblePushCopy} (generic title/body).
  */
-export function buildPushWakePayload(input: {
+export function buildPushWakePayload(input: { about: string; type: string }): {
   about: string;
   type: string;
-}): { about: string; type: string } {
+} {
   return { about: input.about, type: input.type };
 }
 

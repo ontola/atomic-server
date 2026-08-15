@@ -111,7 +111,9 @@ export function NotificationEngineProvider({
       cancelled = true;
       active?.stop();
 
-      const w = window as Window & { __notificationEngine?: NotificationEngine };
+      const w = window as Window & {
+        __notificationEngine?: NotificationEngine;
+      };
 
       if (w.__notificationEngine === active) {
         delete w.__notificationEngine;

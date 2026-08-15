@@ -95,7 +95,8 @@ fn apns_host_from_env() -> String {
 
 fn load_fcm_from_env() -> Option<FcmConfig> {
     if let Some(account) = load_service_account() {
-        let project_id = env_nonempty(ENV_FCM_PROJECT).unwrap_or_else(|| account.project_id.clone());
+        let project_id =
+            env_nonempty(ENV_FCM_PROJECT).unwrap_or_else(|| account.project_id.clone());
         return Some(FcmConfig {
             project_id,
             auth: FcmAuth::ServiceAccount {
@@ -304,8 +305,8 @@ async fn fcm_bearer(cfg: &FcmConfig) -> Result<String, String> {
             if !status.is_success() {
                 return Err(format!("FCM OAuth HTTP {status}: {text}"));
             }
-            let v: JsonValue = serde_json::from_str(&text)
-                .map_err(|e| format!("FCM OAuth JSON: {e}"))?;
+            let v: JsonValue =
+                serde_json::from_str(&text).map_err(|e| format!("FCM OAuth JSON: {e}"))?;
             let token = v
                 .get("access_token")
                 .and_then(|x| x.as_str())

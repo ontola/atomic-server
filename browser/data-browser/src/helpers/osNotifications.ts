@@ -52,9 +52,8 @@ export function shouldUseOsSurface(): boolean {
 export async function getOsNotificationPermission(): Promise<OsNotificationPermission> {
   if (isRunningInTauri()) {
     try {
-      const { isPermissionGranted } = await import(
-        '@tauri-apps/plugin-notification'
-      );
+      const { isPermissionGranted } =
+        await import('@tauri-apps/plugin-notification');
 
       return (await isPermissionGranted()) ? 'granted' : 'default';
     } catch {
@@ -76,9 +75,8 @@ export async function getOsNotificationPermission(): Promise<OsNotificationPermi
 export async function ensureOsNotificationPermission(): Promise<boolean> {
   if (isRunningInTauri()) {
     try {
-      const { isPermissionGranted, requestPermission } = await import(
-        '@tauri-apps/plugin-notification'
-      );
+      const { isPermissionGranted, requestPermission } =
+        await import('@tauri-apps/plugin-notification');
 
       if (await isPermissionGranted()) {
         return true;
@@ -129,9 +127,8 @@ export async function showOsNotification(
 
   try {
     if (isRunningInTauri()) {
-      const { sendNotification } = await import(
-        '@tauri-apps/plugin-notification'
-      );
+      const { sendNotification } =
+        await import('@tauri-apps/plugin-notification');
       const id = notificationNumericId(input.subject);
 
       sendNotification({
@@ -191,9 +188,8 @@ export async function cancelOsNotification(subject: string): Promise<void> {
   }
 
   try {
-    const { cancel, removeActive } = await import(
-      '@tauri-apps/plugin-notification'
-    );
+    const { cancel, removeActive } =
+      await import('@tauri-apps/plugin-notification');
     const id = notificationNumericId(subject);
     await cancel([id]);
     await removeActive([{ id }]);

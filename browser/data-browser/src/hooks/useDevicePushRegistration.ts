@@ -31,10 +31,7 @@ export function useDevicePushRegistration(token?: string): void {
 
     let cancelled = false;
 
-    const upsert = async (
-      effectiveToken: string,
-      platform: PushPlatform,
-    ) => {
+    const upsert = async (effectiveToken: string, platform: PushPlatform) => {
       try {
         const personalDrive = await fetchPrivateDriveSubject(store, agent);
 
@@ -82,10 +79,7 @@ export function useDevicePushRegistration(token?: string): void {
 
       // DEV desktop stub so DevicePushToken ontology is exercised without FCM.
       if (import.meta.env.DEV && isRunningInTauri()) {
-        await upsert(
-          `stub:desktop:${agent.subject.slice(-12)}`,
-          'desktop',
-        );
+        await upsert(`stub:desktop:${agent.subject.slice(-12)}`, 'desktop');
       }
     })();
 

@@ -75,9 +75,7 @@ async function findNotificationItemForAbout(
 
       const res = await store.getResource(subject);
 
-      if (
-        !res.getClasses().includes(notifications.classes.notificationItem)
-      ) {
+      if (!res.getClasses().includes(notifications.classes.notificationItem)) {
         continue;
       }
 

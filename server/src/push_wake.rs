@@ -132,10 +132,7 @@ fn push_sender() -> Arc<dyn PushSender> {
 
 /// Agents that should be woken for a mention commit: everyone in `mentions`
 /// except the commit actor (self-mentions are not product alerts).
-pub fn agents_to_wake_for_mentions(
-    mentions: &[String],
-    actor: Option<&str>,
-) -> Vec<String> {
+pub fn agents_to_wake_for_mentions(mentions: &[String], actor: Option<&str>) -> Vec<String> {
     mentions
         .iter()
         .filter(|agent| actor.map(|a| a != agent.as_str()).unwrap_or(true))
@@ -272,8 +269,7 @@ pub async fn watch_wakes_for_resource(
             // Ensure it's a WatchSubscription when isA is present.
             if let Ok(is_a) = watch.get(urls::IS_A) {
                 if let Ok(classes) = is_a.to_subjects(None) {
-                    if !classes.is_empty()
-                        && !classes.iter().any(|c| c == urls::WATCH_SUBSCRIPTION)
+                    if !classes.is_empty() && !classes.iter().any(|c| c == urls::WATCH_SUBSCRIPTION)
                     {
                         continue;
                     }
@@ -412,7 +408,10 @@ mod tests {
         let hint = PushWakeHint::new("did:ad:doc1", "mention");
         let payload = hint.to_data_payload();
         let obj = payload.as_object().unwrap();
-        assert_eq!(obj.get("about").and_then(|v| v.as_str()), Some("did:ad:doc1"));
+        assert_eq!(
+            obj.get("about").and_then(|v| v.as_str()),
+            Some("did:ad:doc1")
+        );
         assert_eq!(obj.get("type").and_then(|v| v.as_str()), Some("mention"));
         assert!(!obj.contains_key("body"));
         assert!(!obj.contains_key("summary"));
@@ -446,10 +445,7 @@ mod tests {
 
     #[test]
     fn mention_wake_skips_actor() {
-        let mentions = vec![
-            "did:ad:agent:alice".into(),
-            "did:ad:agent:bob".into(),
-        ];
+        let mentions = vec!["did:ad:agent:alice".into(), "did:ad:agent:bob".into()];
         let woken = agents_to_wake_for_mentions(&mentions, Some("did:ad:agent:alice"));
         assert_eq!(woken, vec!["did:ad:agent:bob".to_string()]);
     }
@@ -467,10 +463,7 @@ mod tests {
         resource
             .set_unsafe(
                 urls::MENTIONS.into(),
-                Value::ResourceArray(vec![
-                    "did:ad:agent:alice".into(),
-                    "did:ad:agent:bob".into(),
-                ]),
+                Value::ResourceArray(vec!["did:ad:agent:alice".into(), "did:ad:agent:bob".into()]),
             )
             .unwrap();
 

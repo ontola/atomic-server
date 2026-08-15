@@ -32,8 +32,7 @@ pub const PLAIN_TEXT: &str = "https://atomicdata.dev/classes/PlainText";
 pub const FORK: &str = "https://atomicdata.dev/classes/Fork";
 pub const NOTIFICATION_ITEM: &str = "https://atomicdata.dev/classes/NotificationItem";
 pub const WATCH_SUBSCRIPTION: &str = "https://atomicdata.dev/classes/WatchSubscription";
-pub const NOTIFICATION_PREFERENCES: &str =
-    "https://atomicdata.dev/classes/NotificationPreferences";
+pub const NOTIFICATION_PREFERENCES: &str = "https://atomicdata.dev/classes/NotificationPreferences";
 pub const DEVICE_PUSH_TOKEN: &str = "https://atomicdata.dev/classes/DevicePushToken";
 pub const DIRECT_MESSAGE: &str = "https://atomicdata.dev/classes/DirectMessage";
 pub const ACCESS_REQUEST: &str = "https://atomicdata.dev/classes/AccessRequest";
@@ -48,26 +47,21 @@ pub const NOTIFICATION_TYPE: &str = "https://atomicdata.dev/properties/notificat
 pub const MENTIONED_AGENT: &str = "https://atomicdata.dev/properties/mentionedAgent";
 pub const WATCH_TARGET: &str = "https://atomicdata.dev/properties/watchTarget";
 pub const WATCH_KIND: &str = "https://atomicdata.dev/properties/watchKind";
-pub const NOTIFICATION_CHANNELS: &str =
-    "https://atomicdata.dev/properties/notificationChannels";
+pub const NOTIFICATION_CHANNELS: &str = "https://atomicdata.dev/properties/notificationChannels";
 pub const MUTED_UNTIL: &str = "https://atomicdata.dev/properties/mutedUntil";
-pub const NOTIFICATION_ENABLED: &str =
-    "https://atomicdata.dev/properties/notificationEnabled";
+pub const NOTIFICATION_ENABLED: &str = "https://atomicdata.dev/properties/notificationEnabled";
 pub const NOTIFICATION_READ: &str = "https://atomicdata.dev/properties/notificationRead";
 pub const DISMISSED: &str = "https://atomicdata.dev/properties/dismissed";
-pub const NOTIFICATION_SUMMARY: &str =
-    "https://atomicdata.dev/properties/notificationSummary";
+pub const NOTIFICATION_SUMMARY: &str = "https://atomicdata.dev/properties/notificationSummary";
 pub const NOTIFICATION_ACTOR: &str = "https://atomicdata.dev/properties/notificationActor";
 pub const DEDUPE_KEY: &str = "https://atomicdata.dev/properties/dedupeKey";
 pub const DEVICE_PUSH_AGENT: &str = "https://atomicdata.dev/properties/devicePushAgent";
 pub const PUSH_PLATFORM: &str = "https://atomicdata.dev/properties/pushPlatform";
 pub const PUSH_TOKEN: &str = "https://atomicdata.dev/properties/pushToken";
 pub const PUSH_APP_ID: &str = "https://atomicdata.dev/properties/pushAppId";
-pub const PUSH_TOKEN_UPDATED_AT: &str =
-    "https://atomicdata.dev/properties/pushTokenUpdatedAt";
+pub const PUSH_TOKEN_UPDATED_AT: &str = "https://atomicdata.dev/properties/pushTokenUpdatedAt";
 pub const REQUESTED_RIGHT: &str = "https://atomicdata.dev/properties/requestedRight";
-pub const ACCESS_REQUEST_STATUS: &str =
-    "https://atomicdata.dev/properties/accessRequestStatus";
+pub const ACCESS_REQUEST_STATUS: &str = "https://atomicdata.dev/properties/accessRequestStatus";
 // Content i18n (lib/defaults/i18n.json)
 pub const LANGUAGE: &str = "https://atomicdata.dev/properties/language";
 pub const TRANSLATION_OF: &str = "https://atomicdata.dev/properties/translationOf";

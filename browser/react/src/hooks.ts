@@ -688,8 +688,7 @@ export function useCanWrite(resource: Resource): boolean {
   const optimistic =
     !!agentSubject &&
     (isNew ||
-      (!!subject?.startsWith('did:ad:') &&
-        agentSubject.startsWith('did:ad:')));
+      (!!subject?.startsWith('did:ad:') && agentSubject.startsWith('did:ad:')));
 
   const [canWrite, setCanWrite] = useState<boolean>(optimistic);
 

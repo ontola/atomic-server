@@ -176,21 +176,24 @@ test.describe('notifications', () => {
   test('dev-drive workspace is not the personal inbox drive', async ({
     page,
   }) => {
-    const { current, personal } = await page.evaluate(async personalDriveProp => {
-      const store = window.store;
-      const agent = store.getAgent();
+    const { current, personal } = await page.evaluate(
+      async personalDriveProp => {
+        const store = window.store;
+        const agent = store.getAgent();
 
-      if (!agent?.subject) throw new Error('no agent');
+        if (!agent?.subject) throw new Error('no agent');
 
-      const agentRes = await store.fetchResourceFromServer(agent.subject, {
-        noWebSocket: true,
-      });
+        const agentRes = await store.fetchResourceFromServer(agent.subject, {
+          noWebSocket: true,
+        });
 
-      return {
-        current: store.getDrive(),
-        personal: agentRes.get(personalDriveProp),
-      };
-    }, PERSONAL_DRIVE);
+        return {
+          current: store.getDrive(),
+          personal: agentRes.get(personalDriveProp),
+        };
+      },
+      PERSONAL_DRIVE,
+    );
 
     expect(personal).toBeTruthy();
     expect(current).toBeTruthy();
@@ -229,9 +232,7 @@ test.describe('notifications', () => {
     await expect(page.getByTestId('notifications-empty')).toBeVisible();
   });
 
-  test('inbox lists a NotificationItem with unread badge', async ({
-    page,
-  }) => {
+  test('inbox lists a NotificationItem with unread badge', async ({ page }) => {
     test.slow();
 
     const personalDrive = await resolvePersonalDrive(page);
@@ -457,12 +458,10 @@ test.describe('notifications', () => {
         nameProp,
         docClass,
         notificationItem,
-        isAProp,
       }) => {
         const store = window.store;
-        const engine = (
-          window as Window & { __notificationEngine?: unknown }
-        ).__notificationEngine;
+        const engine = (window as Window & { __notificationEngine?: unknown })
+          .__notificationEngine;
 
         if (!engine) {
           throw new Error('__notificationEngine not ready');
@@ -523,10 +522,9 @@ test.describe('notifications', () => {
     await page.getByRole('link', { name: 'Notifications' }).click();
     await expect(page).toHaveURL(/\/app\/notifications/);
     const item = page.getByTestId('notification-item').first();
-    await expect(
-      item,
-      `created=${JSON.stringify(created)}`,
-    ).toBeVisible({ timeout: 20_000 });
+    await expect(item, `created=${JSON.stringify(created)}`).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(item).toContainText(/Mentioned you in Mention Host Doc/i);
     await expect(page.getByTestId('sidebar-notification-badge')).toBeVisible({
       timeout: 10_000,
@@ -706,7 +704,13 @@ test.describe('notifications', () => {
 
     // Mention B on a drive child — B has drive write via the invite above.
     const docSubject = await page.evaluate(
-      async ({ drive, agentB: mentioned, mentionsProp, nameProp, docClass }) => {
+      async ({
+        drive,
+        agentB: mentioned,
+        mentionsProp,
+        nameProp,
+        docClass,
+      }) => {
         const store = window.store;
         const doc = await store.newResource({
           parent: drive,
@@ -776,7 +780,9 @@ test.describe('notifications', () => {
       timeout: 15_000,
     });
     await page.getByTestId('send-message').click();
-    await expect(page.getByRole('heading', { name: 'Send message' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Send message' }),
+    ).toBeVisible();
   });
 
   test('direct message ResourceUpdated materializes inbox item', async ({
@@ -804,14 +810,12 @@ test.describe('notifications', () => {
         mentionsProp,
         nameProp,
         descProp,
-        isAProp,
         messageClass,
         notificationItem,
       }) => {
         const store = window.store;
-        const engine = (
-          window as Window & { __notificationEngine?: unknown }
-        ).__notificationEngine;
+        const engine = (window as Window & { __notificationEngine?: unknown })
+          .__notificationEngine;
 
         if (!engine) {
           throw new Error('__notificationEngine not ready');
@@ -851,7 +855,6 @@ test.describe('notifications', () => {
         mentionsProp: MENTIONS,
         nameProp: NAME,
         descProp: 'https://atomicdata.dev/properties/description',
-        isAProp: 'https://atomicdata.dev/properties/isA',
         messageClass: 'https://atomicdata.dev/classes/DirectMessage',
         notificationItem: NOTIFICATION_ITEM,
       },
@@ -896,9 +899,8 @@ test.describe('notifications', () => {
         notificationItem,
       }) => {
         const store = window.store;
-        const engine = (
-          window as Window & { __notificationEngine?: unknown }
-        ).__notificationEngine;
+        const engine = (window as Window & { __notificationEngine?: unknown })
+          .__notificationEngine;
 
         if (!engine) {
           throw new Error('__notificationEngine not ready');
@@ -932,7 +934,9 @@ test.describe('notifications', () => {
           for (const res of store.resources.values()) {
             if (
               res.getClasses?.().includes(notificationItem) &&
-              String(res.get?.(nameProp) ?? '').includes('Requested write access')
+              String(res.get?.(nameProp) ?? '').includes(
+                'Requested write access',
+              )
             ) {
               return { ok: true };
             }
@@ -960,7 +964,9 @@ test.describe('notifications', () => {
     await expect(page).toHaveURL(/\/app\/notifications/);
     const item = page.getByTestId('notification-item').first();
     await expect(item).toBeVisible({ timeout: 20_000 });
-    await expect(item).toContainText(/Requested write access to Private Notes/i);
+    await expect(item).toContainText(
+      /Requested write access to Private Notes/i,
+    );
     await expect(page.getByTestId('grant-access')).toBeVisible();
   });
 });
