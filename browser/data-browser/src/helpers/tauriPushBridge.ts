@@ -14,7 +14,10 @@
 import { isRunningInTauri } from './tauri';
 import { queuePushWakeReceive, queuePushWakeTap } from './pushWakeTap';
 
-export type PushTokenListener = (token: string, platform: 'ios' | 'android') => void;
+export type PushTokenListener = (
+  token: string,
+  platform: 'ios' | 'android',
+) => void;
 
 let pushTokenListener: PushTokenListener | undefined;
 let cachedPushToken: string | undefined;
@@ -35,8 +38,9 @@ function typeFromExtra(extra: unknown): string {
     return 'mention';
   }
 
-  const t = (extra as { type?: unknown; notificationType?: unknown }).type
-    ?? (extra as { notificationType?: unknown }).notificationType;
+  const t =
+    (extra as { type?: unknown; notificationType?: unknown }).type ??
+    (extra as { notificationType?: unknown }).notificationType;
 
   return typeof t === 'string' && t.length > 0 ? t : 'mention';
 }
@@ -156,15 +160,14 @@ export function ingestRemotePushPayload(payload: unknown): void {
   const about =
     typeof bag.about === 'string'
       ? bag.about
-      : aboutFromExtra(bag) ?? aboutFromExtra(data.extra);
+      : (aboutFromExtra(bag) ?? aboutFromExtra(data.extra));
 
   if (!about) {
     return;
   }
 
   const type = typeFromExtra(bag) || typeFromExtra(data);
-  const tapped =
-    data.userInteraction === true || data.actionId === 'tap';
+  const tapped = data.userInteraction === true || data.actionId === 'tap';
 
   if (tapped) {
     queuePushWakeTap(about);
@@ -180,6 +183,7 @@ async function subscribeRemotePushEvents(): Promise<void> {
 
   try {
     const { listen } = await import('@tauri-apps/api/event');
+
     // Best-effort: plugin / OS may emit any of these when a remote push lands.
     for (const name of [
       'push-notification',

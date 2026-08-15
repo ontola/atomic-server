@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  notificationNumericId,
-  shouldUseOsSurface,
-} from './osNotifications';
+import { notificationNumericId, shouldUseOsSurface } from './osNotifications';
 
 describe('osNotifications helpers', () => {
   it('notificationNumericId is stable and non-zero', () => {

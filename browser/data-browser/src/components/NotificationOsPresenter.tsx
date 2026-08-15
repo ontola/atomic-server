@@ -194,9 +194,7 @@ export function NotificationOsPresenter(): null {
       try {
         const { onAction } = await import('@tauri-apps/plugin-notification');
         const listener = await onAction(notification => {
-          const extra = notification.extra as
-            | { about?: string }
-            | undefined;
+          const extra = notification.extra as { about?: string } | undefined;
           const about =
             typeof extra?.about === 'string' && extra.about.length > 0
               ? extra.about
