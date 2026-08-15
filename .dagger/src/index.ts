@@ -508,11 +508,12 @@ export class AtomicServer {
           '-lc',
           `${pathPrefix} && ` +
             'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi && ' +
-            // Git-exported sources can have mtimes older than this cache
-            // volume, so cargo would link a stale test binary. Touch, then
-            // run single-threaded: the suite shares a process-global OnceLock
-            // DB (`shared_drive` in rust/src/api/simple/tests.rs).
-            'touch rust/src/lib.rs rust/src/api/simple.rs rust/src/api/simple/tests.rs && ' +
+            // The `flutter-plugin-rust-target` volume can keep an atomic_lib
+            // rlib newer than git-exported `lib/` mtimes, so cargo links a
+            // stale crate (missing DEVICE_PUSH_* urls) against new simple.rs.
+            // Clean both packages, then run single-threaded: the suite shares
+            // a process-global OnceLock DB (`shared_drive`).
+            'cargo clean --manifest-path rust/Cargo.toml -p atomic_lib -p rust_lib_atomiccanvas_flutter && ' +
             'cargo test --manifest-path rust/Cargo.toml -- --test-threads=1',
         ])
         .stdout()
