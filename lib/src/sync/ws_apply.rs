@@ -357,6 +357,59 @@ pub async fn apply_commit_json(store: &Db, body: &str) -> AtomicResult<()> {
 }
 
 #[cfg(test)]
+mod replica_commit_ingest_tests {
+    use super::*;
+    use crate::client::commit_to_wire_json;
+    use crate::commit::{Commit, CommitBuilder};
+
+    /// Flutter WS catch-up applies a commit the hub already accepted. The
+    /// local store may not have the ACL graph yet, so this path does **not**
+    /// re-check write rights. Peer/hub ingest still does — see
+    /// `engine_commit_from_unauthorized_signer_is_rejected`.
+    #[tokio::test]
+    async fn apply_commit_json_does_not_recheck_signer_rights() {
+        let db = Db::init_temp("replica_skip_rights").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let mallory = db.create_agent(Some("Mallory")).await.unwrap();
+
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::NAME.into(),
+            crate::Value::String("Intruder".into()),
+        );
+        builder.set(
+            crate::urls::PARENT.into(),
+            crate::Value::AtomicUrl(drive.into()),
+        );
+        let commit = Commit::create_did(builder, &mallory, &db).await.unwrap();
+        let new_subject = commit.subject.to_string();
+        let commit_json = commit_to_wire_json(&commit, &db).await.unwrap();
+
+        apply_commit_json(&db, &commit_json)
+            .await
+            .expect("replica WS apply skips write-rights (hub already checked)");
+
+        db.get_resource(&new_subject.as_str().into())
+            .await
+            .expect("the committed resource must exist after replica apply");
+    }
+
+    /// Signature check still runs on the replica path — this is not a
+    /// blank-check import.
+    #[tokio::test]
+    async fn apply_commit_json_still_rejects_unsigned_body() {
+        let db = Db::init_temp("replica_requires_signature").await.unwrap();
+        let err = apply_commit_json(&db, "{}")
+            .await
+            .expect_err("a body with no signature must not apply");
+        assert!(
+            !err.to_string().is_empty(),
+            "the rejection must carry a reason"
+        );
+    }
+}
+
+#[cfg(test)]
 mod resolve_update_drive_spoof_tests {
     use super::*;
     use crate::loro::AtomicLoroDoc;
