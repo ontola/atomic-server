@@ -4,9 +4,12 @@ import { CodeBlock } from '../components/CodeBlock';
 import { createAuthentication, useServerURL } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { Main } from '../components/Main';
-import { pathNames } from './paths';
+import { pathNames, paths } from './paths';
 import { appRoute } from './RootRoutes';
 import { createRoute } from '@tanstack/react-router';
+import { WarningBlock } from '../components/WarningBlock';
+import { Column } from '../components/Row';
+import { AtomicLink } from '../components/AtomicLink';
 
 export const TokenRoute = createRoute({
   path: pathNames.token,
@@ -34,7 +37,18 @@ const TokenRoutePage: React.FunctionComponent = () => {
   return (
     <Main>
       <ContainerNarrow>
-        <CodeBlock content={token} />
+        <Column gap='1rem'>
+          <WarningBlock>
+            <WarningBlock.Title>
+              This signs in as you, with all of your rights.
+            </WarningBlock.Title>
+            It is a short-lived session for a personal CLI — not a scoped key
+            for an app. For Raycast, a plugin, or anything that should not hold
+            your account secret, create an app key in{' '}
+            <AtomicLink path={paths.agentSettings}>User Settings</AtomicLink>.
+          </WarningBlock>
+          <CodeBlock content={token} />
+        </Column>
       </ContainerNarrow>
     </Main>
   );

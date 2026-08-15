@@ -113,6 +113,26 @@ Both matter because `iroh_transport` holds the router and node identity in
 
 ---
 
+## App keys (issued agents)
+
+Mint a new agent, grant it drive-level rights, keep the signed-in session as you. Plan: [`planning/issued-agents.md`](./planning/issued-agents.md).
+
+### Glue — covered
+
+| Flow | Where |
+|---|---|
+| Mint does not call `setAgent`; secret round-trips; read-only vs write ACL | `browser/lib/src/issue-access-agent.test.ts` |
+| Grant an existing key more workspaces; revoke removes ACL and marks the name | `browser/lib/src/issue-access-agent.test.ts` |
+
+### Flow — not covered
+
+| Flow | Note |
+|---|---|
+| User Settings create → secret shown once → list row → revoke | UI only; helper tests catch the session-switch failure mode |
+| Last-used for read-only keys | Not built (needs auth-event writes; see the plan) |
+
+---
+
 ## Blind spots
 
 Ordered by how much they would hurt.

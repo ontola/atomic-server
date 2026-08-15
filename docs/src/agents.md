@@ -36,3 +36,18 @@ See the [DID specification](did.md) for details on how agent DIDs work and are r
 One way to start using your Agent is by accepting an [Invite](invitations.md) with your public key.
 The server will derive the `did:ad:agent:` identifier and grant the requested rights.
 Alternatively, you can host an [Atomic Server](https://crates.io/crates/atomic-server) and use the `/setup` invite to configure the root Agent.
+
+## App keys (issued agents)
+
+An Agent secret is a credential. Your **account** secret should stay on your devices. When an app or plugin needs access — a Raycast extension that should read your workspaces, a CI job, a local script — mint a **new** Agent, grant it only the rights it needs, and give *that* secret to the app.
+
+In the Data Browser this is **User Settings → App keys**:
+
+1. Name the key (e.g. `Raycast`).
+2. Choose Read only or Read and write, and which workspaces it may access.
+3. Copy the secret once. It is not stored. If you lose it, revoke the key and create a new one.
+4. The signed-in session stays you. The new identity is a separate `did:ad:agent:…`.
+
+Revoking a key removes it from those workspaces' `read` / `write` lists. The Agent resource stays (old commits still need the public key); it just can no longer read or write what you granted.
+
+This is not the same as the `/app/token` bearer page, which signs in **as you** for a short session. Do not give that to a plugin.

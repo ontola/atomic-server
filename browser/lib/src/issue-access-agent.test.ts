@@ -1,0 +1,143 @@
+import { describe, expect, it } from 'vitest';
+import { Agent } from './agent.js';
+import {
+  grantAccessAgent,
+  isRevokedAccessAgentName,
+  issueAccessAgent,
+  revokeAccessAgent,
+} from './issue-access-agent.js';
+import { core } from './ontologies/core.js';
+import { server } from './ontologies/server.js';
+import { testStore } from './test-store.js';
+
+async function createWorkspace(
+  store: Awaited<ReturnType<typeof testStore>>['store'],
+  owner: string,
+  name: string,
+) {
+  const drive = await store.newResource({
+    noParent: true,
+    isA: server.classes.drive,
+    propVals: {
+      [core.properties.name]: name,
+      [core.properties.read]: [owner],
+      [core.properties.write]: [owner],
+    },
+  });
+  await drive.save();
+
+  return drive;
+}
+
+describe('issueAccessAgent', () => {
+  it('mints a new agent without switching the signed-in session', async () => {
+    const { store, agentDID } = await testStore();
+    const drive = await createWorkspace(store, agentDID, 'Notes');
+
+    const issued = await issueAccessAgent(store, {
+      name: 'Raycast',
+      write: false,
+      targets: [drive.subject],
+    });
+
+    expect(store.getAgent()?.subject).toBe(agentDID);
+    expect(issued.subject).toMatch(/^did:ad:agent:/);
+    expect(issued.subject).not.toBe(agentDID);
+
+    const profile = await store.getResource(issued.subject);
+    expect(profile.get(core.properties.name)).toBe('Raycast');
+    expect(profile.get(core.properties.isA)).toEqual([core.classes.agent]);
+    expect(profile.get(core.properties.publicKey)).toBeTruthy();
+
+    const read = drive.get(core.properties.read) as string[];
+    const write = drive.get(core.properties.write) as string[];
+    expect(read).toContain(issued.subject);
+    expect(write).not.toContain(issued.subject);
+    expect(write).toContain(agentDID);
+  });
+
+  it('round-trips the secret to a working agent', async () => {
+    const { store, agentDID } = await testStore();
+    const drive = await createWorkspace(store, agentDID, 'Notes');
+
+    const issued = await issueAccessAgent(store, {
+      name: 'CLI',
+      write: true,
+      targets: [drive.subject],
+    });
+
+    const fromSecret = Agent.fromSecret(issued.secret, 'js');
+    expect(fromSecret.subject).toBe(issued.subject);
+    expect(await fromSecret.sign('hello')).toMatch(/./);
+
+    const write = drive.get(core.properties.write) as string[];
+    expect(write).toContain(issued.subject);
+  });
+
+  it('refuses to mint without a name, targets, or a signed-in agent', async () => {
+    const { store, agentDID } = await testStore();
+    const drive = await createWorkspace(store, agentDID, 'Notes');
+
+    await expect(
+      issueAccessAgent(store, {
+        name: '   ',
+        write: false,
+        targets: [drive.subject],
+      }),
+    ).rejects.toThrow('name');
+
+    await expect(
+      issueAccessAgent(store, {
+        name: 'Raycast',
+        write: false,
+        targets: [],
+      }),
+    ).rejects.toThrow('workspace');
+
+    store.setAgent(undefined);
+    await expect(
+      issueAccessAgent(store, {
+        name: 'Raycast',
+        write: false,
+        targets: [drive.subject],
+      }),
+    ).rejects.toThrow('signed out');
+  });
+});
+
+describe('grantAccessAgent and revokeAccessAgent', () => {
+  it('adds an existing key to another workspace and later removes it', async () => {
+    const { store, agentDID } = await testStore();
+    const notes = await createWorkspace(store, agentDID, 'Notes');
+    const photos = await createWorkspace(store, agentDID, 'Photos');
+
+    const issued = await issueAccessAgent(store, {
+      name: 'Raycast',
+      write: false,
+      targets: [notes.subject],
+    });
+
+    await grantAccessAgent(store, issued.subject, [photos.subject], false);
+    expect(photos.get(core.properties.read) as string[]).toContain(
+      issued.subject,
+    );
+
+    await revokeAccessAgent(store, issued.subject, [
+      notes.subject,
+      photos.subject,
+    ]);
+
+    expect(notes.get(core.properties.read) as string[]).not.toContain(
+      issued.subject,
+    );
+    expect(photos.get(core.properties.read) as string[]).not.toContain(
+      issued.subject,
+    );
+    expect(notes.get(core.properties.write) as string[]).toContain(agentDID);
+
+    const profile = await store.getResource(issued.subject);
+    expect(profile.get(core.properties.name)).toBe('Raycast (revoked)');
+    expect(isRevokedAccessAgentName('Raycast (revoked)')).toBe(true);
+    expect(isRevokedAccessAgentName('Raycast')).toBe(false);
+  });
+});

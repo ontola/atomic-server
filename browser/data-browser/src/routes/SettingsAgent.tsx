@@ -26,6 +26,7 @@ import { DrivesCard } from '../components/Drives/DrivesCard';
 import { AccountRecoveryCard } from '../components/AccountRecoveryCard';
 import { AgentProfileHeader } from '../components/AgentProfileHeader';
 import { DeviceLockCard } from '../components/DeviceLockCard';
+import { AppKeysCard } from '../components/AppKeysCard';
 import { NewInstanceButton } from '../components/NewInstanceButton';
 import { useSavedDrives } from '../hooks/useSavedDrives';
 import { useDriveHistory } from '../hooks/useDriveHistory';
@@ -282,6 +283,14 @@ const SettingsAgent: React.FunctionComponent = () => {
                   />
                 </>
               )}
+
+              <Margin />
+
+              <Row center gap='1ch'>
+                <Heading as='h2'>App keys</Heading>
+                <InfoHint title='Secrets for apps and plugins. Each key is its own identity — not your account secret.' />
+              </Row>
+              <AppKeysCard />
 
               <Margin />
 
