@@ -12,6 +12,13 @@ import {
 } from '@tomic/react';
 import { styled, keyframes, css, type DefaultTheme } from 'styled-components';
 import {
+  cardSurface,
+  CardIcon,
+  CARD_SUB_FONT,
+  CARD_TITLE_FONT,
+} from '../components/cardSurface';
+import { openExternal } from '../helpers/openExternal';
+import {
   FaLaptop,
   FaServer,
   FaCheck,
@@ -22,8 +29,19 @@ import {
   FaPlus,
   FaMobileScreenButton,
   FaCloudArrowUp,
+  FaKey,
 } from 'react-icons/fa6';
 import { Button } from '../components/Button';
+import { VaultPanel } from '../components/Vault/VaultPanel';
+import { LinkProviderPanel } from '../components/Vault/LinkProviderPanel';
+import { isDeviceLinked } from '../helpers/managed/deviceLink';
+import {
+  getManagedAccount,
+  type ManagedAccount,
+} from '../helpers/managed/session';
+import { getRememberedManagedPortalUrl } from '../helpers/managed/api';
+import { getRecoverySecret } from '../helpers/managed/recovery';
+import { useDriveVault } from '../helpers/managed/useDriveVault';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
 import { Card } from '../components/Card';
@@ -65,6 +83,7 @@ import {
   ensureManagedSession,
   driveHasCloudEnrollment,
   isCloudSyncAvailable,
+  getManagedPortalUrl,
 } from '../helpers/managed/cloudSync';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
@@ -176,6 +195,235 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
 }
 
+type ServerCardProps = {
+  server: string;
+  status: StoreSyncStatus;
+  managedInfo: ManagedInfo;
+  /** Sync status of the server actually in use. */
+  serverStatus: NodeStatus;
+  hasWorkingLocalStore: boolean;
+  nodeUsage: NodeDriveUsage | null;
+  quotaBytes: number | null;
+  serverNodeId: string | null;
+  onSwitch: (server: string) => void;
+  onRemove: (server: string) => void;
+};
+
+/**
+ * One server, as a card.
+ *
+ * Rendered in two places, which is why it is a component: a managed node is no
+ * longer listed among the devices, because it is one of the provider's
+ * services and belongs inside the account card. Both places want the same
+ * content — status, usage, node id, the way to disconnect — and one renderer
+ * is what stops the two copies drifting.
+ *
+ * At module scope with every input passed in, even though all of them are to
+ * hand in `SyncPage`. A component declared inside another component is a fresh
+ * type on every parent render, so React remounts the subtree rather than
+ * updating it — which for this card means throwing away a live connection's
+ * DOM on every keystroke elsewhere on the page.
+ */
+function ServerCard({
+  server,
+  status,
+  managedInfo,
+  serverStatus,
+  hasWorkingLocalStore,
+  nodeUsage,
+  quotaBytes,
+  serverNodeId,
+  onSwitch,
+  onRemove,
+}: ServerCardProps) {
+  const store = useStore();
+  const isActive = sameOrigin(server, status.serverUrl);
+  const isCloud = isActive && managedInfo.managed;
+  const serverHostname = status.serverUrl
+    ? new URL(status.serverUrl).hostname
+    : undefined;
+  const usagePct =
+    nodeUsage && quotaBytes
+      ? Math.min(
+          100,
+          Math.round(
+            ((nodeUsage.blobBytes + nodeUsage.loroBytes) / quotaBytes) * 100,
+          ),
+        )
+      : null;
+
+  const syncedAgo = status.lastDriveSync
+    ? formatTimeAgo(new Date(status.lastDriveSync.timestamp))
+    : null;
+  const usedBytes = nodeUsage
+    ? nodeUsage.blobBytes + nodeUsage.loroBytes
+    : null;
+  /**
+   * What is true of the server in use, as whole phrases joined by a dot.
+   *
+   * Assembled here rather than written inline in the JSX for two reasons.
+   * Interpolated text placed directly inside a `&&` guard extracts wrong —
+   * wuchale keeps the leading literal and drops the arguments, so at runtime
+   * the lookup wants more placeholders than the catalogue entry has and the
+   * line renders as `[i18n-404:…]`. And a translator given a whole phrase can
+   * reorder it, which is the whole point; given `resources ·` and ` of ` they
+   * cannot.
+   *
+   * Each phrase has to start with a capital or a placeholder: wuchale's
+   * default heuristic drops script-scope strings with a lower-case beginning,
+   * on the reasoning that those are usually identifiers rather than prose. A
+   * dropped string is not an error, it is simply never translated — which is
+   * the quiet failure, so it is worth knowing about.
+   */
+  const facts: string[] = [];
+
+  if (nodeUsage && usedBytes !== null) {
+    facts.push(`${nodeUsage.resourceCount.toLocaleString()} resources`);
+    facts.push(
+      quotaBytes
+        ? `${formatBytes(usedBytes)} of ${formatBytes(quotaBytes)}`
+        : formatBytes(usedBytes),
+    );
+  }
+
+  if (status.lastDriveSync) {
+    facts.push(syncedAgo ? `Synced ${syncedAgo}` : 'Synced just now');
+  }
+
+  return (
+    <ConnCard $active={isActive} $provider={isCloud}>
+      <CardIcon $tone={isCloud ? 'provider' : 'neutral'}>
+        {isCloud ? <FaCloud /> : <FaServer />}
+      </CardIcon>
+      <ConnBody>
+        <ConnTopRow>
+          <ConnTitle>
+            {isCloud ? 'Cloud Server' : serverLabel(server)}
+          </ConnTitle>
+          <ConnTopRight>
+            {isActive ? (
+              <>
+                <StatusPill $status={serverStatus}>
+                  <StatusIcon status={serverStatus} />
+                  {statusLabel(serverStatus)}
+                </StatusPill>
+                {status.serverConnected ? (
+                  // Without a working local store (embedded node or
+                  // ready OPFS cache), the server is the only data
+                  // source — disconnecting would leave the app with
+                  // no data at all.
+                  <NodeAction
+                    onClick={() => store.disconnect()}
+                    disabled={!hasWorkingLocalStore}
+                    title={
+                      hasWorkingLocalStore
+                        ? undefined
+                        : 'Local storage is off, so this server is the only data source. Enable local storage below to work disconnected.'
+                    }
+                  >
+                    Disconnect
+                  </NodeAction>
+                ) : (
+                  <NodeAction
+                    onClick={() =>
+                      store.reconnect().catch(e => store.notifyError(e))
+                    }
+                  >
+                    Reconnect
+                  </NodeAction>
+                )}
+              </>
+            ) : (
+              <>
+                <StatusPill $status='unknown'>Not connected</StatusPill>
+                <NodeAction onClick={() => onSwitch(server)}>Switch</NodeAction>
+              </>
+            )}
+          </ConnTopRight>
+        </ConnTopRow>
+
+        <ConnSub>
+          {isActive
+            ? isCloud
+              ? serverHostname
+              : 'Always-on · in use'
+            : 'Always-on device'}
+        </ConnSub>
+
+        {/* Status details belong to the server actually in use. */}
+        {isActive &&
+          !status.serverConnected &&
+          status.serverConnectionError && (
+            <ConnError role='alert'>
+              <FaCircleExclamation aria-hidden />
+              <span>{status.serverConnectionError}</span>
+            </ConnError>
+          )}
+
+        {isActive && usagePct !== null && (
+          <UsageBar
+            aria-label={`${usagePct}% of storage used`}
+            title={`${usagePct}% used`}
+          >
+            <UsageFill style={{ width: `${usagePct}%` }} />
+          </UsageBar>
+        )}
+
+        {isActive && facts.length > 0 && (
+          <ConnMeta>{facts.join(' · ')}</ConnMeta>
+        )}
+
+        {/* A node id identifies this server's node, so it belongs on
+                    the server — not buried in Developer. */}
+        {isActive && serverNodeId && (
+          <NodeIdRow>
+            <NodeIdLabel>Node ID</NodeIdLabel>
+            <NodeIdValue
+              title={`Copy ${rawToNodeDid(serverNodeId)}`}
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(
+                    rawToNodeDid(serverNodeId),
+                  );
+                  toast.success('Node ID copied');
+                } catch (e) {
+                  store.notifyError(e as Error);
+                }
+              }}
+            >
+              {rawToNodeDid(serverNodeId)}
+            </NodeIdValue>
+          </NodeIdRow>
+        )}
+
+        {isCloud && managedInfo.portalUrl && (
+          <ConnActions>
+            <ManagedLink
+              // The dashboard, not the portal root: signed-in
+              // visitors get the marketing page at `/`, so the
+              // link landed on a sales pitch rather than the
+              // account it promises to manage.
+              href={`${managedInfo.portalUrl}/dashboard`}
+              target='_blank'
+              rel='noopener noreferrer'
+            >
+              {'Manage account & plan →'}
+            </ManagedLink>
+          </ConnActions>
+        )}
+        {/* Removing the server you're using would strand the app. */}
+        {!isActive && (
+          <ConnActions>
+            <NodeActionSubtle onClick={() => onRemove(server)}>
+              Remove
+            </NodeActionSubtle>
+          </ConnActions>
+        )}
+      </ConnBody>
+    </ConnCard>
+  );
+}
+
 function SyncPage() {
   const store = useStore();
   const [status, setStatus] = useState<StoreSyncStatus>(() =>
@@ -210,7 +458,7 @@ function SyncPage() {
   const [peerSyncing, setPeerSyncing] = useState(false);
   const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
-  // Cloud Sync (SaaS) backup state for the active drive. `null` = not yet
+  // Cloud Server (SaaS) hosting state for the active drive. `null` = not yet
   // known / not applicable; `false` = eligible but not enrolled (show the CTA);
   // `true` = already enrolled (hide it).
   const [cloudEnrolled, setCloudEnrolled] = useState<boolean | null>(null);
@@ -238,6 +486,98 @@ function SyncPage() {
   // `managed:false` and no portal link is shown; anything plan/billing-specific
   // lives behind the link, on the operator's portal.
   const [managedInfo, setManagedInfo] = useState<ManagedInfo>(EMPTY_NODE_INFO);
+
+  // Cloud Vault. Assembling its prerequisites (wasm key ops, this install's
+  // lane id, the signing agent) lives in the hook, which the wiped-device
+  // onboarding screen uses too — both have to agree about whether a vault
+  // exists for this drive.
+  const vault = useDriveVault(status.drive ?? null);
+
+  /**
+   * Does this client need to link before it can reach the provider at all?
+   *
+   * True only when nothing is linked yet and `/api/me` says there is no
+   * session — the state a self-hosted, desktop or Android client starts in,
+   * and never the state of a browser served from the provider's own site.
+   *
+   * Deliberately not gated on the vault's own status: the vault reports
+   * `unavailable` only once it has an agent, a drive and its wasm keys to ask
+   * with. A fresh install has none of those and sits at `loading`, so gating
+   * on it hid the one control that could have fixed the situation.
+   */
+  const [needsProviderLink, setNeedsProviderLink] = useState(false);
+
+  /**
+   * The provider account this client is signed in to, if any.
+   *
+   * Kept rather than reduced to a boolean because the account is what earns a
+   * link back to the portal, and that relationship exists independently of any
+   * managed node: Cloud Vault is blind backup and needs no hosting, so a user
+   * can be signed in with nothing managed in sight.
+   */
+  const [managedAccount, setManagedAccount] = useState<ManagedAccount | null>(
+    null,
+  );
+
+  /**
+   * Whether the account holds an encrypted recovery backup.
+   *
+   * `null` until asked, and on failure — "we could not check" is not "you have
+   * none", and telling someone their recovery is missing when the control
+   * plane was merely unreachable is the one wrong answer this row can give.
+   */
+  const [hasRecoveryBackup, setHasRecoveryBackup] = useState<boolean | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!managedAccount) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const secret = await getRecoverySecret();
+
+        if (!cancelled) setHasRecoveryBackup(secret !== null);
+      } catch {
+        if (!cancelled) setHasRecoveryBackup(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [managedAccount]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      // Asked even when this device is already linked. The link only settles
+      // *how* this client authenticates; it says nothing about who, and the
+      // portal link needs the account itself.
+      const linked = isDeviceLinked();
+
+      try {
+        const account = await getManagedAccount();
+
+        if (cancelled) return;
+
+        setManagedAccount(account);
+        setNeedsProviderLink(!linked && account === null);
+      } catch {
+        // Unreachable control plane. Offering to link is the useful answer —
+        // the alternative is a Sync page that silently omits backup with no
+        // way to ask for it.
+        if (!cancelled) setNeedsProviderLink(!linked);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const serverUrl = status.serverUrl;
@@ -374,8 +714,8 @@ function SyncPage() {
       .catch(() => {});
   }, []);
 
-  // Does the active drive already have a Cloud Sync enrollment? Drives the
-  // "Back up to Cloud Sync" CTA below. Skips entirely when no control plane is
+  // Does the active drive already have a Cloud Server enrollment? Drives the
+  // Cloud Server CTA below. Skips entirely when no control plane is
   // reachable (pure self-hosted), so the CTA never shows there.
   useEffect(() => {
     const drive = status.drive;
@@ -480,7 +820,7 @@ function SyncPage() {
     }
   });
 
-  // Offer a Cloud Sync backup only for a drive that lives on this device (a
+  // Offer Cloud Server only for a drive that lives on this device (a
   // local-only drive, or the embedded node with no remote server) and isn't
   // already enrolled. A drive already homed on a remote server is a migration,
   // not a backup — out of scope for this action.
@@ -492,15 +832,49 @@ function SyncPage() {
     deviceLocalDrive &&
     !driveMissing;
 
-  const usagePct =
-    nodeUsage && quotaBytes
-      ? Math.min(
-          100,
-          Math.round(
-            ((nodeUsage.blobBytes + nodeUsage.loroBytes) / quotaBytes) * 100,
-          ),
-        )
-      : null;
+  /**
+   * Why Cloud Server can't be switched on from here, or null when it can.
+   *
+   * The row itself is unconditional once an account is known: a service that
+   * vanishes when it is off cannot be discovered, and "is this on?" is exactly
+   * the question this card exists to answer. But most of the reasons it can't
+   * be enabled right now are about *this device* rather than about the
+   * product, and saying which one is the difference between a page that reads
+   * as broken and one that reads as informative.
+   *
+   * The order matters: each line assumes the ones above it are false. `null`
+   * here is the same condition as `showCloudBackup`, by construction.
+   */
+  function cloudServerBlocker(): string | null {
+    if (!status.drive) {
+      return 'Open a workspace to see whether it can be hosted.';
+    }
+
+    if (driveMissing) {
+      return 'This device doesn’t have this workspace yet. Pair the device that does, and you can host it from here.';
+    }
+
+    if (cloudEnrolled === true) {
+      return `Already set up for this workspace. This app is reading from ${serverHostname ?? 'another server'} instead.`;
+    }
+
+    if (!isCloudSyncAvailable(managedInfo)) {
+      return `${serverHostname ?? 'This server'} doesn’t offer hosting, so it can’t be switched on from here.`;
+    }
+
+    if (cloudEnrolled === null) {
+      return 'Checking whether this workspace is hosted…';
+    }
+
+    if (!deviceLocalDrive) {
+      return `This workspace already lives on ${serverHostname ?? 'another server'}. Moving it here is a migration, not a backup.`;
+    }
+
+    return null;
+  }
+
+  /** Evaluated once: three JSX call sites want the same answer. */
+  const cloudServerBlocked = cloudServerBlocker();
 
   function summaryLine(): string {
     if (localOnlyDrive) {
@@ -519,6 +893,53 @@ function SyncPage() {
       connectionCount === 1 ? 'device' : 'devices'
     }.`;
   }
+
+  /** The provider's own node, when this drive is on one. */
+  const managedServer =
+    connectionServers.find(server => isManagedServer(server)) ?? null;
+
+  /** Is this one of ours? Mirrors `isCloud` inside the card renderer. */
+  function isManagedServer(server: string): boolean {
+    return sameOrigin(server, status.serverUrl) && managedInfo.managed;
+  }
+
+  /**
+   * A sales-page link for one tier, carrying what it would apply to.
+   *
+   * The portal only lists prices today, but buying a tier is per drive (that is
+   * how Cloud Server placement and Cloud Vault storage are both costed), so a
+   * checkout will need to know which drive and which agent it is selling to.
+   * Both identifiers are already on this page and both are public DIDs — the
+   * agent's *secret* never leaves the device — so passing them costs nothing
+   * now and saves the round trip later. Unknown values are omitted rather than
+   * sent empty.
+   */
+  function tierOfferUrl(portalUrl: string, tier: 'vault' | 'server'): string {
+    const url = new URL(portalUrl);
+    url.searchParams.set('tier', tier);
+
+    if (status.drive) url.searchParams.set('drive', status.drive);
+
+    const agentSubject = store.getAgent()?.subject;
+
+    if (agentSubject) url.searchParams.set('agent', agentSubject);
+
+    url.hash = 'pricing';
+
+    return url.toString();
+  }
+
+  /**
+   * Where to send someone who holds an account.
+   *
+   * Same sources as the Cloud Server CTA, then the control plane a managed
+   * node named earlier in this install's life. That fallback is what makes the
+   * link work on a device whose active node is unmanaged — a desktop app on
+   * its own embedded node, say — without inventing a URL for a node that has
+   * never heard of a portal.
+   */
+  const accountPortalUrl =
+    getManagedPortalUrl(managedInfo) ?? getRememberedManagedPortalUrl();
 
   async function promoteDrive() {
     if (!status.drive || promoting) return;
@@ -732,38 +1153,163 @@ function SyncPage() {
         <h1>Sync</h1>
         <Lead>{summaryLine()}</Lead>
 
-        {/* This device — always the source of truth for local-first data. */}
-        <DeviceCard>
-          <ConnIcon $tone='device'>
-            <FaLaptop />
-          </ConnIcon>
-          <ConnBody>
-            <ConnTitle>This device</ConnTitle>
-            <ConnSub>
-              {isNode
-                ? status.lastDriveSync
-                  ? `${status.lastDriveSync.count.toLocaleString()} resources · stored locally`
-                  : 'Embedded server · stored locally'
-                : clientDbOn
-                  ? 'Cached locally · works offline'
-                  : 'Server-only · no local cache'}
-            </ConnSub>
-            {isNode && localNodeId && (
-              <NodeIdRow>
-                <NodeIdLabel>Node ID</NodeIdLabel>
-                <NodeIdValue
-                  title='Copy Node ID'
-                  onClick={() => {
-                    navigator.clipboard.writeText(localNodeId);
-                    toast.success('Node ID copied');
-                  }}
+        {/* Everything our paid services own, in one card.
+
+            These used to be loose entries in the Devices list, on the reasoning
+            that a person does not think of "this device", "the backup" and "the
+            hosted workspace" as different kinds of thing — they are all places
+            the same data lives. True as far as it goes, but it left no answer to
+            a different question the page is also asked: which of this is a
+            product I am paying for, and where do I go to manage it. Grouping
+            under the account answers that without returning to the old stack of
+            free-floating offer cards, because this is one card, not three.
+
+            Gated on a portal being known at all, so a self-hosted node with no
+            control plane renders none of it. That URL comes from a managed
+            node, a build-time override, or one a node named earlier — never
+            from anything hardcoded here. */}
+        {accountPortalUrl && (
+          <ProviderCard data-testid='provider-card'>
+            <ProviderHeader>
+              <CardIcon $tone='provider'>
+                <FaCloud />
+              </CardIcon>
+              <AccountBody>
+                <AccountLabel>{PRODUCT_NAME}</AccountLabel>
+                <AccountEmail data-testid='provider-account'>
+                  {managedAccount
+                    ? 'Your cloud services'
+                    : 'Cloud services for this workspace'}
+                </AccountEmail>
+              </AccountBody>
+              {managedAccount && (
+                <ManagedLink
+                  // The dashboard, not the portal root: a signed-in visitor
+                  // gets the marketing page at `/`, so the link would land on
+                  // a sales pitch rather than the account it promises to
+                  // manage.
+                  href={`${accountPortalUrl}/dashboard`}
+                  target='_blank'
+                  rel='noopener noreferrer'
                 >
-                  {localNodeId}
-                </NodeIdValue>
-              </NodeIdRow>
+                  {'Manage account →'}
+                </ManagedLink>
+              )}
+            </ProviderHeader>
+
+            {/* Email recovery. Blue when it is actually set up, which is the
+                rule for every row here: colour answers "is this on", not "does
+                this exist". Left neutral while unknown too — a failed check
+                must not be drawn as a missing backup. */}
+            {managedAccount && (
+              <ProviderService data-testid='recovery-row'>
+                <CardIcon $tone={hasRecoveryBackup ? 'provider' : 'neutral'}>
+                  <FaKey />
+                </CardIcon>
+                <ConnBody>
+                  <ConnTitle>Email recovery</ConnTitle>
+                  <ConnSub>
+                    {hasRecoveryBackup === null
+                      ? `Signed in as ${managedAccount.email}.`
+                      : hasRecoveryBackup
+                        ? `${managedAccount.email} — we hold your key sealed, so this email gets you back in on a new device.`
+                        : `${managedAccount.email} — no recovery backup stored. Lose every device and this workspace is gone.`}
+                  </ConnSub>
+                </ConnBody>
+              </ProviderService>
             )}
-          </ConnBody>
-        </DeviceCard>
+
+            {/* Unconditional, like the other two: a service that disappears
+                when it is off cannot be found, and the question this card
+                answers is "is this on". `VaultPanel` renders every state
+                itself, including the seconds it spends deciding. */}
+            <ProviderService>
+              <VaultPanel
+                vault={vault}
+                embedded
+                offerUrl={tierOfferUrl(accountPortalUrl, 'vault')}
+                onOfferClick={url => void openExternal(url)}
+                onRestored={() => window.location.reload()}
+              />
+            </ProviderService>
+
+            {/* On: the managed node itself, rendered by the same function the
+                Devices list uses, so the two cannot drift. Off: the offer,
+                which stays on the page in every other state — with the reason
+                in place of the button when there is nothing to press. */}
+            {managedServer ? (
+              <ProviderService data-testid='cloud-server-row'>
+                <ServerCard
+                  server={managedServer}
+                  status={status}
+                  managedInfo={managedInfo}
+                  serverStatus={nodes.server}
+                  hasWorkingLocalStore={hasWorkingLocalStore}
+                  nodeUsage={nodeUsage}
+                  quotaBytes={quotaBytes}
+                  serverNodeId={serverNodeId}
+                  onSwitch={switchToServer}
+                  onRemove={removeServer}
+                />
+              </ProviderService>
+            ) : (
+              <ProviderService data-testid='cloud-server-row'>
+                {/* Glyph blue, card neutral: an offer should be findable as
+                    one of ours without being mistaken for a live service. */}
+                <CardIcon $tone='provider'>
+                  <FaCloud />
+                </CardIcon>
+                <ConnBody>
+                  <ConnTitle>Cloud Server</ConnTitle>
+                  <ConnSub>
+                    A hosted workspace on {PRODUCT_NAME}: shareable links,
+                    search across everything, API access, and no waiting on
+                    another device to be awake. Unlike Cloud Vault, our servers
+                    process what you put here.
+                  </ConnSub>
+                  {cloudServerBlocked && (
+                    <ConnMeta>{cloudServerBlocked}</ConnMeta>
+                  )}
+                  <ConnActions>
+                    {!cloudServerBlocked && (
+                      <Button onClick={backupToCloud} disabled={cloudBusy}>
+                        {cloudBusy ? 'Setting up…' : 'Set up Cloud Server'}
+                      </Button>
+                    )}
+                    {/* This tier costs money and reads our copy of your data,
+                        so "what am I agreeing to" deserves an answer that
+                        isn't a paragraph on this card. The sales page already
+                        explains the tiers side by side.
+
+                        Linked off the *account's* portal, not the connected
+                        node's: the states that most need a price are the ones
+                        where this device is talking to a node that has never
+                        heard of a portal. */}
+                    <LearnMore
+                      href={tierOfferUrl(accountPortalUrl, 'server')}
+                      // No `_blank` in the app: Tauri intercepts a new-window
+                      // request natively, before the click handler can cancel
+                      // it, and hands it to `shell.open` — which is denied and
+                      // then fails on Android regardless. The href stays real
+                      // either way, so this is still a link to assistive tech
+                      // and to "copy link address".
+                      target={isNode ? undefined : '_blank'}
+                      rel='noreferrer'
+                      onClick={e => {
+                        e.preventDefault();
+                        void openExternal(
+                          tierOfferUrl(accountPortalUrl, 'server'),
+                        );
+                      }}
+                    >
+                      See plans
+                    </LearnMore>
+                  </ConnActions>
+                </ConnBody>
+              </ProviderService>
+            )}
+          </ProviderCard>
+        )}
 
         {/* Signed in, but this device holds none of the account's data — it's
             still on whatever device created it. Pairing is the way across, so
@@ -771,9 +1317,9 @@ function SyncPage() {
             there is nothing here to promote. */}
         {driveMissing && (
           <LocalDriveNotice>
-            <ConnIcon $tone='device'>
+            <CardIcon>
               <FaMobileScreenButton />
-            </ConnIcon>
+            </CardIcon>
             <ConnBody>
               <ConnTitle>Your data is on another device</ConnTitle>
               <ConnSub>
@@ -795,37 +1341,20 @@ function SyncPage() {
           </LocalDriveNotice>
         )}
 
-        {/* This drive only exists on this device and there's a control plane to
-            back it up to. Leads over the generic "Sync this workspace" below:
-            it both enrolls the drive AND points the app at the assigned node. */}
-        {showCloudBackup && (
-          <LocalDriveNotice>
-            <ConnIcon $tone='cloud'>
-              <FaCloud />
-            </ConnIcon>
-            <ConnBody>
-              <ConnTitle>Back up to {PRODUCT_NAME}</ConnTitle>
-              <ConnSub>
-                This workspace lives only on this device. Turn on {PRODUCT_NAME}{' '}
-                to back it up and reach it from your other devices and the web.
-              </ConnSub>
-              <ConnActions>
-                <Button onClick={backupToCloud} disabled={cloudBusy}>
-                  {cloudBusy ? 'Setting up…' : `Back up to ${PRODUCT_NAME}`}
-                </Button>
-              </ConnActions>
-            </ConnBody>
-          </LocalDriveNotice>
-        )}
+        {/* Cloud Vault first: it is what a managed account gets by default, and
+            it is the promise we can make unconditionally — blind encrypted
+            backup we cannot read. It hides itself entirely when we cannot
+            determine its status, so a missing session never renders a dead
+            button. */}
 
         {/* A local-only drive (demo, or any drive made offline) isn't synced.
             Offer to promote it to a normal synced drive on the connected
             server — the same reconcile a regular drive uses, no special path. */}
         {localOnlyDrive && !driveMissing && !showCloudBackup && (
           <LocalDriveNotice>
-            <ConnIcon $tone='cloud'>
+            <CardIcon $tone='provider'>
               <FaCloudArrowUp />
-            </ConnIcon>
+            </CardIcon>
             <ConnBody>
               <ConnTitle>Only on this device</ConnTitle>
               <ConnSub>
@@ -849,20 +1378,74 @@ function SyncPage() {
 
         <Section>
           <SectionTitle>Devices</SectionTitle>
+
+          {/* Devices only. The hosted services moved up into the provider
+              card, which is a narrower split than the one this list was
+              built to avoid: that earlier layout scattered them as separate
+              offer cards, where they are now one card under the account that
+              pays for them. What is left here is an inventory of places this
+              workspace physically lives. */}
+          {/* This device — always the source of truth for local-first data. */}
+          <DeviceCard>
+            <CardIcon>
+              <FaLaptop />
+            </CardIcon>
+            <ConnBody>
+              <ConnTitle>This device</ConnTitle>
+              <ConnSub>
+                {isNode
+                  ? status.lastDriveSync
+                    ? `${status.lastDriveSync.count.toLocaleString()} resources · stored locally`
+                    : 'Embedded server · stored locally'
+                  : clientDbOn
+                    ? 'Cached locally · works offline'
+                    : 'Server-only · no local cache'}
+              </ConnSub>
+              {isNode && localNodeId && (
+                <NodeIdRow>
+                  <NodeIdLabel>Node ID</NodeIdLabel>
+                  <NodeIdValue
+                    title='Copy Node ID'
+                    onClick={() => {
+                      navigator.clipboard.writeText(localNodeId);
+                      toast.success('Node ID copied');
+                    }}
+                  >
+                    {localNodeId}
+                  </NodeIdValue>
+                </NodeIdRow>
+              )}
+            </ConnBody>
+          </DeviceCard>
+
+          {/* A client that cannot hold the provider's cookie — a self-hosted
+              origin, or the desktop and Android apps on tauri://localhost — has
+              to link before any of the vault works.
+
+              Gated on whether this client has a session, not on what the vault
+              says. The vault reports `unavailable` only once it has an agent, a
+              drive and its wasm keys to ask with; a fresh install has none of
+              those and sits at `loading` forever, so gating on the vault hid the
+              one control that could have fixed it. */}
+          {needsProviderLink && (
+            <LinkProviderPanel
+              portalUrl={getManagedPortalUrl(managedInfo)}
+              onLinked={() => window.location.reload()}
+            />
+          )}
+
           {localOnlyDrive && connectionCount > 0 && (
             <ConnNote>
               These sync your other drives — not this workspace.
             </ConnNote>
           )}
 
-          {/* Only when there's genuinely nothing here — a known-but-unselected
-              server still renders a card, and "not syncing anywhere" above a
-              list of them would contradict itself. */}
+          {/* About *other* devices specifically. This device and any cloud
+              services are listed above, so the old "not syncing anywhere"
+              wording now sat under entries proving otherwise. */}
           {connectionCount === 0 && connectionServers.length === 0 && (
             <EmptyConnections>
-              <p>
-                Not syncing anywhere yet — your data is safe on this device.
-              </p>
+              <p>No other devices yet — your data is safe on this one.</p>
               <p>
                 {isNode
                   ? 'Pair another device to sync directly, or connect an always-on one to reach your data from anywhere.'
@@ -871,175 +1454,35 @@ function SyncPage() {
             </EmptyConnections>
           )}
 
-          {/* Servers — one stable list; the active one is marked, not moved. */}
-          {connectionServers.map(server => {
-            const isActive = sameOrigin(server, status.serverUrl);
-            const isCloud = isActive && managedInfo.managed;
-
-            return (
-              <ConnCard key={server} $active={isActive}>
-                <ConnIcon
-                  $tone={isCloud ? 'cloud' : 'server'}
-                  $active={isActive}
-                >
-                  {isCloud ? <FaCloud /> : <FaServer />}
-                </ConnIcon>
-                <ConnBody>
-                  <ConnTopRow>
-                    <ConnTitle>
-                      {isCloud ? 'Cloud Sync' : serverLabel(server)}
-                    </ConnTitle>
-                    <ConnTopRight>
-                      {isActive ? (
-                        <>
-                          <StatusPill $status={nodes.server}>
-                            <StatusIcon status={nodes.server} />
-                            {statusLabel(nodes.server)}
-                          </StatusPill>
-                          {status.serverConnected ? (
-                            // Without a working local store (embedded node or
-                            // ready OPFS cache), the server is the only data
-                            // source — disconnecting would leave the app with
-                            // no data at all.
-                            <NodeAction
-                              onClick={() => store.disconnect()}
-                              disabled={!hasWorkingLocalStore}
-                              title={
-                                hasWorkingLocalStore
-                                  ? undefined
-                                  : 'Local storage is off, so this server is the only data source. Enable local storage below to work disconnected.'
-                              }
-                            >
-                              Disconnect
-                            </NodeAction>
-                          ) : (
-                            <NodeAction
-                              onClick={() =>
-                                store
-                                  .reconnect()
-                                  .catch(e => store.notifyError(e))
-                              }
-                            >
-                              Reconnect
-                            </NodeAction>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <StatusPill $status='unknown'>
-                            Not connected
-                          </StatusPill>
-                          <NodeAction onClick={() => switchToServer(server)}>
-                            Switch
-                          </NodeAction>
-                        </>
-                      )}
-                    </ConnTopRight>
-                  </ConnTopRow>
-
-                  <ConnSub>
-                    {isActive
-                      ? isCloud
-                        ? serverHostname
-                        : 'Always-on · in use'
-                      : 'Always-on device'}
-                  </ConnSub>
-
-                  {/* Status details belong to the server actually in use. */}
-                  {isActive &&
-                    !status.serverConnected &&
-                    status.serverConnectionError && (
-                      <ConnError role='alert'>
-                        <FaCircleExclamation aria-hidden />
-                        <span>{status.serverConnectionError}</span>
-                      </ConnError>
-                    )}
-
-                  {isActive && usagePct !== null && (
-                    <UsageBar
-                      aria-label={`${usagePct}% of storage used`}
-                      title={`${usagePct}% used`}
-                    >
-                      <UsageFill style={{ width: `${usagePct}%` }} />
-                    </UsageBar>
-                  )}
-
-                  {isActive && nodeUsage && (
-                    <ConnMeta>
-                      {nodeUsage.resourceCount.toLocaleString()} resources ·{' '}
-                      {formatBytes(nodeUsage.blobBytes + nodeUsage.loroBytes)}
-                      {quotaBytes ? ` of ${formatBytes(quotaBytes)}` : ''}
-                      {status.lastDriveSync
-                        ? ` · synced ${formatTimeAgo(new Date(status.lastDriveSync.timestamp)) ?? 'just now'}`
-                        : ''}
-                    </ConnMeta>
-                  )}
-                  {isActive && !nodeUsage && status.lastDriveSync && (
-                    <ConnMeta>
-                      Last synced{' '}
-                      {formatTimeAgo(
-                        new Date(status.lastDriveSync.timestamp),
-                      ) ?? 'just now'}
-                    </ConnMeta>
-                  )}
-
-                  {/* A node id identifies this server's node, so it belongs on
-                      the server — not buried in Developer. */}
-                  {isActive && serverNodeId && (
-                    <NodeIdRow>
-                      <NodeIdLabel>Node ID</NodeIdLabel>
-                      <NodeIdValue
-                        title={`Copy ${rawToNodeDid(serverNodeId)}`}
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(
-                              rawToNodeDid(serverNodeId),
-                            );
-                            toast.success('Node ID copied');
-                          } catch (e) {
-                            store.notifyError(e as Error);
-                          }
-                        }}
-                      >
-                        {rawToNodeDid(serverNodeId)}
-                      </NodeIdValue>
-                    </NodeIdRow>
-                  )}
-
-                  {isCloud && managedInfo.portalUrl && (
-                    <ConnActions>
-                      <ManagedLink
-                        // The dashboard, not the portal root: signed-in
-                        // visitors get the marketing page at `/`, so the
-                        // link landed on a sales pitch rather than the
-                        // account it promises to manage.
-                        href={`${managedInfo.portalUrl}/dashboard`}
-                        target='_blank'
-                        rel='noopener noreferrer'
-                      >
-                        {'Manage account & plan →'}
-                      </ManagedLink>
-                    </ConnActions>
-                  )}
-                  {/* Removing the server you're using would strand the app. */}
-                  {!isActive && (
-                    <ConnActions>
-                      <NodeActionSubtle onClick={() => removeServer(server)}>
-                        Remove
-                      </NodeActionSubtle>
-                    </ConnActions>
-                  )}
-                </ConnBody>
-              </ConnCard>
-            );
-          })}
+          {/* Servers we do not own — one stable list; the active one is marked,
+              not moved. A managed node is deliberately absent: it moved up into
+              the account card, because "what am I paying for" and "where does
+              this drive live" are different questions and it was answering the
+              second while looking like the first. */}
+          {connectionServers
+            .filter(server => !isManagedServer(server))
+            .map(server => (
+              <ServerCard
+                key={server}
+                server={server}
+                status={status}
+                managedInfo={managedInfo}
+                serverStatus={nodes.server}
+                hasWorkingLocalStore={hasWorkingLocalStore}
+                nodeUsage={nodeUsage}
+                quotaBytes={quotaBytes}
+                serverNodeId={serverNodeId}
+                onSwitch={switchToServer}
+                onRemove={removeServer}
+              />
+            ))}
 
           {/* Paired devices (Iroh peers) */}
           {pairedPeers.map(peer => (
             <ConnCard key={peer.nodeId}>
-              <ConnIcon $tone='device'>
+              <CardIcon>
                 <FaMobileScreenButton />
-              </ConnIcon>
+              </CardIcon>
               <ConnBody>
                 <ConnTopRow>
                   <ConnTitle title={peer.nodeId}>{peer.label}</ConnTitle>
@@ -1078,9 +1521,9 @@ function SyncPage() {
 
             return (
               <ConnCard key={peer.nodeId}>
-                <ConnIcon $tone='device'>
+                <CardIcon>
                   <FaMobileScreenButton />
-                </ConnIcon>
+                </CardIcon>
                 <ConnBody>
                   <ConnTopRow>
                     <ConnTitle title={peer.nodeId}>{name}</ConnTitle>
@@ -1489,6 +1932,79 @@ const Lead = styled.p`
   margin-bottom: 2rem;
 `;
 
+/**
+ * The account strip under the lead line.
+ *
+ * Wears the same accent as an active connection card rather than a style of
+ * its own: everything on this page that is backed by the provider account
+ * reads blue, so a glance separates "this is yours and local" from "this
+ * involves your account".
+ */
+const ProviderCard = styled.div`
+  ${cardSurface}
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  margin-bottom: 2rem;
+  border-color: ${p => p.theme.colors.main};
+  background: ${p => `${p.theme.colors.main}0a`};
+`;
+
+const ProviderHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+`;
+
+/**
+ * One service under the account header.
+ *
+ * Separated by a rule rather than by gaps between cards: these belong to the
+ * account above them, and whitespace alone made them read as neighbours of it
+ * instead of contents.
+ */
+const ProviderService = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border-top: 1px solid ${p => `${p.theme.colors.main}33`};
+  min-width: 0;
+
+  /* A connection row is one ellipsised line because a server origin has no
+     useful second line. These rows explain a service, so their text wraps —
+     otherwise the recovery row trails off mid-sentence. */
+  p,
+  span {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+`;
+
+const AccountBody = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+`;
+
+const AccountLabel = styled.span`
+  font-size: ${CARD_TITLE_FONT};
+  font-weight: 600;
+`;
+
+const AccountEmail = styled.span`
+  color: ${p => p.theme.colors.textLight};
+  font-size: ${CARD_SUB_FONT};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
 const Section = styled.section`
   margin-bottom: 2rem;
 `;
@@ -1571,22 +2087,12 @@ const PendingCount = styled.span`
 
 // --- Connection cards ---
 
-const cardBase = css`
-  display: flex;
-  align-items: flex-start;
-  gap: 0.9rem;
-  padding: 0.9rem 1rem;
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  background: ${p => p.theme.colors.bg};
-  min-width: 0;
-`;
+const cardBase = cardSurface;
 
-/** The "This device" card — the source of truth, visually distinct. */
+/** The "This device" card. Same surface as the rest of the list — it is one
+ *  of the devices, not a different kind of object. */
 const DeviceCard = styled.div`
   ${cardBase}
-  background: ${p => p.theme.colors.bg1};
-  border-color: transparent;
   margin-bottom: 1.5rem;
 `;
 
@@ -1625,20 +2131,31 @@ const NodeIdValue = styled.button`
 /** `$active` marks the server actually in use. The list order is stable across
  *  switches, so this accent is the only thing that changes — which is the point:
  *  a reshuffling list is far harder to follow than a highlighted row. */
-const ConnCard = styled.div<{ $active?: boolean }>`
+/**
+ * Blue means "one of the provider's services", not "the one in use".
+ *
+ * These used to be the same thing, because the accent keyed off `$active`. A
+ * self-hosted node someone runs on their own hardware is not a hosted product
+ * no matter how live it is, and painting it the same blue as the account card
+ * said it was. Being in use is still worth showing, so it keeps a neutral
+ * emphasis, and the "In sync" badge next to the title carries the state.
+ */
+const ConnCard = styled.div<{ $active?: boolean; $provider?: boolean }>`
   ${cardBase}
   margin-bottom: 0.6rem;
-  border-color: ${p => (p.$active ? p.theme.colors.main : undefined)};
-  background: ${p => (p.$active ? `${p.theme.colors.main}0a` : undefined)};
+  border-color: ${p =>
+    p.$provider
+      ? p.theme.colors.main
+      : p.$active
+        ? p.theme.colors.textLight
+        : undefined};
+  background: ${p => (p.$provider ? `${p.theme.colors.main}0a` : undefined)};
 `;
 
-/** Accent card for a local-only (unsynced) workspace — visually distinct
- *  from the neutral connection cards, since it's a call to action. */
+/** A call to action, but still one of the cards in this list. The button
+ *  inside it is the affordance; a second accent surface was just noise. */
 const LocalDriveNotice = styled.div`
   ${cardBase}
-  align-items: center;
-  border-color: ${p => p.theme.colors.main}55;
-  background: ${p => p.theme.colors.main}0d;
   margin-bottom: 1.5rem;
 `;
 
@@ -1696,31 +2213,6 @@ const PairLabel = styled.span`
   font-size: 0.82rem;
   font-weight: 600;
   color: ${p => p.theme.colors.textLight};
-`;
-
-const ConnIcon = styled.div<{
-  $tone: 'device' | 'cloud' | 'server';
-  /** The server in use — accented, so which one is live reads at a glance. */
-  $active?: boolean;
-}>`
-  flex-shrink: 0;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
-  color: ${p =>
-    p.$tone === 'device' && !p.$active ? p.theme.colors.text : 'white'};
-  background: ${p =>
-    p.$active
-      ? p.theme.colors.main
-      : p.$tone === 'device'
-        ? p.theme.colors.bg2
-        : p.$tone === 'cloud'
-          ? p.theme.colors.main
-          : p.theme.colors.textLight};
 `;
 
 const ConnBody = styled.div`
@@ -1793,6 +2285,18 @@ const ConnActions = styled.div`
   gap: 1rem;
   margin-top: 0.5rem;
   flex-wrap: wrap;
+`;
+
+/** A link, styled as one. The primary action next to it is the button. */
+const LearnMore = styled.a`
+  color: ${p => p.theme.colors.main};
+  font-size: ${CARD_SUB_FONT};
+  text-decoration: underline;
+
+  &:hover,
+  &:focus-visible {
+    color: ${p => p.theme.colors.mainDark};
+  }
 `;
 
 const StatusPill = styled.span<{ $status: NodeStatus }>`

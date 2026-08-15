@@ -1565,6 +1565,22 @@ export class Resource<C extends OptionalClass = any> {
       this.setCreatedAtValue(remoteCreatedAt);
     }
 
+    // A bootstrapped stub carries an `incomplete` marker so that visiting its
+    // subject triggers a real fetch. That marker lives in the stub's own Loro
+    // ops, and a CRDT merge UNIONS the two docs — so merging in the fetched
+    // full copy left the marker standing and `getResourceLoading` refetched
+    // the subject forever. The incoming copy is what decides: if it is not
+    // itself marked incomplete, the staleness the marker recorded is resolved.
+    //
+    // `removeUnsafe`, not `remove`: this is reconciliation, not an edit, and
+    // must not leave a pending change for the drain to commit.
+    if (
+      resourceB.get(core.properties.incomplete) === undefined &&
+      this.get(core.properties.incomplete) !== undefined
+    ) {
+      this.removeUnsafe(core.properties.incomplete);
+    }
+
     // We set this last because it will trigger a loading change event.
     this.loading = resourceB.loading;
   }

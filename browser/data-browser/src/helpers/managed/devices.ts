@@ -13,7 +13,7 @@
 //
 // Canonical design: planning/device-pairing.md (§ SaaS-assisted pairing).
 
-import { getManagedApiBase } from './api';
+import { managedFetch } from './api';
 import { getManagedAccount } from './session';
 import { getLocalServerOrigin, isRunningInTauri } from '../tauri';
 import { pairAndSync } from '../pairing';
@@ -33,8 +33,14 @@ export type DeviceRecord = {
   last_seen: number;
 };
 
-/** Stable per-install identifier; the key of our own directory record. */
-function getOrCreateDeviceId(): string | null {
+/**
+ * Stable per-install identifier; the key of our own directory record.
+ *
+ * Exported because Cloud Vault derives its lane id from the same value — one
+ * install should be one lane, and minting a second identifier would give the
+ * same device two lanes that each start at segment 1.
+ */
+export function getOrCreateDeviceId(): string | null {
   if (typeof localStorage === 'undefined') return null;
 
   try {
@@ -118,10 +124,9 @@ async function putDeviceRecord(
   deviceId: string,
   body: { name: string; platform: string; node_id: string },
 ): Promise<Response> {
-  return fetch(`${getManagedApiBase()}/devices/${deviceId}`, {
+  return managedFetch(`/devices/${deviceId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(body),
   });
 }
@@ -164,9 +169,7 @@ type KnownPeer = { nodeId: string; label: string; lastSync?: string };
 async function seedKnownPeersFromDirectory(): Promise<string[]> {
   if (typeof localStorage === 'undefined') return [];
 
-  const response = await fetch(`${getManagedApiBase()}/devices`, {
-    credentials: 'include',
-  });
+  const response = await managedFetch(`/devices`, {});
 
   if (!response.ok) return [];
 

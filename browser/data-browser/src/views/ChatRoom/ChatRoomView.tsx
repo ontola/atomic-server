@@ -402,7 +402,8 @@ function MessageMeta({
     <MessageMetaRow>
       {createdBy && (
         <MessageAuthor>
-          <ResourceInline subject={createdBy} />
+          {/* No glyph: the message already leads with the author's avatar. */}
+          <ResourceInline subject={createdBy} hideGlyph />
         </MessageAuthor>
       )}
       {createdAt && (

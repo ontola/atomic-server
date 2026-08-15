@@ -512,13 +512,6 @@ test.describe('data-browser', async () => {
     await expect(page.locator('text=Resource Saved')).toBeVisible();
   });
 
-  // FLAKY (dagger CI): the `Resource deleted` toast and/or the sidebar
-  // un-listing of `folder` aren't visible within 5 s after the delete
-  // confirmation. The toast fires from the store's
-  // `notifyResourceManuallyCreated` / removal handler — the surrounding
-  // commit-flush + sidebar refetch path is what's slow. Investigate:
-  // assert on `store.resources.has(subject) === false` via
-  // `waitForFunction` instead of toast text.
   test('delete resource', async ({ page }) => {
     await newResource('folder', page);
     const parentResource = await getCurrentSubject(page);
@@ -537,7 +530,34 @@ test.describe('data-browser', async () => {
     // some renders before it unmounts, leading to flaky no-ops.
     await page.locator('dialog[open] button:has-text("Delete")').click();
 
-    await expect(page.locator('text=Resource deleted')).toBeVisible();
+    // Wait for the destroy to actually land before reloading. The reload is
+    // what makes this a barrier and not a nicety: it abandons whatever the
+    // page still had in flight, so returning too early cancels the destroy and
+    // the resource is simply still there afterwards.
+    //
+    // This used to wait on the "Resource deleted" toast alone, which is why
+    // the test was marked flaky. A success toast expires after about two
+    // seconds, so under suite load it can be raised and gone before the first
+    // poll — the delete having worked perfectly — and the assertion then waits
+    // out its timeout on an element that will never come back.
+    //
+    // So accept either signal: the toast if we catch it, or the sidebar having
+    // dropped the folder, which is the same fact in a form that does not
+    // expire. Whichever arrives first, the destroy has been applied.
+    await expect
+      .poll(
+        async () => {
+          const toast = await page.locator('text=Resource deleted').count();
+          const listed = await page
+            .getByTestId('sidebar')
+            .getByText('Folder')
+            .count();
+
+          return toast > 0 || listed === 0;
+        },
+        { timeout: 15000, message: 'Destroy never landed' },
+      )
+      .toBe(true);
 
     await page.reload();
     await openSubject(page, nestedResource);
@@ -753,7 +773,11 @@ test.describe('data-browser', async () => {
       page.getByText('First Title', { exact: true }).first(),
     ).toBeVisible();
 
-    await page.click('text=Restore this version');
+    // Enabled only once the selected version differs from the current one, so
+    // wait for that rather than racing the selection above.
+    const restore = page.getByRole('button', { name: 'Restore this version' });
+    await expect(restore).toBeEnabled({ timeout: 15_000 });
+    await restore.click();
 
     await expect(page.locator('text=Resource version updated')).toBeVisible();
     // After restore the page navigates back to the resource. EditableTitle

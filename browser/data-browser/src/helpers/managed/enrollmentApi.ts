@@ -6,7 +6,7 @@
 //        drive_name, resource_count, blob_bytes, loro_bytes, quota_bytes)
 // against the control-plane `GET /api/sync-enrollments` route.
 
-import { getManagedApiBase } from './api';
+import { managedFetch } from './api';
 
 export type ManagedEnrollmentStatus = 'Active' | 'Disabled' | string;
 
@@ -34,9 +34,7 @@ export type ManagedEnrollmentSummary = {
 export async function getManagedEnrollments(): Promise<
   ManagedEnrollmentSummary[]
 > {
-  const response = await fetch(`${getManagedApiBase()}/sync-enrollments`, {
-    credentials: 'include',
-  });
+  const response = await managedFetch(`/sync-enrollments`, {});
 
   if (!response.ok) return [];
 

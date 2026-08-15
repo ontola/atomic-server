@@ -91,6 +91,12 @@ jobs:
     needs: pick
     if: needs.pick.outputs.host == 'mancave'
     uses: ./.github/workflows/main-ci.yml
+    # `packages: write` lets the GITHUB_TOKEN push images to GHCR. An explicit
+    # permissions block replaces the defaults, so `contents: read` (checkout)
+    # has to come along.
+    permissions:
+      contents: read
+      packages: write
     with:
       runner: ${{ vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]' }}
       artifact-name: build-artifacts-mancave
@@ -107,6 +113,9 @@ jobs:
     needs: pick
     if: needs.pick.outputs.host == 'hosted'
     uses: ./.github/workflows/main-ci.yml
+    permissions:
+      contents: read
+      packages: write
     with:
       runner: '["ubuntu-latest"]'
       artifact-name: build-artifacts-github

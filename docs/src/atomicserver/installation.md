@@ -4,7 +4,7 @@
 
 You can run AtomicServer in different ways:
 
-1. Using docker (probably the quickest): `docker run -p 80:80 -p 443:443 -v atomic-storage:/atomic-storage joepmeneer/atomic-server`
+1. Using docker (probably the quickest): `docker run -p 80:80 -p 443:443 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`
 2. From a published [binary](https://github.com/atomicdata-dev/atomic-server/releases)
 3. Using [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) from crates.io: `cargo install atomic-server`
 4. Manually from source
@@ -28,12 +28,12 @@ So running your own node keeps your data, and your traffic, entirely yours.
 
 ## 1. Run using docker
 
-- Run: `docker run -p 80:80 -p 443:443 -v atomic-storage:/atomic-storage joepmeneer/atomic-server`
+- Run: `docker run -p 80:80 -p 443:443 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`
 The `dockerfile` is located in the project root, above this `server` folder.
-- See dockerhub for a [list of all the available tags](https://hub.docker.com/repository/docker/joepmeneer/atomic-server/tags?page=1&ordering=last_updated) (e.g. the `develop` tag for the very latest version)
+- Images are published to the GitHub Container Registry — see the [list of all the available tags](https://github.com/ontola/atomic-server/pkgs/container/atomic-server) (e.g. the `develop` tag for the very latest version)
 - If you want to make changes (e.g. to the port), make sure to pass the relevant CLI options (e.g. `--port 9883`).
-- If you want to update, run `docker pull joepmeneer/atomic-server` and docker should fetch the latest version.
-- By default, docker downloads the `latest` tag. You can find other tags [here](https://hub.docker.com/repository/docker/joepmeneer/atomic-server/tags).
+- If you want to update, run `docker pull ghcr.io/ontola/atomic-server` and docker should fetch the latest version.
+- By default, docker downloads the `latest` tag. You can find other tags [here](https://github.com/ontola/atomic-server/pkgs/container/atomic-server).
 
 ## 2. Run pre-compiled binary
 

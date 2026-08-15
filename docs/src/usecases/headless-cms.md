@@ -45,7 +45,7 @@ Declare `defaultLanguage` (and optionally `languages`) on your website or drive,
 
 ## Setting up the server
 
-- One-liners: `cargo install atomic-server` or `docker run -p 80:80 -v atomic-storage:/atomic-storage joepmeneer/atomic-server`
+- One-liners: `cargo install atomic-server` or `docker run -p 80:80 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`
 - Check out the [readme!](https://github.com/atomicdata-dev/atomic-server)
 
 ## Using the data in your (React / NextJS) app

@@ -46,3 +46,26 @@ To create a production version of your app:
 You can preview the production build with `<PACKAGE_MANAGER_RUN> preview`.
 
 > To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
+
+## Why `@swc/core` is pinned
+
+`package.json` pins `@swc/core` and `@swc/wasm` to an exact version through
+`pnpm.overrides`. Neither is a direct dependency: both arrive under
+`vite-plugin-top-level-await`, which needs them to rewrite top-level `await`
+(this project has some, via the `loro-crdt` wasm bundle).
+
+That plugin floats them on a caret range, and it parses with one and
+manipulates the AST the other produced. When SWC ships a release that changes
+the AST schema, the two disagree and every build fails with:
+
+```
+error during build:
+[vite-plugin-top-level-await] missing field `type`
+```
+
+which names neither SWC nor the plugin, and appears without you having changed
+anything — a fresh install is all it takes. Pinning is the only lever here,
+since the range belongs to a transitive dependency.
+
+Safe to raise once `vite-plugin-top-level-await` ships a release that agrees
+with a newer SWC. Verify by building this template, not by reading versions.

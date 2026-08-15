@@ -836,19 +836,32 @@ export const SEARCHBOX_PROPERTY_PLACEHOLDER = /Search for a .+ or enter a URL/;
 
 /** Create a new Resource in the current Drive.
  * Class can be an Class URL or a shortname available in the new page. */
-export async function newResource(klass: string, page: Page) {
-  // Sidebar "New" navigates to /app/new?parentSubject=<parent> to preserve
-  // the container context (see QuickCreateRow). Match pathname only.
-  //
-  // Retry the click AND the navigation as a unit: the button can be clicked
-  // before its handler is attached, and the click is then simply swallowed —
-  // the app stays where it was, and no amount of waiting on a navigation that
-  // was never started will produce one. Seen in CI as this assertion timing
-  // out with the URL still on `/app/show`.
+/**
+ * Click the sidebar's "New" and land on `/app/new`.
+ *
+ * Sidebar "New" navigates to /app/new?parentSubject=<parent> to preserve the
+ * container context (see QuickCreateRow). Match pathname only.
+ *
+ * Retry the click AND the navigation as a unit: the button can be clicked
+ * before its handler is attached, and the click is then simply swallowed — the
+ * app stays where it was, and no amount of waiting on a navigation that was
+ * never started will produce one. Seen in CI as an assertion timing out with
+ * the URL still on `/app/show`, or as the next click waiting out its budget on
+ * a class button that was never going to render.
+ *
+ * Exported because every caller needs the retry, not just `newResource`.
+ * Clicking and then asserting the URL separately looks equivalent and is not:
+ * it waits for a navigation that the swallowed click never began.
+ */
+export async function openNewResourcePage(page: Page) {
   await expect(async () => {
     await sidebarNewResourceButton(page).click();
     await expect(page).toHaveURL(/\/app\/new(\?|$)/, { timeout: 3_000 });
   }).toPass({ timeout: 20_000 });
+}
+
+export async function newResource(klass: string, page: Page) {
+  await openNewResourcePage(page);
 
   const waitForResourceForm = async () => {
     await Promise.any([
@@ -1044,6 +1057,14 @@ export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
     undefined,
     { timeout: timeoutMs },
   );
+
+  // Acked is not queryable. The ClientDb writes each row — and rebuilds the
+  // index inside that write — on a flush tick, so a query issued in between
+  // answers from an index that is missing rows the grid already shows. The
+  // worker handles its messages in order, so awaiting a flush means everything
+  // queued ahead of it has landed. Without this a filter drops a matching row,
+  // and a total reads an em-dash because the value it sums is not there yet.
+  await page.evaluate(() => window.store?.getClientDb()?.flush?.());
 }
 
 /**
@@ -1055,15 +1076,10 @@ export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
  * reload then drops it. {@link waitForRowsMaterialized} covers both halves.
  */
 export async function reloadGrid(page: Page) {
+  // Includes the OPFS flush: those writes commit with `Durability::None`, so
+  // reloading inside the worker's 1s tick rolls them back and the local db
+  // answers post-reload queries with the pre-edit copy.
   await waitForRowsMaterialized(page);
-  // `pendingDirtyCount === 0` means the rows reached the SERVER — not that
-  // their post-ack re-persist reached OPFS durably. Those writes commit with
-  // `Durability::None` and only survive a reload after the worker's 1s flush
-  // tick; reloading inside that window rolls them back, and the local db then
-  // answers post-reload queries with the pre-edit copy (the CI-only em-dash
-  // totals: member indexed, its newest value missing). Ask for the flush —
-  // the durability signal — instead of racing the tick.
-  await page.evaluate(() => window.store?.getClientDb()?.flush?.());
   await page.reload();
   await expect(page.getByRole('grid')).toBeVisible();
   // The grid binds its cell handlers after the first render.
@@ -1421,13 +1437,33 @@ export async function selectHistoryVersionShowing(
 
   for (let i = 0; i < count; i++) {
     await buttons.nth(i).click();
-    const visible = await page
+
+    // Judge the version by its *resource*, not by whatever text the page
+    // happens to contain.
+    //
+    // The default tab is the diff, and a diff names both sides of the change:
+    // the version that introduced "First Title" and the one that replaced it
+    // with "Second Title" both render "First Title". Scanning the page for
+    // that string therefore matched two different versions, and which one the
+    // loop settled on came down to how quickly a preview rendered. Landing on
+    // the newest version leaves "Restore this version" correctly disabled,
+    // because it is already the current one — a failure that looks like a
+    // broken button and is really a test picking the wrong row.
+    //
+    // The Resource tab shows only the selected version, so it can only match
+    // the version actually meant. Radix unmounts the inactive panel, so this
+    // has to be selected rather than read through.
+    await page.getByRole('tab', { name: 'Resource' }).click();
+
+    const shown = await page
+      .getByRole('tabpanel')
       .getByText(text, { exact: true })
       .first()
-      .isVisible()
+      .waitFor({ state: 'visible', timeout: 5_000 })
+      .then(() => true)
       .catch(() => false);
 
-    if (visible) {
+    if (shown) {
       return;
     }
   }
