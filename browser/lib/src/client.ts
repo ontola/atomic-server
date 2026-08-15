@@ -217,11 +217,26 @@ export class Client {
         url = newURL.href;
       }
 
-      const response = await this.fetch(url, {
-        headers: requestHeaders,
-        method: method ?? 'GET',
-        body: bodyReq,
-      });
+      // A throwing `fetch` (server down, DNS, CORS) is a different kind of
+      // failure from any status code: it carries no information about the
+      // resource, only about the connection. Typing it as such lets the
+      // Store keep local state instead of overwriting it with this
+      // failure, and retry the resource when the connection returns.
+      let response: Response;
+
+      try {
+        response = await this.fetch(url, {
+          headers: requestHeaders,
+          method: method ?? 'GET',
+          body: bodyReq,
+        });
+      } catch (e) {
+        throw new AtomicError(
+          `Could not reach ${url}: ${e instanceof Error ? e.message : e}`,
+          ErrorType.Transport,
+        );
+      }
+
       recordServerVersionFromResponse(url, response);
       const body = await response.text();
 

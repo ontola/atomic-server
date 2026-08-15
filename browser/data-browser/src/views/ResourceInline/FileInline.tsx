@@ -8,7 +8,8 @@ const THUMB_SIZE = '2rem';
 export function FileInline({
   subject,
 }: ResourceInlineInstanceProps): JSX.Element {
-  const resource = useResource(subject);
+  // `allowIncomplete`, like `ResourceInline` above it — see `DefaultInline`.
+  const resource = useResource(subject, { allowIncomplete: true });
   const [filename] = useString(resource, server.properties.filename);
   const [mimeType] = useString(resource, server.properties.mimetype);
 

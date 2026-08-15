@@ -12,6 +12,8 @@ export function getMessageForErrorType(error: Error) {
         return 'Server error';
       case ErrorType.Client:
         return 'Something went wrong';
+      case ErrorType.Transport:
+        return 'Could not reach the server';
     }
   } else {
     return 'Error loading resource';
@@ -23,6 +25,25 @@ export enum ErrorType {
   NotFound = 'NotFound',
   Server = 'Server',
   Client = 'Client',
+  /**
+   * The request never got an answer: the fetch itself threw, or we knew
+   * up front we were offline. Says nothing about the resource — only
+   * that this client couldn't reach the server.
+   */
+  Transport = 'Transport',
+}
+
+/**
+ * True when the error means "we couldn't reach the server", as opposed to
+ * something the server told us about the resource (404, 401, 500).
+ *
+ * The distinction decides two things: whether a failed fetch may overwrite
+ * state we already hold locally (it may not — an unreachable server is no
+ * evidence about the resource), and whether reconnecting should retry the
+ * resource (it should).
+ */
+export function isTransportError(error?: Error): boolean {
+  return error instanceof AtomicError && error.type === ErrorType.Transport;
 }
 
 /** Pass any error. If the error is an AtomicError and it's Unauthorized, return true */

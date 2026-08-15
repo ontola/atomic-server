@@ -13,7 +13,7 @@ import {
   type Commit,
 } from './commit.js';
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
-import { AtomicError, ErrorType } from './error.js';
+import { AtomicError, ErrorType, isTransportError } from './error.js';
 import { EventManager } from './EventManager.js';
 import { hasBrowserAPI } from './hasBrowserAPI.js';
 import { collections } from './ontologies/collections.js';
@@ -2565,6 +2565,23 @@ export class Store {
    *   `undefined` when there was no database to ask — callers must not read
    *   that silence as "not stored locally".
    */
+  /**
+   * True when the resource carries enough state to stand on its own: a
+   * class, or any property beyond the server-managed skeleton
+   * (drive/parent/lastCommit/createdAt) that `rebuildCacheFromLoro`
+   * preserves. A resource that passes this is worth more than a failed
+   * fetch — it renders, and the alternative is showing the user nothing.
+   */
+  private hasRenderableContent(resource: Resource | undefined): boolean {
+    if (!resource) return false;
+
+    if (resource.get(core.properties.isA)) return true;
+
+    return resource
+      .getEntries()
+      .some(([prop]) => !SERVER_MANAGED_SKELETON_PROPS.has(prop));
+  }
+
   private async hydrateFromLocalDb(
     subject: string,
   ): Promise<boolean | undefined> {
@@ -2652,11 +2669,10 @@ export class Store {
         if (hasLocalData) {
           const resource = this.resources.get(subject);
           const hasClass = !!resource?.get(core.properties.isA);
-          const hasRealContent = !!resource
-            ?.getEntries()
-            .some(([prop]) => !SERVER_MANAGED_SKELETON_PROPS.has(prop));
           const renderable =
-            !!resource && (hasClass || (importComplete && hasRealContent));
+            !!resource &&
+            (hasClass ||
+              (importComplete && this.hasRenderableContent(resource)));
 
           if (!renderable) {
             hasLocalData = false;
@@ -2773,8 +2789,9 @@ export class Store {
             if (!alreadyResolved) {
               this.failResource(
                 subject,
-                new Error(
+                new AtomicError(
                   'Offline: resource not available locally. Reconnect to fetch.',
+                  ErrorType.Transport,
                 ),
               );
             }
@@ -3017,6 +3034,25 @@ export class Store {
           serverURL: this.getServerUrl(),
         });
 
+      // `fetchResourceHTTP` reports failure by returning an EMPTY resource
+      // carrying the error. Applying that when the server was merely
+      // unreachable transplants the error onto the copy we already
+      // hydrated (`Resource.merge` copies `error` while keeping propvals),
+      // so the UI renders the resource's own avatar and title next to
+      // "Error loading resource" — and nothing clears it. An unreachable
+      // server is no evidence about the resource: keep what we have and
+      // let the reconnect refetch settle it.
+      if (
+        isTransportError(resource.error) &&
+        this.hasRenderableContent(this.resources.get(normalizedSubject))
+      ) {
+        const existing = this.resources.get(normalizedSubject)!;
+        existing.loading = false;
+        this.notify(existing);
+
+        return existing as Resource<C>;
+      }
+
       // Single chokepoint: the JSONADParser already hydrated each
       // resource, so we use the `resource:` ingress on
       // `applyIncoming` instead of calling `addResources` directly.
@@ -3183,7 +3219,20 @@ export class Store {
       if (resource.get(core.properties.incomplete)) {
         resource.loading = true;
         this.addResource(resource);
-        this.fetchResourceFromServer(resolved, opts);
+
+        // An Agent DID is the one subject whose full state we can expect to
+        // already have on this device: it's our own identity, or someone we
+        // have seen. Ask the local database first — `fetchResourceWithLocalFallback`
+        // only reaches for the server when the local copy is missing or is
+        // itself an unrenderable stub. Going straight to the server made
+        // showing your own name and avatar depend on a reachable server,
+        // which is how an unreachable one turned `/app/show?subject=<your DID>`
+        // into "Error loading resource" while `/app/agent` rendered you fine.
+        if (resolved.startsWith('did:ad:agent:')) {
+          this.fetchResourceWithLocalFallback(resolved, opts);
+        } else {
+          this.fetchResourceFromServer(resolved, opts);
+        }
       }
     }
 
@@ -3382,9 +3431,17 @@ export class Store {
   /**
    * When coming back online, re-fetch resources whose state was affected by
    * being offline:
-   *   - errored with our `Offline:` marker (surfaced by the fallback path), or
+   *   - errored because we couldn't reach the server (the offline fallback's
+   *     own marker, or a fetch that threw), or
    *   - still stuck in `loading=true` (fetch started but never completed,
    *     e.g. because the server went down mid-flight).
+   *
+   * The transport check used to be `message.startsWith('Offline:')`, which
+   * matched only the marker this file writes. A fetch that threw against an
+   * unreachable server produced a raw `TypeError` ("NetworkError when
+   * attempting to fetch resource") — the far more common way to get here —
+   * and no reconnect ever retried it, so the resource stayed errored until
+   * the user reloaded the page.
    *
    * Skips resources with pending commits — those are still in the outbox or
    * mid-drain; pulling a fresh server copy while a push is in flight races
@@ -3396,8 +3453,7 @@ export class Store {
   public refetchOfflineErroredResources(): void {
     for (const [subject, resource] of this.resources.entries()) {
       if (resource.hasPendingCommits) continue;
-      const erroredOffline =
-        resource.error && resource.error.message.startsWith('Offline:');
+      const erroredOffline = isTransportError(resource.error);
       const stuckLoading = resource.loading && !resource.new;
       if (!erroredOffline && !stuckLoading) continue;
 

@@ -8,6 +8,7 @@ import {
   dataBrowser,
   server,
   getMessageForErrorType,
+  isTransportError,
 } from '@tomic/react';
 import { styled } from 'styled-components';
 import { ResourceGlyph } from '../../components/ResourceGlyph';
@@ -49,7 +50,13 @@ export function ResourceInline({
     return <ErrorLook>No subject passed</ErrorLook>;
   }
 
-  if (resource.error) {
+  // A resource we can name is worth rendering, even if the last fetch for
+  // it failed to reach the server: the name is what this component is for,
+  // and replacing it with an error hides information we already have (the
+  // chat message whose author renders their own avatar next to "Error
+  // loading resource"). Errors the server actually reported — 404, 401 —
+  // still win, because there the emptiness is the answer.
+  if (resource.error && !(isTransportError(resource.error) && isA.length > 0)) {
     return (
       <AtomicLink subject={subject} untabbable={untabbable}>
         <ErrorLook about={subject} title={resource.error.message}>
@@ -78,7 +85,11 @@ function DefaultInline({
   subject,
   hideGlyph,
 }: ResourceInlineInstanceProps): JSX.Element {
-  const resource = useResource(subject);
+  // `allowIncomplete`, like the parent: an inline link needs a title, not a
+  // complete resource. Without it this second `useResource` re-requested the
+  // same subject under stricter terms and forced the server round-trip the
+  // parent deliberately opted out of.
+  const resource = useResource(subject, { allowIncomplete: true });
   const [description] = useString(resource, core.properties.description);
   const [emoji] = useString(resource, dataBrowser.properties.emoji);
   const [iconImage] = useSubject(resource, dataBrowser.properties.icon);
