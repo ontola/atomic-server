@@ -321,7 +321,7 @@ surface, not grow more canvas FFI.
 
 | Copy | Where | Action |
 | --- | --- | --- |
-| Subscribe `check_read` ×3 | `server/src/commit_monitor.rs` (`Subscribe`, `SubscribeDrive`, `SubscribeQuery`) | One helper; or fold into [`unify-subscription-primitives.md`](./unify-subscription-primitives.md) |
+| Subscribe `check_read` ×3 | `server/src/commit_monitor.rs` | **Superseded:** [`unify-subscription-primitives.md`](./unify-subscription-primitives.md) landed 2026-09-04 — `SubscribeDrive`/`SubscribeQuery` and their `check_read` copies are gone; one `Subscribe`/`SUB` handler remains, so there is nothing left to consolidate here. |
 | `SUB` / `UNSUB` still hand-rolled | `server/src/handlers/web_sockets.rs` | Last actor-bound frames after GET/AUTH/COMMIT moved to the engine (`unified-sync.md` inventory item 1) |
 | AUTH parse ×3 | `engine.rs`, `web_sockets.rs`, `peer.rs` | `unified-sync.md` inventory item 2 — still open |
 | Compact-VV build ×2 | `peer.rs` vs browser `computeDriveSyncState` | inventory item 3 |
@@ -388,21 +388,27 @@ Work that is local and pays off without waiting on the runtime rewrite.
 Every item still has to pass [`consolidation-contract.md`](./consolidation-contract.md).
 
 1. **Port/env single source** — stop 9883/9885 drift.
-2. **Delete `browser/lib/src/urls.ts`** — migrate the six remaining imports
-   to generated ontologies.
+2. **Delete `browser/lib/src/urls.ts`** — only after data-browser stops using
+   the nested `urls.properties.*` public API. Not a six-file leftover.
 3. **Shared golden fixtures** for pairing URIs, `normalizeServerUrl`,
    datatype tags, and Tantivy key escaping.
-4. **`ws_apply::apply_commit_json` → `ingest_commit_json`** with an explicit
-   `CommitIngestOpts` for the Flutter/replica role.
+4. **`ws_apply::apply_commit_json` → `ingest_commit_json`** — **done
+   (2026-08-15).** `CommitIngestOpts::{hub,peer,replica}`. WASM `applyCommit`
+   still has its own `CommitOpts`.
 5. **Extract `SearchResultsList`**; rename `useDriveHistory`.
-6. **One `check_read` helper** in `commit_monitor.rs`.
+6. ~~**One `check_read` helper** in `commit_monitor.rs`~~ — **superseded**:
+   [`unify-subscription-primitives.md`](./unify-subscription-primitives.md)
+   landed 2026-09-04 and removed `SubscribeDrive`/`SubscribeQuery` outright,
+   leaving one `Subscribe`/`SUB` handler with nothing left to share a helper
+   with.
 7. **Update `flutter/AGENTS.md`** so it matches the Loro canvas path.
 
 Then the existing plans, in this order, because each removes a class of
 copies rather than one function:
 
-8. [`unify-subscription-primitives.md`](./unify-subscription-primitives.md) —
-   kills the three subscribe maps and the three `check_read` blocks together.
+8. ~~[`unify-subscription-primitives.md`](./unify-subscription-primitives.md)~~
+   — **done (2026-09-04)**: killed the three subscribe maps and the three
+   `check_read` blocks together.
 9. [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) blob + search move —
    kills handler-owned semantics.
 10. [`unified-data-layer.md`](./unified-data-layer.md) — kills the browser's

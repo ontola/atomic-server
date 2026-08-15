@@ -323,6 +323,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `ingest_commit_json` serializes; `sync::ws_apply::apply_commit_json` now
   returns the `CommitResponse` instead of `()`. See
   `planning/runtime-boundary-decision.md`.
+- **Commit ingest is one function.** HTTP `/commit`, hub WS `COMMIT`, Iroh/peer `COMMIT`, and Flutter WS catch-up all call `ingest_commit_json` with a named preset (`hub` / `peer` / `replica`). Replica still skips write-rights and timestamp — the hub already checked, and a replica's ACL graph may be incomplete. WASM `applyCommit` is unchanged (its own `CommitOpts`, signature off).
 
 ## [v0.41.0-beta.2] - 2026-08-01
 
