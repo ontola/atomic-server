@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'atomic_client.dart';
-import 'push_payload.dart';
 import 'push_registry.dart';
 
 const androidPushChannelId = 'atomic_notifications';
