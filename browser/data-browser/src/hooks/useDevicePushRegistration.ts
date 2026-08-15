@@ -5,7 +5,7 @@ import {
   useStore,
 } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
-import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
+import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { getOrCreateNotificationsFolder } from '../helpers/notificationsFolder';
 import { isRunningInTauri } from '../helpers/tauri';
 import {
@@ -36,7 +36,7 @@ export function useDevicePushRegistration(token?: string): void {
       platform: PushPlatform,
     ) => {
       try {
-        const personalDrive = await fetchPersonalDriveSubject(store, agent);
+        const personalDrive = await fetchPrivateDriveSubject(store, agent);
 
         if (!personalDrive || cancelled) {
           return;

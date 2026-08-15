@@ -24,11 +24,11 @@ import { Button } from '../components/Button';
 import { Column, Row } from '../components/Row';
 import { ResourceInline } from '../views/ResourceInline';
 import { useSettings } from '../helpers/AppSettings';
-import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
 import {
   useNotificationEngine,
   useUnreadNotificationCount,
 } from '../hooks/useNotificationEngine';
+import { usePrivateDrive } from '../hooks/usePrivateDrive';
 import { constructOpenURL } from '../helpers/navigation';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
@@ -46,29 +46,9 @@ function NotificationsPage(): React.JSX.Element {
   const { agent } = useSettings();
   const engine = useNotificationEngine();
   const unread = useUnreadNotificationCount();
+  const { privateDrive: personalDrive } = usePrivateDrive();
   const [subjects, setSubjects] = useState<string[]>([]);
-  const [personalDrive, setPersonalDrive] = useState<string>();
   const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    if (!agent) {
-      setPersonalDrive(undefined);
-
-      return;
-    }
-
-    let cancelled = false;
-
-    void fetchPersonalDriveSubject(store, agent).then(drive => {
-      if (!cancelled) {
-        setPersonalDrive(drive);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [store, agent]);
 
   const refresh = useCallback(async () => {
     const seen = new Set<string>();

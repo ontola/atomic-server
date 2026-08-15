@@ -15,7 +15,7 @@ import { DropdownInput } from './forms/ResourceSelector/DropdownInput';
 import { InputWrapper, TextAreaStyled } from './forms/InputStyles';
 import { ErrorLook } from './ErrorLook';
 import { useSettings } from '../helpers/AppSettings';
-import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
+import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { getOrCreateNotificationsFolder } from '../helpers/notificationsFolder';
 
 /**
@@ -75,7 +75,7 @@ export function SendMessageButton(): React.JSX.Element | null {
     setError(undefined);
 
     try {
-      const personalDrive = await fetchPersonalDriveSubject(store, agent);
+      const personalDrive = await fetchPrivateDriveSubject(store, agent);
       const fallback = personalDrive
         ? await getOrCreateNotificationsFolder(store, personalDrive)
         : drive;
