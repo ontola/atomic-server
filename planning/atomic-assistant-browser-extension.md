@@ -276,6 +276,8 @@ serve it correctly.
 - Generate a non-extractable extension agent where possible.
 - For hosted/self-hosted sync, grant that agent the minimum rights needed:
   read selected profile resources; read/write the chosen AI-chat folder.
+  Use the issued-agent helper and grant registry in
+  [`issued-agents.md`](./issued-agents.md) rather than a one-off agent.
 - Keep profile read access and chat write access separately revocable.
 - Node IDs, extension IDs, origins, and pairing tokens are routing/session
   identifiers, not authority.

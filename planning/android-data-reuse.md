@@ -236,7 +236,8 @@ Two tiers, matching who the caller is:
   cert) pair and added to the target resource's read/write rights, so
   enforcement is the existing rights system (`authorization-sync.md`), the
   grant list is an ordinary collection, and revocation is removing the agent
-  from rights. No parallel permission model.
+  from rights. No parallel permission model. The cross-platform object and
+  Settings UX for that grant is [`issued-agents.md`](./issued-agents.md).
 
 Every provider entry point checks: calling UID → package(s) → signing cert →
 tier → (for third parties) grant + scope. An unguessable capability ID adds
