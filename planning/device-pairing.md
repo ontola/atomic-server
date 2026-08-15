@@ -10,6 +10,14 @@
 > It never carries an agent secret, and one that claims to is refused. See
 > "Why the secret does *not* go in the QR".
 >
+> **2026-08-15 — field test.**
+> [`pairing-ux-field-test.md`](./pairing-ux-field-test.md) walks this UX on a
+> real self-hosted server plus the desktop app. Transport and pairing work;
+> **drive transfer does not**. A blank node signs in, finds no `personalDrive`
+> on the peer's agent copy, provisions one locally, and reports "Your
+> workspace is here" — onto a drive it just invented. The two nodes end up
+> with disjoint drive sets. Nothing in the flow asks the peer what it holds.
+>
 > Context: the Android Tauri app boots and syncs as of 2026-07-08 (embedded
 > server + webview, Iroh transport ready). What's missing is any humane way
 > to get a second device holding the same agent talking to the first.
