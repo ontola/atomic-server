@@ -1318,8 +1318,28 @@ mod test {
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
             .unwrap();
-        let first_resource = &collection.referenced_resources.clone().unwrap()[0];
-        assert!(first_resource.get_subject().as_str().contains("Agent"));
+        let nested = collection.referenced_resources.clone().unwrap();
+        assert!(
+            !nested.is_empty(),
+            "include_nested should materialize member resources"
+        );
+        let shortnames: Vec<String> = nested
+            .iter()
+            .map(|r| r.get(urls::SHORTNAME).unwrap().to_string())
+            .collect();
+        let mut sorted = shortnames.clone();
+        sorted.sort();
+        assert_eq!(
+            shortnames, sorted,
+            "nested members should be sorted by shortname ascending"
+        );
+        assert!(
+            collection
+                .members
+                .iter()
+                .any(|m| m.contains("classes/Agent")),
+            "Agent class should still be a member of the Class collection"
+        );
 
         let resource_collection = &collection.to_resource(&store).await.unwrap().to_single();
         let val = resource_collection
