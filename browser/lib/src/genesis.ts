@@ -51,6 +51,7 @@ export async function personalDriveSubject(
 
   return subjectForSignature(await signGenesisCert(cert, privateKey));
 }
+
 /** `flags` bit 0: a 32-byte `stateHash` is present after the nonce. */
 const FLAG_HAS_STATE_HASH = 0b0000_0001;
 

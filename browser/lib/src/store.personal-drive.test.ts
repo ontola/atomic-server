@@ -63,6 +63,7 @@ describe('deterministic personal drive', () => {
       vi.spyOn(store, 'getProperty').mockRejectedValue(
         new Error('test: property validation skipped'),
       );
+
       (
         store as unknown as {
           client: { postCommit: (c: unknown) => Promise<unknown> };
