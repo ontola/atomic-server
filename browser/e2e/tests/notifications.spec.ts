@@ -18,6 +18,7 @@
 import { test, expect } from '@playwright/test';
 import {
   acceptInvite,
+  appUrlOnFrontend,
   before,
   contextMenuClick,
   currentDriveTitle,
@@ -356,8 +357,15 @@ test.describe('notifications', () => {
     });
     expect(tableSubject).toBeTruthy();
 
-    await page.evaluate(
-      async ({ table, createdByProp, parentProp, nameProp, docClass }) => {
+    const created = await page.evaluate(
+      async ({
+        table,
+        createdByProp,
+        parentProp,
+        nameProp,
+        docClass,
+        notificationItem,
+      }) => {
         const store = window.store;
         const engine = (
           window as Window & {
@@ -386,6 +394,17 @@ test.describe('notifications', () => {
         store.notifyResourceUpdated(child);
         await new Promise(r => setTimeout(r, 250));
         await engine.flushPendingWatches();
+
+        for (const res of store.resources.values()) {
+          if (
+            res.getClasses?.().includes(notificationItem) &&
+            res.get?.(nameProp)?.toString().includes('Watch Fire Table')
+          ) {
+            return { ok: true };
+          }
+        }
+
+        return { ok: false };
       },
       {
         table: tableSubject,
@@ -393,10 +412,18 @@ test.describe('notifications', () => {
         parentProp: PARENT,
         nameProp: NAME,
         docClass: DOCUMENT,
+        notificationItem: NOTIFICATION_ITEM,
       },
     );
 
-    await page.goto(`${FRONTEND_URL}/app/notifications`);
+    expect(
+      created,
+      `watch materialization failed: ${JSON.stringify(created)}`,
+    ).toMatchObject({ ok: true });
+
+    // In-app nav keeps the same Store (full reload can race OPFS index).
+    await page.getByRole('link', { name: 'Notifications' }).click();
+    await expect(page).toHaveURL(/\/app\/notifications/);
     const item = page.getByTestId('notification-item').first();
     await expect(item).toBeVisible({ timeout: 20_000 });
     await expect(item).toContainText(/Update in Watch Fire Table|updates in/i);
@@ -645,7 +672,7 @@ test.describe('notifications', () => {
       origin: new URL(FRONTEND_URL).origin,
     });
     const page2 = await context2.newPage();
-    await page2.goto(inviteUrl as string);
+    await page2.goto(appUrlOnFrontend(inviteUrl as string));
     await acceptInvite(page2);
     await page2.waitForURL(/\/app\//, { timeout: 15_000 });
 

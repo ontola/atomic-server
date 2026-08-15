@@ -44,6 +44,9 @@ export function spaUrl(url: string): string {
   }
 }
 
+/** Alias used by notification invite e2e; same rewrite as {@link spaUrl}. */
+export const appUrlOnFrontend = spaUrl;
+
 /**
  * Hostname the Node test process can actually reach.
  *

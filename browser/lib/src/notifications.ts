@@ -210,27 +210,21 @@ export class NotificationEngine {
 
   /** Refresh WatchSubscription cache from the personal drive. */
   async reloadWatches(): Promise<void> {
-    const collection = await new CollectionBuilder(this.store)
-      .setDrive(this.personalDrive)
-      .setProperty(core.properties.isA)
-      .setValue(notifications.classes.watchSubscription)
-      .setPageSize(100)
-      .buildAndFetch();
-
     const next = new Map<string, WatchEntry>();
 
-    for (let i = 0; i < collection.totalMembers; i++) {
-      const subject = await collection.getMemberWithIndex(i);
-
-      if (!subject) {
-        continue;
+    const addFromResource = (res: Resource) => {
+      if (!res.getClasses().includes(notifications.classes.watchSubscription)) {
+        return;
       }
 
-      const res = await this.store.getResource(subject);
+      if (res.error) {
+        return;
+      }
+
       const target = res.get(notifications.properties.watchTarget);
 
       if (typeof target !== 'string') {
-        continue;
+        return;
       }
 
       const kind =
@@ -245,7 +239,35 @@ export class NotificationEngine {
         | number
         | undefined;
 
-      next.set(target, { subject, kind, mutedUntil, enabled });
+      next.set(target, { subject: res.subject, kind, mutedUntil, enabled });
+    };
+
+    // Collection `/query` can lag a just-saved watch; keep in-memory
+    // subscriptions so `flushPendingWatches` still fires in e2e / live.
+    for (const res of this.store.resources.values()) {
+      addFromResource(res);
+    }
+
+    try {
+      const collection = await new CollectionBuilder(this.store)
+        .setDrive(this.personalDrive)
+        .setProperty(core.properties.isA)
+        .setValue(notifications.classes.watchSubscription)
+        .setPageSize(100)
+        .buildAndFetch();
+
+      for (let i = 0; i < collection.totalMembers; i++) {
+        const subject = await collection.getMemberWithIndex(i);
+
+        if (!subject) {
+          continue;
+        }
+
+        const res = await this.store.getResource(subject);
+        addFromResource(res);
+      }
+    } catch {
+      // Offline / empty index — in-memory watches above still apply.
     }
 
     this.watches = next;
