@@ -168,6 +168,53 @@ async function seedUnreadItem(
 test.describe('notifications', () => {
   test.beforeEach(before);
 
+  test('dev-drive workspace is not the personal inbox drive', async ({
+    page,
+  }) => {
+    const { current, personal } = await page.evaluate(async personalDriveProp => {
+      const store = window.store;
+      const agent = store.getAgent();
+
+      if (!agent?.subject) throw new Error('no agent');
+
+      const agentRes = await store.fetchResourceFromServer(agent.subject, {
+        noWebSocket: true,
+      });
+
+      return {
+        current: store.getDrive(),
+        personal: agentRes.get(personalDriveProp),
+      };
+    }, PERSONAL_DRIVE);
+
+    expect(personal).toBeTruthy();
+    expect(current).toBeTruthy();
+    expect(current).not.toBe(personal);
+    await expect(currentDriveTitle(page)).toHaveText('Dev drive');
+
+    const folderOnWorkspace = await page.evaluate(
+      async ({ drive, localIdProp }) => {
+        const store = window.store;
+        const hits = await store
+          .search('Notifications', { limit: 5, parents: [drive] })
+          .catch(() => [] as string[]);
+
+        for (const subject of hits) {
+          const res = store.getResourceLoading(subject);
+
+          if (res.get(localIdProp) === 'notifications') {
+            return subject;
+          }
+        }
+
+        return null;
+      },
+      { drive: current, localIdProp: LOCAL_ID },
+    );
+
+    expect(folderOnWorkspace).toBeNull();
+  });
+
   test('sidebar entry opens empty inbox', async ({ page }) => {
     await page.getByRole('link', { name: 'Notifications' }).click();
     await expect(page).toHaveURL(/\/app\/notifications/);

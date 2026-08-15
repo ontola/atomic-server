@@ -116,6 +116,12 @@ Device-local overlays are rejected: the whole point of multi-device is one
 inbox state. Tradeoff: read-flips create small commits (acceptable; batch
 mark-all-read into one commit).
 
+`/app/dev-drive` used to make **Dev drive** the agent's `personalDrive`, so
+the inbox folder showed up as a child of the workspace. It now creates a
+private **Personal** drive (`personal: true`) plus a non-personal **Dev drive**
+workspace and lands you on the workspace. Inbox / watches / device tokens stay
+on Personal.
+
 ### `mentions` property (on content)
 
 `https://atomicdata.dev/properties/mentions` — `resourceArray` of Agent subjects
