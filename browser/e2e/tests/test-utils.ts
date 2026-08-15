@@ -52,6 +52,44 @@ export function spaUrl(url: string): string {
 export const appUrlOnFrontend = spaUrl;
 
 /**
+ * In-app navigate to the inbox. Full `page.goto` reloads the Store and can
+ * drop a just-upserted NotificationItem that is not in OPFS yet, so tests
+ * that seed the inbox in-memory must use this helper.
+ *
+ * The App menu sits at the bottom of a two-drive sidebar, often below the
+ * fold or inside a collapsed panel — force-click after scrolling rather
+ * than waiting for `getByRole('link', { name: 'Notifications' })`.
+ */
+export async function openNotificationsInbox(page: Page) {
+  const sidebar = page.getByTestId('sidebar');
+  const link = page.getByTestId('sidebar-notifications');
+  const expandApp = page.getByRole('button', { name: 'Expand App' });
+
+  if (await expandApp.isVisible().catch(() => false)) {
+    await expandApp.click();
+  }
+
+  await sidebar
+    .evaluate(el => {
+      el.scrollTop = el.scrollHeight;
+    })
+    .catch(() => undefined);
+
+  await expect(link).toBeAttached({ timeout: 15_000 });
+  await link.click({ force: true });
+  await expect(page).toHaveURL(/\/app\/notifications/);
+}
+
+/** Agent is in the JS store — not a sidebar label (dev-drive names it "Dev User"). */
+async function waitUntilSignedIn(page: Page) {
+  await page.waitForFunction(
+    () => !!window.store?.getAgent()?.subject,
+    undefined,
+    { timeout: 15_000 },
+  );
+}
+
+/**
  * Hostname the Node test process can actually reach.
  *
  * Dagger serves the SPA at `http://atomic.localhost:9883` so Chromium treats

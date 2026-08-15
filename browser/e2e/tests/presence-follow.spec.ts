@@ -76,6 +76,11 @@ test('presence avatars and follow mode across two sessions', async ({
   await pageB.goto(
     `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
   );
+  await pageB.waitForFunction(
+    () => window.store?.getSyncStatus()?.serverConnected === true,
+    undefined,
+    { timeout: 20_000 },
+  );
 
   // 1. Presence: both sessions see each other in the navbar facepile.
   await expect(facepile(pageB).getByRole('button').first()).toBeVisible({

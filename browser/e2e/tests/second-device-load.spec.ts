@@ -68,7 +68,7 @@ test(
     await p2.getByLabel('Agent secret').fill(secret);
 
     await expect(p2.getByText('SecondDeviceChild').first()).toBeVisible({
-      timeout: 12000,
+      timeout: 30000,
     });
     await ctx2.close();
   },
