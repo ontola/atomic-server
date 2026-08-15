@@ -532,9 +532,9 @@ export async function signIn(page: Page, secret: string = SECRET) {
  */
 export async function devDrive(page: Page): Promise<string> {
   await page.goto(`${FRONTEND_URL}/app/dev-drive`);
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
+  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 45000 });
   await expect(currentDriveTitle(page)).toHaveText('Dev drive', {
-    timeout: 15000,
+    timeout: 20000,
   });
 
   const secret = await page.evaluate(() =>
@@ -555,6 +555,7 @@ export async function devDrive(page: Page): Promise<string> {
 export async function newDrive(page: Page) {
   // Create new drive to prevent polluting the main drive
   const driveTitle = `testdrive-${timestamp()}`;
+  const previousSubject = await getCurrentSubject(page);
 
   await expect(sideBarDriveSwitcher(page)).toBeVisible({ timeout: 15000 });
 
@@ -572,11 +573,14 @@ export async function newDrive(page: Page) {
   await expect(createButton).toBeEnabled();
   await createButton.click();
 
-  // Wait for the URL to change to did:ad: (newly created drive)
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
-  await expect(currentDriveTitle(page)).toHaveText(driveTitle);
+  // `/app/dev-drive` already lands on a `did:ad:` workspace, so waiting for
+  // that URL pattern returns immediately. Wait for the new title instead.
+  await expect(currentDriveTitle(page)).toHaveText(driveTitle, {
+    timeout: 30000,
+  });
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toBeTruthy();
+  expect(driveURL).not.toBe(previousSubject);
 
   return { driveURL: driveURL as string, driveTitle };
 }

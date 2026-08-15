@@ -79,6 +79,9 @@ export function useDevDrive() {
         {
           description: `Private drive created via \`/app/dev-drive\` for local development and E2E. Notification inbox and watches live here. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
           agentName: DEV_DRIVE_AGENT_NAME,
+          // Inbox-only drive; skip the unused default Ontology so
+          // `before()` stays inside the 60s Playwright budget.
+          skipDefaultOntology: true,
         },
       );
 
@@ -87,12 +90,14 @@ export function useDevDrive() {
         personal: false,
       });
 
-      // Secret `initialDrive` is home (private drive), matching onboarding.
-      // We still `setDrive` + navigate to the workspace below.
+      // Secret `initialDrive` is the workspace. Second-context e2e signs
+      // in with this secret and then opens a subject on Dev drive; putting
+      // the private drive here made `usePrivateDrive` / driveStorage treat
+      // the workspace as foreign. Agent.privateDrive is still the home drive.
       const finalSecret = Agent.buildSecret(
         agentKeys.privateKey,
         agentDID,
-        personalDriveResource.subject,
+        driveResource.subject,
       );
 
       // Expose for E2E tests so they can sign in as the same agent on other pages.
