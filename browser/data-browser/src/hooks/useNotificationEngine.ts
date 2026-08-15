@@ -129,6 +129,7 @@ export function useUnreadNotificationCount(): number {
   const store = useStore();
   const engine = useNotificationEngine();
   const { agent } = useSettings();
+  const { privateDrive: knownPrivateDrive } = usePrivateDrive();
   const [unread, setUnread] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -162,7 +163,8 @@ export function useUnreadNotificationCount(): number {
       consider(res.subject);
     }
 
-    const personalDrive = await fetchPrivateDriveSubject(store, agent);
+    const personalDrive =
+      (await fetchPrivateDriveSubject(store, agent)) ?? knownPrivateDrive;
 
     if (personalDrive) {
       try {
@@ -184,24 +186,22 @@ export function useUnreadNotificationCount(): number {
         // Keep the in-memory count if the index query is still empty.
       }
 
-      if (n === 0) {
-        try {
-          const fromServer = await fetchNotificationItemSubjectsFromServer(
-            store,
-            personalDrive,
-          );
+      try {
+        const fromServer = await fetchNotificationItemSubjectsFromServer(
+          store,
+          personalDrive,
+        );
 
-          for (const subject of fromServer) {
-            consider(subject);
-          }
-        } catch {
-          // Offline — badge stays at the in-memory count.
+        for (const subject of fromServer) {
+          consider(subject);
         }
+      } catch {
+        // Offline — badge stays at the in-memory count.
       }
     }
 
     setUnread(n);
-  }, [store, agent]);
+  }, [store, agent, knownPrivateDrive]);
 
   useEffect(() => {
     void refresh();
