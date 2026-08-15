@@ -187,4 +187,54 @@ describe('deterministic personal drive', () => {
     expect(listed).toContain(leftover);
     expect(derived.getSubjects(FAVORITES)).toContain(starred);
   });
+
+  it('adopts a legacy drive list hosted on another origin', async ({
+    expect,
+  }) => {
+    const { store, agentDID } = await testStore();
+    const agent = store.getAgent()!;
+
+    // The shape of a pre-DID account: the drives live on the server being
+    // migrated away from, while this client points at the new home. Under an
+    // origin check these are all dropped and the user arrives with nothing.
+    const legacy = store.getResourceLoading(
+      'https://atomicdata.dev/agents/QmExample=',
+      { newResource: true },
+    );
+    await legacy.set(core.properties.isA, [core.classes.agent], false);
+    await legacy.set(core.properties.name, 'joep.io', false);
+    await legacy.set(
+      server.properties.drives,
+      [
+        'https://atomicdata.dev/drive/xzpv34r5ibr',
+        'https://staging.atomicdata.dev/drive/ckggjb1d3md',
+        'http://localhost:9883/01j71grbnyq2w9',
+      ],
+      false,
+    );
+
+    const didAgent = store.getResourceLoading(agentDID, { newResource: true });
+    await didAgent.set(core.properties.isA, [core.classes.agent], false);
+
+    await (
+      store as unknown as {
+        adoptLegacyDriveList: (
+          a: unknown,
+          l: unknown,
+          d: unknown,
+        ) => Promise<void>;
+      }
+    ).adoptLegacyDriveList(agent, legacy, didAgent);
+
+    const derived = await store.getResource(await agent.personalDriveSubject());
+    const listed = derived.getSubjects(server.properties.drives);
+
+    expect(listed).toContain('https://atomicdata.dev/drive/xzpv34r5ibr');
+    // A different origin from the legacy agent, so still dropped — this is the
+    // class that made a hosted app fetch from the user's own machine.
+    expect(listed).not.toContain('http://localhost:9883/01j71grbnyq2w9');
+    expect(listed).not.toContain(
+      'https://staging.atomicdata.dev/drive/ckggjb1d3md',
+    );
+  });
 });

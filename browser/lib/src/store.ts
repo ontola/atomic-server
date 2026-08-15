@@ -4133,7 +4133,23 @@ export class Store {
    * origin; drop everything else. A drive that genuinely lives elsewhere is not
    * lost — it is still on the legacy Agent, and "Open by URL" reaches it.
    */
-  private isAdoptableDriveSubject(subject: string): boolean {
+  /**
+   * `legacyOrigin` is the origin of the legacy Agent resource this list came
+   * from. Drives sitting there are adoptable even though they are not on the
+   * current server: that origin is the account being migrated away from, and
+   * the user just authenticated against it, so it is not an arbitrary
+   * third party. Without this a pre-DID account migrating to a desktop node
+   * or a self-hosted server loses its entire drive list, since none of the
+   * subjects can match the new home's origin.
+   *
+   * Everything else still has to be same-origin. That keeps the case this
+   * filter exists for: a stale list naming `http://localhost:9883` must never
+   * make a hosted app issue requests at the user's own machine.
+   */
+  private isAdoptableDriveSubject(
+    subject: string,
+    legacyOrigin?: string,
+  ): boolean {
     if (subject.startsWith('did:')) return true;
 
     // The migration's mangled spelling. It survives serialization as a path
@@ -4142,7 +4158,11 @@ export class Store {
     if (/\/[^/]+:\//.test(subject.replace(/^https?:\/\//, ''))) return false;
 
     try {
-      return new URL(subject).origin === new URL(this.serverUrl).origin;
+      const { origin } = new URL(subject);
+
+      if (origin === new URL(this.serverUrl).origin) return true;
+
+      return legacyOrigin !== undefined && origin === legacyOrigin;
     } catch {
       // Unparseable, and not a DID: nothing can be done with it.
       return false;
@@ -4157,10 +4177,19 @@ export class Store {
     // An earlier build parked the list on the Agent. Treat that as a source
     // too, so an account migrated by that version is repaired rather than
     // stranded.
+    // Where the legacy list came from — see `isAdoptableDriveSubject`.
+    let legacyOrigin: string | undefined;
+
+    try {
+      legacyOrigin = new URL(legacy.subject).origin;
+    } catch {
+      legacyOrigin = undefined;
+    }
+
     const inherited = [
       ...legacy.getSubjects(server.properties.drives),
       ...didAgent.getSubjects(server.properties.drives),
-    ].filter(subject => this.isAdoptableDriveSubject(subject));
+    ].filter(subject => this.isAdoptableDriveSubject(subject, legacyOrigin));
 
     if (inherited.length === 0) return;
 
