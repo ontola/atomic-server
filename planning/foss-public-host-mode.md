@@ -23,8 +23,8 @@ Two things that must stay true:
   the public Agent on a Drive, invite links, and ordinary `check_read` do not
   change.
 - **FOSS never phones home.** No control plane, no email, no portal. The
-  owner is a local agent DID persisted on the node. Guardrail #3 in
-  `cloud-sync-managed-node.md` is not renegotiated here.
+  owner is an agent DID the operator puts in `ATOMIC_OWNER_AGENT`.
+  Guardrail #3 in `cloud-sync-managed-node.md` is not renegotiated here.
 
 ## The hole today
 
@@ -96,10 +96,10 @@ a control plane. FOSS enrollment is local and synchronous.
 
 Narrower than “has write on some hosted Drive”:
 
-1. The **owner agent** — the DID that claimed the node (setup token or
-   `ATOMIC_OWNER_AGENT`).
-2. Later, and only if we add it: agents the owner explicitly grants a
-   `createDrive` / host right. Not v1.
+1. The **owner agent** — the DID in `ATOMIC_OWNER_AGENT` /
+   `--owner-agent`. That is the only claim mechanism.
+2. Later, and only if we add it: a comma-separated
+   `ATOMIC_OWNER_AGENTS` list, or a `createDrive` grant. Not v1.
 
 A collaborator with `write` on Drive D may write to D. They may not
 genesis a new Drive on this node. Treating “write on an enrolled Drive”
@@ -108,6 +108,11 @@ as “may enroll” is the abuse vector with extra steps.
 The owner’s second device is the same agent DID (they imported the
 secret). Creating another Drive auto-enrolls because the signer *is* the
 owner.
+
+The env holds the **agent DID**, never the secret. The node does not
+sign as the owner; it only admits signers that match. If someone pastes
+a full secret JSON, reject boot with “that is a secret; this flag wants
+`did:ad:agent:…`” — people will try.
 
 ### How a Drive gets on the allowlist
 
@@ -136,68 +141,92 @@ Replace `Err(_) => true` (“missing Drive ⇒ admit”) with:
   authorized-to-create; then enroll it. Otherwise `NotEnrolled`.
   `ForAgent::Public` never creates a Drive.
 
-This is “reject-until-known”, not first-writer-wins. First-writer-wins
-on a public socket is a claim race.
+This is “reject-until-known”, not first-writer-wins. There is no
+first-writer: the owner DID is in the process environment before the
+socket opens.
+
+## Claim: `ATOMIC_OWNER_AGENT`
+
+Identity is already local-first. A secret is a keypair; the agent DID
+is `did:ad:agent:{publicKey}` and does not need a server to exist. It
+is reasonable to expect someone who is about to bind `:443` to already
+have one — created on localhost, in the desktop app, or on a phone —
+and to paste that DID into the node’s env.
+
+```env
+# The DID only. Never the private key / secret JSON.
+ATOMIC_OWNER_AGENT=did:ad:agent:AbCdEf...
+```
+
+That is the whole claim. No setup token, no “first visitor to
+`/setup` owns the machine,” no one-shot Create account on the public
+origin. Those are claim races on a public socket; an env the operator
+set is not.
+
+**Owner mode without a valid `ATOMIC_OWNER_AGENT` fails closed.** Do
+not fall back to Open (that would make a missing line in `.env` an
+open hub). Do not boot a “waiting for first user” state. Refuse to
+start and print where to get the DID:
+
+```text
+Owner mode needs ATOMIC_OWNER_AGENT=did:ad:agent:…
+Create an account on localhost or in the app first, then copy the
+agent ID from Settings (or the `subject` field of your secret).
+To run an open node on purpose: ATOMIC_HOST_MODE=open
+```
+
+Validate the value: must be a `did:ad:agent:` DID. Reject a pasted
+secret, an `https://` agent URL, or an empty string.
+
+The env is the source of truth every boot — not a value we persist
+and can drift from. Changing the var changes who may enroll new
+Drives. Already-enrolled Drives stay hosted (collaborators keep
+`write` on them). `--initialize` cannot mint a new owner.
+
+Where the person copies the ID:
+
+- Settings / the agent profile (copy button).
+- The secret JSON’s `subject` field.
+- After a local Create account, one line of copy: “Going to put this
+  on the internet? Set `ATOMIC_OWNER_AGENT=` to this ID.”
 
 ## Setup UX
 
-Three real journeys. The welcome screen must be able to tell them apart
-from `/server` (see [Node advertisement](#node-advertisement)).
+Two journeys. The welcome screen tells them apart from `/server`
+(see [Node advertisement](#node-advertisement)).
 
 ### 1. Localhost (Open) — do not touch
 
 `Create account` → local DID → `createDrive` → it lands. This is the
 FOSS path `managedServer.ts` exists to protect. E2E `before` /
-`devDrive` stay on it.
+`devDrive` stay on it. This is also how a new operator *gets* the
+DID they will put in the env.
 
-### 2. Local first, then expose — the good path
+### 2. Going public — env, then expose
 
-1. Owner creates the account on localhost (Open).
-2. They set a domain / HTTPS / `--host-mode=owner` (or the UI “Make this
-   reachable on the internet” writes the same config).
-3. On the flip: snapshot every Drive already on disk into the allowlist;
-   persist the current agent as owner if none is set.
-4. Restart (or hot-install the policy). Strangers are rejected.
-   The owner’s secret still works from any browser.
+1. They already have a secret (localhost, desktop, or phone).
+2. They set `ATOMIC_OWNER_AGENT`, a public `ATOMIC_DOMAIN`, and
+   usually `--https`. Owner mode is the default on a public domain;
+   the env is what makes it *theirs*.
+3. Boot. Snapshot every Drive already on disk into the allowlist
+   (so a localhost-then-expose move does not lock the owner out of
+   data that is already there).
+4. They sign in on the public URL with the same secret. New Drives
+   they genesis enroll because the signer matches the env.
 
 Copy, in the owner’s language from `sync-onboarding-ux.md`:
 
 > Visitors can see what you have shared. They cannot store their own
 > workspace on this always-on device.
 
-### 3. VPS first (Owner, no owner yet) — the dangerous path
+A VPS image with no prior localhost step is the same journey: create
+the identity in any Atomic client first (the keypair is local), put
+the DID in the server’s env, deploy, sign in. The public welcome
+page never offers Create account.
 
-A fresh node on a public address has no owner. The first `Create
-account` would otherwise *be* the claim.
+### After boot (Owner + env set)
 
-**Setup token** (WordPress / Ghost / Home Assistant pattern):
-
-- On first boot in Owner mode with no owner, mint a high-entropy token.
-  Persist it. Print once:
-
-  `Owner setup: https://example.com/app/welcome?setup=<token>`
-
-- `/setup` and the welcome `Create account` path accept that token
-  **once**. From a loopback peer, the token is optional (so
-  `ssh -L` / a local proxy still works without fishing in logs).
-- From any other peer, missing/wrong token → the Create-account control
-  is hidden and the server rejects the genesis. Do not advertise a
-  working `/setup` URL on the public welcome page.
-- Accepting consumes the token and writes `owner_agent` + enrolls the
-  new Drive.
-
-Headless alternative: `ATOMIC_OWNER_AGENT=did:ad:agent:…` in the env.
-No token, no race. Useful for image-based deploys where the agent
-already exists.
-
-`--initialize` on a publicly bound Owner node is a footgun (it would
-mint a fresh claim). Require an extra `--confirm-initialize` (or only
-honor `--initialize` from a local CLI) and log a warning that names the
-bind address.
-
-### After the owner exists
-
-Welcome screen on an Owner node:
+Welcome screen:
 
 - **No** “Create account” that creates a Drive on this node.
 - **Sign in** (secret / passkey) — the owner on a new browser.
@@ -231,8 +260,8 @@ Add three facts (absent ⇒ treat as Open, so old nodes keep working):
 | Property | Meaning |
 | --- | --- |
 | `hostMode` | `open` \| `owner` |
-| `acceptsNewDrives` | `true` only in Open, or Owner with no owner yet *and* the request carries a valid setup token (the welcome page asked with it) |
-| `ownerSet` | whether an owner agent is persisted |
+| `acceptsNewDrives` | `true` only in Open. Owner is always `false` — new Drives enroll only when the signer matches `ATOMIC_OWNER_AGENT`. |
+| `ownerSet` | whether `ATOMIC_OWNER_AGENT` is set (Owner mode that booted) |
 
 In Owner mode, **do not** give `ForAgent::Public` the Iroh node id or
 the peer list. Those are a device inventory and a dial target. The
@@ -244,9 +273,7 @@ writes fail admission. Hiding the id removes the convenient listing.
 
 - managed + portal → portal (unchanged)
 - FOSS Open → local Create account (unchanged)
-- FOSS Owner + `acceptsNewDrives: false` → no create; Sign in / invite
-- FOSS Owner + valid `?setup=` → one-shot local Create account, then
-  lock
+- FOSS Owner → no create; Sign in / invite
 
 Keep this pure and unit-tested next to `managedServer.test.ts`. Do not
 infer “locked” from `managed: false` alone — that is every FOSS node.
@@ -256,10 +283,12 @@ infer “locked” from `managed: false` alone — that is every FOSS node.
 Admission is the load-bearing gate. These are the leftovers that
 admission does not cover.
 
-1. **Claim race** — setup token, loopback exception, no public `/setup`
-   link. First-writer-wins is not acceptable on `:443`.
-2. **`--initialize`** — extra confirm when bound non-loopback in Owner
-   mode.
+1. **Claim is config, not a request.** `ATOMIC_OWNER_AGENT` is set
+   before bind. A missing or invalid value refuses to start in Owner
+   mode. There is no HTTP path that becomes the owner.
+2. **`--initialize`** — cannot mint an owner (the env still wins).
+   Still log a warning if run on a non-loopback Owner bind; it is
+   not a claim reset.
 3. **Agent spam** — the agent-DID exemption lets anyone persist a tiny
    Agent resource. Either require the signer to be the owner / an
    invite-accept, or rate-limit unknown-agent `POST /commit` (token
@@ -287,7 +316,8 @@ when they say “public but mine.”
 
 - Put a control-plane client, heartbeat, or portal URL into the open
   `atomic-server` binary.
-- Require email to claim a FOSS node.
+- Require email to run a FOSS node.
+- Put the agent **secret** in the environment. The DID is enough.
 - Change the localhost Create-account path.
 - Equate “has write on a shared Drive” with “may enroll a new Drive.”
 - Reuse `--public-mode` or name the feature “public mode.”
@@ -303,12 +333,14 @@ testable.
 
 - `HostMode` on `Opts` / `Config`. Default: Open on loopback/private
   domain, Owner otherwise. Log the choice.
+- Owner mode **requires** `ATOMIC_OWNER_AGENT`. Invalid/missing →
+  exit with the message above. Never fall back to Open.
 - On Owner boot: `Db::set_sync_policy(AllowlistPolicy)` with
-  `set_grace(Duration::ZERO)`, load persisted `{ owner_agent,
-  allowed_drives }` from `PluginMeta`.
+  `set_grace(Duration::ZERO)`. Owner DID comes from the env every
+  time. Persist only `allowed_drives` (redb `PluginMeta`).
 - On Open → Owner flip (or first Owner boot with existing data):
   snapshot every Drive already stored into `allowed_drives`.
-- Drive genesis by the owner agent → persist + enroll.
+- Drive genesis whose signer equals `ATOMIC_OWNER_AGENT` → enroll.
 - Close the missing-Drive carve-out in Owner mode (OQ5).
 - `/server` emits `hostMode`, `acceptsNewDrives`, `ownerSet`. Redact
   node id + peers for `Public` when Owner.
@@ -325,22 +357,20 @@ Tests (protocol / glue):
 - Snapshot-on-flip: a Drive created under Open still admits after the
   policy is installed.
 
-### Phase 2 — claim + welcome
+### Phase 2 — welcome
 
-- Setup token mint / consume; loopback exception; `?setup=` on welcome.
-- `ATOMIC_OWNER_AGENT` env.
-- `--confirm-initialize` when Owner + non-loopback.
 - `accountCreationTarget` third branch + `managedServer.test.ts`.
-- Welcome: hide Create account when `acceptsNewDrives === false`.
+- Welcome: hide Create account when `hostMode === owner`.
+- After local Create account, show the agent DID and one line about
+  `ATOMIC_OWNER_AGENT` for people who will expose a node later.
 - `createDrive` / `promoteLocalDrive` error copy when the node refuses
   enrollment.
 
 Tests (flow):
 
-- Welcome unit: Owner + `ownerSet` → no Create account.
-- Welcome unit: Owner + `?setup=` → Create account once.
-- Server: genesis without token from a non-loopback peer is
-  `NotEnrolled`.
+- Welcome unit: Owner → no Create account; Sign in stays.
+- Server: Owner boot without `ATOMIC_OWNER_AGENT` exits non-zero.
+- Server: pasted secret / non-agent DID is rejected at boot.
 - Browser e2e stays on localhost Open; add one Owner-mode server
   integration test rather than a full Playwright public-bind.
 
@@ -356,8 +386,8 @@ Tests (flow):
 ## Docs and copy
 
 - `docs/src/atomicserver/installation.md` — new subsection after
-  HTTPS: default Owner on a public domain, setup-token log line,
-  localhost-then-expose, `ATOMIC_OWNER_AGENT`, `ATOMIC_HOST_MODE=open`
+  HTTPS: create an account first, set `ATOMIC_OWNER_AGENT`, then
+  expose; default Owner on a public domain; `ATOMIC_HOST_MODE=open`
   escape hatch for a *deliberate* multi-user FOSS node.
 - `docs/src/atomicserver/gui.md` — stop leading with `/setup`.
 - `docs/src/atomicserver/faq.md` — “How do I make my data private, yet
@@ -383,4 +413,8 @@ Tests (flow):
 4. **Name.** `hostMode` / Owner, not “public mode,” not “locked,” not
    “registration.” The node is not a product with accounts; it has an
    owner.
+5. **Refuse to start vs. start locked if the env is missing?** Refuse
+   to start. A process that never bound is an operator error they see
+   in `journalctl`. A process that bound and admits nothing looks like
+   a broken site. `ATOMIC_HOST_MODE=open` remains the explicit escape.
 )
