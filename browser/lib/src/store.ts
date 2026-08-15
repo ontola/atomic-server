@@ -4007,6 +4007,10 @@ export class Store {
    * *this* server is tried first. The original is kept as a fallback for the
    * case the secret really does describe another, still-live server.
    */
+  /** Agents whose legacy migration has already been started — see
+   *  `adoptLegacyAgentIdentity`. */
+  private legacyAdoptionRuns = new Set<string>();
+
   private async fetchLegacyAgentResource(
     legacySubject: string,
   ): Promise<Resource | undefined> {
@@ -4037,6 +4041,20 @@ export class Store {
     const legacySubject = agent.legacySubject;
 
     if (!legacySubject || !agent.subject) return;
+
+    // `setAgent` fires this and forgets it, and an app sets an agent more than
+    // once while booting (a node's own agent, then the signed-in one, then a
+    // rehydrate). Each pass reached `ensurePersonalDrive` and made a drive, so
+    // a single sign-in could leave several "My drive"s behind — and because the
+    // list is adopted onto whichever one ran last, the UI showed an empty
+    // workspace next to a pile of orphans.
+    //
+    // Keyed on the agent, not a bare boolean: signing out and into a different
+    // account must still migrate. The key is added before the first await so
+    // concurrent callers collapse onto one run rather than racing.
+    if (this.legacyAdoptionRuns.has(agent.subject)) return;
+
+    this.legacyAdoptionRuns.add(agent.subject);
 
     try {
       const legacy = await this.fetchLegacyAgentResource(legacySubject);
