@@ -33,10 +33,14 @@ pub(super) async fn shared_drive() -> &'static str {
             std::fs::create_dir_all(&dir).unwrap();
 
             open_db(dir.to_string_lossy().into_owned()).await.unwrap();
-            setup("Test device".to_string())
+            let drive = setup("Test device".to_string())
                 .await
                 .unwrap()
-                .drive_subject
+                .drive_subject;
+            // `create_canvas` reads PluginMeta `active_drive`. Pin it from the
+            // setup result so a shared OnceLock DB cannot race to "no drive".
+            set_active_drive(drive.clone()).await.unwrap();
+            drive
         })
         .await
         .as_str()
