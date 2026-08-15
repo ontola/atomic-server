@@ -2214,7 +2214,10 @@ export class Store {
           agent.subject,
           agentName,
         );
-        await this.maybeMigrateOldPersonalDrive(existing, oldPointer);
+        await this.maybeMigrateOldPersonalDrive(existing, [
+          oldPointer,
+          agent.initialDrive,
+        ]);
 
         return existing;
       }
@@ -2239,7 +2242,10 @@ export class Store {
         agent.subject,
         agentName,
       );
-      await this.maybeMigrateOldPersonalDrive(drive, oldPointer);
+      await this.maybeMigrateOldPersonalDrive(drive, [
+        oldPointer,
+        agent.initialDrive,
+      ]);
     } else {
       await this.addToSavedDrives(drive, agent.subject);
     }
@@ -2369,19 +2375,47 @@ export class Store {
   }
 
   /**
-   * If the Agent still points at a random-DID home, union its lists onto the
-   * derived drive and keep the old drive as an ordinary workspace. Best-effort:
-   * does not block sign-in or first write.
+   * Union any previous home's lists onto the derived drive and keep the old
+   * drive as an ordinary workspace. Best-effort: does not block sign-in or
+   * first write.
+   *
+   * Takes several candidates because the old home is recorded in two places
+   * that go missing independently:
+   *
+   * - `personalDrive` on the Agent **resource** — absent whenever the server
+   *   holding the account never wrote one, which is the common case for a
+   *   self-hosted account whose drives were made ad hoc.
+   * - `initialDrive` from the agent **secret** — the only record left on a
+   *   device that has never seen the old drive, since it travels with the key
+   *   rather than with any server's data.
+   *
+   * An account predating the derivation can have either, both, or (for a
+   * genuinely new agent) neither.
    */
   private async maybeMigrateOldPersonalDrive(
     derived: Resource,
-    oldPointer: string | undefined,
+    candidates: (string | undefined)[],
   ): Promise<void> {
-    try {
-      if (!oldPointer || oldPointer === derived.subject) {
-        return;
+    const seen = new Set<string>([derived.subject]);
+
+    for (const candidate of candidates) {
+      if (!candidate || seen.has(candidate)) {
+        continue;
       }
 
+      seen.add(candidate);
+
+      // Per candidate: one unreachable old home must not strand the other.
+      await this.migrateOneOldPersonalDrive(derived, candidate);
+    }
+  }
+
+  /** Union one old home's lists onto `derived`. See the caller for why. */
+  private async migrateOneOldPersonalDrive(
+    derived: Resource,
+    oldPointer: string,
+  ): Promise<void> {
+    try {
       let old = this._resources.get(oldPointer);
 
       if (!old || !old.isReady()) {

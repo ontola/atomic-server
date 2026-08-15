@@ -145,4 +145,46 @@ describe('deterministic personal drive', () => {
     expect(listed).toContain(leftover);
     expect(derived.getSubjects(FAVORITES)).toContain(starred);
   });
+
+  it('unions lists from the home named in the agent secret when the Agent resource has no pointer', async ({
+    expect,
+  }) => {
+    const { store, agentDID } = await testStore();
+    const agent = store.getAgent()!;
+
+    const oldHome = await store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+      propVals: {
+        [core.properties.name]: 'Old home',
+        [core.properties.write]: [agentDID],
+      },
+    });
+    await oldHome.save();
+
+    const leftover = 'did:ad:secret-only-workspace';
+    const starred = 'did:ad:secret-only-doc';
+    oldHome.push(server.properties.drives, [leftover], true);
+    oldHome.push(FAVORITES, [starred], true);
+    await oldHome.save();
+
+    // No `personalDrive` on the Agent resource — the shape of a self-hosted
+    // account whose server never wrote one. `initialDrive`, which travels with
+    // the secret rather than with any server's data, is the only record left.
+    const agentResource = store.getResourceLoading(agentDID, {
+      newResource: true,
+    });
+    await agentResource.set(core.properties.isA, [core.classes.agent], false);
+    agent.initialDrive = oldHome.subject;
+
+    const derived = await store.ensurePersonalDrive('Home');
+
+    expect(derived.subject).toBe(await agent.personalDriveSubject());
+    expect(derived.subject).not.toBe(oldHome.subject);
+
+    const listed = derived.getSubjects(server.properties.drives);
+    expect(listed).toContain(oldHome.subject);
+    expect(listed).toContain(leftover);
+    expect(derived.getSubjects(FAVORITES)).toContain(starred);
+  });
 });
