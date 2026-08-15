@@ -6,7 +6,7 @@ import {
   newDrive,
   nodeReachableServerUrl,
   signIn,
-  sidebarNewResourceButton,
+  openNewResourcePage,
 } from './test-utils';
 import fs from 'node:fs';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -279,8 +279,7 @@ test.describe('Test create-template package', () => {
     await makeDrivePublic(page);
 
     // Apply the template in data browser
-    await sidebarNewResourceButton(page).click();
-    await expect(page).toHaveURL(/\/app\/new(\?|$)/);
+    await openNewResourcePage(page);
 
     await page.getByTestId('template-button').click();
 
@@ -333,8 +332,7 @@ test.describe('Test create-template package', () => {
     await makeDrivePublic(page);
 
     // Apply the template in data browser
-    await sidebarNewResourceButton(page).click();
-    await expect(page).toHaveURL(/\/app\/new(\?|$)/);
+    await openNewResourcePage(page);
 
     const button = page.getByTestId('template-button');
     await button.click();

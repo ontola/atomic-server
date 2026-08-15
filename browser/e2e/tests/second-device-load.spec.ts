@@ -37,7 +37,19 @@ test('a fresh-OPFS second device loads an existing drive’s contents', async ({
     return d;
   });
   const secret = await getDevDriveSecret(p1);
-  await p1.waitForTimeout(2000);
+
+  // Device 1 is about to be closed, so the folder has to have reached the
+  // server before that — device 2 has an empty OPFS and can only load it from
+  // there. This was a flat 2s sleep, which is a guess at how long a commit
+  // takes and was simply wrong on a loaded CI runner: the context closed with
+  // the commit still queued, and the failure landed on device 2 as "the drive
+  // is missing its contents", pointing at the cold-load path this test exists
+  // to check rather than at the setup that never completed.
+  await p1.waitForFunction(
+    () => window.store?.getSyncStatus().pendingDirtyCount === 0,
+    undefined,
+    { timeout: 30_000 },
+  );
   await ctx1.close();
 
   const ctx2 = await browser.newContext(); // brand-new context ⇒ empty OPFS

@@ -99,7 +99,13 @@ test.describe('table refresh', () => {
           const start = Date.now();
 
           const tick = () => {
-            const db = window.store.getClientDb();
+            // `window.store` is published when the app bundle runs, and the
+            // navigation above only waits for `domcontentloaded` — so on a
+            // slower machine this polls before there is a store at all. It
+            // used to read straight through and throw a TypeError out of the
+            // promise, failing the test with "Cannot read properties of
+            // undefined" instead of waiting the extra tick it needed.
+            const db = window.store?.getClientDb?.();
 
             if (db?.isReady) {
               resolve('ready');
@@ -114,7 +120,9 @@ test.describe('table refresh', () => {
             }
 
             if (Date.now() - start > 20000) {
-              resolve(`timeout: db=${!!db} isReady=${db?.isReady}`);
+              resolve(
+                `timeout: store=${!!window.store} db=${!!db} isReady=${db?.isReady}`,
+              );
 
               return;
             }

@@ -773,7 +773,11 @@ test.describe('data-browser', async () => {
       page.getByText('First Title', { exact: true }).first(),
     ).toBeVisible();
 
-    await page.click('text=Restore this version');
+    // Enabled only once the selected version differs from the current one, so
+    // wait for that rather than racing the selection above.
+    const restore = page.getByRole('button', { name: 'Restore this version' });
+    await expect(restore).toBeEnabled({ timeout: 15_000 });
+    await restore.click();
 
     await expect(page.locator('text=Resource version updated')).toBeVisible();
     // After restore the page navigates back to the resource. EditableTitle

@@ -143,6 +143,41 @@ const filterChip = (page: Page, prefix: string) =>
     .locator('[role="toolbar"][aria-label="Table filters"]')
     .getByRole('button', { name: new RegExp(`^${prefix}`) });
 
+/**
+ * How the chip spells each operator. Mirrors `OPERATOR_LABELS` in
+ * `chunks/TablePage/tableFiltering.ts`; used to tell whether a chosen operator
+ * has actually reached the chip.
+ */
+const OPERATOR_LABEL: Record<string, string> = {
+  eq: 'is',
+  gt: 'greater than',
+  gte: 'at least',
+  lt: 'less than',
+  lte: 'at most',
+  starts_with: 'starts with',
+  contains: 'contains',
+};
+
+/**
+ * Dismiss the filter popover once the chip reflects what was chosen.
+ *
+ * Pressing Escape straight after `selectOption` races the change: the popover
+ * unmounts and the edit can go with it, leaving the previous operator in force
+ * and the grid still showing rows the new one excludes. That surfaced as "the
+ * filter does not work", ten seconds of waiting for a row to disappear that was
+ * never filtered out in the first place.
+ */
+async function closeFilterEditor(
+  page: Page,
+  columnShortname: string,
+  operator: string,
+) {
+  await expect(filterChip(page, columnShortname)).toContainText(
+    OPERATOR_LABEL[operator],
+  );
+  await page.keyboard.press('Escape');
+}
+
 /** Adds a filter for `columnShortname` via the view-row Filter button and sets
  * its operator + value in the auto-opened chip popover. */
 async function addFilter(
@@ -161,8 +196,7 @@ async function addFilter(
     .locator('select[aria-label="Filter operator"]')
     .selectOption(operator);
   await page.getByPlaceholder('Value…').fill(value);
-  // Close the popover so it doesn't overlay the grid.
-  await page.keyboard.press('Escape');
+  await closeFilterEditor(page, columnShortname, operator);
 }
 
 test.describe('table filtering + views', () => {
@@ -216,7 +250,7 @@ test.describe('table filtering + views', () => {
     await page
       .locator('select[aria-label="Filter operator"]')
       .selectOption('gt');
-    await page.keyboard.press('Escape');
+    await closeFilterEditor(page, 'birthday', 'gt');
     await expect(page.getByRole('gridcell', { name: 'Bob' })).toBeVisible();
     await expect(
       page.getByRole('gridcell', { name: 'Alice' }),
