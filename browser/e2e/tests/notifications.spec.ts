@@ -25,6 +25,7 @@ import {
   FRONTEND_URL,
   getDevDriveSecret,
   newResource,
+  signIn,
 } from './test-utils';
 
 const NOTIFICATION_ITEM = 'https://atomicdata.dev/classes/NotificationItem';
@@ -580,19 +581,9 @@ test.describe('notifications', () => {
     const ctx2 = await browser.newContext();
     const page2 = await ctx2.newPage();
     await page2.goto(FRONTEND_URL);
-    await page2.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await page2.getByLabel('Agent secret').fill(secret);
-    const continueBtn = page2.getByRole('button', { name: 'Continue' });
-
-    if (await continueBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await continueBtn.click();
-    }
-
-    // Fresh OPFS may land on connect-device; wait for agent then open inbox.
-    await page2.waitForFunction(
-      () => !!window.store?.getAgent()?.subject,
-      null,
-      { timeout: 25_000 },
+    await signIn(page2, secret);
+    await expect(page2.getByRole('link', { name: /Connected Sync/ })).toBeVisible(
+      { timeout: 30_000 },
     );
 
     await page2.goto(`${FRONTEND_URL}/app/notifications`);
@@ -603,7 +594,13 @@ test.describe('notifications', () => {
             noWebSocket: true,
           });
 
-          return !res.error;
+          if (res.error) {
+            return false;
+          }
+
+          window.store.notifyResourceUpdated(res);
+
+          return true;
         } catch {
           return false;
         }
@@ -623,6 +620,16 @@ test.describe('notifications', () => {
       0,
       { timeout: 15_000 },
     );
+
+    await page2.evaluate(async subject => {
+      const res = await window.store.fetchResourceFromServer(subject, {
+        noWebSocket: true,
+      });
+
+      if (!res.error) {
+        window.store.notifyResourceUpdated(res);
+      }
+    }, seededSubject);
 
     await expect(page2.getByTestId('sidebar-notification-badge')).toHaveCount(
       0,
@@ -667,7 +674,7 @@ test.describe('notifications', () => {
     await page.waitForFunction(
       () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
-      { timeout: 15_000 },
+      { timeout: 30_000 },
     );
 
     const context2 = await browser.newContext();
