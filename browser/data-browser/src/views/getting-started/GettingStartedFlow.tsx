@@ -580,6 +580,19 @@ export function GettingStartedFlow({
         );
       }
 
+      // The home drive is derived from the key rather than looked up, so
+      // nothing else will ever create it — `fetchPersonalDriveSubject` below
+      // computes the subject but does not materialize it, which is why the
+      // drive it navigates to could report "not found". Signing in is the one
+      // deliberate moment to write it; leaving it to whichever render-time
+      // resolver asked first is what let a bad derivation mint hundreds of
+      // drives instead of one.
+      await withDeadline(
+        store.ensurePersonalDrive().then(() => undefined),
+        SIGN_IN_LOOKUP_TIMEOUT_MS,
+        undefined,
+      );
+
       // Where this sign-in wants to end up: the drive it came from, or the
       // account's own. One target, so there is one gate below — an early
       // return for the guard case is an early return around the gate.
