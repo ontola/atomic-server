@@ -96,6 +96,11 @@ pub fn build_search_subject(server_url: &str, query: &str, opts: SearchOpts) -> 
 mod tests {
     use super::*;
 
+    fn search_query_fixture() -> serde_json::Value {
+        serde_json::from_str(include_str!("../../../testdata/search-query.json"))
+            .expect("testdata/search-query.json")
+    }
+
     #[test]
     fn test_base_url() {
         let server_url = "http://example.com";
@@ -105,9 +110,18 @@ mod tests {
 
     #[test]
     fn test_escape_tantivy_key() {
-        let key = "+^`:{}\"[]()!\\* .";
-        let expected_escaped_key = "\\+\\^\\`\\:\\{\\}\\\"\\[\\]\\(\\)\\!\\\\\\*\\ \\.";
-        assert_eq!(escape_tantivy_key(key), expected_escaped_key);
+        for case in search_query_fixture()["escape"]
+            .as_array()
+            .expect("escape array")
+        {
+            let input = case["input"].as_str().unwrap();
+            let escaped = case["escaped"].as_str().unwrap();
+            assert_eq!(
+                escape_tantivy_key(input),
+                escaped,
+                "escape mismatch for {input:?}"
+            );
+        }
     }
 
     #[test]
@@ -123,24 +137,25 @@ mod tests {
 
     #[test]
     fn test_build_search_subject() {
-        // Mimics lib/search.test.ts
-        let server_url = "https://test.com";
-        let query = "test";
+        let subject = &search_query_fixture()["searchSubject"];
+        let mut filters = HashMap::new();
+        for (key, value) in subject["filters"].as_object().unwrap() {
+            filters.insert(key.clone(), value.as_str().unwrap().to_string());
+        }
         let opts = SearchOpts {
-            include: Some(true),
-            limit: Some(30),
-            filters: Some({
-                let mut filters = HashMap::new();
-                filters.insert("age".to_string(), "10".to_string());
-                filters
-            }),
-            parents: Some(vec!["https://test.com/parent".to_string()]),
+            include: Some(subject["include"].as_bool().unwrap()),
+            limit: Some(subject["limit"].as_u64().unwrap() as u32),
+            filters: Some(filters),
+            parents: Some(vec![subject["parents"].as_str().unwrap().to_string()]),
             agent: None,
         };
-        let expected_search_url = "https://test.com/search?q=test&include=true&limit=30&filters=age%3A%2210%22&parents=https%3A%2F%2Ftest.com%2Fparent";
         assert_eq!(
-            build_search_subject(server_url, query, opts),
-            expected_search_url
+            build_search_subject(
+                subject["serverUrl"].as_str().unwrap(),
+                subject["query"].as_str().unwrap(),
+                opts
+            ),
+            subject["expected"].as_str().unwrap()
         );
     }
 }

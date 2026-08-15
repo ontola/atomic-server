@@ -11,17 +11,19 @@ use atomic_lib::{client::connected::Client, errors::AtomicResult};
 
 use crate::common::{start_server, wait_for_server};
 
-/// Matches the browser's `escapeTantivyKey` (`browser/lib/src/search.ts`):
-/// backslash-escapes every tantivy special char, including `.` and `:`.
-fn escape_tantivy_key(key: &str) -> String {
-    let mut out = String::with_capacity(key.len());
-    for c in key.chars() {
-        if "+^`:{}\"[]()!\\* .".contains(c) {
-            out.push('\\');
-        }
-        out.push(c);
-    }
-    out
+/// Escaped `isA` property URL from the shared search-query fixture — the
+/// same bytes `escapeTantivyKey` / `escape_tantivy_key` must produce.
+fn escaped_isa_key() -> String {
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../../testdata/search-query.json"))
+            .expect("testdata/search-query.json");
+    fixture["escape"]
+        .as_array()
+        .expect("escape array")
+        .iter()
+        .find(|case| case["input"].as_str() == Some("https://atomicdata.dev/properties/isA"))
+        .and_then(|case| case["escaped"].as_str().map(str::to_string))
+        .expect("isA key in testdata/search-query.json")
 }
 
 async fn run_search(server_url: &str, agent: &atomic_lib::agents::Agent, query: &str) -> String {
@@ -88,7 +90,7 @@ async fn uploaded_file_is_findable_via_search() -> AtomicResult<()> {
 
     // Exactly what FilePickerDialog issues: filters built via
     // `escapeTantivyKey`/`buildFilterString`, scoped with `parents=<drive>`.
-    let isa_key = escape_tantivy_key("https://atomicdata.dev/properties/isA");
+    let isa_key = escaped_isa_key();
     let filters = format!(r#"{isa_key}:"https://atomicdata.dev/classes/File""#);
 
     let both = run_search(

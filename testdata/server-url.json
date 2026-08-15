@@ -1,0 +1,69 @@
+{
+  "_comment": [
+    "Shared server-URL contract. browser/data-browser/src/helpers/serverUrl.ts",
+    "and flutter/lib/atomic/server_url.dart must both reproduce every expected",
+    "value. Empty / whitespace-only input is intentionally omitted: Dart",
+    "returns '' (no server is a valid choice) while TypeScript currently",
+    "returns 'https://'. That disagreement is a behavior change, not this",
+    "fixture. `::1` is omitted: both implementations split authority on `:`",
+    "so the loopback-v6 check in source never matches. Keys beginning with",
+    "an underscore are documentation."
+  ],
+  "normalize": [
+    { "input": "localhost:9883", "normalized": "http://localhost:9883" },
+    { "input": "127.0.0.1:9883", "normalized": "http://127.0.0.1:9883" },
+    { "input": "my.server.com", "normalized": "https://my.server.com" },
+    { "input": "192.168.0.79:9883", "normalized": "http://192.168.0.79:9883" },
+    { "input": "10.0.0.5:9883", "normalized": "http://10.0.0.5:9883" },
+    { "input": "172.16.4.2:9883", "normalized": "http://172.16.4.2:9883" },
+    { "input": "mac.local:9883", "normalized": "http://mac.local:9883" },
+    { "input": "172.32.0.1:9883", "normalized": "https://172.32.0.1:9883" },
+    { "input": "8.8.8.8", "normalized": "https://8.8.8.8" },
+    { "input": "192.169.0.1", "normalized": "https://192.169.0.1" },
+    { "input": "http://my.server.com", "normalized": "http://my.server.com" },
+    { "input": "https://my.server.com", "normalized": "https://my.server.com" },
+    { "input": "  localhost:9883/  ", "normalized": "http://localhost:9883" },
+    { "input": "https://my.server.com///", "normalized": "https://my.server.com" }
+  ],
+  "isLocal": [
+    { "authority": "localhost:9883", "local": true },
+    { "authority": "127.0.0.1:9883", "local": true },
+    { "authority": "192.168.0.79:9883", "local": true },
+    { "authority": "10.0.0.5:9883", "local": true },
+    { "authority": "172.16.4.2:9883", "local": true },
+    { "authority": "mac.local:9883", "local": true },
+    { "authority": "172.32.0.1:9883", "local": false },
+    { "authority": "8.8.8.8", "local": false },
+    { "authority": "192.169.0.1", "local": false },
+    { "authority": "my.server.com", "local": false }
+  ],
+  "sameOrigin": [
+    {
+      "a": "http://localhost:9883",
+      "b": "http://localhost:9883/",
+      "same": true
+    },
+    {
+      "a": "http://localhost:9883",
+      "b": "http://localhost:9883/some/path",
+      "same": true
+    },
+    {
+      "a": "http://localhost:9883",
+      "b": "http://localhost:9884",
+      "same": false
+    },
+    {
+      "a": "http://my.server.com",
+      "b": "https://my.server.com",
+      "same": false
+    },
+    { "a": "http://localhost:9883", "b": null, "same": false },
+    { "a": "http://localhost:9883", "b": "", "same": false }
+  ],
+  "serverLabel": [
+    { "url": "http://localhost:9883", "label": "localhost:9883" },
+    { "url": "http://localhost:6747", "label": "localhost:6747" },
+    { "url": "https://my.server.com", "label": "my.server.com" }
+  ]
+}

@@ -403,6 +403,10 @@ export class AtomicServer {
         ])
         .withDirectory('/workspace/lib', this.source.directory('lib'))
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
+        .withDirectory(
+          '/workspace/testdata',
+          this.source.directory('testdata'),
+        )
         .withMountedCache('/workspace/flutter/rust/target', flutterRustTarget, {
           sharing: CacheSharingMode.Locked,
         })
@@ -910,13 +914,9 @@ export class AtomicServer {
         '/lib/src/genesis_test_vectors.json',
         this.source.file('lib/src/genesis_test_vectors.json'),
       )
-      // data-browser/src/helpers/pairing.test.ts reads a repo-root testdata
-      // fixture the same way (`../../../../testdata/pairing-request.json`
-      // from /app/data-browser/src/helpers) — mount just this one file.
-      .withFile(
-        '/testdata/pairing-request.json',
-        this.source.file('testdata/pairing-request.json'),
-      );
+      // data-browser and @tomic/lib tests read repo-root testdata fixtures
+      // via `../../../../testdata/...` from /app/... — mount the directory.
+      .withDirectory('/testdata', this.source.directory('testdata'));
 
     // Build all packages since they may depend on each other's built artifacts
     let buildContainer = sourceContainer.withEnvVariable(
@@ -1130,15 +1130,10 @@ export class AtomicServer {
           '/code/.config/nextest.toml',
           source.file('.config/nextest.toml'),
         )
-        // server/tests/it/iroh_pairing.rs reads the pairing contract fixture
-        // relative to CARGO_MANIFEST_DIR (`../testdata/pairing-request.json`
-        // from /code/server). It is the shared Rust/TS contract file, so the
-        // JS container mounts it too — see the identical mount in
-        // `jsBuild()`. Without it the test fails with a bare NotFound.
-        .withFile(
-          '/code/testdata/pairing-request.json',
-          source.file('testdata/pairing-request.json'),
-        )
+        // server/tests and atomic_lib tests read repo-root testdata
+        // (`../testdata/...` from /code/server or /code/lib). JS mounts
+        // the same directory at /testdata — see `jsBuild()`.
+        .withDirectory('/code/testdata', source.directory('testdata'))
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/lib', source.directory('lib'))
         .withDirectory('/code/cli', source.directory('cli'))
