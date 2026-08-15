@@ -229,12 +229,35 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     return true;
   };
 
+  const pinPersonalDriveOnAgent = (personalDrive: string) => {
+    if (agentSecret) {
+      try {
+        const parsed = JSON.parse(atob(agentSecret)) as {
+          privateKey: string;
+          subject: string;
+        };
+        const nextAgent = Agent.fromSecret(
+          Agent.buildSecret(parsed.privateKey, parsed.subject, personalDrive),
+          'js',
+        );
+        store.setAgent(nextAgent);
+        setAgent(nextAgent);
+      } catch {
+        if (agent) {
+          agent.initialDrive = personalDrive;
+        }
+      }
+    } else if (agent) {
+      agent.initialDrive = personalDrive;
+    }
+  };
+
   const [dialogProps, show, hide] = useDialog({
     onSuccess: async () => {
-      setAgentSecret(undefined);
       const agentSubject = agent?.subject;
 
       if (!agentSubject) {
+        setAgentSecret(undefined);
         goToRedirect();
 
         return;
@@ -246,12 +269,14 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         agentName,
       );
 
-      // Inbox / engine fall back to `agent.initialDrive`. Keep that on the
-      // private drive even though the sidebar activates the invite host.
-      if (drives.privateDrive && agent) {
-        agent.initialDrive = drives.privateDrive;
+      // Rebuild the Agent so `initialDrive` is the private drive — the
+      // notification engine remounts and writes inbox rows there. Sidebar
+      // still activates the invite host via `activateDrive`.
+      if (drives.privateDrive) {
+        pinPersonalDriveOnAgent(drives.privateDrive);
       }
 
+      setAgentSecret(undefined);
       goToRedirect(undefined, activateDrive(drives));
     },
   });
@@ -370,8 +395,8 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
           undefined,
         );
 
-        if (drives.privateDrive && agent) {
-          agent.initialDrive = drives.privateDrive;
+        if (drives.privateDrive) {
+          pinPersonalDriveOnAgent(drives.privateDrive);
         }
 
         goToRedirect(destination, activateDrive(drives));

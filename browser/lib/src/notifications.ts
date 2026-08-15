@@ -764,15 +764,10 @@ export async function fetchNotificationItemSubjectsFromServer(
   const subjects = page.getSubjects(collections.properties.members);
 
   for (const subject of subjects) {
-    const existing = store.resources.get(subject);
-
-    if (existing && !existing.loading && !existing.error && !existing.new) {
-      continue;
-    }
-
-    const res = await store.fetchResourceFromServer(subject, {
-      noWebSocket: true,
-    });
+    // Always re-fetch and subscribe. Skipping a cached row left device B
+    // with a stale `notificationRead` after A marked the item read, and
+    // `noWebSocket` meant the row never got live COMMITs.
+    const res = await store.fetchResourceFromServer(subject);
 
     if (!res.error) {
       store.notifyResourceUpdated(res);

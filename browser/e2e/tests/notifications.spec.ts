@@ -167,6 +167,9 @@ async function seedUnreadItem(
 }
 
 test.describe('notifications', () => {
+  // Two-drive `/app/dev-drive` + invitee context; keep before() inside budget
+  // when Vite is mid-HMR after a lib rebuild.
+  test.describe.configure({ timeout: 180_000 });
   test.beforeEach(before);
 
   test('dev-drive workspace is not the personal inbox drive', async ({
