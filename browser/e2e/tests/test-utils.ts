@@ -525,14 +525,17 @@ export async function signIn(page: Page, secret: string = SECRET) {
 }
 
 /**
- * Quick dev setup: navigates to /app/dev-drive which creates a fresh agent +
- * drive on localhost:9883 and switches to it automatically.
+ * Quick dev setup: navigates to /app/dev-drive which creates a fresh agent,
+ * a private Personal drive (inbox / watches), and a non-personal "Dev drive"
+ * workspace, then switches to the workspace.
  * Returns the agent secret so other pages/contexts can sign in as the same user.
  */
 export async function devDrive(page: Page): Promise<string> {
   await page.goto(`${FRONTEND_URL}/app/dev-drive`);
   await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
-  await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
+  await expect(currentDriveTitle(page)).toHaveText('Dev drive', {
+    timeout: 15000,
+  });
 
   const secret = await page.evaluate(() =>
     localStorage.getItem('atomic-test.dev-drive-secret'),
