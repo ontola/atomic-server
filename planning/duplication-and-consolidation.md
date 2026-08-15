@@ -1,8 +1,13 @@
 # Duplication and consolidation audit (2026-08-15)
 
 Index of things that exist more than once, and whether they should stay that
-way. This is a map, not a rewrite plan. Where a dedicated plan already owns
-the work, this file links to it instead of restating it.
+way. This is a map, not a rewrite plan. How a listed copy is allowed to land is
+[`consolidation-contract.md`](./consolidation-contract.md): characterization
+tests on the old code, then a line-count gate so the remaining path is smaller
+and the old behavior is still pinned.
+
+Where a dedicated plan already owns the work, this file links to it instead of
+restating it.
 
 **Related plans (do not duplicate):**
 
@@ -377,7 +382,8 @@ Worker-bound copies (`STORAGE_BLOCKED_MARKER`, WASM URL helpers in
 
 ## Suggested order (small → structural)
 
-Work that is local and pays off without waiting on the runtime rewrite:
+Work that is local and pays off without waiting on the runtime rewrite.
+Every item still has to pass [`consolidation-contract.md`](./consolidation-contract.md).
 
 1. **Port/env single source** — stop 9883/9885 drift.
 2. **Delete `browser/lib/src/urls.ts`** — migrate the six remaining imports
