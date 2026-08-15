@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, getDevDriveSecret, signIn, FRONTEND_URL } from './test-utils';
+import {
+  before,
+  getDevDriveSecret,
+  openDrive,
+  signIn,
+  FRONTEND_URL,
+} from './test-utils';
 
 /**
  * Drive presence + follow mode (#1229), driven as two sessions (browser
@@ -64,18 +70,14 @@ test('presence avatars and follow mode across two sessions', async ({
   const { drive, folder } = created;
   const secret = await getDevDriveSecret(pageA);
 
-  await pageA.goto(
-    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
-  );
+  await openDrive(pageA, drive);
 
   // --- Session B (the follower): same agent, fresh context ---
   const ctxB = await browser.newContext();
   const pageB = await ctxB.newPage();
   await pageB.goto(FRONTEND_URL);
   await signIn(pageB, secret);
-  await pageB.goto(
-    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
-  );
+  await openDrive(pageB, drive);
   await pageB.waitForFunction(
     () => window.store?.getSyncStatus()?.serverConnected === true,
     undefined,

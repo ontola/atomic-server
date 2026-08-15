@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import {
   before,
   getDevDriveSecret,
+  openDrive,
   signIn,
   FRONTEND_URL,
   smoke,
@@ -63,9 +64,7 @@ test(
     const p2 = await ctx2.newPage();
     await p2.goto(FRONTEND_URL);
     await signIn(p2, secret);
-    await p2.goto(
-      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
-    );
+    await openDrive(p2, drive);
 
     await expect(p2.getByText('SecondDeviceChild').first()).toBeVisible({
       timeout: 30000,

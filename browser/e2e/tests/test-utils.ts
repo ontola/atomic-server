@@ -86,6 +86,24 @@ async function waitUntilSignedIn(page: Page) {
 }
 
 /**
+ * Open a drive as the session drive. `/app/dev-drive` secrets pin
+ * `initialDrive` to Personal, so a second context that only navigates to
+ * `?subject=<workspace>` still has Personal as `store.getDrive()` — sidebar
+ * children, presence, and meetings then miss the workspace.
+ */
+export async function openDrive(page: Page, drive: string) {
+  await page.goto(
+    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
+  );
+  const adopt = page.getByRole('button', { name: 'Set as current drive' });
+
+  if (await adopt.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await adopt.click();
+    await expect(adopt).toHaveCount(0, { timeout: 10_000 });
+  }
+}
+
+/**
  * Hostname the Node test process can actually reach.
  *
  * Dagger serves the SPA at `http://atomic.localhost:9883` so Chromium treats
@@ -1664,6 +1682,14 @@ export async function openNewSubjectWindow(
     await page.goto(spaUrl(url));
   } else {
     await openSubject(page, url);
+  }
+
+  // Secret `initialDrive` is Personal; a second window that lands on a
+  // Drive page would otherwise keep Personal as the session drive.
+  const adopt = page.getByRole('button', { name: 'Set as current drive' });
+
+  if (await adopt.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await adopt.click();
   }
 
   return page;
