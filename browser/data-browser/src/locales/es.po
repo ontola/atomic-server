@@ -1012,8 +1012,6 @@ msgstr "Fallo al persistir el agente después de aceptar la invitación"
 msgid "Invite accepted, but no destination was returned."
 msgstr "Invitación aceptada, pero no se devolvió ningún destino."
 
-#: src/components/Logo.tsx
-#: src/views/InvitePage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "AtomicServer"
 msgstr "AtomicServer"

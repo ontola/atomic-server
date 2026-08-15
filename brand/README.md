@@ -102,11 +102,11 @@ Five lockups embed the mark and are **not** generated:
 
 | File | Lockup | Used by |
 | --- | --- | --- |
-| `logo.svg` | AtomicServer | main README, `InvitePage.tsx`, `GettingStartedFlow.tsx`, Dagger mounts it at `/logo.svg` |
+| `logo.svg` | AtomicServer, with an 8px white keyline for placement on photos | main README, Dagger mounts it at `/logo.svg` |
 | `browser/logo.svg` | Atomic Data Browser + TS badge | `browser/README.md` |
 | `browser/data-browser/logo.svg` | identical copy of the above | nothing — unreferenced, safe to delete |
 | `browser/data-browser/index.html` | AtomicServer, **animated** — inline in the boot splash | the app's first paint |
-| `browser/data-browser/src/components/Logo.tsx` | AtomicServer, inline JSX, inked from the dark-mode setting | `AboutRoute.tsx` |
+| `browser/data-browser/src/components/Logo.tsx` | AtomicServer, inline JSX, inked from the dark-mode setting | `AboutRoute.tsx`, `InvitePage.tsx`, `GettingStartedFlow.tsx` |
 
 In each one the mark **is the letter `o`** of "Atomic": the glyph is not drawn
 as a letter at all, the mark stands in for it. That is why they cannot be
@@ -129,6 +129,13 @@ them honest. The splash has to ink itself from `--text-splash` — the in-app
 dark-mode override is applied before first paint, and an external image cannot
 see it — and its `o` has to animate. `Logo.tsx` inks from the `darkMode`
 setting, which is React state an image also cannot see.
+
+In-app surfaces use `Logo.tsx`, not an `<img>` of `logo.svg`. The keyline is
+the reason: it exists so the wordmark survives on a photo, and nothing removes
+it again. A dark-mode `filter: brightness(0) invert(1)` over the image inks the
+letters white but also keeps the keyline white — bloating the glyphs, closing
+the counters of `o`, `e` and `r`, and flattening the orb's gradient to a plain
+white dot. That was shipped on the welcome screen until 2026-08.
 
 ### What the letters are
 

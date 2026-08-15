@@ -4,7 +4,15 @@ import { useSettings } from '../helpers/AppSettings';
 import type { JSX } from 'react';
 
 interface LogoProps {
-  style: React.CSSProperties;
+  style?: React.CSSProperties;
+  /** Set by styled-components when the logo is wrapped in `styled(Logo)`. */
+  className?: string;
+  /**
+   * Accessible name, mirroring `<img alt>`. Pass an empty string where a
+   * heading next to the mark already says "AtomicServer", so a screen reader
+   * does not hear the name twice.
+   */
+  alt?: string;
 }
 
 /**
@@ -13,7 +21,11 @@ interface LogoProps {
  * lists every lockup that has to be re-cut when the mark changes. Smart enough
  * to use the theme's dark mode.
  */
-export function Logo({ style }: LogoProps): JSX.Element {
+export function Logo({
+  style,
+  className,
+  alt = 'AtomicServer',
+}: LogoProps): JSX.Element {
   const { darkMode } = useSettings();
   const fill = darkMode ? 'white' : 'black';
   // Scoped so a second Logo on the page cannot capture this gradient.
@@ -22,11 +34,11 @@ export function Logo({ style }: LogoProps): JSX.Element {
   return (
     <svg
       style={style}
+      className={className}
       viewBox='9.06 32.95 698.61 75.3'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'
-      role='img'
-      aria-label='AtomicServer'
+      {...(alt ? { role: 'img', 'aria-label': alt } : { 'aria-hidden': true })}
     >
       <path
         d='M9.06445 107L41.5125 34.2001H58.1525L90.7045 107H73.0245L46.4005 42.7281H53.0565L26.3285 107H9.06445ZM25.2885 91.4002L29.7605 78.6081H67.2005L71.7765 91.4002H25.2885Z'

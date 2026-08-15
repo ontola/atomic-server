@@ -1012,8 +1012,6 @@ msgstr ""
 msgid "Invite accepted, but no destination was returned."
 msgstr ""
 
-#: src/components/Logo.tsx
-#: src/views/InvitePage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "AtomicServer"
 msgstr ""

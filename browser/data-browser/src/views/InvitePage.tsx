@@ -24,7 +24,7 @@ import { paths } from '../routes/paths';
 import { Column } from '../components/Row';
 import { useWelcomeLayoutEffect } from '../hooks/useWelcomeLayoutEffect';
 import { Shell, Card, CardTitle, CtaButton } from './getting-started/chrome';
-import atomicServerLogoUrl from '../../../../logo.svg?url';
+import { Logo } from '../components/Logo';
 
 import { useId, useState, type JSX } from 'react';
 import { useNavigate } from '@tanstack/react-router';
@@ -363,7 +363,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       <Shell>
         <Card>
           <LogoWrap>
-            <img src={atomicServerLogoUrl} alt='AtomicServer' width={180} />
+            <Logo style={{ width: 180, maxWidth: '100%' }} />
           </LogoWrap>
           <CardTitle>
             You've been invited to {write ? 'edit' : 'view'}

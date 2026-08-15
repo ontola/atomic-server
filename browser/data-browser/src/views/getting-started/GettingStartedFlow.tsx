@@ -5,7 +5,7 @@ import {
 } from '../../helpers/managed';
 import toast from 'react-hot-toast';
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
-import { styled, css, keyframes } from 'styled-components';
+import { styled, keyframes } from 'styled-components';
 import { useStore } from '@tomic/react';
 import { Agent } from '@tomic/lib';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
@@ -54,7 +54,7 @@ import {
 import { CodeBlock } from '../../components/CodeBlock';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
-import atomicServerLogoUrl from '../../../../../logo.svg?url';
+import { Logo } from '../../components/Logo';
 import { ConnectDeviceStep } from './ConnectDeviceStep';
 import {
   Shell,
@@ -684,12 +684,8 @@ export function GettingStartedFlow({
         <Swap key='welcome'>
           <WelcomeStack>
             <VisuallyHiddenH1 key='heading'>AtomicServer</VisuallyHiddenH1>
-            <AtomicServerLogo
-              key='logo'
-              src={atomicServerLogoUrl}
-              alt=''
-              decoding='async'
-            />
+            {/* alt='' because the heading above already names the app. */}
+            <AtomicServerLogo key='logo' alt='' />
             <ButtonStack key='buttons'>
               <CtaButton
                 key='create'
@@ -1233,7 +1229,14 @@ const VisuallyHiddenH1 = styled.h1`
   border-width: 0;
 `;
 
-const AtomicServerLogo = styled.img`
+/**
+ * The inline lockup, not an `<img>` of /logo.svg: that file carries an 8px
+ * white keyline for placement on photos, which a dark-mode
+ * `filter: brightness(0) invert(1)` cannot undo — it bloats the glyphs, closes
+ * their counters and flattens the orb's gradient to white. The component inks
+ * itself from the dark-mode setting instead.
+ */
+const AtomicServerLogo = styled(Logo)`
   width: 100%;
   max-width: min(30rem, 92vw);
   height: auto;
@@ -1243,12 +1246,6 @@ const AtomicServerLogo = styled.img`
   @media (min-width: 56em) {
     margin-inline: 0;
   }
-
-  ${p =>
-    p.theme.darkMode &&
-    css`
-      filter: brightness(0) invert(1);
-    `}
 `;
 
 /** Separates the offered passkey from the advanced agent-secret path below. */
