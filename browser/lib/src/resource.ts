@@ -852,7 +852,7 @@ export class Resource<C extends OptionalClass = any> {
    * Write a value to the Loro map. This is called internally by set().
    * Converts JSON values to Loro-compatible types.
    */
-  private loroSetProperty(prop: string, value: JSONValue): void {
+  private loroSetProperty(prop: string, value: JSONValue): boolean {
     const map = this.getLoroMap();
 
     if (!map) {
@@ -864,17 +864,17 @@ export class Resource<C extends OptionalClass = any> {
         this.#cache[prop] = value;
       }
 
-      return;
+      return false;
     }
 
     if (value === undefined || value === null) {
       // Deleting what isn't there is a real op to Loro — skip it like any
       // other no-change write (see below).
-      if (map.get(prop) === undefined) return;
+      if (map.get(prop) === undefined) return false;
 
       map.delete(prop);
 
-      return;
+      return true;
     }
 
     // Skip writes that change nothing. Loro's LWW registers create an op on
@@ -896,7 +896,7 @@ export class Resource<C extends OptionalClass = any> {
           : current;
 
       try {
-        if (JSON.stringify(currentPlain) === JSON.stringify(value)) return;
+        if (JSON.stringify(currentPlain) === JSON.stringify(value)) return false;
       } catch {
         // Not comparable (cyclic, bigint…) — write as before.
       }
@@ -957,6 +957,8 @@ export class Resource<C extends OptionalClass = any> {
       // Objects: serialize to JSON string.
       map.set(prop, JSON.stringify(value));
     }
+
+    return true;
   }
 
   /**
@@ -1500,6 +1502,7 @@ export class Resource<C extends OptionalClass = any> {
         const serverManaged = [
           properties.commit.lastCommit,
           commits.properties.createdAt,
+          'https://atomicdata.dev/properties/createdBy',
         ];
 
         for (const key of serverManaged) {
@@ -1530,6 +1533,7 @@ export class Resource<C extends OptionalClass = any> {
       const serverManaged = [
         properties.commit.lastCommit,
         commits.properties.createdAt,
+        'https://atomicdata.dev/properties/createdBy',
       ];
 
       for (const key of serverManaged) {
@@ -2264,9 +2268,12 @@ export class Resource<C extends OptionalClass = any> {
 
     // Build a new array so that the reference changes. This is needed in most UI frameworks.
     const newArray = [...propVal, ...values];
-    this.loroSetProperty(propUrl, newArray);
+    const didWrite = this.loroSetProperty(propUrl, newArray);
     this.#cacheDirty = true;
-    this._dirty = true;
+
+    if (didWrite) {
+      this._dirty = true;
+    }
   }
 
   /**
@@ -3333,10 +3340,12 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     // Write to Loro only — cache is rebuilt lazily on next get()
-    this.loroSetProperty(prop, value as JSONValue);
+    const didWrite = this.loroSetProperty(prop, value as JSONValue);
     this.#cacheDirty = true;
 
-    this._dirty = true;
+    if (didWrite) {
+      this._dirty = true;
+    }
     this.eventManager.emit(
       ResourceEvents.LocalChange,
       prop,
