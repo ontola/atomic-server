@@ -508,7 +508,12 @@ export class AtomicServer {
           '-lc',
           `${pathPrefix} && ` +
             'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi && ' +
-            'cargo test --manifest-path rust/Cargo.toml',
+            // Git-exported sources can have mtimes older than this cache
+            // volume, so cargo would link a stale test binary. Touch, then
+            // run single-threaded: the suite shares a process-global OnceLock
+            // DB (`shared_drive` in rust/src/api/simple/tests.rs).
+            'touch rust/src/lib.rs rust/src/api/simple.rs rust/src/api/simple/tests.rs && ' +
+            'cargo test --manifest-path rust/Cargo.toml -- --test-threads=1',
         ])
         .stdout()
     );
