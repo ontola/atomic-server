@@ -1037,8 +1037,14 @@ work in that plan's Phase P0, not a decision-gated maybe.
    hub-signed destroys?
 5. **Bootstrap admission (F2)** — what replaces `Err(_) => true` for a drive that
    doesn't exist locally yet: first-writer-wins with grace (as `AllowlistPolicy`
-   does), explicit enrollment, or reject-until-known? Still open — F2's fix (`989a8751`)
-   closed the existing-resource spoof but deliberately left this carve-out unchanged.
+   does), explicit enrollment, or reject-until-known? **FOSS Owner mode
+   (proposed in [`foss-public-host-mode.md`](./foss-public-host-mode.md)) is
+   reject-until-known:** a missing drive is admitted only if the signer is the
+   node owner, then enrolled; `OpenPolicy` (localhost) keeps the carve-out.
+   F2's fix (`989a8751`) closed the existing-resource spoof and deliberately
+   left this carve-out unchanged — Owner mode is what replaces it on a public
+   FOSS node. Managed nodes keep bootstrap grace because their allowlist is
+   eventually consistent with a control plane.
 6. **What makes a peer "known"? (F9)** — today: any inbound connection. The fix says
    "pairing or explicit user action," but the pairing primitive itself is undefined
    (QR scan is one-directional trust; see [`sync.md`](./sync.md)'s handshake notes and

@@ -95,6 +95,13 @@ Keep these in step. A change to one is usually a change to its twin.
 | pairing code, format | `browser/lib/src/pairing.ts` | `pair_screen.dart` (`_parsePairingUri`) |
 | URL rules (scheme, local address) | `data-browser/src/helpers/serverUrl.ts` | `flutter/lib/atomic/server_url.dart` |
 | what a machine says about itself | `data-browser/src/helpers/managedServer.ts` | `flutter/lib/atomic/server_info.dart` |
+
+A FOSS node on a public address must not present **Create account** as if it
+were an open host — that path calls `createDrive` and, under today's
+`OpenPolicy`, stores the stranger's workspace. The proposed `/server` fields
+and welcome branches live in
+[`foss-public-host-mode.md`](./foss-public-host-mode.md). Localhost Create
+account does not change.
 | push a workspace up | `browser/lib/src/store.ts` (`promoteLocalDrive`) | `AtomicClient.syncDriveToServer` |
 
 **Which servers the browser's Devices list shows.** `SyncRoute` renders every

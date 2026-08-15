@@ -20,8 +20,12 @@ work, spanning `atomic-server` (this repo: data plane + browser) and
   `AllowlistPolicy`, and spawns the heartbeat / policy poll / usage report /
   replication pull. Enabled by `ATOMIC_MANAGED_URL`.
 - **FOSS / self-hosted** runs the plain `atomic-server` binary (no-op hook):
-  unrestricted (`OpenPolicy`), `/node-info` reports `managed: false`, never
-  phones home. FOSS UX never changes.
+  unrestricted (`OpenPolicy`) on localhost, `/node-info` reports
+  `managed: false`, never phones home. Putting that same binary on a public
+  address without a local allowlist is an open sync hub — the proposed FOSS
+  fix is [`foss-public-host-mode.md`](./foss-public-host-mode.md), which
+  reuses `AllowlistPolicy` without a control plane. FOSS localhost UX does
+  not change.
 
 > **Do not put the control-plane client back in the open `atomic-server`.** The
 > recovery restored a pre-deletion `server/src/saas.rs`; it was renamed `node.rs`
