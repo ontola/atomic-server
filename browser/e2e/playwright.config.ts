@@ -77,10 +77,11 @@ const config: PlaywrightTestConfig = {
   // Per-test budget — not a race-prevention timeout. Playwright's
   // default is 30s; some tests (chatroom invite flow, share menu,
   // tables) legitimately run 25–35s when the shared atomic-server is
-  // under suite-wide load. Bumping to 60s gives them headroom without
-  // masking real hangs. Specific assertions inside tests still have
-  // their own targeted timeouts.
-  timeout: 60_000,
+  // under suite-wide load. `/app/dev-drive` now creates Personal +
+  // workspace, so `before()` is heavier; 90s keeps those specs inside
+  // budget. Specific assertions inside tests still have their own
+  // targeted timeouts.
+  timeout: 90_000,
   projects: [
     {
       name: 'chromium',
