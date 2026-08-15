@@ -95,12 +95,25 @@ export async function openDrive(page: Page, drive: string) {
   await page.goto(
     `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
   );
-  const adopt = page.getByRole('button', { name: 'Set as current drive' });
-
-  if (await adopt.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await adopt.click();
-    await expect(adopt).toHaveCount(0, { timeout: 10_000 });
-  }
+  await page.waitForFunction(
+    () => !!window.store?.getAgent()?.subject,
+    undefined,
+    { timeout: 15_000 },
+  );
+  // Don't rely on the Drive-page button appearing in time — after sign-in
+  // the session drive is Personal (`initialDrive`) and the workspace only
+  // becomes current when we set it.
+  await page.evaluate(d => {
+    window.store.setDrive(d);
+  }, drive);
+  await expect
+    .poll(async () => page.evaluate(() => window.store.getDrive() ?? ''), {
+      timeout: 10_000,
+    })
+    .toBe(drive);
+  await expect(
+    page.getByRole('button', { name: 'Set as current drive' }),
+  ).toHaveCount(0, { timeout: 15_000 });
 }
 
 /**
