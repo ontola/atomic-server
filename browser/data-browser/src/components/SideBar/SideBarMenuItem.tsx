@@ -35,6 +35,7 @@ export interface SideBarMenuItemProps extends AtomicLinkProps {
   badge?: number;
   /** Is called when clicking on the item. Used for closing the menu. */
   onClick?: () => void;
+  'data-testid'?: string;
 }
 
 export function SideBarMenuItem({
@@ -46,13 +47,20 @@ export function SideBarMenuItem({
   href,
   subject,
   onClick,
+  'data-testid': dataTestId,
 }: SideBarMenuItemProps) {
   const { pathname } = useLocation();
   const targetPath = path || href || subject;
   const current: boolean = pathname === targetPath;
 
   return (
-    <SideBarMenuItemLink href={href} subject={subject} path={path} clean>
+    <SideBarMenuItemLink
+      href={href}
+      subject={subject}
+      path={path}
+      clean
+      data-testid={dataTestId}
+    >
       <SideBarMenuRow
         key={label}
         title={helper}

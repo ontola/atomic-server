@@ -89,6 +89,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
           path={paths.notifications}
           badge={unreadNotifications}
           onClick={onItemClick}
+          data-testid='sidebar-notifications'
         />
       )}
       <SideBarMenuItem

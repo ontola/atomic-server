@@ -48,6 +48,44 @@ export function spaUrl(url: string): string {
 export const appUrlOnFrontend = spaUrl;
 
 /**
+ * In-app navigate to the inbox. Full `page.goto` reloads the Store and can
+ * drop a just-upserted NotificationItem that is not in OPFS yet, so tests
+ * that seed the inbox in-memory must use this helper.
+ *
+ * The App menu sits at the bottom of a two-drive sidebar, often below the
+ * fold or inside a collapsed panel — force-click after scrolling rather
+ * than waiting for `getByRole('link', { name: 'Notifications' })`.
+ */
+export async function openNotificationsInbox(page: Page) {
+  const sidebar = page.getByTestId('sidebar');
+  const link = page.getByTestId('sidebar-notifications');
+  const expandApp = page.getByRole('button', { name: 'Expand App' });
+
+  if (await expandApp.isVisible().catch(() => false)) {
+    await expandApp.click();
+  }
+
+  await sidebar
+    .evaluate(el => {
+      el.scrollTop = el.scrollHeight;
+    })
+    .catch(() => undefined);
+
+  await expect(link).toBeAttached({ timeout: 15_000 });
+  await link.click({ force: true });
+  await expect(page).toHaveURL(/\/app\/notifications/);
+}
+
+/** Agent is in the JS store — not a sidebar label (dev-drive names it "Dev User"). */
+async function waitUntilSignedIn(page: Page) {
+  await page.waitForFunction(
+    () => !!window.store?.getAgent()?.subject,
+    undefined,
+    { timeout: 15_000 },
+  );
+}
+
+/**
  * Hostname the Node test process can actually reach.
  *
  * Dagger serves the SPA at `http://atomic.localhost:9883` so Chromium treats
@@ -478,7 +516,7 @@ export async function signIn(page: Page, secret: string = SECRET) {
   // already-signed-in (state 1) when really we just hit the page too early.
   await page
     .locator(
-      'button:has-text("Sign in"), a:has-text("Login / New User"), a:has-text("User Settings")',
+      'button:has-text("Sign in"), a:has-text("Login / New User"), a:has-text("User Settings"), [aria-label="App menu"], [data-testid="sidebar-notifications"]',
     )
     .first()
     .waitFor({ state: 'visible', timeout: 10_000 })
@@ -494,14 +532,9 @@ export async function signIn(page: Page, secret: string = SECRET) {
   if (await signInButton.isVisible({ timeout: 1500 }).catch(() => false)) {
     await signInButton.click();
     await enterSecret(page, secret);
-    // Wait for the signed-in sidebar to appear. Without this, callers
-    // (e.g. `openSubject`) may navigate before the auth cookie + localStorage
-    // are written, leaving the next page anonymous (the sidebar then renders
-    // a "Login / New User" link instead of "User Settings").
-    await page
-      .getByRole('link', { name: 'User Settings' })
-      .waitFor({ state: 'visible', timeout: 10_000 })
-      .catch(() => undefined);
+    // `/app/dev-drive` names the agent "Dev User", so the settings row is
+    // not "User Settings". Wait for the store, not a sidebar label.
+    await waitUntilSignedIn(page);
 
     return;
   }
@@ -515,16 +548,19 @@ export async function signIn(page: Page, secret: string = SECRET) {
     await enterSecret(page, secret);
     // Sign-in has to have landed before navigating away: goBack() during the
     // in-flight sign-in leaves the previous page anonymous.
-    await page
-      .getByRole('link', { name: 'User Settings' })
-      .waitFor({ state: 'visible', timeout: 10_000 })
-      .catch(() => undefined);
+    await waitUntilSignedIn(page);
     await page.goBack();
 
     return;
   }
 
-  // State 1: already signed in. Nothing to do.
+  // State 1: already signed in. Confirm the store actually has an agent —
+  // a timed-out welcome-gate wait used to fall through here unsigned.
+  if (await page.evaluate(() => !!window.store?.getAgent()?.subject)) {
+    return;
+  }
+
+  await waitUntilSignedIn(page);
 }
 
 /**

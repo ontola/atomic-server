@@ -25,6 +25,7 @@ import {
   FRONTEND_URL,
   getDevDriveSecret,
   newResource,
+  openNotificationsInbox,
   signIn,
 } from './test-utils';
 
@@ -224,7 +225,7 @@ test.describe('notifications', () => {
   });
 
   test('sidebar entry opens empty inbox', async ({ page }) => {
-    await page.getByRole('link', { name: 'Notifications' }).click();
+    await openNotificationsInbox(page);
     await expect(page).toHaveURL(/\/app\/notifications/);
     await expect(
       page.getByRole('heading', { name: 'Notifications' }),
@@ -427,7 +428,7 @@ test.describe('notifications', () => {
     ).toMatchObject({ ok: true });
 
     // In-app nav keeps the same Store (full reload can race OPFS index).
-    await page.getByRole('link', { name: 'Notifications' }).click();
+    await openNotificationsInbox(page);
     await expect(page).toHaveURL(/\/app\/notifications/);
     const item = page.getByTestId('notification-item').first();
     await expect(item).toBeVisible({ timeout: 20_000 });
@@ -519,7 +520,7 @@ test.describe('notifications', () => {
     ).toMatchObject({ ok: true });
 
     // In-app nav keeps the same Store (full reload can race OPFS index).
-    await page.getByRole('link', { name: 'Notifications' }).click();
+    await openNotificationsInbox(page);
     await expect(page).toHaveURL(/\/app\/notifications/);
     const item = page.getByTestId('notification-item').first();
     await expect(item, `created=${JSON.stringify(created)}`).toBeVisible({
@@ -761,7 +762,7 @@ test.describe('notifications', () => {
       await engine.reconcileMentionBacklog();
     }, docSubject);
 
-    await page2.getByRole('link', { name: 'Notifications' }).click();
+    await openNotificationsInbox(page2);
     await expect(page2).toHaveURL(/\/app\/notifications/);
     const item = page2.getByTestId('notification-item').first();
     await expect(item).toBeVisible({ timeout: 30_000 });
@@ -774,7 +775,7 @@ test.describe('notifications', () => {
   });
 
   test('send message button is on the notifications page', async ({ page }) => {
-    await page.getByRole('link', { name: 'Notifications' }).click();
+    await openNotificationsInbox(page);
     await expect(page).toHaveURL(/\/app\/notifications/);
     await expect(page.getByTestId('send-message')).toBeVisible({
       timeout: 15_000,
@@ -862,7 +863,7 @@ test.describe('notifications', () => {
 
     expect(created).toMatchObject({ ok: true });
 
-    await page.getByRole('link', { name: 'Notifications' }).click();
+    await openNotificationsInbox(page);
     await expect(page).toHaveURL(/\/app\/notifications/);
     const item = page.getByTestId('notification-item').first();
     await expect(item).toBeVisible({ timeout: 20_000 });
@@ -960,7 +961,7 @@ test.describe('notifications', () => {
 
     expect(created).toMatchObject({ ok: true });
 
-    await page.getByRole('link', { name: 'Notifications' }).click();
+    await openNotificationsInbox(page);
     await expect(page).toHaveURL(/\/app\/notifications/);
     const item = page.getByTestId('notification-item').first();
     await expect(item).toBeVisible({ timeout: 20_000 });

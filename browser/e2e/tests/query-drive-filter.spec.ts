@@ -142,7 +142,9 @@ test.describe('query GETs after refresh', () => {
 
         if (firstByte === WS_TAG_GET) {
           // Skip tag + 2-byte requestId; subject is the rest as UTF-8.
-          wsGetFrames.push(asString.slice(3, 253));
+          // Keep enough of the URL to see `property=` (NotificationEngine
+          // queries are long; 250 chars used to cut off before the class).
+          wsGetFrames.push(asString.slice(3, 800));
         }
       });
     });
@@ -163,9 +165,23 @@ test.describe('query GETs after refresh', () => {
     wsGetFrames.length = 0;
     await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
 
-    // No `/query?` frames should fire at all — those are exclusively
-    // collection queries that the local WASM DB can serve.
-    const queryFrames = wsGetFrames.filter(f => f.includes('/query?'));
+    // NotificationEngine issues `/query` for inbox rows (`isA=NotificationItem`
+    // / `WatchSubscription`) and mention backlog after boot. Those are not
+    // the children-of-drive collection storm this regression guards.
+    const queryFrames = wsGetFrames.filter(f => {
+      if (!f.includes('/query?')) return false;
+
+      if (
+        f.includes('mentions') ||
+        f.includes('properties%2Fmentions') ||
+        f.includes('isA') ||
+        f.includes('properties%2FisA')
+      ) {
+        return false;
+      }
+
+      return true;
+    });
     expect(
       queryFrames,
       'After ClientDb is ready, no `/query?` WS GET should fire (collection ' +

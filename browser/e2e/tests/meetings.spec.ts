@@ -160,6 +160,11 @@ test('start a meeting, join it, follow along, and end it', async ({
   await pageB.goto(
     `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
   );
+  await pageB.waitForFunction(
+    () => window.store?.getSyncStatus()?.serverConnected === true,
+    undefined,
+    { timeout: 20_000 },
+  );
 
   // Both sessions see each other — presence is live.
   await expect(facepile(pageB).getByRole('button').first()).toBeVisible({
@@ -255,6 +260,11 @@ test('records join and leave in the meeting chat', async ({ browser }) => {
   await signIn(pageB, secret);
   await pageB.goto(
     `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive!)}`,
+  );
+  await pageB.waitForFunction(
+    () => window.store?.getSyncStatus()?.serverConnected === true,
+    undefined,
+    { timeout: 20_000 },
   );
 
   // Presence is live between the two sessions.
