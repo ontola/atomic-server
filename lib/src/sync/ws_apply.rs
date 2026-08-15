@@ -5,13 +5,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::{
-    commit::{Commit, CommitOpts},
-    db::Db,
-    errors::AtomicResult,
-    parse::parse_json_ad_commit_resource,
-    Storelike,
-};
+use crate::{db::Db, errors::AtomicResult, Storelike};
 
 static IMPORTING: AtomicBool = AtomicBool::new(false);
 
@@ -335,25 +329,12 @@ pub async fn apply_destroy_checked(store: &Db, subject: &str) -> AtomicResult<()
 }
 
 /// Apply a JSON-AD commit received over WS (legacy text `COMMIT` or after fetch).
+/// Replica policy: signature still checked; rights/timestamp are not — see
+/// [`super::ingest::CommitIngestOpts::replica`].
 pub async fn apply_commit_json(store: &Db, body: &str) -> AtomicResult<()> {
-    set_importing(true);
-    let result = async {
-        let resource = parse_json_ad_commit_resource(body, store).await?;
-        let commit = Commit::from_resource(resource)?;
-        let opts = CommitOpts {
-            validate_signature: true,
-            validate_timestamp: false,
-            validate_previous_commit: false,
-            validate_rights: false,
-            update_index: true,
-            ..CommitOpts::no_validations_no_index()
-        };
-        store.apply_commit(commit, &opts).await?;
-        Ok::<(), crate::AtomicError>(())
-    }
-    .await;
-    set_importing(false);
-    result
+    super::ingest::ingest_commit_json(store, body, &super::ingest::CommitIngestOpts::replica())
+        .await
+        .map(|_| ())
 }
 
 #[cfg(test)]

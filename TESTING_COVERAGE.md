@@ -68,6 +68,7 @@ Two things worth knowing about the runners:
 | RBSR reconciliation, drive hashing | `lib/src/sync/rbsr.rs`, `tests.rs` |
 | RBSR finds a remote-only subject sorting below every local one | `lib/src/sync/rbsr.rs` **and** `browser/lib/src/rbsr.test.ts` (regression, see below) |
 | Remote update merge, drive-spoof rejection, tombstones | `lib/src/sync/ws_apply.rs`, `tombstones.rs` |
+| Replica WS commit ingest skips write-rights; hub/peer still enforce | `ws_apply.rs` `replica_commit_ingest_tests`, `engine_commit_from_unauthorized_signer_is_rejected` |
 | Pairing envelope encode/decode | `browser/lib/src/pairing.test.ts` |
 
 ### Cross-process — covered since 2026-07

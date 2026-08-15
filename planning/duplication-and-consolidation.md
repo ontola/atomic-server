@@ -47,9 +47,11 @@ apply commits with weaker or different `CommitOpts`:
 | Flutter WS receive | `lib/src/sync/ws_apply.rs::apply_commit_json` | **yes** | **no** | **no** | **no** |
 | WASM `apply_commit` | `wasm/src/lib.rs` | own `CommitOpts` block | own | own | own |
 
-`ws_apply::apply_commit_json` is the Flutter WS ingest. It is not a thin
-wrapper around `ingest_commit_json`. A rights/timestamp change on the hub
-path does not automatically apply to mobile.
+`ws_apply::apply_commit_json` is the Flutter WS ingest. **Done (2026-08-15):**
+it is a thin wrapper around `ingest_commit_json` with
+`CommitIngestOpts::replica()` (signature on, rights and timestamp off —
+the hub already checked; local ACL may be incomplete). WASM `apply_commit`
+still builds its own `CommitOpts`.
 
 `Resource::save` / `save_locally` / `save_as_genesis` / `save_remote` /
 `apply_signed_commit` (`lib/src/resources.rs`) each construct another

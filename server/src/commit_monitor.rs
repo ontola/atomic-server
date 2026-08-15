@@ -268,6 +268,32 @@ impl Actor for CommitMonitor {
     }
 }
 
+/// `check_read` for a subscribe registration. Missing resource or failed
+/// rights check → `None` (caller drops the subscription). Shared by
+/// subject, drive, and query subscribe so the three handlers cannot drift.
+async fn authorize_read(
+    store: &Db,
+    subject: &atomic_lib::Subject,
+    agent: &str,
+) -> Option<atomic_lib::Resource> {
+    let resource = match store.get_resource(subject).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::debug!("subscribe: {subject} not found for {agent}: {e}");
+            return None;
+        }
+    };
+    match atomic_lib::hierarchy::check_read(store, &resource, &ForAgent::AgentSubject(agent.into()))
+        .await
+    {
+        Ok(_) => Some(resource),
+        Err(e) => {
+            tracing::debug!("subscribe: {agent} cannot read {subject}: {e}");
+            None
+        }
+    }
+}
+
 impl Handler<Subscribe> for CommitMonitor {
     type Result = ResponseActFuture<Self, ()>;
 
@@ -281,42 +307,13 @@ impl Handler<Subscribe> for CommitMonitor {
         let store = self.store.clone();
         Box::pin(
             async move {
-                // check if the agent has the rights to subscribe to this resource
                 if !msg.subject.is_local() {
                     tracing::warn!("can't subscribe to external resource: {}", msg.subject);
                     return None;
                 }
-                match store.get_resource(&msg.subject).await {
-                    Ok(resource) => {
-                        match atomic_lib::hierarchy::check_read(
-                            &store,
-                            &resource,
-                            &ForAgent::AgentSubject(msg.agent.clone().into()),
-                        )
-                        .await
-                        {
-                            Ok(_explanation) => Some(msg),
-                            Err(unauthorized_err) => {
-                                tracing::debug!(
-                                    "Not allowed {} to subscribe to {}: {}",
-                                    &msg.agent,
-                                    &msg.subject,
-                                    unauthorized_err
-                                );
-                                None
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::debug!(
-                            "Subscribe failed for {} by {}: {}",
-                            &msg.subject,
-                            msg.agent,
-                            e
-                        );
-                        None
-                    }
-                }
+                authorize_read(&store, &msg.subject, msg.agent.as_str())
+                    .await
+                    .map(|_| msg)
             }
             .into_actor(self)
             .map(|msg, actor, _ctx| {
@@ -349,29 +346,9 @@ impl Handler<SubscribeDrive> for CommitMonitor {
             async move {
                 let drive_subject =
                     atomic_lib::Subject::from_raw(&msg.drive, store.get_base_domain().as_deref());
-                let resource = match store.get_resource(&drive_subject).await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::debug!("SubscribeDrive: drive {drive_subject} not found: {e}");
-                        return None;
-                    }
-                };
-                match atomic_lib::hierarchy::check_read(
-                    &store,
-                    &resource,
-                    &ForAgent::AgentSubject(msg.agent.clone().into()),
-                )
-                .await
-                {
-                    Ok(_) => Some(msg),
-                    Err(e) => {
-                        tracing::debug!(
-                            "SubscribeDrive: {} cannot read drive {drive_subject}: {e}",
-                            msg.agent
-                        );
-                        None
-                    }
-                }
+                authorize_read(&store, &drive_subject, msg.agent.as_str())
+                    .await
+                    .map(|_| msg)
             }
             .into_actor(self)
             .map(|maybe_msg, actor, _ctx| {
@@ -420,55 +397,33 @@ impl Handler<SubscribeQuery> for CommitMonitor {
                         return None;
                     }
                 };
-                let drive_subject = atomic_lib::Subject::from_raw(
-                    &drive_str,
-                    store.get_base_domain().as_deref(),
-                );
-                let resource = match store.get_resource(&drive_subject).await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::debug!(
-                            "Rejecting SUBSCRIBE_QUERY: drive {drive_subject} not found: {e}"
-                        );
-                        return None;
-                    }
-                };
-                match atomic_lib::hierarchy::check_read(
-                    &store,
-                    &resource,
-                    &ForAgent::AgentSubject(agent.clone().into()),
-                )
-                .await
+                let drive_subject =
+                    atomic_lib::Subject::from_raw(&drive_str, store.get_base_domain().as_deref());
+                if authorize_read(&store, &drive_subject, agent.as_str())
+                    .await
+                    .is_none()
                 {
-                    Ok(_) => {
-                        // Same de-localization the HTTP `/query` path applies
-                        // (`collections::collect_members`). Both sides must
-                        // agree: the subscription is keyed by `query_id`, a
-                        // hash over the filter, so a client that subscribes
-                        // with the localized subject it was served would
-                        // register under a different id than the one the
-                        // index fires membership events for, and never
-                        // receive an update.
-                        let mut msg = msg;
-                        if let Some(raw) = msg.query.value.as_deref() {
-                            let delocalized = atomic_lib::collections::delocalize_filter_value(
-                                &store,
-                                msg.query.property.as_deref(),
-                                raw,
-                            )
-                            .await;
-                            msg.query.value = Some(delocalized.to_string());
-                        }
-
-                        Some(msg)
-                    }
-                    Err(e) => {
-                        tracing::debug!(
-                            "Rejecting SUBSCRIBE_QUERY: {agent} cannot read drive {drive_subject}: {e}"
-                        );
-                        None
-                    }
+                    return None;
                 }
+                // Same de-localization the HTTP `/query` path applies
+                // (`collections::collect_members`). Both sides must
+                // agree: the subscription is keyed by `query_id`, a
+                // hash over the filter, so a client that subscribes
+                // with the localized subject it was served would
+                // register under a different id than the one the
+                // index fires membership events for, and never
+                // receive an update.
+                let mut msg = msg;
+                if let Some(raw) = msg.query.value.as_deref() {
+                    let delocalized = atomic_lib::collections::delocalize_filter_value(
+                        &store,
+                        msg.query.property.as_deref(),
+                        raw,
+                    )
+                    .await;
+                    msg.query.value = Some(delocalized.to_string());
+                }
+                Some(msg)
             }
             .into_actor(self)
             .map(|maybe_msg, actor, _ctx| {
