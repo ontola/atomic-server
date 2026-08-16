@@ -444,6 +444,11 @@ export class Store {
    *  can re-fetch. Keyed by normalized subject. */
   private _inFlightFetches: Map<string, Promise<Resource>> = new Map();
 
+  /** Subjects with a gap-recovery fetch in flight. A delta that cannot apply
+   *  triggers one full-state fetch; this stops a burst of unappliable deltas
+   *  for the same subject from firing one fetch each. */
+  private _gapRecoveries: Set<string> = new Set();
+
   /** Current Agent, used for signing commits. Is required for posting things. */
   private agent?: Agent;
   /** Mapped from origin to websocket */
@@ -1801,6 +1806,39 @@ export class Store {
   }
 
   /**
+   * Repair a document that has fallen behind: fetch full state and replace the
+   * local doc with it.
+   *
+   * The live channel is deltas, and it has no way to say "you are missing
+   * something". A receiver that misses one update queues every later one as
+   * pending, which looks exactly like a document that quietly stopped syncing.
+   * `SYNC_VV` already handles this at connect time; this is the mid-session
+   * equivalent, triggered by the one signal available — an import that could
+   * not fully apply.
+   *
+   * Failures are swallowed on purpose. This runs off the back of an incoming
+   * update, the caller keeps its existing (stale but usable) state either way,
+   * and a network error here should not surface as an error on a document the
+   * user can still read.
+   */
+  private recoverFromIncompleteImport(subject: string, source?: string): void {
+    if (this._gapRecoveries.has(subject)) return;
+
+    this._gapRecoveries.add(subject);
+    console.warn(
+      `[Store] incomplete Loro import for ${subject.slice(0, 60)} ` +
+        `(source: ${source ?? 'unknown'}) — missing base state, fetching a full ` +
+        `snapshot to catch up.`,
+    );
+
+    this.fetchResourceFromServer(subject, { forceOverride: true })
+      .catch(() => undefined)
+      .finally(() => {
+        this._gapRecoveries.delete(subject);
+      });
+  }
+
+  /**
    * Single ingress for resource state from any source: subject
    * normalisation, commit-id dedup, Loro hydration, atomic OPFS
    * persist, one `notify` — in that order.
@@ -1884,21 +1922,44 @@ export class Store {
     // no error anywhere. Surface it instead. Skip the failure if the
     // resource already had usable content from a prior good import
     // (a late/partial live push shouldn't blow away a good state).
-    if (!complete && !isCommitDetail && !resource.get(core.properties.isA)) {
-      console.warn(
-        `[Store] applyIncoming: incomplete Loro import for ${subject.slice(0, 60)} ` +
-          `(source: ${change.source}) — server sent a delta this client can't apply ` +
-          `(missing base state). Surfacing as error.`,
-      );
-      if (change.commitId) resource.setLastCommitValue(change.commitId);
-      this.failResource(
-        subject,
-        new Error(
-          'Sync error: received an incomplete update for this resource ' +
-            '(missing base state). Try reloading; if it persists, the ' +
-            "local cache may be out of sync with the server's history.",
-        ),
-      );
+    if (!complete && !isCommitDetail) {
+      if (!resource.get(core.properties.isA)) {
+        console.warn(
+          `[Store] applyIncoming: incomplete Loro import for ${subject.slice(0, 60)} ` +
+            `(source: ${change.source}) — server sent a delta this client can't apply ` +
+            `(missing base state). Surfacing as error.`,
+        );
+        if (change.commitId) resource.setLastCommitValue(change.commitId);
+        this.failResource(
+          subject,
+          new Error(
+            'Sync error: received an incomplete update for this resource ' +
+              '(missing base state). Try reloading; if it persists, the ' +
+              "local cache may be out of sync with the server's history.",
+          ),
+        );
+
+        return 'invalid';
+      }
+
+      // The resource already has usable content, so failing it would throw
+      // away good state for the sake of an update we couldn't apply. The old
+      // code took the other extreme and fell through to `return 'applied'`,
+      // which is how a collaborator's text went missing in silence: one
+      // delta arrives whose base ops we never saw, Loro parks it as pending,
+      // and every later delta parks behind it. No error, no indicator — the
+      // document simply stops being live until someone reloads.
+      //
+      // Ask for full state instead. `forceOverride` replaces rather than
+      // merges, which is what closes the gap; `applyIncoming`'s own guards
+      // still refuse to clobber unsaved local edits or a pending outbox.
+      //
+      // Deliberately NOT stamping `lastCommit` here. We did not apply that
+      // commit, and claiming it would make the echo-dedup at the top of this
+      // method drop the very fetch being issued to repair the gap.
+      this.recoverFromIncompleteImport(subject, change.source);
+      resource.loading = false;
+      this.addResource(resource, { skipCommitCompare: true });
 
       return 'invalid';
     }
