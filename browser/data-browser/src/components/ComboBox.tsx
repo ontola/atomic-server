@@ -306,6 +306,7 @@ const StyledInputWrapper = styled(InputWrapper)<{
       input {
         background-color: transparent;
         border-color: transparent;
+        color: inherit;
         cursor: pointer;
         white-space: nowrap;
         overflow: hidden;

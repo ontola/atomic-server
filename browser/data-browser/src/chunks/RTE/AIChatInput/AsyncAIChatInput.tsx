@@ -289,10 +289,7 @@ const AsyncAIChatInput: React.FC<
           <EditorEvents onChange={handleChange} />
         </TiptapContextProvider>
       </EditorWrapper>
-      <Row
-        justify='space-between'
-        style={{ minWidth: 0, overflow: 'hidden', width: '100%' }}
-      >
+      <Toolbar justify='space-between'>
         {children}
         <Row center style={{ flexShrink: 0 }}>
           {rightAlignedChildren}
@@ -311,12 +308,20 @@ const AsyncAIChatInput: React.FC<
             <FaArrowRight />
           </IconButton>
         </Row>
-      </Row>
+      </Toolbar>
     </>
   );
 };
 
 export default AsyncAIChatInput;
+
+/** Bottom bar of the chat input. Every control in here shares one muted tone. */
+const Toolbar = styled(Row)`
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: ${p => p.theme.colors.textLight};
+`;
 
 const EditorWrapper = styled(EditorWrapperBase)<{ $large?: boolean }>`
   padding: ${p => p.theme.size(2)};

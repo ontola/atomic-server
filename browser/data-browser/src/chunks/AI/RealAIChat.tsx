@@ -915,7 +915,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                         <IconButton
                           title='Attach file'
                           onClick={() => fileInputRef.current?.click()}
-                          color='textLight'
                         >
                           <FaPaperclip />
                         </IconButton>
@@ -1040,6 +1039,7 @@ const SubtleButton = styled.button`
   cursor: pointer;
   background: none;
   border: none;
+  color: inherit;
   border-radius: ${p => p.theme.radius};
   padding: ${p => p.theme.size(1)};
   padding-inline: ${p => p.theme.size(2)};
