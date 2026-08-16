@@ -495,6 +495,16 @@ impl Resource {
         self.ensure_materialized()
     }
 
+    /// DocumentV2 / TipTap body as markdown. Empty when the resource has no
+    /// rich-text body. Loads materialized Loro state if needed.
+    pub fn document_markdown(&mut self) -> String {
+        let _ = self.ensure_materialized();
+        self.loro
+            .as_ref()
+            .map(|doc| doc.extract_document_markdown())
+            .unwrap_or_default()
+    }
+
     /// Edit history for this resource (newest first).
     pub fn get_history(&self) -> Vec<crate::history::VersionMetadata> {
         match &self.loro {

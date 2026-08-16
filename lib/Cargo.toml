@@ -151,3 +151,11 @@ required-features = ["db-redb"]
 name = "lifecycle_bench"
 harness = false
 required-features = ["db-redb"]
+
+[[example]]
+name = "export_drive_git"
+required-features = ["db-redb"]
+
+[[example]]
+name = "verify_blobs"
+required-features = ["db-redb"]
