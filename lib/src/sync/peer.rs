@@ -1790,8 +1790,8 @@ pub async fn sync_drive_with_peer_using_outcome(
     mark_peer_synced(
         store,
         &remote_key,
-        total_pushed as u32,
-        total_imported as u32,
+        Some(total_pushed as u32),
+        Some(total_imported as u32),
     );
     if let Some(info) = endpoint.remote_info(node_id) {
         let addr: iroh::NodeAddr = info.into();
@@ -2028,7 +2028,14 @@ fn dial_target(store: &Db, node_id: NodeId) -> iroh::NodeAddr {
 /// Stamp a peer's `last_synced` to now, upserting it if unknown. Called when a
 /// sync exchange with the peer completes, so the UI can say "synced 2m ago"
 /// without a separate bookkeeping path.
-pub fn mark_peer_synced(store: &Db, node_id: &str, sent: u32, received: u32) {
+/// Record a completed sync with `node_id`.
+///
+/// `sent` / `received` are optional because the two sides know different
+/// things: the dialling side tallies both directions itself, while the
+/// accepting side answers frames through the engine and only counts what came
+/// in. Reporting an unknown figure as 0 would be the same class of lie this
+/// status work exists to remove, so absent stays absent.
+pub fn mark_peer_synced(store: &Db, node_id: &str, sent: Option<u32>, received: Option<u32>) {
     let key = normalize_node_id(node_id);
     let mut peers = get_known_peers(store);
     let now = crate::utils::now();
@@ -2037,14 +2044,14 @@ pub fn mark_peer_synced(store: &Db, node_id: &str, sent: u32, received: u32) {
         .find(|p| normalize_node_id(&p.node_id) == key)
     {
         existing.last_synced = Some(now);
-        existing.last_sent = Some(sent);
-        existing.last_received = Some(received);
+        existing.last_sent = sent;
+        existing.last_received = received;
     } else {
         peers.push(KnownPeer {
             node_id: key,
             name: String::new(),
-            last_sent: Some(sent),
-            last_received: Some(received),
+            last_sent: sent,
+            last_received: received,
             last_synced: Some(now),
             relay_url: None,
             direct_addrs: Vec::new(),
@@ -2282,6 +2289,12 @@ async fn handle_stream(
                 "[accept] sync complete, transitioning to live mode with {}",
                 &remote_key[..remote_key.len().min(12)]
             );
+            // Record it here too. `mark_peer_synced` used to run only on the
+            // dialling side, so an always-on node — which is always the one
+            // being dialled — reported "not synced yet" about a peer it had
+            // been exchanging data with for hours. The counts are from this
+            // node's point of view: what it served, and what it took in.
+            mark_peer_synced(&store, &remote_key, None, Some(total_imported as u32));
             // Accept side: the peer dialed us. No owned-drive relaxation — it
             // must hold real write rights to touch anything here.
             register_live_peer(remote_key, send, recv, store, agent, false);
@@ -2811,7 +2824,7 @@ mod peer_sync_volume_tests {
         let db = Db::init_temp("peer_sync_volume").await.unwrap();
         let node = "1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff";
 
-        mark_peer_synced(&db, node, 49, 1);
+        mark_peer_synced(&db, node, Some(49), Some(1));
 
         let peer = get_known_peers(&db)
             .into_iter()
@@ -2825,7 +2838,7 @@ mod peer_sync_volume_tests {
         // A later, quieter sync replaces the figures rather than accumulating:
         // these describe the last pass, so they must be checkable against what
         // that pass reported.
-        mark_peer_synced(&db, node, 0, 2);
+        mark_peer_synced(&db, node, Some(0), Some(2));
 
         let peer = get_known_peers(&db)
             .into_iter()

@@ -1485,39 +1485,66 @@ function SyncPage() {
               />
             ))}
 
-          {/* Paired devices (Iroh peers) */}
-          {pairedPeers.map(peer => (
-            <ConnCard key={peer.nodeId}>
-              <CardIcon>
-                <FaMobileScreenButton />
-              </CardIcon>
-              <ConnBody>
-                <ConnTopRow>
-                  <ConnTitle title={peer.nodeId}>{peer.label}</ConnTitle>
-                  <ConnTopRight>
-                    <StatusPill $status='unknown'>Paired</StatusPill>
-                    <NodeAction
-                      onClick={() => syncWithPeer(peer.nodeId)}
-                      disabled={peerSyncing}
-                    >
-                      {peerSyncing ? 'Syncing…' : 'Sync now'}
-                    </NodeAction>
-                  </ConnTopRight>
-                </ConnTopRow>
-                <ConnSub>
-                  Paired device
-                  {peer.lastSync
-                    ? ` · synced ${formatTimeAgo(new Date(peer.lastSync)) ?? 'just now'}`
-                    : ''}
-                </ConnSub>
-                <ConnActions>
-                  <NodeActionSubtle onClick={() => removePeer(peer.nodeId)}>
-                    Remove
-                  </NodeActionSubtle>
-                </ConnActions>
-              </ConnBody>
-            </ConnCard>
-          ))}
+          {/* Paired devices (Iroh peers).
+
+              Status comes from THIS device's own server rather than the local
+              `atomic-peers` record: that record only updates when the user
+              presses "Sync now", so it reported "synced 5 hours ago" about a
+              link that was live and exchanging data. The server knows whether
+              the peer is connected right now and when it last synced. */}
+          {pairedPeers.map(peer => {
+            const reported = serverPeers.find(
+              p => nodeDidToRaw(p.nodeId) === nodeDidToRaw(peer.nodeId),
+            );
+            const lastSynced = reported?.lastSeen ?? peer.lastSync;
+
+            return (
+              <ConnCard key={peer.nodeId}>
+                <CardIcon>
+                  <FaMobileScreenButton />
+                </CardIcon>
+                <ConnBody>
+                  <ConnTopRow>
+                    <ConnTitle title={peer.nodeId}>{peer.label}</ConnTitle>
+                    <ConnTopRight>
+                      <StatusPill
+                        $status={reported?.live ? 'synced' : 'unknown'}
+                      >
+                        {reported?.live ? 'Connected' : 'Paired'}
+                      </StatusPill>
+                      <NodeAction
+                        onClick={() => syncWithPeer(peer.nodeId)}
+                        disabled={peerSyncing}
+                      >
+                        {peerSyncing ? 'Syncing…' : 'Sync now'}
+                      </NodeAction>
+                    </ConnTopRight>
+                  </ConnTopRow>
+                  <ConnSub>
+                    Paired device
+                    {lastSynced
+                      ? ` · synced ${formatTimeAgo(new Date(lastSynced)) ?? 'just now'}`
+                      : ' · not synced yet'}
+                    {/* Only what this side actually counted — the accepting node
+                      answers frames through the engine and does not tally what
+                      it served, and a fabricated 0 would be the same lie this
+                      is meant to remove. */}
+                    {reported?.lastSent !== undefined
+                      ? ` · sent ${reported.lastSent}`
+                      : ''}
+                    {reported?.lastReceived !== undefined
+                      ? ` · received ${reported.lastReceived}`
+                      : ''}
+                  </ConnSub>
+                  <ConnActions>
+                    <NodeActionSubtle onClick={() => removePeer(peer.nodeId)}>
+                      Remove
+                    </NodeActionSubtle>
+                  </ConnActions>
+                </ConnBody>
+              </ConnCard>
+            );
+          })}
 
           {/* Devices paired with the server this browser reads from — a phone
               that scanned the code. The server reports them; this tab only

@@ -597,6 +597,7 @@ msgstr ""
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Connected"
 msgstr ""
 
@@ -7034,19 +7035,12 @@ msgstr ""
 #~ msgstr ""
 
 #: src/chunks/DashboardPage/DashboardBlock.tsx
-#: src/chunks/RTE/EditLinkForm.tsx
 msgid "Remove======="
 msgstr ""
 
 #~ msgid "Don't auto compact conversation>>>>>>> Stashed changes"
 #~ msgstr ""
-ation>>>>>>> Stashed changes"
-#~ msgstr ""
-msgstr ""
 
-#~ msgid "Don't auto compact conversation>>>>>>> Stashed changes"
-#~ msgstr ""
+#: src/routes/SyncRoute.tsx
+msgid "Paired"
 msgstr ""
-
-#~ msgid "Don't auto compact conversation>>>>>>> Stashed changes"
-#~ msgstr ""
