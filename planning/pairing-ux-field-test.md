@@ -502,6 +502,22 @@ edit — the sender's next save pushes a full snapshot" is wrong for an editor
 that is already open. The snapshot reaches the store; the open editor stays
 stuck until someone reloads.
 
+**Reproduced on a real document, 2026-08-16.** Two clients on the paired nodes,
+same document open. One had typed a line the other never received:
+
+| | line 3 of the document |
+| --- | --- |
+| receiving editor, open | `awd` |
+| same editor, after reload | `awdawdawad oawdinawiodawoi dn` |
+
+The full text was on the server throughout — the reload fetched it immediately.
+The open editor had diverged and stayed diverged, with no error and no
+indicator, while the other client's cursor kept rendering in it the whole time.
+
+That last detail is why this reads to a user as "presence works but content does
+not": presence is stateless, so it cannot get stuck, while content is a delta
+stream that can. Both channels are up; only one of them can silently fall behind.
+
 Fixing it needs the receiver to notice a version gap and ask for a snapshot,
 rather than assuming deltas always arrive in order. The `SYNC_VV` handshake
 already does exactly this at connect time — it is the reconnect/gap case that
@@ -663,6 +679,24 @@ what it observed was one failed connect.
 
 Same family as M8 and the false-offline work earlier in this note: a transient
 condition recorded as a permanent verdict.
+
+### M12 — A newly created resource sorts to the top of the sidebar (open, minor)
+
+`RelayTableTest`, created during the M10 work, renders first in the drive tree
+rather than last:
+
+```
+Joeps drijf | RelayTableTest | D | Tekenign | Ontology | Hey wereld | ChatRoom | ...
+```
+
+Noted because it first looked like the resource was missing from the device that
+created it, which would have been serious. It is not: the store holds it with
+`loading: false` and no error, and it is in the DOM — just in an unexpected
+position, so the eye slides past it in a list you know the shape of.
+
+Not investigated. The rest of the tree is in neither alphabetical nor obvious
+creation order, so the question is what key that list sorts on and what a
+freshly-created or freshly-synced child gets for it.
 
 ### P1 — Proposal: show discovered-but-unpaired nodes on the Sync page
 
