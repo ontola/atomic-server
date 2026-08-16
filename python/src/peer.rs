@@ -145,7 +145,7 @@ async fn recv_change(db: &Db, target: Subject) -> String {
 pub(crate) fn wait_for(db: &Db, subject: &str, timeout: f64) -> PyResult<String> {
     let target = Subject::from_raw(subject, db.get_base_domain().as_deref()).without_params();
     let dur = Duration::from_secs_f64(timeout.max(0.0));
-    match block_on(tokio::time::timeout(dur, recv_change(db, target))) {
+    match block_on(async { tokio::time::timeout(dur, recv_change(db, target)).await }) {
         Ok(s) => Ok(s),
         Err(_) => Err(PyTimeoutError::new_err(format!(
             "timed out waiting for {subject}"
