@@ -266,6 +266,12 @@ impl Store {
         q.include_nested = true;
         q.limit = limit;
         q.offset = offset;
+        // Indexed queries refuse to run without a drive. Prefer the active
+        // drive; fall back to `parent` when that *is* the drive (setup just
+        // created it and set it active, or the caller passed it explicitly).
+        if let Some(drive) = self.db.get_active_drive().or_else(|| parent.clone()) {
+            q.drive = Some(self.subject(&drive));
+        }
 
         if let Some(class) = class_url {
             q = q.class_filter(class);

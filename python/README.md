@@ -73,6 +73,12 @@ page = store.get(subject)
 
 `Store.in_memory()` is the same API without a directory — useful in tests.
 
+A `Resource` keeps a handle to the store. Drop every `Store` and `Resource`
+before opening the same directory again — redb takes an exclusive file lock.
+
+`save()` and `destroy()` validate schema. `PlainText` requires `description`;
+`Folder` does not.
+
 ## API
 
 - **Store** — `open(path)`, `in_memory()`, `setup(name)`, `load_agent(secret)`,

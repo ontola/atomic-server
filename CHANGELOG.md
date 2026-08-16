@@ -363,6 +363,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `ingest_commit_json` serializes; `sync::ws_apply::apply_commit_json` now
   returns the `CommitResponse` instead of `()`. See
   `planning/runtime-boundary-decision.md`.
+- **Python SDK** (`python/`, import `atomic_data`): local-first bindings over `atomic_lib` via PyO3. `Store.open` / `in_memory`, setup, create/read/update/query/delete, file-backed reopen. No server required. Sync and PyPI are not in this first cut.
 
 ## [v0.41.0-beta.2] - 2026-08-01
 

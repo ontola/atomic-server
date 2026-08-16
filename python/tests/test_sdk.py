@@ -103,7 +103,8 @@ def test_query_by_parent_and_class(store):
 
 
 def test_delete_removes_resource(store):
-    note = store.create(urls.PLAIN_TEXT, name="ephemeral")
+    # Folder has no extra required props; destroy/save validate schema.
+    note = store.create(urls.FOLDER, name="ephemeral")
     subject = note.subject
     assert store.get(subject) is not None
 
@@ -112,7 +113,7 @@ def test_delete_removes_resource(store):
 
 
 def test_resource_destroy(store):
-    note = store.create(urls.PLAIN_TEXT, name="bye")
+    note = store.create(urls.FOLDER, name="bye")
     subject = note.subject
     note.destroy()
     assert store.get(subject) is None
