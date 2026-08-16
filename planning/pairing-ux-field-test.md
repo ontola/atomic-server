@@ -518,6 +518,25 @@ That last detail is why this reads to a user as "presence works but content does
 not": presence is stateless, so it cannot get stuck, while content is a delta
 stream that can. Both channels are up; only one of them can silently fall behind.
 
+**Fixed and verified in the running app (2026-08-16).** An unappliable delta
+injected at a live resource on the receiving device:
+
+| check | result |
+| --- | --- |
+| `applyIncoming` outcome | `invalid`, not `applied` |
+| recovery | `[Store] incomplete Loro import … fetching a full snapshot to catch up` |
+| claimed the unapplied commit | no |
+| document blanked or failed | no — content intact, no error |
+
+Not stamping `lastCommit` is what makes it work: the echo-dedup at the top of
+`applyIncoming` drops updates matching the cached commit, so claiming a commit
+we never applied would have discarded the very fetch issued to repair the gap.
+The fix would have looked right and done nothing.
+
+The original design note follows, since it still describes what is needed if the
+delta stream is ever made to detect gaps itself rather than inferring them from
+a failed import:
+
 Fixing it needs the receiver to notice a version gap and ask for a snapshot,
 rather than assuming deltas always arrive in order. The `SYNC_VV` handshake
 already does exactly this at connect time — it is the reconnect/gap case that
@@ -598,8 +617,24 @@ compelling and both were aimed at the wrong layer:
    branch. But imports complete and resources are correct without it, so it is
    not implicated in this symptom.
 
-The remaining question is entirely client-side: why a table cell does not
-re-render for a resource that is in the store, correct, and `loading: false`.
+**Fixed and verified end-to-end (2026-08-16).** A row created on the paired node
+appeared on the other device with its name, live, no reload — `aria-setsize`
+9 → 10, footer count 8 → 9.
+
+The cause was not the cell at all. `memberCount` is frozen at the count the
+collection had when it first became ready, deliberately, so a materialising
+session row never remounts and drops keystrokes. Rows below that index render as
+collection members; rows above come from `newRowSubjects`. A row from a peer is
+neither — it grows the collection but not the baseline, and it is not one of this
+session's drafts, so nothing draws it. `totalMembers` 8 against `aria-setsize` 5.
+The baseline now accounts for what this session contributed and lets anything
+beyond that raise it.
+
+Worth recording that the earlier reading here — "the cell is empty" — was itself
+wrong. Five named rows, one empty row and a footer count of eight meant the three
+new rows were not being rendered at all; the single empty row was the trailing
+placeholder. Reading "empty cell" instead of "missing row" sent the next two
+hours at the wrong layer.
 Prime suspect is the React Compiler memoisation pitfall this repo has hit before
 — reading `resource.get(...)` into a variable during render memoises on the proxy
 identity, and internal mutation does not invalidate it. A reload rebuilds the
