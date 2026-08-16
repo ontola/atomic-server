@@ -40,18 +40,9 @@ def test_wait_for_times_out():
         store.wait_for("did:ad:does-not-change", timeout=0.2)
 
 
-def test_start_peer_returns_node_uri():
-    store = Store.in_memory()
-    store.setup("Ada")
-    store.device_name = "pytest-a"
-    node = store.start_peer()
-    assert node.startswith("did:ad:node:")
-    assert store.peer_id == node
-    # Idempotent.
-    assert store.start_peer() == node
-
-
 def test_two_process_iroh_sync(tmp_path):
+    # `start_peer` is process-global. This must be the only test in this
+    # process that starts Iroh, and it must own the store the node serves.
     path_a = tmp_path / "a"
     path_b = tmp_path / "b"
     handshake = tmp_path / "handshake.json"
@@ -61,6 +52,8 @@ def test_two_process_iroh_sync(tmp_path):
     setup = store.setup("Ada")
     store.device_name = "pytest-parent"
     node = store.start_peer()
+    assert node.startswith("did:ad:node:")
+    assert store.peer_id == node
     note = store.create(urls.FOLDER, name="From A")
     store.flush()
     handshake.write_text(

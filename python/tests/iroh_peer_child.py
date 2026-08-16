@@ -23,8 +23,11 @@ def main() -> None:
                 "ok": bool(got) and got["name"] == hs["name"],
                 "imported": report.imported,
                 "pushed": report.pushed,
+                "in_sync": report.in_sync,
+                "peer_name": report.peer_name,
                 "name": got["name"] if got else None,
                 "has_drive": store.has(hs["drive"]),
+                "child_peer": store.peer_id,
             }
         )
     )
