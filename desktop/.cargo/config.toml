@@ -5,3 +5,10 @@
 # `dist-tauri/` via the custom protocol.
 [env]
 ATOMICSERVER_SKIP_JS_BUILD = "true"
+
+# `cargo tauri dev` shells out to `cargo run`, so a target runner is the only
+# hook between linking the dev binary and launching it. Scoped to this directory
+# rather than the workspace root: a runner set at the root would also wrap every
+# test binary nextest spawns.
+[target.'cfg(target_os = "macos")']
+runner = "../scripts/sign-dev-binary.sh"

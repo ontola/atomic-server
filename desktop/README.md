@@ -54,12 +54,21 @@ APPLE_SIGNING_IDENTITY=- cargo tauri build
 how `tauri-release.yml` feeds in the certificate from repository secrets, and
 how its secret-less runs fall back to ad-hoc.
 
-`cargo tauri dev` is a different story: it never bundles, so tauri never signs
-it, and the watcher relinks on every source change. Signing cannot help there.
-Silence those prompts by opening Keychain Access, finding *atomic-server-tauri
-WebCrypto Master Key* and setting its Access Control to "Allow all
-applications" — acceptable for a dev item on your own machine, not something to
-suggest to a user.
+`cargo tauri dev` needs the same identity and tauri never signs it, so
+`desktop/.cargo/config.toml` points cargo's target runner at
+`scripts/sign-dev-binary.sh`, which signs the binary between the link and the
+launch (`cargo tauri dev` shells out to `cargo run`, so a runner is the only
+hook available). Dev builds get no hardened runtime and keep `get-task-allow`,
+so lldb still attaches. Without the certificate the runner is a no-op and the
+app runs ad-hoc, as before. It costs ~2s per launch on the 168MB debug binary.
+
+Note what does *not* work: setting the keychain item to "Allow all
+applications". Access is gated twice, on the item's ACL and on its **partition
+list** of code identities, and the Keychain Access UI only edits the first. An
+ad-hoc binary contributes `cdhash:<hash of this exact build>` to that list — so
+each "Always Allow" pinned the build being replaced, and the item accumulated
+55 dead cdhashes. A Developer ID signature contributes `teamid:Q9WPWRTU7G`,
+which every later build shares.
 
 ## Limitations
 
