@@ -121,6 +121,10 @@ pub const PEER_AGENT: &str = "https://atomicdata.dev/properties/peer/agent";
 pub const PEER_LAST_SEEN: &str = "https://atomicdata.dev/properties/peer/lastSeen";
 /// True while the peer holds an open connection to the node reporting it.
 pub const PEER_LIVE: &str = "https://atomicdata.dev/properties/peer/live";
+/// Resources moved by the LAST completed sync with this peer — not a lifetime
+/// total. See `KnownPeer::last_sent`.
+pub const PEER_LAST_SENT: &str = "https://atomicdata.dev/properties/peer/lastSent";
+pub const PEER_LAST_RECEIVED: &str = "https://atomicdata.dev/properties/peer/lastReceived";
 // ... for Collections
 pub const COLLECTION_PROPERTY: &str = "https://atomicdata.dev/properties/collection/property";
 pub const COLLECTION_VALUE: &str = "https://atomicdata.dev/properties/collection/value";

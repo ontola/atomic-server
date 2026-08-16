@@ -1551,6 +1551,17 @@ function SyncPage() {
                           formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
                         }`
                       : ' · not synced yet'}
+                    {/* What that sync actually moved. A timestamp alone cannot
+                        tell a working link from one being refused every
+                        subject. Deliberately the last pass, not a lifetime
+                        total — see `KnownPeer::last_sent`. */}
+                    {peer.lastSeen &&
+                    (peer.lastSent !== undefined ||
+                      peer.lastReceived !== undefined)
+                      ? ` · sent ${peer.lastSent ?? 0}, received ${
+                          peer.lastReceived ?? 0
+                        }`
+                      : ''}
                   </ConnSub>
                   <NodeIdRow>
                     <NodeIdLabel>Node ID</NodeIdLabel>

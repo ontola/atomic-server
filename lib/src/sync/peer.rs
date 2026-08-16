@@ -1657,7 +1657,12 @@ pub async fn sync_drive_with_peer_using_outcome(
     // The exchange completed and this is a real peer we hold a drive with —
     // stamp it so the UI can show when we last synced, and remember where it
     // lives now (relay + direct addrs) so the next dial skips discovery.
-    mark_peer_synced(store, &remote_key);
+    mark_peer_synced(
+        store,
+        &remote_key,
+        total_pushed as u32,
+        total_imported as u32,
+    );
     if let Some(info) = endpoint.remote_info(node_id) {
         let addr: iroh::NodeAddr = info.into();
         remember_peer_addr(
@@ -1729,6 +1734,15 @@ const KNOWN_PEERS_KEY: &[u8] = b"_iroh_known_peers_v2";
 pub struct KnownPeer {
     pub node_id: String,
     pub name: String,
+    /// What the LAST completed sync with this peer moved, in resources. A
+    /// per-sync figure rather than a lifetime total on purpose: a running
+    /// counter has to survive re-pairs, store resets and partial syncs, and
+    /// quietly becomes fiction the first time one of those is missed. These
+    /// two are checkable against the number the sync itself reported.
+    #[serde(default)]
+    pub last_sent: Option<u32>,
+    #[serde(default)]
+    pub last_received: Option<u32>,
     /// Unix millis of the last successful sync with this peer, if ever. Absent
     /// for peers stored before this was tracked (serde default), so the UI shows
     /// "not yet" rather than a bogus epoch time.
@@ -1787,6 +1801,8 @@ pub fn add_known_peer(store: &Db, node_id: &str, name: &str) {
     } else {
         peers.push(KnownPeer {
             node_id: key,
+            last_sent: None,
+            last_received: None,
             name: name.to_string(),
             last_synced: None,
             relay_url: None,
@@ -1826,6 +1842,8 @@ pub fn remember_peer_addr(
     } else {
         peers.push(KnownPeer {
             node_id: key.clone(),
+            last_sent: None,
+            last_received: None,
             name: String::new(),
             last_synced: None,
             relay_url: None,
@@ -1880,7 +1898,7 @@ fn dial_target(store: &Db, node_id: NodeId) -> iroh::NodeAddr {
 /// Stamp a peer's `last_synced` to now, upserting it if unknown. Called when a
 /// sync exchange with the peer completes, so the UI can say "synced 2m ago"
 /// without a separate bookkeeping path.
-pub fn mark_peer_synced(store: &Db, node_id: &str) {
+pub fn mark_peer_synced(store: &Db, node_id: &str, sent: u32, received: u32) {
     let key = normalize_node_id(node_id);
     let mut peers = get_known_peers(store);
     let now = crate::utils::now();
@@ -1889,10 +1907,14 @@ pub fn mark_peer_synced(store: &Db, node_id: &str) {
         .find(|p| normalize_node_id(&p.node_id) == key)
     {
         existing.last_synced = Some(now);
+        existing.last_sent = Some(sent);
+        existing.last_received = Some(received);
     } else {
         peers.push(KnownPeer {
             node_id: key,
             name: String::new(),
+            last_sent: Some(sent),
+            last_received: Some(received),
             last_synced: Some(now),
             relay_url: None,
             direct_addrs: Vec::new(),
@@ -2644,5 +2666,43 @@ mod live_peer_registry_tests {
         register(peer);
         remove_live_peer_any_quiet(peer);
         assert!(!is_registered(peer));
+    }
+}
+
+#[cfg(all(test, feature = "db-redb"))]
+mod peer_sync_volume_tests {
+    use super::*;
+
+    /// The card needs to say what a sync moved, not just that one happened —
+    /// a timestamp cannot distinguish a link carrying data from one being
+    /// refused every subject.
+    #[tokio::test]
+    async fn a_completed_sync_records_what_it_moved() {
+        let db = Db::init_temp("peer_sync_volume").await.unwrap();
+        let node = "1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff";
+
+        mark_peer_synced(&db, node, 49, 1);
+
+        let peer = get_known_peers(&db)
+            .into_iter()
+            .find(|p| normalize_node_id(&p.node_id) == normalize_node_id(node))
+            .expect("the sync must record the peer");
+
+        assert_eq!(peer.last_sent, Some(49));
+        assert_eq!(peer.last_received, Some(1));
+        assert!(peer.last_synced.is_some());
+
+        // A later, quieter sync replaces the figures rather than accumulating:
+        // these describe the last pass, so they must be checkable against what
+        // that pass reported.
+        mark_peer_synced(&db, node, 0, 2);
+
+        let peer = get_known_peers(&db)
+            .into_iter()
+            .find(|p| normalize_node_id(&p.node_id) == normalize_node_id(node))
+            .unwrap();
+
+        assert_eq!(peer.last_sent, Some(0));
+        assert_eq!(peer.last_received, Some(2));
     }
 }
