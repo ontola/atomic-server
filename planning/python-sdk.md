@@ -20,6 +20,10 @@ UniFFI would help if one IDL had to generate Swift + Kotlin + Python. The
 Python API can be idiomatic on its own (dict-like `Resource`, sync methods,
 context manager). Flutter already has its own bridge.
 
+Kotlin is next and **does** use UniFFI — see [`kotlin-sdk.md`](./kotlin-sdk.md).
+Do not clone `python/src` for that. Extract a shared `atomic_lib::sdk`
+surface first; PyO3 can keep its skin.
+
 The crate is **excluded from the Cargo workspace** (same reason as
 `flutter/rust`): workspace `clippy` / `nextest` should not compile PyO3 on
 every Rust CI run.

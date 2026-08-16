@@ -23,6 +23,7 @@ In the "old" HTTP based Atomic(Server) UX, an app developer had to:
 - Server & connection to it is optional, only required for back-up.
 - Flutter library for native iOS and android apps
 - Python SDK (`python/`, import `atomic_data`) wrapping `atomic_lib` via PyO3 — local read/write/query/persist. See [`python-sdk.md`](./python-sdk.md).
+- Kotlin (not built): same v1 scope, UniFFI over a shared Rust `sdk` surface — not another hand-rolled FFI. See [`kotlin-sdk.md`](./kotlin-sdk.md). Unlocks Swift and the Android Binder host.
 - Still no full, end-to-end atomic app building tutorial available
 
 ## Future situation
