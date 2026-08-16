@@ -80,7 +80,12 @@ export function AppKeysCard() {
     };
   }, [store, personalDrive]);
 
-  const { subjects: children } = useChildren(folderSubject);
+  const { subjects: folderChildren } = useChildren(folderSubject);
+  const [minted, setMinted] = useState<string[]>([]);
+  const children = useMemo(
+    () => [...new Set([...folderChildren, ...minted])],
+    [folderChildren, minted],
+  );
   const [createProps, showCreate, closeCreate, createOpen] = useDialog();
   const [secret, setSecret] = useState<string>();
 
@@ -153,7 +158,14 @@ export function AppKeysCard() {
             <CreateKeyForm
               workspaces={workspaces}
               parent={folderSubject}
-              onCreated={next => setSecret(next)}
+              onCreated={issued => {
+                setMinted(list =>
+                  list.includes(issued.subject)
+                    ? list
+                    : [...list, issued.subject],
+                );
+                setSecret(issued.secret);
+              }}
               onCancel={() => closeCreate(false)}
             />
           ))}
@@ -313,7 +325,7 @@ function CreateKeyForm({
 }: {
   workspaces: string[];
   parent?: string;
-  onCreated: (secret: string) => void;
+  onCreated: (issued: { secret: string; subject: string }) => void;
   onCancel: () => void;
 }) {
   const store = useStore();
@@ -343,7 +355,7 @@ function CreateKeyForm({
         targets: selected,
         parent,
       });
-      onCreated(issued.secret);
+      onCreated(issued);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
