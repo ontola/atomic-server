@@ -259,3 +259,42 @@ must compute the same differing set on either end of the wire. Both carry the
 same test names. A fix to one is a fix to the other; the golden-vector tests
 (`item_fingerprint_matches_golden_vector`) pin the hashing, but the *traversal*
 is only kept in step by mirroring the tests, so do that deliberately.
+
+---
+
+## Headless CMS (Website template)
+
+The CMS is the Website template in the Data Browser plus `@tomic/create-template`
+(Next.js / SvelteKit). Forks and i18n are generic platform features the templates
+consume.
+
+### Covered
+
+| Flow | Where |
+|---|---|
+| Apply template, scaffold Next.js, production build, homepage, blog search, two-locale routing | `browser/e2e/tests/template.spec.ts` (`apply next-js template`) |
+| Same for SvelteKit, including `<html lang>` | `template.spec.ts` (`apply sveltekit template`) |
+| Future-dated post hidden from listing, search, and direct URL (404) | `template.spec.ts` (`assertTwoLocaleSite` + search `Time Travel`) |
+| Cmd/Ctrl+E and **Edit this page** open `/app/edit?subject=` on the Data Browser origin (`--cms-url`) | `template.spec.ts` (`assertCmsEditFromSite`) — SvelteKit footer link; Next.js sign-in banner **Open in Data Browser** |
+| Next.js in-place WYSIWYG (`@tomic/edit-mode`): sign in with agent secret, rename About heading, reload | `template.spec.ts` (`assertInPlaceEdit`) |
+| Nav on `/nl/blog` → Home stays on `/nl` | `template.spec.ts` (`assertTwoLocaleSite`) |
+| Next.js `<html lang>` follows the URL prefix **on the first HTML byte** | `template.spec.ts` (`assertCdnFriendlyPages` + `checkHtmlLang`) |
+| `/` serves `website.homepage` even when that page's path is not `/` | `template.spec.ts` (`assertHomepageIsAbout`) |
+| Fork of a page with a copied `href` does not replace the published page | `template.spec.ts` (`assertHomepageIsAbout` + `DRAFT ABOUT LEAK`) |
+| Blog cards on `/nl/blog` keep the `/nl` prefix | `template.spec.ts` (`assertLocaleBlogCards`) |
+| `sitemap.xml` / `rss.xml` / `robots.txt` omit unpublished posts and forks | `template.spec.ts` (`assertCmsFeeds`) + `browser/lib/src/cms.test.ts` |
+| CDN cache headers (`s-maxage` / `public`, not `no-store`) on HTML and feeds | `template.spec.ts` (`assertCdnFriendlyPages` + `assertCmsFeeds`) |
+| Dutch `/nl/...` HTML already contains Dutch copy and `lang="nl"` without JS | `template.spec.ts` (`assertCdnFriendlyPages`) |
+| Forks hidden; scheduled / undated blog posts hidden; `cmsEditUrl`; slug/cache helpers | `browser/lib/src/cms.test.ts` |
+| Fork → edit → merge; pending forks listed on the original | `browser/e2e/tests/forks.spec.ts` |
+| Three-way merge / conflict / document body CRDT | `browser/lib/src/forks.test.ts` |
+| LocalizedText table editor | `browser/e2e/tests/localized-text.spec.ts` |
+
+### Blind spots
+
+| Gap | Why it hurts |
+|---|---|
+| Confidential drafts (private folder in a non-public Drive) | Not built. `makeDrivePublic()` still publishes the whole Drive. A `published-at` filter is not an ACL. |
+| Suggest-an-edit for non-writers, reject-with-reason, Canvas body fork | Platform gaps in `planning/drafts-and-suggestions.md`; templates cannot paper over them. |
+| Astro from-scratch guide | No test. The Website-template path is what CI exercises. |
+| Image resizing / GraphQL | Documented product absences, not test gaps. |

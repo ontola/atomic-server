@@ -1,9 +1,14 @@
 import { getCurrentResource } from '@/atomic/getCurrentResource';
+import { getSitemapPaths } from '@/atomic/getPublicPages';
 import { getLanguageAlternates, parseLocalizedPath } from '@/atomic/i18n';
+import { cmsPathToSlug } from '@/atomic/feeds';
 import FullPageView from '@/views/FullPage/FullPageView';
 import { core } from '@tomic/lib';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+
+export const revalidate = 60;
+export const dynamicParams = true;
 
 type Params = {
   slug?: string[];
@@ -11,7 +16,6 @@ type Params = {
 
 type Props = {
   params: Promise<Params>;
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 const slugToPath = (slug?: string[]) => (slug ? `/${slug.join('/')}` : '/');
@@ -19,6 +23,33 @@ const slugToPath = (slug?: string[]) => (slug ? `/${slug.join('/')}` : '/');
 const fetchResource = async (slug?: string[]) => {
   return await getCurrentResource(slugToPath(slug));
 };
+
+/**
+ * Prerender every public path so the first byte is already the right language
+ * and content. Unknown paths still generate on demand (`dynamicParams`).
+ * An empty sitemap at build (index still catching up) only prerenders `/`;
+ * ISR refreshes the rest within `revalidate` seconds instead of baking
+ * empty listings forever.
+ */
+export async function generateStaticParams(): Promise<Params[]> {
+  try {
+    const paths = await getSitemapPaths();
+
+    if (paths.length === 0) {
+      console.warn(
+        'No CMS pages at build time; `/` will generate on demand (ISR).',
+      );
+
+      return [{ slug: [] }];
+    }
+
+    return paths.map(path => ({ slug: cmsPathToSlug(path) }));
+  } catch (error) {
+    console.warn('Could not list CMS pages at build time:', error);
+
+    return [{ slug: [] }];
+  }
+}
 
 export const generateMetadata = async ({
   params,
@@ -42,9 +73,8 @@ export const generateMetadata = async ({
   };
 };
 
-const Page = async ({ params, searchParams }: Props) => {
+const Page = async ({ params }: Props) => {
   const slug = (await params).slug;
-  const search = await searchParams;
   const { lang } = await parseLocalizedPath(slugToPath(slug));
   const resource = await fetchResource(slug);
 
@@ -52,9 +82,7 @@ const Page = async ({ params, searchParams }: Props) => {
     return notFound();
   }
 
-  return (
-    <FullPageView subject={resource.subject} lang={lang} searchParams={search} />
-  );
+  return <FullPageView subject={resource.subject} lang={lang} />;
 };
 
 export default Page;

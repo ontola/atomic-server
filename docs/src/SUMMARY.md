@@ -49,6 +49,7 @@
 
 # Guides
 
+- [Build a website (headless CMS)](headless-cms.md)
 - [Build a portfolio using Astro and Atomic Server](astro-guide/1-index.md)
   - [Setup](astro-guide/2-setup.md)
   - [Frontend setup](astro-guide/3-frontend-setup.md)

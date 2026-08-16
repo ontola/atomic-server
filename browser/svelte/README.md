@@ -9,5 +9,5 @@ Read more about @tomic/svelte in the [Docs](https://docs.atomicdata.dev/svelte).
 You can aslo generate a svelekit website by applying the 'website' template in your server and then running:
 
 ```bash
-npm create @tomic/template <NAME> --template sveltekit-site --server-url=<SERVER_URL>
+npm create @tomic/template <NAME> -- --template sveltekit-site --server-url <SERVER_URL> --drive <DRIVE_SUBJECT>
 ```

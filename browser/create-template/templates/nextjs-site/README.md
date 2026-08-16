@@ -14,6 +14,10 @@ $ pnpm create @tomic/template my-project --template nextjs-site --server-url htt
 $ yarn create @tomic/template my-project --template nextjs-site --server-url http://localhost:9883 --drive did:ad:YOUR_DRIVE
 ```
 
+Apply the **Website** template in the Data Browser first (New resource → Templates). `--server-url` is the HTTP origin; `--drive` is the Drive's `did:ad:` subject. If the Data Browser is not on the same origin as the API, add `--cms-url http://localhost:6747`.
+
+Full walkthrough: [Using Atomic as a headless CMS](https://docs.atomicdata.dev/headless-cms.html).
+
 ### 2. Generate ontologies
 
 ```bash
@@ -35,6 +39,18 @@ $ npm run dev
 $ pnpm dev
 $ yarn dev
 ```
+
+## Editing content
+
+Change pages and posts in the Data Browser. From the running site, press Cmd/Ctrl+E or use **Edit this page** in the footer to edit the heading and body in place (`@tomic/edit-mode`). Cmd/Ctrl+Shift+E opens the Data Browser. `NEXT_PUBLIC_ATOMIC_CMS_URL` in `.env` is that editor origin (defaults to the server URL).
+
+A blog post with `published-at` in the future (or missing) is not listed, searchable, or routable. Forks are excluded from public queries because they copy the original `href`.
+
+`/sitemap.xml`, `/robots.txt`, and `/rss.xml` are generated from that same filter. Blog cards on `/nl/blog` keep the `/nl` prefix.
+
+Public pages are prerendered (`generateStaticParams`) and revalidated every 60 seconds (ISR). AtomicServer `fetch` uses `next.revalidate` rather than `no-store`, so a CDN can cache HTML. `<html lang>` is set from the URL on the first byte (`/nl/...` is `lang="nl"`). Blog search filters the prerendered list in the browser, so `/blog` stays cacheable. Feeds send `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400`.
+
+`NEXT_PUBLIC_ATOMIC_CMS_URL` in `.env` is the Data Browser origin. It defaults to the server URL.
 
 ## Structure
 

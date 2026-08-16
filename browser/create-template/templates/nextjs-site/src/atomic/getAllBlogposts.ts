@@ -3,6 +3,7 @@ import { CollectionBuilder, core, i18n, type Resource } from '@tomic/lib';
 import { driveFilter, store } from '@/store';
 import { env } from '@/env';
 import { getLanguageConfig, getResourceLanguage } from './i18n';
+import { isListedCmsResource } from './publicContent';
 
 /**
  * All blogposts in the given language, one per translation group.
@@ -13,9 +14,9 @@ export async function getAllBlogposts(lang?: string): Promise<string[]> {
   const { defaultLanguage } = await getLanguageConfig();
   const language = lang || defaultLanguage;
 
-  const resources = await Promise.all(
-    subjects.map(subject => store.getResource(subject)),
-  );
+  const resources = (
+    await Promise.all(subjects.map(subject => store.getResource(subject)))
+  ).filter(resource => isListedCmsResource(resource));
 
   // Group the different translations of a post together.
   // Translations point at their canonical version via `translationOf`.

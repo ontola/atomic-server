@@ -3,6 +3,7 @@ import BlockView from '../Block/BlockView';
 import { type Page } from '@/ontologies/website';
 import Container from '@/components/Layout/Container';
 import VStack from '@/components/Layout/VStack';
+import { EditableName } from '@/components/EditableField';
 
 const PageFullPage = ({ resource }: { resource: Resource<Page> }) => {
   const title = resource.title;
@@ -10,7 +11,7 @@ const PageFullPage = ({ resource }: { resource: Resource<Page> }) => {
   return (
     <Container>
       <VStack>
-        <h1>{title?.toString()}</h1>
+        <EditableName subject={resource.subject} initialValue={title} />
 
         {resource.props.blocks?.map(block => (
           <BlockView key={block} subject={block} />

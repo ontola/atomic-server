@@ -184,7 +184,7 @@ export function Editable({
 
   return (
     <span
-      className="tomic-editable"
+      className={multiline ? 'tomic-editable tomic-editable-block' : 'tomic-editable'}
       contentEditable
       suppressContentEditableWarning
       spellCheck={false}

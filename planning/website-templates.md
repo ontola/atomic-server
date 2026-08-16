@@ -83,37 +83,56 @@
       by explicitly copying or applying an approved diff to the public page.
       A status or `publishedAt` property alone is presentation metadata, not an
       authorization boundary.
-- [ ] Add a publication query shared by both templates. Today `publishedAt` is
+- [x] Add a publication query shared by both templates. Today `publishedAt` is
       only used for sorting, so future-dated or otherwise unpublished posts are
-      still rendered.
+      still rendered. **Done (2026-08-14):** both templates drop forks and
+      blog posts with a missing or future `published-at` from listings, search,
+      and path routing. A scheduled 2030 post is seeded in the Website template
+      and asserted in `template.spec.ts`. This is still presentation, not an
+      ACL — a public Drive will serve the resource over HTTP.
+- [x] `/` is the Website resource's `homepage` property, not whichever page
+      happens to have path `/`. Changing homepage in the Data Browser changes
+      the site root. **Done (2026-08-14).**
 
 ### Editing from the website
 
 - [x] Record the existing Data Browser contract:
       `/app/edit?subject=<resource>` and Cmd/Ctrl+E inside Data Browser.
-- [ ] Add a configurable CMS origin to generated sites and use it for a
+- [x] Add a configurable CMS origin to generated sites and use it for a
       Cmd/Ctrl+E deep link. Do not assume the content server and Data Browser
-      have the same origin.
-- [ ] Add a small authenticated edit affordance for editors; it must not embed
+      have the same origin. **Done (2026-08-14):** `--cms-url` (defaults to
+      `--server-url`) writes `ATOMIC_CMS_URL`.
+- [x] Add a small authenticated edit affordance for editors; it must not embed
       credentials or private agent material in the public bundle.
-- [ ] Decide whether "in-page editing" means navigation to Data Browser,
-      an extracted shared editor surface, or framework-native fields backed by
-      `@tomic/react` / `@tomic/svelte`. Avoid duplicating the existing editor
-      behavior independently in both templates.
+      Next.js: **Edit this page** / Cmd/Ctrl+E enter `@tomic/edit-mode` in-place
+      WYSIWYG; the agent secret is stored in `localStorage` on the site origin.
+      Cmd/Ctrl+Shift+E and the banner **Open in Data Browser** still open
+      `/app/edit?subject=…`. SvelteKit keeps the Data Browser footer link.
+- [x] In-page editing on generated Next.js sites uses `@tomic/edit-mode`
+      (`Editable` + `EditModeProvider`) against the live resources. SvelteKit
+      does not yet: the package's UI is React.
 
 ### Internationalization
 
 - [x] Record the current boundary: Wuchale translates Data Browser chrome only;
-      the website content model is scalar and both templates hardcode
-      `<html lang="en">`.
-- [ ] Model locale explicitly; do not infer content language only from UI
-      chrome or browser locale.
-- [ ] Prefer localized content resources linked by a stable translation key,
-      with `locale` on each resource and `defaultLocale` on the website.
-- [ ] Decide locale-aware path uniqueness, routing, and fallback rules, for
-      example `/en/about` and `/nl/over` within one website.
-- [ ] Separate translated content resources from translated template chrome.
-- [ ] Add E2E coverage for at least two locales before claiming i18n support.
+      content uses document-level `language` + `translationOf`.
+- [x] Locale on each page/post (`language`) and `defaultLanguage` / `languages`
+      on the website resource. Templates route `/nl/...`, emit `hreflang`, and
+      keep the language prefix on nav links **and blog cards**.
+- [x] E2E: two locales (en default, nl balloon post), `<html lang>`, nav prefix
+      (`template.spec.ts` `assertTwoLocaleSite`), blog-card prefix
+      (`assertLocaleBlogCards`).
+- [x] `/sitemap.xml`, `/robots.txt`, `/rss.xml` from the same public-content
+      filter. Scheduled posts and forks are omitted. **Done (2026-08-14).**
+- [x] E2E: `/` serves `website.homepage` when that is About (path `/about`),
+      and a renamed fork of About does not replace the published page.
+- [x] Generated pages are CDN-friendly: Next.js prerender/ISR, SvelteKit SSR
+      with `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400`,
+      correct `<html lang>` and body content on the first HTML byte (no JS).
+      Blog search is client-side so `/blog` stays cacheable. Empty listings
+      retry then expire instead of baking forever. **Done (2026-08-14).**
+- [ ] Separate translated content resources from translated template chrome
+      (template UI strings are still English).
 
 ## Decisions still open
 
