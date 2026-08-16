@@ -19,6 +19,9 @@ Related design docs:
 - `planning/unified-data-layer.md` describes the browser-facing data layer.
   In this architecture that data layer talks to an `atomic_lib` node surface,
   either through WASM/OPFS, native bindings, or a remote transport.
+- `planning/ts-wasm-duplication.md` measures how much `@tomic/lib` duplicates
+  `atomic_lib` and why the JS Resource/Store cache should stay in JS even as
+  the node surface moves into WASM.
 - `planning/s3-blob-storage.md` describes pluggable blob storage. In this
   architecture the blob backend belongs under the node runtime, not under an
   HTTP handler.
