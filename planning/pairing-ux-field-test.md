@@ -573,10 +573,46 @@ that is gone. The machine is fine, the server is fine, and the resource is on
 disk — it simply was not listening yet at the instant the page asked. Someone
 reading this checks their wifi.
 
-Two things to separate when fixing: the app needs a retry with backoff once a
-connection is established (this is boot ordering, not connectivity), and the
-message should not claim to know the network is down when what it observed was
-one failed request.
+**The mechanism, measured.** The websocket connect fails once, at the moment of
+restart, and is never retried:
+
+```
+16:23:40  [WS] Connection failed
+16:23:40  [WS] close code=1006 reason="" wasClean=false opened=false
+16:23:40  [atomic] Migrating the previous account failed: getResource...
+```
+
+That is the *last* WS line in the log. The server bound seconds later and has
+answered in ~1ms ever since, so a retry would have succeeded immediately — there
+were none. `websockets.ts` does have a backoff loop and an `online` listener, but
+neither ran: dispatching `online` by hand produced zero new sockets, and no
+repeated failures appear in the log either. So this is not slow backoff, it is no
+reconnect at all after a connect that never opened.
+
+Pressing **Retry** does not help, and the reason is the interesting part: it
+re-issues the *fetch*, not the *connection*. The fetch queues on a socket whose
+handshake never completed, and by `websockets.ts`'s own note, `ws.fetch`'s
+`REQUEST_TIMEOUT` "only starts AFTER auth, so a stalled handshake hangs every
+fetch indefinitely". The result is a third state beyond loaded and failed:
+
+> Still loading…
+> The resource ... hasn't loaded after 15 seconds.
+
+That 15 seconds is a UI notice, not a request timeout. Nothing underneath ever
+gives up, so the app sits there indefinitely — not loading, not complete, not an
+error. Confusing to the point of looking like data loss: the sidebar and title
+render as `...` and the body as *Empty*.
+
+Confusingly, the app can look reachable while this is happening: an HTTP
+keep-alive connection to the same port stays ESTABLISHED, so `lsof` shows a live
+socket to a server the app insists it is offline from.
+
+Three things to separate when fixing: a connect that never opened must still
+schedule a retry (this is boot ordering, not connectivity); Retry should re-establish
+the connection rather than only re-issue the request; and a queued fetch needs a
+timeout that runs whether or not auth ever completed, so it can fail honestly
+instead of hanging. The message should also stop claiming the network is down when
+what it observed was one failed connect.
 
 Same family as M8 and the false-offline work earlier in this note: a transient
 condition recorded as a permanent verdict.
