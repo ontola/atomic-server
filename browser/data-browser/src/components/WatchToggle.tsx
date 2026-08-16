@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  CollectionBuilder,
   core,
   notifications,
   useStore,
@@ -33,59 +32,14 @@ export function WatchToggle({
   const [watchSubject, setWatchSubject] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
-  const refresh = useCallback(async () => {
-    if (!agent?.subject) {
-      setWatchSubject(undefined);
-
-      return;
-    }
-
-    const personalDrive = await fetchPrivateDriveSubject(store, agent);
-
-    if (!personalDrive) {
-      setWatchSubject(undefined);
-
-      return;
-    }
-
-    try {
-      const collection = await new CollectionBuilder(store)
-        .setDrive(personalDrive)
-        .setProperty(notifications.properties.watchTarget)
-        .setValue(resource.subject)
-        .setPageSize(5)
-        .buildAndFetch();
-
-      for (let i = 0; i < collection.totalMembers; i++) {
-        const subject = await collection.getMemberWithIndex(i);
-
-        if (!subject) {
-          continue;
-        }
-
-        const res = store.getResourceLoading(subject);
-
-        if (
-          res.getClasses().includes(notifications.classes.watchSubscription)
-        ) {
-          setWatchSubject(subject);
-
-          return;
-        }
-      }
-
-      setWatchSubject(undefined);
-    } catch {
-      setWatchSubject(undefined);
-    }
-  }, [store, agent, resource.subject]);
+  const refresh = useCallback(() => {
+    setWatchSubject(engine?.getWatchForTarget(resource.subject));
+  }, [engine, resource.subject]);
 
   useEffect(() => {
-    void refresh();
+    refresh();
 
-    return engine?.subscribe(() => {
-      void refresh();
-    });
+    return engine?.subscribe(refresh);
   }, [engine, refresh]);
 
   if (!agent) {

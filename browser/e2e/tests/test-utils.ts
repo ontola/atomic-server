@@ -76,6 +76,58 @@ export async function openNotificationsInbox(page: Page) {
   await expect(page).toHaveURL(/\/app\/notifications/);
 }
 
+/** Personal drive via the same helper the app uses (not `store.getDrive()`). */
+export async function resolvePersonalDrive(page: Page): Promise<string> {
+  await page.waitForFunction(
+    () => !!window.__notificationsHelpers && !!window.store?.getAgent(),
+    undefined,
+    { timeout: 20_000 },
+  );
+
+  const personal = await page.evaluate(async () => {
+    const agent = window.store.getAgent();
+    const helpers = window.__notificationsHelpers;
+
+    if (!agent || !helpers) {
+      throw new Error('notifications helpers not ready');
+    }
+
+    return helpers.fetchPersonalDriveSubject(window.store, agent);
+  });
+
+  if (!personal) {
+    throw new Error('personal drive not resolved');
+  }
+
+  return personal;
+}
+
+/** Notifications folder via production `getOrCreateNotificationsFolder`. */
+export async function getOrCreateNotificationsFolder(
+  page: Page,
+  personalDrive: string,
+): Promise<string> {
+  await page.waitForFunction(() => !!window.__notificationsHelpers, undefined, {
+    timeout: 20_000,
+  });
+
+  return page.evaluate(async drive => {
+    const helpers = window.__notificationsHelpers;
+
+    if (!helpers) {
+      throw new Error('notifications helpers not ready');
+    }
+
+    return helpers.getOrCreateNotificationsFolder(window.store, drive);
+  }, personalDrive);
+}
+
+export async function waitForNotificationEngine(page: Page, timeout = 20_000) {
+  await page.waitForFunction(() => !!window.__notificationEngine, undefined, {
+    timeout,
+  });
+}
+
 /** Agent is in the JS store — not a sidebar label (dev-drive names it "Dev User"). */
 async function waitUntilSignedIn(page: Page) {
   await page.waitForFunction(
@@ -1706,8 +1758,7 @@ export async function openNewSubjectWindow(
   // resource's drive or live WS / presence stay on Personal.
   await page.waitForFunction(
     () =>
-      !!window.store &&
-      window.store.getSyncStatus?.().serverConnected === true,
+      !!window.store && window.store.getSyncStatus?.().serverConnected === true,
     undefined,
     { timeout: 20_000 },
   );

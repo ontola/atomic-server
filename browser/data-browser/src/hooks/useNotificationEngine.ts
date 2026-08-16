@@ -8,14 +8,11 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  CollectionBuilder,
   NotificationEngine,
   StoreEvents,
-  core,
-  fetchNotificationItemSubjectsFromServer,
+  listInboxNotificationSubjects,
   notifications,
   useStore,
-  visibleNotificationItems,
 } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
@@ -40,6 +37,23 @@ export function NotificationEngineProvider({
   const { agent } = useSettings();
   const { privateDrive: knownPrivateDrive } = usePrivateDrive();
   const [engine, setEngine] = useState<NotificationEngine | null>(null);
+
+  useEffect(() => {
+    const w = window as Window & {
+      __notificationsHelpers?: {
+        getOrCreateNotificationsFolder: typeof getOrCreateNotificationsFolder;
+        fetchPersonalDriveSubject: typeof fetchPrivateDriveSubject;
+      };
+    };
+    w.__notificationsHelpers = {
+      getOrCreateNotificationsFolder,
+      fetchPersonalDriveSubject: fetchPrivateDriveSubject,
+    };
+
+    return () => {
+      delete w.__notificationsHelpers;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,64 +165,16 @@ export function useUnreadNotificationCount(): number {
       return;
     }
 
-    const seen = new Set<string>();
+    const personalDrive =
+      (await fetchPrivateDriveSubject(store, agent)) ?? knownPrivateDrive;
+    const subjects = await listInboxNotificationSubjects(store, personalDrive);
     let n = 0;
 
-    const consider = (subject: string) => {
-      if (seen.has(subject)) {
-        return;
-      }
-
-      seen.add(subject);
+    for (const subject of subjects) {
       const res = store.getResourceLoading(subject);
-
-      if (res.get(notifications.properties.dismissed) === true) {
-        return;
-      }
 
       if (res.get(notifications.properties.notificationRead) !== true) {
         n += 1;
-      }
-    };
-
-    for (const res of visibleNotificationItems(store)) {
-      consider(res.subject);
-    }
-
-    const personalDrive =
-      (await fetchPrivateDriveSubject(store, agent)) ?? knownPrivateDrive;
-
-    if (personalDrive) {
-      try {
-        const collection = await new CollectionBuilder(store)
-          .setDrive(personalDrive)
-          .setProperty(core.properties.isA)
-          .setValue(notifications.classes.notificationItem)
-          .setPageSize(100)
-          .buildAndFetch();
-
-        for (let i = 0; i < collection.totalMembers; i++) {
-          const subject = await collection.getMemberWithIndex(i);
-
-          if (subject) {
-            consider(subject);
-          }
-        }
-      } catch {
-        // Keep the in-memory count if the index query is still empty.
-      }
-
-      try {
-        const fromServer = await fetchNotificationItemSubjectsFromServer(
-          store,
-          personalDrive,
-        );
-
-        for (const subject of fromServer) {
-          consider(subject);
-        }
-      } catch {
-        // Offline — badge stays at the in-memory count.
       }
     }
 

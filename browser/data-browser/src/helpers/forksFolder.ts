@@ -1,4 +1,5 @@
-import { CollectionBuilder, core, dataBrowser, type Store } from '@tomic/react';
+import type { Store } from '@tomic/react';
+import { getOrCreateFolderByLocalId } from './folderByLocalId';
 
 /** Well-known id of the per-drive Forks folder, resolved via `localId`. */
 const FORKS_LOCAL_ID = 'forks';
@@ -16,35 +17,9 @@ export async function getOrCreateForksFolder(
   store: Store,
   drive: string,
 ): Promise<string> {
-  const collection = await new CollectionBuilder(store)
-    .setDrive(drive)
-    .setProperty(core.properties.localId)
-    .setValue(FORKS_LOCAL_ID)
-    .setPageSize(1)
-    .buildAndFetch();
-
-  // `getMemberWithIndex` throws when the collection is empty, which is exactly
-  // the first-use case, so check the count before asking for a member.
-  if (collection.totalMembers > 0) {
-    const existing = await collection.getMemberWithIndex(0);
-
-    if (existing) {
-      return existing;
-    }
-  }
-
-  const folder = await store.newResource({
-    parent: drive,
-    isA: dataBrowser.classes.folder,
-    propVals: {
-      [core.properties.name]: 'Forks',
-      [core.properties.localId]: FORKS_LOCAL_ID,
-      [core.properties.description]:
-        'Work in progress. Resources here are visible to people who can write to this drive, and are published by moving them somewhere publicly readable.',
-    },
+  return getOrCreateFolderByLocalId(store, drive, FORKS_LOCAL_ID, {
+    name: 'Forks',
+    description:
+      'Work in progress. Resources here are visible to people who can write to this drive, and are published by moving them somewhere publicly readable.',
   });
-
-  await folder.save();
-
-  return folder.subject;
 }

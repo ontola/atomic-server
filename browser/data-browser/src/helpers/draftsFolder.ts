@@ -1,4 +1,5 @@
-import { CollectionBuilder, core, dataBrowser, type Store } from '@tomic/react';
+import type { Store } from '@tomic/react';
+import { getOrCreateFolderByLocalId } from './folderByLocalId';
 
 /** Well-known id of the per-drive Drafts folder, resolved via `localId`. */
 const DRAFTS_LOCAL_ID = 'drafts';
@@ -21,35 +22,9 @@ export async function getOrCreateDraftsFolder(
   store: Store,
   drive: string,
 ): Promise<string> {
-  const collection = await new CollectionBuilder(store)
-    .setDrive(drive)
-    .setProperty(core.properties.localId)
-    .setValue(DRAFTS_LOCAL_ID)
-    .setPageSize(1)
-    .buildAndFetch();
-
-  // `getMemberWithIndex` throws when the collection is empty, which is exactly
-  // the first-use case, so check the count before asking for a member.
-  if (collection.totalMembers > 0) {
-    const existing = await collection.getMemberWithIndex(0);
-
-    if (existing) {
-      return existing;
-    }
-  }
-
-  const folder = await store.newResource({
-    parent: drive,
-    isA: dataBrowser.classes.folder,
-    propVals: {
-      [core.properties.name]: 'Drafts',
-      [core.properties.localId]: DRAFTS_LOCAL_ID,
-      [core.properties.description]:
-        'Unpublished new content. Resources here are visible to people who can write to this drive; publish one by moving it somewhere publicly readable.',
-    },
+  return getOrCreateFolderByLocalId(store, drive, DRAFTS_LOCAL_ID, {
+    name: 'Drafts',
+    description:
+      'Unpublished new content. Resources here are visible to people who can write to this drive; publish one by moving it somewhere publicly readable.',
   });
-
-  await folder.save();
-
-  return folder.subject;
 }
