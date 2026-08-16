@@ -35,21 +35,31 @@ key under a master key it keeps in the login keychain — the item named
 "Atomic Server WebCrypto Master Key". Reading it requires a keychain ACL match
 against the app's code signature.
 
-A local `cargo tauri build` produces an **ad-hoc, linker-signed** binary
-(`"signingIdentity": null`), whose code identity is a hash of the binary
-itself. So there is no stable identity for the ACL to trust: macOS re-asks, and
-"Always Allow" is void as soon as you rebuild.
+An **ad-hoc, linker-signed** binary has no stable identity for that ACL to
+trust — its code identity is a hash of the binary itself, so macOS re-asks and
+"Always Allow" is void as soon as you relink. Hence `signingIdentity` in
+`tauri.conf.json`: bundles are signed with the Developer ID certificate, whose
+requirement (identifier plus team `Q9WPWRTU7G`) survives rebuilds, version
+bumps and reinstalls. One "Always Allow" then holds forever, for users on every
+update as much as for us.
 
-To stop the prompts locally, sign with a stable identity. A self-signed
-certificate is enough — create one in Keychain Access (*Certificate
-Assistant → Create a Certificate*, type "Code Signing"), then:
+Without that certificate in your keychain, `cargo tauri build` fails with `no
+identity found`. Override with codesign's ad-hoc identity:
 
 ```sh
-APPLE_SIGNING_IDENTITY="My Local Code Signing" cargo tauri build
+APPLE_SIGNING_IDENTITY=- cargo tauri build
 ```
 
-Click "Always Allow" once and it holds across rebuilds. Release builds want a
-real Developer ID certificate, which they need for notarization anyway.
+`APPLE_SIGNING_IDENTITY` takes precedence over the config value, which is also
+how `tauri-release.yml` feeds in the certificate from repository secrets, and
+how its secret-less runs fall back to ad-hoc.
+
+`cargo tauri dev` is a different story: it never bundles, so tauri never signs
+it, and the watcher relinks on every source change. Signing cannot help there.
+Silence those prompts by opening Keychain Access, finding *atomic-server-tauri
+WebCrypto Master Key* and setting its Access Control to "Allow all
+applications" — acceptable for a dev item on your own machine, not something to
+suggest to a user.
 
 ## Limitations
 
