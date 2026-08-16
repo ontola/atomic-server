@@ -881,6 +881,14 @@ fn register_live_peer(
         let mut agent = agent;
         let mut drive_cache: std::collections::HashMap<String, bool> =
             std::collections::HashMap::new();
+        // Whether this peer has ever sent a KEEPALIVE. Older builds do not, and
+        // silence from them means nothing — tearing the link down on a timeout
+        // would turn every working idle connection to an older peer into a
+        // 35-second reconnect loop. Observed for real against a peer that had
+        // not been upgraded yet: 10 teardowns in as many minutes, each followed
+        // by a full reconnect. So the timeout only becomes a liveness signal
+        // once the peer has shown it speaks it.
+        let mut peer_sends_keepalives = false;
         loop {
             // Silence is treated as death, not idleness. A half-open link is
             // otherwise invisible: this side keeps believing it is connected,
@@ -908,13 +916,23 @@ fn register_live_peer(
                     );
                     break;
                 }
-                Err(_) => {
+                Err(_) if peer_sends_keepalives => {
                     tracing::info!(
                         "[live] no traffic from {} for {:?} — treating the link as dead",
                         &read_peer_id[..read_peer_id.len().min(12)],
                         super::protocol::LIVENESS_TIMEOUT
                     );
                     break;
+                }
+                Err(_) => {
+                    // Never heard a keepalive from this peer, so its silence
+                    // carries no information. Keep waiting rather than
+                    // manufacture a disconnect.
+                    tracing::debug!(
+                        "[live] {} is quiet and sends no keepalives — not assuming it is dead",
+                        &read_peer_id[..read_peer_id.len().min(12)]
+                    );
+                    continue;
                 }
             };
             // Same "no proven identity → tight budget" rule as the accept-side
@@ -944,6 +962,7 @@ fn register_live_peer(
             // Keepalive: nothing to do. Receiving it already did the job —
             // it reset the liveness timeout above.
             if buf[0] == super::protocol::tag::KEEPALIVE {
+                peer_sends_keepalives = true;
                 continue;
             }
 
