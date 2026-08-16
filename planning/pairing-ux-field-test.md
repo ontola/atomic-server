@@ -550,6 +550,37 @@ sent and the client stores it in a way the table's cell does not read.
 
 Related to M9b: both are a peer's changes reaching an open page only partly.
 
+### M11 — The desktop app never retries once its embedded server is up (open)
+
+The desktop app and its embedded server start together, and the webview is ready
+first. Any fetch issued in that window fails, and the app settles on:
+
+> Could not reach the server
+> `Offline: resource not available locally. Reconnect to fetch.`
+
+It then stays there. Measured: the server bound at 16:23:40 and answered `HTTP
+200 in 1.2ms`, while the webview still reported the error screen two minutes
+later. Nothing re-fetches; the only way out is the Retry button.
+
+Surfaced constantly during this session because `cargo tauri dev` watches
+`desktop/`, `server/` **and** `lib/`, so every Rust edit rebuilds and restarts
+the app — but the packaged app has the same shape, and a cold start on a slow
+machine lands a user on a dead-end error for a resource that is about to be
+available.
+
+The wording compounds it. "Offline" and "Reconnect to fetch" describe a network
+that is gone. The machine is fine, the server is fine, and the resource is on
+disk — it simply was not listening yet at the instant the page asked. Someone
+reading this checks their wifi.
+
+Two things to separate when fixing: the app needs a retry with backoff once a
+connection is established (this is boot ordering, not connectivity), and the
+message should not claim to know the network is down when what it observed was
+one failed request.
+
+Same family as M8 and the false-offline work earlier in this note: a transient
+condition recorded as a permanent verdict.
+
 ### P1 — Proposal: show discovered-but-unpaired nodes on the Sync page
 
 The Sync page shows two lists, and neither is discovery:
