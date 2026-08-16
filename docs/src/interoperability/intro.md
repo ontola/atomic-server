@@ -17,6 +17,7 @@ This section will discuss how Atomic Data differs from or is similar to various 
 
 * [Solid](solid.md): A set of specifications that has many similarities with Atomic Data
 * [IPFS](ipfs.md): Content-based addressing to prevent 404s and centralization
+* [Git](git.md): Export a drive as a git repository (readable backup / interchange). Not a sync transport.
 
 ## Database paradigms
 

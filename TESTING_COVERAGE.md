@@ -113,6 +113,18 @@ Both matter because `iroh_transport` holds the router and node identity in
 
 ---
 
+## Drive export (git)
+
+| Flow | Where | Gap |
+|---|---|---|
+| Snapshot export of folder / document / file / bookmark to a git repo | `lib/src/git_export.rs` | no CLI, no desktop UI |
+| Markdown extraction from ProseMirror / `documentContent` | `lib/src/loro.rs` | TipTap-only marks flatten |
+| Lossy re-import mints new DIDs | `git_export.rs` `reimport_mints_a_new_drive_with_the_same_tree` | DID-preserving import not built |
+| Atomic commit history → git commits | — | not built (Level 1 in `planning/drive-as-git.md`) |
+| Two-way git watch / GitHub PR merge | — | rejected as a sync transport |
+
+---
+
 ## Blind spots
 
 Ordered by how much they would hurt.
