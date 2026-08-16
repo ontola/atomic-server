@@ -98,34 +98,104 @@ export async function grantAccessAgent(
   }
 }
 
+/** What a revocation actually managed to do. */
+export interface RevokeReport {
+  /** Targets this key was removed from, confirmed by re-reading the ACL. */
+  revoked: string[];
+  /** Targets checked that did not grant this key in the first place. */
+  untouched: string[];
+  /** Targets still granting this key, and why. ACCESS PERSISTS on these. */
+  failed: { target: string; reason: string }[];
+}
+
 /**
  * Remove an issued agent from the given targets' ACLs and mark its profile
  * revoked. The Agent resource is kept — old commits still need the public key.
+ *
+ * Returns what it managed to do rather than succeeding silently. A revoke that
+ * quietly leaves access behind is worse than one that fails loudly: the user
+ * reads "Key revoked", stops worrying, and the secret still opens their
+ * workspaces. So every target is verified by re-reading its ACL after the
+ * save, an unreachable target is reported instead of aborting the rest, and
+ * the profile is only marked revoked when nothing was left behind.
+ *
+ * Note the ceiling on what this can promise: `targets` is supplied by the
+ * caller, and grants live on each workspace rather than on the key. A grant on
+ * a workspace outside that list survives and cannot be seen from here — the
+ * caller must pass every target it knows of, and say what it checked.
  */
 export async function revokeAccessAgent(
   store: Store,
   agentSubject: string,
   targets: string[],
-): Promise<void> {
+): Promise<RevokeReport> {
+  const report: RevokeReport = { revoked: [], untouched: [], failed: [] };
+
   for (const target of targets) {
-    const resource = await store.getResource(target);
-    await removeFromRights(resource, core.properties.read, agentSubject);
-    await removeFromRights(resource, core.properties.write, agentSubject);
-    await resource.save();
+    try {
+      const resource = await store.getResource(target);
+
+      if (resource.error) {
+        throw resource.error;
+      }
+
+      if (!grantsAgent(resource, agentSubject)) {
+        report.untouched.push(target);
+        continue;
+      }
+
+      await removeFromRights(resource, core.properties.read, agentSubject);
+      await removeFromRights(resource, core.properties.write, agentSubject);
+      await resource.save();
+
+      // Confirm rather than assume: a save can be rejected by rights or fail
+      // to reach the server, and the in-memory resource would still look
+      // edited.
+      const after = await store.getResource(target);
+
+      if (after.error || grantsAgent(after, agentSubject)) {
+        throw new Error('the workspace still grants this key after saving');
+      }
+
+      report.revoked.push(target);
+    } catch (e) {
+      report.failed.push({
+        target,
+        reason: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
 
-  const agentResource = await store.getResource(agentSubject);
-  const name = (
-    agentResource.get(core.properties.name) as string | undefined
-  )?.trim();
+  // Only claim the key is dead when it is. A "(revoked)" label on a key that
+  // still opens a workspace is exactly the lie this function exists to avoid.
+  if (report.failed.length === 0) {
+    const agentResource = await store.getResource(agentSubject);
+    const name = (
+      agentResource.get(core.properties.name) as string | undefined
+    )?.trim();
 
-  if (name && !isRevokedAccessAgentName(name)) {
-    await agentResource.set(
-      core.properties.name,
-      `${name}${REVOKED_NAME_SUFFIX}`,
-    );
-    await agentResource.save();
+    if (name && !isRevokedAccessAgentName(name)) {
+      await agentResource.set(
+        core.properties.name,
+        `${name}${REVOKED_NAME_SUFFIX}`,
+      );
+      await agentResource.save();
+    }
   }
+
+  return report;
+}
+
+/** Whether `resource` currently lists `agentSubject` in read or write. */
+function grantsAgent(
+  resource: Awaited<ReturnType<Store['getResource']>>,
+  agentSubject: string,
+): boolean {
+  return [core.properties.read, core.properties.write].some(property =>
+    ((resource.get(property) as string[] | undefined) ?? []).includes(
+      agentSubject,
+    ),
+  );
 }
 
 export function isRevokedAccessAgentName(name: string): boolean {

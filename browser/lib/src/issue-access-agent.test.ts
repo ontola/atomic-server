@@ -141,3 +141,92 @@ describe('grantAccessAgent and revokeAccessAgent', () => {
     expect(isRevokedAccessAgentName('Raycast')).toBe(false);
   });
 });
+
+describe('revokeAccessAgent reports what it actually did', () => {
+  it('does not claim success while a workspace still grants the key', async () => {
+    const { store, agentDID } = await testStore();
+    const reachable = await createWorkspace(store, agentDID, 'Notes');
+    const issued = await issueAccessAgent(store, {
+      name: 'Raycast',
+      write: true,
+      targets: [reachable.subject],
+    });
+
+    // A workspace this device cannot load — the shape of a drive on a server
+    // that is down, or one the session no longer has rights to read.
+    const unreachable = 'did:ad:workspace-that-cannot-be-loaded';
+
+    const report = await revokeAccessAgent(store, issued.subject, [
+      reachable.subject,
+      unreachable,
+    ]);
+
+    expect(report.revoked).toEqual([reachable.subject]);
+    expect(report.failed.map(f => f.target)).toEqual([unreachable]);
+
+    // The key must NOT be labelled revoked while a target was left unchecked:
+    // the label is what the user trusts when they stop worrying about it.
+    const agentResource = await store.getResource(issued.subject);
+    expect(
+      isRevokedAccessAgentName(
+        (agentResource.get(core.properties.name) as string) ?? '',
+      ),
+    ).toBe(false);
+  });
+
+  it('marks the key revoked once every target is confirmed clear', async () => {
+    const { store, agentDID } = await testStore();
+    const one = await createWorkspace(store, agentDID, 'Notes');
+    const two = await createWorkspace(store, agentDID, 'Projects');
+    const issued = await issueAccessAgent(store, {
+      name: 'Raycast',
+      write: true,
+      targets: [one.subject, two.subject],
+    });
+
+    const report = await revokeAccessAgent(store, issued.subject, [
+      one.subject,
+      two.subject,
+    ]);
+
+    expect(report.failed).toEqual([]);
+    expect(report.revoked.sort()).toEqual([one.subject, two.subject].sort());
+
+    for (const drive of [one, two]) {
+      const after = await store.getResource(drive.subject);
+      expect(after.getSubjects(core.properties.read)).not.toContain(
+        issued.subject,
+      );
+      expect(after.getSubjects(core.properties.write)).not.toContain(
+        issued.subject,
+      );
+    }
+
+    const agentResource = await store.getResource(issued.subject);
+    expect(
+      isRevokedAccessAgentName(
+        (agentResource.get(core.properties.name) as string) ?? '',
+      ),
+    ).toBe(true);
+  });
+
+  it('reports a target that never granted the key as untouched', async () => {
+    const { store, agentDID } = await testStore();
+    const granted = await createWorkspace(store, agentDID, 'Notes');
+    const other = await createWorkspace(store, agentDID, 'Unrelated');
+    const issued = await issueAccessAgent(store, {
+      name: 'Raycast',
+      write: false,
+      targets: [granted.subject],
+    });
+
+    const report = await revokeAccessAgent(store, issued.subject, [
+      granted.subject,
+      other.subject,
+    ]);
+
+    expect(report.revoked).toEqual([granted.subject]);
+    expect(report.untouched).toEqual([other.subject]);
+    expect(report.failed).toEqual([]);
+  });
+});

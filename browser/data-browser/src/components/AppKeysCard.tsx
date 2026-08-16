@@ -211,9 +211,24 @@ function AppKeyRow({
     setBusy(true);
 
     try {
-      await revokeAccessAgent(store, subject, workspaces);
+      const report = await revokeAccessAgent(store, subject, workspaces);
       setAclEpoch(n => n + 1);
-      toast.success('Key revoked');
+
+      if (report.failed.length > 0) {
+        // Never report a revoke that left access behind as done — the whole
+        // point of the button is that the secret stops working.
+        toast.error(
+          `Still has access to ${report.failed.length} of ${workspaces.length} workspaces — could not revoke: ${report.failed
+            .map(f => f.reason)
+            .join('; ')}`,
+        );
+      } else {
+        toast.success(
+          `Key revoked — checked ${workspaces.length} workspace${
+            workspaces.length === 1 ? '' : 's'
+          }`,
+        );
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
