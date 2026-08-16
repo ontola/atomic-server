@@ -182,7 +182,15 @@ pub async fn parse_json_ad_string(
             // signature-derived subject. Reserve those subjects first so the
             // real import can resolve forward references and cycles between
             // local IDs (ontologies are a common example).
-            let reserved_subjects = reserve_did_import_subjects(&arr, store, parse_opts).await?;
+            let mut reserved_subjects =
+                reserve_did_import_subjects(&arr, store, parse_opts).await?;
+            // Callers (e.g. git import) may pre-seed the importer drive's
+            // localId so `parent: "drive"` resolves to the existing drive DID.
+            for (local_id, subject) in &parse_opts.reserved_local_ids {
+                reserved_subjects
+                    .entry(local_id.clone())
+                    .or_insert_with(|| subject.clone());
+            }
             // Property KEYS may be localIds (imported property definitions
             // used as keys on other resources) — rewrite those up front.
             // VALUES are resolved lazily in `try_to_subject`, which only runs
