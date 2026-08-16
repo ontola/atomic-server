@@ -1179,6 +1179,13 @@ impl Db {
         let mut agent = self.create_agent(Some(agent_name)).await?;
         self.set_default_agent(agent.clone());
         let drive = self.ensure_personal_drive().await?;
+        // `create_drive` — which this used to call — set the active drive as
+        // part of creating one. `ensure_personal_drive` deliberately does not:
+        // materializing a home is not the same act as switching to it. Setup IS
+        // that act, so it records it here; without this every later call fails
+        // with "No drive set. Call setup() first."
+        self.set_active_drive(&drive)?;
+
         if let Ok(mut personal) = self.get_resource(&drive.as_str().into()).await {
             personal.set_unsafe(
                 urls::NAME.into(),
