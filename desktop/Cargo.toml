@@ -33,6 +33,11 @@ tauri-plugin-process = "2"
 # `body` it wins the race against this one and calls `shell.open`, which is
 # denied by our ACL and fails on Android with EACCES regardless.
 tauri-plugin-opener = "2"
+# Drives the running app over a WebSocket so an agent can open documents,
+# type, and read the DOM — used to test collaborative editing end to end
+# without a human at the keyboard. Registered only under `debug_assertions`
+# (see `lib.rs`), so it is compiled but inert in release builds.
+tauri-plugin-mcp-bridge = "0.12"
 tokio = { version = "1", features = ["rt", "sync", "time"] }
 
 # Mobile-only: the in-app QR scanner for device pairing. The Android WebView
