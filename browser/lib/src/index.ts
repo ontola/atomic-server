@@ -89,3 +89,4 @@ export {
   type PerfEvent,
   type PerfSnapshot,
 } from './perf-trace.js';
+export * from './child-order.js';

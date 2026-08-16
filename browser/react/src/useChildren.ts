@@ -1,4 +1,10 @@
-import { commits, core, dataBrowser, StoreEvents } from '@tomic/lib';
+import {
+  commits,
+  core,
+  dataBrowser,
+  orderChildren,
+  StoreEvents,
+} from '@tomic/lib';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCollection } from './useCollection.js';
 import { useStore } from './hooks.js';
@@ -59,8 +65,8 @@ export function useChildren(parentSubject: string | undefined): {
           // RESILIENT: a single child that fails to load (a fetch timeout /
           // transient error during the WS-reconnect race) must NOT reject the
           // whole `Promise.all` — that throws out of `extractMembers` and the
-          // sidebar goes fully empty. Keep the member with a fallback key
-          // (server creation-order index) instead.
+          // sidebar goes fully empty. Keep the member with no key instead;
+          // `orderChildren` holds it in server position.
           try {
             const resource = await store.getResource(subject);
             const explicit = resource.get(dataBrowser.properties.sortOrder);
@@ -70,20 +76,20 @@ export function useChildren(parentSubject: string | undefined): {
                 ? explicit
                 : typeof createdAt === 'number'
                   ? createdAt
-                  : index;
+                  : undefined;
 
             return { subject, key, index };
           } catch {
-            return { subject, key: index, index };
+            return { subject, key: undefined, index };
           }
         }),
       );
 
-      keyed.sort((a, b) =>
-        a.key === b.key ? a.index - b.index : a.key - b.key,
-      );
-
-      return keyed.map(s => s.subject);
+      // Ordering lives in `@tomic/lib` (`orderChildren`) so it can be tested
+      // directly: this package has no test setup, and the rule it encodes —
+      // a member with neither `sortOrder` nor `createdAt` must not fall into
+      // the array-index number space — is the whole bug.
+      return orderChildren(keyed);
     },
     [store],
   );
