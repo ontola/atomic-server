@@ -74,9 +74,9 @@ Ship as an AAR (`dev.atomicdata:sdk`) for JVM + Android. JVM-only is enough
 to test the binding; Android needs `cargo-ndk` and rustls-platform-verifier
 JNI init (known pitfall from the Android build work).
 
-Same v1 exclusions as Python: no WS/Iroh, no blobs, no history. Sync waits
-until the shared `sdk` grows it, rather than each language inventing a
-session API.
+Same v1 exclusions as Python: no blobs, no history. Sync is not forbidden —
+it waits for the shared `sdk` to grow a `SyncSession` (WS or Iroh) rather
+than each language wrapping `peer_sync()` again. See `python-sdk.md`.
 
 ## What Kotlin adds that Python does not
 
