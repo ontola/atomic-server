@@ -85,6 +85,7 @@ pub mod expression;
 pub mod genesis;
 #[cfg(feature = "db")]
 pub mod git_export;
+pub mod git_md;
 pub mod hierarchy;
 pub mod history;
 #[doc(hidden)]

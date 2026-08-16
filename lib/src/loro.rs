@@ -729,22 +729,18 @@ impl AtomicLoroDoc {
 
     /// Document body as markdown for git / filesystem export.
     ///
-    /// Same sources as [`Self::extract_document_plain_text`], but headings,
-    /// lists, code, quotes and inline marks are kept. Lossy: TipTap-only marks
-    /// (colors, mentions) flatten. Empty when the doc has no body.
+    /// Prefers the loro-prosemirror `doc` tree, serialized with
+    /// [`crate::git_md`] so TipTap nodes (embeds, notes, mentions) survive a
+    /// round-trip. Falls back to a top-level `documentContent` text container.
     pub fn extract_document_markdown(&self) -> String {
-        let doc = self.doc();
-
-        if let Some(pm_map) = doc.try_get_map("doc") {
-            let json = loro_value_to_json(&pm_map.get_deep_value());
-            let markdown = extract_markdown_from_prosemirror_json(&json);
-            let trimmed = markdown.trim();
-            if !trimmed.is_empty() {
-                return format!("{trimmed}\n");
+        if let Some(json) = self.prosemirror_json() {
+            let markdown = crate::git_md::serialize(&json);
+            if !markdown.trim().is_empty() {
+                return markdown;
             }
         }
 
-        if let Some(text_container) = doc.try_get_text("documentContent") {
+        if let Some(text_container) = self.doc().try_get_text("documentContent") {
             let trimmed = text_container.to_string().trim().to_string();
             if !trimmed.is_empty() {
                 return format!("{trimmed}\n");
@@ -752,6 +748,36 @@ impl AtomicLoroDoc {
         }
 
         String::new()
+    }
+
+    /// Normalized ProseMirror JSON from the loro-prosemirror `doc` root.
+    pub fn prosemirror_json(&self) -> Option<serde_json::Value> {
+        let pm_map = self.doc().try_get_map("doc")?;
+        let json = loro_value_to_json(&pm_map.get_deep_value());
+        let normalized = crate::git_md::normalize_pm_json(&json);
+        if normalized.get("type").and_then(|t| t.as_str()) == Some("doc") {
+            Some(normalized)
+        } else {
+            Some(serde_json::json!({ "type": "doc", "content": [normalized] }))
+        }
+    }
+
+    /// Replace the loro-prosemirror `doc` tree from ProseMirror JSON.
+    pub fn set_prosemirror_doc(&self, json: &serde_json::Value) -> AtomicResult<()> {
+        let shape = crate::git_md::pm_to_loro_shape(json);
+        let map = self.doc().get_map("doc");
+        let keys: Vec<String> = {
+            let mut keys = Vec::new();
+            map.for_each(|key, _| keys.push(key.to_string()));
+            keys
+        };
+        for key in keys {
+            map.delete(&key)
+                .map_err(|e| format!("Loro doc map delete error: {e}"))?;
+        }
+        json_value_to_loro_map(&shape, &map)?;
+        self.commit();
+        Ok(())
     }
 
     /// Get all properties from the root map as a HashMap of LoroValues.
