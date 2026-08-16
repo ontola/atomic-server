@@ -263,6 +263,46 @@ where
         atomic_lib::sync::peer::set_device_name(&appstate.store, name);
     }
 
+    // Presence arriving from peers → the local websocket clients.
+    //
+    // Deliberately its own channel rather than `db_events`: presence must never
+    // be written, and every consumer of a DbEvent writes or indexes. Cursor
+    // positions merged into the CRDT would persist and sync forever.
+    //
+    // `addr: None` marks the update as relayed, which is what stops the
+    // broadcaster sending it straight back out to peers — presence arrives at
+    // cursor frequency, so an echo here would saturate the link far faster than
+    // resource changes could.
+    {
+        let store = appstate.store.clone();
+        let broadcaster = appstate.loro_sync_broadcaster.clone();
+        let mut rx = store.subscribe_ephemeral();
+        actix_web::rt::spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Ok(event) => {
+                        let subject = atomic_lib::Subject::from_raw(
+                            &event.drive,
+                            store.get_base_domain().as_deref(),
+                        );
+                        broadcaster.do_send(crate::actor_messages::LoroEphemeralUpdate {
+                            subject,
+                            update: String::from_utf8_lossy(&event.payload).to_string(),
+                            addr: None,
+                        });
+                    }
+                    // Presence is the first thing worth dropping under load, so
+                    // lagging is expected and not an error: skip what was
+                    // missed and carry on with the current cursors.
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::debug!("[presence] dropped {n} frames under load");
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+    }
+
     // Durable-flush tick. Per-commit writes use Durability::None (no fsync)
     // for throughput; this background flush makes them durable on a fixed
     // cadence (100ms), bounding crash data-loss to the interval while

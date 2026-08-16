@@ -405,6 +405,94 @@ pub fn encode_hello(name: &str) -> Vec<u8> {
     buf
 }
 
+/// Largest ephemeral payload accepted from a peer. Presence is cursor
+/// positions and selections, not documents — anything larger is a bug or an
+/// attempt to push real data down a channel that skips every rights check a
+/// write would face.
+pub const EPHEMERAL_MAX_PAYLOAD: usize = 64 * 1024;
+
+/// Encode an EPHEMERAL frame: `drive`, the agent it originated from, and an
+/// opaque payload (a Loro `EphemeralStore` update).
+///
+/// The agent travels with the frame because a peer link is node-to-node while
+/// presence is per-agent: one node may relay several agents' cursors, and the
+/// receiver needs to know whose it is — to attribute it, and to decide whether
+/// it may be shown at all.
+pub fn encode_ephemeral(drive: &str, agent: &str, payload: &[u8]) -> Vec<u8> {
+    let drive_bytes = drive.as_bytes();
+    let agent_bytes = agent.as_bytes();
+    let drive_len = drive_bytes.len().min(u16::MAX as usize);
+    let agent_len = agent_bytes.len().min(u16::MAX as usize);
+
+    let mut buf = Vec::with_capacity(1 + 2 + drive_len + 2 + agent_len + payload.len());
+    buf.push(tag::EPHEMERAL);
+    buf.extend_from_slice(&(drive_len as u16).to_be_bytes());
+    buf.extend_from_slice(&drive_bytes[..drive_len]);
+    buf.extend_from_slice(&(agent_len as u16).to_be_bytes());
+    buf.extend_from_slice(&agent_bytes[..agent_len]);
+    buf.extend_from_slice(payload);
+    buf
+}
+
+/// A decoded EPHEMERAL frame. Never persisted — see the read loop in `peer.rs`.
+#[derive(Debug, Clone)]
+pub struct DecodedEphemeral {
+    pub drive: String,
+    pub agent: String,
+    pub payload: Vec<u8>,
+}
+
+/// Decode the payload of an EPHEMERAL frame (slice *after* the tag byte).
+///
+/// Returns `None` on truncation, invalid UTF-8, or a payload beyond
+/// [`EPHEMERAL_MAX_PAYLOAD`]. Fail closed: presence is the least important
+/// thing on the link, so a malformed frame is dropped rather than recovered.
+pub fn decode_ephemeral(data: &[u8]) -> Option<DecodedEphemeral> {
+    if data.len() < 2 {
+        return None;
+    }
+
+    let drive_len = u16::from_be_bytes([data[0], data[1]]) as usize;
+    let mut cursor = 2;
+
+    if data.len() < cursor + drive_len {
+        return None;
+    }
+
+    let drive = std::str::from_utf8(&data[cursor..cursor + drive_len])
+        .ok()?
+        .to_string();
+    cursor += drive_len;
+
+    if data.len() < cursor + 2 {
+        return None;
+    }
+
+    let agent_len = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+    cursor += 2;
+
+    if data.len() < cursor + agent_len {
+        return None;
+    }
+
+    let agent = std::str::from_utf8(&data[cursor..cursor + agent_len])
+        .ok()?
+        .to_string();
+    cursor += agent_len;
+
+    let payload = data[cursor..].to_vec();
+
+    if payload.len() > EPHEMERAL_MAX_PAYLOAD {
+        return None;
+    }
+
+    Some(DecodedEphemeral {
+        drive,
+        agent,
+        payload,
+    })
+}
+
 /// Decode the payload of a HELLO frame (slice *after* the tag byte).
 ///
 /// Returns `None` if the frame is malformed (truncated, invalid UTF-8, or
@@ -965,5 +1053,47 @@ mod tests {
         let encoded = encode_sub("did:ad:drive:abc");
         assert_eq!(encoded[0], tag::SUB);
         assert_eq!(&encoded[1..], b"did:ad:drive:abc");
+    }
+}
+
+#[cfg(test)]
+mod ephemeral_frame_tests {
+    use super::*;
+
+    #[test]
+    fn an_ephemeral_frame_round_trips() {
+        let payload = vec![0xAA, 0xBB, 0x00, 0xFF];
+        let frame = encode_ephemeral("did:ad:drive123", "did:ad:agent:abc", &payload);
+
+        assert_eq!(frame[0], tag::EPHEMERAL);
+
+        let decoded = decode_ephemeral(&frame[1..]).expect("must decode");
+        assert_eq!(decoded.drive, "did:ad:drive123");
+        assert_eq!(decoded.agent, "did:ad:agent:abc");
+        assert_eq!(decoded.payload, payload);
+    }
+
+    /// Presence skips every check a write faces, so an oversized payload is
+    /// either a bug or an attempt to move real data down it. Drop, don't parse.
+    #[test]
+    fn an_oversized_payload_is_refused() {
+        let payload = vec![0u8; EPHEMERAL_MAX_PAYLOAD + 1];
+        let frame = encode_ephemeral("did:ad:drive123", "did:ad:agent:abc", &payload);
+
+        assert!(decode_ephemeral(&frame[1..]).is_none());
+    }
+
+    /// Fail closed on anything malformed: presence is the least important
+    /// thing on the link, so a truncated frame is dropped rather than guessed.
+    #[test]
+    fn a_truncated_frame_is_refused() {
+        let frame = encode_ephemeral("did:ad:drive123", "did:ad:agent:abc", &[1, 2, 3]);
+
+        for cut in 1..frame.len().min(24) {
+            let _ = decode_ephemeral(&frame[1..cut]);
+        }
+
+        assert!(decode_ephemeral(&[]).is_none());
+        assert!(decode_ephemeral(&[0xFF]).is_none());
     }
 }

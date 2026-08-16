@@ -7017,17 +7017,14 @@ msgstr ""
 #~ msgid "Synced{0} — sent {1}, received {2}=======>>>>>>> Stashed changes"
 #~ msgstr "=======>>>>>>> Stashed changes"
 
-#: src/chunks/AI/AISidebar.tsx
-msgid "Close AI Sidebar<<<<<<< Updated upstream"
-msgstr ""
+#~ msgid "Close AI Sidebar<<<<<<< Updated upstream"
+#~ msgstr ""
 
-#: src/chunks/AI/MCPConfigTab.tsx
-msgid "custom header======="
-msgstr ""
+#~ msgid "custom header======="
+#~ msgstr ""
 
-#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
-msgid "Send>>>>>>> Stashed changes"
-msgstr ""
+#~ msgid "Send>>>>>>> Stashed changes"
+#~ msgstr ""
 
 #: src/helpers/managed/enrollment.test.ts
 msgid "Internal Server Error======="
@@ -7036,20 +7033,20 @@ msgstr ""
 #~ msgid "App>>>>>>> Stashed changes"
 #~ msgstr ""
 
-#: src/chunks/AI/MessageContextItem.tsx
 #: src/chunks/DashboardPage/DashboardBlock.tsx
-#: src/chunks/EmojiInput/EmojiInput.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
-#: src/chunks/TablePage/DerivedColumnHeading.tsx
-#: src/chunks/TablePage/DerivedColumnHeading.tsx
-#: src/chunks/TablePage/QuickAddDialog.tsx
-#: src/chunks/TablePage/RowActionHeading.tsx
-#: src/chunks/TablePage/RowActionHeading.tsx
-#: src/chunks/TablePage/TableHeadingMenu.tsx
-#: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Remove======="
 msgstr ""
 
-#: src/chunks/AI/AgentConfig.tsx
-msgid "Don't auto compact conversation>>>>>>> Stashed changes"
+#~ msgid "Don't auto compact conversation>>>>>>> Stashed changes"
+#~ msgstr ""
+ation>>>>>>> Stashed changes"
+#~ msgstr ""
 msgstr ""
+
+#~ msgid "Don't auto compact conversation>>>>>>> Stashed changes"
+#~ msgstr ""
+msgstr ""
+
+#~ msgid "Don't auto compact conversation>>>>>>> Stashed changes"
+#~ msgstr ""

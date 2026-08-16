@@ -7051,17 +7051,14 @@ msgstr "Synced{0} — sent {1}, received {2}"
 #~ msgid "Synced{0} — sent {1}, received {2}=======>>>>>>> Stashed changes"
 #~ msgstr "Synced{0} — sent {1}, received {2}=======>>>>>>> Stashed changes"
 
-#: src/chunks/AI/AISidebar.tsx
-msgid "Close AI Sidebar<<<<<<< Updated upstream"
-msgstr "Close AI Sidebar<<<<<<< Updated upstream"
+#~ msgid "Close AI Sidebar<<<<<<< Updated upstream"
+#~ msgstr "Close AI Sidebar<<<<<<< Updated upstream"
 
-#: src/chunks/AI/MCPConfigTab.tsx
-msgid "custom header======="
-msgstr "custom header======="
+#~ msgid "custom header======="
+#~ msgstr "custom header======="
 
-#: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
-msgid "Send>>>>>>> Stashed changes"
-msgstr "Send>>>>>>> Stashed changes"
+#~ msgid "Send>>>>>>> Stashed changes"
+#~ msgstr "Send>>>>>>> Stashed changes"
 
 #: src/helpers/managed/enrollment.test.ts
 msgid "Internal Server Error======="
@@ -7070,20 +7067,15 @@ msgstr "Internal Server Error======="
 #~ msgid "App>>>>>>> Stashed changes"
 #~ msgstr "App>>>>>>> Stashed changes"
 
-#: src/chunks/AI/MessageContextItem.tsx
 #: src/chunks/DashboardPage/DashboardBlock.tsx
-#: src/chunks/EmojiInput/EmojiInput.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
-#: src/chunks/TablePage/DerivedColumnHeading.tsx
-#: src/chunks/TablePage/DerivedColumnHeading.tsx
-#: src/chunks/TablePage/QuickAddDialog.tsx
-#: src/chunks/TablePage/RowActionHeading.tsx
-#: src/chunks/TablePage/RowActionHeading.tsx
-#: src/chunks/TablePage/TableHeadingMenu.tsx
-#: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Remove======="
 msgstr "Remove======="
 
-#: src/chunks/AI/AgentConfig.tsx
-msgid "Don't auto compact conversation>>>>>>> Stashed changes"
-msgstr "Don't auto compact conversation>>>>>>> Stashed changes"
+#~ msgid "Don't auto compact conversation>>>>>>> Stashed changes"
+#~ msgstr "Don't auto compact conversation>>>>>>> Stashed changes"
+mpact conversation>>>>>>> Stashed changes"
+>>>>> Stashed changes"
+#~ msgstr "Don't auto compact conversation>>>>>>> Stashed changes"
+>>>>> Stashed changes"
+#~ msgstr "Don't auto compact conversation>>>>>>> Stashed changes"

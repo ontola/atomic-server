@@ -529,6 +529,29 @@ fn send_live_update_wire_msg(msg: Vec<u8>) {
     send_live_update_wire_msg_except(msg, None);
 }
 
+/// Push presence to connected live peers.
+///
+/// `skip_peer` is the peer it arrived from, if this is a relay rather than a
+/// local update — the same echo suppression `UPDATE` frames use, which matters
+/// more here: presence arrives at cursor frequency, so a loop would saturate
+/// the link far faster than resource changes ever could.
+///
+/// Nothing is stored and nothing is retried. Presence is the least important
+/// thing on the link: if the channel is full it is dropped, on the grounds that
+/// a stale cursor is better than a delayed document.
+pub fn broadcast_ephemeral(drive: &str, agent: &str, payload: &[u8], skip_peer: Option<&str>) {
+    if payload.is_empty() || payload.len() > super::protocol::EPHEMERAL_MAX_PAYLOAD {
+        return;
+    }
+
+    let frame = super::protocol::encode_ephemeral(drive, agent, payload);
+    let len = frame.len() as u32;
+    let mut msg = Vec::with_capacity(4 + frame.len());
+    msg.extend_from_slice(&len.to_be_bytes());
+    msg.extend_from_slice(&frame);
+    send_live_update_wire_msg_except(msg, skip_peer);
+}
+
 /// Push an UPDATE frame to all connected live peers immediately (e.g. after a stroke save).
 pub fn broadcast_live_update(subject_key: &str, loro_bytes: &[u8]) {
     if loro_bytes.is_empty() || super::ws_apply::is_importing() {
@@ -884,6 +907,50 @@ fn register_live_peer(
             }
 
             if buf.is_empty() {
+                continue;
+            }
+
+            // Presence. Handled before every other frame type and returned
+            // from immediately, because the one thing it must not do is reach
+            // the store: the paths below all end in a write, and cursor
+            // positions merged into the CRDT would persist and sync forever.
+            //
+            // Gated on read, not write. Presence discloses who is looking at
+            // what, so a peer that cannot read the drive must not receive or
+            // inject it — but it authors nothing, so the write checks below do
+            // not apply.
+            if buf[0] == super::protocol::tag::EPHEMERAL {
+                if let Some(decoded) = super::protocol::decode_ephemeral(&buf[1..]) {
+                    let drive_subj = crate::Subject::from_raw(
+                        &decoded.drive,
+                        store.get_base_domain().as_deref(),
+                    );
+
+                    let may_see = match store.get_resource(&drive_subj).await {
+                        Ok(drive_resource) => {
+                            crate::hierarchy::check_read(&store, &drive_resource, &agent)
+                                .await
+                                .is_ok()
+                        }
+                        // A drive we do not hold has nothing to disclose.
+                        Err(_) => false,
+                    };
+
+                    if may_see {
+                        store.publish_ephemeral(crate::db::EphemeralEvent {
+                            drive: decoded.drive,
+                            agent: decoded.agent,
+                            payload: decoded.payload,
+                            from_peer: read_peer_id.clone(),
+                        });
+                    } else {
+                        tracing::debug!(
+                            "[live] dropped presence for a drive {} may not read",
+                            &read_peer_id[..read_peer_id.len().min(12)]
+                        );
+                    }
+                }
+
                 continue;
             }
 

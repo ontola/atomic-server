@@ -70,6 +70,25 @@ use self::{
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
 
+/// Presence received from a peer over the sync link.
+///
+/// Separate from [`DbEvent`] because it must never be written: it exists only
+/// to be handed to whatever is currently rendering (websocket clients), then
+/// forgotten. The originating agent travels with it because a peer link is
+/// node-to-node while presence is per-agent — one node may relay several
+/// people's cursors.
+#[derive(Debug, Clone)]
+pub struct EphemeralEvent {
+    /// The drive this presence belongs to.
+    pub drive: String,
+    /// The agent whose presence this is.
+    pub agent: String,
+    /// Opaque Loro `EphemeralStore` update.
+    pub payload: Vec<u8>,
+    /// The peer that relayed it, so it is not sent straight back.
+    pub from_peer: String,
+}
+
 /// Event emitted when a resource is created, updated, or deleted.
 #[derive(Debug, Clone)]
 pub enum DbEvent {
@@ -248,6 +267,14 @@ pub struct Db {
     on_commit: Option<Arc<HandleCommit>>,
     /// Broadcast channel for all resource mutations.
     db_events: tokio::sync::broadcast::Sender<DbEvent>,
+    /// Presence arriving from a peer. Deliberately NOT `db_events`: presence is
+    /// ephemeral and must never reach the store, and every consumer of
+    /// `DbEvent` writes or indexes. Cursor positions merged into the CRDT would
+    /// be persisted and synced forever.
+    ///
+    /// Small buffer on purpose — presence is worth dropping under load, unlike
+    /// a resource change. A lagging subscriber loses cursors, not data.
+    ephemeral_events: tokio::sync::broadcast::Sender<EphemeralEvent>,
     /// In-memory authoritative map of watched query filters, keyed by drive
     /// prefix (e.g. `"https://example.com"` for HTTP drives, the DID for
     /// DID-form drives) and routed by property within each drive (see
@@ -370,6 +397,7 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             base_domain,
@@ -404,6 +432,7 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             base_domain,
@@ -436,6 +465,7 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             base_domain,
@@ -529,6 +559,7 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             base_domain,
@@ -678,6 +709,7 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             base_domain,
@@ -1750,6 +1782,17 @@ impl Db {
     /// Subscribe to all DB events (changes, deletions).
     pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<DbEvent> {
         self.db_events.subscribe()
+    }
+
+    /// Presence arriving from peers. See [`EphemeralEvent`].
+    pub fn subscribe_ephemeral(&self) -> tokio::sync::broadcast::Receiver<EphemeralEvent> {
+        self.ephemeral_events.subscribe()
+    }
+
+    /// Publish presence received from a peer. Send failure means nobody is
+    /// listening (no websocket clients on this node) — expected, not an error.
+    pub fn publish_ephemeral(&self, event: EphemeralEvent) {
+        let _ = self.ephemeral_events.send(event);
     }
 
     /// Finds resource by Subject, return PropVals HashMap

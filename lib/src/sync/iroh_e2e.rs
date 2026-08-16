@@ -232,6 +232,42 @@ async fn e2e_bidirectional_bulk_sync() {
 }
 
 /// After bulk sync, an edit on A reaches B via the live stream.
+/// Presence crosses a peer link — and never reaches the store.
+///
+/// Both halves matter. Before this, `EPHEMERAL` (0x40) was a reserved tag with
+/// no sender and no handler, so two machines syncing the same drive could not
+/// see each other's cursors at all. And presence must stay out of the store:
+/// every other frame on this link ends in a write, and cursor positions merged
+/// into the CRDT would be persisted and synced forever.
+#[tokio::test]
+async fn e2e_presence_crosses_the_link_without_being_stored() {
+    let pair = setup_pair("e2e_presence").await;
+
+    sync_b_from_a(&pair).await;
+    wait_for_live_peers(1, std::time::Duration::from_secs(3)).await;
+
+    let before = pair.db_b.all_resources(true).count();
+    let mut presence = pair.db_b.subscribe_ephemeral();
+
+    let payload = b"cursor-position-blob".to_vec();
+    crate::sync::peer::broadcast_ephemeral(&pair.drive, "did:ad:agent:someone", &payload, None);
+
+    let received = tokio::time::timeout(std::time::Duration::from_secs(5), presence.recv())
+        .await
+        .expect("presence must arrive before the timeout")
+        .expect("the presence channel must stay open");
+
+    assert_eq!(received.drive, pair.drive);
+    assert_eq!(received.agent, "did:ad:agent:someone");
+    assert_eq!(received.payload, payload);
+
+    let after = pair.db_b.all_resources(true).count();
+    assert_eq!(
+        before, after,
+        "presence must not create resources — it is not data"
+    );
+}
+
 #[tokio::test]
 async fn e2e_stroke_append_after_sync() {
     let pair = setup_pair("e2e_stroke").await;

@@ -191,6 +191,21 @@ impl Handler<LoroEphemeralUpdate> for LoroSyncBroadcaster {
     type Result = ();
 
     fn handle(&mut self, msg: LoroEphemeralUpdate, _ctx: &mut Context<Self>) {
+        // Relay to peers before the local fan-out below, and only for presence
+        // that originated here (`addr` is the websocket it came from; a frame
+        // we relayed IN from a peer has none, and must not be sent back out or
+        // two nodes trade cursors forever).
+        if msg.addr.is_some() {
+            if let Ok(agent) = self.store.get_default_agent() {
+                atomic_lib::sync::peer::broadcast_ephemeral(
+                    msg.subject.as_str(),
+                    &agent.subject.to_string(),
+                    msg.update.as_bytes(),
+                    None,
+                );
+            }
+        }
+
         let Some(subscribers) = self.subscriptions.get(&msg.subject) else {
             return;
         };

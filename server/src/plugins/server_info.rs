@@ -137,6 +137,20 @@ fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
                     propvals.insert(urls::PEER_LAST_SEEN.into(), Value::Timestamp(last_synced));
                 }
 
+                // What the last sync moved, each way. A timestamp plus
+                // "Connected" still cannot distinguish a link carrying data
+                // from one being refused every subject; these can.
+                if let Some(sent) = last_sent {
+                    propvals.insert(urls::PEER_LAST_SENT.into(), Value::Integer(sent as i64));
+                }
+
+                if let Some(received) = last_received {
+                    propvals.insert(
+                        urls::PEER_LAST_RECEIVED.into(),
+                        Value::Integer(received as i64),
+                    );
+                }
+
                 atomic_lib::values::SubResource::Nested(propvals)
             },
         )
