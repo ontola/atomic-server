@@ -171,6 +171,7 @@ the document itself.
 | [`demo-experience.md`](./demo-experience.md) | v1 and v2 demo workspace. |
 | [`local-search.md`](./local-search.md) | KV inverted index in `atomic_lib` (redb/OPFS/sled): BM25 + prefix + 1-edit prefix-fuzzy + PropValSub filters. Hosted `/search` is the same engine; Tantivy is gone. |
 | [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) | Onboarding, managed-node detection, enrollment, heartbeat and replication pull. Verified against the SaaS `LocalProcessNodeProvider` only; the sync-path admission gate and reaper are not built. |
+| [`python-sdk.md`](./python-sdk.md) | Python bindings over `atomic_lib` via PyO3 (local redb, read/write/query). |
 | [`completed/commit-fanout-drive-isolation.md`](./completed/commit-fanout-drive-isolation.md) | Drive-scoped WS commit fan-out + server-side drive safety net. |
 | [`completed/cleanup-update-encoding.md`](./completed/cleanup-update-encoding.md) | Unified `decode_update`; TS client exports compact Loro deltas. |
 | [`completed/sign-at-drain.md`](./completed/sign-at-drain.md) | One signed commit per dirty subject per drain pass. |

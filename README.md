@@ -19,6 +19,7 @@ This repo also includes:
 - [`atomic_lib`](lib/README.md) Rust library.
 - [`atomic-cli`](cli/README.md) terminal client.
 - [`flutter`](/flutter) a Dart / Flutter client for Atomic Data, plus AtomicCanvas, a collaborative infinite drawing canvas that syncs peer-to-peer between devices.
+- [`python`](/python) local-first Python SDK (`atomic_data`) wrapping `atomic_lib` via PyO3.
 - [`docs`](docs/README.md) documentation / specification for Atomic Data ([docs.atomicdata.dev](https://docs.atomicdata.dev)).
 
 _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
@@ -48,7 +49,7 @@ _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 - 📲  **Invite and sharing system** with [Atomic Invites](https://docs.atomicdata.dev/invitations.html)
 - 🌐  **Embedded server** with support for HTTP / HTTPS / HTTP2.0 (TLS) and Built-in LetsEncrypt handshake.
 - 📱  **Runs on mobile**: `atomic_lib` compiles into Flutter apps through [flutter_rust_bridge](https://github.com/fzyzcjy/flutter_rust_bridge), so phones get the same local-first store, signing and peer sync as the browser, not a thin REST wrapper. See [`/flutter`](/flutter).
-- 📚  **Libraries**: [Javascript / Typescript](https://www.npmjs.com/package/@tomic/lib), [React](https://www.npmjs.com/package/@tomic/react), [Svelte](https://www.npmjs.com/package/@tomic/svelte), [Rust](https://crates.io/crates/atomic-lib), and a [Dart / Flutter client](/flutter/lib/atomic)
+- 📚  **Libraries**: [Javascript / Typescript](https://www.npmjs.com/package/@tomic/lib), [React](https://www.npmjs.com/package/@tomic/react), [Svelte](https://www.npmjs.com/package/@tomic/svelte), [Rust](https://crates.io/crates/atomic-lib), a [Dart / Flutter client](/flutter/lib/atomic), and a [Python SDK](/python) (`atomic_data`)
 
 https://user-images.githubusercontent.com/2183313/139728539-d69b899f-6f9b-44cb-a1b7-bbab68beac0c.mp4
 
