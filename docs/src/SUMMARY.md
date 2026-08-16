@@ -98,6 +98,7 @@
   - [Solid](interoperability/solid.md)
   - [JSON](interoperability/json.md)
   - [IPFS](interoperability/ipfs.md)
+  - [Git](interoperability/git.md)
   - [SQL](interoperability/sql.md)
   - [Graph Databases](interoperability/graph-database.md)
 - [Potential use cases](usecases/intro.md)
