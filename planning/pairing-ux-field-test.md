@@ -460,6 +460,182 @@ attacker-influenced on a shared network. It must read as a suggestion to act
 on, never as something already connected, and the node ID must stay visible so
 a user on an untrusted network can verify what they are pairing with.
 
+### M9 — Live sync echoes forever between two idle nodes (fixed)
+
+With both nodes live and nobody typing, they traded **355 frames in 58 seconds**
+(~8.6KB each, ~50KB/s):
+
+```
+267 x imported update for did:ad:agent:QmfpRIB    <- the account's agent resource
+ 87 x imported update for did:ad:W2Q3m_ZUK0cz2    <- the drive
+```
+
+The live read loop held the importing flag — which is what stops the push loop
+re-broadcasting — only when the imported subject was *this node's own agent*.
+The comment above it described the ping-pong exactly; the guard just covered one
+case of it. So the device whose agent it is stays quiet, the peer for whom it is
+a stranger's agent re-sends it, and a drive (nobody's own agent) echoes on both
+sides. Suppression now wraps every live import.
+
+**Better fix, not taken here:** `DbEvent` already carries `source_id`. The push
+loop could skip only the peer an update came from, instead of globally muting
+all broadcasts for the duration of an import — a global `AtomicBool` means one
+task's import silences another task's local edit. That needs `persist_update` to
+accept a source and the push loop to read it.
+
+### M10 — Peer-synced resources never reach the search index (fixed)
+
+49 resources arrived over Iroh and produced **zero** `INDEXING` events on the
+receiving node. Search indexing hangs off the CommitMonitor
+(`server/src/commit_monitor.rs:828`), which watches commits flowing through the
+server; peer sync writes straight to the store via `add_resource_opts`.
+
+The *query* index is updated (`update_index: true`), so drive listings and
+collections do show the data — it is only search that cannot see it. The failure
+is invisible until someone reaches for search and concludes their data did not
+arrive.
+
+### M11 — Sync status is decorative (fixed)
+
+Three sightings in one session, all pointing the same way — the status is
+computed from something other than what happened:
+
+- **"In sync"** on a peer that was being refused every subject (9 refusals).
+- **"Synced 1 resource"** when 49 had just landed.
+- The paired-device card shows no last-sync time, no volume, and no node ID,
+  while the server card beside it shows all three. A user cannot tell a working
+  link from a broken one.
+
+Same family as the revoke button in PR 1275, which reported success while
+leaving access behind. Worth treating as one problem: a status that is not
+derived from the last actual transfer will eventually lie in the dangerous
+direction.
+
+**Fixed:** `/iroh-sync` returns both directions, so the toast reads "sent 49,
+received 1" rather than "Synced 1 resource". The device card gained last-sync
+time, the node ID, and what the last sync moved each way — `KnownPeer` now keeps
+`last_sent` / `last_received` beside `last_synced`. Deliberately per-sync rather
+than a lifetime total: a running counter has to survive re-pairs, store resets
+and partial syncs, and becomes fiction the first time one is missed.
+
+### P2 — Nodes relay signed writes, so relaying should not require write access (serve side done)
+
+Getting two of the owner's own nodes to sync required pasting one node's agent
+DID into the other's share dialog and granting it write. Nothing asked for it,
+nothing said it was missing, and until it was done the sending node refused all
+49 resources while the UI showed "In sync".
+
+The owner's objection is the right one: **the two nodes are not writing, they
+are passing along writes the owner already signed.**
+
+**The receive side already agrees with that.** A relayed commit is validated
+against its own signer, not the peer that carried it
+(`lib/src/sync/engine.rs:428`):
+
+```rust
+validate_rights: true,
+validate_for_agent: Some(signer.to_string()),
+```
+
+Safety comes from the commit's signature and the author's rights. Also requiring
+the *relaying* peer to hold write access adds nothing — it checks the courier's
+credentials instead of the letter's seal. Drop it and rely on what already runs.
+
+**The serve side is different and should not be waved through.** Handing
+resources to a peer IS disclosure; without a check, anyone who dials could pull a
+private drive. But the authorisation should be **the owner's pairing intent**,
+not an ACL entry naming the peer's agent. Pairing is already an explicit,
+authenticated act by the owner.
+
+The codebase has exactly this idea, in one direction only: `may_accept_drive_write`
+relaxes via `trust_owned` when `initiated_by_us` — "I dialled you, so I will take
+your relayed writes to drives I own". There is no mirror on the serve path: "I
+paired with you, so you may replicate drives I own." Adding that symmetry removes
+the manual grant.
+
+So: two changes, not a new subsystem.
+
+1. **Receive** — stop requiring the relaying peer to have write rights.
+2. **Serve** — authorise replication by pairing, not by the peer agent's ACL.
+
+**Done: (2).** `collect_readable_snapshots` takes the dialled peer's node id; a
+peer the owner deliberately paired with is served what THIS node can read, and
+nothing more. `known_peers` is a sound basis because only the initiator records a
+peer — the accept side deliberately does not ("the local user never chose to sync
+with this peer"), so the list means "nodes this user dialled".
+
+**NOT done: (1),** and deliberately. See P3: the peer wire carries raw CRDT
+state, not signed commits, so the peer's identity is the only credential
+available. Removing that check would let any node that dials you inject arbitrary
+state.
+
+Neither needs delegation tokens or issued keys. Note also that a node never needs
+the owner's private key to relay: commits are signed client-side and travel
+intact; a node signs only its own AUTH frame, with its own key (`peer.rs:1259`,
+`protocol.rs:156`). Any design that has a node holding the owner's secret — as
+`adoptAgentOnDevice` does today — is a convenience, not a requirement.
+
+### P3 — What signed peer writes would cost, and what they would buy
+
+Follows P2. The premise there — "nodes are not writing, they are passing along
+signed writes" — does not describe the wire today:
+
+```rust
+pub struct SyncPushEntry {
+    pub subject: String,
+    pub loro_bytes: Vec<u8>,
+}
+```
+
+Bulk `SYNC_PUSH` and live `UPDATE` both carry **raw merged CRDT state**: no
+signature, no author. The signed-commit validation
+(`engine.rs`, `validate_for_agent: Some(signer)`) is on the commit path — HTTP
+`/commit`, WS `COMMIT` — not the peer path. So a peer is not a courier with
+sealed letters; its identity is the only credential on the wire, which is why
+`may_accept_drive_write` checks the peer's own rights.
+
+**What already exists.** Loro changes carry a `peer_id` for the authoring peer
+(`lib/src/loro.rs:52`), and a Commit signs its `loro_update` bytes — so on the
+commit path, ops ARE attributable to an agent. Two things are missing: peer sync
+exports a *merged snapshot*, so original signatures do not travel with it, and
+nothing binds a Loro `peer_id` to an agent.
+
+**Level 1 — exchange commits instead of state.** Smallest conceptually: the
+receiver already knows how to validate a commit against its signer's rights, so
+the relaying peer would need no rights at all. Costs: history grows unboundedly,
+onboarding becomes replay-the-log rather than take-a-snapshot, and **compaction
+destroys provenance** — collapsing history into a snapshot discards the very
+signatures that authorised it. This trades away the main advantage of
+state-based sync.
+
+**Level 2 — bind `peer_id` to an agent.** A signed statement that a Loro PeerID
+belongs to an agent; receivers attribute incoming changes by `peer_id` and check
+that agent's rights. Keeps snapshot sync, much cheaper than level 1. Limit: it
+constrains what a node may author *as itself*, and does not preserve authorship
+through merges.
+
+**Level 3 — signatures preserved per op-range across merges.** Byzantine-tolerant
+CRDT territory. Loro does not do this natively; research-adjacent rather than an
+afternoon's work.
+
+**Does it increase security?** Yes, in one specific way. Today an admitted peer
+can inject ARBITRARY state into any drive it is admitted for, including content
+that appears authored by someone else — trust is per-node and coarse. With
+authorship-bound writes a relay can only pass along validly-authored changes; it
+cannot fabricate another user's edits. That is the difference between trusting
+the machine and trusting the author, and it matters for multi-user drives,
+untrusted hosting, and the blast radius of one compromised device.
+
+**What it would NOT fix:** confidentiality (reads still need authorisation or
+end-to-end encryption), withholding (a relay can always drop data), rollback to
+stale state (needs signed version vectors), availability.
+
+**Where that leaves the current design.** Sound *if you only pair nodes you
+trust* — which is what P2 implemented: pairing as a deliberate choice by the
+owner, standing in for a hand-written ACL grant. Fair for one person's laptop
+and their Pi. Weaker than it looks the moment you sync with someone else's
+server, which is the case worth designing for before it exists.
+
 ## Fixed between 0.41.0-beta.2 (Jul 25) and 2026-08-15 — do not chase
 
 Recorded because the first draft of this note treated them as live, and
