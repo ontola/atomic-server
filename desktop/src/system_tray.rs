@@ -3,7 +3,7 @@ use tauri::{
   tray::TrayIconBuilder,
   App, Manager,
 };
-use tauri_plugin_shell::ShellExt;
+use tauri_plugin_opener::OpenerExt;
 
 /// The app's ONLY tray icon.
 ///
@@ -37,15 +37,15 @@ pub fn setup(app: &mut App, config: &atomic_server_lib::config::Config) -> tauri
         }
       }
       "browser" => {
-        app.shell().open(&origin, None).unwrap();
+        app.opener().open_url(&origin, None::<&str>).unwrap();
       }
       "config" => {
-        app.shell().open(&config_dir, None).unwrap();
+        app.opener().open_path(&config_dir, None::<&str>).unwrap();
       }
       "docs" => {
         app
-          .shell()
-          .open("https://docs.atomicdata.dev", None)
+          .opener()
+          .open_url("https://docs.atomicdata.dev", None::<&str>)
           .unwrap();
       }
       _ => {}

@@ -25,11 +25,13 @@ clap = "4"
 serde_json = "1.0"
 tauri = { version = "2", features = ["tray-icon", "image-png", "devtools"] }
 tauri-plugin-deep-link = "2"
-tauri-plugin-shell = "2"
 tauri-plugin-process = "2"
-# Opening a URL in the system browser. `shell.open` is the v1 way and fails on
-# Android with EACCES; this is the supported one, and it is what an <a
+# Opening a URL in the system browser: the tray menu, and what an <a
 # target="_blank"> ultimately needs in a webview with nowhere to put a tab.
+# Deliberately the only plugin here that opens things — `tauri-plugin-shell`
+# also injects a click handler for `_blank` links, and because it listens on
+# `body` it wins the race against this one and calls `shell.open`, which is
+# denied by our ACL and fails on Android with EACCES regardless.
 tauri-plugin-opener = "2"
 tokio = { version = "1", features = ["rt", "sync", "time"] }
 
