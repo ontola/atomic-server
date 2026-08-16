@@ -2,9 +2,10 @@
 
 ## Status
 
-Decision, not built. Same *product* scope as the Python v1 SDK
-([`python-sdk.md`](./python-sdk.md)): local read / write / query / persist
-over `atomic_lib`. Different *binding*.
+v1 implemented for JVM: local read / write / query / persist plus Iroh P2P.
+Crate lives in `ffi/` (`atomic-ffi`), Kotlin package `dev.atomicdata`.
+
+Android AAR / `cargo-ndk` and the Binder host are **not** built.
 
 ## Decision
 
@@ -20,64 +21,62 @@ Kotlin is the first language where UniFFI is the obvious tool:
   engine**. FRB cannot be that entry point.
 - [`virtual-drive.md`](./virtual-drive.md) needs the same Swift + Kotlin
   pair for File Provider / DocumentsProvider.
-- One UDL gives Swift for free when iOS wants the same v1 surface.
+- One UniFFI surface gives Swift for free when iOS wants the same v1 API.
 
 Do **not** copy `python/src/*.rs` into a `kotlin/` crate and re-wrap `Db`.
-That is how the binding zoo grows. The Python v1 API is the *shape* to
-expose, not the code to duplicate.
+`ffi/` is that shared surface. Python keeps its PyO3 skin.
 
-## Shared Rust surface first
+## Shared Rust surface
 
-Before (or as the first commit of) the Kotlin work, extract the generic
-store API into one Rust module that every binding calls:
+`ffi/` is a small crate (excluded from the Cargo workspace) that every
+non-Python / non-Flutter binding should call:
 
 ```text
-atomic_lib::sdk  (or a small atomic-ffi crate)
+atomic-ffi
 
   open / in_memory
   setup / load_agent / create_agent
   create_drive / list_drives
   create / get / query / delete / flush
-  Resource: get/set/save/destroy / to_json
+  Resource: get/set/save/destroy_resource / to_json
+  start_peer / sync_with / announce / wait_for
 ```
 
 Callers:
 
 | Binding | Today | Target |
 | --- | --- | --- |
-| Python | PyO3 talks to `Db` directly | keep PyO3; point it at `sdk` when convenient |
-| Flutter | FRB `simple.rs` mixes store + canvas | store group calls `sdk`; canvas stays FRB |
-| Kotlin / Swift | none | UniFFI over `sdk` |
+| Python | PyO3 talks to `Db` directly | keep PyO3; point it at `ffi`/`sdk` when convenient |
+| Flutter | FRB `simple.rs` mixes store + canvas | store group can call the same helpers; canvas stays FRB |
+| Kotlin / Swift | UniFFI over `ffi/` (Kotlin JVM done) | Swift generate from the same crate |
 | Android host | none | same UniFFI, then Binder in Kotlin |
 | WASM | `ClientDb` | later; OPFS constraints differ |
 
 This is a thin slice of [`atomic-lib-runtime.md`](./atomic-lib-runtime.md)
-`AtomicNode` — enough for local CRUD, not events / outbox / transport yet.
-
-`flutter/rust/src/api/simple.rs` already listed the groups. Steal those, drop
-canvas/history/peer from v1.
+`AtomicNode` — enough for local CRUD + Iroh, not events / outbox / WS yet.
 
 ## v1 Kotlin product scope (match Python)
 
 ```kotlin
 val store = Store.open(path)          // or Store.inMemory()
 val setup = store.setup("Ada")
-val note = store.create(Urls.PLAIN_TEXT, name = "Hello", parent = setup.driveSubject)
+val note = store.create(Urls.PLAIN_TEXT, "Hello", setup.driveSubject, mapOf("description" to "offline"))
 note.set(Urls.DESCRIPTION, "offline")
 note.save()
-val got = store.get(note.subject)
-store.query(parent = setup.driveSubject)
+val got = store.get(note.subject())
+store.query(setup.driveSubject, null, null, null, null, 0u)
 store.flush()
+val node = store.startPeer()
+// other.syncWith(node, null)
 ```
 
-Ship as an AAR (`dev.atomicdata:sdk`) for JVM + Android. JVM-only is enough
-to test the binding; Android needs `cargo-ndk` and rustls-platform-verifier
-JNI init (known pitfall from the Android build work).
+`Resource.destroyResource()` deletes the resource. UniFFI already uses
+`destroy()` for FFI handle teardown, so the method cannot be named
+`destroy()` in Kotlin.
 
 Iroh belongs in Kotlin v1 the same way it does in Python — local CRUD
-without P2P is not the product. Wrap the same `start_peer` / `sync_with` /
-live-save surface. A later `SyncSession` can sit on top; do not ship Kotlin
-without a way for two devices to converge.
+without P2P is not the product. `startPeer` is process-global (one Iroh
+`Router` / NodeID per OS process). Two nodes = two processes.
 
 ## What Kotlin adds that Python does not
 
@@ -90,29 +89,24 @@ without a way for two devices to converge.
 - **redb exclusive lock.** Same as Python: one process owns the file. On
   Android that is the elected host, not "whoever imported the AAR".
 
-## Layout (when built)
+## Layout
 
 ```text
-ffi/                    # or kotlin/ — excluded from the Cargo workspace
-  Cargo.toml            # uniffi, atomic_lib (db-redb)
-  src/lib.rs            # thin UniFFI scaffolding
-  src/atomic.udl        # the sdk surface
-  android/              # Gradle AAR
-  tests/                # JVM unit tests against in-memory store
+ffi/                    # excluded from the Cargo workspace
+  Cargo.toml            # uniffi, atomic_lib (db-redb, iroh, discovery)
+  src/lib.rs            # UniFFI scaffolding
+  src/{store,resource,peer,convert}.rs
+  uniffi.toml           # package_name = dev.atomicdata
+  kotlin/               # Gradle JVM + generated bindings + JUnit
+  generate-kotlin.sh
 ```
 
-Exclude from the workspace like `python/` and `flutter/rust`.
+## Still open
 
-## Order
-
-1. Extract `atomic_lib::sdk` (or `atomic-ffi`) with in-process Rust tests.
-   No new language yet. This is the useful prerequisite.
-2. UniFFI + JVM tests for the same cases as `python/tests/`.
-3. Android AAR + `cargo-ndk`.
-4. Only then Binder host/client (`android-data-reuse.md`).
-
-Skipping step 1 and writing Kotlin-only wrappers around `Db` will have to
-be rewritten when Swift, the Android host, and `AtomicNode` show up.
+1. Android AAR + `cargo-ndk` + rustls-platform-verifier JNI init.
+2. Swift generate from the same crate.
+3. Binder host/client (`android-data-reuse.md`).
+4. Point Python at a shared `atomic_lib::sdk` (optional; PyO3 stays).
 
 ## Not this work
 

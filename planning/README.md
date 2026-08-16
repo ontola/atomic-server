@@ -126,7 +126,6 @@ Design intent, kept for direction. None has a line of code behind it.
 | --- | --- |
 | [`reticulum-sync.md`](./reticulum-sync.md) | Atomic sync protocol over Reticulum. |
 | [`nextgraph-interop.md`](./nextgraph-interop.md) | `did:ng:` via a scheme-routed Store backend. PR #1360 (optional NextGraph mirror) is open. |
-| [`kotlin-sdk.md`](./kotlin-sdk.md) | **Decision.** Kotlin v1 matches Python's local CRUD scope via UniFFI over a shared Rust surface. |
 | [`llm-wasm-gui-plugins.md`](./llm-wasm-gui-plugins.md) | **Proposal.** Browser-built JS/TS apps with scoped Loro docs. |
 | [`personal-information-suite.md`](./personal-information-suite.md) | Contacts, calendar, email. |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
@@ -173,7 +172,8 @@ the document itself.
 | [`demo-experience.md`](./demo-experience.md) | v1 and v2 demo workspace. |
 | [`local-search.md`](./local-search.md) | KV inverted index in `atomic_lib` (redb/OPFS/sled): BM25 + prefix + 1-edit prefix-fuzzy + PropValSub filters. Hosted `/search` is the same engine; Tantivy is gone. |
 | [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) | Onboarding, managed-node detection, enrollment, heartbeat and replication pull. Verified against the SaaS `LocalProcessNodeProvider` only; the sync-path admission gate and reaper are not built. |
-| [`python-sdk.md`](./python-sdk.md) | Python bindings over `atomic_lib` via PyO3 (local redb, read/write/query). |
+| [`python-sdk.md`](./python-sdk.md) | Python bindings over `atomic_lib` via PyO3 (local redb, Iroh). |
+| [`kotlin-sdk.md`](./kotlin-sdk.md) | UniFFI crate `ffi/` + Kotlin package `dev.atomicdata`. Same local redb + Iroh surface as Python. Android AAR still open. |
 | [`completed/commit-fanout-drive-isolation.md`](./completed/commit-fanout-drive-isolation.md) | Drive-scoped WS commit fan-out + server-side drive safety net. |
 | [`completed/cleanup-update-encoding.md`](./completed/cleanup-update-encoding.md) | Unified `decode_update`; TS client exports compact Loro deltas. |
 | [`completed/sign-at-drain.md`](./completed/sign-at-drain.md) | One signed commit per dirty subject per drain pass. |
