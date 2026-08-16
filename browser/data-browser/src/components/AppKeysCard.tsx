@@ -108,7 +108,7 @@ export function AppKeysCard() {
                 showCreate();
               }}
               disabled={!folderSubject}
-              data-test='create-app-key'
+              data-testid='create-app-key'
             >
               <FaPlus />
               Create key
@@ -267,7 +267,7 @@ function AppKeyRow({
               alert
               onClick={() => setConfirmRevoke(true)}
               disabled={busy}
-              data-test='revoke-app-key'
+              data-testid='revoke-app-key'
             >
               Revoke
             </Button>
@@ -367,7 +367,7 @@ function CreateKeyForm({
                 onChange={e => setName(e.target.value)}
                 placeholder='Raycast'
                 autoFocus
-                data-test='app-key-name'
+                data-testid='app-key-name'
               />
             </InputWrapper>
           </div>
@@ -425,7 +425,7 @@ function CreateKeyForm({
         <Button
           onClick={() => void handleCreate()}
           disabled={busy || !name.trim() || selected.length === 0}
-          data-test='app-key-create-confirm'
+          data-testid='app-key-create-confirm'
         >
           {busy ? 'Creating…' : 'Create key'}
         </Button>
@@ -535,7 +535,7 @@ function CreatedSecret({
         </Column>
       </Dialog.Content>
       <Dialog.Actions>
-        <Button onClick={onDone} data-test='app-key-secret-done'>
+        <Button onClick={onDone} data-testid='app-key-secret-done'>
           I have copied it
         </Button>
       </Dialog.Actions>

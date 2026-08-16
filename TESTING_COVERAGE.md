@@ -124,11 +124,16 @@ Mint a new agent, grant it drive-level rights, keep the signed-in session as you
 | Mint does not call `setAgent`; secret round-trips; read-only vs write ACL | `browser/lib/src/issue-access-agent.test.ts` |
 | Grant an existing key more workspaces; revoke removes ACL and marks the name | `browser/lib/src/issue-access-agent.test.ts` |
 
-### Flow — not covered
+### Flow — covered
+
+| Flow | Where |
+|---|---|
+| User Settings create → secret shown once → list row → still signed in → revoke | `browser/e2e/tests/app-keys.spec.ts` |
+
+### Not covered
 
 | Flow | Note |
 |---|---|
-| User Settings create → secret shown once → list row → revoke | UI only; helper tests catch the session-switch failure mode |
 | Last-used for read-only keys | Not built (needs auth-event writes; see the plan) |
 
 ---
