@@ -70,24 +70,30 @@ use self::{
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
 
-/// Presence received from a peer over the sync link.
+/// Live-collaboration state received from a peer over the sync link:
+/// presence, cursors, or the ops of an edit someone has not saved yet.
 ///
-/// Separate from [`DbEvent`] because it must never be written: it exists only
+/// Separate from [`DbEvent`] because none of it is written here: it exists only
 /// to be handed to whatever is currently rendering (websocket clients), then
-/// forgotten. The originating agent travels with it because a peer link is
-/// node-to-node while presence is per-agent — one node may relay several
-/// people's cursors.
+/// forgotten. Uncommitted ops become durable only if a local user saves the
+/// document they land in, which produces a signed commit under that user's own
+/// identity. The originating agent travels with it because a peer link is
+/// node-to-node while this state is per-agent — one node may relay several
+/// people's cursors and edits.
 #[derive(Debug, Clone)]
 pub struct EphemeralEvent {
-    /// Which ephemeral channel this belongs to — per-document Loro ephemeral,
-    /// or drive-scoped presence. They fan out to different subscribers, so the
-    /// distinction has to survive the trip. See `protocol::ephemeral_kind`.
+    /// Which channel this belongs to — per-document Loro ephemeral,
+    /// drive-scoped presence, or an edit in progress. They fan out to different
+    /// subscribers, so the distinction has to survive the trip. See
+    /// `protocol::ephemeral_kind`.
     pub kind: u8,
-    /// The drive this presence belongs to.
+    /// What the state is scoped to: the drive for presence, the resource for
+    /// the other two.
     pub drive: String,
-    /// The agent whose presence this is.
+    /// The agent this came from.
     pub agent: String,
-    /// Opaque Loro `EphemeralStore` update.
+    /// Opaque Loro update — `EphemeralStore` bytes for presence and cursors,
+    /// document ops for an edit in progress.
     pub payload: Vec<u8>,
     /// The peer that relayed it, so it is not sent straight back.
     pub from_peer: String,

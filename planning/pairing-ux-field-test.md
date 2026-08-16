@@ -420,6 +420,93 @@ tick, and the desktop goes through that same path.
 Either the outbox must persist content without the ClientDb on this platform, or
 the app must not claim local safety it does not have.
 
+### M9 — Cursors crossed the peer link but the text did not (fixed)
+
+Remote carets never appeared between the desktop and the HA node, and the
+receiving browser logged `The container does not exist in the doc` on every
+keystroke the other side typed.
+
+The transport was not the problem, which is what made this take a while. Frames
+were measured going both ways (190–200 bytes out, 371–531 in), HA rejected
+nothing, and the payload survives the trip intact — it is base64, so the
+`as_bytes()` / `from_utf8_lossy()` round-trip in the relay is lossless.
+
+The gap was that only *half* of a collaborative edit was crossing. Two separate
+client channels carry an edit, and they are easy to mistake for one:
+
+| client call | carries | crossed the link? |
+| --- | --- | --- |
+| `broadcastLoroEphemeralUpdate` | `CursorEphemeralStore` bytes — cursor positions | yes |
+| `broadcastLoroSyncUpdate` | `LoroDoc` ops — the actual characters | **no** |
+
+`broadcast_ephemeral` had exactly two callers, `Handler<LoroEphemeralUpdate>`
+and `Handler<PresenceUpdate>`. `Handler<LoroSyncUpdate>` fanned out to local
+websocket subscribers and stopped there. A caret pointing into text the
+receiving document has never heard of is exactly what Loro refuses to place.
+
+**Fixed** by relaying document ops too, as a third `ephemeral_kind` (`DOC`) on
+the existing frame rather than a new frame type. Two things differ from presence
+and are switched on the kind byte:
+
+- **Admission is on write, not read.** Presence discloses who is looking at
+  what and authors nothing, so read is enough. Uncommitted ops are somebody
+  else's characters appearing in a document; a peer with read access has no
+  business putting text in front of an editor as though it belonged there.
+- **A looser size ceiling** (1 MB vs 64 KB). A keystroke is tens of bytes but a
+  paste is one op, and the presence ceiling would drop exactly the edits most
+  worth relaying.
+
+Nothing is written to the store on receipt: relayed ops go to open editors and
+become durable only if a local user saves, which produces a signed commit under
+that user's own identity. Worth stating plainly, because it means a paired peer
+can put text in a document you have open, and your save signs it.
+
+### M9a — what the A/B actually showed, and what the first write-up got wrong
+
+The first version of this note said committed state "does cross on save", which
+implied a save would make an edit appear for the other user. It does not. A/B on
+one variable, same page instance on both sides, only the `DOC` relay toggled:
+
+| | relay on | relay off |
+| --- | --- | --- |
+| text in the peer's **store** | yes | **yes** (`imported update`, 190ms) |
+| text in the peer's **open editor** | yes, ~2.5s | **never** (still absent at 12s) |
+| caret renders | yes | yes |
+
+So a save puts the edit on the other node's disk and no further. The open page
+does not re-render — `ExternalChange` carries a Loro snapshot to subscribers,
+but it does not reach a live editor. Only a reload shows it. That the caret
+still rendered in the control run is what rules out a dropped websocket: the
+channel was up, and content specifically was not travelling it.
+
+This is a better fit for the reported symptoms than the original story. It is
+not a narrow race — live collaboration between two nodes did not work in an open
+window at all, in either direction. It is worth re-testing "table rows do not
+sync" against this: same shape (content on disk, not in the open page), so it
+may be the same root cause rather than an unrelated bug.
+
+### M9b — a client that misses one delta stops updating, silently (open)
+
+Found while confirming the fix, and not fixed by it. The live channel is
+deltas with no gap recovery. A client that misses one op — link down, or the
+control run above — queues every subsequent delta as pending, because their
+dependencies never arrive. The editor then silently stops updating: no error,
+no indicator, just a document that quietly stops being live.
+
+Measured: after the control run left the HA page one op behind, the next two
+relayed edits did not appear. A reload pulled a fresh snapshot and showed all of
+them, and live updates resumed immediately.
+
+So the earlier claim that "a dropped frame costs a moment of divergence, not the
+edit — the sender's next save pushes a full snapshot" is wrong for an editor
+that is already open. The snapshot reaches the store; the open editor stays
+stuck until someone reloads.
+
+Fixing it needs the receiver to notice a version gap and ask for a snapshot,
+rather than assuming deltas always arrive in order. The `SYNC_VV` handshake
+already does exactly this at connect time — it is the reconnect/gap case that
+has no equivalent.
+
 ### P1 — Proposal: show discovered-but-unpaired nodes on the Sync page
 
 The Sync page shows two lists, and neither is discovery:

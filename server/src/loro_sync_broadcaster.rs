@@ -166,14 +166,35 @@ impl Handler<LoroSyncUpdate> for LoroSyncBroadcaster {
             return;
         };
 
+        // No sender address means a peer relayed this in. There is no local
+        // connection to attribute it to and none to exclude from the fan-out;
+        // the sending node ran its own write check before relaying, and this
+        // one ran another when the frame arrived.
         let Some(addr) = &msg.addr else {
-            tracing::warn!("no addr in LoroSync update for {}", msg.subject);
+            for subscriber in subscribers {
+                subscriber.addr.do_send(msg.clone());
+            }
+
             return;
         };
 
         if !subscribers.iter().any(|s| s.addr == *addr && s.can_write) {
             tracing::warn!("not allowed to send LoroSync update to {}", msg.subject);
             return;
+        }
+
+        // Out to peers as well as to local subscribers, so an edit in progress
+        // reaches the other device rather than waiting for a save. Only local
+        // updates get here (the branch above returns early for relayed ones),
+        // so there is no echo to guard against.
+        if let Ok(agent) = self.store.get_default_agent() {
+            atomic_lib::sync::peer::broadcast_ephemeral(
+                atomic_lib::sync::protocol::ephemeral_kind::DOC,
+                msg.subject.as_str(),
+                &agent.subject.to_string(),
+                msg.update.as_bytes(),
+                None,
+            );
         }
 
         // Broadcast to all subscribers except the sender

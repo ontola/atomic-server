@@ -529,16 +529,19 @@ fn send_live_update_wire_msg(msg: Vec<u8>) {
     send_live_update_wire_msg_except(msg, None);
 }
 
-/// Push presence to connected live peers.
+/// Push live-collaboration state — presence, cursors, or the ops of an edit in
+/// progress — to connected live peers. `kind` says which; see
+/// `protocol::ephemeral_kind`.
 ///
 /// `skip_peer` is the peer it arrived from, if this is a relay rather than a
 /// local update — the same echo suppression `UPDATE` frames use, which matters
-/// more here: presence arrives at cursor frequency, so a loop would saturate
-/// the link far faster than resource changes ever could.
+/// more here: these arrive at keystroke frequency, so a loop would saturate the
+/// link far faster than resource changes ever could.
 ///
-/// Nothing is stored and nothing is retried. Presence is the least important
-/// thing on the link: if the channel is full it is dropped, on the grounds that
-/// a stale cursor is better than a delayed document.
+/// Nothing is stored and nothing is retried. If the channel is full the frame
+/// is dropped, on the grounds that a stale cursor is better than a delayed
+/// document — and that a dropped op costs a moment of divergence, which the
+/// sender's next save repairs with a full snapshot.
 pub fn broadcast_ephemeral(
     kind: u8,
     drive: &str,
@@ -546,7 +549,7 @@ pub fn broadcast_ephemeral(
     payload: &[u8],
     skip_peer: Option<&str>,
 ) {
-    if payload.is_empty() || payload.len() > super::protocol::EPHEMERAL_MAX_PAYLOAD {
+    if payload.is_empty() || payload.len() > super::protocol::max_payload_for_kind(kind) {
         return;
     }
 
@@ -972,33 +975,59 @@ fn register_live_peer(
                 continue;
             }
 
-            // Presence. Handled before every other frame type and returned
-            // from immediately, because the one thing it must not do is reach
-            // the store: the paths below all end in a write, and cursor
-            // positions merged into the CRDT would persist and sync forever.
+            // Live collaboration: presence, cursors, and the ops of an edit in
+            // progress. Handled before every other frame type and returned from
+            // immediately, because the one thing none of it may do is reach the
+            // store: the paths below all end in a write, and cursor positions
+            // merged into the CRDT would persist and sync forever. Uncommitted
+            // ops become durable only if a local user saves the document they
+            // land in, which produces a signed commit under that user's own
+            // identity.
             //
-            // Gated on read, not write. Presence discloses who is looking at
-            // what, so a peer that cannot read the drive must not receive or
-            // inject it — but it authors nothing, so the write checks below do
-            // not apply.
+            // Two different gates, because the kinds ask for different things.
+            // Presence and cursors disclose who is looking at what, so a peer
+            // that cannot read must not receive them — but they author nothing,
+            // so read is enough. Uncommitted ops are somebody else's characters
+            // appearing in a document, so those need write: a peer with read
+            // access has no business putting text in front of an editor as
+            // though it belonged there.
             if buf[0] == super::protocol::tag::EPHEMERAL {
                 if let Some(decoded) = super::protocol::decode_ephemeral(&buf[1..]) {
-                    let drive_subj = crate::Subject::from_raw(
+                    let scope_subj = crate::Subject::from_raw(
                         &decoded.drive,
                         store.get_base_domain().as_deref(),
                     );
 
-                    let may_see = match store.get_resource(&drive_subj).await {
-                        Ok(drive_resource) => {
-                            crate::hierarchy::check_read(&store, &drive_resource, &agent)
+                    let admitted = if decoded.kind == super::protocol::ephemeral_kind::DOC {
+                        // `None` means the resource isn't stored here: nothing
+                        // to check rights against, and no local editor that
+                        // could have it open either.
+                        match super::ws_apply::resolve_destroy_drive(&store, &decoded.drive).await {
+                            Some(drive_subject) => {
+                                admitted_for_drive(
+                                    &store,
+                                    &agent,
+                                    &drive_subject,
+                                    initiated_by_us,
+                                    &mut drive_cache,
+                                )
                                 .await
-                                .is_ok()
+                            }
+                            None => false,
                         }
-                        // A drive we do not hold has nothing to disclose.
-                        Err(_) => false,
+                    } else {
+                        match store.get_resource(&scope_subj).await {
+                            Ok(scope_resource) => {
+                                crate::hierarchy::check_read(&store, &scope_resource, &agent)
+                                    .await
+                                    .is_ok()
+                            }
+                            // A drive we do not hold has nothing to disclose.
+                            Err(_) => false,
+                        }
                     };
 
-                    if may_see {
+                    if admitted {
                         store.publish_ephemeral(crate::db::EphemeralEvent {
                             kind: decoded.kind,
                             drive: decoded.drive,
@@ -1008,7 +1037,8 @@ fn register_live_peer(
                         });
                     } else {
                         tracing::debug!(
-                            "[live] dropped presence for a drive {} may not read",
+                            "[live] dropped a kind-{} frame {} is not admitted for",
+                            decoded.kind,
                             &read_peer_id[..read_peer_id.len().min(12)]
                         );
                     }

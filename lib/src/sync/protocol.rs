@@ -63,17 +63,31 @@ pub const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_se
 /// which every local change was silently dropped.
 pub const LIVENESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(35);
 
-/// Which ephemeral channel a frame belongs to.
+/// Which live-collaboration channel a frame belongs to.
 ///
-/// Two exist and they are not interchangeable: the per-document Loro ephemeral
-/// channel (cursors inside one resource) and drive-scoped presence (who is in
-/// this drive at all). They fan out to different subscriber sets on the far
-/// side, so the frame has to say which.
+/// They are not interchangeable: each fans out to a different subscriber set on
+/// the far side, so the frame has to say which. [`DOC`] additionally differs in
+/// what it is *allowed* to do — see its own note.
 pub mod ephemeral_kind {
     /// `LORO_EPHEMERAL_UPDATE` — ephemeral state for one subject.
     pub const LORO: u8 = 0;
     /// `PRESENCE_UPDATE` — drive-scoped presence.
     pub const PRESENCE: u8 = 1;
+    /// `LORO_SYNC_UPDATE` — the ops of an edit in progress, before anyone has
+    /// saved.
+    ///
+    /// The odd one out, and the reason this frame is no longer only about
+    /// presence: this is content, not a cursor. Committed state crosses the
+    /// link as an `UPDATE` frame when the store is written, which happens on
+    /// save — so without this, a peer sees nothing of an edit until it is
+    /// finished, while cursors cross the instant they move. The result was
+    /// carets pointing into text the receiving document had never heard of,
+    /// which Loro rejects, so remote cursors never appeared at all.
+    ///
+    /// Because it is content it gets a stricter gate and a looser size limit
+    /// than the other two: see [`max_payload_for_kind`] and the read loop in
+    /// `peer.rs`, which admits it on *write* rights rather than read.
+    pub const DOC: u8 = 2;
 }
 
 /// A single `KEEPALIVE` frame, length-prefixed and ready to send.
@@ -451,6 +465,23 @@ pub fn encode_hello(name: &str) -> Vec<u8> {
 /// write would face.
 pub const EPHEMERAL_MAX_PAYLOAD: usize = 64 * 1024;
 
+/// Largest [`ephemeral_kind::DOC`] payload accepted from a peer.
+///
+/// Roomier than [`EPHEMERAL_MAX_PAYLOAD`] because this kind carries content: a
+/// keystroke is tens of bytes, but pasting a section of a document is a single
+/// op and can be far larger. Still bounded — a whole document arrives as a
+/// snapshot through the sync handshake, not through here.
+pub const LIVE_DOC_MAX_PAYLOAD: usize = 1024 * 1024;
+
+/// The payload ceiling for one [`ephemeral_kind`].
+pub fn max_payload_for_kind(kind: u8) -> usize {
+    if kind == ephemeral_kind::DOC {
+        LIVE_DOC_MAX_PAYLOAD
+    } else {
+        EPHEMERAL_MAX_PAYLOAD
+    }
+}
+
 /// Encode an EPHEMERAL frame: `drive`, the agent it originated from, and an
 /// opaque payload (a Loro `EphemeralStore` update).
 ///
@@ -488,8 +519,11 @@ pub struct DecodedEphemeral {
 /// Decode the payload of an EPHEMERAL frame (slice *after* the tag byte).
 ///
 /// Returns `None` on truncation, invalid UTF-8, or a payload beyond
-/// [`EPHEMERAL_MAX_PAYLOAD`]. Fail closed: presence is the least important
-/// thing on the link, so a malformed frame is dropped rather than recovered.
+/// [`max_payload_for_kind`]. Fail closed rather than attempt recovery — for
+/// presence because it is the least important thing on the link, and for
+/// [`ephemeral_kind::DOC`] because a half-read op is worse than a missing one:
+/// the sender's next save pushes a full snapshot, so a dropped frame costs a
+/// moment of divergence, not the edit.
 pub fn decode_ephemeral(data: &[u8]) -> Option<DecodedEphemeral> {
     if data.len() < 3 {
         return None;
@@ -526,7 +560,7 @@ pub fn decode_ephemeral(data: &[u8]) -> Option<DecodedEphemeral> {
 
     let payload = data[cursor..].to_vec();
 
-    if payload.len() > EPHEMERAL_MAX_PAYLOAD {
+    if payload.len() > max_payload_for_kind(kind) {
         return None;
     }
 
@@ -1156,5 +1190,38 @@ mod ephemeral_frame_tests {
 
         assert!(decode_ephemeral(&[]).is_none());
         assert!(decode_ephemeral(&[0xFF]).is_none());
+    }
+
+    /// An edit in progress is content, not a cursor: a paste is one op and can
+    /// be far bigger than any selection. Holding it to the presence ceiling
+    /// would drop exactly the edits most worth relaying.
+    #[test]
+    fn an_edit_may_carry_more_than_a_cursor() {
+        let payload = vec![7u8; EPHEMERAL_MAX_PAYLOAD + 1];
+        let frame = encode_ephemeral(
+            ephemeral_kind::DOC,
+            "did:ad:doc123",
+            "did:ad:agent:abc",
+            &payload,
+        );
+
+        let decoded = decode_ephemeral(&frame[1..]).expect("must decode");
+        assert_eq!(decoded.kind, ephemeral_kind::DOC);
+        assert_eq!(decoded.payload, payload);
+    }
+
+    /// Roomier is not unbounded — a whole document arrives as a snapshot
+    /// through the sync handshake, never through this channel.
+    #[test]
+    fn an_edit_past_its_own_ceiling_is_refused() {
+        let payload = vec![7u8; LIVE_DOC_MAX_PAYLOAD + 1];
+        let frame = encode_ephemeral(
+            ephemeral_kind::DOC,
+            "did:ad:doc123",
+            "did:ad:agent:abc",
+            &payload,
+        );
+
+        assert!(decode_ephemeral(&frame[1..]).is_none());
     }
 }

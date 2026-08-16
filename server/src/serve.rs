@@ -287,20 +287,30 @@ where
                         );
                         let update = String::from_utf8_lossy(&event.payload).to_string();
 
-                        // The two ephemeral channels fan out to different
-                        // subscriber sets, so a relayed frame has to re-enter
-                        // through the same one it left by.
-                        if event.kind == atomic_lib::sync::protocol::ephemeral_kind::PRESENCE {
-                            broadcaster.do_send(crate::actor_messages::RemotePresenceUpdate {
-                                subject,
-                                update,
-                            });
-                        } else {
-                            broadcaster.do_send(crate::actor_messages::LoroEphemeralUpdate {
-                                subject,
-                                update,
-                                addr: None,
-                            });
+                        // Each channel fans out to a different subscriber set,
+                        // so a relayed frame has to re-enter through the same
+                        // one it left by.
+                        match event.kind {
+                            atomic_lib::sync::protocol::ephemeral_kind::PRESENCE => {
+                                broadcaster.do_send(crate::actor_messages::RemotePresenceUpdate {
+                                    subject,
+                                    update,
+                                });
+                            }
+                            atomic_lib::sync::protocol::ephemeral_kind::DOC => {
+                                broadcaster.do_send(crate::actor_messages::LoroSyncUpdate {
+                                    subject,
+                                    update,
+                                    addr: None,
+                                });
+                            }
+                            _ => {
+                                broadcaster.do_send(crate::actor_messages::LoroEphemeralUpdate {
+                                    subject,
+                                    update,
+                                    addr: None,
+                                });
+                            }
                         }
                     }
                     // Presence is the first thing worth dropping under load, so
