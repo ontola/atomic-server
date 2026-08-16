@@ -1,4 +1,5 @@
 import { CollectionBuilder } from './collectionBuilder.js';
+import { constraintMatches } from './collection.js';
 import {
   applyMentionsProperty,
   extractAgentMentionsFromText,
@@ -271,6 +272,27 @@ export class NotificationEngine {
     }
 
     this.watches = next;
+    this.emit();
+  }
+
+  /** Subject of the WatchSubscription for `target`, if cached. */
+  getWatchForTarget(target: string): string | undefined {
+    return this.watches.get(target)?.subject;
+  }
+
+  /** In-memory WatchSubscriptions (personal drive). */
+  listWatches(): Array<{
+    subject: string;
+    target: string;
+    enabled: boolean;
+    kind: WatchKind;
+  }> {
+    return [...this.watches.entries()].map(([target, watch]) => ({
+      subject: watch.subject,
+      target,
+      enabled: watch.enabled,
+      kind: watch.kind,
+    }));
   }
 
   /**
@@ -448,11 +470,7 @@ export class NotificationEngine {
           | undefined;
 
         if (prop && value) {
-          const actual = resource.get(prop);
-
-          return Array.isArray(actual)
-            ? actual.includes(value)
-            : actual === value;
+          return constraintMatches(resource, prop, value);
         }
       }
     } catch {
@@ -780,6 +798,127 @@ export async function fetchNotificationItemSubjectsFromServer(
   }
 
   return subjects;
+}
+
+/**
+ * Non-dismissed inbox subjects: in-memory store, then personal-drive
+ * collection index, then a server `/query` refresh. Shared by the inbox
+ * route and the unread badge so those UIs cannot drift.
+ */
+export async function listInboxNotificationSubjects(
+  store: Store,
+  personalDrive?: string,
+): Promise<string[]> {
+  const seen = new Set<string>();
+  const next: string[] = [];
+
+  const consider = (subject: string) => {
+    if (seen.has(subject)) {
+      return;
+    }
+
+    seen.add(subject);
+    const res = store.getResourceLoading(subject);
+
+    if (res.get(notifications.properties.dismissed) === true) {
+      return;
+    }
+
+    next.push(subject);
+  };
+
+  for (const res of visibleNotificationItems(store)) {
+    consider(res.subject);
+  }
+
+  if (!personalDrive) {
+    return next;
+  }
+
+  try {
+    const collection = await new CollectionBuilder(store)
+      .setDrive(personalDrive)
+      .setProperty(core.properties.isA)
+      .setValue(notifications.classes.notificationItem)
+      .setPageSize(100)
+      .buildAndFetch();
+
+    for (let i = 0; i < collection.totalMembers; i++) {
+      const subject = await collection.getMemberWithIndex(i);
+
+      if (subject) {
+        consider(subject);
+      }
+    }
+  } catch {
+    // In-memory items still render if the index query races drive sync.
+  }
+
+  try {
+    const fromServer = await fetchNotificationItemSubjectsFromServer(
+      store,
+      personalDrive,
+    );
+
+    for (const subject of fromServer) {
+      consider(subject);
+    }
+  } catch {
+    // Offline / query 404 — keep whatever we already listed.
+  }
+
+  return next;
+}
+
+/** First NotificationItem on `drive` whose `about` is `about`. */
+export async function findNotificationItemForAbout(
+  store: Store,
+  drive: string,
+  about: string,
+): Promise<
+  | {
+      subject: string;
+      read: boolean;
+      dismissed: boolean;
+      summary?: string;
+    }
+  | undefined
+> {
+  try {
+    const collection = await new CollectionBuilder(store)
+      .setDrive(drive)
+      .setProperty(dataBrowser.properties.about)
+      .setValue(about)
+      .setPageSize(20)
+      .buildAndFetch();
+
+    for (let i = 0; i < collection.totalMembers; i++) {
+      const subject = await collection.getMemberWithIndex(i);
+
+      if (!subject) {
+        continue;
+      }
+
+      const res = await store.getResource(subject);
+
+      if (!res.getClasses().includes(notifications.classes.notificationItem)) {
+        continue;
+      }
+
+      return {
+        subject,
+        read: res.get(notifications.properties.notificationRead) === true,
+        dismissed: res.get(notifications.properties.dismissed) === true,
+        summary: res.get(notifications.properties.notificationSummary) as
+          | string
+          | undefined,
+      };
+    }
+  } catch {
+    // Index unavailable — treat as no item.
+  }
+
+  return undefined;
 }
 
 /** Apply mentions from TipTap JSON onto a document resource (no save). */

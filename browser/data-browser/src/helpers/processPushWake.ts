@@ -5,10 +5,8 @@
  */
 
 import {
-  CollectionBuilder,
-  dataBrowser,
+  findNotificationItemForAbout,
   handlePushWake,
-  notifications,
   type NotificationEngine,
   type Store,
 } from '@tomic/lib';
@@ -41,56 +39,10 @@ export async function processPushWake(opts: {
     type,
     reconcile: () => engine.reconcileMentionBacklog(),
     findItemForAbout: aboutSubject =>
-      findNotificationItemForAbout(store, engine, aboutSubject),
+      findNotificationItemForAbout(
+        store,
+        engine.getPersonalDrive(),
+        aboutSubject,
+      ),
   });
-}
-
-async function findNotificationItemForAbout(
-  store: Store,
-  engine: NotificationEngine,
-  about: string,
-): Promise<
-  | {
-      subject: string;
-      read: boolean;
-      dismissed: boolean;
-      summary?: string;
-    }
-  | undefined
-> {
-  try {
-    const collection = await new CollectionBuilder(store)
-      .setDrive(engine.getPersonalDrive())
-      .setProperty(dataBrowser.properties.about)
-      .setValue(about)
-      .setPageSize(20)
-      .buildAndFetch();
-
-    for (let i = 0; i < collection.totalMembers; i++) {
-      const subject = await collection.getMemberWithIndex(i);
-
-      if (!subject) {
-        continue;
-      }
-
-      const res = await store.getResource(subject);
-
-      if (!res.getClasses().includes(notifications.classes.notificationItem)) {
-        continue;
-      }
-
-      return {
-        subject,
-        read: res.get(notifications.properties.notificationRead) === true,
-        dismissed: res.get(notifications.properties.dismissed) === true,
-        summary: res.get(notifications.properties.notificationSummary) as
-          | string
-          | undefined,
-      };
-    }
-  } catch {
-    // Index unavailable — treat as no item.
-  }
-
-  return undefined;
 }

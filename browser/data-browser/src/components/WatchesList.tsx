@@ -1,16 +1,8 @@
 import { useCallback, useEffect, useState, type JSX } from 'react';
-import {
-  CollectionBuilder,
-  core,
-  notifications,
-  useStore,
-  type Resource,
-} from '@tomic/react';
+import { core, notifications, useStore, type Resource } from '@tomic/react';
 import { styled } from 'styled-components';
 import { Button } from './Button';
 import { Column, Row } from './Row';
-import { useSettings } from '../helpers/AppSettings';
-import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { useNotificationEngine } from '../hooks/useNotificationEngine';
 import { AtomicLink } from './AtomicLink';
 
@@ -27,102 +19,61 @@ type WatchRow = {
  */
 export function WatchesList(): JSX.Element {
   const store = useStore();
-  const { agent } = useSettings();
   const engine = useNotificationEngine();
   const [rows, setRows] = useState<WatchRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    if (!agent?.subject) {
+    if (!engine) {
       setRows([]);
       setLoading(false);
 
       return;
     }
 
-    const personalDrive = await fetchPrivateDriveSubject(store, agent);
+    const next: WatchRow[] = [];
 
-    if (!personalDrive) {
-      setRows([]);
-      setLoading(false);
+    for (const watch of engine.listWatches()) {
+      let targetName = watch.target;
 
-      return;
-    }
-
-    try {
-      const collection = await new CollectionBuilder(store)
-        .setDrive(personalDrive)
-        .setProperty(core.properties.isA)
-        .setValue(notifications.classes.watchSubscription)
-        .setPageSize(50)
-        .buildAndFetch();
-
-      const next: WatchRow[] = [];
-
-      for (let i = 0; i < collection.totalMembers; i++) {
-        const subject = await collection.getMemberWithIndex(i);
-
-        if (!subject) {
-          continue;
-        }
-
-        const res = await store.getResource(subject);
-        const target = res.get(notifications.properties.watchTarget);
-
-        if (typeof target !== 'string') {
-          continue;
-        }
-
-        const enabled =
-          (res.get(notifications.properties.notificationEnabled) as
-            | boolean
-            | undefined) !== false;
-
-        let targetName = target;
-
-        try {
-          const t = await store.getResource(target);
-          targetName =
-            (t.get(core.properties.name) as string | undefined) ?? target;
-        } catch {
-          // keep subject
-        }
-
-        next.push({ subject, target, targetName, enabled });
+      try {
+        const t = await store.getResource(watch.target);
+        targetName =
+          (t.get(core.properties.name) as string | undefined) ?? watch.target;
+      } catch {
+        // keep subject
       }
 
-      setRows(next);
-    } catch {
-      setRows([]);
-    } finally {
-      setLoading(false);
+      next.push({
+        subject: watch.subject,
+        target: watch.target,
+        targetName,
+        enabled: watch.enabled,
+      });
     }
-  }, [store, agent]);
+
+    setRows(next);
+    setLoading(false);
+  }, [store, engine]);
 
   useEffect(() => {
     void refresh();
 
-    const unsub = engine?.subscribe(() => {
+    return engine?.subscribe(() => {
       void refresh();
     });
-
-    return () => {
-      unsub?.();
-    };
   }, [engine, refresh]);
 
   const setEnabled = async (watch: Resource, enabled: boolean) => {
     await watch.set(notifications.properties.notificationEnabled, enabled);
     await watch.save();
     await engine?.reloadWatches();
-    await refresh();
   };
 
   const removeWatch = async (subject: string) => {
     const res = await store.getResource(subject);
     await res.destroy();
     await engine?.reloadWatches();
-    await refresh();
   };
 
   if (loading) {

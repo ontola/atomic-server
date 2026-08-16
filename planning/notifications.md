@@ -83,6 +83,13 @@ drive (or local-only until sync exists). Sources are discovered from data the
 recipient can already read. Nothing is appended into a stranger's inbox for a
 same-drive `@mention`.
 
+**Reuse (do not grow a parallel stack):**
+- Folders: `getOrCreateFolderByLocalId` — same helper as Drafts / Forks.
+- Inbox listing: `listInboxNotificationSubjects` — inbox route + unread badge.
+- Watch match: `constraintMatches` from `collection.ts` (not a second filter).
+- Watch UI: `NotificationEngine.listWatches` / `getWatchForTarget` (no extra `/query`).
+- E2E: `window.__notificationsHelpers` calls production folder/drive helpers.
+
 ## Ontology
 
 New defaults (bootstrap + `ATOMIC_REPOPULATE_DEFAULTS` caveat as in drafts):

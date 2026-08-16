@@ -3,19 +3,16 @@ import { createRoute } from '@tanstack/react-router';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { styled } from 'styled-components';
 import {
-  CollectionBuilder,
   StoreEvents,
-  core,
   dataBrowser,
-  fetchNotificationItemSubjectsFromServer,
   grantAccessRequest,
+  listInboxNotificationSubjects,
   notifications,
   useResource,
   useStore,
   useString,
   useTitle,
   useValue,
-  visibleNotificationItems,
 } from '@tomic/react';
 import { FaBell, FaCheck, FaTrash, FaUnlockKeyhole } from 'react-icons/fa6';
 import { ContainerNarrow } from '../components/Containers';
@@ -51,63 +48,7 @@ function NotificationsPage(): React.JSX.Element {
   const [tick, setTick] = useState(0);
 
   const refresh = useCallback(async () => {
-    const seen = new Set<string>();
-    const next: string[] = [];
-
-    const consider = (subject: string) => {
-      if (seen.has(subject)) {
-        return;
-      }
-
-      seen.add(subject);
-      const res = store.getResourceLoading(subject);
-
-      if (res.get(notifications.properties.dismissed) === true) {
-        return;
-      }
-
-      next.push(subject);
-    };
-
-    for (const res of visibleNotificationItems(store)) {
-      consider(res.subject);
-    }
-
-    if (personalDrive) {
-      try {
-        const collection = await new CollectionBuilder(store)
-          .setDrive(personalDrive)
-          .setProperty(core.properties.isA)
-          .setValue(notifications.classes.notificationItem)
-          .setPageSize(100)
-          .buildAndFetch();
-
-        for (let i = 0; i < collection.totalMembers; i++) {
-          const subject = await collection.getMemberWithIndex(i);
-
-          if (subject) {
-            consider(subject);
-          }
-        }
-      } catch {
-        // In-memory items still render if the index query races drive sync.
-      }
-
-      try {
-        const fromServer = await fetchNotificationItemSubjectsFromServer(
-          store,
-          personalDrive,
-        );
-
-        for (const subject of fromServer) {
-          consider(subject);
-        }
-      } catch {
-        // Offline / query 404 — keep whatever we already listed.
-      }
-    }
-
-    setSubjects(next);
+    setSubjects(await listInboxNotificationSubjects(store, personalDrive));
   }, [store, personalDrive]);
 
   useEffect(() => {

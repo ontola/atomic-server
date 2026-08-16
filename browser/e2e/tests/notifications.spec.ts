@@ -16,6 +16,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { core, dataBrowser, notifications } from '@tomic/lib';
 import {
   acceptInvite,
   appUrlOnFrontend,
@@ -24,94 +25,13 @@ import {
   currentDriveTitle,
   FRONTEND_URL,
   getDevDriveSecret,
+  getOrCreateNotificationsFolder,
   newResource,
   openNotificationsInbox,
+  resolvePersonalDrive,
   signIn,
+  waitForNotificationEngine,
 } from './test-utils';
-
-const NOTIFICATION_ITEM = 'https://atomicdata.dev/classes/NotificationItem';
-const NOTIFICATION_TYPE = 'https://atomicdata.dev/properties/notificationType';
-const NOTIFICATION_SUMMARY =
-  'https://atomicdata.dev/properties/notificationSummary';
-const NOTIFICATION_READ = 'https://atomicdata.dev/properties/notificationRead';
-const DISMISSED = 'https://atomicdata.dev/properties/dismissed';
-const DEDUPE_KEY = 'https://atomicdata.dev/properties/dedupeKey';
-const ABOUT = 'https://atomicdata.dev/properties/about';
-const NAME = 'https://atomicdata.dev/properties/name';
-const LOCAL_ID = 'https://atomicdata.dev/properties/localId';
-const FOLDER = 'https://atomicdata.dev/classes/Folder';
-const PERSONAL_DRIVE = 'https://atomicdata.dev/properties/personalDrive';
-const CREATED_BY = 'https://atomicdata.dev/properties/createdBy';
-const PARENT = 'https://atomicdata.dev/properties/parent';
-const DOCUMENT = 'https://atomicdata.dev/classes/DocumentV2';
-const MENTIONS = 'https://atomicdata.dev/properties/mentions';
-
-async function resolvePersonalDrive(page: import('@playwright/test').Page) {
-  return page.evaluate(async personalDriveProp => {
-    const store = window.store;
-    const agent = store.getAgent();
-    const drive = store.getDrive();
-
-    if (!agent?.subject) throw new Error('no agent');
-
-    try {
-      const agentRes = await store.fetchResourceFromServer(agent.subject, {
-        noWebSocket: true,
-      });
-      const personal = agentRes.get(personalDriveProp);
-
-      if (typeof personal === 'string' && personal.length > 0) {
-        return personal;
-      }
-    } catch {
-      // fall through
-    }
-
-    return drive ?? agent.initialDrive;
-  }, PERSONAL_DRIVE);
-}
-
-async function getOrCreateNotificationsFolder(
-  page: import('@playwright/test').Page,
-  personalDrive: string,
-) {
-  return page.evaluate(
-    async ({ personalDrive: drive, folderClass, localIdProp, nameProp }) => {
-      const store = window.store;
-
-      const existing = await store
-        .search('Notifications', { limit: 5, parents: [drive] })
-        .catch(() => [] as string[]);
-
-      for (const subject of existing) {
-        const res = store.getResourceLoading(subject);
-        const localId = res.get(localIdProp);
-
-        if (localId === 'notifications') {
-          return subject;
-        }
-      }
-
-      const folder = await store.newResource({
-        parent: drive,
-        isA: folderClass,
-        propVals: {
-          [nameProp]: 'Notifications',
-          [localIdProp]: 'notifications',
-        },
-      });
-      await folder.save();
-
-      return folder.subject;
-    },
-    {
-      personalDrive,
-      folderClass: FOLDER,
-      localIdProp: LOCAL_ID,
-      nameProp: NAME,
-    },
-  );
-}
 
 async function seedUnreadItem(
   page: import('@playwright/test').Page,
@@ -156,14 +76,41 @@ async function seedUnreadItem(
       about: opts.about,
       summary: opts.summary,
       dedupeKey: opts.dedupeKey,
-      notificationItem: NOTIFICATION_ITEM,
-      notificationType: NOTIFICATION_TYPE,
-      notificationSummary: NOTIFICATION_SUMMARY,
-      notificationRead: NOTIFICATION_READ,
-      dismissed: DISMISSED,
-      dedupeKeyProp: DEDUPE_KEY,
-      aboutProp: ABOUT,
-      nameProp: NAME,
+      notificationItem: notifications.classes.notificationItem,
+      notificationType: notifications.properties.notificationType,
+      notificationSummary: notifications.properties.notificationSummary,
+      notificationRead: notifications.properties.notificationRead,
+      dismissed: notifications.properties.dismissed,
+      dedupeKeyProp: notifications.properties.dedupeKey,
+      aboutProp: dataBrowser.properties.about,
+      nameProp: core.properties.name,
+    },
+  );
+}
+
+async function createNamedChild(
+  page: import('@playwright/test').Page,
+  parent: string,
+  isA: string,
+  name: string,
+): Promise<string> {
+  return page.evaluate(
+    async ({ parent: folder, isA: cls, name: title, nameProp }) => {
+      const store = window.store;
+      const doc = await store.newResource({
+        parent: folder,
+        isA: cls,
+        propVals: { [nameProp]: title },
+      });
+      await doc.save();
+
+      return doc.subject;
+    },
+    {
+      parent,
+      isA,
+      name,
+      nameProp: core.properties.name,
     },
   );
 }
@@ -177,24 +124,8 @@ test.describe('notifications', () => {
   test('dev-drive workspace is not the personal inbox drive', async ({
     page,
   }) => {
-    const { current, personal } = await page.evaluate(
-      async personalDriveProp => {
-        const store = window.store;
-        const agent = store.getAgent();
-
-        if (!agent?.subject) throw new Error('no agent');
-
-        const agentRes = await store.fetchResourceFromServer(agent.subject, {
-          noWebSocket: true,
-        });
-
-        return {
-          current: store.getDrive(),
-          personal: agentRes.get(personalDriveProp),
-        };
-      },
-      PERSONAL_DRIVE,
-    );
+    const current = await page.evaluate(() => window.store.getDrive());
+    const personal = await resolvePersonalDrive(page);
 
     expect(personal).toBeTruthy();
     expect(current).toBeTruthy();
@@ -218,7 +149,7 @@ test.describe('notifications', () => {
 
         return null;
       },
-      { drive: current, localIdProp: LOCAL_ID },
+      { drive: current, localIdProp: core.properties.localId },
     );
 
     expect(folderOnWorkspace).toBeNull();
@@ -240,19 +171,12 @@ test.describe('notifications', () => {
     expect(personalDrive).toBeTruthy();
     const folder = await getOrCreateNotificationsFolder(page, personalDrive!);
 
-    const aboutSubject = await page.evaluate(async drive => {
-      const store = window.store;
-      const doc = await store.newResource({
-        parent: drive,
-        isA: 'https://atomicdata.dev/classes/DocumentV2',
-        propVals: {
-          'https://atomicdata.dev/properties/name': 'About Doc',
-        },
-      });
-      await doc.save();
-
-      return doc.subject;
-    }, personalDrive);
+    const aboutSubject = await createNamedChild(
+      page,
+      personalDrive,
+      dataBrowser.classes.documentV2,
+      'About Doc',
+    );
 
     await seedUnreadItem(page, {
       folder,
@@ -278,19 +202,12 @@ test.describe('notifications', () => {
     const personalDrive = await resolvePersonalDrive(page);
     const folder = await getOrCreateNotificationsFolder(page, personalDrive!);
 
-    const aboutSubject = await page.evaluate(async drive => {
-      const store = window.store;
-      const doc = await store.newResource({
-        parent: drive,
-        isA: 'https://atomicdata.dev/classes/Folder',
-        propVals: {
-          'https://atomicdata.dev/properties/name': 'ReadTarget',
-        },
-      });
-      await doc.save();
-
-      return doc.subject;
-    }, personalDrive);
+    const aboutSubject = await createNamedChild(
+      page,
+      personalDrive,
+      dataBrowser.classes.folder,
+      'ReadTarget',
+    );
 
     await seedUnreadItem(page, {
       folder,
@@ -373,14 +290,7 @@ test.describe('notifications', () => {
         notificationItem,
       }) => {
         const store = window.store;
-        const engine = (
-          window as Window & {
-            __notificationEngine?: {
-              reloadWatches: () => Promise<void>;
-              flushPendingWatches: () => Promise<void>;
-            };
-          }
-        ).__notificationEngine;
+        const engine = window.__notificationEngine;
 
         if (!engine) {
           throw new Error('__notificationEngine not ready');
@@ -414,11 +324,11 @@ test.describe('notifications', () => {
       },
       {
         table: tableSubject,
-        createdByProp: CREATED_BY,
-        parentProp: PARENT,
-        nameProp: NAME,
-        docClass: DOCUMENT,
-        notificationItem: NOTIFICATION_ITEM,
+        createdByProp: core.properties.createdBy,
+        parentProp: core.properties.parent,
+        nameProp: core.properties.name,
+        docClass: dataBrowser.classes.documentV2,
+        notificationItem: notifications.classes.notificationItem,
       },
     );
 
@@ -438,13 +348,7 @@ test.describe('notifications', () => {
   test('mention ResourceUpdated materializes inbox item', async ({ page }) => {
     test.slow();
 
-    await page.waitForFunction(
-      () =>
-        !!(window as Window & { __notificationEngine?: unknown })
-          .__notificationEngine,
-      null,
-      { timeout: 20_000 },
-    );
+    await waitForNotificationEngine(page);
 
     const personalDrive = await resolvePersonalDrive(page);
     const myAgent = await page.evaluate(() => window.store.getAgent()?.subject);
@@ -461,8 +365,7 @@ test.describe('notifications', () => {
         notificationItem,
       }) => {
         const store = window.store;
-        const engine = (window as Window & { __notificationEngine?: unknown })
-          .__notificationEngine;
+        const engine = window.__notificationEngine;
 
         if (!engine) {
           throw new Error('__notificationEngine not ready');
@@ -506,11 +409,11 @@ test.describe('notifications', () => {
       {
         drive: personalDrive,
         me: myAgent,
-        createdByProp: CREATED_BY,
-        mentionsProp: MENTIONS,
-        nameProp: NAME,
-        docClass: DOCUMENT,
-        notificationItem: NOTIFICATION_ITEM,
+        createdByProp: core.properties.createdBy,
+        mentionsProp: notifications.properties.mentions,
+        nameProp: core.properties.name,
+        docClass: dataBrowser.classes.documentV2,
+        notificationItem: notifications.classes.notificationItem,
       },
     );
 
@@ -542,19 +445,12 @@ test.describe('notifications', () => {
     const personalDrive = await resolvePersonalDrive(page);
     const folder = await getOrCreateNotificationsFolder(page, personalDrive!);
 
-    const aboutSubject = await page.evaluate(async drive => {
-      const store = window.store;
-      const doc = await store.newResource({
-        parent: drive,
-        isA: 'https://atomicdata.dev/classes/Folder',
-        propVals: {
-          'https://atomicdata.dev/properties/name': 'SyncReadTarget',
-        },
-      });
-      await doc.save();
-
-      return doc.subject;
-    }, personalDrive);
+    const aboutSubject = await createNamedChild(
+      page,
+      personalDrive,
+      dataBrowser.classes.folder,
+      'SyncReadTarget',
+    );
 
     const seededSubject = await seedUnreadItem(page, {
       folder,
@@ -685,22 +581,12 @@ test.describe('notifications', () => {
     const agentB = await page2.evaluate(() => window.store.getAgent()?.subject);
     expect(agentB).toMatch(/^did:ad:agent:/);
 
-    await page2.waitForFunction(
-      () =>
-        !!(window as Window & { __notificationEngine?: unknown })
-          .__notificationEngine,
-      null,
-      { timeout: 40_000 },
-    );
+    await waitForNotificationEngine(page2, 40_000);
 
     // Pause B's engine so A's mention is discovered via reverse query on
     // restart (reconcileMentionBacklog), not live ResourceUpdated.
     await page2.evaluate(() => {
-      (
-        window as Window & {
-          __notificationEngine?: { stop: () => void };
-        }
-      ).__notificationEngine?.stop();
+      window.__notificationEngine?.stop();
     });
 
     // Mention B on a drive child — B has drive write via the invite above.
@@ -728,9 +614,9 @@ test.describe('notifications', () => {
       {
         drive: driveSubject,
         agentB,
-        mentionsProp: MENTIONS,
-        nameProp: NAME,
-        docClass: DOCUMENT,
+        mentionsProp: notifications.properties.mentions,
+        nameProp: core.properties.name,
+        docClass: dataBrowser.classes.documentV2,
       },
     );
 
@@ -743,14 +629,7 @@ test.describe('notifications', () => {
     // B loads the mentioned doc and restarts the engine → backlog reconcile.
     await page2.evaluate(async doc => {
       const store = window.store;
-      const engine = (
-        window as Window & {
-          __notificationEngine?: {
-            start: () => Promise<void>;
-            reconcileMentionBacklog: () => Promise<void>;
-          };
-        }
-      ).__notificationEngine;
+      const engine = window.__notificationEngine;
 
       if (!engine) {
         throw new Error('__notificationEngine missing after stop');
@@ -791,13 +670,7 @@ test.describe('notifications', () => {
   }) => {
     test.slow();
 
-    await page.waitForFunction(
-      () =>
-        !!(window as Window & { __notificationEngine?: unknown })
-          .__notificationEngine,
-      null,
-      { timeout: 20_000 },
-    );
+    await waitForNotificationEngine(page);
 
     const personalDrive = await resolvePersonalDrive(page);
     const myAgent = await page.evaluate(() => window.store.getAgent()?.subject);
@@ -815,8 +688,7 @@ test.describe('notifications', () => {
         notificationItem,
       }) => {
         const store = window.store;
-        const engine = (window as Window & { __notificationEngine?: unknown })
-          .__notificationEngine;
+        const engine = window.__notificationEngine;
 
         if (!engine) {
           throw new Error('__notificationEngine not ready');
@@ -852,12 +724,12 @@ test.describe('notifications', () => {
       {
         drive: personalDrive,
         me: myAgent,
-        createdByProp: CREATED_BY,
-        mentionsProp: MENTIONS,
-        nameProp: NAME,
-        descProp: 'https://atomicdata.dev/properties/description',
-        messageClass: 'https://atomicdata.dev/classes/DirectMessage',
-        notificationItem: NOTIFICATION_ITEM,
+        createdByProp: core.properties.createdBy,
+        mentionsProp: notifications.properties.mentions,
+        nameProp: core.properties.name,
+        descProp: core.properties.description,
+        messageClass: notifications.classes.directMessage,
+        notificationItem: notifications.classes.notificationItem,
       },
     );
 
@@ -875,13 +747,7 @@ test.describe('notifications', () => {
   }) => {
     test.slow();
 
-    await page.waitForFunction(
-      () =>
-        !!(window as Window & { __notificationEngine?: unknown })
-          .__notificationEngine,
-      null,
-      { timeout: 20_000 },
-    );
+    await waitForNotificationEngine(page);
 
     const personalDrive = await resolvePersonalDrive(page);
     const myAgent = await page.evaluate(() => window.store.getAgent()?.subject);
@@ -897,11 +763,11 @@ test.describe('notifications', () => {
         aboutProp,
         rightProp,
         requestClass,
+        docClass,
         notificationItem,
       }) => {
         const store = window.store;
-        const engine = (window as Window & { __notificationEngine?: unknown })
-          .__notificationEngine;
+        const engine = window.__notificationEngine;
 
         if (!engine) {
           throw new Error('__notificationEngine not ready');
@@ -909,7 +775,7 @@ test.describe('notifications', () => {
 
         const target = await store.newResource({
           parent: drive,
-          isA: 'https://atomicdata.dev/classes/DocumentV2',
+          isA: docClass,
           propVals: {
             [nameProp]: 'Private Notes',
           },
@@ -949,13 +815,14 @@ test.describe('notifications', () => {
       {
         drive: personalDrive,
         me: myAgent,
-        createdByProp: CREATED_BY,
-        mentionsProp: MENTIONS,
-        nameProp: NAME,
-        aboutProp: ABOUT,
-        rightProp: 'https://atomicdata.dev/properties/requestedRight',
-        requestClass: 'https://atomicdata.dev/classes/AccessRequest',
-        notificationItem: NOTIFICATION_ITEM,
+        createdByProp: core.properties.createdBy,
+        mentionsProp: notifications.properties.mentions,
+        nameProp: core.properties.name,
+        aboutProp: dataBrowser.properties.about,
+        rightProp: notifications.properties.requestedRight,
+        requestClass: notifications.classes.accessRequest,
+        docClass: dataBrowser.classes.documentV2,
+        notificationItem: notifications.classes.notificationItem,
       },
     );
 

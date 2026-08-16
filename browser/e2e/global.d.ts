@@ -1,4 +1,4 @@
-import type { Store } from '@tomic/lib';
+import type { Agent, NotificationEngine, Store } from '@tomic/lib';
 
 declare global {
   interface Window {
@@ -7,6 +7,19 @@ declare global {
     __e2eLoad?: {
       longTasks: Array<{ start: number; duration: number }>;
       maxTimerLagMs: number;
+    };
+    /** Set by NotificationEngineProvider for e2e / console. */
+    __notificationEngine?: NotificationEngine;
+    /** Production helpers so e2e does not reimplement folder/drive lookup. */
+    __notificationsHelpers?: {
+      getOrCreateNotificationsFolder: (
+        store: Store,
+        drive: string,
+      ) => Promise<string>;
+      fetchPersonalDriveSubject: (
+        store: Store,
+        agent: Agent,
+      ) => Promise<string | undefined>;
     };
   }
 }

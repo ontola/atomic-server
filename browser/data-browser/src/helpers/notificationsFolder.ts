@@ -1,4 +1,5 @@
-import { CollectionBuilder, core, dataBrowser, type Store } from '@tomic/react';
+import type { Store } from '@tomic/react';
+import { getOrCreateFolderByLocalId } from './folderByLocalId';
 
 /** Well-known id of the per-personal-drive Notifications folder. */
 const NOTIFICATIONS_LOCAL_ID = 'notifications';
@@ -14,33 +15,9 @@ export async function getOrCreateNotificationsFolder(
   store: Store,
   drive: string,
 ): Promise<string> {
-  const collection = await new CollectionBuilder(store)
-    .setDrive(drive)
-    .setProperty(core.properties.localId)
-    .setValue(NOTIFICATIONS_LOCAL_ID)
-    .setPageSize(1)
-    .buildAndFetch();
-
-  if (collection.totalMembers > 0) {
-    const existing = await collection.getMemberWithIndex(0);
-
-    if (existing) {
-      return existing;
-    }
-  }
-
-  const folder = await store.newResource({
-    parent: drive,
-    isA: dataBrowser.classes.folder,
-    propVals: {
-      [core.properties.name]: 'Notifications',
-      [core.properties.localId]: NOTIFICATIONS_LOCAL_ID,
-      [core.properties.description]:
-        'Your notification inbox. Items sync across your devices, including read state.',
-    },
+  return getOrCreateFolderByLocalId(store, drive, NOTIFICATIONS_LOCAL_ID, {
+    name: 'Notifications',
+    description:
+      'Your notification inbox. Items sync across your devices, including read state.',
   });
-
-  await folder.save();
-
-  return folder.subject;
 }
