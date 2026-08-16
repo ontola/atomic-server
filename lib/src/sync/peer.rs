@@ -402,6 +402,13 @@ fn remove_live_peer_any_quiet(peer_id: &str) {
     remove_live_peer_inner(peer_id, None, false);
 }
 
+/// Evict the current connection and tell the UI. For an explicit user action —
+/// "Disconnect" / forget this peer — where the intent is to drop the link
+/// whichever connection happens to hold it.
+pub fn remove_live_peer_any(peer_id: &str) {
+    remove_live_peer_inner(peer_id, None, true);
+}
+
 fn remove_live_peer_inner(peer_id: &str, generation: Option<u64>, notify: bool) {
     let key = normalize_node_id(peer_id);
     let mut removed = false;
