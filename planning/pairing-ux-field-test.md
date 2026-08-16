@@ -507,40 +507,48 @@ rather than assuming deltas always arrive in order. The `SYNC_VV` handshake
 already does exactly this at connect time — it is the reconnect/gap case that
 has no equivalent.
 
-### M10 — A peer's new child resources never reach an open page (open)
+### M10 — A peer's new row arrives without its contents (open)
 
-Tested after M9, because "adding things to a table does not sync" had the same
-shape as the document bug and looked like it might share a cause. It does share
-the shape. It is not fixed by M9.
+Tested because "adding things to a table does not sync" had the same shape as
+the document bug fixed above. It is a real bug, but a narrower one than the
+first version of this note claimed.
 
-Table `RelayTableTest` open on both nodes, row added on the desktop:
+**The first measurement was invalid, and the correction is the interesting
+part.** Row added on the desktop, table open on both nodes: the peer's page
+received *nothing at all* — zero websocket frames, verified with a hook on the
+live socket and a positive control (a document edit on the same page and socket
+captured two frames). That looked conclusive.
+
+It was an artefact of the test account. The client subscribes drive-wide via
+`subscribeToDrive()` → `encodeSub(store.getDrive())`, and this session's drive
+was `https://atomic.ontola.io` — the server root — rather than the DID drive,
+because the account was created through an invite and never had a drive set. So
+`Handler<ExternalChange>`'s `owner.is_within_drive(...)` check correctly refused
+to fan out, and "zero frames" was the server behaving properly on a wrongly
+subscribed connection. The giveaway was in view the whole time: the sidebar
+showed `/` rather than the drive name, and `/search?parents=https://atomic.ontola.io`
+was returning 500.
+
+With the drive set correctly, the same test gives a different and much more
+specific result:
 
 | | desktop | HA, page open | HA, after reload |
 | --- | --- | --- | --- |
-| `RowAlpha-4416` | instant | **absent at 18s** | **present** |
+| row exists | yes | **yes** — row 3 renders, footer count 2 → 3 | yes |
+| row's `name` | `RowGamma-5514` | **empty** | `RowGamma-5514` |
 
-So the row crosses the link and lands in the peer's store. The open page simply
-never learns about it.
+So membership propagates live and content does not. The peer's page learns a
+third row exists, renders it, and leaves the cell blank until a reload.
 
-The reason M9 does not cover this: a table row is a separate child resource
-created by a commit, not an op inside the table's own Loro document. It travels
-the commit → `UPDATE` frame → `add_resource_opts` → `ExternalChange` route. M9
-only put *document ops* on the live channel.
+That rules out the drive-fanout path being dead, which is what the first version
+of this note asserted. What it does not yet explain is why the `UPDATE` frame
+that carries the row — `Handler<ExternalChange>` encodes a full Loro snapshot
+plus `commit_id` — leaves the client with a resource that has no `name`. Two
+candidates worth separating: the frame for the row subject is never sent (only
+the parent table's own change is, which alone would move the count), or it is
+sent and the client stores it in a way the table's cell does not read.
 
-`Handler<ExternalChange>` (`server/src/commit_monitor.rs`) does fan out to the
-subject's subscribers and to its drive's subscribers, so the notification is
-being sent. What is not established is whether the client can act on it: a table
-renders a *query* over its children, and query-update frames were retired
-(`tag::QUERY_UPDATE_RESERVED`, `planning/drop-query-update.md`) in favour of
-`UPDATE`/`DESTROY` carrying full snapshots. Locally that is fine — the desktop
-showed its own new row immediately. Across a peer link it is not.
-
-Next step is to find where the chain stops: whether `ExternalChange` reaches the
-websocket at all for a subject the client never explicitly subscribed to (a row
-that did not exist when the page loaded), and whether the table's query
-invalidates on a drive-level notification. That is a client-side question, and
-it is the same question M9b raises from the other direction — both are about a
-peer's changes not reaching an already-open page.
+Related to M9b: both are a peer's changes reaching an open page only partly.
 
 ### P1 — Proposal: show discovered-but-unpaired nodes on the Sync page
 
