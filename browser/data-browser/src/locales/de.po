@@ -1757,15 +1757,11 @@ msgstr ""
 msgid "Error: Expected {0}<node-id>"
 msgstr ""
 
-#. 0: data.count; 1: data.count !== 1 ? 's' \\: ''; 2: peerName
-#: src/routes/SyncRoute.tsx
-msgid "Synced {0} resource{1} with {2}"
-msgstr ""
+#~ msgid "Synced {0} resource{1} with {2}"
+#~ msgstr ""
 
-#. 0: data.count; 1: data.count !== 1 ? 's' \\: ''
-#: src/routes/SyncRoute.tsx
-msgid "Synced {0} resource{1}"
-msgstr ""
+#~ msgid "Synced {0} resource{1}"
+#~ msgstr ""
 
 #: src/helpers/managed/deviceLink.ts
 #: src/routes/SettingsAgent.tsx
@@ -5276,10 +5272,13 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Node ID copied"
 msgstr ""
 
 #. 0: rawToNodeDid(serverNodeId)
+#. 0: peer.nodeId
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Copy {0}"
 msgstr ""
@@ -7000,4 +6999,14 @@ msgstr ""
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Checking this workspace’s backup…"
+msgstr ""
+
+#. 0: withWhom
+#: src/routes/SyncRoute.tsx
+msgid "Already up to date{0}"
+msgstr ""
+
+#. 0: withWhom; 1: sent; 2: received
+#: src/routes/SyncRoute.tsx
+msgid "Synced{0} — sent {1}, received {2}"
 msgstr ""

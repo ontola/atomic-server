@@ -61,7 +61,18 @@ fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
     let live = crate::iroh_transport::live_peer_ids();
     let known = crate::iroh_transport::get_known_peers(store);
 
-    let mut seen: Vec<(String, Option<String>, bool)> = Vec::new();
+    // (node id, name, live, last synced). `last_synced` is already tracked on
+    // the stored peer; reporting it is what lets a device card say when it last
+    // exchanged anything instead of only whether a socket is open. "Connected"
+    // alone cannot distinguish a healthy link from one that has moved nothing.
+    let mut seen: Vec<(String, Option<String>, bool, Option<i64>)> = Vec::new();
+
+    let last_synced_for = |id: &str| -> Option<i64> {
+        known
+            .iter()
+            .find(|p| crate::iroh_transport::normalize_node_id(&p.node_id) == id)
+            .and_then(|p| p.last_synced)
+    };
 
     for id in &live {
         let name = crate::iroh_transport::live_peer_name(id).or_else(|| {
@@ -71,22 +82,23 @@ fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
                 .map(|p| p.name.clone())
                 .filter(|n| !n.is_empty())
         });
-        seen.push((id.clone(), name, true));
+        let last_synced = last_synced_for(id);
+        seen.push((id.clone(), name, true, last_synced));
     }
 
     for peer in &known {
         let id = crate::iroh_transport::normalize_node_id(&peer.node_id);
 
-        if seen.iter().any(|(known_id, _, _)| known_id == &id) {
+        if seen.iter().any(|(known_id, _, _, _)| known_id == &id) {
             continue;
         }
 
         let name = Some(peer.name.clone()).filter(|n| !n.is_empty());
-        seen.push((id, name, false));
+        seen.push((id, name, false, peer.last_synced));
     }
 
     seen.into_iter()
-        .map(|(node_id, name, is_live)| {
+        .map(|(node_id, name, is_live, last_synced)| {
             let mut propvals = atomic_lib::resources::PropVals::new();
             propvals.insert(urls::IS_A.into(), vec![urls::PEER.to_string()].into());
             propvals.insert(
@@ -99,6 +111,10 @@ fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
             }
 
             propvals.insert(urls::PEER_LIVE.into(), Value::Boolean(is_live));
+
+            if let Some(last_synced) = last_synced {
+                propvals.insert(urls::PEER_LAST_SEEN.into(), Value::Timestamp(last_synced));
+            }
 
             atomic_lib::values::SubResource::Nested(propvals)
         })

@@ -9,6 +9,8 @@ export type ServerPeer = {
   deviceName: string | null;
   /** Whether it holds a connection to the server right now. */
   live: boolean;
+  /** Unix millis of the last successful sync, if it has ever synced. */
+  lastSeen?: number;
 };
 
 /**
@@ -90,6 +92,10 @@ export async function fetchManagedInfo(
                   nodeId,
                   deviceName: readString(p?.[peerProps.deviceName]),
                   live: p?.[peerProps.live] === true,
+                  lastSeen:
+                    typeof p?.[peerProps.lastSeen] === 'number'
+                      ? (p[peerProps.lastSeen] as number)
+                      : undefined,
                 }
               : null;
           })

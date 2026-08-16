@@ -567,6 +567,42 @@ impl Handler<ExternalChange> for CommitMonitor {
     /// subscribers of its drive — the same two audiences, and the same
     /// drive-boundary check, that `Handler<CommitMessage>` serves.
     fn handle(&mut self, msg: ExternalChange, _ctx: &mut Context<Self>) {
+        // Keep search in step with the store. A change that no commit produced
+        // — a peer sync writing straight through `add_resource_opts` — never
+        // reaches `Handler<CommitMessage>`, which is where indexing lives. So
+        // resources arriving over Iroh were stored and listed (the query index
+        // IS updated) but invisible to search: 49 resources synced, zero
+        // INDEXING events. Someone who reaches for search first concludes their
+        // data never arrived.
+        if !msg.destroyed {
+            let search_state = self.search_state.clone();
+            let store = self.store.clone();
+            let subject_for_index = msg.subject.clone();
+            tokio::spawn(async move {
+                let subject = atomic_lib::Subject::from_raw(
+                    &subject_for_index,
+                    store.get_base_domain().as_deref(),
+                );
+
+                match store.get_resource(&subject).await {
+                    Ok(resource) => {
+                        let _ = search_state.remove_resource(&subject_for_index);
+
+                        if let Err(e) = search_state.add_resource(&resource, &store).await {
+                            tracing::warn!(
+                                "CommitMonitor: could not index peer-synced {}: {e}",
+                                &subject_for_index[..subject_for_index.len().min(40)]
+                            );
+                        }
+                    }
+                    Err(e) => tracing::debug!(
+                        "CommitMonitor: peer-synced {} not indexable: {e}",
+                        &subject_for_index[..subject_for_index.len().min(40)]
+                    ),
+                }
+            });
+        }
+
         let base_domain = self.store.get_base_domain();
         let subject = atomic_lib::Subject::from_raw(&msg.subject, base_domain.as_deref());
         let resolved = subject.resolve(

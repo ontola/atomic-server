@@ -1092,9 +1092,17 @@ function SyncPage() {
             ? data.peerName.trim()
             : undefined;
         const didFallback = `${NODE_DID_PREFIX}${rawNodeId.slice(0, 8)}...`;
-        const msg = peerName
-          ? `Synced ${data.count} resource${data.count !== 1 ? 's' : ''} with ${peerName}`
-          : `Synced ${data.count} resource${data.count !== 1 ? 's' : ''}`;
+        // Say what moved in each direction. A pass that sends 49 and receives 1
+        // is not "1 resource synced", and reporting it that way hides whether
+        // the link works at all.
+        const received: number =
+          typeof data.count === 'number' ? data.count : 0;
+        const sent: number = typeof data.pushed === 'number' ? data.pushed : 0;
+        const withWhom = peerName ? ` with ${peerName}` : '';
+        const msg =
+          received === 0 && sent === 0
+            ? `Already up to date${withWhom}`
+            : `Synced${withWhom} — sent ${sent}, received ${received}`;
         setPeerSyncResult(msg);
 
         const existing = knownPeers.findIndex(
@@ -1535,7 +1543,31 @@ function SyncPage() {
                   </ConnTopRow>
                   <ConnSub>
                     Paired with {serverLabel(status.serverUrl ?? '')}
+                    {/* "Connected" only says a socket is open. Say when data
+                        last actually moved, so a link that is up but carrying
+                        nothing is distinguishable from a healthy one. */}
+                    {peer.lastSeen
+                      ? ` · synced ${
+                          formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+                        }`
+                      : ' · not synced yet'}
                   </ConnSub>
+                  <NodeIdRow>
+                    <NodeIdLabel>Node ID</NodeIdLabel>
+                    <NodeIdValue
+                      title={`Copy ${peer.nodeId}`}
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(peer.nodeId);
+                          toast.success('Node ID copied');
+                        } catch (e) {
+                          store.notifyError(e as Error);
+                        }
+                      }}
+                    >
+                      {peer.nodeId}
+                    </NodeIdValue>
+                  </NodeIdRow>
                   <ConnActions>
                     <NodeActionSubtle
                       onClick={() => disconnectServerPeer(peer.nodeId)}

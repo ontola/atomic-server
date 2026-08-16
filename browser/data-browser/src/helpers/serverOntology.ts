@@ -20,6 +20,8 @@ export const peerProps = {
   nodeId: 'https://atomicdata.dev/properties/peer/nodeId',
   deviceName: 'https://atomicdata.dev/properties/peer/deviceName',
   live: 'https://atomicdata.dev/properties/peer/live',
+  /** Unix millis of the last successful sync. Absent if it has never synced. */
+  lastSeen: 'https://atomicdata.dev/properties/peer/lastSeen',
 } as const;
 
 export const NODE_DID_PREFIX = 'did:ad:node:';
