@@ -298,7 +298,13 @@ async fn e2e_presence_crosses_the_link_without_being_stored() {
     let mut presence = pair.db_b.subscribe_ephemeral();
 
     let payload = b"cursor-position-blob".to_vec();
-    crate::sync::peer::broadcast_ephemeral(&pair.drive, "did:ad:agent:someone", &payload, None);
+    crate::sync::peer::broadcast_ephemeral(
+        crate::sync::protocol::ephemeral_kind::PRESENCE,
+        &pair.drive,
+        "did:ad:agent:someone",
+        &payload,
+        None,
+    );
 
     let received = tokio::time::timeout(std::time::Duration::from_secs(5), presence.recv())
         .await

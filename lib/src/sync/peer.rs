@@ -539,12 +539,18 @@ fn send_live_update_wire_msg(msg: Vec<u8>) {
 /// Nothing is stored and nothing is retried. Presence is the least important
 /// thing on the link: if the channel is full it is dropped, on the grounds that
 /// a stale cursor is better than a delayed document.
-pub fn broadcast_ephemeral(drive: &str, agent: &str, payload: &[u8], skip_peer: Option<&str>) {
+pub fn broadcast_ephemeral(
+    kind: u8,
+    drive: &str,
+    agent: &str,
+    payload: &[u8],
+    skip_peer: Option<&str>,
+) {
     if payload.is_empty() || payload.len() > super::protocol::EPHEMERAL_MAX_PAYLOAD {
         return;
     }
 
-    let frame = super::protocol::encode_ephemeral(drive, agent, payload);
+    let frame = super::protocol::encode_ephemeral(kind, drive, agent, payload);
     let len = frame.len() as u32;
     let mut msg = Vec::with_capacity(4 + frame.len());
     msg.extend_from_slice(&len.to_be_bytes());
@@ -994,6 +1000,7 @@ fn register_live_peer(
 
                     if may_see {
                         store.publish_ephemeral(crate::db::EphemeralEvent {
+                            kind: decoded.kind,
                             drive: decoded.drive,
                             agent: decoded.agent,
                             payload: decoded.payload,

@@ -285,11 +285,23 @@ where
                             &event.drive,
                             store.get_base_domain().as_deref(),
                         );
-                        broadcaster.do_send(crate::actor_messages::LoroEphemeralUpdate {
-                            subject,
-                            update: String::from_utf8_lossy(&event.payload).to_string(),
-                            addr: None,
-                        });
+                        let update = String::from_utf8_lossy(&event.payload).to_string();
+
+                        // The two ephemeral channels fan out to different
+                        // subscriber sets, so a relayed frame has to re-enter
+                        // through the same one it left by.
+                        if event.kind == atomic_lib::sync::protocol::ephemeral_kind::PRESENCE {
+                            broadcaster.do_send(crate::actor_messages::RemotePresenceUpdate {
+                                subject,
+                                update,
+                            });
+                        } else {
+                            broadcaster.do_send(crate::actor_messages::LoroEphemeralUpdate {
+                                subject,
+                                update,
+                                addr: None,
+                            });
+                        }
                     }
                     // Presence is the first thing worth dropping under load, so
                     // lagging is expected and not an error: skip what was

@@ -79,6 +79,10 @@ type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
 /// people's cursors.
 #[derive(Debug, Clone)]
 pub struct EphemeralEvent {
+    /// Which ephemeral channel this belongs to — per-document Loro ephemeral,
+    /// or drive-scoped presence. They fan out to different subscribers, so the
+    /// distinction has to survive the trip. See `protocol::ephemeral_kind`.
+    pub kind: u8,
     /// The drive this presence belongs to.
     pub drive: String,
     /// The agent whose presence this is.

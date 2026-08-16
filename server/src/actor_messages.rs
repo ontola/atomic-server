@@ -108,6 +108,21 @@ pub struct PresenceUpdate {
     pub addr: Option<Addr<crate::handlers::web_sockets::WebSocketConnection>>,
 }
 
+/// Drive presence that arrived from a PEER, not from a local websocket.
+///
+/// Distinct from [`PresenceUpdate`] because that one is gated on the sender
+/// being a subscriber — which is where the drive read-access check happens for
+/// local clients, and is exactly the gate that should NOT be faked for relayed
+/// traffic. A peer's presence has already passed its own read check in the sync
+/// read loop, and there is no local connection to attribute it to, so it fans
+/// out to every subscriber with nobody to exclude.
+#[derive(Message, Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[rtype(result = "()")]
+pub struct RemotePresenceUpdate {
+    pub subject: atomic_lib::Subject,
+    pub update: String,
+}
+
 /// Subscribe to all commits on resources living under a drive. Every
 /// commit under the drive fans out to this connection as a `CommitMessage`
 /// (encoded as UPDATE / DESTROY by the WebSocketConnection handler).

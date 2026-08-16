@@ -63,6 +63,19 @@ pub const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_se
 /// which every local change was silently dropped.
 pub const LIVENESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(35);
 
+/// Which ephemeral channel a frame belongs to.
+///
+/// Two exist and they are not interchangeable: the per-document Loro ephemeral
+/// channel (cursors inside one resource) and drive-scoped presence (who is in
+/// this drive at all). They fan out to different subscriber sets on the far
+/// side, so the frame has to say which.
+pub mod ephemeral_kind {
+    /// `LORO_EPHEMERAL_UPDATE` — ephemeral state for one subject.
+    pub const LORO: u8 = 0;
+    /// `PRESENCE_UPDATE` — drive-scoped presence.
+    pub const PRESENCE: u8 = 1;
+}
+
 /// A single `KEEPALIVE` frame, length-prefixed and ready to send.
 pub fn encode_keepalive_wire_msg() -> Vec<u8> {
     let frame = vec![tag::KEEPALIVE];
@@ -445,14 +458,15 @@ pub const EPHEMERAL_MAX_PAYLOAD: usize = 64 * 1024;
 /// presence is per-agent: one node may relay several agents' cursors, and the
 /// receiver needs to know whose it is — to attribute it, and to decide whether
 /// it may be shown at all.
-pub fn encode_ephemeral(drive: &str, agent: &str, payload: &[u8]) -> Vec<u8> {
+pub fn encode_ephemeral(kind: u8, drive: &str, agent: &str, payload: &[u8]) -> Vec<u8> {
     let drive_bytes = drive.as_bytes();
     let agent_bytes = agent.as_bytes();
     let drive_len = drive_bytes.len().min(u16::MAX as usize);
     let agent_len = agent_bytes.len().min(u16::MAX as usize);
 
-    let mut buf = Vec::with_capacity(1 + 2 + drive_len + 2 + agent_len + payload.len());
+    let mut buf = Vec::with_capacity(2 + 2 + drive_len + 2 + agent_len + payload.len());
     buf.push(tag::EPHEMERAL);
+    buf.push(kind);
     buf.extend_from_slice(&(drive_len as u16).to_be_bytes());
     buf.extend_from_slice(&drive_bytes[..drive_len]);
     buf.extend_from_slice(&(agent_len as u16).to_be_bytes());
@@ -464,6 +478,8 @@ pub fn encode_ephemeral(drive: &str, agent: &str, payload: &[u8]) -> Vec<u8> {
 /// A decoded EPHEMERAL frame. Never persisted — see the read loop in `peer.rs`.
 #[derive(Debug, Clone)]
 pub struct DecodedEphemeral {
+    /// See [`ephemeral_kind`].
+    pub kind: u8,
     pub drive: String,
     pub agent: String,
     pub payload: Vec<u8>,
@@ -475,12 +491,13 @@ pub struct DecodedEphemeral {
 /// [`EPHEMERAL_MAX_PAYLOAD`]. Fail closed: presence is the least important
 /// thing on the link, so a malformed frame is dropped rather than recovered.
 pub fn decode_ephemeral(data: &[u8]) -> Option<DecodedEphemeral> {
-    if data.len() < 2 {
+    if data.len() < 3 {
         return None;
     }
 
-    let drive_len = u16::from_be_bytes([data[0], data[1]]) as usize;
-    let mut cursor = 2;
+    let kind = data[0];
+    let drive_len = u16::from_be_bytes([data[1], data[2]]) as usize;
+    let mut cursor = 3;
 
     if data.len() < cursor + drive_len {
         return None;
@@ -514,6 +531,7 @@ pub fn decode_ephemeral(data: &[u8]) -> Option<DecodedEphemeral> {
     }
 
     Some(DecodedEphemeral {
+        kind,
         drive,
         agent,
         payload,
@@ -1090,11 +1108,17 @@ mod ephemeral_frame_tests {
     #[test]
     fn an_ephemeral_frame_round_trips() {
         let payload = vec![0xAA, 0xBB, 0x00, 0xFF];
-        let frame = encode_ephemeral("did:ad:drive123", "did:ad:agent:abc", &payload);
+        let frame = encode_ephemeral(
+            ephemeral_kind::PRESENCE,
+            "did:ad:drive123",
+            "did:ad:agent:abc",
+            &payload,
+        );
 
         assert_eq!(frame[0], tag::EPHEMERAL);
 
         let decoded = decode_ephemeral(&frame[1..]).expect("must decode");
+        assert_eq!(decoded.kind, ephemeral_kind::PRESENCE);
         assert_eq!(decoded.drive, "did:ad:drive123");
         assert_eq!(decoded.agent, "did:ad:agent:abc");
         assert_eq!(decoded.payload, payload);
@@ -1105,7 +1129,12 @@ mod ephemeral_frame_tests {
     #[test]
     fn an_oversized_payload_is_refused() {
         let payload = vec![0u8; EPHEMERAL_MAX_PAYLOAD + 1];
-        let frame = encode_ephemeral("did:ad:drive123", "did:ad:agent:abc", &payload);
+        let frame = encode_ephemeral(
+            ephemeral_kind::PRESENCE,
+            "did:ad:drive123",
+            "did:ad:agent:abc",
+            &payload,
+        );
 
         assert!(decode_ephemeral(&frame[1..]).is_none());
     }
@@ -1114,7 +1143,12 @@ mod ephemeral_frame_tests {
     /// thing on the link, so a truncated frame is dropped rather than guessed.
     #[test]
     fn a_truncated_frame_is_refused() {
-        let frame = encode_ephemeral("did:ad:drive123", "did:ad:agent:abc", &[1, 2, 3]);
+        let frame = encode_ephemeral(
+            ephemeral_kind::LORO,
+            "did:ad:drive123",
+            "did:ad:agent:abc",
+            &[1, 2, 3],
+        );
 
         for cut in 1..frame.len().min(24) {
             let _ = decode_ephemeral(&frame[1..cut]);
