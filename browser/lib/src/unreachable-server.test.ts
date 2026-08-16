@@ -1,5 +1,11 @@
 import { describe, it, beforeEach } from 'vitest';
-import { Agent, Store, core, JSCryptoProvider, isTransportError } from './index.js';
+import {
+  Agent,
+  Store,
+  core,
+  JSCryptoProvider,
+  isTransportError,
+} from './index.js';
 import { bootstrapCoreVocab } from './test-vocab.js';
 
 /**
