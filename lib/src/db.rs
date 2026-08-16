@@ -2865,7 +2865,10 @@ impl Storelike for Db {
         let _ = self.db_events.send(DbEvent::Changed {
             subject: resource.get_subject().without_params(),
             delta: None,
-            source_id: None,
+            // Attributed here, while the importing write is still on the stack:
+            // the live push loop uses it to avoid sending an update straight
+            // back to the peer it came from.
+            source_id: crate::sync::ws_apply::current_import_source(),
             is_new: false,
             from_commit: false,
         });

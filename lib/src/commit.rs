@@ -688,8 +688,19 @@ impl Commit {
         // - destroy commits (no Loro merge to evaluate).
         // - tiny/empty loroUpdate (client didn't really try to write).
         // - genesis commits (is_new): no stored state to lose to.
+        // - REPEAT genesis: a second genesis for a subject that already exists
+        //   is legitimate (`repeat_genesis_is_mergeable`) — every device mints
+        //   the same cert for a personal drive, so the same DID. Its propvals
+        //   are the creation defaults, and losing them to whatever the resource
+        //   has since become is the expected outcome, not evidence that the
+        //   client failed to seed from server state. Without this, a device
+        //   that renamed its home drive rejected its own stashed genesis
+        //   forever: the intent says `name = "My drive"`, the stored state says
+        //   the chosen name, they do not match, and the outbox retries every
+        //   30s for as long as the app is open.
         if opts.validate_loro_causality
             && !is_new
+            && commit.is_genesis != Some(true)
             && !commit.destroy.unwrap_or(false)
             && commit.loro_update.as_ref().map(|b| b.len()).unwrap_or(0) > 16
             && applied.add_atoms.is_empty()
@@ -1832,6 +1843,87 @@ mod test {
                 .to_subjects(None)
                 .unwrap()[0],
             crate::urls::DRIVE
+        );
+    }
+
+    /// A repeat genesis whose every value loses to the resource's current
+    /// state must still be accepted.
+    ///
+    /// The device that created the drive keeps a stashed genesis commit. Rename
+    /// the drive, and that stash now says `name = "My drive"` while the stored
+    /// state says the chosen name. It contributes new ops but changes no atom,
+    /// which is exactly the shape the causality guard rejects — so the client
+    /// re-posted it every 30 seconds for as long as the app stayed open.
+    #[tokio::test]
+    async fn repeat_genesis_losing_every_value_is_accepted() {
+        let (store, agent) = store_with_known_agent().await;
+        let pubkey: [u8; 32] = crate::agents::decode_base64(&agent.public_key)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let cert = crate::genesis::GenesisCert::for_personal_drive(pubkey);
+        let opts = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            validate_loro_causality: true,
+            ..CommitOpts::no_validations_no_index()
+        };
+
+        let mut genesis = CommitBuilder::new("placeholder".into());
+        genesis.set(
+            crate::urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::urls::DRIVE.into()]),
+        );
+        genesis.set(crate::urls::NAME.into(), Value::String("My drive".into()));
+        genesis.set(
+            crate::urls::WRITE.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        let first = Commit::create_did_with_cert(genesis, &agent, &store, Some(cert.clone()))
+            .await
+            .unwrap();
+        let subject = first.subject.clone();
+        store.apply_commit(first, &opts).await.unwrap();
+
+        // The user names their home drive.
+        let stored = store.get_resource(&subject).await.unwrap();
+        let mut rename = CommitBuilder::new(subject.clone());
+        rename.set(
+            crate::urls::NAME.into(),
+            Value::String("Joeps drijf".into()),
+        );
+        let rename = rename.sign(&agent, &store, &stored).await.unwrap();
+        store.apply_commit(rename, &opts).await.unwrap();
+
+        // Another device mints the same cert — same DID, creation defaults.
+        // Every propval it carries now loses to the rename.
+        let mut stale = CommitBuilder::new("placeholder".into());
+        stale.set(
+            crate::urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::urls::DRIVE.into()]),
+        );
+        stale.set(crate::urls::NAME.into(), Value::String("My drive".into()));
+        stale.set(
+            crate::urls::WRITE.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        let stale = Commit::create_did_with_cert(stale, &agent, &store, Some(cert))
+            .await
+            .unwrap();
+        assert_eq!(stale.subject, subject);
+
+        store
+            .apply_commit(stale, &opts)
+            .await
+            .expect("a repeat genesis that changes nothing must be accepted, not retried forever");
+
+        let merged = store.get_resource(&subject).await.unwrap();
+        assert_eq!(
+            merged.get(crate::urls::NAME).unwrap().to_string(),
+            "Joeps drijf",
+            "the chosen name must survive the repeat genesis"
         );
     }
 

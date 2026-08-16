@@ -24,6 +24,28 @@ pub(crate) fn set_importing(v: bool) {
     IMPORTING.store(v, Ordering::Relaxed);
 }
 
+/// The peer an import is currently being applied from, if any.
+///
+/// Read synchronously by the write that emits `DbEvent::Changed`, so the event
+/// carries the peer it came from. That is what makes echo suppression
+/// deterministic: the alternative — a bool the live push loop checks when it
+/// eventually processes the event — cannot work, because the push loop is a
+/// separate task consuming a broadcast channel and may not be scheduled until
+/// after the flag is cleared. Two idle nodes then trade the same snapshot
+/// forever (see `peer.rs`'s live read loop).
+static IMPORT_SOURCE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+pub(crate) fn set_import_source(source: Option<String>) {
+    if let Ok(mut guard) = IMPORT_SOURCE.lock() {
+        *guard = source;
+    }
+}
+
+/// The peer id to attribute a write to, for echo suppression.
+pub fn current_import_source() -> Option<String> {
+    IMPORT_SOURCE.lock().ok().and_then(|g| g.clone())
+}
+
 /// Import a remote UPDATE frame into the local store. Trusted callers only —
 /// merges and persists unconditionally, with no admission check. Live-sync
 /// transports that receive data from a peer whose write rights aren't already
