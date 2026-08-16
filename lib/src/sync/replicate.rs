@@ -184,7 +184,11 @@ async fn drive_exchange(
                     break;
                 }
 
-                let entries = engine::collect_readable_snapshots(store, export_as, &pull).await;
+                // No paired-replica relaxation here: this is the relayed
+                // WebSocket path, where there is no dialled node identity to
+                // stand in for the owner's pairing choice. Rights only.
+                let entries =
+                    engine::collect_readable_snapshots(store, export_as, &pull, None).await;
 
                 if entries.is_empty() {
                     tracing::warn!(

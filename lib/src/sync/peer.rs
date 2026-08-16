@@ -1498,6 +1498,7 @@ pub async fn sync_drive_with_peer_using_outcome(
                                 store,
                                 &remote_agent,
                                 &diff.pull,
+                                Some(&remote_key),
                             )
                             .await;
                             if !entries.is_empty() {
@@ -1554,6 +1555,7 @@ pub async fn sync_drive_with_peer_using_outcome(
                         store,
                         &remote_agent,
                         &pull_subjects,
+                        Some(&remote_key),
                     )
                     .await;
                     if !entries.is_empty() {
@@ -1744,6 +1746,22 @@ pub struct KnownPeer {
 }
 
 /// Get all known peers from the DB.
+/// Whether this node's user deliberately paired with `node_id`.
+///
+/// Only the initiator side records a peer (`add_known_peer` is called after we
+/// dial and the remote says HELLO); the accept side deliberately does not, on
+/// the grounds that the local user never chose an unsolicited inbound
+/// connection. So this answers "did the owner of this node choose to sync with
+/// that one", which is the authority a replica needs — rather than an ACL entry
+/// the owner has to write by hand for every device and every drive.
+pub fn is_paired_peer(store: &Db, node_id: &str) -> bool {
+    let key = normalize_node_id(node_id);
+
+    get_known_peers(store)
+        .iter()
+        .any(|p| normalize_node_id(&p.node_id) == key)
+}
+
 pub fn get_known_peers(store: &Db) -> Vec<KnownPeer> {
     if let Ok(Some(bytes)) = store
         .kv
@@ -2407,6 +2425,7 @@ mod initiator_trust_tests {
             &db,
             &ForAgent::Public,
             &[child.clone()],
+            None,
         )
         .await;
         assert!(
@@ -2420,6 +2439,7 @@ mod initiator_trust_tests {
             &db,
             &ForAgent::AgentSubject(alice.subject.clone()),
             &[child.clone()],
+            None,
         )
         .await;
         assert_eq!(
@@ -2444,11 +2464,63 @@ mod initiator_trust_tests {
             &db,
             &ForAgent::AgentSubject(mallory.subject.clone()),
             &[child],
+            None,
         )
         .await;
         assert!(
             served.is_empty(),
             "a peer that authenticated as an unrelated agent must not receive unreadable snapshots"
+        );
+    }
+
+    /// A node the owner deliberately paired with may replicate what the owner
+    /// can read, even though its own agent holds no rights on the drive.
+    ///
+    /// Without this, two of the same person's machines sync nothing: the
+    /// serving node refuses every subject because the peer's node agent is a
+    /// stranger to the drive, and the only remedy is hand-writing an ACL entry
+    /// naming that agent — per device, per drive, with no prompt and no error.
+    /// Pairing is already an authenticated choice by the owner; this treats it
+    /// as one.
+    #[tokio::test]
+    async fn a_paired_replica_receives_what_the_owner_can_read() {
+        let db = Db::init_temp("paired_replica_serves").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (_drive, child) = private_drive_with_child(&db, &alice).await;
+
+        // The replica's own identity: a node agent, granted nothing.
+        let replica_node = "aaaabbbbccccddddeeeeffff0000111122223333444455556666777788889999";
+        let replica_agent = db.create_agent(Some("Replica")).await.unwrap();
+        let as_replica = ForAgent::AgentSubject(replica_agent.subject.clone());
+
+        // Not paired yet — rights only, so nothing is served.
+        let unpaired = crate::sync::engine::collect_readable_snapshots(
+            &db,
+            &as_replica,
+            &[child.clone()],
+            Some(replica_node),
+        )
+        .await;
+        assert!(
+            unpaired.is_empty(),
+            "a node the owner never dialled must not be served"
+        );
+
+        // The owner pairs with it.
+        add_known_peer(&db, replica_node, "Replica");
+
+        let paired = crate::sync::engine::collect_readable_snapshots(
+            &db,
+            &as_replica,
+            &[child],
+            Some(replica_node),
+        )
+        .await;
+        assert_eq!(
+            paired.len(),
+            1,
+            "a paired replica must receive what the owner can read"
         );
     }
 
