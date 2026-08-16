@@ -126,6 +126,8 @@ Design intent, kept for direction. None has a line of code behind it.
 | --- | --- |
 | [`reticulum-sync.md`](./reticulum-sync.md) | Atomic sync protocol over Reticulum. |
 | [`nextgraph-interop.md`](./nextgraph-interop.md) | `did:ng:` via a scheme-routed Store backend. PR #1360 (optional NextGraph mirror) is open. |
+| [`kotlin-sdk.md`](./kotlin-sdk.md) | **Decision.** Kotlin v1 matches Python's local CRUD scope via UniFFI over a shared Rust surface. |
+| [`llm-wasm-gui-plugins.md`](./llm-wasm-gui-plugins.md) | **Proposal.** Browser-built JS/TS apps with scoped Loro docs. |
 | [`personal-information-suite.md`](./personal-information-suite.md) | Contacts, calendar, email. |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | Local-first Chromium extension. |

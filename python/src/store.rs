@@ -309,6 +309,81 @@ impl Store {
         self.db.flush().map_err(py_err)
     }
 
+    /// Start the Iroh node. Returns `did:ad:node:{hex}`.
+    ///
+    /// Idempotent. The NodeID is persisted in the store so it survives reopen.
+    /// Incoming connections stay up for the process lifetime.
+    fn start_peer(&self) -> PyResult<String> {
+        crate::peer::start_peer(&self.db)
+    }
+
+    /// This process's Iroh node URI, if [`Store.start_peer`] has run.
+    #[getter]
+    fn peer_id(&self) -> Option<String> {
+        let _ = self;
+        crate::peer::peer_id()
+    }
+
+    /// Publish this node on pkarr for `drive` (default: active drive).
+    #[pyo3(signature = (drive=None))]
+    fn announce(&self, drive: Option<&str>) -> PyResult<()> {
+        crate::peer::announce(&self.db, drive)
+    }
+
+    /// Bulk-sync the drive with a peer (`did:ad:node:…` or raw hex).
+    ///
+    /// Call [`Store.start_peer`] first. After this, live Iroh updates flow
+    /// both ways for connected peers.
+    #[pyo3(signature = (node_id, drive=None))]
+    fn sync_with(&self, node_id: &str, drive: Option<&str>) -> PyResult<crate::SyncReport> {
+        crate::peer::sync_with(&self.db, node_id, drive)
+    }
+
+    /// Remember a peer so auto-connect can find it later.
+    #[pyo3(signature = (node_id, name=""))]
+    fn add_peer(&self, node_id: &str, name: &str) -> PyResult<()> {
+        atomic_lib::sync::peer::add_known_peer(&self.db, node_id, name);
+        Ok(())
+    }
+
+    /// Peers persisted in this store.
+    fn peers(&self) -> Vec<crate::PeerInfo> {
+        atomic_lib::sync::peer::get_known_peers(&self.db)
+            .into_iter()
+            .map(|p| crate::PeerInfo {
+                node_id: crate::peer::node_uri(&p.node_id),
+                name: p.name,
+            })
+            .collect()
+    }
+
+    /// Node URIs currently holding a live Iroh stream.
+    fn live_peers(&self) -> Vec<String> {
+        let _ = self;
+        atomic_lib::sync::peer::live_peer_ids()
+            .into_iter()
+            .map(|id| crate::peer::node_uri(&id))
+            .collect()
+    }
+
+    /// Block until `subject` changes in this store (local or peer).
+    ///
+    /// Returns the subject, or `!{subject}` if it was destroyed.
+    #[pyo3(signature = (subject, timeout=30.0))]
+    fn wait_for(&self, subject: &str, timeout: f64) -> PyResult<String> {
+        crate::peer::wait_for(&self.db, subject, timeout)
+    }
+
+    #[getter]
+    fn device_name(&self) -> String {
+        atomic_lib::sync::peer::get_device_name(&self.db)
+    }
+
+    #[setter]
+    fn set_device_name(&self, name: &str) {
+        atomic_lib::sync::peer::set_device_name(&self.db, name);
+    }
+
     fn __enter__(slf: Py<Self>) -> Py<Self> {
         slf
     }

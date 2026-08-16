@@ -55,8 +55,22 @@ store.load_agent(secret)
 
 `Store.in_memory()` is the same API without a directory.
 
+## P2P sync (Iroh)
+
+```python
+node = store.start_peer()          # did:ad:node:…
+store.announce()                   # optional pkarr publish
+# On the other device, same agent secret (or a grant), then:
+other.sync_with(node)
+```
+
+After the first sync, connected peers get live Loro updates on `.save()`.
+`store.wait_for(subject)` blocks until a local or peer change lands.
+
+Two Iroh nodes cannot share one Python process — `start_peer` is
+process-global, same as Flutter. Use two processes (or two devices).
+
 ## What this is not (yet)
 
-v1 is local read, write, query, and persist. It does not open a WebSocket or
-an Iroh session. Those can use the same store later, as they already do in
-Flutter.
+WebSocket-to-server `SyncSession` is not wrapped. Blobs and history are not
+wrapped. Iroh P2P is.

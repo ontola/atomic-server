@@ -23,8 +23,8 @@ Reimplementing commits, Ed25519, and Loro in Python would drift. UniFFI is a
 better fit when one IDL must generate Swift + Kotlin + Python; here the Python
 API can be idiomatic on its own, the way the Flutter bridge is.
 
-v1 is local read / write / query / persist. WebSocket and Iroh sync can sit on
-the same store later, as they already do in Flutter.
+Reads and writes are local. Sync is Iroh: `start_peer()`, hand the node URI
+to another device, `sync_with()`. After that, `.save()` pushes live.
 
 ## Install (from this repo)
 
@@ -61,6 +61,11 @@ for child in store.query(parent=setup.drive_subject):
     print(child.subject, child.name)
 
 store.flush()
+
+# P2P: start Iroh, give this URI to another device, then sync.
+node = store.start_peer()
+print(node)  # did:ad:node:…
+# other.sync_with(node)
 ```
 
 Reopen later with the same path and the agent secret from `setup.agent_secret`:
@@ -84,7 +89,10 @@ before opening the same directory again — redb takes an exclusive file lock.
 - **Store** — `open(path)`, `in_memory()`, `setup(name)`, `load_agent(secret)`,
   `create(class_url, name, ...)`, `get(subject)`, `query(...)`, `delete(subject)`,
   `flush()`, context manager
-- **Resource** — dict-like access, `.save()`, `.destroy()`, `.to_dict()`, `.to_json()`
+- **Iroh** — `start_peer()`, `peer_id`, `announce()`, `sync_with(node_id)`,
+  `add_peer()`, `peers()`, `live_peers()`, `wait_for(subject)`
+- **Resource** — dict-like access, `.save()` (live-pushes if peers are up),
+  `.destroy()`, `.to_dict()`, `.to_json()`
 - **atomic_data.urls** — well-known class and property URLs
 
 Property keys accept full URLs or shortnames (`name`, `description`, `parent`,
