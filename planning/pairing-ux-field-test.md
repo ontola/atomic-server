@@ -420,7 +420,7 @@ tick, and the desktop goes through that same path.
 Either the outbox must persist content without the ClientDb on this platform, or
 the app must not claim local safety it does not have.
 
-### M9 — Cursors crossed the peer link but the text did not (fixed)
+### M14 — Cursors crossed the peer link but the text did not (fixed)
 
 Remote carets never appeared between the desktop and the HA node, and the
 receiving browser logged `The container does not exist in the doc` on every
@@ -461,7 +461,7 @@ become durable only if a local user saves, which produces a signed commit under
 that user's own identity. Worth stating plainly, because it means a paired peer
 can put text in a document you have open, and your save signs it.
 
-### M9a — what the A/B actually showed, and what the first write-up got wrong
+### M14a — what the A/B actually showed, and what the first write-up got wrong
 
 The first version of this note said committed state "does cross on save", which
 implied a save would make an edit appear for the other user. It does not. A/B on
@@ -485,7 +485,7 @@ window at all, in either direction. It is worth re-testing "table rows do not
 sync" against this: same shape (content on disk, not in the open page), so it
 may be the same root cause rather than an unrelated bug.
 
-### M9b — a client that misses one delta stops updating, silently (open)
+### M14b — a client that misses one delta stops updating, silently (fixed)
 
 Found while confirming the fix, and not fixed by it. The live channel is
 deltas with no gap recovery. A client that misses one op — link down, or the
@@ -542,7 +542,7 @@ rather than assuming deltas always arrive in order. The `SYNC_VV` handshake
 already does exactly this at connect time — it is the reconnect/gap case that
 has no equivalent.
 
-### M10 — A peer's new row arrives without its contents (open)
+### M15 — A peer's new row arrives without its contents (fixed)
 
 Tested because "adding things to a table does not sync" had the same shape as
 the document bug fixed above. It is a real bug, but a narrower one than the
@@ -583,7 +583,7 @@ candidates worth separating: the frame for the row subject is never sent (only
 the parent table's own change is, which alone would move the count), or it is
 sent and the client stores it in a way the table's cell does not read.
 
-### M10a — corrected again: the data arrives, the table does not re-render
+### M15a — corrected again: the data arrives, the table does not re-render
 
 The version above said "membership propagates live and content does not". Also
 wrong. Content propagates. Read directly out of the live store on the receiving
@@ -646,9 +646,9 @@ cross-build. One constraint: do not start a second vite dev server, as two
 wuchale extractors race on `src/locales/*.po` and corrupt the catalog; have the
 second instance serve built assets.
 
-Related to M9b: both are a peer's changes reaching an open page only partly.
+Related to M14b: both are a peer's changes reaching an open page only partly.
 
-### M11 — The desktop app never retries once its embedded server is up (open)
+### M16 — A connect that never opened pins the auth flag forever (fixed)
 
 The desktop app and its embedded server start together, and the webview is ready
 first. Any fetch issued in that window fails, and the app settles on:
@@ -724,7 +724,7 @@ what it observed was one failed connect.
 Same family as M8 and the false-offline work earlier in this note: a transient
 condition recorded as a permanent verdict.
 
-### M12 — A newly created resource sorts to the top of the sidebar (open, minor)
+### M13 — A newly created resource sorts to the top of the sidebar (fixed)
 
 `RelayTableTest`, created during the M10 work, renders first in the drive tree
 rather than last:
@@ -738,9 +738,21 @@ created it, which would have been serious. It is not: the store holds it with
 `loading: false` and no error, and it is in the DOM — just in an unexpected
 position, so the eye slides past it in a list you know the shape of.
 
-Not investigated. The rest of the tree is in neither alphabetical nor obvious
-creation order, so the question is what key that list sorts on and what a
-freshly-created or freshly-synced child gets for it.
+**Fixed.** `sortOrder` and `createdAt` share a number space on purpose —
+drag-and-drop mints a fractional key between two neighbours' keys and the server
+sorts by the same fallback. A member carrying neither fell back to its array
+index, which is not in that space at all: an index of 3 against timestamps
+around 1.7e12 sorts to the very front. Measured on the affected drive,
+`RelayTableTest` and `Tekenign` had neither property.
+
+Keyless members now inherit the preceding member's key, so they stay where the
+server put them. Verified in the running app: the tree ends
+"Meetings | Tekenign | Ontology | RelayTableTest" where it previously began
+"RelayTableTest | Tekenign".
+
+(This session's findings are numbered M13-M16: `develop` independently used
+M9-M12 for different findings while this branch was open, and the note now
+carries both sets.)
 
 ### P1 — Proposal: show discovered-but-unpaired nodes on the Sync page
 

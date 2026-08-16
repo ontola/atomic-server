@@ -7046,34 +7046,14 @@ msgstr "Already up to date{0}"
 msgid "Synced{0} — sent {1}, received {2}"
 msgstr "Synced{0} — sent {1}, received {2}"
 
-#~ msgid "App<<<<<<< Updated upstream"
-#~ msgstr "App<<<<<<< Updated upstream"
 
-#~ msgid "Synced{0} — sent {1}, received {2}=======>>>>>>> Stashed changes"
-#~ msgstr "Synced{0} — sent {1}, received {2}=======>>>>>>> Stashed changes"
 
-#~ msgid "Close AI Sidebar<<<<<<< Updated upstream"
-#~ msgstr "Close AI Sidebar<<<<<<< Updated upstream"
 
-#~ msgid "custom header======="
-#~ msgstr "custom header======="
 
-#~ msgid "Send>>>>>>> Stashed changes"
-#~ msgstr "Send>>>>>>> Stashed changes"
 
-#: src/helpers/managed/enrollment.test.ts
-msgid "Internal Server Error======="
-msgstr "Internal Server Error======="
 
-#~ msgid "App>>>>>>> Stashed changes"
-#~ msgstr "App>>>>>>> Stashed changes"
 
-#: src/chunks/DashboardPage/DashboardBlock.tsx
-msgid "Remove======="
-msgstr "Remove======="
 
-#~ msgid "Don't auto compact conversation>>>>>>> Stashed changes"
-#~ msgstr "Don't auto compact conversation>>>>>>> Stashed changes"
 
 #: src/routes/SyncRoute.tsx
 msgid "Paired"
