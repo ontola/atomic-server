@@ -16,7 +16,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { core, dataBrowser, notifications } from '@tomic/lib';
+import { core, dataBrowser, notifications, server } from '@tomic/lib';
 import {
   acceptInvite,
   appUrlOnFrontend,
@@ -324,7 +324,7 @@ test.describe('notifications', () => {
       },
       {
         table: tableSubject,
-        createdByProp: core.properties.createdBy,
+        createdByProp: server.properties.createdBy,
         parentProp: core.properties.parent,
         nameProp: core.properties.name,
         docClass: dataBrowser.classes.documentV2,
@@ -409,7 +409,7 @@ test.describe('notifications', () => {
       {
         drive: personalDrive,
         me: myAgent,
-        createdByProp: core.properties.createdBy,
+        createdByProp: server.properties.createdBy,
         mentionsProp: notifications.properties.mentions,
         nameProp: core.properties.name,
         docClass: dataBrowser.classes.documentV2,
@@ -724,7 +724,7 @@ test.describe('notifications', () => {
       {
         drive: personalDrive,
         me: myAgent,
-        createdByProp: core.properties.createdBy,
+        createdByProp: server.properties.createdBy,
         mentionsProp: notifications.properties.mentions,
         nameProp: core.properties.name,
         descProp: core.properties.description,
@@ -815,7 +815,7 @@ test.describe('notifications', () => {
       {
         drive: personalDrive,
         me: myAgent,
-        createdByProp: core.properties.createdBy,
+        createdByProp: server.properties.createdBy,
         mentionsProp: notifications.properties.mentions,
         nameProp: core.properties.name,
         aboutProp: dataBrowser.properties.about,
