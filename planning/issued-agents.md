@@ -101,9 +101,13 @@ No new ontology. Reuse what the personal drive already does for drafts.
 - The **genesis of that Agent resource is signed by you**, not by the new
   key. You own the profile (name, description, revocation mark). The issued
   key does not need write on itself.
-- Scopes are the live ACL: the DID is pushed onto each chosen workspace's
-  `read` (and `write` if asked). The rights lists are the source of truth;
-  the folder is only the index of "ones I minted".
+- Scopes are the live ACL: the DID is pushed onto each chosen **resource's**
+  `read` (and `write` if asked) — a workspace, a folder, a page. Rights
+  inherit down the parent tree, so a folder grant is that folder and its
+  children, not the rest of the workspace. The rights lists are the source
+  of truth. The issued agent also records the target subjects (so revoke
+  can find a folder-level grant, not only the workspaces the UI has loaded).
+  The folder is only the index of "ones I minted".
 - The secret is **not** stored. Shown once at creation. Lost secret → mint
   a new key and revoke the old one (Phase 2 will call this rotate).
 - Revoked keys stay in the folder, name suffixed ` (revoked)`, and are
@@ -195,10 +199,9 @@ Developer-facing docs and the copied blob may say "agent secret".
 
 1. Name (required) — `Raycast`
 2. Access — Read only / Read and write
-3. Workspaces — checkboxes, default all current workspaces (personal +
-   saved). "Everything" means everything *you select now*; a workspace
-   created later is not granted until you add it (or, later, opt into
-   auto-grant).
+3. Access to — workspaces as checkboxes (default all current ones), plus
+   a search box for any folder, page, or other resource. A later resource
+   is not granted until you add it.
 4. Create → the current session stays *you*. A new keypair is minted, the
    Agent resource is published, rights are pushed, the secret is shown
    once.
@@ -209,7 +212,7 @@ Each row: name, Read / Read and write, Revoke. Revoked rows stay, marked.
 
 ### Reuse
 
-On an existing key: grant it additional workspaces without minting a new
+On an existing key: grant it additional resources without minting a new
 secret. That is the whole reuse story for v1.
 
 ### Share dialog (later)
@@ -270,8 +273,8 @@ can still *sign*. They just fail authorization.
 - [x] `issueAccessAgent` / `revokeAccessAgent` / `grantAccessAgent` in
       `@tomic/lib` (session stays the current agent).
 - [x] App keys folder (`localId: app-keys`) on the personal drive.
-- [x] User Settings card: create (name, read/write, workspaces), show
-      secret once, list, revoke, add workspaces to an existing key.
+- [x] User Settings card: create (name, read/write, any resource), show
+      secret once, list, revoke, add access to an existing key.
 - [x] Unit tests on the helper. Docs: agents page + this plan.
 - [x] Relabel `/app/token` so it is not mistaken for a scoped key.
 
@@ -299,8 +302,9 @@ can still *sign*. They just fail authorization.
   on the key is enough.
 - Do we ever store the secret? GitHub-style show-once is the safer
   default. "Show again" is a vault feature, not a graph property.
-- Fine-grained scopes (one folder, one class, search-but-not-bodies) wait
-  on zones and on search filtering. v1 is drive-level read/write.
+- Class-level or "search but not bodies" scopes still wait on zones and
+  search filtering. Resource-level grants (folder, page, workspace) ship
+  now — that is the existing rights walk.
 - Groups of agents ([docs issue 73](https://github.com/atomicdata-dev/atomic-data-docs/issues/73))
   would let several keys share a grant. Not needed until someone is
   minting many keys for one job.

@@ -1,7 +1,18 @@
 import { Agent } from './agent.js';
 import { core } from './ontologies/core.js';
+import { dataBrowser } from './ontologies/dataBrowser.js';
 import type { Store } from './store.js';
 import { instances } from './urls.js';
+
+/**
+ * Grant-target cache on an issued agent. The live ACL on each target is still
+ * what authorization consults; this list is so revoke and the Settings row
+ * can find a folder- or page-level grant, not only a workspace.
+ *
+ * Reuses the data-browser `resources` property (a resourceArray). Target DIDs
+ * are unguessable; titles stay behind those resources' own read rights.
+ */
+const GRANT_TARGETS = dataBrowser.properties.resources;
 
 export const REVOKED_NAME_SUFFIX = ' (revoked)';
 
@@ -11,7 +22,11 @@ export interface IssueAccessAgentOpts {
   description?: string;
   /** When true, the new agent is added to `write` as well as `read`. */
   write: boolean;
-  /** Workspace (or other ACL-bearing resource) subjects to grant. */
+  /**
+   * Resources that receive this key on `read` (and `write` if asked).
+   * Any ACL-bearing resource — a workspace, a folder, a page. Rights
+   * inherit to children.
+   */
   targets: string[];
   /** App keys folder — or any private parent that should own the registry row. */
   parent?: string;
@@ -46,7 +61,7 @@ export async function issueAccessAgent(
   }
 
   if (opts.targets.length === 0) {
-    throw new Error('Choose at least one workspace');
+    throw new Error('Choose at least one resource');
   }
 
   const keys = await Agent.generateKeyPair();
@@ -83,7 +98,9 @@ export async function issueAccessAgent(
 }
 
 /**
- * Add an existing issued agent to more workspaces. Does not mint a secret.
+ * Add an existing issued agent to more resources. Does not mint a secret.
+ * Each target can be a workspace, folder, or any other ACL-bearing resource;
+ * children inherit the grant.
  */
 export async function grantAccessAgent(
   store: Store,
@@ -101,6 +118,18 @@ export async function grantAccessAgent(
 
     await resource.save();
   }
+
+  await appendRecordedTargets(store, agentSubject, targets);
+}
+
+/** Subjects this key was granted on, as last recorded on the agent. */
+export async function grantedTargetsOf(
+  store: Store,
+  agentSubject: string,
+): Promise<string[]> {
+  const agent = await store.getResource(agentSubject);
+
+  return recordedTargetsOn(agent);
 }
 
 /** What a revocation actually managed to do. */
@@ -124,10 +153,9 @@ export interface RevokeReport {
  * save, an unreachable target is reported instead of aborting the rest, and
  * the profile is only marked revoked when nothing was left behind.
  *
- * Note the ceiling on what this can promise: `targets` is supplied by the
- * caller, and grants live on each workspace rather than on the key. A grant on
- * a workspace outside that list survives and cannot be seen from here — the
- * caller must pass every target it knows of, and say what it checked.
+ * `targets` is merged with the list recorded on the key, so a folder-level
+ * grant is not missed just because the caller only passed workspaces. A
+ * grant on a resource in neither list still survives — say what you checked.
  */
 export async function revokeAccessAgent(
   store: Store,
@@ -135,8 +163,10 @@ export async function revokeAccessAgent(
   targets: string[],
 ): Promise<RevokeReport> {
   const report: RevokeReport = { revoked: [], untouched: [], failed: [] };
+  const recorded = await grantedTargetsOf(store, agentSubject);
+  const allTargets = [...new Set([...targets, ...recorded])];
 
-  for (const target of targets) {
+  for (const target of allTargets) {
     try {
       const resource = await store.getResource(target);
 
@@ -159,7 +189,7 @@ export async function revokeAccessAgent(
       const after = await store.getResource(target);
 
       if (after.error || grantsAgent(after, agentSubject)) {
-        throw new Error('the workspace still grants this key after saving');
+        throw new Error('the resource still grants this key after saving');
       }
 
       report.revoked.push(target);
@@ -172,7 +202,7 @@ export async function revokeAccessAgent(
   }
 
   // Only claim the key is dead when it is. A "(revoked)" label on a key that
-  // still opens a workspace is exactly the lie this function exists to avoid.
+  // still opens a resource is exactly the lie this function exists to avoid.
   if (report.failed.length === 0) {
     const agentResource = await store.getResource(agentSubject);
     const name = (
@@ -184,8 +214,10 @@ export async function revokeAccessAgent(
         core.properties.name,
         `${name}${REVOKED_NAME_SUFFIX}`,
       );
-      await agentResource.save();
     }
+
+    await agentResource.set(GRANT_TARGETS, []);
+    await agentResource.save();
   }
 
   return report;
@@ -205,6 +237,29 @@ function grantsAgent(
 
 export function isRevokedAccessAgentName(name: string): boolean {
   return name.endsWith(REVOKED_NAME_SUFFIX);
+}
+
+function recordedTargetsOn(
+  agent: Awaited<ReturnType<Store['getResource']>>,
+): string[] {
+  return ((agent.get(GRANT_TARGETS) as string[] | undefined) ?? []).filter(
+    Boolean,
+  );
+}
+
+async function appendRecordedTargets(
+  store: Store,
+  agentSubject: string,
+  targets: string[],
+): Promise<void> {
+  if (targets.length === 0) {
+    return;
+  }
+
+  const agent = await store.getResource(agentSubject);
+  const next = [...new Set([...recordedTargetsOn(agent), ...targets])];
+  await agent.set(GRANT_TARGETS, next);
+  await agent.save();
 }
 
 async function removeFromRights(

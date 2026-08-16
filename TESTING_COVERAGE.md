@@ -122,13 +122,15 @@ Mint a new agent, grant it drive-level rights, keep the signed-in session as you
 | Flow | Where |
 |---|---|
 | Mint does not call `setAgent`; secret round-trips; read-only vs write ACL | `browser/lib/src/issue-access-agent.test.ts` |
-| Grant an existing key more workspaces; revoke removes ACL and marks the name | `browser/lib/src/issue-access-agent.test.ts` |
+| Grant an existing key more resources; revoke removes ACL and marks the name | `browser/lib/src/issue-access-agent.test.ts` |
+| Folder-level grant does not put the key on the workspace; revoke finds it from the recorded targets | `browser/lib/src/issue-access-agent.test.ts` |
 
 ### Flow — covered
 
 | Flow | Where |
 |---|---|
 | User Settings create → secret shown once → list row → still signed in → revoke | `browser/e2e/tests/app-keys.spec.ts` |
+| Grant on a folder, not the whole workspace | `browser/e2e/tests/app-keys.spec.ts` |
 
 ### Not covered
 

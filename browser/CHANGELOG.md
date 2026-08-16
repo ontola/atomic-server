@@ -6,7 +6,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ### Atomic Browser
 
-- **App keys.** User Settings can mint a new agent for an app or plugin (Raycast, a CLI, anything that should not hold your account secret), grant it read or read-and-write on chosen workspaces, show the secret once, list the keys you have issued, add more workspaces to an existing key, and revoke one. `/app/token` now warns that it signs in as you — scoped keys live under App keys.
+- **App keys.** User Settings can mint a new agent for an app or plugin (Raycast, a CLI, anything that should not hold your account secret), grant it read or read-and-write on any resource you pick — a workspace, or a single folder or page (rights inherit to children) — show the secret once, list the keys you have issued, add more access to an existing key, and revoke one. `/app/token` now warns that it signs in as you — scoped keys live under App keys.
 
 ## [v0.41.0-beta.2] - 2026-08-01
 

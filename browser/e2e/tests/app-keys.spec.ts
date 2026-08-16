@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { before, currentDialog, FRONTEND_URL } from './test-utils';
+import {
+  before,
+  currentDialog,
+  fillSearchBox,
+  FRONTEND_URL,
+  newResource,
+  setTitle,
+} from './test-utils';
 
 /**
  * App keys (issued agents): mint a named extra identity, grant it workspace
@@ -55,7 +62,7 @@ test.describe('app keys', () => {
       page.getByText('No app keys yet', { exact: false }),
     ).toHaveCount(0, { timeout: 15_000 });
     await expect(page.getByText('Raycast', { exact: true })).toBeVisible();
-    await expect(page.getByText(/Read · \d+ workspace/)).toBeVisible();
+    await expect(page.getByText(/Read · /)).toBeVisible();
 
     await page.getByTestId('revoke-app-key').click();
     const confirm = currentDialog(page);
@@ -68,5 +75,43 @@ test.describe('app keys', () => {
       timeout: 15_000,
     });
     await expect(page.getByTestId('revoke-app-key')).toHaveCount(0);
+  });
+
+  test('grant a key on a folder, not the whole workspace', async ({ page }) => {
+    await newResource('folder', page);
+    const folderName = `Project notes ${Date.now()}`;
+    await setTitle(page, folderName);
+
+    await page.goto(`${FRONTEND_URL}/app/agent`);
+    const create = page.getByTestId('create-app-key');
+    await expect(create).toBeEnabled({ timeout: 30_000 });
+    await create.click();
+
+    const dialog = currentDialog(page);
+    await dialog.getByTestId('app-key-name').fill('Folder reader');
+
+    // Default is every workspace. Turn that off so the only grant is the folder.
+    for (const box of await dialog.getByRole('checkbox').all()) {
+      if (await box.isChecked()) {
+        await box.uncheck();
+      }
+    }
+
+    const pick = await fillSearchBox(
+      dialog,
+      'Add a folder, page, or other resource',
+      folderName,
+    );
+    await pick(folderName);
+
+    await dialog.getByTestId('app-key-create-confirm').click();
+    await expect(
+      dialog.getByRole('heading', { name: 'Copy this secret now' }),
+    ).toBeVisible({ timeout: 30_000 });
+    await dialog.getByTestId('app-key-secret-done').click();
+
+    await expect(page.getByText('Folder reader', { exact: true })).toBeVisible();
+    await expect(page.getByText(`Read · ${folderName}`)).toBeVisible();
+    await expect(page.getByText(/Read · Dev drive/)).toHaveCount(0);
   });
 });

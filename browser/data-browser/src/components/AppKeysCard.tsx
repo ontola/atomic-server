@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import {
   core,
+  dataBrowser,
   grantAccessAgent,
   isRevokedAccessAgentName,
   issueAccessAgent,
@@ -27,15 +28,18 @@ import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
 } from './ConfirmationDialog';
+import { SearchBox } from './forms/SearchBox';
 import { getOrCreateAppKeysFolder } from '../helpers/appKeysFolder';
 import { usePersonalDrive } from '../hooks/usePersonalDrive';
 import { useSavedDrives } from '../hooks/useSavedDrives';
+
+const ADD_TARGET_PLACEHOLDER = 'Add a folder, page, or other resource';
 
 type AccessLevel = 'read' | 'write';
 
 /**
  * Create, reuse, and revoke app keys — extra agents with their own secret,
- * granted only the workspaces you pick. The signed-in session stays you.
+ * granted only the resources you pick. The signed-in session stays you.
  */
 export function AppKeysCard() {
   const store = useStore();
@@ -104,8 +108,8 @@ export function AppKeysCard() {
         <Column gap='0.75rem'>
           <Row justify='space-between' align='center' wrapItems>
             <Explanation>
-              Each key is its own identity. Give one to an app instead of your
-              account secret.
+              Each key is its own identity. Grant a workspace, or a single
+              folder or page — rights inherit to everything inside.
             </Explanation>
             <Button
               onClick={() => {
@@ -191,53 +195,56 @@ function AppKeyRow({
   const [busy, setBusy] = useState(false);
   const [aclEpoch, setAclEpoch] = useState(0);
   const revoked = isRevokedAccessAgentName(title ?? '');
+  const recorded =
+    (resource.get(dataBrowser.properties.resources) as string[] | undefined) ??
+    [];
 
   const access = useMemo(() => {
     let write = false;
     let read = false;
     const granted: string[] = [];
+    const candidates = [...new Set([...recorded, ...workspaces])];
 
-    for (const workspace of workspaces) {
-      const drive = store.getResourceLoading(workspace);
-      const readers = (drive.get(core.properties.read) as string[]) ?? [];
-      const writers = (drive.get(core.properties.write) as string[]) ?? [];
+    for (const target of candidates) {
+      const res = store.getResourceLoading(target);
+      const readers = (res.get(core.properties.read) as string[]) ?? [];
+      const writers = (res.get(core.properties.write) as string[]) ?? [];
 
       if (writers.includes(subject)) {
         write = true;
         read = true;
-        granted.push(workspace);
+        granted.push(target);
       } else if (readers.includes(subject)) {
         read = true;
-        granted.push(workspace);
+        granted.push(target);
       }
     }
 
     return { write, read, granted };
-    // `aclEpoch` re-reads drive ACLs after grant/revoke; the store mutates
-    // those resources in place so `workspaces` alone would not refresh.
-  }, [store, subject, workspaces, aclEpoch]);
-
-  const ungranted = workspaces.filter(w => !access.granted.includes(w));
+    // `aclEpoch` re-reads ACLs after grant/revoke; the store mutates
+    // those resources in place so the subject list alone would not refresh.
+  }, [store, subject, workspaces, recorded, aclEpoch]);
 
   async function handleRevoke() {
     setBusy(true);
 
     try {
-      const report = await revokeAccessAgent(store, subject, workspaces);
+      const known = [...new Set([...recorded, ...workspaces])];
+      const report = await revokeAccessAgent(store, subject, known);
       setAclEpoch(n => n + 1);
 
       if (report.failed.length > 0) {
         // Never report a revoke that left access behind as done — the whole
         // point of the button is that the secret stops working.
         toast.error(
-          `Still has access to ${report.failed.length} of ${workspaces.length} workspaces — could not revoke: ${report.failed
+          `Still has access to ${report.failed.length} of ${known.length} places — could not revoke: ${report.failed
             .map(f => f.reason)
             .join('; ')}`,
         );
       } else {
         toast.success(
-          `Key revoked — checked ${workspaces.length} workspace${
-            workspaces.length === 1 ? '' : 's'
+          `Key revoked — checked ${known.length} place${
+            known.length === 1 ? '' : 's'
           }`,
         );
       }
@@ -257,23 +264,25 @@ function AppKeyRow({
           <Column gap='0.15rem'>
             <KeyName>{title || 'Untitled key'}</KeyName>
             <KeyMeta>
-              {revoked
-                ? 'Revoked — this secret can no longer read your workspaces.'
-                : access.write
-                  ? `Read and write · ${workspaceCount(access.granted.length)}`
-                  : access.read
-                    ? `Read · ${workspaceCount(access.granted.length)}`
-                    : 'No workspace access'}
+              {revoked ? (
+                'Revoked — this secret can no longer read what you granted.'
+              ) : access.read ? (
+                <>
+                  {access.write ? 'Read and write' : 'Read'}
+                  {' · '}
+                  <GrantPlaces subjects={access.granted} />
+                </>
+              ) : (
+                'No access'
+              )}
             </KeyMeta>
           </Column>
         </Row>
         {!revoked && (
           <Row gap='0.5rem'>
-            {ungranted.length > 0 && (
-              <Button subtle onClick={showGrant} disabled={busy}>
-                Add workspaces
-              </Button>
-            )}
+            <Button subtle onClick={showGrant} disabled={busy}>
+              Add access
+            </Button>
             <Button
               subtle
               alert
@@ -292,7 +301,8 @@ function AppKeyRow({
           <GrantMoreForm
             agentSubject={subject}
             write={access.write}
-            candidates={ungranted}
+            workspaces={workspaces}
+            alreadyGranted={access.granted}
             onDone={() => {
               setAclEpoch(n => n + 1);
               closeGrant(true);
@@ -338,9 +348,16 @@ function CreateKeyForm({
 
   useEffect(() => {
     setSelected(current => {
-      const still = current.filter(s => workspaces.includes(s));
+      const extras = current.filter(s => !workspaces.includes(s));
+      const stillWorkspaces = current.filter(s => workspaces.includes(s));
+      const next = [
+        ...(stillWorkspaces.length > 0 || extras.length > 0
+          ? stillWorkspaces
+          : workspaces),
+        ...extras,
+      ];
 
-      return still.length > 0 ? still : workspaces;
+      return next.length > 0 ? next : workspaces;
     });
   }, [workspaces]);
 
@@ -405,16 +422,33 @@ function CreateKeyForm({
           </fieldset>
 
           <fieldset>
-            <Legend>Workspaces</Legend>
+            <Legend>Access to</Legend>
+            <Hint>
+              A folder or page grant covers that resource and everything inside
+              it — not the rest of the workspace.
+            </Hint>
             <Column gap='0.4rem'>
-              {workspaces.length === 0 ? (
-                <ErrorLook>No workspaces to grant yet.</ErrorLook>
-              ) : (
-                workspaces.map(subject => (
-                  <WorkspaceCheck
+              {workspaces.map(subject => (
+                <TargetCheck
+                  key={subject}
+                  subject={subject}
+                  checked={selected.includes(subject)}
+                  onChange={checked =>
+                    setSelected(list =>
+                      checked
+                        ? [...list, subject]
+                        : list.filter(s => s !== subject),
+                    )
+                  }
+                />
+              ))}
+              {selected
+                .filter(s => !workspaces.includes(s))
+                .map(subject => (
+                  <TargetCheck
                     key={subject}
                     subject={subject}
-                    checked={selected.includes(subject)}
+                    checked
                     onChange={checked =>
                       setSelected(list =>
                         checked
@@ -423,8 +457,18 @@ function CreateKeyForm({
                       )
                     }
                   />
-                ))
-              )}
+                ))}
+              <SearchBox
+                placeholder={ADD_TARGET_PLACEHOLDER}
+                value={undefined}
+                scopes={workspaces}
+                hideClearButton
+                onChange={next => {
+                  if (next && !selected.includes(next)) {
+                    setSelected(list => [...list, next]);
+                  }
+                }}
+              />
             </Column>
           </fieldset>
           {error && <ErrorLook>{error}</ErrorLook>}
@@ -449,13 +493,15 @@ function CreateKeyForm({
 function GrantMoreForm({
   agentSubject,
   write,
-  candidates,
+  workspaces,
+  alreadyGranted,
   onDone,
   onCancel,
 }: {
   agentSubject: string;
   write: boolean;
-  candidates: string[];
+  workspaces: string[];
+  alreadyGranted: string[];
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -463,6 +509,7 @@ function GrantMoreForm({
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const leftovers = workspaces.filter(w => !alreadyGranted.includes(w));
 
   async function handleGrant() {
     setBusy(true);
@@ -482,16 +529,16 @@ function GrantMoreForm({
   return (
     <>
       <Dialog.Title>
-        <h1>Add workspaces</h1>
+        <h1>Add access</h1>
       </Dialog.Title>
       <Dialog.Content>
         <Column gap='0.75rem'>
           <p>
-            Same key, more workspaces. The secret does not change — the app
-            already holding it gets the new access.
+            Same key, more places. The secret does not change — the app already
+            holding it gets the new access.
           </p>
-          {candidates.map(subject => (
-            <WorkspaceCheck
+          {leftovers.map(subject => (
+            <TargetCheck
               key={subject}
               subject={subject}
               checked={selected.includes(subject)}
@@ -504,6 +551,35 @@ function GrantMoreForm({
               }
             />
           ))}
+          {selected
+            .filter(s => !leftovers.includes(s))
+            .map(subject => (
+              <TargetCheck
+                key={subject}
+                subject={subject}
+                checked
+                onChange={checked =>
+                  setSelected(list =>
+                    checked ? list : list.filter(s => s !== subject),
+                  )
+                }
+              />
+            ))}
+          <SearchBox
+            placeholder={ADD_TARGET_PLACEHOLDER}
+            value={undefined}
+            scopes={workspaces}
+            hideClearButton
+            onChange={next => {
+              if (
+                next &&
+                !selected.includes(next) &&
+                !alreadyGranted.includes(next)
+              ) {
+                setSelected(list => [...list, next]);
+              }
+            }}
+          />
           {error && <ErrorLook>{error}</ErrorLook>}
         </Column>
       </Dialog.Content>
@@ -555,7 +631,7 @@ function CreatedSecret({
   );
 }
 
-function WorkspaceCheck({
+function TargetCheck({
   subject,
   checked,
   onChange,
@@ -581,8 +657,32 @@ function WorkspaceCheck({
   );
 }
 
-function workspaceCount(n: number): string {
-  return n === 1 ? '1 workspace' : `${n} workspaces`;
+function GrantPlaces({ subjects }: { subjects: string[] }) {
+  if (subjects.length === 0) {
+    return <>nothing</>;
+  }
+
+  if (subjects.length > 2) {
+    return <>{subjects.length} places</>;
+  }
+
+  return (
+    <>
+      {subjects.map((subject, index) => (
+        <span key={subject}>
+          {index > 0 ? ', ' : ''}
+          <TargetName subject={subject} />
+        </span>
+      ))}
+    </>
+  );
+}
+
+function TargetName({ subject }: { subject: string }) {
+  const resource = useResource(subject);
+  const [title] = useTitle(resource);
+
+  return <>{title || 'Untitled'}</>;
 }
 
 const Explanation = styled.p`
@@ -604,4 +704,10 @@ const Legend = styled.legend`
   font-weight: bold;
   padding: 0;
   margin-bottom: 0.4rem;
+`;
+
+const Hint = styled.p`
+  margin: 0 0 0.5rem;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.9em;
 `;

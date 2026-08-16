@@ -44,10 +44,10 @@ An Agent secret is a credential. Your **account** secret should stay on your dev
 In the Data Browser this is **User Settings → App keys**:
 
 1. Name the key (e.g. `Raycast`).
-2. Choose Read only or Read and write, and which workspaces it may access.
+2. Choose Read only or Read and write, and which resources it may access — a whole workspace, or a single folder or page. Rights inherit to children, so a folder grant is that folder and everything inside it, not the rest of the workspace.
 3. Copy the secret once. It is not stored. If you lose it, revoke the key and create a new one.
 4. The signed-in session stays you. The new identity is a separate `did:ad:agent:…`.
 
-Revoking a key removes it from those workspaces' `read` / `write` lists. The Agent resource stays (old commits still need the public key); it just can no longer read or write what you granted.
+Revoking a key removes it from those resources' `read` / `write` lists. The Agent resource stays (old commits still need the public key); it just can no longer read or write what you granted.
 
 This is not the same as the `/app/token` bearer page, which signs in **as you** for a short session. Do not give that to a plugin.

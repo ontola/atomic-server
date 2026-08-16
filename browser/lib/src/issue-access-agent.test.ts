@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { Agent } from './agent.js';
 import {
   grantAccessAgent,
+  grantedTargetsOf,
   isRevokedAccessAgentName,
   issueAccessAgent,
   revokeAccessAgent,
 } from './issue-access-agent.js';
 import { core } from './ontologies/core.js';
+import { dataBrowser } from './ontologies/dataBrowser.js';
 import { server } from './ontologies/server.js';
 import { testStore } from './test-store.js';
 
@@ -116,7 +118,7 @@ describe('issueAccessAgent', () => {
         write: false,
         targets: [],
       }),
-    ).rejects.toThrow('workspace');
+    ).rejects.toThrow('resource');
 
     store.setAgent(undefined);
     await expect(
@@ -163,6 +165,47 @@ describe('grantAccessAgent and revokeAccessAgent', () => {
     expect(profile.get(core.properties.name)).toBe('Raycast (revoked)');
     expect(isRevokedAccessAgentName('Raycast (revoked)')).toBe(true);
     expect(isRevokedAccessAgentName('Raycast')).toBe(false);
+  });
+
+  it('grants a folder without putting the key on the workspace', async () => {
+    const { store, agentDID } = await testStore();
+    const drive = await createWorkspace(store, agentDID, 'Notes');
+    const folder = await store.newResource({
+      parent: drive.subject,
+      isA: dataBrowser.classes.folder,
+      propVals: {
+        [core.properties.name]: 'Project notes',
+        [core.properties.write]: [agentDID],
+      },
+    });
+    await folder.save();
+
+    const issued = await issueAccessAgent(store, {
+      name: 'Raycast',
+      write: false,
+      targets: [folder.subject],
+    });
+
+    expect(folder.get(core.properties.read) as string[]).toContain(
+      issued.subject,
+    );
+    expect(drive.get(core.properties.read) as string[]).not.toContain(
+      issued.subject,
+    );
+    expect(await grantedTargetsOf(store, issued.subject)).toEqual([
+      folder.subject,
+    ]);
+
+    // Revoke with no caller list — the recorded folder grant must still die.
+    const report = await revokeAccessAgent(store, issued.subject, []);
+    expect(report.revoked).toEqual([folder.subject]);
+    expect(report.failed).toEqual([]);
+
+    const afterFolder = await store.getResource(folder.subject);
+    expect(afterFolder.get(core.properties.read) as string[]).not.toContain(
+      issued.subject,
+    );
+    expect(await grantedTargetsOf(store, issued.subject)).toEqual([]);
   });
 });
 
