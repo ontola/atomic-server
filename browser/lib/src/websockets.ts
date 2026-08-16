@@ -345,7 +345,32 @@ export class WSClient {
           this._retryDelay = Math.min(this._retryDelay * 2, 30000);
         }
       });
-      this.openPromise = new Promise(resolve => {
+      this.openPromise = new Promise((resolve, reject) => {
+        // A socket that dies before opening must REJECT this, not leave it
+        // pending forever. `authenticate()` awaits it while holding
+        // `isAuthenticating`, and its `finally` — the only thing that clears
+        // that flag — is downstream of this await. A never-settling promise
+        // therefore pins the flag for the lifetime of the client: the retry
+        // loop reconnects, the new socket opens, and its `authenticate()`
+        // takes the `if (this.isAuthenticating) await this.authPromise` branch
+        // onto the dead promise and waits forever. Auth never completes, so
+        // `reportConnected(true)` never fires and the app sits on "Offline"
+        // next to a server answering in milliseconds, with every `ws.fetch`
+        // hung because `REQUEST_TIMEOUT` only starts after auth.
+        //
+        // Reproduced on a cold start where the webview is ready before the
+        // embedded server binds: one `close code=1006 opened=false`, and no
+        // recovery until a reload builds a fresh client.
+        ws.addEventListener('close', () => {
+          if (!opened) {
+            reject(
+              new AtomicError(
+                `WebSocket to ${wsURL.origin} closed before it opened`,
+                ErrorType.Server,
+              ),
+            );
+          }
+        });
         ws.addEventListener('open', () => {
           opened = true;
           this._retryDelay = 1000;
@@ -364,6 +389,10 @@ export class WSClient {
           this.handleOpen();
         });
       });
+      // Nobody awaits `openPromise` until an auth or fetch needs it, so a
+      // rejection that arrives first would surface as an unhandled rejection.
+      // This derived catch absorbs that; awaiters still see the rejection.
+      this.openPromise.catch(() => undefined);
 
       this.ws = ws;
     };

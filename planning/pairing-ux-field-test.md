@@ -671,39 +671,48 @@ that is gone. The machine is fine, the server is fine, and the resource is on
 disk — it simply was not listening yet at the instant the page asked. Someone
 reading this checks their wifi.
 
-**The mechanism, measured.** The websocket connect fails once, at the moment of
-restart, and is never retried:
+**Two thirds of the first write-up here was wrong, and the correction is the
+finding.** It said the reconnect never runs. It does: backoff 2/4/8/16/30s,
+indefinitely, and a socket killed *after* opening reconnects within a minute.
+One of the runs that seemed to prove otherwise was C3 in disguise — three app
+instances alive at once, the oldest holding the redb lock
+(`Failed to create redb … Database already open`), so there was no server to
+reach and the retries were correctly failing.
 
+**The real mechanism.** `openPromise` only ever resolved:
+
+```js
+this.openPromise = new Promise(resolve => {
+  ws.addEventListener('open', () => { … resolve(); });
+});
 ```
-16:23:40  [WS] Connection failed
-16:23:40  [WS] close code=1006 reason="" wasClean=false opened=false
-16:23:40  [atomic] Migrating the previous account failed: getResource...
-```
 
-That is the *last* WS line in the log. The server bound seconds later and has
-answered in ~1ms ever since, so a retry would have succeeded immediately — there
-were none. `websockets.ts` does have a backoff loop and an `online` listener, but
-neither ran: dispatching `online` by hand produced zero new sockets, and no
-repeated failures appear in the log either. So this is not slow backoff, it is no
-reconnect at all after a connect that never opened.
+A socket that dies before opening leaves it pending forever. `authenticate()`
+awaits it while holding `isAuthenticating`, and the `finally` that clears that
+flag is downstream of the await — so the flag is pinned for the life of the
+client. The retry then works perfectly and makes no difference: the new socket
+opens, its `authenticate()` takes the `if (this.isAuthenticating) await
+this.authPromise` branch onto the dead promise, and waits forever. Auth never
+completes, `reportConnected(true)` never fires, and every `ws.fetch` hangs
+because `REQUEST_TIMEOUT` only starts after auth.
 
-Pressing **Retry** does not help, and the reason is the interesting part: it
-re-issues the *fetch*, not the *connection*. The fetch queues on a socket whose
-handshake never completed, and by `websockets.ts`'s own note, `ws.fetch`'s
-`REQUEST_TIMEOUT` "only starts AFTER auth, so a stalled handshake hangs every
-fetch indefinitely". The result is a third state beyond loaded and failed:
+That is why Retry does nothing (it re-issues the fetch, which queues behind the
+same dead auth), why a reload fixes it (fresh client), and why the app can show
+"Offline" while holding an ESTABLISHED socket to a server answering in ~1ms.
 
-> Still loading…
-> The resource ... hasn't loaded after 15 seconds.
+**Fixed and verified end-to-end.** `openPromise` now rejects when a socket closes
+before opening, so the stuck auth settles and the flag clears. Same cold-start
+race, measured before and after:
 
-That 15 seconds is a UI notice, not a request timeout. Nothing underneath ever
-gives up, so the app sits there indefinitely — not loading, not complete, not an
-error. Confusing to the point of looking like data loss: the sidebar and title
-render as `...` and the body as *Empty*.
+| | before | after |
+| --- | --- | --- |
+| WS connect | `close code=1006 opened=false` | same |
+| server binds | 1s later | 1s later |
+| sync status | **Offline, indefinitely** | **Connected** |
+| error screen | shown until reload | none |
 
-Confusingly, the app can look reachable while this is happening: an HTTP
-keep-alive connection to the same port stays ESTABLISHED, so `lsof` shows a live
-socket to a server the app insists it is offline from.
+Unit tests fail without the fix; the second one times out at 5002ms, which is
+the deadlock reproducing.
 
 Three things to separate when fixing: a connect that never opened must still
 schedule a retry (this is boot ordering, not connectivity); Retry should re-establish
