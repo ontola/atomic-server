@@ -507,6 +507,41 @@ rather than assuming deltas always arrive in order. The `SYNC_VV` handshake
 already does exactly this at connect time — it is the reconnect/gap case that
 has no equivalent.
 
+### M10 — A peer's new child resources never reach an open page (open)
+
+Tested after M9, because "adding things to a table does not sync" had the same
+shape as the document bug and looked like it might share a cause. It does share
+the shape. It is not fixed by M9.
+
+Table `RelayTableTest` open on both nodes, row added on the desktop:
+
+| | desktop | HA, page open | HA, after reload |
+| --- | --- | --- | --- |
+| `RowAlpha-4416` | instant | **absent at 18s** | **present** |
+
+So the row crosses the link and lands in the peer's store. The open page simply
+never learns about it.
+
+The reason M9 does not cover this: a table row is a separate child resource
+created by a commit, not an op inside the table's own Loro document. It travels
+the commit → `UPDATE` frame → `add_resource_opts` → `ExternalChange` route. M9
+only put *document ops* on the live channel.
+
+`Handler<ExternalChange>` (`server/src/commit_monitor.rs`) does fan out to the
+subject's subscribers and to its drive's subscribers, so the notification is
+being sent. What is not established is whether the client can act on it: a table
+renders a *query* over its children, and query-update frames were retired
+(`tag::QUERY_UPDATE_RESERVED`, `planning/drop-query-update.md`) in favour of
+`UPDATE`/`DESTROY` carrying full snapshots. Locally that is fine — the desktop
+showed its own new row immediately. Across a peer link it is not.
+
+Next step is to find where the chain stops: whether `ExternalChange` reaches the
+websocket at all for a subject the client never explicitly subscribed to (a row
+that did not exist when the page loaded), and whether the table's query
+invalidates on a drive-level notification. That is a client-side question, and
+it is the same question M9b raises from the other direction — both are about a
+peer's changes not reaching an already-open page.
+
 ### P1 — Proposal: show discovered-but-unpaired nodes on the Sync page
 
 The Sync page shows two lists, and neither is discovery:
