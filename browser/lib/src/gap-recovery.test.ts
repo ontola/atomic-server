@@ -52,7 +52,7 @@ function withheldCommit(): { seed: Uint8Array; orphaned: Uint8Array[] } {
   const doc = new LoroDoc();
   const map = doc.getMap('properties');
 
-  map.set(core.properties.isA, [core.classes.document]);
+  map.set(core.properties.isA, [core.classes.class]);
   map.set(NAME, 'awd');
   doc.commit();
   const seed = doc.export({ mode: 'snapshot' });

@@ -1701,6 +1701,19 @@ export class Store {
     return this.aliases.get(normalized) ?? normalized;
   }
 
+  /**
+   * True when `subject` is a placeholder (`_new:…`) that has since been aliased
+   * to a real subject — i.e. the draft it stood for has been persisted.
+   *
+   * Lets a view tell apart the two reasons a collection can grow: one of its
+   * own drafts materialising, versus a resource arriving from elsewhere (a
+   * peer, or another tab). Those need opposite handling, and without a way to
+   * distinguish them a view has to guess.
+   */
+  public isAliased(subject: string): boolean {
+    return this.aliases.has(this.normalizeSubject(subject));
+  }
+
   /** Resolve a (possibly aliased) subject to its cached Resource. */
   private getResolved(subject: string): Resource | undefined {
     return this.resources.get(this.resolveSubject(subject));

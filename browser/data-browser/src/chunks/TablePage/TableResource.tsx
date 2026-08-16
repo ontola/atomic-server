@@ -679,6 +679,33 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // missing rows (surfacing as an unhandled rejection in
   // `useMemberFromCollection`). The clamp guards that instant; the filter
   // rebase effect below then recaptures a fresh baseline.
+  // A row can also arrive from somewhere this session knows nothing about: a
+  // paired peer, or another tab on the same drive. That grows the collection
+  // without going through the new-row flow, so the frozen baseline never moves
+  // and the grid keeps rendering the count it captured at load — the row is in
+  // the collection, in the store, complete, and simply never drawn. Measured
+  // against a paired node: `totalMembers` 8, `aria-setsize` 5.
+  //
+  // Freezing exists to stop a materialising session row from remounting; it was
+  // never meant to hide other people's rows. So account for what this session
+  // contributed — each materialised draft adds a member while still rendering
+  // from `newRowSubjects` — and let anything beyond that raise the baseline.
+  //
+  // Only ever raises it. Shrink stays with `decrementMemberCount` and the clamp
+  // below, and session rows keep their `_new:` key through the index shift
+  // (`itemKey` offsets by `memberCount`), so nothing remounts.
+  if (baselineMemberCountRef.current !== null) {
+    const materialisedSessionRows = newRowSubjects.filter(subject =>
+      store.isAliased(subject),
+    ).length;
+    const accountedFor =
+      baselineMemberCountRef.current + materialisedSessionRows;
+
+    if (collection.totalMembers > accountedFor) {
+      baselineMemberCountRef.current += collection.totalMembers - accountedFor;
+    }
+  }
+
   const memberCount = Math.min(
     baselineMemberCountRef.current ?? collection.totalMembers,
     collection.totalMembers,
