@@ -73,7 +73,23 @@ export function useLoroSync(
     const unsub = store.subscribeLoroEphemeral(
       subject,
       (update: Uint8Array) => {
-        ephemeralStore.apply(update);
+        try {
+          ephemeralStore.apply(update);
+        } catch (e) {
+          // A cursor can arrive before the content it points into. Positions
+          // reference Loro containers, and a peer editing a document this
+          // device has not caught up on yet names containers the local doc
+          // does not have — Loro throws "The container does not exist in the
+          // doc". That became routine once presence started crossing peer
+          // links: the update travels on its own channel and does not wait for
+          // document state.
+          //
+          // Dropping it is correct. Presence is a snapshot of right now, so
+          // there is nothing to replay — the next update after the document
+          // catches up applies cleanly. Throwing here only produced an uncaught
+          // error per keystroke of someone else's typing.
+          console.debug('[presence] skipped a cursor for unsynced content:', e);
+        }
       },
     );
 
