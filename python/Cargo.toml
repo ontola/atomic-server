@@ -11,7 +11,11 @@ name = "atomic_data"
 crate-type = ["cdylib"]
 
 [dependencies]
-atomic_lib = { path = "../lib", default-features = false, features = ["db-redb"] }
+atomic_lib = { path = "../lib", default-features = false, features = [
+    "db-redb",
+    "iroh",
+    "discovery",
+] }
 pyo3 = { version = "0.25", features = ["abi3-py39"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

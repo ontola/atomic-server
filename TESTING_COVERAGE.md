@@ -207,7 +207,7 @@ One 13-line smoke test, never run in CI — the pipeline has no emulator.
 
 ### 7b. Python SDK (`python/`)
 
-Glue only: `pytest` after `maturin develop` covers in-memory create/read/update/query/delete and file-backed reopen. Not in Dagger CI. No sync, blobs, or HTTP.
+Glue: `pytest` after `maturin build` covers in-memory CRUD, file-backed reopen, and a two-process Iroh sync (`tests/test_iroh.py`). Not in Dagger CI. No WS session or blobs.
 
 ### 8. Known residual races
 

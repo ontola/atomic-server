@@ -10,11 +10,13 @@ use std::sync::OnceLock;
 use pyo3::prelude::*;
 
 mod convert;
+mod peer;
 mod resource;
 mod store;
 mod urls;
 
 pub(crate) use convert::{py_err, py_to_value, resolve_property, resource_to_dict, value_to_py};
+pub(crate) use peer::{PeerInfo, SyncReport};
 pub(crate) use resource::Resource;
 pub(crate) use store::{AgentInfo, DriveInfo, SetupInfo, Store};
 
@@ -48,6 +50,8 @@ fn atomic_data(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SetupInfo>()?;
     m.add_class::<AgentInfo>()?;
     m.add_class::<DriveInfo>()?;
+    m.add_class::<SyncReport>()?;
+    m.add_class::<PeerInfo>()?;
 
     let urls_mod = urls::urls_module(m.py())?;
     m.add_submodule(&urls_mod)?;

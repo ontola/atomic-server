@@ -101,8 +101,12 @@ impl Resource {
     }
 
     /// Sign and apply the pending edits to the local store.
+    ///
+    /// If this process has `start_peer()` running and live peers, the Loro
+    /// delta is pushed over Iroh immediately.
     fn save(&mut self) -> PyResult<()> {
-        block_on(self.inner.save_locally(&self.db)).map_err(py_err)?;
+        let response = block_on(self.inner.save_locally(&self.db)).map_err(py_err)?;
+        crate::peer::publish_live(&response);
         Ok(())
     }
 

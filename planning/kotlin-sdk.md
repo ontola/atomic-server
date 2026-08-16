@@ -74,9 +74,10 @@ Ship as an AAR (`dev.atomicdata:sdk`) for JVM + Android. JVM-only is enough
 to test the binding; Android needs `cargo-ndk` and rustls-platform-verifier
 JNI init (known pitfall from the Android build work).
 
-Same v1 exclusions as Python: no blobs, no history. Sync is not forbidden —
-it waits for the shared `sdk` to grow a `SyncSession` (WS or Iroh) rather
-than each language wrapping `peer_sync()` again. See `python-sdk.md`.
+Iroh belongs in Kotlin v1 the same way it does in Python — local CRUD
+without P2P is not the product. Wrap the same `start_peer` / `sync_with` /
+live-save surface. A later `SyncSession` can sit on top; do not ship Kotlin
+without a way for two devices to converge.
 
 ## What Kotlin adds that Python does not
 

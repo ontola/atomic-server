@@ -33,21 +33,29 @@ every Rust CI run.
 - `Store.open(path)` / `Store.in_memory()`
 - `setup`, `load_agent`, `create_agent`, `create_drive`
 - `create`, `get`, `query`, `delete`, `flush`
+- Iroh: `start_peer`, `announce`, `sync_with`, `wait_for`, live push on `save`
 - `Resource` dict access, `save`, `destroy`, `to_dict`, `to_json`
 - `atomic_data.urls` constants
 
 Python calls are synchronous. Each one `block_on`s a process-wide tokio
 runtime and drops the GIL for the Rust work.
 
+## Sync
+
+Iroh is in. Local CRUD without P2P is not the product.
+
+- `start_peer()` / `peer_id` / `announce()` / `sync_with(node_id)`
+- `.save()` broadcasts a live Loro update when peers are connected
+- `wait_for(subject)` observes local or peer changes
+- Two-process pytest (`tests/test_iroh.py`) — one node per OS process
+
+WS `SyncSession` (unified-sync) is still the next *shared* API. Python
+ships the same Iroh calls Flutter already has, because that is what
+makes two devices converge today.
+
 ## Not in v1
 
-- **Iroh / WS sync.** Not blocked — `atomic_lib` already has it, Flutter
-  already wraps it (`start_peer`, `peer_announce`, `peer_sync`). Left out
-  because v1 was the binding + local redb loop, Iroh is a heavy feature
-  (`iroh` + `discovery`, live `Router`, one node per process), and
-  [`unified-sync.md`](./unified-sync.md) does not want a new language to
-  ship `peer_sync()` as the primary API. Next network work should be a
-  `SyncSession` (WS or Iroh), not a Python-only QR/peer helper.
+- WebSocket-to-server session
 - Blobs
 - History / time-travel
 - Code-first schema (see `json-schema-code-first.md`)
