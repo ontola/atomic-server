@@ -8,7 +8,11 @@ import { orderChildren, type ChildSortEntry } from './child-order.js';
  * fell back to its array index — 3 against timestamps around 1.7e12.
  */
 
-const at = (subject: string, key: number | undefined, index: number): ChildSortEntry => ({
+const at = (
+  subject: string,
+  key: number | undefined,
+  index: number,
+): ChildSortEntry => ({
   subject,
   key,
   index,

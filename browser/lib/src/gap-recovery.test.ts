@@ -87,9 +87,7 @@ describe('a delta that cannot apply triggers a catch-up fetch', () => {
 
   /** Seed a resource with real, usable content — the case the old code let
    *  through silently, because a resource with an `isA` was assumed healthy. */
-  async function seeded(
-    store: Store,
-  ): Promise<{ orphaned: Uint8Array[] }> {
+  async function seeded(store: Store): Promise<{ orphaned: Uint8Array[] }> {
     const { seed, orphaned } = withheldCommit();
     const r = new Resource(subject);
     r.setStore(store);
