@@ -34,16 +34,22 @@ Atomic state *as* git.
 
 ## Exporting a drive as a git repo
 
-`atomic_lib::git_export::export_drive` writes an `atomic-git-export` v1 tree:
+`atomic_lib::git_export::export_drive` writes an `atomic-git-export` v2 tree:
 
 - Folders stay folders; File blobs stay files; DocumentV2 bodies become
-  markdown; other resources become pretty JSON-AD.
-- `.atomic/index.json` maps each DID to its path (paths are not identity).
-- `.atomic/resources/` holds JSON-AD without the Loro binary.
+  lossless markdown+HTML; other resources become pretty JSON-AD.
+- Identity is `localId` (existing property, else the export path). Sidecars
+  have no `@id`; in-drive links are rewritten to `localId`s.
+- `.atomic/index.json` maps each `localId` to its path and kind.
+- `.atomic/resources/` holds portable JSON-AD (no Loro binary, no commit
+  bookkeeping).
 - Optionally `git init` and one snapshot commit.
 
-Re-import (`import_as_new_drive`) mints **new** DIDs. It is interchange, not a
-restore of identity. Encrypted vault backup is the identity-preserving path.
+Re-import (`import_as_new_drive`) mints **new** DIDs the first time. A second
+import into the same drive is idempotent (same `localId`s → same DIDs).
+Export → import → export is a no-op aside from `exportedAt`. This is
+interchange of content + graph shape, not a restore of original DIDs or
+CRDT history. Encrypted vault backup is the identity-preserving path.
 
 Try the sample:
 

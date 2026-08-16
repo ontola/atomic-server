@@ -1,9 +1,10 @@
 # Drive as a Git repository
 
-> Status: **Exploration + prototype (2026-08-16).** Prototype lives in
-> `lib/src/git_export.rs` (snapshot export of a drive to a working tree, optional
-> `git init` + commit, and a lossy re-import). Not a sync replacement and not a
-> substitute for the encrypted vault.
+> Status: **Prototype v2 (2026-08-16).** Content-reversible export/import lives
+> in `lib/src/git_export.rs` + `lib/src/git_md.rs`. Identity is `localId`,
+> document bodies are lossless markdown+HTML, and export → import → export is a
+> no-op (ignoring `exportedAt`). Not a sync replacement and not a substitute
+> for the encrypted vault.
 
 Related: [`virtual-drive.md`](./virtual-drive.md) (OS filesystem mount),
 [`encrypted-vault-format.md`](./encrypted-vault-format.md) (blind backup),
@@ -52,7 +53,7 @@ Treat it as backup-of-content and as interchange, not as the source of truth.
 
 ## Mapping: the working tree
 
-The prototype writes this layout (v1 of `atomic-git-export`):
+The prototype writes this layout (v2 of `atomic-git-export`):
 
 ```text
 <repo>/
@@ -60,16 +61,16 @@ The prototype writes this layout (v1 of `atomic-git-export`):
   .gitignore
   .atomic/
     FORMAT.md                       # this layout, versioned
-    drive.json                      # drive resource as pretty JSON-AD
-    index.json                      # DID → path + kind (the load-bearing map)
-    resources/<did_sanitized>.json  # full JSON-AD minus Loro binary
-    loro/<did_sanitized>.bin        # optional: raw Loro snapshots
+    drive.json                      # drive resource as pretty JSON-AD (no @id)
+    index.json                      # localId → path + kind (the load-bearing map)
+    resources/<localId_stem>.json   # JSON-AD keyed by localId, refs rewritten
+    loro/<localId_stem>.bin         # optional: raw Loro snapshots
   Notes/
-    Hello.md                        # DocumentV2 body as markdown
+    Hello.md                        # DocumentV2 body as lossless markdown+HTML
   Photos/
-    cat.jpg                         # File blob bytes
+    cat.jpg                         # File blob bytes (did:ad:blob:{blake3})
   Projects/
-    Roadmap.json                    # any other resource as JSON-AD
+    Roadmap.json                    # any other resource as portable JSON-AD
 ```
 
 Class → file:
@@ -79,7 +80,7 @@ Class → file:
 | Drive | repo root | `.atomic/drive.json` |
 | Folder | directory | children + JSON-AD under `.atomic/resources/` |
 | File | basename from `filename` / `name` | blob bytes (chunked files concatenated) |
-| DocumentV2 | `{name}.md` (or `index.md` inside the folder if it has children) | markdown extracted from the Loro/ProseMirror body, else `description` |
+| DocumentV2 | `{name}.md` (or `index.md` inside the folder if it has children) | lossless markdown+HTML from the Loro/ProseMirror body (`lib/src/git_md.rs`) |
 | Table, ChatRoom, anything with children | directory | children as files; self as JSON-AD |
 | Everything else | `{name}.json` | pretty JSON-AD, keys sorted |
 
@@ -93,29 +94,24 @@ not a diff-friendly file; stuffing base64 into JSON would dominate every
 commit. Optional `.atomic/loro/*.bin` is the escape hatch for a more complete
 backup.
 
-## Identity: paths are not DIDs
+## Identity: `localId`, not DIDs
 
-Git's unit of identity is a path. Atomic's is `did:ad:{genesis}`. Those
-disagree on the operations people actually do:
+Git's unit of identity is a path. Atomic's is `did:ad:{genesis}`. v2 uses
+`localId` (`https://atomicdata.dev/properties/localId`) as the portable key:
 
-- **Rename** in Atomic is a property change; in git it is `git mv` (detected
-  heuristically). `.atomic/index.json` is the stable DID → path map so an
-  importer does not mint a new resource because a markdown file moved.
-- **Move across folders** is `parent` in Atomic, a path change in git. Same map.
-- **Two resources, same name** is legal in Atomic, illegal as sibling files.
-  Collision suffixing is required, and the suffix must be stable across
-  re-exports (prototype: first-wins order from the parent index, then
-  `(2)`… — not a hash of the DID, so a rename of the *other* file does not
-  reshuffle numbers). Follow-up: suffix a short DID stem when colliding so
-  identity is obvious in the path.
-- **Delete** in Atomic is a tombstone + optional commit retention; in git it is
-  an absent path. Re-import must not resurrect a tombstoned DID.
+- Existing `localId` is kept. Otherwise the exporter assigns the projection
+  path (`Notes/Hello.md`, `hello.txt`).
+- Sidecars have **no `@id`**. `parent` and in-drive AtomicUrls are rewritten
+  to `localId`s. Blob hashes (`did:ad:blob:{blake3}`) stay.
+- First import mints new DIDs via genesis. JSON-AD import already resolves
+  `localId` refs and, under a DID parent, looks up `(importer, localId)` so a
+  second import into the same drive is **idempotent** (same DIDs).
+- If `localId` *is* the path, `git mv` / rename mints a sibling on re-import.
+  Keep a stable `localId` when you care about identity across renames.
 
-Round-trip that **preserves DIDs** needs the genesis certificate (and, for a
-verifier, the signature chain) in the sidecar. The prototype stores JSON-AD
-propvals including `genesis` when present, but re-import currently *mints new
-DIDs* under the target drive. That is the honest v1: content compatibility,
-not identity restore. Vault remains the identity-preserving backup.
+Round-trip that **preserves original DIDs** still needs genesis certificates.
+Vault remains the identity-preserving backup. Git export is content + graph
+shape.
 
 ## History: three levels, only the first is real today
 
@@ -184,25 +180,21 @@ not `git merge`.
 This is the compatibility win. A DocumentV2 whose body is a Loro-ProseMirror
 tree becomes a `.md` file other tools can open.
 
-The conversion is **lossy in both directions**:
+v2 is **content-reversible**, not CRDT-identical. `lib/src/git_md.rs`
+serializes the TipTap schema as markdown plus raw HTML, and parses that
+format back into ProseMirror JSON:
 
-- TipTap marks that are not markdown (colors, mentions, inline comments,
-  canvas embeds) flatten or drop.
-- Markdown imported back cannot reconstruct the original CRDT items, so
-  collaborators who kept editing in Atomic will conflict with a naive
-  overwrite. Import should write a *new* Loro doc from the markdown, not
-  splice into the old one, unless we are doing a deliberate "replace body"
-  user action.
+- CommonMark for headings, lists, code, quotes, emphasis, links, images.
+- HTML for resource embeds (`<a data-type="resource-block" href>`), notes,
+  tables, colors, text-align, mentions (`[@id="…" label="…"]`).
+- Unknown nodes as `<div data-pm-type="…">` so they survive a round-trip.
+- Export rewrites embed `href`s from DID → `localId`; import rewrites them
+  back to the minted DID (the editor expects DIDs).
 
-The prototype extracts:
-
-1. Loro `doc` map → markdown (headings, lists, code, quotes, links, emphasis)
-2. else `documentContent` text container
-3. else the resource's `description`
-
-Search already uses (1)/(2) as plain text
-(`AtomicLoroDoc::extract_document_plain_text`). Markdown is the same tree with
-structure kept.
+The `.md` file is the source of truth — not an embedded ProseMirror JSON
+comment — so human edits in git are what get imported. Import writes a new
+Loro `doc` tree from the parsed markdown; it does not splice into the old
+oplog.
 
 ## Blobs
 
@@ -238,20 +230,21 @@ private remote, and that this is not encrypted at rest.
 
 ## Prototype (what shipped)
 
-`atomic_lib::git_export`, gated on the `db` feature:
+`atomic_lib::git_export` (gated on `db`) and `atomic_lib::git_md`:
 
-- `export_drive(store, drive, dest, opts)` — walks `parent` like
-  `collect_drive_subjects`, writes the layout above, optionally `git init` +
-  commit (shells out to `git`; no libgit2).
-- `import_as_new_drive(store, src)` — reads `index.json` + files, mints a new
-  drive and new DIDs. Lossy, identity not preserved. Proves the tree is
-  loadable.
+- `export_drive(store, drive, dest, opts)` — walks `parent`, writes the v2
+  layout, optionally `git init` + commit (shells out to `git`; no libgit2).
+- `import_as_new_drive(store, src)` — creates a drive, JSON-AD imports
+  sidecars via `localId`, inserts file blobs, applies `.md` bodies to Loro.
+- `import_into_drive(store, src, drive)` — same, idempotent on an existing
+  drive (same `localId`s → same DIDs).
+- Success test: export → import → export is a no-op (`exportedAt` ignored).
 - `cargo run -p atomic_lib --features db-redb --example export_drive_git -- <dir>`
-  — builds a sample drive (folder, document, file, bookmark) and exports it.
+  — sample drive (folder, document with heading/marks/list/embed, file,
+  bookmark) and export.
 
-Out of scope for the prototype: commit replay, LFS, watching a remote, ACL
-filtering of the export (it dumps everything the local node can read; callers
-must pass a store already scoped), encrypted remotes.
+Out of scope: commit replay, LFS, watching a remote, ACL filtering of the
+export, encrypted remotes, original-DID restore.
 
 ## Open questions
 
