@@ -43,6 +43,33 @@ pub mod tag {
     /// authorization (the authenticated agent + Iroh NodeId are).
     pub const HELLO: u8 = 0x37;
     pub const EPHEMERAL: u8 = 0x40;
+    /// Liveness probe. Payload-free, never answered — its only job is to give
+    /// the peer's read loop something to receive, so silence can be treated as
+    /// a dead link rather than an idle one.
+    pub const KEEPALIVE: u8 = 0x41;
+}
+
+/// How often an otherwise-idle live connection sends a `KEEPALIVE`.
+pub const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How long a live connection may hear nothing at all before it is considered
+/// dead. Comfortably more than [`KEEPALIVE_INTERVAL`], so a couple of dropped
+/// probes do not tear down a working link.
+///
+/// This exists because a half-open connection is invisible: one side's stream
+/// dies and the other keeps queueing writes into it, believing it is live —
+/// which also stops the reconnect loop, since that skips peers it thinks are
+/// connected. Observed gap between the two sides noticing: 15 minutes, during
+/// which every local change was silently dropped.
+pub const LIVENESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(35);
+
+/// A single `KEEPALIVE` frame, length-prefixed and ready to send.
+pub fn encode_keepalive_wire_msg() -> Vec<u8> {
+    let frame = vec![tag::KEEPALIVE];
+    let mut msg = Vec::with_capacity(4 + frame.len());
+    msg.extend_from_slice(&(frame.len() as u32).to_be_bytes());
+    msg.extend_from_slice(&frame);
+    msg
 }
 
 /// Structured error codes carried on `ERROR` frames (and the HTTP `/commit`

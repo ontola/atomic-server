@@ -232,6 +232,54 @@ async fn e2e_bidirectional_bulk_sync() {
 }
 
 /// After bulk sync, an edit on A reaches B via the live stream.
+/// An idle link stays up.
+///
+/// The read loop now treats silence as a dead connection, which is what makes a
+/// half-open link recoverable — one side's stream can die while the other keeps
+/// broadcasting into it, and until this it took ~15 minutes for the second side
+/// to notice, during which every local change was silently dropped and
+/// `auto_connect` would not redial (it skips peers it believes are connected).
+///
+/// The hazard in that fix is tearing down healthy connections that simply have
+/// nothing to say, so this waits past the keepalive interval with no traffic at
+/// all and asserts the peer is still there and still syncing.
+#[tokio::test]
+async fn e2e_an_idle_link_survives_on_keepalives() {
+    let pair = setup_pair("e2e_idle_link").await;
+
+    sync_b_from_a(&pair).await;
+    wait_for_live_peers(1, std::time::Duration::from_secs(3)).await;
+
+    // Quiet for longer than a keepalive interval — but inside the liveness
+    // timeout, so only the keepalives are holding it open.
+    tokio::time::sleep(crate::sync::protocol::KEEPALIVE_INTERVAL * 2).await;
+
+    assert!(
+        crate::sync::peer::live_peer_count() >= 1,
+        "an idle connection must be held open by keepalives, not torn down"
+    );
+
+    // And it still works, rather than merely appearing registered.
+    let canvas = pair
+        .db_a
+        .create_resource(
+            CANVAS_CLASS,
+            &pair.drive,
+            "After idling",
+            Some(vec![(
+                STROKE_DATA,
+                crate::Value::Json(serde_json::Value::Array(vec![
+                    serde_json::json!({"color": 2, "path": [[1.0, 1.0]]}),
+                ])),
+            )]),
+        )
+        .await
+        .unwrap();
+
+    sync_b_from_a(&pair).await;
+    assert_eq!(stroke_count(&pair.db_b, &canvas).await, 1);
+}
+
 /// Presence crosses a peer link — and never reaches the store.
 ///
 /// Both halves matter. Before this, `EPHEMERAL` (0x40) was a reserved tag with

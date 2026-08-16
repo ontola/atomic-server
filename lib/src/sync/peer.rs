@@ -828,7 +828,20 @@ fn register_live_peer(
             "[live] write loop started for {}",
             &write_peer_id[..write_peer_id.len().min(12)]
         );
-        while let Some(msg) = rx.recv().await {
+        loop {
+            // Send a KEEPALIVE whenever there is nothing else to say, so the
+            // peer can tell an idle link from a dead one. Without traffic the
+            // far side has no way to distinguish "quiet" from "gone", and a
+            // half-open connection survives until some lower layer eventually
+            // notices — 15 minutes, in the case this was written for.
+            let msg =
+                match tokio::time::timeout(super::protocol::KEEPALIVE_INTERVAL, rx.recv()).await {
+                    Ok(Some(msg)) => msg,
+                    // Channel closed: the peer was deregistered.
+                    Ok(None) => break,
+                    Err(_) => super::protocol::encode_keepalive_wire_msg(),
+                };
+
             match send.write_all(&msg).await {
                 Ok(_) => {
                     tracing::trace!(
@@ -869,8 +882,18 @@ fn register_live_peer(
         let mut drive_cache: std::collections::HashMap<String, bool> =
             std::collections::HashMap::new();
         loop {
-            let len = match recv.read_u32().await {
-                Ok(n) => {
+            // Silence is treated as death, not idleness. A half-open link is
+            // otherwise invisible: this side keeps believing it is connected,
+            // so `auto_connect` will not redial it (it skips peers already in
+            // `live_peer_ids`) and every local change is broadcast into a
+            // socket nobody reads — with no error anywhere. The peer sends a
+            // KEEPALIVE every `KEEPALIVE_INTERVAL`, so hearing nothing for
+            // `LIVENESS_TIMEOUT` means the connection is gone.
+            let read =
+                tokio::time::timeout(super::protocol::LIVENESS_TIMEOUT, recv.read_u32()).await;
+
+            let len = match read {
+                Ok(Ok(n)) => {
                     tracing::trace!(
                         "[live] received frame {} bytes from {}",
                         n,
@@ -878,10 +901,18 @@ fn register_live_peer(
                     );
                     n as usize
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     tracing::info!(
                         "[live] read error from {}: {e}",
                         &read_peer_id[..read_peer_id.len().min(12)]
+                    );
+                    break;
+                }
+                Err(_) => {
+                    tracing::info!(
+                        "[live] no traffic from {} for {:?} — treating the link as dead",
+                        &read_peer_id[..read_peer_id.len().min(12)],
+                        super::protocol::LIVENESS_TIMEOUT
                     );
                     break;
                 }
@@ -907,6 +938,12 @@ fn register_live_peer(
             }
 
             if buf.is_empty() {
+                continue;
+            }
+
+            // Keepalive: nothing to do. Receiving it already did the job —
+            // it reset the liveness timeout above.
+            if buf[0] == super::protocol::tag::KEEPALIVE {
                 continue;
             }
 
