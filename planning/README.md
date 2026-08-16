@@ -55,7 +55,6 @@ Remaining work, not "this file exists."
 | [`reticulum-sync.md`](./reticulum-sync.md) | **Proposal.** Atomic sync protocol over Reticulum. |
 | [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal.** Code-first JSON Schema → local DID-backed Class/Property resources. |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
-| [`kotlin-sdk.md`](./kotlin-sdk.md) | **Decision.** Kotlin v1 matches Python's local CRUD scope via UniFFI over a shared Rust surface. |
 | [`llm-wasm-gui-plugins.md`](./llm-wasm-gui-plugins.md) | **Proposal.** Browser-built JS/TS apps with scoped Loro docs. |
 | [`personal-information-suite.md`](./personal-information-suite.md) | Exploration: contacts, calendar, email. |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
@@ -112,7 +111,8 @@ the document itself.
 | [`presence-views.md`](./presence-views.md) | Presence on canvas, tables, navbar, sidebar. |
 | [`demo-experience.md`](./demo-experience.md) | v1 demo workspace. |
 | [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) | Bootstrap-grace admission gate for managed nodes. |
-| [`python-sdk.md`](./python-sdk.md) | Python bindings over `atomic_lib` via PyO3 (local redb, read/write/query). |
+| [`python-sdk.md`](./python-sdk.md) | Python bindings over `atomic_lib` via PyO3 (local redb, Iroh). |
+| [`kotlin-sdk.md`](./kotlin-sdk.md) | UniFFI crate `ffi/` + Kotlin package `dev.atomicdata`. Same local redb + Iroh surface as Python. Android AAR still open. |
 
 ## Agent Workflow
 

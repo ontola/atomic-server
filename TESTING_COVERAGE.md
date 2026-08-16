@@ -58,6 +58,7 @@ templates, and offline variants stay in the full suite. Policy:
 | Flutter Dart | `cd flutter && flutter test` | `flutterTest` |
 | Flutter Rust bridge | `cargo test --manifest-path flutter/rust/Cargo.toml` | `flutterTest` |
 | Python SDK | `cd python && maturin develop && pytest` | **not in CI** |
+| Kotlin / UniFFI SDK | `cd ffi && cargo test && cd kotlin && ./gradlew test` | **not in CI** |
 
 CI runs `cargo nextest run --workspace --exclude atomic-server-tauri
 --no-default-features --features light`. Feature unification pulls in
@@ -70,6 +71,9 @@ Two things worth knowing about the runners:
   `--manifest-path` step in `flutterTest`.
 - **`python/` is excluded from the workspace** for the same reason (PyO3).
   Tests are `pytest` after `maturin develop`; they are not in Dagger CI yet.
+- **`ffi/` is excluded from the workspace** (UniFFI + Iroh). Rust tests are
+  `cargo test` in `ffi/`; JVM tests are `./gradlew test` in `ffi/kotlin`.
+  Not in Dagger CI yet.
 - **`.config/nextest.toml` sets `retries = 2`.** A flaky test passes CI
   silently. Check for `FLAKY` in nextest output, not just the summary line.
 
@@ -208,6 +212,10 @@ One 13-line smoke test, never run in CI — the pipeline has no emulator.
 ### 7b. Python SDK (`python/`)
 
 Glue: `pytest` after `maturin build` covers in-memory CRUD, file-backed reopen, and a two-process Iroh sync (`tests/test_iroh.py`). Not in Dagger CI. No WS session or blobs.
+
+### 7c. Kotlin / UniFFI SDK (`ffi/`)
+
+Glue: `cargo test` in `ffi/` covers the same local CRUD + Iroh-guard cases as Python, in-process. `ffi/kotlin` JUnit covers the generated bindings plus a two-process Iroh sync (`IrohTest.twoProcessIrohSync`). Not in Dagger CI. No Android AAR, WS session, or blobs. `startPeer` is process-global — only one JVM test may start Iroh.
 
 ### 8. Known residual races
 

@@ -18,6 +18,7 @@ The other language bindings already follow this shape:
 | TypeScript (browser) | `wasm-bindgen` | redb in OPFS |
 | Dart / Flutter | `flutter_rust_bridge` | redb on disk |
 | Python | **PyO3 + maturin** | redb on disk |
+| Kotlin / JVM | UniFFI (`ffi/`) | redb on disk |
 
 Reimplementing commits, Ed25519, and Loro in Python would drift. UniFFI is a
 better fit when one IDL must generate Swift + Kotlin + Python; here the Python
