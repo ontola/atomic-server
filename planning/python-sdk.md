@@ -41,7 +41,13 @@ runtime and drops the GIL for the Rust work.
 
 ## Not in v1
 
-- WebSocket / Iroh sync (Flutter already has the pattern)
+- **Iroh / WS sync.** Not blocked — `atomic_lib` already has it, Flutter
+  already wraps it (`start_peer`, `peer_announce`, `peer_sync`). Left out
+  because v1 was the binding + local redb loop, Iroh is a heavy feature
+  (`iroh` + `discovery`, live `Router`, one node per process), and
+  [`unified-sync.md`](./unified-sync.md) does not want a new language to
+  ship `peer_sync()` as the primary API. Next network work should be a
+  `SyncSession` (WS or Iroh), not a Python-only QR/peer helper.
 - Blobs
 - History / time-travel
 - Code-first schema (see `json-schema-code-first.md`)
