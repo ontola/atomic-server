@@ -111,6 +111,7 @@ the document itself.
 | [`presence-views.md`](./presence-views.md) | Presence on canvas, tables, navbar, sidebar. |
 | [`demo-experience.md`](./demo-experience.md) | v1 demo workspace. |
 | [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) | Bootstrap-grace admission gate for managed nodes. |
+| [`python-sdk.md`](./python-sdk.md) | Python bindings over `atomic_lib` via PyO3 (local redb, read/write/query). |
 
 ## Agent Workflow
 

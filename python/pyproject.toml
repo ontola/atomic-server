@@ -1,0 +1,42 @@
+[build-system]
+requires = ["maturin>=1.8,<2"]
+build-backend = "maturin"
+
+[project]
+name = "atomic-data"
+version = "0.1.0"
+description = "Local-first Atomic Data SDK for Python. Wraps atomic_lib (Rust) via PyO3."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Joep Meindertsma", email = "joep@argu.co" }]
+keywords = ["atomic-data", "crdt", "local-first", "graph"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+]
+
+[project.urls]
+Homepage = "https://atomicdata.dev"
+Documentation = "https://docs.atomicdata.dev/python.html"
+Repository = "https://github.com/atomicdata-dev/atomic-server"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "atomic_data"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
