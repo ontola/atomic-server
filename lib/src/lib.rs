@@ -85,6 +85,8 @@ pub mod envelopes;
 pub mod errors;
 pub mod expression;
 pub mod genesis;
+#[cfg(feature = "db")]
+pub mod git_export;
 pub mod hierarchy;
 pub mod history;
 pub mod import_identity;
