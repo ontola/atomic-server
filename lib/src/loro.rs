@@ -1270,6 +1270,8 @@ fn collapse_whitespace(s: &str) -> String {
 }
 
 /// Best-effort markdown from a loro-prosemirror or ProseMirror JSON tree.
+/// Kept for tests that pin the old lossy extractor; git export uses `git_md`.
+#[cfg(test)]
 /// Handles both `{type, content}` (ProseMirror) and `{nodeName, children}`
 /// (loro-prosemirror) shapes.
 fn extract_markdown_from_prosemirror_json(node: &serde_json::Value) -> String {
@@ -1372,6 +1374,7 @@ fn extract_markdown_from_prosemirror_json(node: &serde_json::Value) -> String {
     }
 }
 
+#[cfg(test)]
 fn apply_pm_marks(text: &str, marks: Option<&serde_json::Value>) -> String {
     let Some(serde_json::Value::Array(marks)) = marks else {
         return text.to_string();
@@ -1403,6 +1406,7 @@ fn apply_pm_marks(text: &str, marks: Option<&serde_json::Value>) -> String {
 }
 
 /// Ordered lists come out of `listItem` as `- ` bullets; renumber them.
+#[cfg(test)]
 fn numbered_markdown_list(children: &str) -> String {
     let mut n = 1u32;
     let mut out = String::new();
