@@ -51,6 +51,9 @@ test.describe('app keys', () => {
     await expect(
       page.getByRole('heading', { name: 'User Settings' }),
     ).toBeVisible();
+    await expect(
+      page.getByText('No app keys yet', { exact: false }),
+    ).toHaveCount(0, { timeout: 15_000 });
     await expect(page.getByText('Raycast', { exact: true })).toBeVisible();
     await expect(page.getByText(/Read · \d+ workspace/)).toBeVisible();
 

@@ -56,6 +56,30 @@ describe('issueAccessAgent', () => {
     expect(write).toContain(agentDID);
   });
 
+  it('parents the key and clears `new` so the App keys list can see it', async () => {
+    const { store, agentDID } = await testStore();
+    const drive = await createWorkspace(store, agentDID, 'Notes');
+    const folder = await store.newResource({
+      parent: drive.subject,
+      propVals: {
+        [core.properties.name]: 'App keys',
+      },
+    });
+    await folder.save();
+
+    const issued = await issueAccessAgent(store, {
+      name: 'Raycast',
+      write: false,
+      targets: [drive.subject],
+      parent: folder.subject,
+    });
+
+    const profile = await store.getResource(issued.subject);
+    expect(profile.new).toBe(false);
+    expect(profile.get(core.properties.parent)).toBe(folder.subject);
+    expect(profile.get(core.properties.name)).toBe('Raycast');
+  });
+
   it('round-trips the secret to a working agent', async () => {
     const { store, agentDID } = await testStore();
     const drive = await createWorkspace(store, agentDID, 'Notes');

@@ -3055,6 +3055,15 @@ export class Resource<C extends OptionalClass = any> {
         await this.persistToClientDb();
       }
 
+      // `new` is cleared in `signChanges`, but agents (preset
+      // `did:ad:agent:` subject) skip that path: `newResource` does not
+      // stash a genesis, and `_saveInner` does not call `signChanges`
+      // because `commitBuilder.isGenesis` is unset. Leaving `new` true
+      // after a successful POST makes `Collection.applyResourceChange`
+      // ignore `ResourceManuallyCreated`, so a just-minted app key never
+      // appears in the App keys list.
+      this.new = false;
+
       return 'persisted';
     } catch (e) {
       if (isNetworkError(e)) {
@@ -3122,6 +3131,7 @@ export class Resource<C extends OptionalClass = any> {
 
     this.commitError = undefined;
     this.loading = false;
+    this.new = false;
     this.applyToStore('local-acked');
     this.store.notifyResourceSaved(this);
 

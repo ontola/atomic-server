@@ -67,6 +67,11 @@ export async function issueAccessAgent(
     },
   });
   await resource.save();
+  // Agents skip `signChanges` on create (identity is the public key, not a
+  // genesis signature). `save()` must have cleared `new`; do it here too so
+  // `useChildren` / `applyResourceChange` will admit this row. A `new`
+  // resource is treated as a table-row placeholder and never listed.
+  resource.new = false;
   await store.notifyResourceManuallyCreated(resource);
 
   await grantAccessAgent(store, subject, opts.targets, opts.write);
