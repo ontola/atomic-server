@@ -548,6 +548,53 @@ candidates worth separating: the frame for the row subject is never sent (only
 the parent table's own change is, which alone would move the count), or it is
 sent and the client stores it in a way the table's cell does not read.
 
+### M10a — corrected again: the data arrives, the table does not re-render
+
+The version above said "membership propagates live and content does not". Also
+wrong. Content propagates. Read directly out of the live store on the receiving
+page, while those same cells rendered blank:
+
+| subject | `name` | `isA` | `loading` | `error` |
+| --- | --- | --- | --- | --- |
+| `ZkDx6E0iQs6…` | `RowEta-FLAGS-7791` | set | false | none |
+| `f3R9qMqKjOc…` | `RowTheta-CONSOLE-6203` | set | false | none |
+
+Complete, class set, not loading, no error. So the row crosses the peer link,
+imports cleanly, and is in the store with its name — and the table shows an empty
+cell. **This is a render bug, not a sync bug.** Everything below the UI is
+working.
+
+Supporting detail from a frame capture on the receiving socket: each new row
+arrives as one `SNAPSHOT|PUSH` frame followed by several `HAS_COMMIT_ID|PUSH`
+deltas from the commit path, and nothing calls `failResource` — consistent with
+imports reporting `complete`, which the store contents confirm.
+
+**Two dead ends recorded so the next person does not repeat them.** Both looked
+compelling and both were aimed at the wrong layer:
+
+1. *The server mislabels the frame.* `Handler<ExternalChange>` sent a payload read
+   from `Tree::LoroSnapshots` without `flags::SNAPSHOT`, unlike the normal push
+   path. Fixed, verified on the wire (`flags: 5`), symptom unchanged. The fix is
+   kept because labelling a snapshot as a snapshot is correct on its own terms,
+   not because it fixes anything here.
+2. *The client ignores `SNAPSHOT` on the push branch.* Real — `applyIncoming` is
+   called without `replaceLoroDocsFromRemote` there, only on the pending-GET
+   branch. But imports complete and resources are correct without it, so it is
+   not implicated in this symptom.
+
+The remaining question is entirely client-side: why a table cell does not
+re-render for a resource that is in the store, correct, and `loading: false`.
+Prime suspect is the React Compiler memoisation pitfall this repo has hit before
+— reading `resource.get(...)` into a variable during render memoises on the proxy
+identity, and internal mutation does not invalidate it. A reload rebuilds the
+component tree, which is exactly why reloading "fixes" it.
+
+Cheapest harness for the next attempt: two atomic-server instances on one
+machine rather than deploying to the Pi — `cargo build` instead of an 11-minute
+cross-build. One constraint: do not start a second vite dev server, as two
+wuchale extractors race on `src/locales/*.po` and corrupt the catalog; have the
+second instance serve built assets.
+
 Related to M9b: both are a peer's changes reaching an open page only partly.
 
 ### M11 — The desktop app never retries once its embedded server is up (open)

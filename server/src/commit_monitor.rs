@@ -617,10 +617,18 @@ impl Handler<ExternalChange> for CommitMonitor {
             let Some(snapshot) = msg.loro_snapshot.as_ref() else {
                 return;
             };
+            // SNAPSHOT, because that is what this payload is: `external_change`
+            // reads it straight out of `Tree::LoroSnapshots`, unlike the commit
+            // path above which carries a commit's delta and correctly omits the
+            // flag. Sending full state labelled as a delta made the client merge
+            // it into a document it does not have, seeding the partial doc its
+            // own GET handler warns about — "can keep only the seed's props and
+            // render the resource class-less". Visible as a peer's new table row
+            // appearing with every cell empty until a reload.
             let flags = if msg.commit_id.is_some() {
-                ws_v2::flags::HAS_COMMIT_ID | ws_v2::flags::PUSH
+                ws_v2::flags::SNAPSHOT | ws_v2::flags::HAS_COMMIT_ID | ws_v2::flags::PUSH
             } else {
-                ws_v2::flags::PUSH
+                ws_v2::flags::SNAPSHOT | ws_v2::flags::PUSH
             };
             Arc::from(
                 ws_v2::encode_update(flags, 0, &resolved, msg.commit_id.as_deref(), snapshot)
