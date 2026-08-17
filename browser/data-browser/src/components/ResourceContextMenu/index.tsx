@@ -207,7 +207,10 @@ export function ResourceContextMenu({
     items.push({
       id: action.id,
       label:
-        shiftHeld && action.danger && action.dangerLabel && !usesCustomDeleteDialog
+        shiftHeld &&
+        action.danger &&
+        action.dangerLabel &&
+        !usesCustomDeleteDialog
           ? action.dangerLabel(ctx)
           : action.label(ctx),
       helper: action.helper(ctx),

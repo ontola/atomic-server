@@ -3170,10 +3170,7 @@ mod test {
             "Renamed"
         );
         assert_eq!(
-            recovered
-                .get(crate::urls::DESCRIPTION)
-                .unwrap()
-                .to_string(),
+            recovered.get(crate::urls::DESCRIPTION).unwrap().to_string(),
             "the lost edit"
         );
     }
