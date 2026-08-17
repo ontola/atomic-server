@@ -827,10 +827,13 @@ before assuming.
 **Reproduce:** open the sidebar avatar menu for another live session, click Show
 profile, compare the opened subject against that agent's subject.
 
-### M20 — A colleague's browser does not show rows this session created (open)
+### M20 — A colleague's browser does not show rows this session created (explained by M21)
 
-Almost certainly the deploy gap rather than a new bug, and worth checking before
-anything else is investigated.
+**Cause found — see M21.** The rows were never saved: the server rejects every
+row commit because the table's class is missing there. Nothing was going to
+show them, on any bundle. The deploy-gap reasoning below was wrong, and it was
+wrong in a way worth noticing — it explained the symptom plausibly enough that
+I deployed before checking whether the writes had succeeded at all.
 
 The colleague loads the app from the Home Assistant add-on, whose binary — and
 therefore whose embedded bundle — was built at 18:35. Every client-side fix from
@@ -849,6 +852,53 @@ new investigation.
 
 If it still reproduces after that deploy, the next suspect is M17: a session
 subscribed to the wrong drive receives no live fan-out for the shared one.
+
+### M21 — Rows are silently discarded when their class is missing server-side (open, worst of the set)
+
+This supersedes M20's "probably the deploy gap" guess. The rows never reached
+anyone because they were never saved. From the console of the person who typed
+them, repeating for every row:
+
+```
+[postCommit] Server error: Failed getting class did:ad:ViKExaq3nm6t… not found locally
+[Outbox]     drain failed for subject: did:ad:9SWmXNZ…   (name: "Henk")
+[Outbox]     drain failed for subject: did:ad:I4h_29uw…  (name: "Blaa")
+```
+
+Confirmed against the server: that class returns `Resource not found`, not
+`Unauthorized`, so it is genuinely absent rather than hidden by rights. The
+table resource itself IS there. So a table exists on the server whose row class
+does not, and every row commit referencing it is rejected.
+
+**The failure is silent, and that is the part to fix first.** The row appears in
+the grid as you type it. Nothing marks it unsaved, nothing surfaces the rejection,
+and the outbox retries the same commit forever. The only way to find out is to
+open the console. Two people spent a session believing sync was broken when in
+fact their writes were being refused one layer down and the UI was telling them
+everything was fine.
+
+Note the outbox HAS the vocabulary for this: `error_code::MISSING_REQUIRED_PROPERTY`
+and friends classify terminal errors so an entry can stop retrying and stay
+visible. "Class not found" is not in that registry, so it falls through to
+retry-forever with no surface.
+
+**Two separate fixes, and they are worth separating:**
+
+1. A commit rejected for a structural reason must be visible — the row marked
+   unsaved, the reason reachable. Retrying a commit that cannot succeed until
+   someone fixes the class is not a recovery strategy.
+2. Whatever makes a table's class reachable wherever the table is. Creating a
+   table on one node and using it on another cannot depend on the class having
+   travelled by luck.
+
+**Open question worth answering before fixing 2:** where was that class created,
+and why did it not travel with the table? Same drive, same sync path, one
+arrived and one did not. That asymmetry is the real bug and it is not yet
+explained.
+
+**Reproduce:** create a table on one node, add a row from a browser talking to
+another node, watch the console. Expect `Failed getting class`, a row that looks
+saved, and an outbox that never drains.
 
 ### P1 — Proposal: show discovered-but-unpaired nodes on the Sync page
 
