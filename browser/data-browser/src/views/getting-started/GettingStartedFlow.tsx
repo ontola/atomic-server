@@ -580,19 +580,6 @@ export function GettingStartedFlow({
         );
       }
 
-      // The home drive is derived from the key rather than looked up, so
-      // nothing else will ever create it — `fetchPersonalDriveSubject` below
-      // computes the subject but does not materialize it, which is why the
-      // drive it navigates to could report "not found". Signing in is the one
-      // deliberate moment to write it; leaving it to whichever render-time
-      // resolver asked first is what let a bad derivation mint hundreds of
-      // drives instead of one.
-      await withDeadline(
-        store.ensurePersonalDrive().then(() => undefined),
-        SIGN_IN_LOOKUP_TIMEOUT_MS,
-        undefined,
-      );
-
       // Where this sign-in wants to end up: the drive it came from, or the
       // account's own. One target, so there is one gate below — an early
       // return for the guard case is an early return around the gate.
@@ -622,20 +609,50 @@ export function GettingStartedFlow({
       // back to whatever was last open, or to the default, which is the
       // server's own root. Showing that as your workspace is how signing in
       // ends with somebody else's data on screen.
-      setDrive(target ?? '');
-
       // A secret restores who you are, not what you have. So the app only
       // opens once the workspace is here to read: opening one we cannot read
       // shows an empty shell wearing its name, which reads as data loss.
-      if (
-        target &&
+      //
+      // Asked BEFORE the drive is materialized below, deliberately. A drive we
+      // wrote a moment ago answers "yes, this device has your data" — about
+      // data it does not have — and that is how signing in on a fresh device
+      // started opening an empty workspace instead of saying where its data is.
+      const hasData =
+        !!target &&
         (await withDeadline(
-          deviceHasDriveData(store, target),
+          // `refresh` asks the server rather than trusting the store: a
+          // just-created placeholder for a drive nobody has ever written has
+          // no error on it *yet*, and reading that as "present" is how this
+          // check said yes about an account whose data is elsewhere.
+          deviceHasDriveData(store, target, { refresh: true }),
           SIGN_IN_LOOKUP_TIMEOUT_MS,
           false,
-        ))
-      ) {
-        navigate(constructOpenURL(target));
+        ));
+
+      // The home drive is derived from the key rather than looked up, so
+      // nothing else will ever create it — `fetchPersonalDriveSubject` above
+      // computes the subject but does not materialize it. Signing in is the one
+      // deliberate moment to write it; leaving it to whichever render-time
+      // resolver asked first is what let a bad derivation mint hundreds of
+      // drives instead of one. Writing one on a device that turns out to hold
+      // nothing is harmless: a repeat materialization is the same author by
+      // construction and merges, so this drive and the one already out there
+      // converge when the devices meet.
+      await withDeadline(
+        store.ensurePersonalDrive().then(() => undefined),
+        SIGN_IN_LOOKUP_TIMEOUT_MS,
+        undefined,
+      );
+
+      // Only a workspace with something in it becomes the active one. Writing
+      // a drive is not the same as having your data, and an empty one sitting
+      // there under your own name is indistinguishable from having lost it —
+      // the complaint this whole path exists for. The card names the missing
+      // drive instead, so Sync can still say which one is elsewhere.
+      setDrive(hasData ? target! : '');
+
+      if (hasData) {
+        navigate(constructOpenURL(target!));
       } else {
         setMissingDrive(target);
         setStep('connect-device');
