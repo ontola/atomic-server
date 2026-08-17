@@ -764,8 +764,8 @@ turned into five findings once the fourth was traced.
 | | status |
 | --- | --- |
 | M17 invite does not switch drive | **fixed** |
-| M18 agent names do not propagate | **root cause found**, needs a design decision to fix |
-| M19 "Show profile" opens the wrong resource | navigation is correct; the page is an M18 stub |
+| M18 agent names do not propagate | **fixed** |
+| M19 "Show profile" opens the wrong resource | **resolved by M18** — the page was right, its contents were a stub |
 | M20 colleague sees no rows | explained by M21, not its own bug |
 | M21 rows refused because the class is missing | **cause fixed and deployed**, origin still unexplained |
 | M22 read-only invitee gets a stuck outbox entry | new, reproduced |
@@ -1408,3 +1408,37 @@ indistinguishable from a real profile. Today an unreadable agent renders with
 `isA: agent`, the `publicKey` recovered from the DID suffix and a `createdAt`
 of *now* — which is why this read as "names don't update" rather than "you are
 not allowed to read this".
+
+### M18, fixed: agents are public
+
+Joep's call, and it dissolves the discovery problem the Profile design ran
+into: if the agent resource is readable, nothing needs to find a second
+resource. No new class, no index, no migration.
+
+Two halves, and the second is the one that would have been easy to miss.
+
+**Server.** Anyone may READ an agent; writing stays owner-only, asserted in
+the same test. This is stated once in `check_rights_impl` rather than granted
+per agent at creation, so it covers every agent that already exists —
+including legacy `internal:/agents/…` spellings, which normalise to the same
+DID.
+
+**Client.** Opening the read on the server changes nothing by itself, because
+every client already holds a cached stub for the agents it has seen and has
+stopped asking for them. "Trust the local copy while online" is sound for
+anything under a drive — the drive's SUB delivers deltas — but agents are
+under no drive, so nothing ever refreshes them. A cached agent could stay
+wrong forever. Now re-checked once per agent per session, then trusted.
+
+Verified with two agents on one server: the presence avatar's label goes from
+`did:ad:agent:WA6IORw…` to `Bob`, and "Show profile" renders a real profile,
+including Bob's real creation time — where the synthesized stub reported
+*now*.
+
+**M19 falls out of this.** The navigation was always correct; the page just
+had nothing in it. Closing it with M18.
+
+One loose end worth a look: the profile now shows `personal-drive: Server
+error` to someone who can read the agent but not the drive it points at. The
+pointer is visible (that is the consequence of making agents public) but a
+resource you may not read should not render as an error.
