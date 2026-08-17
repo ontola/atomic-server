@@ -497,13 +497,22 @@ async fn e2e_engine_pull_after_iroh_bulk_sync() {
     let subjects = crate::sync::engine::collect_drive_subjects(&pair.db_b, &drive_subject).await;
     let vvs = crate::sync::engine::build_drive_vvs(&pair.db_b, &subjects);
     let hash = crate::sync::engine::compute_drive_hash(&vvs);
+    // Pull as the drive's own agent, not `Public`. Since the personal drive is
+    // derived and provisioned private, nothing on it is world-readable, and the
+    // push side of `handle_sync_vv` filters by `check_read` — so a `Public`
+    // pull now returns SYNC_DIFF with no SYNC_PUSH behind it and imports
+    // nothing. `Public` passed here only while test drives happened to be
+    // readable by anyone, which is not the shape this fallback runs in: the
+    // device doing the pull is the owner's other device, holding the owner's
+    // agent.
+    let owner = crate::agents::ForAgent::from(pair.db_a.get_default_agent().unwrap());
     let frames = crate::sync::engine::handle_sync_vv(
         &pair.drive,
         &hash,
         &[],
         &std::collections::HashMap::new(),
         &pair.db_a,
-        &ForAgent::Public,
+        &owner,
     )
     .await;
 

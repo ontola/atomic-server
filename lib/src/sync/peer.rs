@@ -2065,6 +2065,21 @@ fn dial_target(store: &Db, node_id: NodeId) -> iroh::NodeAddr {
 /// accepting side answers frames through the engine and only counts what came
 /// in. Reporting an unknown figure as 0 would be the same class of lie this
 /// status work exists to remove, so absent stays absent.
+/// Record a sync against a peer we ALREADY know, and do nothing otherwise.
+///
+/// For the accepting side. `mark_peer_synced` inserts a `KnownPeer` when it
+/// finds none, which is right when we did the dialling — choosing to dial is
+/// the consent. On the accept side the peer chose us, so inserting would hand
+/// any stranger who completes a handshake a permanent entry in known-peers, and
+/// with it an auto-reconnect slot that no pairing ever granted.
+pub fn mark_known_peer_synced(store: &Db, node_id: &str, sent: Option<u32>, received: Option<u32>) {
+    if !is_paired_peer(store, node_id) {
+        return;
+    }
+
+    mark_peer_synced(store, node_id, sent, received);
+}
+
 pub fn mark_peer_synced(store: &Db, node_id: &str, sent: Option<u32>, received: Option<u32>) {
     let key = normalize_node_id(node_id);
     let mut peers = get_known_peers(store);
@@ -2319,12 +2334,17 @@ async fn handle_stream(
                 "[accept] sync complete, transitioning to live mode with {}",
                 &remote_key[..remote_key.len().min(12)]
             );
-            // Record it here too. `mark_peer_synced` used to run only on the
-            // dialling side, so an always-on node — which is always the one
-            // being dialled — reported "not synced yet" about a peer it had
-            // been exchanging data with for hours. The counts are from this
-            // node's point of view: what it served, and what it took in.
-            mark_peer_synced(&store, &remote_key, None, Some(total_imported as u32));
+            // Record it here too. This used to run only on the dialling side,
+            // so an always-on node — which is always the one being dialled —
+            // reported "not synced yet" about a peer it had been exchanging
+            // data with for hours. The counts are from this node's point of
+            // view: what it served, and what it took in.
+            //
+            // `mark_known_peer_synced`, not `mark_peer_synced`: this side did
+            // not choose the connection, so recording a sync must never be what
+            // introduces the peer. Updating a peer we already paired with is
+            // reporting; inserting one we have not is granting access.
+            mark_known_peer_synced(&store, &remote_key, None, Some(total_imported as u32));
             // Accept side: the peer dialed us. No owned-drive relaxation — it
             // must hold real write rights to touch anything here.
             register_live_peer(remote_key, send, recv, store, agent, false);
