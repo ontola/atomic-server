@@ -1671,3 +1671,59 @@ and `personal` defaults to true. A personal drive is now the derived home,
 returned untouched when it exists — so the call handed back the dev drive and
 the assertion compared it against a name it never got to use. Same class as
 the two peer-sync tests in `b2d168dd`.
+
+## Desktop ↔ Home Assistant, on today's builds — 2026-08-17 evening
+
+Both ends rebuilt from this branch: the HA add-on binary cross-compiled
+(`aarch64-unknown-linux-musl`, checksum-verified on install, previous kept as
+`atomic-server.prev`), the desktop run from the same tree. The served bundle
+hash on `https://atomic.ontola.io` matches the local build exactly, so what was
+tested is what was built.
+
+```
+HA node       did:ad:node:5066634d0786d35c927f2ec099e911fe4924c035ec463c8a3c6cb6ff37aad9bb
+desktop node  did:ad:node:6041773d78f964b03087801b602be64c3558d2b8dea7221453135468df4e574a
+```
+
+### Sync works in both directions
+
+Pairing survived the upgrade — the desktop still lists `local-atomic-server` as
+paired, and a manual sync ran the full handshake: authenticated as the agent,
+version vectors compared (`hashes match, in sync`), live mode, read and write
+loops up.
+
+Live propagation, no manual sync in either case:
+
+| direction | created | arrived |
+| --- | --- | --- |
+| desktop → HA | 16:13:19 | 16:13:24 |
+| HA → desktop | 16:30:44 | 16:30:49 |
+
+The second one was written by a *different agent* on the HA server, which makes
+it a real test of the relayed-write path rather than an echo.
+
+### The invite flow, against a real replica
+
+An invite token minted on the desktop and opened against `atomic.ontola.io`
+verified there — proof the drive and the signer's agent had both synced across.
+Accepting produced, on the HA server:
+
+- a new agent with its **derived personal drive set** — the fix in `bd6af81c`.
+  Before it, an invite-created agent could never name its own home, which is
+  what left "Shared with me" permanently empty;
+- the **invited drive** as the active one (M17);
+- the new agent added to the drive's `write` list by `add_rights`, which uses
+  `save_locally` and so is not itself subject to the rights check.
+
+### Two things worth following up
+
+**Write amplification reaches the relayed path.** One resource creation caused
+**seven** `INDEXING` passes on the HA server. Same shape as the OPFS finding,
+now on the server's search index — and this one runs on a Raspberry Pi 5.
+
+**The post-accept unauthorized window is reliable, not occasional.** Between
+accepting and `add_rights` landing, the client's writes to the target drive are
+refused with `No write right has been found for did:ad:agent:…`. `InvitePage`
+already treats the drive-bookmark as best-effort for exactly this reason, but
+against a remote replica the window fires every time rather than rarely, so
+anything in that path that is *not* best-effort will fail there.
