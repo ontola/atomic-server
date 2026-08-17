@@ -580,19 +580,6 @@ export function GettingStartedFlow({
         );
       }
 
-      // The home drive is derived from the key rather than looked up, so
-      // nothing else will ever create it — `fetchPersonalDriveSubject` below
-      // computes the subject but does not materialize it, which is why the
-      // drive it navigates to could report "not found". Signing in is the one
-      // deliberate moment to write it; leaving it to whichever render-time
-      // resolver asked first is what let a bad derivation mint hundreds of
-      // drives instead of one.
-      await withDeadline(
-        store.ensurePersonalDrive().then(() => undefined),
-        SIGN_IN_LOOKUP_TIMEOUT_MS,
-        undefined,
-      );
-
       // Where this sign-in wants to end up: the drive it came from, or the
       // account's own. One target, so there is one gate below — an early
       // return for the guard case is an early return around the gate.
@@ -615,6 +602,37 @@ export function GettingStartedFlow({
           undefined,
         ));
 
+      // A secret restores who you are, not what you have. So the app only
+      // opens once the workspace is here to read: opening one we cannot read
+      // shows an empty shell wearing its name, which reads as data loss.
+      //
+      // Asked before anything writes the drive, deliberately. Materializing it
+      // first — which is what this flow used to do — makes every "do I have my
+      // data?" check answer yes about data the device does not have.
+      const canRead = (subject: string) =>
+        withDeadline(
+          deviceHasDriveData(store, subject),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          false,
+        );
+
+      // The home a pre-derivation secret was made for. Its data has not moved
+      // to the derived home yet — that is what materializing below does, by
+      // adopting its drive lists — so the derived subject alone reports "no
+      // data" for an account whose workspace is sitting on the very server
+      // they just authenticated against. Answering "your data is on another
+      // device" there would be false, and it would skip the adoption that
+      // makes it true. Costs nothing for accounts that never had one: a
+      // secret minted after derivation carries no `initialDrive`.
+      const legacyHome = newAgent.initialDrive;
+
+      const hasData =
+        !!target &&
+        ((await canRead(target)) ||
+          (!!legacyHome &&
+            legacyHome !== target &&
+            (await canRead(legacyHome))));
+
       // Name the account's drive even when its data hasn't arrived: the Sync
       // page says "your data is on another device" about *that* drive, which
       // is true and useful. But when the account's drive cannot be named at
@@ -622,20 +640,29 @@ export function GettingStartedFlow({
       // back to whatever was last open, or to the default, which is the
       // server's own root. Showing that as your workspace is how signing in
       // ends with somebody else's data on screen.
-      setDrive(target ?? '');
+      setDrive(hasData ? target! : '');
 
-      // A secret restores who you are, not what you have. So the app only
-      // opens once the workspace is here to read: opening one we cannot read
-      // shows an empty shell wearing its name, which reads as data loss.
-      if (
-        target &&
-        (await withDeadline(
-          deviceHasDriveData(store, target),
+      if (hasData) {
+        // The home drive is derived from the key rather than looked up, so
+        // nothing else will ever write it — `fetchPersonalDriveSubject` above
+        // computes the subject but does not materialize it. Signing in is the
+        // one deliberate moment to do it; leaving it to whichever render-time
+        // resolver asked first is what let a bad derivation mint hundreds of
+        // drives instead of one.
+        //
+        // Here it usually finds the drive the gate just read and returns it
+        // untouched — but that path still seeds the switcher list and adopts
+        // drives from an older, pre-derivation home, which is why it runs on
+        // the "we have it" branch rather than only on the "we don't" one. It
+        // must not run before the gate: a drive written a moment ago is not
+        // evidence that this device has the account's data.
+        await withDeadline(
+          store.ensurePersonalDrive().then(() => undefined),
           SIGN_IN_LOOKUP_TIMEOUT_MS,
-          false,
-        ))
-      ) {
-        navigate(constructOpenURL(target));
+          undefined,
+        );
+
+        navigate(constructOpenURL(target!));
       } else {
         setMissingDrive(target);
         setStep('connect-device');
