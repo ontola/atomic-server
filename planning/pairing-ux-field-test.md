@@ -1602,3 +1602,72 @@ reported 8 failures; four of them evaporated on a fresh store. The e2e store
 had reached 141MB — right at the ~150MB line where specs start failing on
 timing rather than on bugs. `du -sm .e2e-store` before believing a failure
 list, and re-run with `--fresh` before believing a regression.
+
+## Getting CI green — and a local harness that can actually see it
+
+Merging needs green, and "attributed as pre-existing" is not green. CI's last
+real run (4 shards, retries on) had **five hard failures**: the two
+`sign-in-without-data` specs, `chatroom`, `offline-create-then-online` and
+`quick-add`. Four others — `aggregates`, `documents`, `offline-chatroom`,
+`perf-sidebar-reload` — fail and pass on retry, so they do not fail the
+pipeline. `plugin › install a plugin` and `apply sveltekit template` fail
+locally and appear nowhere in CI's list.
+
+### The thing that made these debuggable
+
+**Half the suite never touches the vite dev server.** Any page reached through
+a server-issued URL — an invite link, `/app/dev-drive` — loads the SPA that
+`atomic-server` has embedded in its own binary. `FRONTEND_URL` only points the
+*first* page. So `chatroom` opens page1 on vite and page2 on the production
+bundle, which is why it failed identically on CI and locally while three
+separate source fixes changed nothing at all: none of them were ever loaded.
+
+Two settings reproduce CI's serving path locally:
+
+    VITE_E2E=true cargo build -p atomic-server     # /app/dev-drive only exists
+                                                   # in a prod build with this
+    FRONTEND_URL=http://localhost:9886 SERVER_URL=http://localhost:9886 \
+      npx playwright test
+
+Without `VITE_E2E` the dev routes are absent from the bundle and every spec
+dies in `before()` on a 30s `waitForURL` — which looks nothing like its cause.
+With them, the suite runs against the same artifact CI serves. This retires
+"local and CI serve different things" as a standing excuse: they no longer
+have to.
+
+The cost is that a source change now needs a ~50s rebuild to reach page2. That
+is the price of testing the artifact rather than the sources.
+
+### chatroom — the invite flow threw away the home drive
+
+Root-caused with `window.store` diagnostics at the failing assertion, which
+reported the drive present, `sharedWithMe` holding the chatroom, and:
+
+    Cannot derive this agent's personal drive: its key signs
+    non-deterministically and no derived subject was stored.
+
+A drive's subject IS its owner's signature over its genesis cert, and a
+WebCrypto key signs differently every time — so it can only be computed while
+the raw private key is in hand. `Agent.fromSecret` does that and stores it.
+The invite path had the raw key, built a secret from it, then discarded the
+result twice: it constructed the Agent without `personalDrive`, and persisted
+through the keypair overload of `saveAgent`, which writes that field as
+`undefined` because it has no secret to re-derive from.
+
+After that the derivation is impossible forever. `usePersonalDrive` fell back
+to `initialDrive`, a new agent has none, and `usePersonalDriveList` returned
+an empty list — the panel renders *nothing* when the list is empty, so a
+resolution failure looked exactly like "nobody shared anything with you".
+
+Fixed by deriving it at both agent-minting sites and storing the secret rather
+than the keypair. `persistAgentAfterInvite` also stopped minting a drive of
+its own: it wrote the home index to a drive the sidebar never reads, since the
+sidebar resolves the home from the key and not from the Agent's pointer.
+
+### offline-create-then-online — a test that predates derived homes
+
+`store.createDrive('Offline-Created Drive', …)` never said `personal: false`,
+and `personal` defaults to true. A personal drive is now the derived home,
+returned untouched when it exists — so the call handed back the dev drive and
+the assertion compared it against a name it never got to use. Same class as
+the two peer-sync tests in `b2d168dd`.
