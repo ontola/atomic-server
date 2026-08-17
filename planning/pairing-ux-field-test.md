@@ -1760,15 +1760,48 @@ Two ways a run lied today, both worth checking before debugging anything:
   times to the tenth of a minute, which re-executed tests cannot produce. To
   force a real e2e run, change something under `browser/`.
 
-**A theory that did not survive checking.** The scattered failures were first
-put down to runner contention. There was no second run, disk was at 9% and
-memory fine, and load ~20 is simply what 4 shards x 2 workers costs on that
-box — so that explanation is withdrawn.
+**It was host contention after all — and the instrument could not see it.**
+The scattered failures were first blamed on runner contention, then withdrawn
+because `uptime` inside the WSL2 runner reported an idle box. That check was
+worthless: **WSL2's loadavg reports the Linux VM's own load and cannot see the
+Windows host starving it.** Joep was gaming on that desktop. Measure
+throughput instead — `ssh mancave "time (for i in $(seq 1 3000000); do :; done)"`,
+~2.5-2.9s on a quiet host — which does reflect starvation.
 
-What remains is harder. The run before the quick-add change had **one**
-failure; the two after it had 8 and 11, with shard times going 8m -> 18-22m.
-Every one of those specs passes locally, so a correctness A/B clears them —
-but a correctness A/B cannot see load, and that change had removed the bar's
-in-flight gate, letting it fire overlapping saves in a suite that was already
-timing-marginal. Not proven to be the cause; also not a change worth making by
-accident, so it was replaced with a queue that keeps exactly one save open.
+The numbers, once the host was free: **9 failures -> 2**, shard 1 from 18.4m to
+13.7m, with `calendar`, `aggregates`, `kanban` x2, `filePicker`, `onboarding`
+and `e2e > folder` all passing. Nothing was wrong with them.
+
+Two lessons worth more than the incident. `gh run rerun` **replays the dagger
+cache** — the re-run returned byte-identical failures *and* identical shard
+times, which re-executed tests cannot produce, so it is never a way to retest
+after a bad-environment run; only a change under `browser/` forces execution.
+And a correctness A/B cannot clear a change of *load* effects, which is why
+the quick-add fix was still rewritten to queue rather than to remove the
+in-flight gate: keeping exactly one save open is what the original code
+guaranteed, and that guarantee should not be dropped by accident.
+
+
+### What is left, and what it is not
+
+On a quiet runner the branch fails two specs, both the same shape:
+
+    dashboard:311   "Total spent—Sum amount"   expected 946.5
+    dashboard:340   "Expenses—Count"           expected 4
+
+That em-dash is the placeholder shown while a measure has not computed, so
+neither is about adding a row — `340` fails on its Count block before the
+row-add matters. It is the totals path missing a 15s budget, the same family
+as `aggregates.spec.ts:50`, and the same fragility already on record: acked
+rows re-draining on every reload plus OPFS write amplification. The relayed
+path shows it too — one resource created on the Home Assistant box produced
+**seven** index writes.
+
+This PR did not cause it and should not be asked to fix it; it is the
+write-amplification work, which is its own piece.
+
+**One thing this PR did cause, found late.** Persisting the invite agent as a
+secret rather than a keypair also adopts that agent on the device by default —
+so accepting an invite on a desktop that already holds its owner's agent would
+have repointed the embedded node's identity. Storage was what the fix needed;
+the adoption was not. Now `adoptOnDevice: false`.
