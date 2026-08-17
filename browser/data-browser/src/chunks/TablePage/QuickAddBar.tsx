@@ -1,5 +1,5 @@
 import { useStore, type Property, type Resource } from '@tomic/react';
-import { useState, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaPlus } from 'react-icons/fa6';
 import toast from 'react-hot-toast';
@@ -35,33 +35,22 @@ export function QuickAddBar({
 }: Props): JSX.Element {
   const store = useStore();
   const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
   /**
-   * How many saves are in flight, not whether one is — this bar is used at
-   * speed, and a second item is often named before the first has landed.
+   * Named while a save was still in flight, waiting its turn.
+   *
+   * A ref, not state: `submit` below reads it from inside a promise callback,
+   * where a state value would be whatever it was when that callback was
+   * created.
    */
-  const [pending, setPending] = useState(0);
-  const busy = pending > 0;
+  const queued = useRef<string[]>([]);
 
   // A spec with a field is asking for a value; creating a blank row instead
   // would be a worse guess than doing nothing.
   const ready = !spec.field || typed.trim() !== '';
 
-  const create = () => {
-    // Deliberately not gated on a save being in flight. It used to be, and that
-    // silently dropped the keystroke: type, press enter, and nothing happens —
-    // no row, no error, the text still sitting in the field. Double-submitting
-    // one item is already impossible without it, because the field is cleared
-    // below before anything is awaited, which makes `ready` false until
-    // something new is typed.
-    if (!ready) {
-      return;
-    }
-
-    const value = typed.trim();
-    // Cleared up front, not after the save: anything typed while the save is in
-    // flight would otherwise be wiped when the reset landed.
-    setTyped('');
-    setPending(n => n + 1);
+  const submit = (value: string) => {
+    setBusy(true);
 
     void createQuickAddRow(store, {
       table: tableSubject,
@@ -77,7 +66,41 @@ export function QuickAddBar({
         console.error('Failed to quick-add a row', error);
         toast.error(`Could not add the ${tableClass.title.toLowerCase()}`);
       })
-      .finally(() => setPending(n => n - 1));
+      .finally(() => {
+        const next = queued.current.shift();
+
+        if (next === undefined) {
+          setBusy(false);
+
+          return;
+        }
+
+        submit(next);
+      });
+  };
+
+  const create = () => {
+    if (!ready) {
+      return;
+    }
+
+    const value = typed.trim();
+    // Cleared up front, not after the save: anything typed while the save is in
+    // flight would otherwise be wiped when the reset landed.
+    setTyped('');
+
+    // Queued rather than dropped. This used to return early while a save was in
+    // flight, which lost the keystroke in silence — type, press enter, and
+    // nothing happens: no row, no error, the text still sitting in the field.
+    // Queueing keeps that from happening without letting the bar fire saves
+    // concurrently, which is load this runs under on the slowest devices.
+    if (busy) {
+      queued.current.push(value);
+
+      return;
+    }
+
+    submit(value);
   };
 
   return (
