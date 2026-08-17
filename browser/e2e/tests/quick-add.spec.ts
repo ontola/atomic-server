@@ -99,6 +99,64 @@ test.describe('quick add', () => {
     await expect(row(page, 'Bread')).toBeVisible();
   });
 
+  /**
+   * Naming a second item while the first is still saving.
+   *
+   * This is the normal way the bar gets used — it exists to be typed into at
+   * speed — and it used to drop the keystroke silently: no row, no error, the
+   * text still sitting in the field. On a fast machine the save lands between
+   * the two, so the gap only opened under load, which is where it was found.
+   *
+   * Held open deliberately here rather than hoped for: the commit POST is
+   * delayed so the second item is always typed mid-save.
+   */
+  test('a second item typed while the first is still saving is not lost', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1800, height: 900 });
+    await createFromTemplate(page, /Grocery list/, 'Shopping', 'List');
+
+    // Commits travel over the websocket while connected, so delaying the HTTP
+    // /commit route holds nothing — an earlier version of this test did that
+    // and passed against the bug it was written for.
+    let holdCommits = true;
+    await page.routeWebSocket(/.*/, ws => {
+      const server = ws.connectToServer();
+      ws.onMessage(async message => {
+        if (holdCommits) {
+          await new Promise(resolve => setTimeout(resolve, 2500));
+        }
+
+        server.send(message);
+      });
+      server.onMessage(message => ws.send(message));
+    });
+
+    const input = page.getByTestId('quick-add-input');
+
+    await input.fill('Milk');
+    await page.getByTestId('quick-add-button').click();
+
+    // No wait for Milk's row: the point is to type while its save is in
+    // flight. The field clearing is the signal that the create was accepted.
+    await expect(input).toHaveValue('');
+
+    await input.fill('Bread');
+    await input.press('Enter');
+    // If the keystroke was swallowed, the text stays put — assert on that
+    // directly, so a failure names the actual symptom.
+    await expect(input).toHaveValue('');
+
+    holdCommits = false;
+
+    await expect(row(page, 'Milk')).toBeVisible({ timeout: 20_000 });
+    await expect(row(page, 'Bread')).toBeVisible({ timeout: 20_000 });
+
+    await reloadGrid(page);
+    await expect(row(page, 'Milk')).toBeVisible();
+    await expect(row(page, 'Bread')).toBeVisible();
+  });
+
   test('the Workout log records the moment with no field at all', async ({
     page,
   }) => {
