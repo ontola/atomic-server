@@ -996,12 +996,10 @@ msgid "This collection is empty"
 msgstr "This collection is empty"
 
 #: src/components/NewIdentitySection.tsx
-#: src/views/InvitePage.tsx
 msgid "Personal"
 msgstr "Personal"
 
 #: src/components/NewIdentitySection.tsx
-#: src/views/InvitePage.tsx
 msgid "Your private space on this server. Only you can read and write here."
 msgstr "Your private space on this server. Only you can read and write here."
 
@@ -7045,15 +7043,6 @@ msgstr "Already up to date{0}"
 #: src/routes/SyncRoute.tsx
 msgid "Synced{0} — sent {1}, received {2}"
 msgstr "Synced{0} — sent {1}, received {2}"
-
-
-
-
-
-
-
-
-
 
 #: src/routes/SyncRoute.tsx
 msgid "Paired"
