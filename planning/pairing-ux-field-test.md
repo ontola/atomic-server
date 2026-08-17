@@ -768,7 +768,8 @@ turned into five findings once the fourth was traced.
 | M19 "Show profile" opens the wrong resource | **resolved by M18** — the page was right, its contents were a stub |
 | M20 colleague sees no rows | explained by M21, not its own bug |
 | M21 rows refused because the class is missing | **cause fixed and deployed**, origin still unexplained |
-| M22 read-only invitee gets a stuck outbox entry | new, reproduced |
+| M22 read-only invitee gets a stuck outbox entry | **fixed** |
+| M23 sign-in on a device with no data opens an empty workspace | diagnosed, fix approach known, **not fixed** |
 
 Two fixes went in for M21 and are on the branch:
 
@@ -1442,3 +1443,93 @@ One loose end worth a look: the profile now shows `personal-drive: Server
 error` to someone who can read the agent but not the drive it points at. The
 pointer is visible (that is the consequence of making agents public) but a
 resource you may not read should not render as an error.
+
+## Running the pipeline locally, 2026-08-17 evening
+
+Every CI run on this branch sat queued for most of the day, so nothing had
+validated it. Running the pipeline locally found two Rust failures CI would
+have reported first, and then a much longer thread.
+
+### Two peer-sync tests were failing on the branch — fixed
+
+`two_devices_sync_via_engine` and `undo_syncs_to_peer_via_engine` pull a
+private drive as `ForAgent::Public` and assert something comes back.
+`69fc5a7e` ("always hand a peer your own agent resource on connect")
+tightened what an unidentified pull sees; the iroh end-to-end test was
+updated with it and these two were missed. Both model two devices of the
+SAME person — the test asserts the agents share an `initialDrive` — so the
+owner is who the pull should claim to be.
+
+### Repeat materialization merges, flagged genesis or not — fixed
+
+Joep's call: deterministic personal drives mean two devices mint the same DID
+for the same drive, so a second materialization is normal and should merge.
+The branch already did that via `repeat_genesis_is_mergeable` — but only for
+commits declaring `is_genesis`. Whether a second device's from-scratch doc
+drains as a genesis or as an ordinary commit is an accident of which client
+path exported it, and the ordinary path hit the causality guard: creation
+defaults, every value losing to stored state, read as silent data loss and
+refused. Observed live as a 500 loop on the owner's own home drive from their
+second browser.
+
+The cert decides, not the flag. It must verify against the subject AND name
+the signer — and for a `did:ad:` subject the DID *is* the signature over that
+cert, so a repeat can only be the same author. Nothing an attacker can reach.
+
+### M23 — signing in on a device with no data opens an empty workspace
+
+`sign-in-without-data.spec.ts` fails on the branch, and on CI. It encodes:
+signing in with a secret whose workspace this device has never held must stop
+and say so, not present an empty workspace under your name.
+
+Cause, established by instrumenting `localStorage.setItem('drive')` with stack
+traces during a live sign-in — three layers, each hiding the next:
+
+1. `0409e86e` added `store.ensurePersonalDrive()` to sign-in, so **the drive
+   resource always exists**, on every device, including one holding none of
+   the account's data. Every "do I have my data?" check reads that as yes.
+   Proven by stubbing `ensurePersonalDrive` at runtime: the card appears.
+2. Fixing only the sign-in gate does nothing. `ConnectDeviceStep`'s arrival
+   poll (`driveIsHere`) asks the same question again and calls `onConnected`,
+   which navigates straight back out of the card. The traces show `""` written
+   by the sign-in flow, then the drive DID written by `onConnected`.
+3. Switching the predicate to "the drive has children" **also** fails:
+   `createDrive` creates the drive's default Ontology, so a freshly
+   materialized drive has a child immediately.
+
+**A fix that looked right and was not.** Predicate = "has a child that isn't
+the default ontology". The two target specs passed. The full suite went from
+161 passed / 7 failed to **60 passed / 106 failed**, with 11 specs parked on
+the connect-device card: that predicate asks the server's query index, on the
+sign-in path, and an index that isn't warm answers "empty" for a drive that
+does have data. Reverted.
+
+**The approach that should work**: ask the local ClientDb whether this device
+held the drive BEFORE this sign-in materialized it. No server round trip, no
+search index — that dependency is exactly what broke the attempt above. Both
+consumers already funnel through `deviceHasDriveData`, so it is one edit.
+
+### Baseline to measure against
+
+CI on the current HEAD: `fmt`, `clippy`, `nextest`, `pnpm build`, `pnpm lint`
+and `pnpm test` all pass; it fails only in e2e, with **3 failed and 1 flaky**
+in the shard that failed and 40 passed in the other. Local full-suite is 161
+passed / 7 failed. These are different measurements — CI shards, and CI serves
+the production bundle behind a service worker while local runs hit the vite
+dev server. `plugin › install a plugin` fails locally on every run and does
+not appear in CI's list at all, which is that divergence, not a bug.
+
+Rust is 570/570 locally.
+
+### Two ways to waste an hour, both hit today
+
+- The browser bundle resolves `@tomic/lib` to `lib/dist`. Editing
+  `browser/lib/src` and reloading proves nothing until `pnpm build` runs in
+  `browser/lib` — HMR does not cover it.
+- `cargo build -p atomic-server --features db-redb` exits **0** while building
+  nothing: that feature belongs to `atomic_lib`, not the server. The stale
+  binary keeps serving.
+
+Both produced confident, wrong verifications. Check the artifact's mtime
+before trusting a result — and prefer a runtime experiment (stub the function,
+hook the setter) over reading code to decide what is happening.
