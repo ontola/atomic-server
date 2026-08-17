@@ -754,7 +754,40 @@ server put them. Verified in the running app: the tree ends
 M9-M12 for different findings while this branch was open, and the note now
 carries both sets.)
 
-## Two-person session, 2026-08-17 — reported, not yet fixed
+## Two-person session, 2026-08-17
+
+Joep invited a colleague who also holds a legacy secret. Four reports, which
+turned into five findings once the fourth was traced.
+
+**State of play**
+
+| | status |
+| --- | --- |
+| M17 invite does not switch drive | open, reproduced |
+| M18 agent names do not propagate | open, needs a design decision first |
+| M19 "Show profile" opens the wrong resource | open, one code pointer |
+| M20 colleague sees no rows | explained by M21, not its own bug |
+| M21 rows refused because the class is missing | **cause fixed**, origin still unexplained |
+
+Two fixes went in for M21 and are on the branch:
+
+- `fix(validation): an unknown class must not reject the write` — the write is no
+  longer refused for a reason the writer cannot act on.
+- `fix(outbox): stop discarding table rows in silence when the class is missing`
+  — if a commit IS refused structurally, it blocks visibly instead of retrying
+  forever in silence.
+
+Neither was deployed at the time of writing, so a console from before the next
+deploy still shows `errorCode: 0` and the old behaviour. The two stuck rows
+("Henk", "Blaa") are still in the reporter's outbox and should drain on their own
+once the server carries the validation fix — no re-typing — which is the cleanest
+single check that it worked.
+
+**What is still not explained**, and matters most for the next session: the table
+reached the server and its row class did not, on the same drive. M21 records the
+parenting asymmetry that probably causes it, as a hypothesis with the test that
+would settle it. The fixes above mean this no longer costs data; they do not mean
+it is understood.
 
 Joep invited a colleague who also holds a legacy secret. Four distinct problems,
 recorded here so each can be reproduced and fixed on its own rather than as one
@@ -853,7 +886,7 @@ new investigation.
 If it still reproduces after that deploy, the next suspect is M17: a session
 subscribed to the wrong drive receives no live fan-out for the shared one.
 
-### M21 — Rows are silently discarded when their class is missing server-side (open, worst of the set)
+### M21 — Rows are silently discarded when their class is missing server-side (cause fixed; origin open)
 
 This supersedes M20's "probably the deploy gap" guess. The rows never reached
 anyone because they were never saved. From the console of the person who typed
@@ -882,14 +915,29 @@ and friends classify terminal errors so an entry can stop retrying and stay
 visible. "Class not found" is not in that registry, so it falls through to
 retry-forever with no surface.
 
-**Two separate fixes, and they are worth separating:**
+**Two separate fixes, both now made:**
 
-1. A commit rejected for a structural reason must be visible — the row marked
-   unsaved, the reason reachable. Retrying a commit that cannot succeed until
-   someone fixes the class is not a recovery strategy.
-2. Whatever makes a table's class reachable wherever the table is. Creating a
-   table on one node and using it on another cannot depend on the class having
-   travelled by luck.
+1. *Visible instead of silent.* `MISSING_CLASS` added to the shared error
+   registry, the server's "Failed getting class <subject>" classified into it,
+   and the client matching on both code and message so an older server behaves
+   the same. Blocking rather than terminal: the row is well-formed and would
+   apply once the class exists, so discarding it would throw away a write the
+   user believes they made.
+2. *Not refused in the first place.* `Resource::get_classes` had always
+   documented "Returns an empty vector if there are no classes found", but a `?`
+   made one unresolvable class abort the call — and `check_required_props` runs
+   it on every commit, so an unknown class became a rejected write. It now skips,
+   with a warning naming the class and the unvalidated resource.
+
+   The trade: required-property validation does not run for classes this store
+   cannot see. A store cannot enforce a contract it does not hold, the same write
+   already succeeds with no class at all, and this is data integrity rather than
+   access control — rights are enforced elsewhere and unaffected.
+
+**Still to do:** whatever makes a table's class reachable wherever the table is.
+Creating a table on one node and using it on another should not depend on the
+class having travelled by luck. The fixes above stop that costing data; they do
+not make the class arrive.
 
 **Where the class goes, and why that is the likely asymmetry.** The two
 resources are NOT parented alike. `NewTableDialog` puts the table under the
