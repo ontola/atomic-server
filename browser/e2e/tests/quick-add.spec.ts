@@ -120,7 +120,9 @@ test.describe('quick add', () => {
     // /commit route holds nothing — an earlier version of this test did that
     // and passed against the bug it was written for.
     let holdCommits = true;
-    await page.routeWebSocket(/.*/, ws => {
+    // Scoped to the server's own socket (`/ws`, see `websockets.ts`) rather
+    // than every socket the page opens.
+    await page.routeWebSocket('**/ws', ws => {
       const server = ws.connectToServer();
       ws.onMessage(async message => {
         if (holdCommits) {
