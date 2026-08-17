@@ -769,7 +769,7 @@ turned into five findings once the fourth was traced.
 | M20 colleague sees no rows | explained by M21, not its own bug |
 | M21 rows refused because the class is missing | **cause fixed and deployed**, origin still unexplained |
 | M22 read-only invitee gets a stuck outbox entry | **fixed** |
-| M23 sign-in on a device with no data opens an empty workspace | diagnosed, fix approach known, **not fixed** |
+| M23 sign-in on a device with no data opens an empty workspace | **fixed** |
 
 Two fixes went in for M21 and are on the branch:
 
@@ -1533,3 +1533,72 @@ Rust is 570/570 locally.
 Both produced confident, wrong verifications. Check the artifact's mtime
 before trusting a result — and prefer a runtime experiment (stub the function,
 hook the setter) over reading code to decide what is happening.
+
+## M23 fixed — ask before writing, 2026-08-17 late
+
+The predicate was never the problem. The **order** was.
+
+`0409e86e` put `store.ensurePersonalDrive()` ahead of the gate, so by the time
+anything asked "does this device have my data?", the drive resource existed —
+because sign-in had just written it. Every check downstream reads that as yes.
+The two layers underneath it were consequences, not separate bugs:
+`ConnectDeviceStep`'s arrival poll asks the same question and navigates back
+out of the card, and `createDrive` also makes the default Ontology so "the
+drive has children" is true as well. Nothing writes a decoy drive now, so
+there is nothing for either to find, and both dissolve untouched.
+
+The materialization stays — on the branch where the answer is yes. There it is
+*nearly* a no-op, and the "nearly" is the point: `createDrive`'s existing-drive
+path still seeds the switcher list and calls `maybeMigrateOldPersonalDrive`,
+which is what adopts an older, pre-derivation home's `drives`, `sharedWithMe`
+and `favorites` lists onto the derived one.
+
+Which forced a second change. A pre-derivation account's data is not under the
+derived home yet — the adoption above is what moves it — so asking only about
+the derived subject reports "no data" for someone whose workspace is sitting on
+the server they just authenticated against. Telling them their data is on
+another device would be false, and it would skip the adoption that makes it
+true. So the gate also asks about `agent.initialDrive`, which the old secret
+carries. This is not a widening of what counts as "your data": it is the same
+reachability question, asked about the drive the secret was actually made for.
+Secrets minted after derivation carry no `initialDrive`, so a stranger's
+sign-in is unaffected — which is why the two target specs still pass.
+
+Worth recording that the earlier attempt failed for a reason that had nothing
+to do with the diagnosis. "Has a child that isn't the default ontology" is a
+*correct* description of a materialized-but-empty drive. It broke the suite
+because of where it asked: the server's query index, on the sign-in path, which
+answers "empty" for a populated drive whenever it isn't warm. A right predicate
+in the wrong place cost 100 specs. This change adds no query the plain
+reachability check wasn't already making.
+
+### Measured, not assumed
+
+Local full suite on a fresh store: **162 passed / 6 failed**, against the
+161/7 baseline, with both target specs flipping green.
+
+Every one of the six is attributed by A/B — same specs, fresh store, with the
+change and with it reverted:
+
+| spec | without | with |
+| --- | --- | --- |
+| `sign-in-without-data` (×2) | fail | **pass** |
+| `chatroom` | fail | fail |
+| `offline-create-then-online` | fail | fail |
+| `plugin › install a plugin` | fail | fail |
+| `template › apply sveltekit template` | fail | fail |
+| `delete resource` | pass in isolation | pass in isolation |
+| `sign in with secret, edit profile, sign out` | pass in isolation | pass in isolation |
+
+The last two fail only under full-suite load and pass alone — `delete resource`
+carries a comment about exactly that (a success toast that expires in ~2s, so
+under load it is gone before the first poll). `apply sveltekit template` fails
+on a SvelteKit **build** error, before the browser is involved at all.
+
+Unit tests 591/591.
+
+**A measurement trap worth the note.** The first full run of this change
+reported 8 failures; four of them evaporated on a fresh store. The e2e store
+had reached 141MB — right at the ~150MB line where specs start failing on
+timing rather than on bugs. `du -sm .e2e-store` before believing a failure
+list, and re-run with `--fresh` before believing a regression.
