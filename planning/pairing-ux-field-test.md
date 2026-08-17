@@ -891,10 +891,33 @@ retry-forever with no surface.
    table on one node and using it on another cannot depend on the class having
    travelled by luck.
 
-**Open question worth answering before fixing 2:** where was that class created,
-and why did it not travel with the table? Same drive, same sync path, one
-arrived and one did not. That asymmetry is the real bug and it is not yet
-explained.
+**Where the class goes, and why that is the likely asymmetry.** The two
+resources are NOT parented alike. `NewTableDialog` puts the table under the
+folder the user picked, but the row class under
+`resolveOntologyParent(store, driveSubject)` — the drive's `defaultOntology`,
+falling back to the drive itself. So creating one table writes to two different
+places, with two different sets of rights.
+
+The rows in the field case carry `drive = did:ad:kgOPf15k…`, which is a drive
+shared WITH that user, not their own. That fits: the table landed somewhere they
+could write, and the class had to go into that drive's ontology, which they may
+not be able to write. The table commit succeeds, the class commit does not, and
+the table is left naming a `classtype` the server has never heard of.
+
+Consistent with what the server reports now: the table returns
+`not publicly readable` (present, private) while the class returns
+`not found` (absent).
+
+**Not yet confirmed** — this is a hypothesis with the shape of the evidence
+behind it, not a diagnosis. What would settle it: create a table on a drive
+shared with you and watch the console at CREATION time, not at row time. If a
+class commit is rejected there, this is it. If the class commit succeeds and the
+class still never appears, the fault is in sync rather than in rights, and the
+ontology-parenting is a red herring.
+
+Worth noting either way: with the outbox fix above, a rejected class commit is
+now blocking-and-visible rather than silent, so the next attempt should say what
+went wrong instead of leaving it to be reconstructed from a console.
 
 **Reproduce:** create a table on one node, add a row from a browser talking to
 another node, watch the console. Expect `Failed getting class`, a row that looks
