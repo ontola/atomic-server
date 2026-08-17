@@ -345,7 +345,11 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       // what threw it away a line after it was computed. This path still
       // prefers the non-extractable keypair, and it also covers the JS-crypto
       // fallback, which previously persisted no agent at all.
-      await saveAgentToIDB(secret);
+      // `adoptOnDevice: false` keeps this to storage. Signing in is the moment
+      // a device takes on an identity; opening an invite link is not — this
+      // runs on a desktop that may already hold its owner's agent, and the
+      // embedded node should not start signing as whoever accepted an invite.
+      await saveAgentToIDB(secret, { adoptOnDevice: false });
 
       setAgentSecret(secret);
       setAgent(newAgent);
