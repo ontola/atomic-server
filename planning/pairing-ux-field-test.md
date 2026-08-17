@@ -1754,16 +1754,21 @@ passing.
 
 Two ways a run lied today, both worth checking before debugging anything:
 
-- **Overlapping runs.** Mancave is one 24-core box running 4 shards x 2 workers.
-  Pushing inside a run's ~30 min doubles shard times (8m -> 18m) and fails a
-  scattered set of timing-sensitive specs together — dashboards, calendar,
-  filePicker, table-templates. Seen at load average 20.88. `ssh mancave uptime`
-  before believing a list.
+- **Cache replay** (below) — the one that is actually provable.
 - **Cache replay.** A docs-only commit does not touch the e2e cache key, so the
   run replays the previous result — identical failures *and* identical shard
   times to the tenth of a minute, which re-executed tests cannot produce. To
   force a real e2e run, change something under `browser/`.
 
-All eight failures from that degraded run were A/B'd locally against this
-branch's changes and none of them are ours — including the four dashboard
-specs, which do use `QuickAddBar` through `CreateBlock`.
+**A theory that did not survive checking.** The scattered failures were first
+put down to runner contention. There was no second run, disk was at 9% and
+memory fine, and load ~20 is simply what 4 shards x 2 workers costs on that
+box — so that explanation is withdrawn.
+
+What remains is harder. The run before the quick-add change had **one**
+failure; the two after it had 8 and 11, with shard times going 8m -> 18-22m.
+Every one of those specs passes locally, so a correctness A/B clears them —
+but a correctness A/B cannot see load, and that change had removed the bar's
+in-flight gate, letting it fire overlapping saves in a suite that was already
+timing-marginal. Not proven to be the cause; also not a change worth making by
+accident, so it was replaced with a queue that keeps exactly one save open.
