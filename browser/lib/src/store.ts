@@ -362,6 +362,7 @@ const CLIENT_DB_ATTACH_GRACE = 5000;
 const SERVER_MANAGED_SKELETON_PROPS: ReadonlySet<string> = new Set([
   commits.properties.lastCommit,
   commits.properties.createdAt,
+  'https://atomicdata.dev/properties/createdBy',
   'https://atomicdata.dev/properties/drive',
   core.properties.parent,
 ]);

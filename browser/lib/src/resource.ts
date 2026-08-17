@@ -47,6 +47,33 @@ import {
 /** Contains the PropertyURL / Value combinations */
 export type PropVals = Map<string, AtomicValue>;
 
+/**
+ * Propvals the server derives and ships alongside a resource, which must never
+ * be written into its CRDT.
+ *
+ * They all have another source of truth: `lastCommit` is commit metadata,
+ * `createdAt` and `createdBy` come from the genesis certificate (see
+ * {@link Resource.getCreatedBy}). Writing one into Loro produces a LOCAL
+ * operation, and a local operation means a dirty subject and a commit — for a
+ * value the client never authored. On a resource you may write that is a
+ * redundant commit per hydration; on one you may only READ, the server refuses
+ * it forever, which is how an invitee who had written nothing ended up with a
+ * blocked outbox entry and a permanent "changes pending".
+ *
+ * They stay in the read cache, so `resource.get()` and JSON-AD round-trips are
+ * unaffected — which is why every `serverManaged` preservation list below has
+ * to include them.
+ */
+const DERIVED_BY_SERVER: ReadonlySet<string> = new Set<string>([
+  properties.commit.lastCommit,
+  commits.properties.createdAt,
+  properties.createdBy,
+]);
+
+/** True for a propval the server derives — see {@link DERIVED_BY_SERVER}. */
+const isDerivedByServer = (prop: string): boolean =>
+  DERIVED_BY_SERVER.has(prop);
+
 export interface MergeOptions {
   replaceLoroDocs?: boolean;
   /**
@@ -267,8 +294,7 @@ export class Resource<C extends OptionalClass = any> {
         // Object.create(null) #cache → Object.keys is the cheap own-prop scan.
         const hasRenderable = Object.keys(this.#cache).some(
           k =>
-            k !== properties.commit.lastCommit &&
-            k !== commits.properties.createdAt &&
+            !isDerivedByServer(k) &&
             k !== core.properties.parent &&
             k !== 'https://atomicdata.dev/properties/drive',
         );
@@ -441,10 +467,7 @@ export class Resource<C extends OptionalClass = any> {
         this._loroDoc.import(stored);
       } else {
         for (const [key, value] of Object.entries(this.#cache)) {
-          if (
-            key !== properties.commit.lastCommit &&
-            key !== commits.properties.createdAt
-          ) {
+          if (!isDerivedByServer(key)) {
             this.loroSetProperty(key, value);
           }
         }
@@ -464,13 +487,8 @@ export class Resource<C extends OptionalClass = any> {
       // behaviour is unchanged.
       if (initializedFromSnapshot && this._loroMap) {
         for (const [key, value] of Object.entries(this.#cache)) {
-          if (
-            key !== properties.commit.lastCommit &&
-            key !== commits.properties.createdAt
-          ) {
-            if (this._loroMap.get(key) === undefined) {
-              this.loroSetProperty(key, value);
-            }
+          if (!isDerivedByServer(key) && this._loroMap.get(key) === undefined) {
+            this.loroSetProperty(key, value);
           }
         }
       }
@@ -584,10 +602,7 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   private applyRawValue(prop: string, val: AtomicValue): void {
-    if (
-      prop === properties.commit.lastCommit ||
-      prop === commits.properties.createdAt
-    ) {
+    if (isDerivedByServer(prop)) {
       if (val === undefined) {
         delete this.#cache[prop];
       } else {
@@ -739,6 +754,7 @@ export class Resource<C extends OptionalClass = any> {
     const serverManaged = [
       properties.commit.lastCommit,
       commits.properties.createdAt,
+      properties.createdBy,
       'https://atomicdata.dev/properties/drive',
       // The inline genesis certificate: set once at creation, immutable, and
       // must not be dropped when the cache is rebuilt from a delta-only doc —
@@ -1451,6 +1467,7 @@ export class Resource<C extends OptionalClass = any> {
         const serverManaged = [
           properties.commit.lastCommit,
           commits.properties.createdAt,
+          properties.createdBy,
         ];
 
         for (const key of serverManaged) {
@@ -1481,6 +1498,7 @@ export class Resource<C extends OptionalClass = any> {
       const serverManaged = [
         properties.commit.lastCommit,
         commits.properties.createdAt,
+        properties.createdBy,
       ];
 
       for (const key of serverManaged) {
@@ -3303,10 +3321,7 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
-    if (
-      prop === properties.commit.lastCommit ||
-      prop === commits.properties.createdAt
-    ) {
+    if (isDerivedByServer(prop)) {
       delete this.#cache[prop];
 
       return;
