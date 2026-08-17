@@ -76,12 +76,21 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     );
   };
 
-  const goToRedirect = (destination?: string) => {
+  const goToRedirect = (destination?: string, activated?: boolean) => {
     const url = destination ?? redirectURL;
     if (!url) return;
     queueMicrotask(() => {
       navigate(constructOpenURL(url));
       void store.fetchResourceFromServer(url).finally(() => {
+        // The invite's own drive is already the active one — leave it alone.
+        // Falling through here is what used to send an invitee straight back
+        // to their private drive: they'd land on the shared resource with a
+        // sidebar showing their own drive, and no live subscription to the
+        // one they were invited to.
+        if (activated) {
+          return;
+        }
+
         const signedIn = store.getAgent();
 
         if (!signedIn?.subject) {
@@ -107,14 +116,19 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
    *  2. the personal drive (the lists).
    * Order matters: the Agent's `personalDrive` must be saved before the drive's
    * lists, so the sidebar can resolve agent → personalDrive → lists.
+   *
+   * Returns both drives the caller has to choose between: the invitee's own
+   * `personalDrive`, and `hostDrive` — the drive the invited resource lives on,
+   * which is the one they should land in.
    */
   const persistAgentAfterInvite = async (
     subject: string,
     destination: string | undefined,
     name?: string,
-  ): Promise<string | undefined> => {
+  ): Promise<{ personalDrive?: string; hostDrive?: string }> => {
     store.getResourceLoading(subject);
     let personalDriveSubject: string | undefined;
+    let hostDriveSubject: string | undefined;
     let createdDrive = false;
 
     try {
@@ -190,6 +204,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
             const hostDrive = await getResourcesDrive(target, store);
 
             if (hostDrive && hostDrive !== personalDriveSubject) {
+              hostDriveSubject = hostDrive;
               driveResource.push(server.properties.drives, [hostDrive], true);
             }
           } catch (e) {
@@ -210,7 +225,30 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       );
     }
 
-    return personalDriveSubject;
+    return { personalDrive: personalDriveSubject, hostDrive: hostDriveSubject };
+  };
+
+  /**
+   * Make the invite's drive the active one, so the sidebar shows what the
+   * invitee was actually invited to. Falls back to their own drive when the
+   * destination's drive can't be resolved (a bare resource, or the ancestry
+   * walk failed) — which is also the new-agent case, where `drive` would
+   * otherwise still be `baseURL`. Reports whether it set anything, so
+   * `goToRedirect` knows not to overwrite it.
+   */
+  const activateDrive = (drives: {
+    personalDrive?: string;
+    hostDrive?: string;
+  }): boolean => {
+    const target = drives.hostDrive ?? drives.personalDrive;
+
+    if (!target) {
+      return false;
+    }
+
+    setDrive(target);
+
+    return true;
   };
 
   const [dialogProps, show, hide] = useDialog({
@@ -224,20 +262,13 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         return;
       }
 
-      const personalDrive = await persistAgentAfterInvite(
+      const drives = await persistAgentAfterInvite(
         agentSubject,
         redirectURL,
         agentName,
       );
 
-      // Point the sidebar at the new personal drive. Without this, the
-      // default `drive` in AppSettings is still `baseURL` (or whatever was
-      // active pre-invite) and the sidebar shows that instead.
-      if (personalDrive) {
-        setDrive(personalDrive);
-      }
-
-      goToRedirect();
+      goToRedirect(undefined, activateDrive(drives));
     },
   });
 
@@ -329,17 +360,13 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       setRedirectURL(destination);
 
       void (async () => {
-        const personalDrive = await persistAgentAfterInvite(
+        const drives = await persistAgentAfterInvite(
           agentSubject!,
           destination,
           undefined,
         );
 
-        if (personalDrive) {
-          setDrive(personalDrive);
-        }
-
-        goToRedirect(destination);
+        goToRedirect(destination, activateDrive(drives));
       })();
 
       return;

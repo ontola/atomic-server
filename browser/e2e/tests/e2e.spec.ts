@@ -145,6 +145,13 @@ test.describe('data-browser', async () => {
     await page3.waitForURL(/\/app\/show/, { timeout: 15000 });
     await page3.reload();
     await expect(page3.getByText(driveTitle).first()).toBeVisible();
+    // Accepting must also make the invited drive the ACTIVE one. Showing the
+    // resource while the sidebar still points at the invitee's own drive is
+    // the failure this guards: the sidebar lists the wrong children and the
+    // drive-wide subscription goes to a drive nobody is looking at.
+    await expect(page3.getByTestId('current-drive-title')).toHaveText(
+      driveTitle,
+    );
   });
 
   test('chatroom', async ({ page, browser, context }) => {
