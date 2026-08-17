@@ -763,11 +763,12 @@ turned into five findings once the fourth was traced.
 
 | | status |
 | --- | --- |
-| M17 invite does not switch drive | open, reproduced |
-| M18 agent names do not propagate | open, needs a design decision first |
-| M19 "Show profile" opens the wrong resource | open, one code pointer |
+| M17 invite does not switch drive | **fixed** |
+| M18 agent names do not propagate | **root cause found**, needs a design decision to fix |
+| M19 "Show profile" opens the wrong resource | navigation is correct; the page is an M18 stub |
 | M20 colleague sees no rows | explained by M21, not its own bug |
-| M21 rows refused because the class is missing | **cause fixed**, origin still unexplained |
+| M21 rows refused because the class is missing | **cause fixed and deployed**, origin still unexplained |
+| M22 read-only invitee gets a stuck outbox entry | new, reproduced |
 
 Two fixes went in for M21 and are on the branch:
 
@@ -1279,3 +1280,81 @@ Two things would have caught it immediately:
 
 Worth keeping in mind for the Android app too, where the same "install an
 old bundle, reason from current source" trap is one `adb install` away.
+
+### Reproduced locally, 2026-08-17 afternoon
+
+Two scratch agents (Alice, Bob) against one local server, in two browser
+origins so each has its own store. Everything below is from that run, not from
+reading the code.
+
+**M17 — fixed.** Accepting an invite left `drive` pointing at the invitee's own
+private drive: `persistAgentAfterInvite` returned only the personal drive, the
+caller activated it, and `goToRedirect` activated it a second time after the
+redirect had already happened. The drive the invited resource lives on was
+already being computed one line away, to bookmark it in the switcher — it was
+just discarded. Now returned and preferred, with the personal drive as the
+fallback (which is the new-agent case, where the current drive would otherwise
+still be `baseURL`). Verified: after accepting, `drive` is the shared drive and
+the sidebar reads its name. The e2e invite test now asserts
+`current-drive-title`, which it did not before — the old assertion passed with
+the bug, because the *page* showed the drive all along.
+
+This cost more than a wrong label. The drive-wide subscription follows the
+current drive, so an invitee sat on a shared drive with no live fan-out, and
+never joined its presence channel.
+
+**M18 — root cause found.** Not a resolution or live-update problem. Alice
+asking the server for Bob's agent gets:
+
+    Unauthorized. No .../properties/read right has been found for
+    did:ad:agent:d9Im… in this resource or its parents
+
+Agent resources are created with no read grant for anyone but their owner, and
+they live on no drive, so no drive-level grant reaches them either. Every
+consumer that resolves an agent to show a name — chat avatars, member lists,
+"Show profile" — is reading a resource it is not allowed to read. Presence is
+the sole exception because the name travels inside the presence payload.
+
+The client hides this instead of surfacing it: it renders a locally-derived
+stub with `isA: agent`, the `publicKey` recovered from the DID suffix, and a
+`createdAt` of *now*. That stub looks renderable, so the local-first fallback
+never retries the server. Hence "names don't propagate" rather than "you can't
+read this agent".
+
+Fixing it is a design decision, not a patch — see the options recorded with the
+question to Joep. Whatever we choose, the client should stop fabricating a
+stub that is indistinguishable from a real profile.
+
+**M19 — not what it looked like.** `Show profile` navigates to
+`constructOpenURL(agentSubject)`, which resolves to `/app/show?subject=<agent
+DID>` and renders the agent page. Verified working for an agent you *can* read
+(your own). For anyone else you land on the M18 stub: no name, no personal
+drive, a fabricated timestamp. Keeping M19 open only to confirm against the
+reporter's exact wording ("opens the following resource"), since the
+navigation target itself is correct.
+
+**M22 — new: a read-only invitee gets a permanently stuck outbox entry.**
+Right after accepting a *view* invite, Bob's client signs a commit against the
+shared drive and the server refuses it, correctly:
+
+    Unauthorized. No .../properties/write right ... for did:ad:agent:WA6I…
+
+The commit carries the whole drive — `name`, `isA`, `read` (both agents),
+`write`, `genesis` — which is what a Loro export from an empty version vector
+looks like. So this is not a stray edit: the drive's doc was hydrated locally
+through operations that count as *local*, and the outbox then tried to push
+them.
+
+Traced far enough to be sure of the shape: `markDirty` for the drive is called
+from the `subscribeLocalUpdates` handler (the stack runs through loro wasm), so
+a genuine local op is being applied to a doc the invitee only has read on. It
+only happens on the resource's FIRST hydration in that store — visiting the
+same drive afterwards produces only `setLastCommitValue`, which is correctly
+exempt. `isOwnedSubject` returns true for every `did:` subject, so "ours to
+POST" is decided by namespace and never by rights.
+
+The retries are bounded (`BLOCK_AFTER_FAILURES`), so it parks rather than
+hammers — but it parks as a blocked entry, which is why an invitee who has
+written nothing still sees "Changes pending" forever. Not yet fixed; the cold
+repro to finish it is a second drive + invite with `Resource.prototype`
+instrumented before accepting.
