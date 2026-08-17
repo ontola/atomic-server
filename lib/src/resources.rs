@@ -566,11 +566,37 @@ impl Resource {
 
     /// Checks if the classes are there, if not, fetches them.
     /// Returns an empty vector if there are no classes found.
+    ///
+    /// A class this store does not hold is SKIPPED, not an error. That is what
+    /// the line above always claimed, but the `?` that used to be here made one
+    /// unresolvable class abort the lot — and since `check_required_props` calls
+    /// this, that turned "I have never seen this class" into a rejected commit.
+    ///
+    /// Cost of getting it wrong, measured in the field: a table was created on
+    /// one node and its row class never reached another, so every row written
+    /// against that node was refused, forever, with the rows still rendering
+    /// locally as though saved. Two people lost a session to it.
+    ///
+    /// Skipping weakens required-property validation for classes we cannot see,
+    /// which is the right trade: a store cannot enforce a contract it does not
+    /// have, the same write is already possible with no class at all, and this
+    /// is a data-integrity check rather than an access-control one — rights are
+    /// enforced separately and are not affected. In a system where resources
+    /// arrive at different times by different routes, an unknown class is a
+    /// normal state, not a malformed write.
     pub async fn get_classes(&self, store: &impl Storelike) -> AtomicResult<Vec<Class>> {
         let mut classes: Vec<Class> = Vec::new();
         if let Ok(val) = self.get(crate::urls::IS_A) {
             for class in val.to_subjects(None)? {
-                classes.push(store.get_class(&class).await?)
+                match store.get_class(&class).await {
+                    Ok(resolved) => classes.push(resolved),
+                    Err(e) => tracing::warn!(
+                        "Class {} is not available here, so {} is not validated against it: {}",
+                        class,
+                        self.get_subject(),
+                        e
+                    ),
+                }
             }
         }
         Ok(classes)
@@ -1669,6 +1695,29 @@ mod test {
             .set_shortname("shortname", "should not contain spaces", &store)
             .await
             .unwrap_err();
+    }
+
+    /// A table's row class created on one node may not have reached this one.
+    /// Refusing the write in that case cost two people a session: every row was
+    /// rejected with "Failed getting class …", the rows rendered locally as
+    /// though saved, and nothing surfaced it.
+    #[tokio::test]
+    async fn a_class_this_store_does_not_have_is_skipped_not_fatal() {
+        let store: crate::Db = init_store().await;
+        let mut row = Resource::new("did:ad:rowAgainstAnAbsentClass".into());
+        row.set_unsafe(
+            crate::urls::IS_A.into(),
+            crate::Value::ResourceArray(vec![crate::values::SubResource::Subject(
+                "did:ad:aClassThisStoreHasNeverSeen".into(),
+            )]),
+        )
+        .unwrap();
+
+        // Unresolvable, so there is nothing to validate against — and nothing
+        // to validate against is not the same as invalid.
+        let classes = row.get_classes(&store).await.unwrap();
+        assert!(classes.is_empty());
+        row.check_required_props(&store).await.unwrap();
     }
 
     #[tokio::test]
