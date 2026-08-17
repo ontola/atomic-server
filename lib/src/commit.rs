@@ -701,6 +701,16 @@ impl Commit {
         if opts.validate_loro_causality
             && !is_new
             && commit.is_genesis != Some(true)
+            // ...and not a repeat materialization that merely forgot to say so.
+            // A second device deriving the same personal drive builds its doc
+            // from the creation defaults; whether that reaches us flagged
+            // `is_genesis` or as an ordinary commit is an accident of which
+            // client path drained it. The cert decides, not the flag: it has to
+            // verify against this subject AND name this signer, which for a
+            // `did:ad:` subject can only be the same author. Observed in the
+            // field as a 500 loop on the owner's own home drive, from their
+            // second browser.
+            && !commit.repeat_genesis_is_mergeable().unwrap_or(false)
             && !commit.destroy.unwrap_or(false)
             && commit.loro_update.as_ref().map(|b| b.len()).unwrap_or(0) > 16
             && applied.add_atoms.is_empty()
@@ -1924,6 +1934,95 @@ mod test {
             merged.get(crate::urls::NAME).unwrap().to_string(),
             "Joeps drijf",
             "the chosen name must survive the repeat genesis"
+        );
+    }
+
+    /// The same materialization, arriving WITHOUT the `is_genesis` flag, must
+    /// merge too.
+    ///
+    /// Whether a second device's from-scratch doc drains as a genesis or as an
+    /// ordinary commit is an accident of which client path exported it. Seen in
+    /// the field as a 500 loop on the owner's own home drive, posted from their
+    /// second browser: the commit carried the creation defaults, every one lost
+    /// to stored state, and the causality guard read that as silent data loss.
+    /// The cert is what decides — it verifies against this subject and names
+    /// this signer, so it can only be the same author.
+    #[tokio::test]
+    async fn repeat_materialization_merges_even_when_not_flagged_genesis() {
+        let (store, agent) = store_with_known_agent().await;
+        let pubkey: [u8; 32] = crate::agents::decode_base64(&agent.public_key)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let cert = crate::genesis::GenesisCert::for_personal_drive(pubkey);
+        let opts = CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            validate_loro_causality: true,
+            ..CommitOpts::no_validations_no_index()
+        };
+
+        let defaults = |builder: &mut CommitBuilder| {
+            builder.set(
+                crate::urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::urls::DRIVE.into()]),
+            );
+            builder.set(crate::urls::NAME.into(), Value::String("My drive".into()));
+            builder.set(
+                crate::urls::WRITE.into(),
+                Value::ResourceArray(vec![agent.subject.to_string().into()]),
+            );
+        };
+
+        let mut genesis = CommitBuilder::new("placeholder".into());
+        defaults(&mut genesis);
+        let first = Commit::create_did_with_cert(genesis, &agent, &store, Some(cert.clone()))
+            .await
+            .unwrap();
+        let subject = first.subject.clone();
+        store.apply_commit(first, &opts).await.unwrap();
+
+        let stored = store.get_resource(&subject).await.unwrap();
+        let mut rename = CommitBuilder::new(subject.clone());
+        rename.set(crate::urls::NAME.into(), Value::String("Home".into()));
+        let rename = rename.sign(&agent, &store, &stored).await.unwrap();
+        store.apply_commit(rename, &opts).await.unwrap();
+
+        // Second device: same cert, same defaults — but drained as an ordinary
+        // commit, so `is_genesis` never gets set.
+        let mut second = CommitBuilder::new("placeholder".into());
+        defaults(&mut second);
+        let mut second = Commit::create_did_with_cert(second, &agent, &store, Some(cert))
+            .await
+            .unwrap();
+        assert_eq!(second.subject, subject);
+        second.is_genesis = None;
+        // Re-sign: the flag is part of the signed payload.
+        let stringified = second
+            .serialize_deterministically_json_ad(&store)
+            .await
+            .unwrap();
+        second.signature = Some(
+            sign_message(
+                &stringified,
+                &agent.private_key.clone().unwrap(),
+                &agent.public_key,
+            )
+            .unwrap(),
+        );
+
+        store.apply_commit(second, &opts).await.expect(
+            "a repeat materialization is the same author by construction — merge it, do not \
+             refuse it as silent data loss",
+        );
+
+        let merged = store.get_resource(&subject).await.unwrap();
+        assert_eq!(
+            merged.get(crate::urls::NAME).unwrap().to_string(),
+            "Home",
+            "the chosen name must survive the second device's defaults"
         );
     }
 
