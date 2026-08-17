@@ -48,9 +48,18 @@ export const CARD_ACTIONS_GAP = '0.5rem';
  * grey with a white one, so two things in the same category looked like two
  * categories. Anything that reads as a distinction here should be a real one.
  *
- * The only real one left is whose service it is. Blue means the provider owns
- * it; everything else is neutral, including a self-hosted node, which is
- * somebody else's box however live it happens to be.
+ * The only real one left is whether the service is on. Blue means this is one
+ * of ours *and* it is running for you. Neutral covers everything else: an offer
+ * we have not sold yet, a service still being checked, one that failed to
+ * answer, and a self-hosted node, which is somebody else's box however live it
+ * happens to be.
+ *
+ * Blue for "ours, but only on offer" reads fine on a single card and badly in a
+ * list, which is what the Sync page is. In a column of these, the tier you pay
+ * for and the one you merely could buy looked identical, so the glyph answered
+ * "does this product exist" when the only question being asked of it was "do I
+ * have this". The account header is the one blue that is not a service: being
+ * connected to the provider is the state it reports.
  */
 export const CardIcon = styled.div<{ $tone?: 'neutral' | 'provider' }>`
   flex-shrink: 0;

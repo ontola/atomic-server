@@ -5097,6 +5097,7 @@ msgstr ""
 msgid "Backing up this workspace to {0}…"
 msgstr ""
 
+#: src/components/AccountRecoveryCard.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Setting up…"
@@ -5739,6 +5740,7 @@ msgstr ""
 msgid "Use a recovery code instead"
 msgstr ""
 
+#: src/components/AccountRecoveryCard.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Atomic account"
 msgstr ""
@@ -5856,14 +5858,11 @@ msgstr ""
 msgid "<0>Then it's all on you.</0> We'll show you your secret next — it's the only copy that will ever exist, nobody can reset it for you, and losing it means losing your account and everything in it. Fine if you'll genuinely keep it safe."
 msgstr ""
 
-#: src/components/AccountRecoveryCard.tsx
-msgid "Nothing protects this account but the secret you saved during setup. That copy is the only one — we can't show it here, and we can't reset it. Keep it safe."
-msgstr ""
+#~ msgid "Nothing protects this account but the secret you saved during setup. That copy is the only one — we can't show it here, and we can't reset it. Keep it safe."
+#~ msgstr ""
 
-#. 0: ' '; 1: [hasPasskey && 'your passkey', hasCode && 'your recovery code'] .filter(Boolean) .join(' or ') || 'your recovery password'
-#: src/components/AccountRecoveryCard.tsx
-msgid "You can get back in with:{0} {1} ."
-msgstr ""
+#~ msgid "You can get back in with:{0} {1} ."
+#~ msgstr ""
 
 #. 0: PRODUCT_NAME; 1: ' '
 #: src/components/AccountRecoveryCard.tsx
@@ -6886,15 +6885,11 @@ msgstr ""
 msgid "Signed in as {0}."
 msgstr ""
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
-msgid "{0} — we hold your key sealed, so this email gets you back in on a new device."
-msgstr ""
+#~ msgid "{0} — we hold your key sealed, so this email gets you back in on a new device."
+#~ msgstr ""
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
-msgid "{0} — no recovery backup stored. Lose every device and this workspace is gone."
-msgstr ""
+#~ msgid "{0} — no recovery backup stored. Lose every device and this workspace is gone."
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Email recovery"
@@ -7000,4 +6995,117 @@ msgstr ""
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Checking this workspace’s backup…"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Sign in →"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "Not set up. With an account on {0} we hold your key sealed, so an email gets you back in on a new device. Without one, losing every device loses this workspace."
+msgstr ""
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
+msgstr ""
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0}. No recovery backup stored, so losing every device loses this workspace."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Set up email recovery"
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "That does not look like an agent secret."
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "That secret belongs to a different account than the one signed in here."
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "That secret carries no account to back up."
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Could not set up account recovery."
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Nothing protects this account but the secret you saved during setup. Lose every device you are signed in on and that copy is all there is."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "You can store an encrypted backup now. Paste the secret and this device seals it before sending, so {0} holds a blob it cannot read and your email plus a passkey or recovery code gets you back in on a new device."
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "We have to ask you for it. This browser keeps your key where scripts cannot read it, which protects you and also means we cannot fetch the secret ourselves."
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Sign in to set up recovery"
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+#: src/components/AccountRecoveryCard.tsx
+msgid "Your agent secret"
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Set up account recovery"
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Storing a backup is a write to"
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid ", so it needs you signed in there first."
+msgstr ""
+
+#~ msgid "{0}. Your backup is sealed in this browser only. A passkey opens it here, but nothing is stored with {1}, so a new device could not get you back in."
+#~ msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Store it with "
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Could not store your backup with {0}."
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Storing…"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Store it with {0}"
+msgstr ""
+
+#~ msgid "You can get back in with:{0} {1} {2}."
+#~ msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "This backup is sealed in this browser only. {0} is not holding a copy, so a new device could not get you back in."
+msgstr ""
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
+msgstr ""
+
+#. 0: ' '; 1: `${ [hasPasskey && 'your passkey', hasCode && 'your recovery code'] .filter(Boolean) .join(' or ') || 'your recovery password' }${deviceOnly ? ', on this device' \\: ''}.`
+#: src/components/AccountRecoveryCard.tsx
+msgid "You can get back in with:{0} {1}"
 msgstr ""
